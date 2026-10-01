@@ -228,6 +228,90 @@ Defaults are chosen so work can start; change the spec first if a different answ
 
 ## Phase 4: Core evaluator
 
+Run the checked `program` and produce a value, or one located runtime diagnostic. Keep the stage shape: `evaluate` takes the `program` `check` returned and returns a value or one `diagnostic`. The evaluator trusts the checker: it does not re-check types, and every name it looks up is expected to be bound. It still never raises a host exception and never prints.
+
+### `src/` organization for this phase
+
+```text
+src/
+├── main.rkt       # CLI: lex, parse, check, evaluate
+├── source.rkt     # unchanged
+├── diagnostic.rkt # unchanged
+├── token.rkt      # unchanged
+├── lexer.rkt      # unchanged
+├── ast.rkt        # unchanged
+├── parser.rkt     # unchanged
+├── checker.rkt    # unchanged
+└── evaluator.rkt  # program -> value or runtime diagnostic
+
+tests/
+├── lexer-test.rkt    # unchanged
+├── parser-test.rkt   # unchanged
+├── checker-test.rkt  # unchanged
+└── evaluator-test.rkt # focused evaluator behavior tests
+```
+
+Keep the evaluator free of parsing and checking rules. Do not add a bytecode or VM layer; the AST is the program.
+
+### Runtime values and the result
+
+- `Int`, `Float`, `Bool`, `String` map to the Racket integer, flonum, boolean, and string values. `Nil` is the symbol `'nil`. `List[T]` is a Racket list (the checker guarantees homogeneity).
+- A struct instance is a new `instance` struct in `evaluator.rkt`: the declared type name plus an immutable hash from field name to value. Field order comes from the `struct-decl` in the program, so no separate table from the checker is needed.
+- `evaluate` returns the value of the initial `main()` call. Since `main` is `() -> Nil`, a successful run returns `'nil`; `puts` is the visible output.
+- The evaluator writes `puts` output to `(current-output-port)`, so tests capture it with `parameterize` and `with-output-to-string`.
+
+### Environment and control flow
+
+- A scope stack is a list of frames, each a mutable hash from name to a box, so assignment mutates a binding without changing its type. Helpers: `lookup`, `define!` for a fresh local, and `assign!` for an existing binding. The checker already rejects unknown names and shadowing.
+- `exec-block` runs statements in order and stops on `return`. Use one `let/ec` per function call as the return escape: `return-stmt` calls it with the value, so returns leave loops and nested blocks without a signal value threaded through every statement.
+- Functions are registered before any body runs, so forward calls and recursion work. Calling a function pushes a frame with its parameters and evaluates the body under the return escape.
+- `if`/`elsif`/`else` take the first true branch; `while` re-evaluates its condition each pass; `for` binds its variable to each element in list order in a fresh scope.
+- Bindings: an annotation or a fresh name introduces a local; a binding without an annotation to a visible name updates that binding. An assignment statement updates the visible binding.
+
+### Numeric and list rules
+
+- Evaluate operands, arguments, and constructor fields left to right.
+- `and` and `or` short-circuit and produce `Bool`; `not` negates. No truthiness.
+- `+` is `string-append` for `String`, and numeric addition otherwise. `-`, `*`, `/` follow the checker's same-type rule.
+- `Int` is signed 64-bit: after `+`, `-`, or `*` on two `Int`s, reject a result outside `[-2^63, 2^63-1]` as `RUNTIME-INTEGER-OVERFLOW`. Racket integers are unbounded, so this is an explicit range check.
+- `/` on `Int` truncates toward zero (Racket `quotient`); `/` on `Float` is IEEE 754. A zero divisor is `RUNTIME-DIVISION-BY-ZERO` for both `Int` and `Float` (Racket would return infinity for floats). `%` is `Int` only and uses `remainder`, matching `a = (a / b) * b + (a % b)` with truncated division; a zero divisor is the same error.
+- `<`, `<=`, `>`, `>=` compare two numbers of the same type. `==` and `!=` compare two values of the same primitive type with `equal?`, so a NaN is not equal to itself as IEEE 754 requires.
+- Index access rejects an index outside `0` to `length - 1` as `RUNTIME-INDEX-OUT-OF-RANGE`; negative indexes are out of range.
+- Field access reads the instance hash; the checker guarantees the struct and field exist.
+- A `list-lit` evaluates its elements in order into a Racket list; an empty list is `'()`.
+
+### Runtime diagnostic codes
+
+Use the `RUNTIME-` prefix, one code per failure family. Point the span at the operator for arithmetic, and at the index expression for a bounds error.
+
+- `RUNTIME-DIVISION-BY-ZERO` — `/` or `%` with a zero divisor.
+- `RUNTIME-INTEGER-OVERFLOW` — an `Int` operation outside 64-bit range.
+- `RUNTIME-INDEX-OUT-OF-RANGE` — a list index below zero or at or above the length.
+
+Add a catch-all `RUNTIME-UNREACHABLE` only as a guard that turns an unexpected evaluator state into a diagnostic instead of a traceback; the checker should make it unreachable.
+
+### Work sequence
+
+1. Add `src/evaluator.rkt` with `evaluate`, an `instance` struct, a `bail` that escapes with a `diagnostic`, and a `let/ec` per call for `return`.
+2. Register the struct declarations (name → ordered fields) and the function declarations before running anything.
+3. Add `eval-expression`: literals, `name-ref`, `unary`, `binary`, `call`, `construct`, `list-lit`, `field-access`, `index-access`.
+4. Add `exec-statement` and `exec-block`: `binding`, `return-stmt`, `expr-stmt`, `if`, `while`, `for`, with scope push/pop and assignment.
+5. Add the numeric helpers: same-type dispatch, the 64-bit range check, truncated integer division, `remainder` for `%`, and the zero-divisor check for both numeric types.
+6. Implement `puts` (write the string and a newline) and call `main()` once with no arguments.
+7. Wire `main.rkt`: after `check`, call `evaluate` behind a `diagnostic?` guard and exit 1 with the formatted runtime diagnostic; on success exit 0. Keep the checked tree printable for inspection (Phase 5 decides the flag).
+8. Add `tests/evaluator-test.rkt`; CI needs no change because `raco test tests/` finds the new file.
+
+### Evaluator rules and edge cases
+
+- The evaluator is total: every expression the checker accepted produces a value or a `RUNTIME-*` diagnostic. No Racket exception may escape, including a division by zero or an out-of-range index.
+- `main` is the only entry point; a program of only declarations cannot run, and Phase 3 already requires one `main() -> Nil`.
+- `for` over an empty list runs its body zero times; `while` with a false condition runs zero times.
+- A function that reaches the end of a `Nil` body returns `'nil`; a non-`Nil` function cannot reach the end because the checker required a return on every path.
+- Constructor named arguments may be written in any order; evaluate them in source order and store them by name, so field order in the hash does not matter.
+- An assignment to a `for` variable is already `CHECK-IMMUTABLE-ASSIGNMENT`; the evaluator does not need a second guard.
+
+### Phase 4 checklist
+
 - [ ] Evaluate expressions and arguments left to right; implement short-circuit `and` and `or`.
 - [ ] Execute scoped blocks, assignments, returns, conditionals, loops, and `for` over lists.
 - [ ] Evaluate function calls, structs, fields, lists, and indexes according to the checked types.
@@ -235,14 +319,104 @@ Defaults are chosen so work can start; change the spec first if a different answ
 - [ ] Implement `puts(value: String) -> Nil` and start each program by calling `main()`.
 - [ ] Convert runtime failures into Agentica diagnostics rather than host tracebacks.
 
+### Focused tests
+
+- Valid: `examples/hello.agc`, the `classify` and `Task`/`for` programs from section 10, a forward call, and a recursive function.
+- Control flow: `if`/`elsif`/`else` selection, `while` counting, `for` over a non-empty and an empty list, and an early `return` inside a loop.
+- Values: integer, float, string, boolean, and `nil` literals; list literals; struct construction, field access, and index access.
+- Operators: short-circuit `and`/`or` (a side effect in the skipped operand does not run), string concatenation, truncated integer division with negative operands, and `remainder` sign.
+- Runtime errors: integer overflow, division by zero for `Int` and `Float`, `%` by zero, and an index equal to and one past the length.
+- Output: `puts` writes the value and one newline to the captured port; a run returns `'nil`.
+- Spans: the line and column of a division-by-zero and of an out-of-range index.
+
 **Complete when:** the section 10 programs that pass checking execute with the specified results and runtime errors are located in the source.
 
 ## Phase 5: CLI and diagnostic quality
+
+Make the pipeline usable from the command line and make every diagnostic name the file, position, stable code, concrete explanation, and the offending source text. Presentation stays in `main.rkt` and `diagnostic.rkt`; the stages keep returning data.
+
+### `src/` organization for this phase
+
+```text
+src/
+├── main.rkt       # full pipeline driver plus CLI flags
+├── source.rkt     # unchanged
+├── diagnostic.rkt # format-diagnostic gains the source excerpt and caret
+├── token.rkt      # unchanged
+├── lexer.rkt      # unchanged
+├── ast.rkt        # unchanged
+├── parser.rkt     # unchanged
+├── checker.rkt    # unchanged
+└── evaluator.rkt  # unchanged
+
+tests/
+├── lexer-test.rkt     # unchanged
+├── parser-test.rkt    # unchanged
+├── checker-test.rkt   # unchanged
+├── evaluator-test.rkt # unchanged
+├── diagnostic-test.rkt # excerpt and caret formatting
+└── examples-test.rkt   # every grammar example, valid and invalid
+
+examples/
+├── hello.agc          # existing
+├── classify.agc       # section 10 function and control flow
+└── tasks.agc          # section 10 lists and field access
+```
+
+No new pipeline module: the CLI is `main.rkt`, and the excerpt logic is one helper in `diagnostic.rkt`.
+
+### Diagnostic format
+
+Replace the single-line format with the grammar's section 9 shape: a header with file, line, column, and code; the explanation; and the source line with a caret run under the span.
+
+```text
+hello.agc:4:11 error[CHECK-TYPE-MISMATCH]
+Expected Int, found String.
+
+4 | age: Int = "25"
+  |           ^^^^
+```
+
+- The caret run starts at the span's column and spans `end - start` characters, clamped to the line's text so a multi-line or EOF span cannot print past the end.
+- Split the source text on newlines and take line `line - 1`; strip a trailing `\r` so CRLF files do not print a stray carriage return.
+- `format-diagnostic` keeps returning one string; `main.rkt` prints it to stderr.
+- The grammar's `E_TYPE_MISMATCH` style codes are proposals. Keep the existing stage-prefixed codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) so the tests and the skill stay consistent, and note the choice in the roadmap if the grammar later fixes `E_` names.
+
+### CLI behavior
+
+- Default: read the UTF-8 file, run lexer → parser → checker → evaluator, print `puts` output, exit 0. Print the first diagnostic to stderr and exit 1.
+- `--dump` (or the minimal equivalent) prints the checked tree instead of running it, preserving the Phase 3 inspection path.
+- A missing file or bad usage prints one plain CLI message and exits 2; it is not a stage diagnostic. Wrap the file read so a missing file never prints a Racket traceback.
+- Keep the driver thin: one `fail!` helper prints a diagnostic and exits 1, and each stage is guarded with `diagnostic?` before the next.
+
+### Work sequence
+
+1. Add the excerpt helper to `src/diagnostic.rkt` and rewrite `format-diagnostic`; the stage tests only use it inside failure messages, so no assertion depends on the old layout.
+2. Add the CLI flags and the missing-file handling in `src/main.rkt`; wire `evaluate` as the final stage.
+3. Add `examples/classify.agc` and `examples/tasks.agc` from section 10.
+4. Add `tests/diagnostic-test.rkt`: header line, caret column and width, CRLF handling, and a span at the end of a line.
+5. Add `tests/examples-test.rkt`: run each valid example and assert success plus expected output; run each rejected fragment and assert its code (`CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `PARSE-*` for `puts "hello"`).
+6. Update `.github/workflows/ci.yml` to smoke-test both valid examples, and update the Phase 5 checklist and the development skill.
+
+### Phase 5 checklist
 
 - [ ] Run `.agc` files through the lexer, parser, checker, and evaluator from the command line.
 - [ ] Show stable error codes, file, line, column, a concrete explanation, and a source excerpt with a caret.
 - [ ] Cover syntax, unknown names, type mismatches, arity, struct fields, missing returns, and runtime errors with focused examples.
 - [ ] Check every valid and invalid example in the grammar against the interpreter.
+
+### Focused tests
+
+- Formatting: the header has file, 1-based line and column, and the code; the caret run matches the span width; the excerpt line matches the source; CRLF and end-of-line spans are safe.
+- CLI: a valid file exits 0 and prints the program output; each stage's failure exits 1 with one diagnostic; a missing file exits 2 without a traceback.
+- Examples: every valid program in section 10 runs; every rejected fragment fails with the intended code and a useful position.
+- Regression: `raco test tests/` still passes with the new format, and `racket src/main.rkt examples/hello.agc` still exits 0.
+
+### Open decisions
+
+1. Keep the stage-prefixed codes rather than the grammar's `E_*` proposals until the grammar fixes the final names.
+2. Exit 1 for any stage diagnostic, 2 for CLI usage or a missing file.
+3. `--dump` is the only inspection flag; add token or AST dumps only if a debugging need appears.
 
 **Complete when:** a user can run the sample from the README and get useful diagnostics for the grammar's required failure cases.
 
