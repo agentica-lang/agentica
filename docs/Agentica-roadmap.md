@@ -166,6 +166,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
 - `CHECK-MISSING-RETURN` — a non-`Nil` function with a path that does not return.
 - `CHECK-MAIN` — no `main`, or a `main` that is not `() -> Nil`. A second `main` is a duplicate name and is `CHECK-REDEFINED-NAME`.
+- `CHECK-INT-RANGE` — an `Int` literal above 2^63-1. `-9223372036854775808` is valid: the literal 2^63 is allowed as the direct operand of unary `-`.
 
 ### Work sequence
 
@@ -312,12 +313,12 @@ Add a catch-all `RUNTIME-UNREACHABLE` only as a guard that turns an unexpected e
 
 ### Phase 4 checklist
 
-- [ ] Evaluate expressions and arguments left to right; implement short-circuit `and` and `or`.
-- [ ] Execute scoped blocks, assignments, returns, conditionals, loops, and `for` over lists.
-- [ ] Evaluate function calls, structs, fields, lists, and indexes according to the checked types.
-- [ ] Implement numeric rules, integer overflow checks, division and modulo behavior, zero-division errors, and list bounds errors.
-- [ ] Implement `puts(value: String) -> Nil` and start each program by calling `main()`.
-- [ ] Convert runtime failures into Agentica diagnostics rather than host tracebacks.
+- [x] Evaluate expressions and arguments left to right; implement short-circuit `and` and `or`.
+- [x] Execute scoped blocks, assignments, returns, conditionals, loops, and `for` over lists.
+- [x] Evaluate function calls, structs, fields, lists, and indexes according to the checked types.
+- [x] Implement numeric rules, integer overflow checks, division and modulo behavior, zero-division errors, and list bounds errors.
+- [x] Implement `puts(value: String) -> Nil` and start each program by calling `main()`.
+- [x] Convert runtime failures into Agentica diagnostics rather than host tracebacks.
 
 ### Focused tests
 
@@ -402,12 +403,12 @@ Expected Int, found String.
 
 ### Phase 5 checklist
 
-- [ ] Run `.agc` files through the lexer, parser, checker, and evaluator from the command line.
-- [ ] Show stable error codes, file, line, column, a concrete explanation, and a source excerpt with a caret.
-- [ ] Cover syntax, unknown names, type mismatches, arity, struct fields, missing returns, and runtime errors with focused examples.
-- [ ] Check every valid and invalid example in the grammar against the interpreter.
-- [ ] Point operator diagnostics at the operator token, not the whole expression.
-- [ ] Report unreachable checker states with a dedicated `CHECK-INTERNAL` code instead of `CHECK-UNKNOWN-TYPE`.
+- [x] Run `.agc` files through the lexer, parser, checker, and evaluator from the command line.
+- [x] Show stable error codes, file, line, column, a concrete explanation, and a source excerpt with a caret.
+- [x] Cover syntax, unknown names, type mismatches, arity, struct fields, missing returns, and runtime errors with focused examples.
+- [x] Check every valid and invalid example in the grammar against the interpreter.
+- [x] Point operator diagnostics at the operator token, not the whole expression.
+- [x] Report unreachable checker states with a dedicated `CHECK-INTERNAL` code instead of `CHECK-UNKNOWN-TYPE`.
 
 ### Focused tests
 

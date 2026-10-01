@@ -6,6 +6,8 @@
 
 (provide check)
 
+(define int-max (sub1 (expt 2 63)))
+
 (define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List"))
 
 (define (type->string type)
@@ -30,38 +32,11 @@
 (define (literal-type value)
   (cond
     [(boolean? value) 'Bool]
-    [(integer? value) 'Int]
+    [(exact-integer? value) 'Int]
     [(flonum? value) 'Float]
     [(string? value) 'String]
     [(eq? value 'nil) 'Nil]
     [else '?]))
-
-(define (node-span node)
-  (cond
-    [(program? node) (program-span node)]
-    [(function-decl? node) (function-decl-span node)]
-    [(param? node) (param-span node)]
-    [(struct-decl? node) (struct-decl-span node)]
-    [(field-decl? node) (field-decl-span node)]
-    [(type-ref? node) (type-ref-span node)]
-    [(binding? node) (binding-span node)]
-    [(return-stmt? node) (return-stmt-span node)]
-    [(expr-stmt? node) (expr-stmt-span node)]
-    [(if-branch? node) (if-branch-span node)]
-    [(if-stmt? node) (if-stmt-span node)]
-    [(while-stmt? node) (while-stmt-span node)]
-    [(for-stmt? node) (for-stmt-span node)]
-    [(literal? node) (literal-span node)]
-    [(name-ref? node) (name-ref-span node)]
-    [(call? node) (call-span node)]
-    [(named-arg? node) (named-arg-span node)]
-    [(construct? node) (construct-span node)]
-    [(list-lit? node) (list-lit-span node)]
-    [(field-access? node) (field-access-span node)]
-    [(index-access? node) (index-access-span node)]
-    [(unary? node) (unary-span node)]
-    [(binary? node) (binary-span node)]
-    [else #f]))
 
 (define (block-returns? statements)
   (ormap returns? statements))
@@ -199,7 +174,13 @@
     (define (check-expression expression expected)
       (define actual
         (cond
-          [(literal? expression) (literal-type (literal-value expression))]
+          [(literal? expression)
+           (when (and (exact-integer? (literal-value expression))
+                      (> (literal-value expression) int-max))
+             (bail 'CHECK-INT-RANGE
+                   "Int literal is outside the signed 64-bit range"
+                   (literal-span expression)))
+           (literal-type (literal-value expression))]
           [(name-ref? expression)
            (define binding (lookup (name-ref-name expression)))
            (unless binding
@@ -217,30 +198,36 @@
           [(list-lit? expression) (check-list expression expected)]
           [(field-access? expression) (check-field-access expression)]
           [(index-access? expression) (check-index-access expression)]
-          [else (bail 'CHECK-UNKNOWN-TYPE "unsupported expression" (node-span expression))]))
+          [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
       (ensure actual expected (node-span expression)))
 
     (define (check-unary expression)
-      (define operand (check-expression (unary-operand expression) #f))
+      (define inner (unary-operand expression))
+      (define operand
+        (if (and (eq? (unary-op expression) 'minus)
+                 (literal? inner)
+                 (eqv? (literal-value inner) (add1 int-max)))
+            'Int
+            (check-expression inner #f)))
       (case (unary-op expression)
         [(minus)
          (unless (numeric-type? operand)
            (bail 'CHECK-TYPE-MISMATCH
                  (format "unary \"-\" expects a number, found ~a" (type->string operand))
-                 (unary-span expression)))
+                 (unary-op-span expression)))
          operand]
         [(not)
          (unless (eq? operand 'Bool)
            (bail 'CHECK-TYPE-MISMATCH
                  (format "\"not\" expects Bool, found ~a" (type->string operand))
-                 (unary-span expression)))
+                 (unary-op-span expression)))
          'Bool]
-        [else (bail 'CHECK-UNKNOWN-TYPE "unsupported unary operator" (unary-span expression))]))
+        [else (bail 'CHECK-INTERNAL "unsupported unary operator" (unary-op-span expression))]))
 
     (define (check-binary expression)
       (define left (check-expression (binary-left expression) #f))
       (define right (check-expression (binary-right expression) #f))
-      (define span (binary-span expression))
+      (define span (binary-op-span expression))
       (define (same!)
         (unless (equal? left right)
           (bail 'CHECK-TYPE-MISMATCH
@@ -267,7 +254,7 @@
         [(modulo)
          (unless (and (eq? left 'Int) (eq? right 'Int))
            (bail 'CHECK-TYPE-MISMATCH
-                 (format "\"%%\" expects two Ints, found ~a and ~a"
+                 (format "\"%\" expects two Ints, found ~a and ~a"
                          (type->string left) (type->string right))
                  span))
          'Int]
@@ -293,7 +280,7 @@
                          (type->string left) (type->string right))
                  span))
          'Bool]
-        [else (bail 'CHECK-UNKNOWN-TYPE "unsupported operator" span)]))
+        [else (bail 'CHECK-INTERNAL "unsupported operator" span)]))
 
     (define (check-call expression)
       (define name (call-name expression))
@@ -401,7 +388,7 @@
         [(if-stmt? statement) (check-if statement)]
         [(while-stmt? statement) (check-while statement)]
         [(for-stmt? statement) (check-for statement)]
-        [else (bail 'CHECK-UNKNOWN-TYPE "unsupported statement" (node-span statement))]))
+        [else (bail 'CHECK-INTERNAL "unsupported statement" (node-span statement))]))
 
     (define (check-binding statement)
       (define name (binding-name statement))

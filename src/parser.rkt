@@ -263,32 +263,31 @@
 
     (define (parse-expression) (parse-or))
 
-    (define (parse-or)
+    (define (parse-left-assoc kinds parse-operand)
       (define start (current))
-      (let loop ([left (parse-and)])
-        (if (kind? 'or)
-            (begin (advance!) (loop (binary 'or left (parse-and) (span-from start))))
+      (let loop ([left (parse-operand)])
+        (if (memq (token-kind (current)) kinds)
+            (let* ([operator (advance!)]
+                   [right (parse-operand)])
+              (loop (binary (token-kind operator) (token-span operator) left right (span-from start))))
             left)))
 
-    (define (parse-and)
-      (define start (current))
-      (let loop ([left (parse-equality)])
-        (if (kind? 'and)
-            (begin (advance!) (loop (binary 'and left (parse-equality) (span-from start))))
-            left)))
+    (define (parse-or) (parse-left-assoc '(or) parse-and))
+
+    (define (parse-and) (parse-left-assoc '(and) parse-equality))
 
     (define (parse-equality)
       (define start (current))
       (define left (parse-comparison))
       (cond
         [(or (kind? 'equal) (kind? 'not-equal))
-         (define op (token-kind (advance!)))
+         (define operator (advance!))
          (define right (parse-comparison))
          (when (or (kind? 'equal) (kind? 'not-equal))
            (bail 'PARSE-CHAINED-COMPARISON
                  "equality does not chain; combine two comparisons with \"and\""
                  (current)))
-         (binary op left right (span-from start))]
+         (binary (token-kind operator) (token-span operator) left right (span-from start))]
         [else left]))
 
     (define (parse-comparison)
@@ -296,37 +295,25 @@
       (define left (parse-additive))
       (cond
         [(memq (token-kind (current)) '(less less-equal greater greater-equal))
-         (define op (token-kind (advance!)))
+         (define operator (advance!))
          (define right (parse-additive))
          (when (memq (token-kind (current)) '(less less-equal greater greater-equal))
            (bail 'PARSE-CHAINED-COMPARISON
                  "comparison does not chain; write \"a < b and b < c\""
                  (current)))
-         (binary op left right (span-from start))]
+         (binary (token-kind operator) (token-span operator) left right (span-from start))]
         [else left]))
 
-    (define (parse-additive)
-      (define start (current))
-      (let loop ([left (parse-multiplicative)])
-        (cond
-          [(kind? 'plus) (advance!) (loop (binary 'plus left (parse-multiplicative) (span-from start)))]
-          [(kind? 'minus) (advance!) (loop (binary 'minus left (parse-multiplicative) (span-from start)))]
-          [else left])))
+    (define (parse-additive) (parse-left-assoc '(plus minus) parse-multiplicative))
 
-    (define (parse-multiplicative)
-      (define start (current))
-      (let loop ([left (parse-unary)])
-        (cond
-          [(kind? 'multiply) (advance!) (loop (binary 'multiply left (parse-unary) (span-from start)))]
-          [(kind? 'divide) (advance!) (loop (binary 'divide left (parse-unary) (span-from start)))]
-          [(kind? 'modulo) (advance!) (loop (binary 'modulo left (parse-unary) (span-from start)))]
-          [else left])))
+    (define (parse-multiplicative) (parse-left-assoc '(multiply divide modulo) parse-unary))
 
     (define (parse-unary)
       (define start (current))
       (cond
-        [(kind? 'minus) (advance!) (unary 'minus (parse-unary) (span-from start))]
-        [(kind? 'not) (advance!) (unary 'not (parse-unary) (span-from start))]
+        [(or (kind? 'minus) (kind? 'not))
+         (define operator (advance!))
+         (unary (token-kind operator) (token-span operator) (parse-unary) (span-from start))]
         [else (parse-postfix)]))
 
     (define (parse-postfix)

@@ -11,11 +11,13 @@ Read the active phase in the roadmap before adding code. Implement only what tha
 
 ## Commands
 
-Run both before calling a change done:
+Run all of these before calling a change done:
 
 ```sh
 raco test tests/                          # every stage test
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
+racket src/main.rkt examples/classify.agc
+racket src/main.rkt examples/tasks.agc
 ```
 
 CI (`.github/workflows/ci.yml`) runs exactly these on Racket CS 9.3. Use the standard library only; the project adds no dependencies.
@@ -31,11 +33,16 @@ src/
   ast.rkt         # syntax tree nodes; every node carries a span
   parser.rkt      # parse: (listof token) -> program | diagnostic
   checker.rkt     # check: program -> program | diagnostic
-  main.rkt        # thin CLI driver: lex, parse, check, then print the tree or the diagnostic
+  evaluator.rkt   # evaluate: program -> 'nil | diagnostic (RUNTIME-); puts writes to current-output-port
+  main.rkt        # thin CLI driver: lex, parse, check, then run (or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
 tests/
   lexer-test.rkt
   parser-test.rkt
   checker-test.rkt
+  evaluator-test.rkt
+  diagnostic-test.rkt   # excerpt and caret format
+  examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
+examples/               # hello.agc, classify.agc, tasks.agc
 docs/
   Agentica-gramatica.md   # language grammar, the source of truth
   Agentica-roadmap.md     # phases and the active checklist
@@ -48,8 +55,8 @@ docs/
 | keyword, operator, or literal form | `src/lexer.rkt` lookup tables |
 | AST node | `src/ast.rkt` struct plus `provide`; construct it from `src/parser.rkt` |
 | syntax, statement, or expression form | `src/parser.rkt` |
-| diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`) |
-| pipeline stage (evaluator) | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
+| diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) |
+| pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
 | language rule or example | `docs/Agentica-gramatica.md`; phase scope in `docs/Agentica-roadmap.md` |
 | test | `tests/<stage>-test.rkt` |
 
@@ -114,7 +121,9 @@ Every stage follows the same shape; keep new stages consistent with it.
 - The lexer and parser are single mutable-pass scanners driven by `set!`. The parser cursor is capped at the last token (`EOF`), so `advance!` never runs past the end and `current`/`peek-token` stay safe at EOF.
 - Early exit uses `let/ec` with a `bail`/`return` helper that escapes with a `diagnostic`. This is how a stage stops at the first error.
 - `provide (struct-out name)` exports the constructor, predicate, and accessors in one line.
-- `#lang racket` provides `pretty-print`; `src/main.rkt` uses it for the tree.
+- `#lang racket` provides `pretty-print`; `src/main.rkt` uses it for `--dump`.
+- `unary` and `binary` carry `op-span` (the operator token) beside `span`. Operator diagnostics use `op-span`; `node-span` in `ast.rkt` returns any node's span.
+- Racket `equal?` treats `+nan.0` as equal to itself and `0.0` unequal to `-0.0`; the evaluator compares numbers with `=` so `==` follows IEEE 754.
 - Positions count Racket string characters, line and column are 1-based, and span ends are exclusive. Keep that convention in new spans.
 
 ## Lexer gotcha: stray NL tokens
@@ -124,7 +133,7 @@ The lexer emits one `NL` per newline sequence outside `()` and `[]`, but a comme
 ## Error handling
 
 - `raco test tests/` failure: read the failing `test-case` name and the message from the `parse-ok`/`parse-code` helper. A `parse-ok` failure prints the diagnostic the stage returned.
-- Smoke test exits 1: `main.rkt` printed `file:line:column: [CODE] message` on stderr. That is a stage diagnostic, not a crash.
+- Smoke test exits 1: `main.rkt` printed `file:line:column error[CODE]`, the message, and a source excerpt with a caret on stderr. That is a stage diagnostic, not a crash.
 - A Racket traceback instead of a diagnostic means a stage raised or indexed out of range. Find the token or index and turn it into a `bail`/`fail`; the roadmap requires Agentica diagnostics, never host tracebacks.
 - A stage unexpectedly returns a diagnostic: check the first-error rule and that `main.rkt` guards with `diagnostic?` before passing data to the next stage.
 
