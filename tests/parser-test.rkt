@@ -160,7 +160,11 @@
     (check-equal? (source-position-column (source-span-start (function-decl-span fn))) 1)
     (define node (expr-stmt-value (car (function-decl-body fn))))
     (check-equal? (source-position-line (source-span-start (call-span node))) 2)
-    (check-equal? (source-position-column (source-span-start (call-span node))) 3))
+    (check-equal? (source-position-column (source-span-start (call-span node))) 3)
+    (check-equal? (source-span-end (call-span node)) (source-position 33 2 16))
+    (define composite (parse-expr "a + b * c"))
+    (check-equal? (source-span-start (binary-span composite)) (source-position 21 2 7))
+    (check-equal? (source-span-end (binary-span composite)) (source-position 30 2 16)))
 
   (test-case "empty input parses to an empty program"
     (check-equal? (program-declarations (parse-ok "")) '()))
