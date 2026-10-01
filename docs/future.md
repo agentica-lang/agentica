@@ -116,7 +116,72 @@ f = &missing           # &name requires a declared function.
 ok = done?             # The ? suffix exists only when followed by "(".
 ```
 
-## 5. Native runtime
+## 5. `Enum` module and list building
+
+Today a program cannot build or sort a list: lists are immutable and the only list function is `List.size`. There is no append, concatenation, slice, reverse, or sort, and no way to pass a function. Many ordinary programs (sort these numbers, double every element, sum a list) cannot be written. This section fixes that with an Elixir-like `Enum` module. Not part of the core until its phase lands.
+
+**Depends on function values** (section 4, phase 5j): `Enum.map`, `Enum.filter`, `Enum.reduce`, and `Enum.sort_by` take a function, written `&name` and called by the module. Without closures, a function cannot capture variables; extra state travels as an argument (`reduce` already passes the accumulator).
+
+```text
+Enum.map(list: List[A], f: Fn[A, B]) -> List[B]
+Enum.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
+Enum.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B     # f(accumulator, item)
+Enum.sort(list: List[T]) -> List[T]                               # T is Int, Float, or String
+Enum.sort_by(list: List[A], key: Fn[A, K]) -> List[A]             # K is Int, Float, or String; stable
+Enum.reverse(list: List[T]) -> List[T]
+Enum.concat(a: List[T], b: List[T]) -> List[T]
+Enum.append(list: List[T], item: T) -> List[T]                    # a new list; the original is unchanged
+Enum.take(list: List[T], count: Int) -> List[T]
+Enum.drop(list: List[T], count: Int) -> List[T]
+Enum.at(list: List[T], index: Int) -> T                           # out of range is RUNTIME-INDEX-OUT-OF-RANGE
+Enum.count(list: List[T]) -> Int
+Enum.sum(list: List[Int]) -> Int
+Enum.member?(list: List[T], item: T) -> Bool                      # T is a primitive type
+Enum.any?(list: List[A], f: Fn[A, Bool]) -> Bool
+Enum.all?(list: List[A], f: Fn[A, Bool]) -> Bool
+```
+
+Companions for maps, so a map can be traversed and rebuilt without tuples:
+
+```text
+Map.values(map: Map[K, V]) -> List[V]                             # insertion order, like Map.keys
+Map.get(map: Map[K, V], key: K, default: V) -> V
+Map.delete(map: Map[K, V], key: K) -> Map[K, V]
+```
+
+Rules:
+
+- The functions are generic and builtin, special-cased in the checker like `List` and `Map`. No user generics.
+- `Enum.sort` and `Enum.sort_by` need an ordered element type: `Int`, `Float`, or `String`. Strings compare by Unicode code point; `Float` uses IEEE 754 order with a NaN placed last. Any other type is a `CHECK-TYPE-MISMATCH`. A `sort_by` key may not be a struct.
+- The sort is stable.
+- `Enum.reduce` passes the accumulator first: `f(accumulator, item)`. (Elixir passes the item first; Agentica chooses the accumulator first so the call reads like a left fold. Decide before the phase starts.)
+- A function argument is checked exactly: parameter and result types must match (`CHECK-TYPE-MISMATCH` otherwise), as for any `Fn` value.
+- All functions return a new list. `List.size` stays; `Enum.count` is the same thing and `List.size` may become an alias, or be dropped.
+- Name clash to settle first: the future sum-type keyword is `enum` (section 2) and this module is `Enum`. They differ in case and position (keyword versus module name), but an agent may confuse them. Alternatives: rename the module to `Lists`, or the keyword to `variants`.
+- Cost: each function copies, so `Enum.append` in a loop is O(n²). Acceptable for the prototype; a persistent vector is a later optimization (see the roadmap's "Later extensions").
+
+Example, once phase 5j and this phase exist:
+
+```ruby
+def double(n: Int) -> Int
+  return n * 2
+end
+
+def add(total: Int, n: Int) -> Int
+  return total + n
+end
+
+def main() -> Nil
+  numbers = [3, 1, 2]
+  sorted = Enum.sort(numbers)
+  doubled = Enum.map(sorted, &double)
+  puts(String.from_int(Enum.reduce(doubled, 0, &add)))
+end
+```
+
+Order of work: function values first (5j), then `Enum.append`, `Enum.concat`, `Enum.reverse`, `Enum.take`, `Enum.drop`, `Enum.at`, then `Enum.map`, `Enum.filter`, `Enum.reduce`, then `Enum.sort` and `Enum.sort_by`, then the `Map` companions. Each step needs the builtins catalog (phase 5e) so the checker, the evaluator, and the skill reference stay in sync.
+
+## 6. Native runtime
 
 For a later native runtime, procedural C++20, structs and free functions, the Boehm GC, and, later, libevent have been considered. Those decisions are not part of the grammar and must not appear in Agentica programs.
 
