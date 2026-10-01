@@ -10,11 +10,10 @@ Interpreter for the Agentica language, written in Racket. The language is define
 
 ## Layout
 
-- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `checker.rkt`. The evaluator comes in Phase 4.
+- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `checker.rkt` → `evaluator.rkt`.
 - `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
 - `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
 - `tests/<stage>-test.rkt` holds the focused tests for each stage.
-- `.agents/skills/agentica-development/` has stage-by-stage notes. Read it before changing a stage.
 
 ## Conventions
 
@@ -23,7 +22,7 @@ Interpreter for the Agentica language, written in Racket. The language is define
 - Keep to the core grammar (sections 4–6). No enums, generics, or modules, and no placeholder files or nodes for later phases.
 - Use only Racket's built-in test support (`rackunit`). Add no dependencies.
 - Tests assert the diagnostic code (and the span when it matters), not message text.
-- When a phase item is finished, tick it in the roadmap and update the development skill.
+- When a phase item is finished, tick it in the roadmap.
 
 ## Working style
 

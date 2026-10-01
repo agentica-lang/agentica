@@ -1,0 +1,65 @@
+#lang racket
+
+(require (except-in rackunit check)
+         racket/runtime-path
+         "../src/checker.rkt"
+         "../src/diagnostic.rkt"
+         "../src/evaluator.rkt"
+         "../src/lexer.rkt"
+         "../src/parser.rkt"
+         "../src/source.rkt")
+
+(define-runtime-path examples-dir "../examples")
+(define-runtime-path main-file "../src/main.rkt")
+
+(define (run-text text)
+  (define result #f)
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (set! result
+              (let* ([lexed (lex (source "test.agc" text))]
+                     [parsed (if (diagnostic? lexed) lexed (parse lexed))]
+                     [checked (if (diagnostic? parsed) parsed (check parsed))])
+                (if (diagnostic? checked) checked (evaluate checked)))))))
+  (values output result))
+
+(define (code-of body)
+  (define-values (output result) (run-text (format "def main() -> Nil\n~a\nend\n" body)))
+  (if (diagnostic? result) (diagnostic-code result) result))
+
+(define (cli . arguments)
+  (define-values (process out in err)
+    (apply subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) arguments))
+  (close-output-port in)
+  (define stdout (port->string out))
+  (define stderr (port->string err))
+  (subprocess-wait process)
+  (list (subprocess-status process) stdout stderr))
+
+(module+ test
+  (test-case "valid examples run with the expected output"
+    (for ([entry '(("hello.agc" . "hello\n")
+                   ("classify.agc" . "adult\n")
+                   ("tasks.agc" . "Probar Agentica\n"))])
+      (define-values (output result)
+        (run-text (file->string (build-path examples-dir (car entry)))))
+      (check-equal? result 'nil (car entry))
+      (check-equal? output (cdr entry) (car entry))))
+
+  (test-case "rejected fragments fail with the intended code"
+    (check-equal? (code-of "  age: Int = \"25\"") 'CHECK-TYPE-MISMATCH)
+    (check-equal? (code-of "  if 1\n    puts(\"hello\")\n  end") 'CHECK-TYPE-MISMATCH)
+    (check-equal? (code-of "  values = []") 'CHECK-EMPTY-LIST-TYPE)
+    (check-equal? (code-of "  puts \"hello\"") 'PARSE-UNEXPECTED-TOKEN))
+
+  (test-case "CLI exit codes"
+    (define hello (path->string (build-path examples-dir "hello.agc")))
+    (check-equal? (cli hello) '(0 "hello\n" ""))
+    (check-equal? (car (cli "no-such-file.agc")) 2)
+    (define bad (make-temporary-file "agentica~a.agc"))
+    (display-to-file "def main() -> Nil\n  x = 1 / 0\nend\n" bad #:exists 'truncate)
+    (define failed (cli (path->string bad)))
+    (delete-file bad)
+    (check-equal? (car failed) 1)
+    (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))))

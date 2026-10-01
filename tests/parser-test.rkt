@@ -164,7 +164,11 @@
     (check-equal? (source-span-end (call-span node)) (source-position 33 2 16))
     (define composite (parse-expr "a + b * c"))
     (check-equal? (source-span-start (binary-span composite)) (source-position 21 2 7))
-    (check-equal? (source-span-end (binary-span composite)) (source-position 30 2 16)))
+    (check-equal? (source-span-end (binary-span composite)) (source-position 30 2 16))
+    (check-equal? (source-span-start (binary-op-span composite)) (source-position 23 2 9))
+    (check-equal? (source-span-end (binary-op-span composite)) (source-position 24 2 10))
+    (define negated (parse-expr "-a"))
+    (check-equal? (source-span-start (unary-op-span negated)) (source-position 21 2 7)))
 
   (test-case "empty input parses to an empty program"
     (check-equal? (program-declarations (parse-ok "")) '()))

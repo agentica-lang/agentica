@@ -24,7 +24,8 @@
          (struct-out field-access)
          (struct-out index-access)
          (struct-out unary)
-         (struct-out binary))
+         (struct-out binary)
+         node-span)
 
 (struct program (declarations span) #:transparent)
 (struct function-decl (name params result body span) #:transparent)
@@ -50,5 +51,32 @@
 (struct list-lit (elements span) #:transparent)
 (struct field-access (target name span) #:transparent)
 (struct index-access (target index span) #:transparent)
-(struct unary (op operand span) #:transparent)
-(struct binary (op left right span) #:transparent)
+(struct unary (op op-span operand span) #:transparent)
+(struct binary (op op-span left right span) #:transparent)
+
+(define (node-span node)
+  (cond
+    [(program? node) (program-span node)]
+    [(function-decl? node) (function-decl-span node)]
+    [(param? node) (param-span node)]
+    [(struct-decl? node) (struct-decl-span node)]
+    [(field-decl? node) (field-decl-span node)]
+    [(type-ref? node) (type-ref-span node)]
+    [(binding? node) (binding-span node)]
+    [(return-stmt? node) (return-stmt-span node)]
+    [(expr-stmt? node) (expr-stmt-span node)]
+    [(if-branch? node) (if-branch-span node)]
+    [(if-stmt? node) (if-stmt-span node)]
+    [(while-stmt? node) (while-stmt-span node)]
+    [(for-stmt? node) (for-stmt-span node)]
+    [(literal? node) (literal-span node)]
+    [(name-ref? node) (name-ref-span node)]
+    [(call? node) (call-span node)]
+    [(named-arg? node) (named-arg-span node)]
+    [(construct? node) (construct-span node)]
+    [(list-lit? node) (list-lit-span node)]
+    [(field-access? node) (field-access-span node)]
+    [(index-access? node) (index-access-span node)]
+    [(unary? node) (unary-span node)]
+    [(binary? node) (binary-span node)]
+    [else #f]))

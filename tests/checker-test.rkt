@@ -190,4 +190,9 @@
     (check-true (diagnostic? unknown))
     (check-equal? (diagnostic-code unknown) 'CHECK-UNKNOWN-NAME)
     (check-equal? (source-position-line (source-span-start (diagnostic-span unknown))) 2)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span unknown))) 7)))
+    (check-equal? (source-position-column (source-span-start (diagnostic-span unknown))) 7)
+
+    (define operator (check-text "def main() -> Nil\n  x = 1 + \"a\"\nend\n"))
+    (check-true (diagnostic? operator))
+    (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9)))
