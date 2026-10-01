@@ -156,7 +156,10 @@
         [("Map.len") (length (mapping-pairs (car arguments)))]
         [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
         [("List.len") (length (car arguments))]
-        [else (call-function (hash-ref functions name) arguments (call-span expression))]))
+        [else
+         (define declaration (hash-ref functions name #f))
+         (unless declaration (unreachable "call" (call-span expression)))
+         (call-function declaration arguments (call-span expression))]))
 
     (define (call-function declaration arguments span)
       (when (>= depth max-call-depth)

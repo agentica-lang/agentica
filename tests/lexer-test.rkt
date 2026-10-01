@@ -69,4 +69,8 @@
     (check-equal? (diagnostic-code (lex-text ")"))
                   'LEX-UNMATCHED-DELIMITER)
     (check-equal? (diagnostic-code (lex-text "(["))
+                  'LEX-UNCLOSED-DELIMITER)
+    (check-equal? (diagnostic-code (lex-text "}"))
+                  'LEX-UNMATCHED-DELIMITER)
+    (check-equal? (diagnostic-code (lex-text "{"))
                   'LEX-UNCLOSED-DELIMITER)))

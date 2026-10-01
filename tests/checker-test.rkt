@@ -220,4 +220,5 @@
     (check-equal? (check-code (main-with "  m = {}")) 'CHECK-EMPTY-LIST-TYPE)
     (check-equal? (check-code (main-with "  x = Map.len()")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = Map.nope(1)")) 'CHECK-UNKNOWN-NAME)
+    (check-equal? (check-code (main-with "  x = Mpa.put(1)")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m == m")) 'CHECK-TYPE-MISMATCH)))
