@@ -107,4 +107,9 @@
     (check-equal? (diagnostic-code past-end) 'RUNTIME-INDEX-OUT-OF-RANGE)
     (check-equal? (position-of past-end) '(3 10))
     (check-equal? (diagnostic-code (diagnostic-of (main-with "  xs = [1, 2]\n  y = xs[0 - 1]")))
-                  'RUNTIME-INDEX-OUT-OF-RANGE)))
+                  'RUNTIME-INDEX-OUT-OF-RANGE)
+    (check-equal? (diagnostic-code
+                   (diagnostic-of (string-append
+                                   "def loop(n: Int) -> Int\n  return loop(n + 1)\nend\n"
+                                   "def main() -> Nil\n  x = loop(0)\nend\n")))
+                  'RUNTIME-STACK-OVERFLOW)))

@@ -11,12 +11,20 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
+(define max-call-depth 10000)
+
 (define (evaluate program)
   (define functions (make-hash))
   (define scopes '())
   (define return-to #f)
+  (define depth 0)
 
-  (let/ec escape
+  (with-handlers ([exn:fail?
+                   (lambda (failure)
+                     (diagnostic 'RUNTIME-INTERNAL
+                                 (exn-message failure)
+                                 (program-span program)))])
+   (let/ec escape
     (define (bail code message span)
       (escape (diagnostic code message span)))
 
@@ -118,11 +126,14 @@
       (define name (call-name expression))
       (if (string=? name "puts")
           (begin (displayln (car arguments)) 'nil)
-          (call-function (hash-ref functions name) arguments)))
+          (call-function (hash-ref functions name) arguments (call-span expression))))
 
-    (define (call-function declaration arguments)
+    (define (call-function declaration arguments span)
+      (when (>= depth max-call-depth)
+        (bail 'RUNTIME-STACK-OVERFLOW "call depth limit exceeded" span))
       (define saved-scopes scopes)
       (define saved-return return-to)
+      (set! depth (add1 depth))
       (define result
         (let/ec done
           (set! return-to done)
@@ -133,6 +144,7 @@
             (define! (param-name parameter) argument))
           (exec-block (function-decl-body declaration))
           'nil))
+      (set! depth (sub1 depth))
       (set! scopes saved-scopes)
       (set! return-to saved-return)
       result)
@@ -186,4 +198,4 @@
     (for ([declaration (in-list (program-declarations program))])
       (when (function-decl? declaration)
         (hash-set! functions (function-decl-name declaration) declaration)))
-    (call-function (hash-ref functions "main") '())))
+    (call-function (hash-ref functions "main") '() (program-span program)))))

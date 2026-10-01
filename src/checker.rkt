@@ -254,7 +254,7 @@
         [(modulo)
          (unless (and (eq? left 'Int) (eq? right 'Int))
            (bail 'CHECK-TYPE-MISMATCH
-                 (format "\"%%\" expects two Ints, found ~a and ~a"
+                 (format "\"%\" expects two Ints, found ~a and ~a"
                          (type->string left) (type->string right))
                  span))
          'Int]

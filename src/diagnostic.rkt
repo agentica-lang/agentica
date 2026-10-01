@@ -35,5 +35,7 @@
           gutter
           text
           (make-string (string-length gutter) #\space)
-          (make-string (sub1 column) #\space)
+          (list->string
+           (for/list ([character (in-string text 0 (min (sub1 column) (string-length text)))])
+             (if (char=? character #\tab) #\tab #\space)))
           (make-string (max 1 (min wanted room)) #\^)))
