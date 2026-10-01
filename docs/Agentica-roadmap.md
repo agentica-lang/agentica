@@ -498,7 +498,7 @@ System.exit(code: Int) -> Nil
 
 - `puts` stays as a global alias of `IO.puts`.
 - `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form (structs, lists, maps) and returns it, like Elixir.
-- `IO.gets` returns the next line without the newline, and halts with `RUNTIME-END-OF-INPUT` at end of input; check `IO.eof?()` first. This changes to `Result` in 5e.
+- `IO.gets` returns the next line without the newline, and halts with `RUNTIME-END-OF-INPUT` at end of input; check `IO.eof?()` first. Phase 5d2 closes the final API: `IO.gets()` returns `Result[String]` and `IO.gets!()` is the halting form.
 - `System.exit` ends the run with that exit code. The evaluator returns it as data, and only `main.rkt` exits.
 - `main.rkt` passes the program arguments to the evaluator.
 
@@ -506,9 +506,103 @@ System.exit(code: Int) -> Nil
 - [x] Type and evaluate the functions above.
 - [x] Add `examples/echo.agc` and a test that feeds input through a string port.
 
-### Phase 5e: Result and error handling
+### Revised order (after the static review of `cd33a26`)
 
-Phases 5f to 5h need a way to report failure without halting. Full enums and generics stay a later extension, so `Result[T]` is a builtin generic type, special-cased in the checker like `List` and `Map`.
+Measure before growing the language. The order from here is: 5d2 (consistency fixes) → 5d3 (agent API) → 6a (first agent evaluation) → 5e with `try` (Result and propagation together) → faster maps → 5f (JSON) → 6b (second evaluation) → the rest (5f2, 5g, 5h, 5i, 5j, 5l, 5m). Each later phase should answer a problem seen in 6a or 6b.
+
+### Phase 5d2: Consistency fixes (P0)
+
+The spec and the implementation must agree, because an agent that reads both learns the contradiction. Reproduce each item as a failing test first, then fix it.
+
+- [ ] `?` and `!` suffix: today the lexer accepts the suffix only when `(` is the next character, so `String.contains?("a", "a")` works and `String.contains? ("a", "a")` does not. Separate recognizing the name from the call syntax: the suffix belongs to the name, and `a!=b` still lexes as `a != b`. This also unblocks `&predicate?` in 5j.
+- [ ] Newlines: the spec says a run of newlines is one `NL`, but the lexer emits one per newline around comment lines (the parser tolerates it). Make the lexer and the contract (grammar and Phase 1 notes) say the same thing; verify first that no accepted program changes.
+- [ ] Add `CHECK-EMPTY-MAP-TYPE`: an empty map with no expected type currently reuses `CHECK-EMPTY-LIST-TYPE`.
+- [ ] Update the header and tables of `Agentica-gramatica.md`: it still says "no implementation yet" and keeps older decisions. Remove every sentence that contradicts the interpreter.
+- [ ] Close the `IO.gets` API now: `IO.gets() -> Result[String]` and `IO.gets!() -> String` (halts with `RUNTIME-END-OF-INPUT`). Do not teach a form that 5e breaks.
+- [ ] Execution budget: the call-depth limit does not stop infinite loops. Add an optional step budget or timeout (`--max-steps N`, `RUNTIME-STEP-LIMIT`) so automatic evaluations always end.
+- [ ] Document that list indexing is O(n) and prefer `for` in the examples.
+
+### Phase 5d3: Agent API (P0 and P1)
+
+`--dump` prints Racket structures, which is a poor interface for an agent. Add small machine-readable commands. Start with a stable JSON shape; presentation stays in `main.rkt`.
+
+```text
+agentica check program.agc --ai                # compact text for the agent (first)
+agentica check program.agc --json              # parse and check, never run
+agentica symbols program.agc --json            # functions, structs, fields, signatures
+agentica show program.agc --symbol NAME --json # one declaration with its span and source
+agentica refs program.agc --symbol NAME --json # uses of a symbol
+```
+
+Diagnostic shape (P0):
+
+```json
+{"code": "CHECK-TYPE-MISMATCH", "message": "expected Int, found String",
+ "file": "program.agc",
+ "range": {"start": {"line": 2, "column": 14}, "end": {"line": 2, "column": 18}},
+ "expected": "Int", "actual": "String"}
+```
+
+- `expected` and `actual` are fields the checker produces, not text cut from the message. Diagnostics that have no such data omit them.
+- No persistent symbol IDs yet: symbol name + location + file hash is enough. Structured patches wait until real cases need them.
+- `check --ai` and `check --json` exit 1 on a diagnostic and 0 on success, like the plain CLI.
+
+`--ai` is the first output to build (KISS for v0.0.1): compact text for the agent that reads the result and repairs the code. `--json` stays for tools that need to deserialize. Both print the same structured diagnostic; only the printer differs, so presentation can change without duplicating logic.
+
+```text
+check failed: 1 error
+
+[CHECK-TYPE-MISMATCH]
+  at: main.agc:12:10
+  in: greet(name: String) -> String
+  source: return 42
+  expected: String
+  actual: Int
+```
+
+```text
+[CHECK-ARG-TYPE]
+  at: main.agc:8:20
+  source: String.split(text, 3)
+  callee: String.split(text: String, separator: String) -> List[String]
+  argument: 2 (separator)
+  expected: String
+  actual: Int
+```
+
+On success it prints `check ok`.
+
+- Fixed format, spaces only (no tabs): stable code in brackets, exact location, the signature of the enclosing function (`in:`), the minimal relevant source fragment, and the error's own fields (`expected`, `actual`, `symbol`, `callee`, `argument`).
+- Add `suggestion:` only when the checker has a grounded fix. Never guess.
+- Open question: `CHECK-ARG-TYPE` is not an existing code (argument mismatches are `CHECK-TYPE-MISMATCH` today). Split it only if 6a shows agents gain from it.
+- Compact text is not proven to help the agent or to save tokens. Measure it in 6a (`--ai` against plain text and `--json`); the defensible gain is choosing relevant information and keeping it predictable.
+
+- [ ] Add optional `expected`, `actual`, `callee`, and `argument` to `diagnostic` and fill them in `CHECK-TYPE-MISMATCH` and `CHECK-ARITY`; the checker also records the enclosing function signature.
+- [ ] One structured diagnostic, two printers: `--ai` (P0, first) and `--json` (P0).
+- [ ] `symbols`, `show`, `refs` (P1).
+- [ ] One test per command over `examples/`.
+
+### Phase 6a: First agent evaluation
+
+Run a small evaluation now, with the language as it is, and again after 5e and 5f (6b). The agent should implement Agentica, and also be the subject of the experiment.
+
+Tasks (about five, each with hidden tests):
+
+1. Write a function from a description.
+2. Repair a type error.
+3. Change a struct and every use of it.
+4. Implement an algorithm with lists and maps.
+5. Fix a program with scope and return errors.
+
+Method: the same model, equivalent tasks, and a comparable budget in Agentica and Python. Measure hidden tests passed, repair attempts, tokens, and time, and separate syntax errors from logic errors. Record whether the checker output was enough to fix the error, comparing the three formats: plain, `--ai`, and `--json`.
+
+- [ ] Write the task set and hidden tests under `tests/eval/` (data and a runner script; no new dependency).
+- [ ] Run the Agentica and Python arms and record the results in `docs/`.
+- [ ] List the problems found and put them in the next phases before building more.
+
+### Phase 5e: Result and error handling (with propagation)
+
+Phases 5f to 5h need a way to report failure without halting. Full enums and generics stay a later extension, so `Result[T]` is a builtin generic type, special-cased in the checker like `List` and `Map`. Error propagation (`try`, formerly Phase 5k) ships in the same delivery: without it, `Result` code is full of manual checks.
 
 ```text
 Result[T]                         # either ok(value) or error(message)
@@ -525,10 +619,30 @@ Result.message(r: Result[T]) -> String
 - `Result.unwrap!` on an error is `RUNTIME-UNWRAP-ERROR`.
 - Open decision: use `Result.ok?` or add pattern matching (`case r in ok(v)`) with the enum extension. Start with the functions.
 
+Propagation rule: `try` unwraps an `ok` or returns the `error` from the current function, and is allowed only inside a function that returns `Result[...]` (otherwise a `CHECK-` error). The error stays a `String`; no enums or exceptions.
+
+```ruby
+def read_age(text: String) -> Result[Int]
+  age = try String.to_int(text)
+  return ok(age)
+end
+```
+
 - [ ] Add the `Result[T]` type, `ok`, `error`, and the `Result` module.
-- [ ] Reserve `Result`, `ok`, `error`.
+- [ ] Reserve `Result`, `ok`, `error`, `try`.
 - [ ] Add the Result forms to `String` and `IO`.
-- [ ] Add `examples/result.agc`.
+- [ ] Write `try` in `Agentica-gramatica.md`, then implement it across lexer, parser, checker, and evaluator.
+- [ ] Add `examples/result.agc`, using `try`, and rewrite one earlier example with it.
+
+### Builtins catalog
+
+Builtins are described today by branches in `check-builtin-call` and implemented by other branches in `eval-call`, so names and arities can drift. Add one `src/builtins.rkt` table before the library grows further.
+
+- Each entry has: name, type rule or signature, effects (`stdin`, `stdout`, `net`, `process`), and a short description. Implementations stay normal functions.
+- The checker, the evaluator, and `agentica help NAME --json` read the same table; effects are information only at first (no mandatory annotations).
+- [ ] Add `src/builtins.rkt` and move the 5b to 5d builtins into it.
+- [ ] Make the checker and evaluator read it; add a test that every entry is both typed and evaluated.
+- [ ] Add `agentica help NAME --json`.
 
 ### Phase 5f: JSON
 
@@ -637,7 +751,11 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 
 - [x] Phase 5c: String library.
 - [x] Phase 5d: standard input and output.
-- [ ] Phase 5e: `Result[T]` and error handling.
+- [ ] Phase 5d2: consistency fixes.
+- [ ] Phase 5d3: agent API (`check --json`, `symbols`, `show`, `refs`).
+- [ ] Phase 6a: first agent evaluation.
+- [ ] Phase 5e: `Result[T]`, `try`, and the builtins catalog.
+- [ ] Faster maps (before JSON).
 - [ ] Phase 5f: JSON.
 - [ ] Phase 5f2: typed JSON decoding.
 - [ ] Phase 5g: TCP.
@@ -690,15 +808,7 @@ result = handlers["add"].call(args)
 
 ### Phase 5k: Error propagation
 
-Chains such as connect, initialize, list tools, call, each returning `Result`, nest deeply without help.
-
-- Decide the form first: Ruby-like `try!`, Elixir-like `with`, or a Rust-like `?` suffix. Recommended: a `try` expression, `value = try Result.something()`, that returns the error from the enclosing function, which must itself return `Result[...]`.
-- A `try` in a function that does not return `Result` is a `CHECK-` error.
-- Update the grammar first, then all stages.
-
-- [ ] Pick the form and write it in `Agentica-gramatica.md`.
-- [ ] Implement it across the lexer, parser, checker, and evaluator.
-- [ ] Add a focused test per stage and rewrite one earlier example to use it.
+Moved into Phase 5e: `try` ships together with `Result`. The decision is made: a `try` expression that returns the error from the enclosing function, which must return `Result[...]`. Nothing is left to do here.
 
 ### Phase 5l: Process spawning
 
@@ -736,11 +846,13 @@ Process.close(p: Process) -> Nil
 
 - [ ] Phase 5i: JSON builders and schemas.
 - [ ] Phase 5j: function values.
-- [ ] Phase 5k: error propagation.
+- [x] Phase 5k: error propagation (merged into 5e).
 - [ ] Phase 5l: process spawning.
 - [ ] Phase 5m: MCP client and server examples.
 
 ## Phase 6: Validate the language design
+
+Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result` + `try` and JSON) are described under Phase 5d3 and use the same task set, so the results compare.
 
 - [ ] Ask agents to write and repair small programs using only the grammar and examples.
 - [ ] Record correct programs, repair attempts, and whether diagnostics helped identify the fix.
@@ -750,7 +862,7 @@ Process.close(p: Process) -> Nil
 
 ## Later extensions
 
-- [ ] Faster maps: `mapping` in `src/evaluator.rkt` is an association list, so `Map.put`, `Map.has_key?`, and `m[key]` are O(n) and building a map of n entries is O(n²). Replace it with an immutable `hash` plus a reversed key list (insertion order), keeping `mapping-put` as the only writer. Do this when JSON or HTTP payloads (phases 5f–5h) make maps large.
+- [ ] Faster maps: `mapping` in `src/evaluator.rkt` is an association list, so `Map.put`, `Map.has_key?`, and `m[key]` are O(n) and building a map of n entries is O(n²). Replace it with an immutable `hash` plus a reversed key list (insertion order), keeping `mapping-put` as the only writer. Do this before JSON (5f), once 5e is done. Lists keep O(n) indexing; document it and favor `for`, with no runtime rewrite yet.
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
