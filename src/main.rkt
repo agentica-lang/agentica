@@ -1,6 +1,7 @@
 #lang racket
 
-(require "diagnostic.rkt"
+(require "checker.rkt"
+         "diagnostic.rkt"
          "lexer.rkt"
          "parser.rkt"
          "source.rkt")
@@ -12,15 +13,15 @@
      #:args (source-file)
      source-file))
   (define input (source source-file (file->string source-file)))
-  (define result (lex input))
-  (cond
-    [(diagnostic? result)
-     (displayln (format-diagnostic result) (current-error-port))
-     (exit 1)]
-    [else
-     (define tree (parse result))
-     (if (diagnostic? tree)
-         (begin
-           (displayln (format-diagnostic tree) (current-error-port))
-           (exit 1))
-         (pretty-print tree))]))
+
+  (define (fail! problem)
+    (displayln (format-diagnostic problem) (current-error-port))
+    (exit 1))
+
+  (define lexed (lex input))
+  (when (diagnostic? lexed) (fail! lexed))
+  (define tree (parse lexed))
+  (when (diagnostic? tree) (fail! tree))
+  (define checked (check tree))
+  (when (diagnostic? checked) (fail! checked))
+  (pretty-print checked))

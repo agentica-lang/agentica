@@ -119,12 +119,110 @@ Keep the AST free of parsing rules and the parser free of checking rules. Do not
 
 ## Phase 3: Name resolution and type checking
 
-- [ ] Register structs and functions before checking bodies so forward calls and recursion work.
-- [ ] Check primitive, struct, and `List[T]` types; infer local variable types and require an expected type for empty lists.
-- [ ] Enforce operator operand types, boolean conditions, call arity, constructor fields, and field/index access rules.
-- [ ] Implement lexical block scopes, assignment updates, immutable types, and the no-shadowing rule.
-- [ ] Check return types and require every reachable path in non-`Nil` functions to return.
-- [ ] Require exactly one `main() -> Nil` with no parameters and reserve `puts`.
+Turn the tree from Phase 2 into a checked program, or a located check diagnostic. Keep the same shape: `check` takes the `program` `parse` returned and gives back the program or one diagnostic, and stops at the first error. No evaluator yet.
+
+### `src/` organization for this phase
+
+```text
+src/
+├── main.rkt       # CLI: lex, parse, check, show the tree or the first diagnostic
+├── source.rkt     # unchanged
+├── diagnostic.rkt # unchanged
+├── token.rkt      # unchanged
+├── lexer.rkt      # unchanged
+├── ast.rkt        # unchanged
+├── parser.rkt     # unchanged
+└── checker.rkt    # program -> program or check diagnostic
+
+tests/
+├── lexer-test.rkt   # unchanged
+├── parser-test.rkt  # unchanged
+└── checker-test.rkt # focused checker behavior tests
+```
+
+Keep the checker free of parsing rules and evaluator rules. Do not add an evaluator file, and do not add placeholder checks for enums, generics, or modules.
+
+### Types and the check result
+
+- One internal type value covers every type: the symbols `Int`, `Float`, `Bool`, `String`, and `Nil`; `(list 'List T)`; and `(list 'Struct NAME)`. No new struct is needed.
+- `check` returns the same `program` when it is valid, or one diagnostic. It does not annotate the tree and adds no new result type. Phase 4 can read the types again if it needs them.
+- The parser already stores decoded literals, so the checker dispatches on the Racket value: integer → `Int`, flonum → `Float`, string → `String`, boolean → `Bool`, `'nil` → `Nil`.
+- An empty list takes its type from the expected type: an annotation, a parameter, a field, the function result, or an argument position. With no expected type it is an error.
+
+### Diagnostic codes
+
+Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same into one code.
+
+- `CHECK-UNKNOWN-NAME` — a name that is not a local, a parameter, a function, or `puts`.
+- `CHECK-UNKNOWN-TYPE` — a type name that is not a primitive, `List`, or a declared struct, or `List` with the wrong number of arguments.
+- `CHECK-REDEFINED-NAME` — a duplicate function, struct, parameter, or field, or a definition of the reserved `puts`.
+- `CHECK-ARITY` — a call with the wrong number of arguments.
+- `CHECK-TYPE-MISMATCH` — operand, condition, argument, assignment, return, or field value of the wrong type.
+- `CHECK-EMPTY-LIST-TYPE` — an empty list with no expected type.
+- `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD` — constructor field rules.
+- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-A-LIST` — index on a non-list.
+- `CHECK-SHADOWED-NAME` — a new local reusing a name visible in an outer scope.
+- `CHECK-ANNOTATION-ON-EXISTING` — an annotation on a name that is already bound.
+- `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
+- `CHECK-MISSING-RETURN` — a non-`Nil` function with a path that does not return.
+- `CHECK-MAIN` — no `main`, or a `main` that is not `() -> Nil`. A second `main` is a duplicate name and is `CHECK-REDEFINED-NAME`.
+
+### Work sequence
+
+1. Add `src/checker.rkt` with one entry point `(check program)`, a `bail`/`return` escape, a `fail` that builds a diagnostic from a span, and a `type->string` for messages.
+2. Pass 1 registers declarations before any body: a struct table (name → ordered fields and types) and a function table (name → parameter types and result type). Register `puts(value: String) -> Nil` first so it cannot be redefined. Reject duplicate names and unknown types here.
+3. Pass 2 checks bodies with a scope stack: a list of frames, each a hash of name → type, plus helpers `lookup`, `introduce!` (no-shadowing), and `update!`.
+4. Add `check-expression` with an optional expected type: literals, `name-ref`, `unary`, `binary`, `call`, `construct`, `list-lit`, `field-access`, `index-access`.
+5. Add `check-statement`: `binding`, `return-stmt`, `expr-stmt`, `if`, `while`, `for`. Each control block pushes and pops a frame.
+6. Add return analysis: `block-returns?` is true when every statement on the path returns; an `if` returns when it has an `else` and every branch returns; loops never guarantee a return. A non-`Nil` function must return on every reachable path.
+7. Add the program rule: exactly one `main() -> Nil` with no parameters, and `puts` reserved.
+8. Wire `main.rkt`: after `parse`, call `check` behind a `diagnostic?` guard, and print the tree when it passes.
+9. Add `tests/checker-test.rkt`; update the Phase 3 checklist and the development skill. CI needs no change: `raco test tests/` finds the new file.
+
+### Checker rules and edge cases
+
+- Numeric operators: `+` takes two numbers of the same type or two `String`s; `-`, `*`, `/` take two numbers of the same type; `%` takes two `Int`s; `<`, `<=`, `>`, `>=` take two numbers of the same type; `==` and `!=` take two values of the same primitive type (no list or struct equality); `and`, `or`, and `not` take `Bool`; unary `-` takes a number. No implicit numeric conversion.
+- `if` and `while` conditions must be `Bool`.
+- Calls: the name must be a function or `puts`, the arity must match, and each argument is checked against its parameter type. Named arguments are only for constructors.
+- Constructors: the type must be a declared struct; every field appears exactly once, in any order; no unknown and no duplicate fields; each value matches the field type.
+- Field access needs a struct target and a field that exists. Index needs a `List[T]` target and an `Int` index. Strings cannot be indexed.
+- A binding with an annotation introduces a new local. A binding without an annotation that names a visible variable is an update and must keep the type; otherwise it introduces a local in the current scope.
+- No-shadowing: a new local may not reuse a name visible in an outer scope. An annotation on an existing name is `CHECK-ANNOTATION-ON-EXISTING`.
+- The `for` variable is a fresh binding in the loop body and cannot be assigned. A parameter may be assigned; the spec only forbids the `for` variable.
+- An empty list needs an expected type. A non-empty list checks each element against the expected element type when one is known, and otherwise against the first element's type.
+- `return` with no value is `Nil`; a value must match the function result type.
+- Stop at the first error and return one diagnostic, as the other stages do. No error recovery.
+- Every check diagnostic points at the node span: the name token for names, the operator token for operators, the whole node otherwise.
+
+### Open decisions
+
+Defaults are chosen so work can start; change the spec first if a different answer is wanted.
+
+1. `check` returns the same `program`. Add a typed tree only when Phase 4 needs it.
+2. A parameter may be reassigned; only the `for` variable is fixed.
+3. Statements after a `return` are allowed and not diagnosed. Add `CHECK-UNREACHABLE` only if asked.
+4. Every program needs one `main() -> Nil`, as the spec says. A file of only structs fails, and a test helper must wrap a body in `main`.
+5. A second `main` is caught as a duplicate function name (`CHECK-REDEFINED-NAME`) before the `main` rule runs, so `CHECK-MAIN` only covers a missing or wrongly typed `main`.
+
+### Phase 3 checklist
+
+- [x] Register structs and functions before checking bodies so forward calls and recursion work.
+- [x] Check primitive, struct, and `List[T]` types; infer local variable types and require an expected type for empty lists.
+- [x] Enforce operator operand types, boolean conditions, call arity, constructor fields, and field/index access rules.
+- [x] Implement lexical block scopes, assignment updates, immutable types, and the no-shadowing rule.
+- [x] Check return types and require every reachable path in non-`Nil` functions to return.
+- [x] Require exactly one `main() -> Nil` with no parameters and reserve `puts`.
+- [x] Show the checked result from the CLI so a valid file is inspectable end to end.
+
+### Focused tests
+
+- Valid: `examples/hello.agc`, the `classify` and `Task`/`for` programs from section 10, a forward call, and a recursive function.
+- Rejected from section 10: `age: Int = "25"` and `if 1` are `CHECK-TYPE-MISMATCH`; `values = []` is `CHECK-EMPTY-LIST-TYPE`; `puts "hello"` stays a parse error.
+- Names and types: unknown name, unknown type, `List` with the wrong arity, duplicate function or struct, redefined `puts`.
+- Calls and constructors: wrong arity, unknown field, missing field, duplicate field, wrong field value type.
+- Statements: assignment that changes a type, annotation on an existing name, shadowed local, field access on a non-struct, index on a non-list.
+- Returns and entry: missing return on one branch, missing `main`, two `main`s, `main` with parameters, `main` with a non-`Nil` result.
+- Spans: line and column of a type mismatch and of an unknown name.
 
 **Complete when:** valid programs pass, the rejected examples in section 10 fail for the intended reason, and each failure points to its source.
 
