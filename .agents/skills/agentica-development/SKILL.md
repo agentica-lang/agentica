@@ -61,7 +61,7 @@ docs/
 | syntax, statement, or expression form | `src/parser.rkt` |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
-| language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap.md` |
+| language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap.md`; also update `.agents/skills/agentica-programming/references/language.md` (the reference evaluators read instead of the grammar) |
 | test | `tests/<stage>-test.rkt` |
 
 ## Stage contract

@@ -598,7 +598,7 @@ Method: the same model, equivalent tasks, and a comparable budget in Agentica an
 
 The agent runs the `agentica` binary (`dist/agentica`), not `racket src/main.rkt`. `dist/` is not versioned and can be stale, so the runner rebuilds it with `make exe` before each round and puts it on the `PATH`.
 
-The skill `.agents/skills/agentica-programming/` is a variable: one arm gets only the grammar and examples, the other also gets the skill. It starts without a list of commonly broken rules, on purpose: first see how agents behave with the basic skill, then add rules only for failures actually observed. Record the skill version (commit) used in each round.
+The skill `.agents/skills/agentica-programming/` is a variable: one arm gets `docs/grammar.md` and `examples/`, the other gets only the skill, which is self-contained: its `references/language.md` is a minimal English subset of the language, and the agent does not read the grammar. It starts without a list of commonly broken rules, on purpose: first see how agents behave with the basic skill, then add rules only for failures actually observed. Record the skill version (commit) used in each round.
 
 - [x] Write the minimal `agentica-programming` skill.
 - [ ] Write the task set and hidden tests under `tests/eval/` (data and a runner script; no new dependency).

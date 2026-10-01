@@ -29,6 +29,7 @@ Interpreter for the Agentica language, written in Racket. The language is define
 - Network and process tests stay hermetic by default (Racket-only, port 0). Optional Node.js fixtures in `tests/fixtures/` may check interoperability: Node standard library only, and the test skips itself when `node` is missing. See "Integration fixtures in Node.js" in the roadmap.
 - Tests assert the diagnostic code (and the span when it matters), not message text.
 - When a phase item is finished, tick it in the roadmap and update the development skill.
+- When the language changes, update `docs/grammar.md` and `.agents/skills/agentica-programming/references/language.md` together; the programming skill is self-contained and does not read the grammar.
 
 ## Working style
 

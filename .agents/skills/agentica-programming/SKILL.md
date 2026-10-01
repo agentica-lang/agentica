@@ -5,7 +5,7 @@ description: Write, run, and repair programs in the Agentica language (`.agc` fi
 
 # Programming in Agentica
 
-Agentica is a small statically typed language with Ruby-like syntax. The language is defined in `docs/grammar.md`; read the sections you need before writing code, and do not guess syntax. Valid programs to copy from are in `examples/`: `hello.agc`, `classify.agc` (functions and control flow), `tasks.agc` (structs, lists), `inventory.agc` (maps), `strings.agc` (String library), `echo.agc` (input).
+Agentica is a small statically typed language with Ruby-like syntax. Read [references/language.md](references/language.md) before writing code: it is the whole language, with its builtin functions, diagnostic codes, and complete example programs. Do not guess syntax that is not in it.
 
 ## Run and check
 
@@ -17,7 +17,7 @@ agentica --dump program.agc     # check only; prints the checked tree, runs noth
 agentica program.agc a b        # extra arguments reach System.args()
 ```
 
-If `agentica` is not on the `PATH`, use the path the user gave you, or `dist/agentica` in the repository (`make exe` builds it).
+If `agentica` is not on the `PATH`, use the path the user gave you.
 
 Exit codes: `0` ok, `1` the program has a diagnostic (the stage that failed stopped at its first error), `2` bad usage or unreadable file.
 
@@ -37,7 +37,7 @@ The header gives the file, line, column, and a stable code. The code prefix name
 
 ## Work loop
 
-1. Read the relevant grammar sections and the closest example.
+1. Read `references/language.md`.
 2. Write the program to a `.agc` file. Every program needs one `main() -> Nil`.
 3. Run `agentica` on it. If it exits `1`, fix the code at the reported position and run again.
 4. Stop when it exits `0` and the output is what the task asked for. A program that only passes the checker is not done: run it and compare the output.
