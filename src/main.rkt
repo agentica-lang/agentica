@@ -2,8 +2,8 @@
 
 (require "diagnostic.rkt"
          "lexer.rkt"
-         "source.rkt"
-         "token.rkt")
+         "parser.rkt"
+         "source.rkt")
 
 (module+ main
   (define source-file
@@ -13,14 +13,14 @@
      source-file))
   (define input (source source-file (file->string source-file)))
   (define result (lex input))
-  (if (diagnostic? result)
-      (begin
-        (displayln (format-diagnostic result) (current-error-port))
-        (exit 1))
-      (for ([item (in-list result)])
-        (define start (source-span-start (token-span item)))
-        (printf "~a ~s @~a:~a\n"
-                (token-kind item)
-                (token-lexeme item)
-                (source-position-line start)
-                (source-position-column start)))))
+  (cond
+    [(diagnostic? result)
+     (displayln (format-diagnostic result) (current-error-port))
+     (exit 1)]
+    [else
+     (define tree (parse result))
+     (if (diagnostic? tree)
+         (begin
+           (displayln (format-diagnostic tree) (current-error-port))
+           (exit 1))
+         (pretty-print tree))]))

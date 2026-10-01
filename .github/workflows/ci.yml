@@ -16,5 +16,5 @@ jobs:
         with:
           variant: CS
           version: '9.3'
-      - run: raco test tests/lexer-test.rkt
+      - run: raco test tests/
       - run: racket src/main.rkt examples/hello.agc

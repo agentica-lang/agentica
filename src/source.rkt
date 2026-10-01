@@ -4,6 +4,7 @@
          (struct-out source-position)
          (struct-out source-span))
 
-(struct source (name text) #:transparent)
+;; Opaque so a printed tree shows #<source> instead of the whole file text.
+(struct source (name text))
 (struct source-position (offset line column) #:transparent)
 (struct source-span (source start end) #:transparent)
