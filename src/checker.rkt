@@ -462,7 +462,7 @@
          (check-expression (index-access-index expression) 'Int)
          (cadr target)]
         [else
-         (bail 'CHECK-NOT-A-LIST
+         (bail 'CHECK-NOT-INDEXABLE
                (format "indexing needs a list or a map, found ~a" (type->string target))
                (index-access-span expression))]))
 

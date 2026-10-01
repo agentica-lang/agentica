@@ -193,7 +193,7 @@
          (when (kind? 'assign)
            (bail 'PARSE-INVALID-ASSIGNMENT-TARGET
                  (if (index-access? value)
-                     "the core only assigns to a plain name; lists and maps are immutable, use Map.put(map, key, value) for a new map"
+                     "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, Map.put(map, key, value))"
                      "the core only assigns to a plain name")
                  (current)))
          (when (and (name-ref? value) (not (kind? 'NL)))

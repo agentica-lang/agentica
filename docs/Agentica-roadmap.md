@@ -160,7 +160,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-TYPE-MISMATCH` — operand, condition, argument, assignment, return, or field value of the wrong type.
 - `CHECK-EMPTY-LIST-TYPE` — an empty list with no expected type.
 - `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD` — constructor field rules.
-- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-A-LIST` — index on a non-list.
+- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
 - `CHECK-SHADOWED-NAME` — a new local reusing a name visible in an outer scope.
 - `CHECK-ANNOTATION-ON-EXISTING` — an annotation on a name that is already bound.
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
@@ -444,7 +444,7 @@ Add `Map[K, V]` before Phase 6, so the validation does not measure a missing dic
 
 ## Phases 5c to 5h: Standard library before validation
 
-Phase 6 measures whether agents can write useful programs, so the language needs I/O, strings, and data exchange first. These are core extensions. As in Phase 5b, write the spec in `Agentica-gramatica.md` first, then implement stage by stage.
+Phase 6 measures whether agents can write useful programs, so the language needs I/O, strings, and data exchange first. These are core extensions. As in Phase 5b, write the spec in `Agentica-gramatica.md` first (planned syntax lives in its section 8 until the phase lands, then moves to sections 4–6), then implement stage by stage.
 
 Rules for every phase here:
 
@@ -476,7 +476,7 @@ String.to_float!(s: String) -> Float
 - Length and slice count Unicode characters, not bytes. The grammar keeps "no slices, no string indexing"; `String.slice` is a function, not syntax.
 - A bad `String.to_int!` is `RUNTIME-INVALID-NUMBER`. `String.slice` out of range is `RUNTIME-INDEX-OUT-OF-RANGE`.
 
-- [ ] Allow a trailing `?` and `!` in function names (lexer; grammar done). The suffix counts only when the next character is `(`, so `a!=b` still lexes as `a != b`.
+- [ ] Allow a trailing `?` and `!` in function names (lexer; spec in the grammar's section 8, move it to sections 4–6 when done). The suffix counts only when the next character is `(`, so `a!=b` still lexes as `a != b`.
 - [ ] Reserve `String` as a type and module name.
 - [ ] Type and evaluate the functions above, with a focused test per stage.
 - [ ] Add `examples/strings.agc`.
@@ -565,7 +565,7 @@ The second argument is a struct name, not a value, as in `JSON.decode(text, User
 - A missing field or a wrong type is `error("age: expected Int, found String")`, with the path to the field. Extra keys are ignored.
 - A JSON integer decodes to `Float` when the field is `Float`, but a JSON float never decodes to `Int`.
 
-- [ ] Parse a bare type name as an expression (grammar done; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
+- [ ] Parse a bare type name as an expression (spec in the grammar's section 8; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
 - [ ] Check that the target type is decodable.
 - [ ] Decode nested structs, lists, and maps, with the path in error messages.
 - [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
@@ -679,7 +679,7 @@ handlers: Map[String, Fn[Json, Result[Json]]] = {"add": &add}
 result = handlers["add"].call(args)
 ```
 
-- New type `Fn[A, ..., R]`, with the last argument as the return type. `&name` makes a value from a top-level function (like Ruby's `&method(:name)`, shortened). `.call(...)` calls it, as in Ruby. The grammar already has both.
+- New type `Fn[A, ..., R]`, with the last argument as the return type. `&name` makes a value from a top-level function (like Ruby's `&method(:name)`, shortened). `.call(...)` calls it, as in Ruby. The grammar's section 8 already specifies both.
 - The checker compares parameter and return types exactly. A wrong shape is `CHECK-TYPE-MISMATCH`.
 - Reserve `Fn`. Lambdas and closures stay a later extension.
 

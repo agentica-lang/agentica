@@ -154,7 +154,7 @@
     (check-equal? (check-code (main-with "  x = 0\n  for x in [1, 2]\n    puts(\"hi\")\n  end"))
                   'CHECK-SHADOWED-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  y = x.name")) 'CHECK-NOT-A-STRUCT)
-    (check-equal? (check-code (main-with "  x = 1\n  y = x[0]")) 'CHECK-NOT-A-LIST)
+    (check-equal? (check-code (main-with "  x = 1\n  y = x[0]")) 'CHECK-NOT-INDEXABLE)
     (check-equal? (check-code (main-with "  for i in 1\n    puts(\"hi\")\n  end"))
                   'CHECK-NOT-A-LIST)
     (check-equal? (check-code (main-with "  x = 1 + 1.5")) 'CHECK-TYPE-MISMATCH)
@@ -212,6 +212,7 @@
                           "  total: Int = Map.len(n) + List.len(ks)\n"
                           "  found: Bool = Map.has(n, \"a\")")))
     (check-equal? (check-code (main-with "  m: Map[Float, Int] = {}")) 'CHECK-MAP-KEY-TYPE)
+    (check-equal? (check-code (main-with "  m: Map[String] = {}")) 'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (main-with "  m = {1.5: 1}")) 'CHECK-MAP-KEY-TYPE)
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m[1]")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = Map.put(m, \"b\", \"c\")"))
