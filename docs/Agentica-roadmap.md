@@ -2,14 +2,44 @@
 
 This roadmap turns the core specification in [`Agentica-gramatica.md`](Agentica-gramatica.md) into a usable interpreter. Keep every phase focused on the core in sections 4–6 until the prototype can run and diagnose the examples in sections 9–10. Enums and other extensions stay out of the initial milestone.
 
-## Phase 1: Source handling and lexer
+## Current plan: Phase 1 — source handling and lexer
 
-- [ ] Read UTF-8 `.agc` source files and preserve file, line, and column positions.
-- [ ] Normalize CRLF, emit one `NL` per newline sequence outside delimiters, and add a final `NL` when needed.
-- [ ] Tokenize identifiers, reserved words, integer and float literals, strings and escapes, comments, delimiters, and operators.
-- [ ] Report lexical errors with source locations and stable error codes.
+Build only the first working slice: `.agc` text in, located tokens (or a located lexical diagnostic) out. Keep `src/` flat and create modules when this phase needs them; do not add empty parser, checker, evaluator, or pipeline placeholders.
 
-**Complete when:** lexer output and spans are inspectable, and malformed characters or strings produce Agentica diagnostics.
+### `src/` organization for this phase
+
+```text
+src/
+├── main.rkt       # existing CLI entry point; read a file and show lexer output/errors
+├── source.rkt     # source text and source positions/spans
+├── diagnostic.rkt # shared lexical diagnostic representation/formatting
+├── token.rkt      # token kinds and token data
+└── lexer.rkt      # source text -> tokens or lexical diagnostics
+
+tests/
+└── lexer-test.rkt # focused lexer behavior tests
+```
+
+Keep source positions and token/diagnostic data separate from lexing rules. `main.rkt` remains a thin driver; no general pipeline module is needed until multiple stages are connected. Use Racket's built-in test support; add no dependencies.
+
+### Work sequence
+
+1. Add the minimal source representation: file name, source text, and spans with offsets plus 1-based line/column positions. Define whether span ends are exclusive and use that convention consistently.
+2. Define token kinds and token data, including a span. Cover the core grammar's identifiers, reserved words, literals, punctuation, operators, `NL`, and `EOF` only.
+3. Implement the lexer as a single pass. Normalize CRLF as one newline, track positions, ignore spaces/tabs, preserve newline tokens inside comments, and suppress newline tokens while inside `()` or `[]`. Emit one `NL` for each newline sequence outside delimiters and synthesize a final `NL` before `EOF` when needed.
+4. Recognize ASCII identifiers and the specified reserved words; decimal integers/floats; strings with only the documented escapes; delimiters and operators. Reject unsupported characters, malformed escapes, unterminated strings, and mismatched/unclosed delimiters with stable error codes and source spans.
+5. Connect `main.rkt` to read UTF-8 `.agc` files, invoke the lexer, and print tokens or a concise diagnostic. Keep presentation at the CLI boundary; the lexer returns data, not printed errors.
+6. Add focused tests for token kinds and spans, CRLF/final-newline behavior, comments and multiline delimiters, every supported escape/operator, and representative malformed input. Run them with `raco test tests/lexer-test.rkt` and smoke-test `racket src/main.rkt examples/hello.agc`.
+
+### Phase 1 checklist
+
+- [x] Read UTF-8 `.agc` source files and preserve file, line, and column positions.
+- [x] Normalize CRLF, emit one `NL` per newline sequence outside delimiters, and add a final `NL` when needed.
+- [x] Tokenize identifiers, reserved words, integer and float literals, strings and escapes, comments, delimiters, and operators.
+- [x] Report lexical errors with source locations and stable error codes.
+- [x] Expose lexer output through the existing CLI and cover core behavior with focused tests.
+
+**Complete when:** the sample file produces inspectable tokens, and malformed characters, strings, or delimiters produce Agentica diagnostics with useful locations—not Racket tracebacks.
 
 ## Phase 2: AST and parser
 
