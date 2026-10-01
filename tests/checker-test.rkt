@@ -100,7 +100,20 @@
     (check-equal? (check-code (string-append
                                "def puts(value: String) -> Nil\nend\n\n"
                                "def main() -> Nil\nend\n"))
-                  'CHECK-REDEFINED-NAME))
+                  'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code (string-append
+                               "struct A\n  x: Int\nend\n\n"
+                               "struct A\n  y: Int\nend\n\n"
+                               "def main() -> Nil\nend\n"))
+                  'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code (main-with "  x: List[Int, Int] = []")) 'CHECK-UNKNOWN-TYPE)
+    (check-equal? (check-code (string-append
+                               "def f() -> Nil\nend\n\n"
+                               "def main() -> Nil\n  x = f\nend\n"))
+                  'CHECK-UNKNOWN-NAME)
+    (check-ok (string-append
+               "def f() -> Nil\nend\n\n"
+               "def main() -> Nil\n  f = 1\n  puts(\"ok\")\nend\n")))
 
   (test-case "calls and constructors"
     (define task
@@ -142,6 +155,9 @@
                   'CHECK-SHADOWED-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  y = x.name")) 'CHECK-NOT-A-STRUCT)
     (check-equal? (check-code (main-with "  x = 1\n  y = x[0]")) 'CHECK-NOT-A-LIST)
+    (check-equal? (check-code (main-with "  for i in 1\n    puts(\"hi\")\n  end"))
+                  'CHECK-NOT-A-LIST)
+    (check-equal? (check-code (main-with "  x = 1 + 1.5")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  for i in [1, 2]\n    i = 3\n  end"))
                   'CHECK-IMMUTABLE-ASSIGNMENT)
     (check-ok (main-with "  x: List[Int] = []\n  puts(\"ok\")")))

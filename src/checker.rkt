@@ -125,9 +125,7 @@
           [else (loop (cdr frames))])))
 
     (define (introduce! name type span [immutable? #f])
-      (when (or (lookup name)
-                (hash-has-key? functions name)
-                (hash-has-key? structs name))
+      (when (lookup name)
         (bail 'CHECK-SHADOWED-NAME
               (format "\"~a\" is already visible; Agentica does not allow shadowing" name)
               span))
@@ -206,7 +204,10 @@
            (define binding (lookup (name-ref-name expression)))
            (unless binding
              (bail 'CHECK-UNKNOWN-NAME
-                   (format "unknown name \"~a\"" (name-ref-name expression))
+                   (if (hash-has-key? functions (name-ref-name expression))
+                       (format "\"~a\" is a function; functions are not values"
+                               (name-ref-name expression))
+                       (format "unknown name \"~a\"" (name-ref-name expression)))
                    (name-ref-span expression)))
            (car binding)]
           [(unary? expression) (check-unary expression)]

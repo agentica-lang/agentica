@@ -397,6 +397,8 @@ Expected Int, found String.
 4. Add `tests/diagnostic-test.rkt`: header line, caret column and width, CRLF handling, and a span at the end of a line.
 5. Add `tests/examples-test.rkt`: run each valid example and assert success plus expected output; run each rejected fragment and assert its code (`CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `PARSE-*` for `puts "hello"`).
 6. Update `.github/workflows/ci.yml` to smoke-test both valid examples, and update the Phase 5 checklist and the development skill.
+7. Carry-over from the Phase 3 review: operator spans. `unary` and `binary` keep no operator token, so `CHECK-TYPE-MISMATCH` on `1 + "a"` points at the whole expression, not at `+`. Add an operator span field to `unary`/`binary` in `ast.rkt`, set it in `parser.rkt`, and use it in `check-unary`/`check-binary` in `checker.rkt` (and the evaluator's arithmetic errors). Update the parser and checker tests that build or match these nodes.
+8. Carry-over from the Phase 3 review: `checker.rkt` reports unreachable internal cases (unsupported expression, unary operator, operator, statement) as `CHECK-UNKNOWN-TYPE`, which is misleading if it ever fires. Give them their own code (`CHECK-INTERNAL`), as the evaluator does with `RUNTIME-UNREACHABLE`.
 
 ### Phase 5 checklist
 
@@ -404,6 +406,8 @@ Expected Int, found String.
 - [ ] Show stable error codes, file, line, column, a concrete explanation, and a source excerpt with a caret.
 - [ ] Cover syntax, unknown names, type mismatches, arity, struct fields, missing returns, and runtime errors with focused examples.
 - [ ] Check every valid and invalid example in the grammar against the interpreter.
+- [ ] Point operator diagnostics at the operator token, not the whole expression.
+- [ ] Report unreachable checker states with a dedicated `CHECK-INTERNAL` code instead of `CHECK-UNKNOWN-TYPE`.
 
 ### Focused tests
 
