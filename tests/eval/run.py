@@ -18,7 +18,7 @@ TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
 ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py"}
 HOME = Path.home()
-HIDDEN_PATHS = [ROOT, HOME / ".graphmem", HOME / ".claude" / "CLAUDE.md", HOME / ".claude" / "hooks", HOME / ".claude" / "skills"]
+HIDDEN_PATHS = [ROOT, HOME / ".graphmem", HOME / ".claude", HOME / ".cache" / "gmem-bench"]
 NET_WORDS = ("curl", "wget", "git clone", "github.com")
 CASE_TIMEOUT = 10
 WRITE_LOCK = threading.Lock()
@@ -95,7 +95,7 @@ def run_agent(agent, work, task, arm, model, timeout, sandbox=False):
     env = dict(os.environ, PATH=f"{work / 'bin'}:{os.environ['PATH']}")
     command = agent_command(agent, work, arm, model)
     if sandbox:
-        jail = ["firejail", "--quiet", "--noprofile"]
+        jail = ["firejail", "--quiet", "--noprofile", f"--whitelist={work}"]
         jail += [f"--blacklist={path}" for path in HIDDEN_PATHS if path.exists()]
         command = jail + command
     proc = subprocess.Popen(command, cwd=work, env=env, text=True,

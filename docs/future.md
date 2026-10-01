@@ -181,6 +181,20 @@ end
 
 Order of work: function values first (5j), then `Enum.append`, `Enum.concat`, `Enum.reverse`, `Enum.take`, `Enum.drop`, `Enum.at`, then `Enum.map`, `Enum.filter`, `Enum.reduce`, then `Enum.sort` and `Enum.sort_by`, then the `Map` companions. Each step needs the builtins catalog (phase 5e) so the checker, the evaluator, and the skill reference stay in sync.
 
+### Other gaps for code-challenge programs
+
+Besides `Enum`, function values (5j), and the builtins catalog (5e), these are missing. Check each against a real task in 6b before building it.
+
+- **Math:** `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`, `gcd`.
+- **Conversion:** `Int` to `Float` and back (for example `Float.from_int`, `Float.to_int`).
+- **Strings:** the character at an index, a character code, `reverse`, `index_of`.
+- **Maps and sets:** `Map.get` with a default, `Map.delete`, `Map.values` (above); a set type, or `Map[T, Bool]` as the documented way; stack, queue, and priority queue.
+- **Input:** `IO.gets` halts at end of input, so programs use `IO.eof?`; `Result` and `try` (5e) fix it. A helper for lines of integers.
+- **Structures:** tuples or pairs, and nested lists and matrices (check that `List[List[Int]]` works end to end).
+- **Performance:** every `Map.put` and list update copies, so a loop of 10^5 steps is O(n²). Needs a persistent vector and map ("Faster maps" in the roadmap).
+- **To verify:** the recursion depth the evaluator allows, and the integer range (arbitrary precision today in Racket; most challenges assume 64 bits).
+- **Outside the language:** online judges do not accept Agentica, so challenges run locally against hidden cases, as in `tests/eval/`. The interpreter is a tree walker on Racket, so judge time limits are tight.
+
 ## 6. Native runtime
 
 For a later native runtime, procedural C++20, structs and free functions, the Boehm GC, and, later, libevent have been considered. Those decisions are not part of the grammar and must not appear in Agentica programs.

@@ -853,6 +853,7 @@ Process.close(p: Process) -> Nil
 - [ ] `Enum.map`, `filter`, `reduce`.
 - [ ] `Enum.sort`, `sort_by`.
 - [ ] `Map.values`, `Map.get`, `Map.delete`.
+- [ ] Decide which of the other gaps in `future.md` ("Other gaps for code-challenge programs": math, conversions, strings, sets, input, performance) join this phase, after a real task needs them.
 - [ ] Update `grammar.md` and the programming skill reference; add harder 6b tasks that need sorting.
 
 ### Later, for MCP
