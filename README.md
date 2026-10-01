@@ -45,7 +45,7 @@ bundle the runtime. `compiled/` and `dist/` are in `.gitignore`.
 ## Usage
 
 ```sh
-racket src/main.rkt [--dump] <file.agc>
+racket src/main.rkt [--dump] [check] <file.agc>
 ```
 
 Run a program. `main()` is the entry point, and `puts` prints to stdout:
@@ -58,6 +58,7 @@ racket src/main.rkt examples/hello.agc
 | Option   | Effect                                                |
 | -------- | ----------------------------------------------------- |
 | `--dump` | Print the checked syntax tree instead of running it.  |
+| `check`  | Subcommand: check the file, print `check ok`, run nothing. |
 
 ### Exit codes
 

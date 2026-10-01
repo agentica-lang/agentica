@@ -37,7 +37,7 @@ src/
   parser.rkt      # parse: (listof token) -> program | diagnostic
   checker.rkt     # check: program -> program | diagnostic
   evaluator.rkt   # evaluate: program -> 'nil | diagnostic (RUNTIME-); puts writes to current-output-port
-  main.rkt        # thin CLI driver: lex, parse, check, then run (or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
+  main.rkt        # thin CLI driver: lex, parse, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
 tests/
   lexer-test.rkt
   parser-test.rkt

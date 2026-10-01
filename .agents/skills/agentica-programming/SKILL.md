@@ -13,6 +13,7 @@ Use the `agentica` binary, not `racket`:
 
 ```sh
 agentica program.agc            # check, then run main()
+agentica check program.agc      # check only; prints "check ok", runs nothing
 agentica --dump program.agc     # check only; prints the checked tree, runs nothing
 agentica program.agc a b        # extra arguments reach System.args()
 ```

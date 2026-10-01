@@ -577,6 +577,7 @@ On success it prints `check ok`.
 - Open question: `CHECK-ARG-TYPE` is not an existing code (argument mismatches are `CHECK-TYPE-MISMATCH` today). Split it only if 6a shows agents gain from it.
 - Compact text is not proven to help the agent or to save tokens. Measure it in 6a (`--ai` against plain text and `--json`); the defensible gain is choosing relevant information and keeping it predictable.
 
+- [x] `agentica check <file>` subcommand: checks, prints `check ok`, never runs (plain diagnostics; `--ai` and `--json` come next).
 - [ ] Add optional `expected`, `actual`, `callee`, and `argument` to `diagnostic` and fill them in `CHECK-TYPE-MISMATCH` and `CHECK-ARITY`; the checker also records the enclosing function signature.
 - [ ] One structured diagnostic, two printers: `--ai` (P0, first) and `--json` (P0).
 - [ ] `symbols`, `show`, `refs` (P1).
@@ -601,9 +602,11 @@ The agent runs the `agentica` binary (`dist/agentica`), not `racket src/main.rkt
 The skill `.agents/skills/agentica-programming/` is a variable: one arm gets `docs/grammar.md` and `examples/`, the other gets only the skill, which is self-contained: its `references/language.md` is a minimal English subset of the language, and the agent does not read the grammar. It starts without a list of commonly broken rules, on purpose: first see how agents behave with the basic skill, then add rules only for failures actually observed. Record the skill version (commit) used in each round.
 
 - [x] Write the minimal `agentica-programming` skill.
-- [ ] Write the task set and hidden tests under `tests/eval/` (data and a runner script; no new dependency).
-- [ ] Run the Agentica and Python arms and record the results in `docs/`.
-- [ ] List the problems found and put them in the next phases before building more.
+- [x] Write the task set and hidden tests under `tests/eval/` (data and a runner script; no new dependency).
+- [x] Run the Agentica and Python arms (round 1, DeepSeek V4.1 flash via `pi`) and record the results in `docs/eval-6a.md`.
+- [x] Add the `binary` arm (no skill, no grammar) and a Firejail sandbox; smoke-tested. A full `binary` round is still to run.
+- [ ] Sonnet 5.5 round: postponed; only `pi` for now.
+- [x] List the problems found and put them in the next phases before building more (list building: 5n).
 
 ### Phase 5e: Result and error handling (with propagation)
 
@@ -758,7 +761,7 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 - [x] Phase 5d: standard input and output.
 - [ ] Phase 5d2: consistency fixes.
 - [ ] Phase 5d3: agent API (`check --json`, `symbols`, `show`, `refs`).
-- [ ] Phase 6a: first agent evaluation.
+- [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval-6a.md`).
 - [ ] Phase 5e: `Result[T]`, `try`, and the builtins catalog.
 - [ ] Faster maps (before JSON).
 - [ ] Phase 5f: JSON.
@@ -841,6 +844,17 @@ Process.close(p: Process) -> Nil
 - [ ] A test that runs the client against the server and checks the result.
 - [ ] Node fixtures (see "Integration fixtures in Node.js"): the Agentica client against a Node stdio server, and a Node client against the Agentica server. Skipped when Node is missing.
 
+### Phase 5n: Enum module and list building
+
+6a showed that a program cannot build or sort a list (only `List.size` exists). The design is in `future.md` section 5. It depends on 5j (function values) and on the builtins catalog (5e).
+
+- [ ] Settle the open decisions: `reduce` argument order and the `Enum` module versus the future `enum` keyword.
+- [ ] `Enum.append`, `concat`, `reverse`, `take`, `drop`, `at`.
+- [ ] `Enum.map`, `filter`, `reduce`.
+- [ ] `Enum.sort`, `sort_by`.
+- [ ] `Map.values`, `Map.get`, `Map.delete`.
+- [ ] Update `grammar.md` and the programming skill reference; add harder 6b tasks that need sorting.
+
 ### Later, for MCP
 
 - HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
@@ -854,6 +868,7 @@ Process.close(p: Process) -> Nil
 - [x] Phase 5k: error propagation (merged into 5e).
 - [ ] Phase 5l: process spawning.
 - [ ] Phase 5m: MCP client and server examples.
+- [ ] Phase 5n: `Enum` module and list building.
 
 ## Phase 6: Validate the language design
 

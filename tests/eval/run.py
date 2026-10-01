@@ -7,15 +7,21 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EVAL = ROOT / "tests" / "eval"
 TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
-ARMS = {"skill": "agc", "grammar": "agc", "python": "py"}
+ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py"}
+HOME = Path.home()
+HIDDEN_PATHS = [ROOT, HOME / ".graphmem", HOME / ".claude" / "CLAUDE.md", HOME / ".claude" / "hooks", HOME / ".claude" / "skills"]
+NET_WORDS = ("curl", "wget", "git clone", "github.com")
 CASE_TIMEOUT = 10
+WRITE_LOCK = threading.Lock()
 
 
 def build():
@@ -48,6 +54,9 @@ def prompt(work, arm):
         lines.append("Write a complete Agentica program to solution.agc. Run programs with the `agentica` command, which is on your PATH.")
         if arm == "skill":
             lines.append("Use the agentica-programming skill.")
+        elif arm == "binary":
+            lines.append("The language is Agentica: Ruby-like syntax, statically typed, programs start with `def main() -> Nil`. "
+                         "`agentica file.agc` runs a program and `agentica check file.agc` checks it without running.")
         else:
             lines.append("The language is described in docs/grammar.md, and example programs are in examples/.")
     else:
@@ -78,13 +87,18 @@ def agent_command(agent, work, arm, model):
     raise SystemExit(f"unknown agent {agent}")
 
 
-def run_agent(agent, work, task, arm, model, timeout):
+def run_agent(agent, work, task, arm, model, timeout, sandbox=False):
     ext = ARMS[arm]
     if agent == "reference":
         shutil.copy(TASKS / task / f"reference.{ext}", work / f"solution.{ext}")
         return "", False
     env = dict(os.environ, PATH=f"{work / 'bin'}:{os.environ['PATH']}")
-    proc = subprocess.Popen(agent_command(agent, work, arm, model), cwd=work, env=env, text=True,
+    command = agent_command(agent, work, arm, model)
+    if sandbox:
+        jail = ["firejail", "--quiet", "--noprofile"]
+        jail += [f"--blacklist={path}" for path in HIDDEN_PATHS if path.exists()]
+        command = jail + command
+    proc = subprocess.Popen(command, cwd=work, env=env, text=True,
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             start_new_session=True)
     try:
@@ -98,7 +112,7 @@ def run_agent(agent, work, task, arm, model, timeout):
 
 def pi_metrics(out):
     m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "cost": 0.0, "turns": 0,
-         "interpreter_runs": 0, "failing_runs": 0, "outside_reads": 0}
+         "interpreter_runs": 0, "failing_runs": 0, "outside_reads": 0, "net_commands": 0}
     pending = {}
     for line in out.splitlines():
         if not line.startswith("{"):
@@ -120,6 +134,8 @@ def pi_metrics(out):
             if str(ROOT) in args:
                 m["outside_reads"] += 1
             command = event.get("args", {}).get("command", "")
+            if any(word in command for word in NET_WORDS):
+                m["net_commands"] += 1
             if event.get("toolName") == "bash" and ("agentica" in command or "python" in command):
                 m["interpreter_runs"] += 1
                 pending[event["toolCallId"]] = True
@@ -186,7 +202,7 @@ def one_run(args, results, scratch, task, arm, rep):
     work = scratch / name
     prepare(work, task, arm)
     began = time.time()
-    out, timed_out = run_agent(args.agent, work, task, arm, args.model, args.timeout)
+    out, timed_out = run_agent(args.agent, work, task, arm, args.model, args.timeout, args.sandbox)
     seconds = round(time.time() - began, 1)
     row = {"task": task, "arm": arm, "rep": rep, "agent": args.agent, "model": args.model or "default",
            "seconds": seconds, "agent_timeout": timed_out}
@@ -200,9 +216,10 @@ def one_run(args, results, scratch, task, arm, rep):
     (run_dir / "agent.jsonl").write_text(out)
     for path in work.glob("solution.*"):
         shutil.copy(path, run_dir / path.name)
-    with (results / "results.jsonl").open("a") as handle:
-        handle.write(json.dumps(row) + "\n")
-    print(f"{name}: {row['status']} {row['passed']}/{row['total']} {seconds}s", flush=True)
+    with WRITE_LOCK:
+        with (results / "results.jsonl").open("a") as handle:
+            handle.write(json.dumps(row) + "\n")
+        print(f"{name}: {row['status']} {row['passed']}/{row['total']} {seconds}s", flush=True)
 
 
 def summarize(results):
@@ -232,22 +249,26 @@ def main():
     parser.add_argument("--arms", nargs="*", default=list(ARMS))
     parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--jobs", type=int, default=1, help="runs in parallel")
     parser.add_argument("--no-build", action="store_true")
+    parser.add_argument("--no-sandbox", dest="sandbox", action="store_false", help="run the agent without firejail")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
     args = parser.parse_args()
     if args.summarize:
         summarize(Path(args.summarize))
         return
+    if args.sandbox and args.agent != "reference" and not shutil.which("firejail"):
+        raise SystemExit("firejail not found; install it or pass --no-sandbox")
     if not args.no_build:
         build()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
     scratch = Path(tempfile.mkdtemp(prefix="agentica-eval-"))
-    for task in args.tasks:
-        for arm in args.arms:
-            for rep in range(1, args.reps + 1):
-                one_run(args, results, scratch, task, arm, rep)
+    jobs = [(task, arm, rep) for task in args.tasks for arm in args.arms for rep in range(1, args.reps + 1)]
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        for future in [pool.submit(one_run, args, results, scratch, *job) for job in jobs]:
+            future.result()
     summarize(results)
     print(f"results: {results}")
 

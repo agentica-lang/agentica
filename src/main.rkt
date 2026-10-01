@@ -9,15 +9,17 @@
 
 (module+ main
   (define dump? #f)
-  (define arguments
+  (define raw-arguments
     (command-line
      #:program "agentica"
      #:once-each
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
      #:args arguments
      arguments))
+  (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
+  (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--dump] <source-file> [args...]\n")
+    (eprintf "usage: agentica [--dump] [check] <source-file> [args...]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -41,6 +43,7 @@
   (define checked (check tree))
   (when (diagnostic? checked) (fail! checked))
   (cond
+    [check-only? (displayln "check ok")]
     [dump? (pretty-print checked)]
     [else
      (define result (evaluate checked #:args program-args))
