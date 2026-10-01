@@ -21,6 +21,8 @@
          (struct-out named-arg)
          (struct-out construct)
          (struct-out list-lit)
+         (struct-out map-entry)
+         (struct-out map-lit)
          (struct-out field-access)
          (struct-out index-access)
          (struct-out unary)
@@ -49,6 +51,8 @@
 (struct named-arg (name value span) #:transparent)
 (struct construct (type-name args span) #:transparent)
 (struct list-lit (elements span) #:transparent)
+(struct map-entry (key value span) #:transparent)
+(struct map-lit (entries span) #:transparent)
 (struct field-access (target name span) #:transparent)
 (struct index-access (target index span) #:transparent)
 (struct unary (op op-span operand span) #:transparent)
@@ -75,6 +79,8 @@
     [(named-arg? node) (named-arg-span node)]
     [(construct? node) (construct-span node)]
     [(list-lit? node) (list-lit-span node)]
+    [(map-entry? node) (map-entry-span node)]
+    [(map-lit? node) (map-lit-span node)]
     [(field-access? node) (field-access-span node)]
     [(index-access? node) (index-access-span node)]
     [(unary? node) (unary-span node)]

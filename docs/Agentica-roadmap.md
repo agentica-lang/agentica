@@ -160,7 +160,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-TYPE-MISMATCH` — operand, condition, argument, assignment, return, or field value of the wrong type.
 - `CHECK-EMPTY-LIST-TYPE` — an empty list with no expected type.
 - `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD` — constructor field rules.
-- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-A-LIST` — index on a non-list.
+- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
 - `CHECK-SHADOWED-NAME` — a new local reusing a name visible in an outer scope.
 - `CHECK-ANNOTATION-ON-EXISTING` — an annotation on a name that is already bound.
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
@@ -425,6 +425,320 @@ Expected Int, found String.
 
 **Complete when:** a user can run the sample from the README and get useful diagnostics for the grammar's required failure cases.
 
+## Phase 5b: Maps and builtin modules
+
+Add `Map[K, V]` before Phase 6, so the validation does not measure a missing dictionary. This is a core extension: the spec in `Agentica-gramatica.md` changed first (type table, `map_literal`, qualified call, the `Map` and `List` modules).
+
+- Maps are immutable like lists. Keys are `Int` or `String`. A literal is `{"a": 1}`; `m[key]` reads; a missing key is `RUNTIME-KEY-NOT-FOUND`; a duplicate literal key keeps the last value.
+- Operations are builtin modules, not global functions: `Map.has`, `Map.keys`, `Map.len`, `Map.put`, `List.len`. `Map.keys` returns keys in insertion order.
+- The parser keeps a qualified call as one dotted name in `call-name`; `check-builtin-call` in the checker types the builtins generically and the evaluator dispatches them in `eval-call`.
+- New codes: `CHECK-MAP-KEY-TYPE`, `RUNTIME-KEY-NOT-FOUND`. `m[k] = v` stays `PARSE-INVALID-ASSIGNMENT-TARGET`, now with a hint to use `Map.put`.
+
+### Phase 5b checklist
+
+- [x] Lex `{` and `}` as delimiters that suppress newlines.
+- [x] Parse map literals and qualified calls such as `Map.put(...)`.
+- [x] Check `Map[K, V]` types, map literals, `m[key]`, and the `Map`/`List` builtins.
+- [x] Evaluate maps with insertion order and located missing-key errors.
+- [x] Add `examples/inventory.agc` and cover each stage with a focused test.
+
+## Phases 5c to 5h: Standard library before validation
+
+Phase 6 measures whether agents can write useful programs, so the language needs I/O, strings, and data exchange first. These are core extensions. As in Phase 5b, write the spec in `Agentica-gramatica.md` first (planned syntax lives in its section 8 until the phase lands, then moves to sections 4–6), then implement stage by stage.
+
+Rules for every phase here:
+
+- Names and shapes copy Ruby and Elixir, so an agent can guess them: modules (`IO`, `String`, `JSON`, `TCP`, `HTTP`) called as `Module.function(...)`, snake_case functions, `?` suffix for predicates (`String.contains?`), `!` suffix for a version that halts on failure (`String.to_int!`). The lexer must accept a trailing `?` or `!` on a function name (see Open decisions).
+- Modules are builtin and typed specially in `check-builtin-call`, like `Map` and `List`. No user modules yet. Add no Racket dependencies: `racket/base`, `racket/tcp`, `net/http-client`, `openssl`, and `json` all ship with Racket.
+- All I/O goes through Racket's `current-input-port` and `current-output-port` (or the matching port parameters), so tests can inject it. Tests never touch the real network: use a local listener on port 0.
+- A function that can fail has two forms once Phase 5e lands: `x(...)` returns `Result[T]`, `x!(...)` halts with a `RUNTIME-` diagnostic. Before 5e only the halting `!` form exists.
+
+### Phase 5c: String library
+
+```text
+String.length(s: String) -> Int
+String.upcase(s: String) -> String
+String.downcase(s: String) -> String
+String.trim(s: String) -> String
+String.split(s: String, separator: String) -> List[String]
+String.join(parts: List[String], separator: String) -> String
+String.contains?(s: String, part: String) -> Bool
+String.starts_with?(s: String, prefix: String) -> Bool
+String.ends_with?(s: String, suffix: String) -> Bool
+String.replace(s: String, from: String, to: String) -> String
+String.slice(s: String, start: Int, length: Int) -> String
+String.from_int(n: Int) -> String
+String.from_float(x: Float) -> String
+String.to_int!(s: String) -> Int
+String.to_float!(s: String) -> Float
+```
+
+- Length and slice count Unicode characters, not bytes. The grammar keeps "no slices, no string indexing"; `String.slice` is a function, not syntax.
+- A bad `String.to_int!` is `RUNTIME-INVALID-NUMBER`. `String.slice` out of range is `RUNTIME-INDEX-OUT-OF-RANGE`.
+
+- [ ] Allow a trailing `?` and `!` in function names (lexer; spec in the grammar's section 8, move it to sections 4–6 when done). The suffix counts only when the next character is `(`, so `a!=b` still lexes as `a != b`.
+- [ ] Reserve `String` as a type and module name.
+- [ ] Type and evaluate the functions above, with a focused test per stage.
+- [ ] Add `examples/strings.agc`.
+
+### Phase 5d: Standard input and output
+
+```text
+IO.puts(value: String) -> Nil
+IO.print(value: String) -> Nil
+IO.warn(value: String) -> Nil
+IO.inspect(value: T) -> T
+IO.gets() -> String
+IO.read() -> String
+IO.eof?() -> Bool
+System.args() -> List[String]
+System.exit(code: Int) -> Nil
+```
+
+- `puts` stays as a global alias of `IO.puts`.
+- `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form (structs, lists, maps) and returns it, like Elixir.
+- `IO.gets` returns the next line without the newline, and halts with `RUNTIME-END-OF-INPUT` at end of input; check `IO.eof?()` first. This changes to `Result` in 5e.
+- `System.exit` ends the run with that exit code. The evaluator returns it as data, and only `main.rkt` exits.
+- `main.rkt` passes the program arguments to the evaluator.
+
+- [ ] Evaluator takes input and output ports and the argument list as parameters.
+- [ ] Type and evaluate the functions above.
+- [ ] Add `examples/echo.agc` and a test that feeds input through a string port.
+
+### Phase 5e: Result and error handling
+
+Phases 5f to 5h need a way to report failure without halting. Full enums and generics stay a later extension, so `Result[T]` is a builtin generic type, special-cased in the checker like `List` and `Map`.
+
+```text
+Result[T]                         # either ok(value) or error(message)
+ok(value: T) -> Result[T]
+error(message: String) -> Result[T]
+Result.ok?(r: Result[T]) -> Bool
+Result.unwrap!(r: Result[T]) -> T
+Result.unwrap_or(r: Result[T], default: T) -> T
+Result.message(r: Result[T]) -> String
+```
+
+- The error is always a `String`. A richer error type waits for enums.
+- Add the non-bang forms from 5c and 5d: `String.to_int`, `String.to_float`, `IO.gets` return `Result[...]`.
+- `Result.unwrap!` on an error is `RUNTIME-UNWRAP-ERROR`.
+- Open decision: use `Result.ok?` or add pattern matching (`case r in ok(v)`) with the enum extension. Start with the functions.
+
+- [ ] Add the `Result[T]` type, `ok`, `error`, and the `Result` module.
+- [ ] Reserve `Result`, `ok`, `error`.
+- [ ] Add the Result forms to `String` and `IO`.
+- [ ] Add `examples/result.agc`.
+
+### Phase 5f: JSON
+
+JSON comes before the network phases because it is pure and easy to test. Add an opaque builtin type `Json`.
+
+```text
+JSON.parse(s: String) -> Result[Json]
+JSON.encode(value: T) -> String
+JSON.get(j: Json, key: String) -> Result[Json]
+JSON.at(j: Json, index: Int) -> Result[Json]
+JSON.string(j: Json) -> Result[String]
+JSON.int(j: Json) -> Result[Int]
+JSON.float(j: Json) -> Result[Float]
+JSON.bool(j: Json) -> Result[Bool]
+JSON.list(j: Json) -> Result[List[Json]]
+```
+
+- `JSON.encode` accepts `Int`, `Float`, `Bool`, `String`, `Nil` (as `null`), `List`, `Map[String, V]`, structs (as objects, fields in declared order), and `Json`. A map with `Int` keys is a `CHECK-` error.
+- No user generics are needed. Struct decoding needs a type as an argument, which the checker special-cases like the other builtins (see 5f2).
+
+- [ ] Add the `Json` type and the `JSON` module.
+- [ ] Use Racket's `json` library, without new dependencies.
+- [ ] Add `examples/json.agc`.
+
+### Phase 5f2: Typed JSON decoding
+
+```text
+JSON.decode(s: String, type: T) -> Result[T]
+```
+
+The second argument is a struct name, not a value, as in `JSON.decode(text, User)`. This is similar to Go's `json.Unmarshal` into a typed target, or Elixir's `struct(User, map)`. The checker types the call as `Result[User]`, and the evaluator walks the declared fields.
+
+- The target type may contain only `Int`, `Float`, `Bool`, `String`, `List[T]`, `Map[String, V]`, and other structs. Anything else is `CHECK-NOT-DECODABLE`, reported before the program runs.
+- Fields map to JSON keys by name. Struct tags such as Go's `json:"user_name"` are out of scope.
+- A missing field or a wrong type is `error("age: expected Int, found String")`, with the path to the field. Extra keys are ignored.
+- A JSON integer decodes to `Float` when the field is `Float`, but a JSON float never decodes to `Int`.
+
+- [ ] Parse a bare type name as an expression (spec in the grammar's section 8; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
+- [ ] Check that the target type is decodable.
+- [ ] Decode nested structs, lists, and maps, with the path in error messages.
+- [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
+
+### Phase 5g: TCP
+
+Opaque builtin types `Socket` and `Listener`. Every blocking call takes a timeout in milliseconds, so a program cannot hang an agent forever.
+
+```text
+TCP.connect(host: String, port: Int, timeout: Int) -> Result[Socket]
+TCP.listen(port: Int) -> Result[Listener]
+TCP.accept(listener: Listener, timeout: Int) -> Result[Socket]
+TCP.send(socket: Socket, data: String) -> Result[Nil]
+TCP.recv(socket: Socket, max: Int, timeout: Int) -> Result[String]
+TCP.read_line(socket: Socket, timeout: Int) -> Result[String]
+TCP.close(socket: Socket) -> Nil
+TCP.local_port(listener: Listener) -> Int
+```
+
+- `TCP.listen(0)` picks a free port; `TCP.local_port` reports it, so tests can run a client and a listener in one program without a fixed port.
+- Sockets close when the run ends, even after a halting error.
+- Strings are UTF-8. Binary data is out of scope.
+
+- [ ] Add `Socket` and `Listener` types and the `TCP` module.
+- [ ] Test with a local listener on port 0. No outside network in tests or CI.
+- [ ] Add `examples/tcp_echo.agc`.
+
+### Phase 5h: HTTP and HTTPS
+
+A client only. `Response` is a builtin struct with fields `status: Int`, `body: String`, `headers: Map[String, String]`, so `response.status` works with the existing field access.
+
+```text
+HTTP.get(url: String) -> Result[Response]
+HTTP.post(url: String, body: String, headers: Map[String, String]) -> Result[Response]
+HTTP.request(method: String, url: String, body: String, headers: Map[String, String]) -> Result[Response]
+```
+
+- `http://` and `https://` both work; HTTPS uses Racket's `openssl` and verifies certificates. A bad certificate is an `error`, not a halt.
+- A fixed default timeout, with a limit on the body size.
+- Builtin structs are new: the checker needs to know their fields. Keep it to `Response`.
+- Tests talk to a local HTTP server written in Racket in the test file. A Node fixture (see "Integration fixtures in Node.js") adds an independent server. HTTPS is covered by one test against a local self-signed server that must be rejected.
+
+- [ ] Support builtin structs in the checker (`Response` only).
+- [ ] Add the `HTTP` module over `net/http-client`.
+- [ ] Add `examples/http_get.agc`. CI does not run it, because it needs the network.
+
+### Open decisions
+
+- Whether `?` and `!` become part of function names for all functions or only for builtin modules. Recommended: all functions, as in Ruby and Elixir.
+- Whether `Map.has` and `Map.len` get renamed to `Map.has_key?` and `Map.size`. Renaming later breaks stable names, so decide in 5c.
+- A capability flag for the CLI (`--allow-net`, `--allow-read`): agents run unknown programs, and network access should be opt-in. Decide before 5g.
+
+### Integration fixtures in Node.js (optional layer)
+
+The Racket-only tests stay the base: they are fast and need nothing installed. On top of them, small Node.js fixtures check interoperability, because a server written independently of the client catches mistakes that both sides would share (chunked bodies, header case, JSON-RPC line framing).
+
+- Fixtures live in `tests/fixtures/*.js` and use only Node's standard library (`http`, `https`, `net`, `readline`). No `npm install`, no `package.json`.
+- A fixture listens on port 0 and prints the port as its first line of standard output. The Racket test starts it with `racket/subprocess`, reads the port, runs the Agentica program against it, and kills the process at the end.
+- The test finds Node with `find-executable-path` and skips itself, with a visible message, when Node is missing. `raco test tests/` must pass without Node.
+- CI uses the Node that ships on the runner. Add no setup step unless the version causes trouble.
+- The fixtures are tests only. They are not part of the language and add no Racket dependency.
+- A test against the official MCP SDK needs `npx` and the network. Keep it manual and out of CI.
+- An `.agc` example that starts a fixture with `Process.spawn` (5l) is allowed as a demo, but CI does not run it.
+
+Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a self-signed certificate to reject), 5l (a child process to spawn), 5m (a hand-written stdio MCP server to run the Agentica client against, and an Agentica server checked by a Node client).
+
+### Checklist for phases 5c to 5h
+
+- [ ] Phase 5c: String library.
+- [ ] Phase 5d: standard input and output.
+- [ ] Phase 5e: `Result[T]` and error handling.
+- [ ] Phase 5f: JSON.
+- [ ] Phase 5f2: typed JSON decoding.
+- [ ] Phase 5g: TCP.
+- [ ] Phase 5h: HTTP and HTTPS.
+
+## Phases 5i to 5m: MCP support
+
+Goal: write an MCP client and an MCP server in Agentica. MCP is JSON-RPC 2.0 over stdio (one JSON message per line) or Streamable HTTP. Do stdio first. The first client and server are plain example programs, which also give Phase 6 real material. Add `require` or modules only if those examples get too big to read.
+
+### Phase 5i: JSON builders and schemas
+
+A JSON-RPC reply needs JSON built at run time, not only read.
+
+```text
+JSON.object(fields: Map[String, Json]) -> Json
+JSON.array(items: List[Json]) -> Json
+JSON.from(value: T) -> Json
+JSON.null() -> Json
+JSON.null?(j: Json) -> Bool
+JSON.schema(type: T) -> Json
+```
+
+- `JSON.from` accepts the same types as `JSON.encode`.
+- `JSON.schema(AddArgs)` takes a struct name, as in `JSON.decode`, and returns its JSON Schema (`type`, `properties`, `required`). MCP tools declare an `inputSchema`, so a tool is a struct plus a function.
+- Same decodable-type rule as 5f2: `CHECK-NOT-DECODABLE` otherwise.
+
+- [ ] Add the functions above and a focused test for each stage.
+- [ ] Add a test that `JSON.schema` output matches a fixed string for one struct.
+
+### Phase 5j: Function values
+
+A server registers tools with handlers, so functions must be passable. Keep it small: named functions only, no closures that capture variables.
+
+```ruby
+def add(args: Json) -> Result[Json]
+  ...
+end
+
+handlers: Map[String, Fn[Json, Result[Json]]] = {"add": &add}
+result = handlers["add"].call(args)
+```
+
+- New type `Fn[A, ..., R]`, with the last argument as the return type. `&name` makes a value from a top-level function (like Ruby's `&method(:name)`, shortened). `.call(...)` calls it, as in Ruby. The grammar's section 8 already specifies both.
+- The checker compares parameter and return types exactly. A wrong shape is `CHECK-TYPE-MISMATCH`.
+- Reserve `Fn`. Lambdas and closures stay a later extension.
+
+- [ ] Lex `&`, and parse `Fn[...]` types, `&name`, and `.call(...)`.
+- [ ] Check and evaluate function values.
+- [ ] Add `examples/dispatch.agc`.
+
+### Phase 5k: Error propagation
+
+Chains such as connect, initialize, list tools, call, each returning `Result`, nest deeply without help.
+
+- Decide the form first: Ruby-like `try!`, Elixir-like `with`, or a Rust-like `?` suffix. Recommended: a `try` expression, `value = try Result.something()`, that returns the error from the enclosing function, which must itself return `Result[...]`.
+- A `try` in a function that does not return `Result` is a `CHECK-` error.
+- Update the grammar first, then all stages.
+
+- [ ] Pick the form and write it in `Agentica-gramatica.md`.
+- [ ] Implement it across the lexer, parser, checker, and evaluator.
+- [ ] Add a focused test per stage and rewrite one earlier example to use it.
+
+### Phase 5l: Process spawning
+
+An MCP client for stdio servers has to launch the server and use its stdin and stdout.
+
+```text
+Process.spawn(command: String, args: List[String]) -> Result[Process]
+Process.send(p: Process, data: String) -> Result[Nil]
+Process.read_line(p: Process, timeout: Int) -> Result[String]
+Process.close(p: Process) -> Nil
+```
+
+- Opaque `Process` type. Every blocking call has a timeout, as in 5g.
+- Processes are killed when the run ends.
+- Needs the capability flag `--allow-run`, off by default (see Open decisions above).
+- The child's standard error goes to the parent's standard error.
+
+- [ ] Add the `Process` type and module over `racket/subprocess`.
+- [ ] Test with a small child program, not an outside tool.
+
+### Phase 5m: MCP examples
+
+- [ ] `examples/mcp_server.agc`: a stdio server that answers `initialize`, `tools/list`, and `tools/call` for one or two tools. Logs go to standard error with `IO.warn`, so standard output carries only protocol messages.
+- [ ] `examples/mcp_client.agc`: spawns the server above, initializes, lists tools, and calls one.
+- [ ] A test that runs the client against the server and checks the result.
+- [ ] Node fixtures (see "Integration fixtures in Node.js"): the Agentica client against a Node stdio server, and a Node client against the Agentica server. Skipped when Node is missing.
+
+### Later, for MCP
+
+- HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
+- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first.
+- `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
+
+### Checklist for phases 5i to 5m
+
+- [ ] Phase 5i: JSON builders and schemas.
+- [ ] Phase 5j: function values.
+- [ ] Phase 5k: error propagation.
+- [ ] Phase 5l: process spawning.
+- [ ] Phase 5m: MCP client and server examples.
+
 ## Phase 6: Validate the language design
 
 - [ ] Ask agents to write and repair small programs using only the grammar and examples.
@@ -435,8 +749,11 @@ Expected Int, found String.
 
 ## Later extensions
 
+- [ ] Faster maps: `mapping` in `src/evaluator.rkt` is an association list, so `Map.put`, `Map.has`, and `m[key]` are O(n) and building a map of n entries is O(n²). Replace it with an immutable `hash` plus a reversed key list (insertion order), keeping `mapping-put` as the only writer. Do this when JSON or HTTP payloads (phases 5f–5h) make maps large.
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
+
+- [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 
 These items are deliberately outside the initial core milestone.

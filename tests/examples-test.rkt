@@ -41,7 +41,8 @@
   (test-case "valid examples run with the expected output"
     (for ([entry '(("hello.agc" . "hello\n")
                    ("classify.agc" . "adult\n")
-                   ("tasks.agc" . "Probar Agentica\n"))])
+                   ("tasks.agc" . "Probar Agentica\n")
+                   ("inventory.agc" . "apple\nkiwi\n"))])
       (define-values (output result)
         (run-text (file->string (build-path examples-dir (car entry)))))
       (check-equal? result 'nil (car entry))

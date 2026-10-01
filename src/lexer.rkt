@@ -192,6 +192,7 @@
                      "<=" 'less-equal ">=" 'greater-equal
                      "(" 'left-paren ")" 'right-paren
                      "[" 'left-bracket "]" 'right-bracket
+                     "{" 'left-brace "}" 'right-brace
                      "," 'comma ":" 'colon "." 'dot
                      "=" 'assign "+" 'plus "-" 'minus
                      "*" 'multiply "/" 'divide "%" 'modulo
@@ -204,10 +205,10 @@
                             (format "unexpected character ~s" char)
                             start)))
             (for ([unused (in-string lexeme)]) (advance!))
-            (when (memq kind '(left-paren left-bracket))
+            (when (memq kind '(left-paren left-bracket left-brace))
               (set! delimiters (cons (cons char start) delimiters)))
-            (when (memq kind '(right-paren right-bracket))
-              (define expected (if (char=? char #\)) #\( #\[))
+            (when (memq kind '(right-paren right-bracket right-brace))
+              (define expected (case char [(#\)) #\(] [(#\]) #\[] [else #\{]))
               (unless (and (pair? delimiters)
                            (char=? (caar delimiters) expected))
                 (return (fail 'LEX-UNMATCHED-DELIMITER

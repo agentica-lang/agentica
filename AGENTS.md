@@ -14,15 +14,17 @@ Interpreter for the Agentica language, written in Racket. The language is define
 - `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
 - `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
 - `tests/<stage>-test.rkt` holds the focused tests for each stage.
+- `.agents/skills/agentica-development/` has stage-by-stage notes. Read it before changing a stage.
 
 ## Conventions
 
 - Each stage takes the previous stage's output and returns data or exactly one `diagnostic`. It stops at the first error, never prints, and never lets a Racket exception escape.
 - Diagnostic codes are stable and prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`. Every diagnostic carries a source span.
-- Keep to the core grammar (sections 4–6). No enums, generics, or modules, and no placeholder files or nodes for later phases.
+- Keep to the core grammar (sections 4–6). No enums, user generics, or user modules; the builtin generics `List[T]` and `Map[K, V]` and the builtin modules `Map` and `List` are core. Planned syntax stays in the grammar's section 8 until its phase lands. No placeholder files or nodes for later phases.
 - Use only Racket's built-in test support (`rackunit`). Add no dependencies.
+- Network and process tests stay hermetic by default (Racket-only, port 0). Optional Node.js fixtures in `tests/fixtures/` may check interoperability: Node standard library only, and the test skips itself when `node` is missing. See "Integration fixtures in Node.js" in the roadmap.
 - Tests assert the diagnostic code (and the span when it matters), not message text.
-- When a phase item is finished, tick it in the roadmap.
+- When a phase item is finished, tick it in the roadmap and update the development skill.
 
 ## Working style
 

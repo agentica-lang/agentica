@@ -33,6 +33,11 @@
                   '(name assign left-paren left-bracket integer comma integer
                     right-bracket right-paren NL name NL EOF)))
 
+  (test-case "newlines inside braces are suppressed"
+    (check-equal? (kinds (lex-text "x = {\n\"a\": 1,\n}\ny"))
+                  '(name assign left-brace string colon integer comma
+                    right-brace NL name NL EOF)))
+
   (test-case "operators and delimiters are recognized"
     (check-equal? (kinds (lex-text "-> == != <= >= ( ) [ ] , : . = + - * / % < >"))
                   '(arrow equal not-equal less-equal greater-equal
@@ -64,4 +69,8 @@
     (check-equal? (diagnostic-code (lex-text ")"))
                   'LEX-UNMATCHED-DELIMITER)
     (check-equal? (diagnostic-code (lex-text "(["))
+                  'LEX-UNCLOSED-DELIMITER)
+    (check-equal? (diagnostic-code (lex-text "}"))
+                  'LEX-UNMATCHED-DELIMITER)
+    (check-equal? (diagnostic-code (lex-text "{"))
                   'LEX-UNCLOSED-DELIMITER)))

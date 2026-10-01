@@ -180,18 +180,24 @@ postfix_expr     = primary, { ".", NAME | "[", expression, "]" } ;
 
 primary          = literal
                  | NAME, [ "(", [ arguments ], ")" ]
+                 | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
                  | TYPE_NAME, "(", [ named_arguments ], ")"
                  | list_literal
+                 | map_literal
                  | "(", expression, ")" ;
 
 arguments        = expression, { ",", expression }, [ "," ] ;
 named_arguments  = named_argument, { ",", named_argument }, [ "," ] ;
 named_argument   = NAME, ":", expression ;
 list_literal     = "[", [ arguments ], "]" ;
+map_literal      = "{", [ map_entry, { ",", map_entry }, [ "," ] ], "}" ;
+map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
-Las llamadas del núcleo son a funciones nombradas. Las funciones no son valores y no se admite `user.method()`. `user.name`, `users[0]` y `find_user(1).name` sí encajan en la gramática.
+Las llamadas del núcleo son a funciones nombradas, y no se admite `user.method()`. `user.name`, `users[0]` y `find_user(1).name` sí encajan en la gramática.
+
+`TYPE_NAME, ".", NAME, "(" … ")"` es la llamada a una función de un módulo incorporado (`Map.put(...)`); el núcleo no admite módulos de usuario.
 
 `and` y `or` evalúan con cortocircuito. Las sumas, restas, multiplicaciones, divisiones y módulos se agrupan de izquierda a derecha. Las comparaciones y comprobaciones de igualdad no se encadenan: `a < b < c` es inválido; se escribe `a < b and b < c`.
 
@@ -222,6 +228,7 @@ La gramática determina qué se puede escribir. Las siguientes reglas determinan
 | `String` | Texto Unicode; concatenación con `+` |
 | `Nil` | Un único valor, `nil`; también indica retorno sin resultado |
 | `List[T]` | Lista homogénea e inmutable; índices `Int`, desde cero |
+| `Map[K, V]` | Diccionario homogéneo e inmutable; la clave `K` es `Int` o `String`; conserva el orden de inserción |
 | Struct declarado | Tipo nominal, campos tipados e inmutables |
 
 Los parámetros y el retorno de las funciones requieren anotación. Las variables locales pueden inferirse del inicializador:
@@ -283,13 +290,41 @@ user = User(age: 25, name: "Ana")
 
 Los índices de listas deben estar entre cero y longitud menos uno; un índice negativo o fuera de rango produce error. `for` itera sobre `List[T]` en orden. No se admiten slices ni indexación de strings en el núcleo.
 
+### Maps
+
+`Map[K, V]` asocia claves con valores. La clave `K` solo puede ser `Int` o `String`; `V` puede ser cualquier tipo. `Map` lleva exactamente dos argumentos de tipo.
+
+```ruby
+stock: Map[String, Int] = {"apple": 3, "pear": 0}
+apples = stock["apple"]
+more = Map.put(stock, "kiwi", 7)
+```
+
+- Un literal usa llaves y `clave: valor`; admite varias líneas y coma final. Un `{}` vacío necesita un tipo esperado, como `[]`.
+- `m[clave]` devuelve el valor. La clave debe tener el tipo `K`. Una clave ausente produce error de ejecución.
+- Si un literal repite una clave, gana la última.
+- Los maps son inmutables, como las listas: no hay `m[clave] = valor`. `Map.put` devuelve un map nuevo y deja el original intacto.
+- No hay igualdad de maps ni `for` sobre un map; se recorre con `Map.keys`, que devuelve las claves en orden de inserción.
+
 ### Funciones incorporadas mínimas
 
 ```text
 puts(value: String) -> Nil
 ```
 
-`puts` escribe el texto y un salto de línea. Se reserva ese nombre y no se puede redefinir. Para conservar un primer núcleo pequeño, este documento solo fija esa función incorporada. Archivos, JSON, argumentos del proceso y conversiones de tipos necesitan una API posterior; se habían sugerido para hacer pruebas útiles, pero no se había definido su forma.
+`puts` escribe el texto y un salto de línea. Se reserva ese nombre y no se puede redefinir.
+
+Para trabajar con maps y listas hay dos módulos incorporados, `Map` y `List`, que se llaman con `Modulo.funcion(...)`. Sus funciones son genéricas, así que el checker las trata de forma especial. Los nombres `Map` y `List` están reservados y no se pueden redefinir.
+
+```text
+Map.has(map: Map[K, V], key: K) -> Bool
+Map.keys(map: Map[K, V]) -> List[K]
+Map.len(map: Map[K, V]) -> Int
+Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
+List.len(list: List[T]) -> Int
+```
+
+Para conservar un primer núcleo pequeño, este documento no fija más funciones incorporadas. Archivos, JSON, argumentos del proceso y conversiones de tipos necesitan una API posterior; se habían sugerido para hacer pruebas útiles, pero no se había definido su forma.
 
 ## 7. Extensión futura: enums y pattern matching
 
@@ -356,6 +391,50 @@ La gramática de expresiones también debe ampliarse para construir variantes, p
 | Async y fibers | Suspender ejecución en I/O; inicialmente un thread | API, cancelación y propagación de errores |
 | Actores | Mensajes y mailboxes propios | Sintaxis, aislamiento, valores compartidos y supervisión |
 
+### Biblioteca estándar y funciones como valores (fases 5c–5m)
+
+Nada de esta subsección está implementado ni forma parte del núcleo. Se fija aquí para que cada fase del roadmap la tome como especificación, y se mueve a las secciones 4–6 cuando la fase termine.
+
+```ebnf
+NAME             = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
+
+postfix_expr     = primary, { ".", NAME
+                            | ".", "call", "(", [ arguments ], ")"
+                            | "[", expression, "]" } ;
+
+primary          = (* …formas del núcleo, más: *)
+                 | "&", NAME
+                 | TYPE_NAME ;
+```
+
+- **Sufijo `?` y `!`:** solo forma parte del `NAME` cuando el carácter siguiente es `(`: `contains?(`, `to_int!(`. Así `a!=b` sigue siendo `a != b`, y `x?` o `x!` sin paréntesis no son nombres. Por convención, `?` marca un predicado que devuelve `Bool` y `!` marca la versión que termina la ejecución con error en vez de devolver un `Result`. Variables, campos y parámetros no pueden llevar el sufijo.
+- **`&nombre` y `.call(...)`:** `&nombre` convierte una función de nivel superior en un valor de tipo `Fn[...]`, y `valor.call(args)` lo invoca. `call` no es palabra reservada: solo tiene este significado justo después de un `.` y antes de `(`. No hay closures: `&nombre` no captura variables. El checker exige que `nombre` sea una función declarada y compara parámetros y retorno con el tipo esperado. Precedencia 1, como la llamada nombrada.
+- **`TYPE_NAME` solo:** sin `(` ni `.`, es un tipo usado como argumento, como en `JSON.decode(text, User)`. El checker lo acepta únicamente como argumento de las funciones incorporadas que lo piden (`JSON.decode`, `JSON.schema`); en cualquier otro lugar es un error.
+- **Tipos:** `Fn[A, ..., R]` (los tipos finales son el retorno, fase 5j), `Result[T]` (error siempre `String`), `Json`, `Socket`, `Listener`, `Process` y `Response` (struct incorporado con `status`, `body` y `headers`). Los tipos opacos no se pueden construir ni inspeccionar, solo pasar a las funciones incorporadas.
+- **Nombres reservados al empezar cada fase:** `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `String`, `IO`, `System`, `JSON`, `TCP` y `HTTP`.
+
+```ruby
+def double(n: Int) -> Int
+  return n * 2
+end
+
+def main() -> Nil
+  f: Fn[Int, Int] = &double
+  puts(String.from_int(f.call(21)))
+  if String.contains?("agentica", "gent")
+    puts("found")
+  end
+end
+```
+
+Programas que esa fase debe rechazar:
+
+```ruby
+x = User               # Un tipo solo es válido como argumento de JSON.decode o JSON.schema.
+f = &missing           # &nombre exige una función declarada.
+ok = done?             # El sufijo ? solo existe seguido de "(".
+```
+
 La integración del host C++ con una librería C no resuelve por sí sola el FFI de Agentica: un intérprete necesita wrappers nativos o una capa de llamadas que respete el ABI. Tampoco incluir libevent proporciona automáticamente fibers o actores.
 
 No se introducen de momento interfaces, traits, herencia, JIT, distribución ni paralelismo. La semántica del lenguaje debe conservarse al cambiar el evaluador de AST por una VM futura.
@@ -413,6 +492,20 @@ def main() -> Nil
   for task in tasks
     if not task.done
       puts(task.title)
+    end
+  end
+end
+```
+
+### Maps
+
+```ruby
+def main() -> Nil
+  stock: Map[String, Int] = {"apple": 3, "pear": 0}
+  stock = Map.put(stock, "kiwi", 7)
+  for name in Map.keys(stock)
+    if stock[name] > 0
+      puts(name)
     end
   end
 end

@@ -86,5 +86,6 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/hello.agc`](examples/hello.agc): a minimal program.
 - [`examples/classify.agc`](examples/classify.agc): functions and control flow.
 - [`examples/tasks.agc`](examples/tasks.agc): structs, lists, and field access.
+- [`examples/inventory.agc`](examples/inventory.agc): maps and the `Map` module.
 
 Enums and pattern matching are future extensions.

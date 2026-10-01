@@ -32,7 +32,7 @@ Accessors: `source-name`, `source-text`, `source-position-offset`/`-line`/`-colu
 | `integer` `float` | decimal number literal |
 | `string` | decoded string contents |
 | `arrow` `equal` `not-equal` `less-equal` `greater-equal` | `->` `==` `!=` `<=` `>=` |
-| `left-paren` `right-paren` `left-bracket` `right-bracket` | `(` `)` `[` `]` |
+| `left-paren` `right-paren` `left-bracket` `right-bracket` `left-brace` `right-brace` | `(` `)` `[` `]` `{` `}` |
 | `comma` `colon` `dot` | `,` `:` `.` |
 | `assign` `plus` `minus` `multiply` `divide` `modulo` `less` `greater` | `=` `+` `-` `*` `/` `%` `<` `>` |
 | `NL` `EOF` | newline token, end of input |
@@ -47,8 +47,8 @@ The parser reads the keyword literals from their kind, not from `value`: `true` 
 | --- | --- |
 | lexer | `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE` |
 | parser | `PARSE-UNEXPECTED-TOKEN`, `PARSE-UNCLOSED-BLOCK`, `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET` |
-| checker | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL` |
-| evaluator | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-UNREACHABLE` |
+| checker | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL` |
+| evaluator | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-UNREACHABLE` |
 
 ## `src/lexer.rkt`
 
@@ -67,7 +67,7 @@ Every node is `#:transparent` with `span` as the last field.
 | --- | --- |
 | declarations | `program`, `function-decl`, `param`, `struct-decl`, `field-decl`, `type-ref` |
 | statements | `binding`, `return-stmt`, `expr-stmt`, `if-branch`, `if-stmt`, `while-stmt`, `for-stmt` |
-| expressions | `literal`, `name-ref`, `call`, `named-arg`, `construct`, `list-lit`, `field-access`, `index-access`, `unary`, `binary` |
+| expressions | `literal`, `name-ref`, `call`, `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access`, `index-access`, `unary`, `binary` |
 
 Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; one `literal` covers integers, floats, strings, booleans, and `nil`; grouping `( expr )` produces no node; `call`/`construct` store the name as a string; `unary`/`binary` store the operator as the token-kind symbol (`'plus`, `'and`, `'equal`).
 
@@ -87,7 +87,8 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 - Struct names are inserted before fields are resolved, and function signatures after, so forward references, recursion, and struct fields that name a later struct all work.
 - `puts` is pre-registered as `(String) -> Nil` and cannot be redefined.
-- Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`; `(list 'List T)`; `(list 'Struct NAME)`.
+- Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`; `(list 'List T)`; `(list 'Map K V)` with `K` `Int` or `String`; `(list 'Struct NAME)`.
+- `Map.has/keys/len/put` and `List.len` are builtin module calls: the parser keeps the dotted name in `call-name`, and `check-builtin-call` types them generically. The evaluator's `eval-call` dispatches them by name and relies on the checker for arity, so add the arity check there first.
 - Scopes are a stack of hashes holding `name -> (cons type immutable?)`. The `for` variable is immutable.
 - A plain binding to a visible name is an update and must keep its type; an annotated binding to a visible name is `CHECK-ANNOTATION-ON-EXISTING`; a fresh name that is already visible is `CHECK-SHADOWED-NAME`.
 - `check` returns the same `program` when it is valid; the evaluator trusts it and does not re-check types.
@@ -96,7 +97,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 `(evaluate program) -> 'nil | diagnostic`. Runs `main()` and trusts the checker.
 
-- Values: Racket integers, flonums, booleans, strings, `'nil`, lists, and an `instance` struct (type name plus an immutable field hash).
+- Values: Racket integers, flonums, booleans, strings, `'nil`, lists, a `mapping` struct (association list, insertion order), and an `instance` struct (type name plus an immutable field hash).
 - Scopes are a list of frames of `name -> box`. A call starts a fresh scope list (callers' locals are not visible) and one `let/ec` per call for `return`.
 - `Int` results of `+ - *` and unary `-` are range-checked to signed 64-bit; `/` and `%` by zero fail for `Int` and `Float`; `==` on numbers uses `=`.
 - Index errors point at the index expression; arithmetic errors point at `op-span`.
