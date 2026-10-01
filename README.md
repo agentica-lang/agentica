@@ -3,6 +3,8 @@
 Minimal Racket bootstrap for the interpreter described in
 [`docs/Agentica-gramatica.md`](docs/Agentica-gramatica.md).
 
+See the [implementation roadmap](docs/Agentica-roadmap.md) for the phased plan.
+
 Run the current scaffold with:
 
 ```sh
