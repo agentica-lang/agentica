@@ -328,7 +328,7 @@ Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
 List.size(list: List[T]) -> Int
 ```
 
-El módulo `String` opera sobre texto. `String.length` y `String.slice` cuentan caracteres Unicode, no bytes; un `slice` fuera de rango es error de ejecución. `String.to_int!` y `String.to_float!` fallan con `RUNTIME-INVALID-NUMBER` si el texto no es un número.
+El módulo `String` opera sobre texto. `String.length` y `String.slice` cuentan caracteres Unicode, no bytes; un `slice` fuera de rango es error de ejecución. `String.split(s, "")` devuelve una lista con un carácter Unicode por elemento. Las conversiones `String.to_int!` y `String.to_float!` aceptan números decimales con signo opcional; `to_int!` falla con `RUNTIME-INVALID-NUMBER` si el texto no es un entero decimal y con `RUNTIME-INTEGER-OVERFLOW` si está fuera del rango de `Int`, mientras `to_float!` rechaza texto que no sea un decimal real con `RUNTIME-INVALID-NUMBER`.
 
 ```text
 String.length(s: String) -> Int
@@ -348,7 +348,7 @@ String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
 ```
 
-El módulo `IO` escribe y lee por los puertos estándar; `IO.warn` escribe en la salida de error. `IO.inspect` imprime cualquier valor en forma de depuración estable y lo devuelve. `IO.gets` devuelve la siguiente línea sin el salto y falla con `RUNTIME-END-OF-INPUT` al final; `IO.eof?` permite comprobarlo antes. El módulo `System` expone los argumentos del programa y termina la ejecución con un código.
+El módulo `IO` escribe y lee por los puertos estándar; `IO.warn` escribe en la salida de error. `IO.inspect` imprime cualquier valor en forma de depuración estable y lo devuelve. `IO.gets` devuelve la siguiente línea sin su terminador (LF, CR o CRLF) y falla con `RUNTIME-END-OF-INPUT` al final; `IO.eof?` permite comprobarlo antes. El módulo `System` expone los argumentos del programa y termina la ejecución con un código.
 
 ```text
 IO.puts(value: String) -> Nil

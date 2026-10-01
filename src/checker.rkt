@@ -8,7 +8,7 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "IO" "System"))
 
 (define (type->string type)
   (cond

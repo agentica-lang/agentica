@@ -22,6 +22,8 @@
 
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
+(define decimal-integer-pattern #px"^[+-]?[0-9]+$")
+(define decimal-float-pattern #px"^[+-]?[0-9]+(\\.[0-9]+)?$")
 
 (define max-call-depth 10000)
 
@@ -199,7 +201,7 @@
          (displayln (value->debug-string (car arguments)))
          (car arguments)]
         [("IO.gets")
-         (define line (read-line (current-input-port)))
+         (define line (read-line (current-input-port) 'any))
          (if (eof-object? line)
              (bail 'RUNTIME-END-OF-INPUT
                    "IO.gets reached the end of input"
@@ -218,7 +220,12 @@
         [("String.upcase") (string-upcase (car arguments))]
         [("String.downcase") (string-downcase (car arguments))]
         [("String.trim") (string-trim (car arguments))]
-        [("String.split") (string-split (car arguments) (cadr arguments))]
+        [("String.split")
+         (define text (car arguments))
+         (define separator (cadr arguments))
+         (if (string=? separator "")
+             (map string (string->list text))
+             (string-split text separator))]
         [("String.join") (string-join (car arguments) (cadr arguments))]
         [("String.contains?") (string-contains? (car arguments) (cadr arguments))]
         [("String.starts_with?") (string-prefix? (car arguments) (cadr arguments))]
@@ -239,17 +246,23 @@
         [("String.from_int") (number->string (car arguments))]
         [("String.from_float") (number->string (car arguments))]
         [("String.to_int!")
-         (define parsed-int (string->number (car arguments)))
+         (define text (car arguments))
+         (define parsed-int
+           (and (regexp-match? decimal-integer-pattern text)
+                (string->number text)))
          (unless (exact-integer? parsed-int)
            (bail 'RUNTIME-INVALID-NUMBER
-                 (format "cannot convert ~s to Int" (car arguments))
+                 (format "cannot convert ~s to Int" text)
                  (call-span expression)))
          (in-int-range parsed-int (call-span expression))]
         [("String.to_float!")
-         (define parsed-float (string->number (car arguments)))
-         (unless (number? parsed-float)
+         (define text (car arguments))
+         (define parsed-float
+           (and (regexp-match? decimal-float-pattern text)
+                (string->number text)))
+         (unless (real? parsed-float)
            (bail 'RUNTIME-INVALID-NUMBER
-                 (format "cannot convert ~s to Float" (car arguments))
+                 (format "cannot convert ~s to Float" text)
                  (call-span expression)))
          (exact->inexact parsed-float)]
         [else

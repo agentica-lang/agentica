@@ -90,7 +90,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 - `puts` is pre-registered as `(String) -> Nil` and cannot be redefined.
 - Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`; `(list 'List T)`; `(list 'Map K V)` with `K` `Int` or `String`; `(list 'Struct NAME)`.
 - Builtin module calls (`Map`, `List`, `String`, `IO`, `System`) keep their dotted name in `call-name`; `check-builtin-call` types them generically. The evaluator's `eval-call` dispatches them by name and relies on the checker for arity, so add the arity check there first.
-- `Map.has_key?/keys/size/put`, `List.size`, the `String.*` functions, `IO.*`, and `System.*` are the builtins; `String` and `IO` count Unicode characters, and `String.to_int!`/`String.to_float!` fail with `RUNTIME-INVALID-NUMBER`.
+- `Map.has_key?/keys/size/put`, `List.size`, the `String.*` functions, `IO.*`, and `System.*` are the builtins. String operations count Unicode characters. Numeric conversions accept signed decimal notation; invalid text yields `RUNTIME-INVALID-NUMBER`, and an out-of-range integer yields `RUNTIME-INTEGER-OVERFLOW`.
 - Scopes are a stack of hashes holding `name -> (cons type immutable?)`. The `for` variable is immutable.
 - A plain binding to a visible name is an update and must keep its type; an annotated binding to a visible name is `CHECK-ANNOTATION-ON-EXISTING`; a fresh name that is already visible is `CHECK-SHADOWED-NAME`.
 - `check` returns the same `program` when it is valid; the evaluator trusts it and does not re-check types.

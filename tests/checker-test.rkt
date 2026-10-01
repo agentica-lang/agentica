@@ -106,6 +106,14 @@
                                "struct A\n  y: Int\nend\n\n"
                                "def main() -> Nil\nend\n"))
                   'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code (string-append
+                               "struct IO\n  value: Int\nend\n\n"
+                               "def main() -> Nil\nend\n"))
+                  'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code (string-append
+                               "struct System\n  value: Int\nend\n\n"
+                               "def main() -> Nil\nend\n"))
+                  'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (main-with "  x: List[Int, Int] = []")) 'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (string-append
                                "def f() -> Nil\nend\n\n"

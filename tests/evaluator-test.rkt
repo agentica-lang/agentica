@@ -135,10 +135,11 @@
                      "  end\n"
                      "  puts(String.replace(\"aXbX\", \"X\", \"-\"))\n"
                      "  puts(String.slice(\"hola\", 1, 2))\n"
+                     "  puts(String.join(String.split(\"ñ😀\", \"\"), \"|\"))\n"
                      "  puts(String.from_float(1.5))\n"
                      "  puts(String.from_int(String.to_int!(\"42\")))\n"
                      "  puts(String.from_float(String.to_float!(\"1.25\")))")))
-                  "4\nHOLAhola\nx\na-b-c\nfound\na-b-\nol\n1.5\n42\n1.25\n"))
+                  "4\nHOLAhola\nx\na-b-c\nfound\na-b-\nol\nñ|😀\n1.5\n42\n1.25\n"))
 
   (test-case "String.length and String.slice count characters, not bytes"
     (check-equal? (output-of
@@ -153,8 +154,26 @@
                   'RUNTIME-INDEX-OUT-OF-RANGE)
     (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_int!(\"1.5\")")))
                   'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_int!(\"#x10\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_int!(\"9223372036854775808\")")))
+                  'RUNTIME-INTEGER-OVERFLOW)
     (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"abc\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"1+2i\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"1/2\")")))
                   'RUNTIME-INVALID-NUMBER))
+
+  (test-case "user functions may use ? and ! suffixes"
+    (check-equal? (output-of
+                   (string-append
+                    "def ready?() -> Bool\n  return true\nend\n\n"
+                    "def value!() -> String\n  return \"ok\"\nend\n\n"
+                    "def main() -> Nil\n"
+                    "  if ready?()\n    puts(value!())\n  end\n"
+                    "end\n"))
+                  "ok\n"))
 
   (test-case "IO writes to the injected ports and inspect returns its value"
     (define-values (output err result)
@@ -192,7 +211,7 @@
                 "  puts(IO.gets())\n"
                 "  puts(IO.read())\n"
                 "  if IO.eof?()\n    puts(\"done\")\n  end\n"))
-              "one\ntwo\nrest\n"))
+              "one\r\ntwo\rrest\n"))
     (check-equal? result 'nil)
     (check-equal? output "one\ntwo\nrest\n\ndone\n"))
 
