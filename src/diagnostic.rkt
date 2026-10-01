@@ -14,7 +14,9 @@
          diagnostic-signature
          diagnostic-labels
          diagnostic-help
-         format-diagnostic)
+         format-diagnostic
+         format-diagnostic-ai
+         diagnostic->jsexpr)
 
 (struct diagnostic (code message span expected actual callee argument signature labels help)
   #:transparent
@@ -101,3 +103,53 @@
           (diagnostic-message problem)
           body
           help))
+
+(define (span-start-line span) (source-position-line (source-span-start span)))
+
+(define (format-diagnostic-ai problem)
+  (define span (diagnostic-span problem))
+  (define start (source-span-start span))
+  (define line (source-line (source-text (source-span-source span)) (source-position-line start)))
+  (define (field name value) (if value (list (format "  ~a: ~a" name value)) '()))
+  (string-join
+   (append (list "check failed: 1 error" "" (format "[~a]" (diagnostic-code problem))
+                 (format "  message: ~a" (diagnostic-message problem))
+                 (format "  at: ~a:~a:~a" (source-name (source-span-source span))
+                         (source-position-line start) (source-position-column start)))
+           (field "in" (diagnostic-signature problem))
+           (list (format "  source: ~a" (string-trim line)))
+           (field "callee" (diagnostic-callee problem))
+           (field "expected" (diagnostic-expected problem))
+           (field "actual" (diagnostic-actual problem))
+           (for/list ([label (in-list (diagnostic-labels problem))])
+             (format "  label: ~a:~a ~a"
+                     (span-start-line (car label))
+                     (source-position-column (source-span-start (car label)))
+                     (cdr label)))
+           (field "help" (diagnostic-help problem)))
+   "\n"))
+
+(define (diagnostic->jsexpr problem)
+  (define span (diagnostic-span problem))
+  (define (position p) (hasheq 'line (source-position-line p) 'column (source-position-column p)))
+  (define (optional key value) (if value (list (cons key value)) '()))
+  (make-immutable-hasheq
+   (append
+    (list (cons 'code (symbol->string (diagnostic-code problem)))
+          (cons 'message (diagnostic-message problem))
+          (cons 'file (source-name (source-span-source span)))
+          (cons 'range (hasheq 'start (position (source-span-start span))
+                               'end (position (source-span-end span)))))
+    (optional 'expected (diagnostic-expected problem))
+    (optional 'actual (diagnostic-actual problem))
+    (optional 'callee (diagnostic-callee problem))
+    (optional 'argument (diagnostic-argument problem))
+    (optional 'function (diagnostic-signature problem))
+    (optional 'help (diagnostic-help problem))
+    (if (null? (diagnostic-labels problem))
+        '()
+        (list (cons 'labels
+                    (for/list ([label (in-list (diagnostic-labels problem))])
+                      (hasheq 'range (hasheq 'start (position (source-span-start (car label)))
+                                             'end (position (source-span-end (car label))))
+                              'text (cdr label)))))))))

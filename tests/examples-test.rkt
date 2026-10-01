@@ -1,6 +1,7 @@
 #lang racket
 
 (require (except-in rackunit check)
+         json
          racket/runtime-path
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
@@ -83,10 +84,16 @@
     (define type-error (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Nil\n  puts(1)\nend\n" type-error #:exists 'truncate)
     (define checked (cli "check" (path->string type-error)))
+    (define ai (cli "--ai" "check" (path->string type-error)))
+    (define json (cli "--json" "check" (path->string type-error)))
     (delete-file type-error)
     (check-equal? (car checked) 1)
     (check-equal? (cadr checked) "")
     (check-regexp-match #rx"error\\[CHECK-" (caddr checked))
+    (check-equal? (car ai) 1)
+    (check-regexp-match #rx"^check failed: 1 error\n\n\\[CHECK-" (caddr ai))
+    (check-equal? (car json) 1)
+    (check-equal? (hash-ref (string->jsexpr (caddr json)) 'code) "CHECK-TYPE-MISMATCH")
     (define bad (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Nil\n  x = 1 / 0\nend\n" bad #:exists 'truncate)
     (define failed (cli (path->string bad)))

@@ -34,7 +34,7 @@ expected Int, found String
   |              ^^^^
 ```
 
-The header gives the file, line, column, and a stable code. The code prefix names the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-` (while running). The caret marks the offending source. Only the first error is reported, so fixing it can reveal the next one.
+The header gives the file, line, column, and a stable code. The code prefix names the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-` (while running). The caret marks the offending source. Only the first error is reported, so fixing it can reveal the next one. Extra `-` marks under other parts of the line, with a short note, show the values involved (for example `this is Int`), and a final `= help:` line gives a fix when the checker knows one. `agentica --ai check program.agc` prints the same diagnostic as compact text (`expected`, `actual`, the enclosing function) if the plain form is not enough.
 
 ## Work loop
 
