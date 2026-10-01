@@ -213,6 +213,16 @@
     (check-equal? (parse-code "def f() -> Nil\n  puts \"hello\"\nend\n")
                   'PARSE-UNEXPECTED-TOKEN))
 
+  (test-case "map literals and builtin module calls"
+    (define literal (parse-expr "{\n  \"a\": 1,\n  \"b\": 2,\n}"))
+    (check-true (map-lit? literal))
+    (check-equal? (length (map-lit-entries literal)) 2)
+    (check-true (map-lit? (parse-expr "{}")))
+    (define put (parse-expr "Map.put(m, \"a\", 1)"))
+    (check-true (call? put))
+    (check-equal? (call-name put) "Map.put")
+    (check-equal? (length (call-args put)) 3))
+
   (test-case "comparison mixed with equality is allowed"
     (define node (parse-expr "a < b == c < d"))
     (check-equal? (binary-op node) 'equal)

@@ -4,9 +4,19 @@
          "diagnostic.rkt")
 
 (provide evaluate
-         (struct-out instance))
+         (struct-out instance)
+         (struct-out mapping))
 
 (struct instance (type-name fields) #:transparent)
+(struct mapping (pairs) #:transparent)
+
+(define (mapping-put target key value)
+  (define pairs (mapping-pairs target))
+  (mapping
+   (if (assoc key pairs)
+       (for/list ([pair (in-list pairs)])
+         (if (equal? (car pair) key) (cons key value) pair))
+       (append pairs (list (cons key value))))))
 
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
@@ -67,17 +77,32 @@
         [(list-lit? expression)
          (for/list ([element (in-list (list-lit-elements expression))])
            (eval-expression element))]
+        [(map-lit? expression)
+         (for/fold ([result (mapping '())])
+                   ([entry (in-list (map-lit-entries expression))])
+           (mapping-put result
+                        (eval-expression (map-entry-key entry))
+                        (eval-expression (map-entry-value entry))))]
         [(field-access? expression)
          (hash-ref (instance-fields (eval-expression (field-access-target expression)))
                    (field-access-name expression))]
         [(index-access? expression)
          (define target (eval-expression (index-access-target expression)))
          (define index (eval-expression (index-access-index expression)))
-         (unless (< -1 index (length target))
-           (bail 'RUNTIME-INDEX-OUT-OF-RANGE
-                 (format "index ~a is outside a list of length ~a" index (length target))
-                 (node-span (index-access-index expression))))
-         (list-ref target index)]
+         (cond
+           [(mapping? target)
+            (define pair (assoc index (mapping-pairs target)))
+            (unless pair
+              (bail 'RUNTIME-KEY-NOT-FOUND
+                    (format "key ~s is not in the map" index)
+                    (node-span (index-access-index expression))))
+            (cdr pair)]
+           [else
+            (unless (< -1 index (length target))
+              (bail 'RUNTIME-INDEX-OUT-OF-RANGE
+                    (format "index ~a is outside a list of length ~a" index (length target))
+                    (node-span (index-access-index expression))))
+            (list-ref target index)])]
         [else (unreachable "expression" (node-span expression))]))
 
     (define (eval-unary expression)
@@ -124,9 +149,14 @@
         (for/list ([argument (in-list (call-args expression))])
           (eval-expression argument)))
       (define name (call-name expression))
-      (if (string=? name "puts")
-          (begin (displayln (car arguments)) 'nil)
-          (call-function (hash-ref functions name) arguments (call-span expression))))
+      (case name
+        [("puts") (displayln (car arguments)) 'nil]
+        [("Map.has") (and (assoc (cadr arguments) (mapping-pairs (car arguments))) #t)]
+        [("Map.keys") (map car (mapping-pairs (car arguments)))]
+        [("Map.len") (length (mapping-pairs (car arguments)))]
+        [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
+        [("List.len") (length (car arguments))]
+        [else (call-function (hash-ref functions name) arguments (call-span expression))]))
 
     (define (call-function declaration arguments span)
       (when (>= depth max-call-depth)

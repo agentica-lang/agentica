@@ -8,12 +8,14 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map"))
 
 (define (type->string type)
   (cond
     [(symbol? type) (symbol->string type)]
     [(eq? (car type) 'List) (format "List[~a]" (type->string (cadr type)))]
+    [(eq? (car type) 'Map)
+     (format "Map[~a, ~a]" (type->string (cadr type)) (type->string (caddr type)))]
     [(eq? (car type) 'Struct) (cadr type)]
     [else "?"]))
 
@@ -25,6 +27,12 @@
 
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
+
+(define (map-type? type)
+  (and (pair? type) (eq? (car type) 'Map)))
+
+(define (key-type? type)
+  (memq type '(Int String)))
 
 (define (struct-type? type)
   (and (pair? type) (eq? (car type) 'Struct)))
@@ -80,6 +88,13 @@
          (string->symbol name)]
         [(and (string=? name "List") (= (length arguments) 1))
          (list 'List (resolve-type (car arguments)))]
+        [(and (string=? name "Map") (= (length arguments) 2))
+         (define key (resolve-type (car arguments)))
+         (unless (key-type? key)
+           (bail 'CHECK-MAP-KEY-TYPE
+                 (format "a Map key must be Int or String, found ~a" (type->string key))
+                 (type-ref-span (car arguments))))
+         (list 'Map key (resolve-type (cadr arguments)))]
         [(and (hash-has-key? structs name) (null? arguments))
          (list 'Struct name)]
         [else
@@ -196,6 +211,7 @@
           [(call? expression) (check-call expression)]
           [(construct? expression) (check-construct expression)]
           [(list-lit? expression) (check-list expression expected)]
+          [(map-lit? expression) (check-map expression expected)]
           [(field-access? expression) (check-field-access expression)]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
@@ -282,7 +298,47 @@
          'Bool]
         [else (bail 'CHECK-INTERNAL "unsupported operator" span)]))
 
+    (define (check-builtin-call expression)
+      (define name (call-name expression))
+      (define span (call-span expression))
+      (define arguments (call-args expression))
+      (define (arity! count)
+        (unless (= (length arguments) count)
+          (bail 'CHECK-ARITY
+                (format "\"~a\" expects ~a argument(s), found ~a"
+                        name count (length arguments))
+                span)))
+      (define (map-argument)
+        (define type (check-expression (car arguments) #f))
+        (unless (map-type? type) (mismatch! 'Map type (node-span (car arguments))))
+        type)
+      (case name
+        [("Map.has")
+         (arity! 2)
+         (define target (map-argument))
+         (check-expression (cadr arguments) (cadr target))
+         'Bool]
+        [("Map.keys") (arity! 1) (list 'List (cadr (map-argument)))]
+        [("Map.len") (arity! 1) (map-argument) 'Int]
+        [("Map.put")
+         (arity! 3)
+         (define target (map-argument))
+         (check-expression (cadr arguments) (cadr target))
+         (check-expression (caddr arguments) (caddr target))
+         target]
+        [("List.len")
+         (arity! 1)
+         (define type (check-expression (car arguments) #f))
+         (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
+         'Int]
+        [else (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span)]))
+
     (define (check-call expression)
+      (if (string-contains? (call-name expression) ".")
+          (check-builtin-call expression)
+          (check-plain-call expression)))
+
+    (define (check-plain-call expression)
       (define name (call-name expression))
       (define entry (hash-ref functions name #f))
       (unless entry
@@ -352,6 +408,37 @@
            (check-expression element element-type))
          (list 'List element-type)]))
 
+    (define (check-map expression expected)
+      (define span (map-lit-span expression))
+      (define entries (map-lit-entries expression))
+      (when (and expected (not (map-type? expected)))
+        (bail 'CHECK-TYPE-MISMATCH
+              (format "expected ~a, found a map" (type->string expected))
+              span))
+      (define expected-key (and expected (cadr expected)))
+      (define expected-value (and expected (caddr expected)))
+      (cond
+        [(null? entries)
+         (unless expected
+           (bail 'CHECK-EMPTY-LIST-TYPE
+                 "an empty map needs an expected type, for example \"Map[String, Int]\""
+                 span))
+         expected]
+        [else
+         (define first-entry (car entries))
+         (define key-type
+           (check-expression (map-entry-key first-entry) expected-key))
+         (unless (key-type? key-type)
+           (bail 'CHECK-MAP-KEY-TYPE
+                 (format "a Map key must be Int or String, found ~a" (type->string key-type))
+                 (node-span (map-entry-key first-entry))))
+         (define value-type
+           (check-expression (map-entry-value first-entry) expected-value))
+         (for ([entry (in-list (cdr entries))])
+           (check-expression (map-entry-key entry) key-type)
+           (check-expression (map-entry-value entry) value-type))
+         (list 'Map key-type value-type)]))
+
     (define (check-field-access expression)
       (define target (check-expression (field-access-target expression) #f))
       (unless (struct-type? target)
@@ -367,12 +454,17 @@
 
     (define (check-index-access expression)
       (define target (check-expression (index-access-target expression) #f))
-      (unless (list-type? target)
-        (bail 'CHECK-NOT-A-LIST
-              (format "indexing needs a list, found ~a" (type->string target))
-              (index-access-span expression)))
-      (check-expression (index-access-index expression) 'Int)
-      (cadr target))
+      (cond
+        [(map-type? target)
+         (check-expression (index-access-index expression) (cadr target))
+         (caddr target)]
+        [(list-type? target)
+         (check-expression (index-access-index expression) 'Int)
+         (cadr target)]
+        [else
+         (bail 'CHECK-NOT-A-LIST
+               (format "indexing needs a list or a map, found ~a" (type->string target))
+               (index-access-span expression))]))
 
     ;; Statements -----------------------------------------------------------
 

@@ -180,14 +180,18 @@ postfix_expr     = primary, { ".", NAME | "[", expression, "]" } ;
 
 primary          = literal
                  | NAME, [ "(", [ arguments ], ")" ]
+                 | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
                  | TYPE_NAME, "(", [ named_arguments ], ")"
                  | list_literal
+                 | map_literal
                  | "(", expression, ")" ;
 
 arguments        = expression, { ",", expression }, [ "," ] ;
 named_arguments  = named_argument, { ",", named_argument }, [ "," ] ;
 named_argument   = NAME, ":", expression ;
 list_literal     = "[", [ arguments ], "]" ;
+map_literal      = "{", [ map_entry, { ",", map_entry }, [ "," ] ], "}" ;
+map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
@@ -222,6 +226,7 @@ La gramática determina qué se puede escribir. Las siguientes reglas determinan
 | `String` | Texto Unicode; concatenación con `+` |
 | `Nil` | Un único valor, `nil`; también indica retorno sin resultado |
 | `List[T]` | Lista homogénea e inmutable; índices `Int`, desde cero |
+| `Map[K, V]` | Diccionario homogéneo e inmutable; la clave `K` es `Int` o `String`; conserva el orden de inserción |
 | Struct declarado | Tipo nominal, campos tipados e inmutables |
 
 Los parámetros y el retorno de las funciones requieren anotación. Las variables locales pueden inferirse del inicializador:
@@ -283,13 +288,41 @@ user = User(age: 25, name: "Ana")
 
 Los índices de listas deben estar entre cero y longitud menos uno; un índice negativo o fuera de rango produce error. `for` itera sobre `List[T]` en orden. No se admiten slices ni indexación de strings en el núcleo.
 
+### Maps
+
+`Map[K, V]` asocia claves con valores. La clave `K` solo puede ser `Int` o `String`; `V` puede ser cualquier tipo. `Map` lleva exactamente dos argumentos de tipo.
+
+```ruby
+stock: Map[String, Int] = {"apple": 3, "pear": 0}
+apples = stock["apple"]
+more = Map.put(stock, "kiwi", 7)
+```
+
+- Un literal usa llaves y `clave: valor`; admite varias líneas y coma final. Un `{}` vacío necesita un tipo esperado, como `[]`.
+- `m[clave]` devuelve el valor. La clave debe tener el tipo `K`. Una clave ausente produce error de ejecución.
+- Si un literal repite una clave, gana la última.
+- Los maps son inmutables, como las listas: no hay `m[clave] = valor`. `Map.put` devuelve un map nuevo y deja el original intacto.
+- No hay igualdad de maps ni `for` sobre un map; se recorre con `Map.keys`, que devuelve las claves en orden de inserción.
+
 ### Funciones incorporadas mínimas
 
 ```text
 puts(value: String) -> Nil
 ```
 
-`puts` escribe el texto y un salto de línea. Se reserva ese nombre y no se puede redefinir. Para conservar un primer núcleo pequeño, este documento solo fija esa función incorporada. Archivos, JSON, argumentos del proceso y conversiones de tipos necesitan una API posterior; se habían sugerido para hacer pruebas útiles, pero no se había definido su forma.
+`puts` escribe el texto y un salto de línea. Se reserva ese nombre y no se puede redefinir.
+
+Para trabajar con maps y listas hay dos módulos incorporados, `Map` y `List`, que se llaman con `Modulo.funcion(...)`. Sus funciones son genéricas, así que el checker las trata de forma especial. Los nombres `Map` y `List` están reservados y no se pueden redefinir.
+
+```text
+Map.has(map: Map[K, V], key: K) -> Bool
+Map.keys(map: Map[K, V]) -> List[K]
+Map.len(map: Map[K, V]) -> Int
+Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
+List.len(list: List[T]) -> Int
+```
+
+Para conservar un primer núcleo pequeño, este documento no fija más funciones incorporadas. Archivos, JSON, argumentos del proceso y conversiones de tipos necesitan una API posterior; se habían sugerido para hacer pruebas útiles, pero no se había definido su forma.
 
 ## 7. Extensión futura: enums y pattern matching
 
@@ -413,6 +446,20 @@ def main() -> Nil
   for task in tasks
     if not task.done
       puts(task.title)
+    end
+  end
+end
+```
+
+### Maps
+
+```ruby
+def main() -> Nil
+  stock: Map[String, Int] = {"apple": 3, "pear": 0}
+  stock = Map.put(stock, "kiwi", 7)
+  for name in Map.keys(stock)
+    if stock[name] > 0
+      puts(name)
     end
   end
 end

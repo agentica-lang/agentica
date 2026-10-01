@@ -91,6 +91,22 @@
                     "  puts(\"a\" + \"b\")\nend\n"))
                   "skip\ntrunc\nab\n"))
 
+  (test-case "maps are immutable and keep insertion order"
+    (check-equal? (output-of
+                   (main-with
+                    (string-append
+                     "  m: Map[String, Int] = {\"b\": 1, \"a\": 2, \"b\": 3}\n"
+                     "  n = Map.put(m, \"c\", 4)\n"
+                     "  for k in Map.keys(n)\n    puts(k)\n  end\n"
+                     "  if Map.has(m, \"c\") or m[\"b\"] != 3 or Map.len(m) != 2 or Map.len(n) != 3\n"
+                     "    puts(\"wrong\")\n  end")))
+                  "b\na\nc\n"))
+
+  (test-case "a missing map key is a located diagnostic"
+    (define missing (diagnostic-of (main-with "  m = {\"a\": 1}\n  x = m[\"z\"]")))
+    (check-equal? (diagnostic-code missing) 'RUNTIME-KEY-NOT-FOUND)
+    (check-equal? (position-of missing) '(3 9)))
+
   (test-case "runtime errors are located diagnostics"
     (define overflow (diagnostic-of (main-with "  x = 9223372036854775807 + 1")))
     (check-equal? (diagnostic-code overflow) 'RUNTIME-INTEGER-OVERFLOW)

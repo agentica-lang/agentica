@@ -192,7 +192,9 @@
          (define value (parse-expression))
          (when (kind? 'assign)
            (bail 'PARSE-INVALID-ASSIGNMENT-TARGET
-                 "the core only assigns to a plain name"
+                 (if (index-access? value)
+                     "the core only assigns to a plain name; lists and maps are immutable, use Map.put(map, key, value) for a new map"
+                     "the core only assigns to a plain name")
                  (current)))
          (when (and (name-ref? value) (not (kind? 'NL)))
            (bail 'PARSE-UNEXPECTED-TOKEN
@@ -346,6 +348,7 @@
          (expect 'right-paren "\")\"")
          inner]
         [(left-bracket) (parse-list-literal)]
+        [(left-brace) (parse-map-literal)]
         [else
          (bail 'PARSE-UNEXPECTED-TOKEN
                (format "expected an expression, found ~a" (describe token))
@@ -370,6 +373,15 @@
          (define arguments (parse-named-arguments))
          (expect 'right-paren "\")\"")
          (construct (token-lexeme name) arguments (span-from name))]
+        [(kind? 'dot)
+         (advance!)
+         (define member (expect 'name "a function name"))
+         (expect 'left-paren "\"(\"")
+         (define arguments (parse-expression-list 'right-paren))
+         (expect 'right-paren "\")\"")
+         (call (string-append (token-lexeme name) "." (token-lexeme member))
+               arguments
+               (span-from name))]
         [else
          (bail 'PARSE-UNEXPECTED-TOKEN
                "a type name is only a type or a constructor call; add \"(\""
@@ -410,5 +422,27 @@
       (define elements (parse-expression-list 'right-bracket))
       (expect 'right-bracket "\"]\"")
       (list-lit elements (span-from start)))
+
+    (define (parse-map-entry)
+      (define start (current))
+      (define key (parse-expression))
+      (expect 'colon "\":\"")
+      (map-entry key (parse-expression) (span-from start)))
+
+    (define (parse-map-literal)
+      (define start (expect 'left-brace "\"{\""))
+      (define entries
+        (if (kind? 'right-brace)
+            '()
+            (let loop ([acc (list (parse-map-entry))])
+              (cond
+                [(kind? 'comma)
+                 (advance!)
+                 (if (kind? 'right-brace)
+                     (reverse acc)
+                     (loop (cons (parse-map-entry) acc)))]
+                [else (reverse acc)]))))
+      (expect 'right-brace "\"}\"")
+      (map-lit entries (span-from start)))
 
     (parse-program)))

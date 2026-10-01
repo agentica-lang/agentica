@@ -201,4 +201,21 @@
     (define operator (check-text "def main() -> Nil\n  x = 1 + \"a\"\nend\n"))
     (check-true (diagnostic? operator))
     (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9)))
+    (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
+
+  (test-case "maps and the Map and List modules"
+    (check-ok (main-with (string-append
+                          "  m: Map[String, Int] = {\"a\": 1}\n"
+                          "  n = Map.put(m, \"b\", m[\"a\"])\n"
+                          "  e: Map[Int, String] = {}\n"
+                          "  ks: List[String] = Map.keys(n)\n"
+                          "  total: Int = Map.len(n) + List.len(ks)\n"
+                          "  found: Bool = Map.has(n, \"a\")")))
+    (check-equal? (check-code (main-with "  m: Map[Float, Int] = {}")) 'CHECK-MAP-KEY-TYPE)
+    (check-equal? (check-code (main-with "  m = {1.5: 1}")) 'CHECK-MAP-KEY-TYPE)
+    (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m[1]")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = Map.put(m, \"b\", \"c\")"))
+                  'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  m = {}")) 'CHECK-EMPTY-LIST-TYPE)
+    (check-equal? (check-code (main-with "  x = Map.len()")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  x = Map.nope(1)")) 'CHECK-UNKNOWN-NAME)))

@@ -425,6 +425,23 @@ Expected Int, found String.
 
 **Complete when:** a user can run the sample from the README and get useful diagnostics for the grammar's required failure cases.
 
+## Phase 5b: Maps and builtin modules
+
+Add `Map[K, V]` before Phase 6, so the validation does not measure a missing dictionary. This is a core extension: the spec in `Agentica-gramatica.md` changed first (type table, `map_literal`, qualified call, the `Map` and `List` modules).
+
+- Maps are immutable like lists. Keys are `Int` or `String`. A literal is `{"a": 1}`; `m[key]` reads; a missing key is `RUNTIME-KEY-NOT-FOUND`; a duplicate literal key keeps the last value.
+- Operations are builtin modules, not global functions: `Map.has`, `Map.keys`, `Map.len`, `Map.put`, `List.len`. `Map.keys` returns keys in insertion order.
+- The parser keeps a qualified call as one dotted name in `call-name`; `check-builtin-call` in the checker types the builtins generically and the evaluator dispatches them in `eval-call`.
+- New codes: `CHECK-MAP-KEY-TYPE`, `RUNTIME-KEY-NOT-FOUND`. `m[k] = v` stays `PARSE-INVALID-ASSIGNMENT-TARGET`, now with a hint to use `Map.put`.
+
+### Phase 5b checklist
+
+- [x] Lex `{` and `}` as delimiters that suppress newlines.
+- [x] Parse map literals and qualified calls such as `Map.put(...)`.
+- [x] Check `Map[K, V]` types, map literals, `m[key]`, and the `Map`/`List` builtins.
+- [x] Evaluate maps with insertion order and located missing-key errors.
+- [x] Add `examples/inventory.agc` and cover each stage with a focused test.
+
 ## Phase 6: Validate the language design
 
 - [ ] Ask agents to write and repair small programs using only the grammar and examples.
