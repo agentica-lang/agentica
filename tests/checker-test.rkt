@@ -106,6 +106,14 @@
                                "struct A\n  y: Int\nend\n\n"
                                "def main() -> Nil\nend\n"))
                   'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code (string-append
+                               "struct IO\n  value: Int\nend\n\n"
+                               "def main() -> Nil\nend\n"))
+                  'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code (string-append
+                               "struct System\n  value: Int\nend\n\n"
+                               "def main() -> Nil\nend\n"))
+                  'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (main-with "  x: List[Int, Int] = []")) 'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (string-append
                                "def f() -> Nil\nend\n\n"
@@ -185,6 +193,41 @@
     (check-equal? (check-code (main-with "  x: Int = -9223372036854775809")) 'CHECK-INT-RANGE)
     (check-ok (main-with "  x: Float = 1.0")))
 
+  (test-case "the String module"
+    (check-ok (main-with (string-append
+                          "  a: Int = String.length(\"hola\")\n"
+                          "  b: String = String.upcase(String.trim(\" x \"))\n"
+                          "  c: List[String] = String.split(\"a,b\", \",\")\n"
+                          "  d: String = String.join(c, \"-\")\n"
+                          "  e: Bool = String.contains?(\"hola\", \"ol\")\n"
+                          "  f: Bool = String.starts_with?(\"hola\", \"ho\")\n"
+                          "  g: Bool = String.ends_with?(\"hola\", \"la\")\n"
+                          "  h: String = String.replace(\"aXb\", \"X\", \"-\")\n"
+                          "  i: String = String.slice(\"hola\", 1, 2)\n"
+                          "  j: String = String.from_int(3) + String.from_float(1.5)\n"
+                          "  k: Int = String.to_int!(\"3\")\n"
+                          "  l: Float = String.to_float!(\"1.5\")")))
+    (check-equal? (check-code (main-with "  x = String.length(1)")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  x = String.length()")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  x = String.nope(\"a\")")) 'CHECK-UNKNOWN-NAME)
+    (check-equal? (check-code (main-with "  x = String.join(\"a\", \",\")")) 'CHECK-TYPE-MISMATCH))
+
+  (test-case "the IO and System modules"
+    (check-ok (main-with (string-append
+                          "  IO.puts(\"a\")\n"
+                          "  IO.print(\"b\")\n"
+                          "  IO.warn(\"c\")\n"
+                          "  x: Int = IO.inspect(1)\n"
+                          "  s: String = IO.gets()\n"
+                          "  r: String = IO.read()\n"
+                          "  e: Bool = IO.eof?()\n"
+                          "  a: List[String] = System.args()\n"
+                          "  System.exit(0)")))
+    (check-equal? (check-code (main-with "  IO.puts(1)")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  x = IO.gets(1)")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  x = IO.nope()")) 'CHECK-UNKNOWN-NAME)
+    (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH))
+
   (test-case "check diagnostics carry spans"
     (define mismatch (check-text "def main() -> Nil\n  x: Int = \"s\"\nend\n"))
     (check-true (diagnostic? mismatch))
@@ -209,8 +252,8 @@
                           "  n = Map.put(m, \"b\", m[\"a\"])\n"
                           "  e: Map[Int, String] = {}\n"
                           "  ks: List[String] = Map.keys(n)\n"
-                          "  total: Int = Map.len(n) + List.len(ks)\n"
-                          "  found: Bool = Map.has(n, \"a\")")))
+                          "  total: Int = Map.size(n) + List.size(ks)\n"
+                          "  found: Bool = Map.has_key?(n, \"a\")")))
     (check-equal? (check-code (main-with "  m: Map[Float, Int] = {}")) 'CHECK-MAP-KEY-TYPE)
     (check-equal? (check-code (main-with "  m: Map[String] = {}")) 'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (main-with "  m = {1.5: 1}")) 'CHECK-MAP-KEY-TYPE)
@@ -218,7 +261,7 @@
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = Map.put(m, \"b\", \"c\")"))
                   'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  m = {}")) 'CHECK-EMPTY-LIST-TYPE)
-    (check-equal? (check-code (main-with "  x = Map.len()")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  x = Map.size()")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = Map.nope(1)")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = Mpa.put(1)")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m == m")) 'CHECK-TYPE-MISMATCH)))

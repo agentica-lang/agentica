@@ -8,7 +8,7 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "IO" "System"))
 
 (define (type->string type)
   (cond
@@ -313,24 +313,95 @@
         (unless (map-type? type) (mismatch! 'Map type (node-span (car arguments))))
         type)
       (case name
-        [("Map.has")
+        [("Map.has_key?")
          (arity! 2)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
          'Bool]
         [("Map.keys") (arity! 1) (list 'List (cadr (map-argument)))]
-        [("Map.len") (arity! 1) (map-argument) 'Int]
+        [("Map.size") (arity! 1) (map-argument) 'Int]
         [("Map.put")
          (arity! 3)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
          (check-expression (caddr arguments) (caddr target))
          target]
-        [("List.len")
+        [("List.size")
          (arity! 1)
          (define type (check-expression (car arguments) #f))
          (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
          'Int]
+        [("String.length")
+         (arity! 1)
+         (check-expression (car arguments) 'String)
+         'Int]
+        [("String.upcase" "String.downcase" "String.trim")
+         (arity! 1)
+         (check-expression (car arguments) 'String)
+         'String]
+        [("String.split")
+         (arity! 2)
+         (check-expression (car arguments) 'String)
+         (check-expression (cadr arguments) 'String)
+         '(List String)]
+        [("String.join")
+         (arity! 2)
+         (check-expression (car arguments) '(List String))
+         (check-expression (cadr arguments) 'String)
+         'String]
+        [("String.contains?" "String.starts_with?" "String.ends_with?")
+         (arity! 2)
+         (check-expression (car arguments) 'String)
+         (check-expression (cadr arguments) 'String)
+         'Bool]
+        [("String.replace")
+         (arity! 3)
+         (check-expression (car arguments) 'String)
+         (check-expression (cadr arguments) 'String)
+         (check-expression (caddr arguments) 'String)
+         'String]
+        [("String.slice")
+         (arity! 3)
+         (check-expression (car arguments) 'String)
+         (check-expression (cadr arguments) 'Int)
+         (check-expression (caddr arguments) 'Int)
+         'String]
+        [("String.from_int")
+         (arity! 1)
+         (check-expression (car arguments) 'Int)
+         'String]
+        [("String.from_float")
+         (arity! 1)
+         (check-expression (car arguments) 'Float)
+         'String]
+        [("String.to_int!")
+         (arity! 1)
+         (check-expression (car arguments) 'String)
+         'Int]
+        [("String.to_float!")
+         (arity! 1)
+         (check-expression (car arguments) 'String)
+         'Float]
+        [("IO.puts" "IO.print" "IO.warn")
+         (arity! 1)
+         (check-expression (car arguments) 'String)
+         'Nil]
+        [("IO.inspect")
+         (arity! 1)
+         (check-expression (car arguments) #f)]
+        [("IO.gets" "IO.read")
+         (arity! 0)
+         'String]
+        [("IO.eof?")
+         (arity! 0)
+         'Bool]
+        [("System.args")
+         (arity! 0)
+         '(List String)]
+        [("System.exit")
+         (arity! 1)
+         (check-expression (car arguments) 'Int)
+         'Nil]
         [else (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span)]))
 
     (define (check-call expression)

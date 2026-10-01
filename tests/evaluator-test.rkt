@@ -24,6 +24,21 @@
     (error 'evaluator-test "unexpected diagnostic: ~a" (format-diagnostic result)))
   output)
 
+(define (run-io text [input ""] [arguments '()])
+  (define lexed (lex (source "test.agc" text)))
+  (define parsed (if (diagnostic? lexed) lexed (parse lexed)))
+  (define checked (if (diagnostic? parsed) parsed (check parsed)))
+  (when (diagnostic? checked)
+    (error 'evaluator-test "program rejected before running: ~a" (format-diagnostic checked)))
+  (define out (open-output-string))
+  (define err (open-output-string))
+  (define result (evaluate checked
+                           #:in (open-input-string input)
+                           #:out out
+                           #:err err
+                           #:args arguments))
+  (values (get-output-string out) (get-output-string err) result))
+
 (define (diagnostic-of text)
   (define-values (output result) (run text))
   (unless (diagnostic? result)
@@ -98,7 +113,7 @@
                      "  m: Map[String, Int] = {\"b\": 1, \"a\": 2, \"b\": 3}\n"
                      "  n = Map.put(m, \"c\", 4)\n"
                      "  for k in Map.keys(n)\n    puts(k)\n  end\n"
-                     "  if Map.has(m, \"c\") or m[\"b\"] != 3 or Map.len(m) != 2 or Map.len(n) != 3 or List.len(Map.keys(n)) != 3\n"
+                     "  if Map.has_key?(m, \"c\") or m[\"b\"] != 3 or Map.size(m) != 2 or Map.size(n) != 3 or List.size(Map.keys(n)) != 3\n"
                      "    puts(\"wrong\")\n  end")))
                   "b\na\nc\n"))
 
@@ -106,6 +121,114 @@
     (define missing (diagnostic-of (main-with "  m = {\"a\": 1}\n  x = m[\"z\"]")))
     (check-equal? (diagnostic-code missing) 'RUNTIME-KEY-NOT-FOUND)
     (check-equal? (position-of missing) '(3 9)))
+
+  (test-case "the String module"
+    (check-equal? (output-of
+                   (main-with
+                    (string-append
+                     "  puts(String.from_int(String.length(\"hola\")))\n"
+                     "  puts(String.upcase(\"hola\") + String.downcase(\"HOLA\"))\n"
+                     "  puts(String.trim(\"  x  \"))\n"
+                     "  puts(String.join(String.split(\"a,b,c\", \",\"), \"-\"))\n"
+                     "  if String.contains?(\"hola\", \"ol\") and String.starts_with?(\"hola\", \"ho\") and String.ends_with?(\"hola\", \"la\")\n"
+                     "    puts(\"found\")\n"
+                     "  end\n"
+                     "  puts(String.replace(\"aXbX\", \"X\", \"-\"))\n"
+                     "  puts(String.slice(\"hola\", 1, 2))\n"
+                     "  puts(String.join(String.split(\"ñ😀\", \"\"), \"|\"))\n"
+                     "  puts(String.from_float(1.5))\n"
+                     "  puts(String.from_int(String.to_int!(\"42\")))\n"
+                     "  puts(String.from_float(String.to_float!(\"1.25\")))")))
+                  "4\nHOLAhola\nx\na-b-c\nfound\na-b-\nol\nñ|😀\n1.5\n42\n1.25\n"))
+
+  (test-case "String.length and String.slice count characters, not bytes"
+    (check-equal? (output-of
+                   (main-with
+                    "  puts(String.from_int(String.length(\"ñ😀\")))\n  puts(String.slice(\"ñ😀x\", 1, 2))"))
+                  "2\n😀x\n"))
+
+  (test-case "String.slice and number conversions fail with located diagnostics"
+    (define past-end (diagnostic-of (main-with "  x = String.slice(\"abc\", 2, 5)")))
+    (check-equal? (diagnostic-code past-end) 'RUNTIME-INDEX-OUT-OF-RANGE)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.slice(\"abc\", 0 - 1, 1)")))
+                  'RUNTIME-INDEX-OUT-OF-RANGE)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_int!(\"1.5\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_int!(\"#x10\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_int!(\"9223372036854775808\")")))
+                  'RUNTIME-INTEGER-OVERFLOW)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"abc\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"1+2i\")")))
+                  'RUNTIME-INVALID-NUMBER)
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"1/2\")")))
+                  'RUNTIME-INVALID-NUMBER))
+
+  (test-case "user functions may use ? and ! suffixes"
+    (check-equal? (output-of
+                   (string-append
+                    "def ready?() -> Bool\n  return true\nend\n\n"
+                    "def value!() -> String\n  return \"ok\"\nend\n\n"
+                    "def main() -> Nil\n"
+                    "  if ready?()\n    puts(value!())\n  end\n"
+                    "end\n"))
+                  "ok\n"))
+
+  (test-case "IO writes to the injected ports and inspect returns its value"
+    (define-values (output err result)
+      (run-io (main-with
+               (string-append
+                "  IO.puts(\"a\")\n"
+                "  IO.print(\"b\")\n"
+                "  IO.warn(\"w\")\n"
+                "  x = IO.inspect([1, 2])\n"
+                "  puts(String.from_int(List.size(x)))"))))
+    (check-equal? result 'nil)
+    (check-equal? output "a\nb[1, 2]\n2\n")
+    (check-equal? err "w\n"))
+
+  (test-case "IO.inspect prints structs, lists, and maps in a stable form"
+    (define-values (output err result)
+      (run-io (string-append
+               "struct Task\n  title: String\n  done: Bool\nend\n\n"
+               "def main() -> Nil\n"
+               "  t = Task(done: true, title: \"a\")\n"
+               "  IO.inspect(t)\n"
+               "  IO.inspect({\"k\": 1})\n"
+               "  IO.inspect(\"hi\")\n"
+               "  IO.inspect(nil)\n"
+               "end\n")))
+    (check-equal? result 'nil)
+    (check-equal? output "Task(title: \"a\", done: true)\n{\"k\": 1}\n\"hi\"\nnil\n"))
+
+  (test-case "IO.gets reads lines, IO.read drains, and IO.eof? peeks"
+    (define-values (output err result)
+      (run-io (main-with
+               (string-append
+                "  if IO.eof?()\n    puts(\"empty\")\n  end\n"
+                "  puts(IO.gets())\n"
+                "  puts(IO.gets())\n"
+                "  puts(IO.read())\n"
+                "  if IO.eof?()\n    puts(\"done\")\n  end\n"))
+              "one\r\ntwo\rrest\n"))
+    (check-equal? result 'nil)
+    (check-equal? output "one\ntwo\nrest\n\ndone\n"))
+
+  (test-case "IO.gets at end of input is a located diagnostic"
+    (define-values (output err result) (run-io (main-with "  x = IO.gets()") ""))
+    (check-true (diagnostic? result))
+    (check-equal? (diagnostic-code result) 'RUNTIME-END-OF-INPUT)
+    (check-equal? (position-of result) '(2 7)))
+
+  (test-case "System.args and System.exit"
+    (define-values (args-output err args-result)
+      (run-io (main-with "  for a in System.args()\n    puts(a)\n  end") "" '("x" "y")))
+    (check-equal? args-result 'nil)
+    (check-equal? args-output "x\ny\n")
+    (define-values (exit-output exit-err result) (run-io (main-with "  System.exit(3)")))
+    (check-true (exit-code? result))
+    (check-equal? (exit-code-code result) 3))
 
   (test-case "runtime errors are located diagnostics"
     (define overflow (diagnostic-of (main-with "  x = 9223372036854775807 + 1")))

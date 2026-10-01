@@ -45,6 +45,17 @@
                     comma colon dot assign plus minus multiply divide modulo
                     less greater NL EOF)))
 
+  (test-case "a trailing ? or ! joins the name only before a parenthesis"
+    (define qualified (lex-text "String.contains?(s, p)"))
+    (check-equal? (kinds qualified)
+                  '(type-name dot name left-paren name comma name right-paren NL EOF))
+    (check-equal? (token-lexeme (list-ref qualified 2)) "contains?")
+    (define bang (lex-text "x = to_int!(\"1\")"))
+    (check-equal? (token-lexeme (list-ref bang 2)) "to_int!")
+    (check-equal? (kinds (lex-text "a!=b")) '(name not-equal name NL EOF))
+    (check-equal? (diagnostic-code (lex-text "x?")) 'LEX-UNEXPECTED-CHAR)
+    (check-equal? (diagnostic-code (lex-text "x!")) 'LEX-UNEXPECTED-CHAR))
+
   (test-case "strings decode only the specified escapes"
     (define result (lex-text "\"quote: \\\" slash: \\\\ newline: \\n return: \\r tab: \\t\""))
     (check-equal? (token-value (car result))

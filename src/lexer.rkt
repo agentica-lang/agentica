@@ -118,6 +118,13 @@
             (scan-while! (lambda (c) (or (ascii-letter? c)
                                          (ascii-digit? c)
                                          (char=? c #\_))))
+            ;; A trailing "?" or "!" is part of the name only when a "("
+            ;; follows, so "a!=b" still lexes as "a != b".
+            (when (and (not (char<=? #\A char #\Z))
+                       (< index source-length)
+                       (memv (current) '(#\? #\!))
+                       (equal? (peek 1) #\())
+              (advance!))
             (define lexeme (substring text (source-position-offset start) index))
             (define kind
               (hash-ref keywords lexeme

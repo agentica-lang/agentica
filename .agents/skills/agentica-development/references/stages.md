@@ -48,7 +48,7 @@ The parser reads the keyword literals from their kind, not from `value`: `true` 
 | lexer | `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE` |
 | parser | `PARSE-UNEXPECTED-TOKEN`, `PARSE-UNCLOSED-BLOCK`, `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET` |
 | checker | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL` |
-| evaluator | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-UNREACHABLE` |
+| evaluator | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-INVALID-NUMBER`, `RUNTIME-END-OF-INPUT`, `RUNTIME-STACK-OVERFLOW`, `RUNTIME-UNREACHABLE`, `RUNTIME-INTERNAL` |
 
 ## `src/lexer.rkt`
 
@@ -58,6 +58,7 @@ The parser reads the keyword literals from their kind, not from `value`: `true` 
 - `NL` is suppressed inside `()` and `[]`; one `NL` per newline sequence outside them.
 - A final `NL` is synthesized before `EOF` when the file does not end with one.
 - `#` starts a comment that runs to the end of the line.
+- A lowercase name may end in `?` or `!`, but only when the next character is `(` (`contains?`, `to_int!`), so `a!=b` is still `a != b`.
 
 ## `src/ast.rkt`
 
@@ -88,20 +89,22 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 - Struct names are inserted before fields are resolved, and function signatures after, so forward references, recursion, and struct fields that name a later struct all work.
 - `puts` is pre-registered as `(String) -> Nil` and cannot be redefined.
 - Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`; `(list 'List T)`; `(list 'Map K V)` with `K` `Int` or `String`; `(list 'Struct NAME)`.
-- `Map.has/keys/len/put` and `List.len` are builtin module calls: the parser keeps the dotted name in `call-name`, and `check-builtin-call` types them generically. The evaluator's `eval-call` dispatches them by name and relies on the checker for arity, so add the arity check there first.
+- Builtin module calls (`Map`, `List`, `String`, `IO`, `System`) keep their dotted name in `call-name`; `check-builtin-call` types them generically. The evaluator's `eval-call` dispatches them by name and relies on the checker for arity, so add the arity check there first.
+- `Map.has_key?/keys/size/put`, `List.size`, the `String.*` functions, `IO.*`, and `System.*` are the builtins. String operations count Unicode characters. Numeric conversions accept signed decimal notation; invalid text yields `RUNTIME-INVALID-NUMBER`, and an out-of-range integer yields `RUNTIME-INTEGER-OVERFLOW`.
 - Scopes are a stack of hashes holding `name -> (cons type immutable?)`. The `for` variable is immutable.
 - A plain binding to a visible name is an update and must keep its type; an annotated binding to a visible name is `CHECK-ANNOTATION-ON-EXISTING`; a fresh name that is already visible is `CHECK-SHADOWED-NAME`.
 - `check` returns the same `program` when it is valid; the evaluator trusts it and does not re-check types.
 
 ## `src/evaluator.rkt`
 
-`(evaluate program) -> 'nil | diagnostic`. Runs `main()` and trusts the checker.
+`(evaluate program #:in #:out #:err #:args) -> 'nil | exit-code | diagnostic`. Runs `main()` and trusts the checker. Ports default to the current ports and the arguments to `'()`; the body runs inside `parameterize` so `IO.*` honors them.
 
-- Values: Racket integers, flonums, booleans, strings, `'nil`, lists, a `mapping` struct (association list, insertion order), and an `instance` struct (type name plus an immutable field hash).
+- Values: Racket integers, flonums, booleans, strings, `'nil`, lists, a `mapping` struct (association list, insertion order), an `instance` struct (type name plus an immutable field hash), and `exit-code` for `System.exit`.
+- `IO.inspect` uses `value->debug-string`, which formats structs in declared field order (the evaluator registers a `struct-fields` hash for this).
 - Scopes are a list of frames of `name -> box`. A call starts a fresh scope list (callers' locals are not visible) and one `let/ec` per call for `return`.
 - `Int` results of `+ - *` and unary `-` are range-checked to signed 64-bit; `/` and `%` by zero fail for `Int` and `Float`; `==` on numbers uses `=`.
 - Index errors point at the index expression; arithmetic errors point at `op-span`.
 
 ## `src/main.rkt`
 
-Reads the file (a missing file prints one plain line and exits 2), builds a `source`, and calls `lex`, `parse`, `check`, then `evaluate`. A diagnostic is printed by `format-diagnostic` (header, message, source line, caret run) on stderr with exit 1. `--dump` pretty-prints the checked tree instead of running it. Wrong argument count exits 2.
+Reads the file (a missing file prints one plain line and exits 2), builds a `source`, and calls `lex`, `parse`, `check`, then `evaluate`. A diagnostic is printed by `format-diagnostic` (header, message, source line, caret run) on stderr with exit 1. `--dump` pretty-prints the checked tree instead of running it. Arguments after the source file are passed to the evaluator as `System.args`, and an `exit-code` result exits with that code. No source file exits 2.
