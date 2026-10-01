@@ -47,6 +47,7 @@ The parser reads the keyword literals from their kind, not from `value`: `true` 
 | --- | --- |
 | lexer | `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE` |
 | parser | `PARSE-UNEXPECTED-TOKEN`, `PARSE-UNCLOSED-BLOCK`, `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET` |
+| checker | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN` |
 
 ## `src/lexer.rkt`
 
@@ -79,6 +80,17 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 - A statement starting with `name` is a binding when the next token is `=` or `:`; otherwise it is an expression.
 - Stray `NL` tokens are skipped at the top level and between statements (see the gotcha in `SKILL.md`).
 
+## `src/checker.rkt`
+
+`(check program) -> program | diagnostic`. Registration first, then bodies, stopping at the first error:
+
+- Struct names are inserted before fields are resolved, and function signatures after, so forward references, recursion, and struct fields that name a later struct all work.
+- `puts` is pre-registered as `(String) -> Nil` and cannot be redefined.
+- Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`; `(list 'List T)`; `(list 'Struct NAME)`.
+- Scopes are a stack of hashes holding `name -> (cons type immutable?)`. The `for` variable is immutable.
+- A plain binding to a visible name is an update and must keep its type; an annotated binding to a visible name is `CHECK-ANNOTATION-ON-EXISTING`; a fresh name that is already visible is `CHECK-SHADOWED-NAME`.
+- `check` returns the same `program` when it is valid, so Phase 4 re-reads types if it needs them.
+
 ## `src/main.rkt`
 
-Reads the file, builds a `source`, calls `lex`, then `parse`, prints `format-diagnostic` to stderr and exits 1 on a diagnostic, and otherwise `pretty-print`s the tree.
+Reads the file, builds a `source`, calls `lex`, `parse`, then `check`, prints `format-diagnostic` to stderr and exits 1 on a diagnostic, and otherwise `pretty-print`s the tree.

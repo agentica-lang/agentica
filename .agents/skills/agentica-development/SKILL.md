@@ -30,10 +30,12 @@ src/
   lexer.rkt       # lex: source -> (listof token) | diagnostic
   ast.rkt         # syntax tree nodes; every node carries a span
   parser.rkt      # parse: (listof token) -> program | diagnostic
-  main.rkt        # thin CLI driver: lex, then parse, then print the tree or the diagnostic
+  checker.rkt     # check: program -> program | diagnostic
+  main.rkt        # thin CLI driver: lex, parse, check, then print the tree or the diagnostic
 tests/
   lexer-test.rkt
   parser-test.rkt
+  checker-test.rkt
 docs/
   Agentica-gramatica.md   # language grammar, the source of truth
   Agentica-roadmap.md     # phases and the active checklist
@@ -46,8 +48,8 @@ docs/
 | keyword, operator, or literal form | `src/lexer.rkt` lookup tables |
 | AST node | `src/ast.rkt` struct plus `provide`; construct it from `src/parser.rkt` |
 | syntax, statement, or expression form | `src/parser.rkt` |
-| diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`) |
-| pipeline stage (checker, evaluator) | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
+| diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`) |
+| pipeline stage (evaluator) | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
 | language rule or example | `docs/Agentica-gramatica.md`; phase scope in `docs/Agentica-roadmap.md` |
 | test | `tests/<stage>-test.rkt` |
 
