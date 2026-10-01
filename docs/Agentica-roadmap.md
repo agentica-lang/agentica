@@ -596,6 +596,11 @@ Tasks (about five, each with hidden tests):
 
 Method: the same model, equivalent tasks, and a comparable budget in Agentica and Python. Measure hidden tests passed, repair attempts, tokens, and time, and separate syntax errors from logic errors. Record whether the checker output was enough to fix the error, comparing the three formats: plain, `--ai`, and `--json`.
 
+The agent runs the `agentica` binary (`dist/agentica`), not `racket src/main.rkt`. `dist/` is not versioned and can be stale, so the runner rebuilds it with `make exe` before each round and puts it on the `PATH`.
+
+The skill `.agents/skills/agentica-programming/` is a variable: one arm gets only the grammar and examples, the other also gets the skill. It starts without a list of commonly broken rules, on purpose: first see how agents behave with the basic skill, then add rules only for failures actually observed. Record the skill version (commit) used in each round.
+
+- [x] Write the minimal `agentica-programming` skill.
 - [ ] Write the task set and hidden tests under `tests/eval/` (data and a runner script; no new dependency).
 - [ ] Run the Agentica and Python arms and record the results in `docs/`.
 - [ ] List the problems found and put them in the next phases before building more.
