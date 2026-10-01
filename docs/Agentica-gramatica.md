@@ -100,7 +100,7 @@ Las extensiones introducirán más palabras reservadas. No se consideran disponi
 ### Literales
 
 ```ebnf
-NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" } ;
+NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
 TYPE_NAME  = UPPER, { LETTER | DIGIT | "_" } ;
 INTEGER    = DIGIT, { DIGIT } ;
 FLOAT      = DIGIT, { DIGIT }, ".", DIGIT, { DIGIT } ;
@@ -109,6 +109,8 @@ ESCAPE     = "\\", ( '"' | "\\" | "n" | "r" | "t" ) ;
 ```
 
 `LETTER` representa `A`–`Z` o `a`–`z`; `DIGIT`, `0`–`9`; `LOWER_OR_UNDERSCORE`, `a`–`z` o `_`; `UPPER`, `A`–`Z`. `STRING_CHAR` es cualquier carácter Unicode salvo comillas dobles, barra inversa y saltos de línea. `NL` y `EOF` son tokens producidos por el lexer.
+
+El sufijo `?` o `!` solo forma parte del `NAME` cuando el carácter siguiente es `(`: `contains?(`, `to_int!(`. Así `a!=b` sigue siendo `a != b`, y `x?` o `x!` sin paréntesis no son nombres. Por convención, `?` marca un predicado que devuelve `Bool` y `!` marca la versión que termina la ejecución con error en vez de devolver un `Result`. Variables, campos y parámetros no pueden llevar el sufijo.
 
 El signo negativo es un operador, no parte del literal. El núcleo no incluye exponentes, bases alternativas, separadores numéricos, strings multilínea ni interpolación. `"#{name}"` es texto literal en esta versión.
 
@@ -176,12 +178,16 @@ additive_expr    = multiplicative_expr,
 multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
 unary_expr       = ( "-" | "not" ), unary_expr | postfix_expr ;
-postfix_expr     = primary, { ".", NAME | "[", expression, "]" } ;
+postfix_expr     = primary, { ".", NAME
+                            | ".", "call", "(", [ arguments ], ")"
+                            | "[", expression, "]" } ;
 
 primary          = literal
                  | NAME, [ "(", [ arguments ], ")" ]
+                 | "&", NAME
                  | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
                  | TYPE_NAME, "(", [ named_arguments ], ")"
+                 | TYPE_NAME
                  | list_literal
                  | map_literal
                  | "(", expression, ")" ;
@@ -195,13 +201,18 @@ map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
-Las llamadas del núcleo son a funciones nombradas. Las funciones no son valores y no se admite `user.method()`. `user.name`, `users[0]` y `find_user(1).name` sí encajan en la gramática.
+Las llamadas del núcleo son a funciones nombradas, y no se admite `user.method()`. `user.name`, `users[0]` y `find_user(1).name` sí encajan en la gramática.
+
+Dos formas son nuevas y de uso limitado:
+
+- `&nombre` convierte una función de nivel superior en un valor de tipo `Fn[...]`, y `valor.call(args)` lo invoca. `call` no es palabra reservada: solo tiene este significado justo después de un `.` y antes de `(`. No hay closures: `&nombre` no captura variables. El checker exige que `nombre` sea una función declarada y compara parámetros y retorno con el tipo esperado.
+- Un `TYPE_NAME` solo, sin `(` ni `.`, es un tipo usado como argumento, como en `JSON.decode(text, User)`. El checker lo acepta únicamente como argumento de las funciones incorporadas que lo piden (`JSON.decode`, `JSON.schema`); en cualquier otro lugar es un error.
 
 `and` y `or` evalúan con cortocircuito. Las sumas, restas, multiplicaciones, divisiones y módulos se agrupan de izquierda a derecha. Las comparaciones y comprobaciones de igualdad no se encadenan: `a < b < c` es inválido; se escribe `a < b and b < c`.
 
 | Precedencia, de mayor a menor | Operaciones |
 |---|---|
-| 1 | Llamada nombrada, campo `.`, índice `[]`, agrupación |
+| 1 | Llamada nombrada, `&nombre`, campo `.`, `.call(...)`, índice `[]`, agrupación |
 | 2 | `-`, `not` unarios |
 | 3 | `*`, `/`, `%` |
 | 4 | `+`, `-` |
@@ -228,6 +239,9 @@ La gramática determina qué se puede escribir. Las siguientes reglas determinan
 | `List[T]` | Lista homogénea e inmutable; índices `Int`, desde cero |
 | `Map[K, V]` | Diccionario homogéneo e inmutable; la clave `K` es `Int` o `String`; conserva el orden de inserción |
 | Struct declarado | Tipo nominal, campos tipados e inmutables |
+| `Fn[A, ..., R]` | Función de nivel superior como valor; los tipos finales son el retorno (fase 5j) |
+
+Los tipos incorporados de las fases de librería se escriben con la misma sintaxis `type` y se fijan cuando empieza cada fase: `Result[T]` (error siempre `String`), `Json`, `Socket`, `Listener`, `Process` y `Response` (struct incorporado con `status`, `body` y `headers`). Los nombres `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `String`, `IO`, `System`, `JSON`, `TCP` y `HTTP` pasan a estar reservados. Los tipos opacos no se pueden construir ni inspeccionar, solo pasar a las funciones incorporadas.
 
 Los parámetros y el retorno de las funciones requieren anotación. Las variables locales pueden inferirse del inicializador:
 
@@ -465,6 +479,22 @@ def main() -> Nil
 end
 ```
 
+### Funciones como valores
+
+```ruby
+def double(n: Int) -> Int
+  return n * 2
+end
+
+def main() -> Nil
+  f: Fn[Int, Int] = &double
+  puts(String.from_int(f.call(21)))
+  if String.contains?("agentica", "gent")
+    puts("found")
+  end
+end
+```
+
 ### Programas que deben rechazarse
 
 ```ruby
@@ -474,6 +504,9 @@ if 1                   # La condición debe ser Bool.
 end
 values = []            # Falta tipo esperado para la lista vacía.
 puts "hello"           # La llamada requiere paréntesis.
+x = User               # Un tipo solo es válido como argumento de JSON.decode o JSON.schema.
+f = &missing           # &nombre exige una función declarada.
+ok = done?             # El sufijo ? solo existe seguido de "(".
 ```
 
 Estas instrucciones se muestran como fragmentos de cuerpo de función. En el nivel superior también serían inválidas por no ser declaraciones.
