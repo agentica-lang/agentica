@@ -166,6 +166,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
 - `CHECK-MISSING-RETURN` — a non-`Nil` function with a path that does not return.
 - `CHECK-MAIN` — no `main`, or a `main` that is not `() -> Nil`. A second `main` is a duplicate name and is `CHECK-REDEFINED-NAME`.
+- `CHECK-INT-RANGE` — an `Int` literal above 2^63-1. `-9223372036854775808` is valid: the literal 2^63 is allowed as the direct operand of unary `-`.
 
 ### Work sequence
 

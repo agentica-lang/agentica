@@ -179,6 +179,12 @@
     (check-equal? (check-code "def main(x: Int) -> Nil\nend\n") 'CHECK-MAIN)
     (check-equal? (check-code "def main() -> Int\n  return 1\nend\n") 'CHECK-MAIN))
 
+  (test-case "Int literals stay in 64 bits and Float literals are Float"
+    (check-ok (main-with "  x: Int = 9223372036854775807\n  y: Int = -9223372036854775808"))
+    (check-equal? (check-code (main-with "  x: Int = 9223372036854775808")) 'CHECK-INT-RANGE)
+    (check-equal? (check-code (main-with "  x: Int = -9223372036854775809")) 'CHECK-INT-RANGE)
+    (check-ok (main-with "  x: Float = 1.0")))
+
   (test-case "check diagnostics carry spans"
     (define mismatch (check-text "def main() -> Nil\n  x: Int = \"s\"\nend\n"))
     (check-true (diagnostic? mismatch))

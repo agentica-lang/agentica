@@ -6,6 +6,8 @@
 
 (provide check)
 
+(define int-max (sub1 (expt 2 63)))
+
 (define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List"))
 
 (define (type->string type)
@@ -30,7 +32,7 @@
 (define (literal-type value)
   (cond
     [(boolean? value) 'Bool]
-    [(integer? value) 'Int]
+    [(exact-integer? value) 'Int]
     [(flonum? value) 'Float]
     [(string? value) 'String]
     [(eq? value 'nil) 'Nil]
@@ -172,7 +174,13 @@
     (define (check-expression expression expected)
       (define actual
         (cond
-          [(literal? expression) (literal-type (literal-value expression))]
+          [(literal? expression)
+           (when (and (exact-integer? (literal-value expression))
+                      (> (literal-value expression) int-max))
+             (bail 'CHECK-INT-RANGE
+                   "Int literal is outside the signed 64-bit range"
+                   (literal-span expression)))
+           (literal-type (literal-value expression))]
           [(name-ref? expression)
            (define binding (lookup (name-ref-name expression)))
            (unless binding
@@ -194,7 +202,13 @@
       (ensure actual expected (node-span expression)))
 
     (define (check-unary expression)
-      (define operand (check-expression (unary-operand expression) #f))
+      (define inner (unary-operand expression))
+      (define operand
+        (if (and (eq? (unary-op expression) 'minus)
+                 (literal? inner)
+                 (eqv? (literal-value inner) (add1 int-max)))
+            'Int
+            (check-expression inner #f)))
       (case (unary-op expression)
         [(minus)
          (unless (numeric-type? operand)
