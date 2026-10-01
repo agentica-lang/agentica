@@ -5,7 +5,7 @@ description: Write, run, and repair programs in the Agentica language (`.agc` fi
 
 # Programming in Agentica
 
-Agentica is a small statically typed language with Ruby-like syntax. The language is defined in `docs/Agentica-gramatica.md`; read the sections you need before writing code, and do not guess syntax. Valid programs to copy from are in `examples/`: `hello.agc`, `classify.agc` (functions and control flow), `tasks.agc` (structs, lists), `inventory.agc` (maps), `strings.agc` (String library), `echo.agc` (input).
+Agentica is a small statically typed language with Ruby-like syntax. The language is defined in `docs/grammar.md`; read the sections you need before writing code, and do not guess syntax. Valid programs to copy from are in `examples/`: `hello.agc`, `classify.agc` (functions and control flow), `tasks.agc` (structs, lists), `inventory.agc` (maps), `strings.agc` (String library), `echo.agc` (input).
 
 ## Run and check
 

@@ -1,33 +1,27 @@
 # Agentica: gramática y diseño del lenguaje
 
-Fecha: 1 de octubre de 2026. Estado: propuesta de trabajo, todavía sin implementación.
+Estado: implementada por el intérprete en Racket (`src/`). Este documento describe solo lo que el intérprete acepta; la sintaxis planeada está en [`future.md`](future.md).
 
 ## 1. Qué queremos validar
 
-Agentica es un lenguaje pensado para que agentes de IA puedan escribir, leer y corregir programas con facilidad. La prioridad inicial es experimentar con la sintaxis, las reglas y los diagnósticos. El rendimiento, la concurrencia y el runtime definitivo se abordarán después.
+Agentica es un lenguaje pensado para que agentes de IA puedan escribir, leer y corregir programas con facilidad. La prioridad es experimentar con la sintaxis, las reglas y los diagnósticos. El rendimiento, la concurrencia y el runtime definitivo se abordarán después.
 
-La dirección acordada es KISS: una sintaxis cercana a Ruby, tipos estáticos, inferencia local y pocas formas de expresar cada operación. El lenguaje de implementación del prototipo sigue abierto. Esta especificación no depende de Python, Elixir, Racket ni C++.
+La dirección es KISS: una sintaxis cercana a Ruby, tipos estáticos, inferencia local y pocas formas de expresar cada operación. Esta especificación no depende del lenguaje en que se implemente el intérprete.
 
-Para un runtime nativo posterior se ha planteado C++20 procedural, structs y funciones libres, Boehm GC y, más adelante, libevent. Esas decisiones no forman parte de la gramática ni deben aparecer en los programas Agentica.
+## 2. Decisiones de diseño
 
-## 2. Qué está acordado y qué propone este documento
-
-La conversación definió ejemplos y una dirección, pero no una gramática completa. Este documento completa los huecos con reglas concretas para disponer de una base implementable. Las elecciones nuevas son propuestas revisables, no acuerdos previos.
-
-| Aspecto | Estado |
+| Aspecto | Regla |
 |---|---|
-| Sintaxis `def`, `struct`, `if`, `while`, `for`, `end` | Dirección ya planteada |
-| Tipos estáticos e inferencia donde sea evidente | Dirección ya planteada |
-| Funciones, listas y structs en el núcleo | Alcance ya planteado |
-| Enums, `Result`, `Option` y matching básico | Extensiones ya planteadas, aplazadas |
-| Actores, FFI y ejecución asíncrona | Futuro; fuera del núcleo |
-| Paréntesis obligatorios en llamadas | Propuesta para reducir ambigüedad |
-| Retorno explícito y anotaciones obligatorias en firmas | Propuesta para facilitar implementación y diagnósticos |
-| Reasignación de variables; listas y structs inicialmente inmutables | Propuesta de semántica mínima |
-| `Int` de 64 bits, reglas numéricas y scopes | Propuestas que completan el diseño |
-| Sin sufijos `?` en nombres de funciones del núcleo | Propuesta; los ejemplos anteriores usaban `adult?` |
+| Sintaxis | `def`, `struct`, `if`, `while`, `for`, `end`; los bloques terminan con `end` |
+| Tipos | Estáticos, con inferencia local donde sea evidente |
+| Llamadas | Paréntesis obligatorios |
+| Firmas | Retorno explícito y anotaciones obligatorias |
+| Datos | Reasignación de variables; listas, maps y structs inmutables |
+| Números | `Int` de 64 bits, sin conversiones implícitas |
+| Nombres | Sufijo `?` (predicado) o `!` (versión que termina la ejecución) en funciones, solo seguido de `(` |
+| Biblioteca | Módulos incorporados `Map`, `List`, `String`, `IO` y `System` |
 
-El documento distingue un **núcleo inicial** y **extensiones futuras**. Implementar la gramática completa de las extensiones no es un requisito para tener el primer prototipo.
+Enums, `Result`, `Option`, interpolación, funciones como valores, JSON, red y otras extensiones no forman parte del lenguaje actual: están en [`future.md`](future.md).
 
 ## 3. Un programa del núcleo
 
@@ -70,7 +64,7 @@ El ejecutable comienza llamando a `main()`. En el núcleo no hay instrucciones e
 - Los espacios y tabuladores separan tokens; no tienen significado estructural.
 - Un salto de línea separa instrucciones, salvo dentro de `(...)` y `[...]`.
 - CRLF se normaliza a LF. Un comentario no elimina el salto de línea que lo sigue.
-- El lexer emite un único token `NL` por cada secuencia de saltos de línea fuera de delimitadores, incluyendo líneas vacías y líneas con comentarios.
+- El lexer emite un token `NL` por cada salto de línea fuera de delimitadores, salvo que agrupa las líneas vacías consecutivas; una línea con comentario produce su propio `NL`. El parser ignora los `NL` sobrantes entre declaraciones e instrucciones.
 - Si el archivo no termina con salto de línea, el lexer añade uno antes de `EOF`.
 - No se admiten `;`, continuación con barra inversa ni expresiones que continúen implícitamente tras un operador.
 
@@ -95,7 +89,7 @@ def struct end if elsif else while for in return
 true false nil and or not
 ```
 
-Las extensiones introducirán más palabras reservadas. No se consideran disponibles en el núcleo.
+Las extensiones futuras introducirán más palabras reservadas; no están disponibles.
 
 El sufijo `?` o `!` solo forma parte del `NAME` cuando el carácter siguiente es `(`: `contains?(`, `to_int!(`. Así `a!=b` sigue siendo `a != b`, y `x?` o `x!` sin paréntesis no son nombres. Por convención, `?` marca un predicado que devuelve `Bool` y `!` marca la versión que termina la ejecución con error en vez de devolver un `Result`. Variables, campos y parámetros no pueden llevar el sufijo.
 
@@ -220,11 +214,11 @@ Las llamadas del núcleo son a funciones nombradas, y no se admite `user.method(
 
 ## 6. Reglas semánticas mínimas
 
-La gramática determina qué se puede escribir. Las siguientes reglas determinan qué programas son válidos y cómo se ejecutan. Son propuestas para cerrar el primer prototipo.
+La gramática determina qué se puede escribir. Las siguientes reglas determinan qué programas son válidos y cómo se ejecutan. Son las reglas que implementa el intérprete.
 
 ### Tipos e inferencia
 
-| Tipo | Regla propuesta |
+| Tipo | Regla |
 |---|---|
 | `Int` | Entero con signo de 64 bits; overflow produce error de ejecución |
 | `Float` | IEEE 754 binary64 |
@@ -362,135 +356,25 @@ System.args() -> List[String]
 System.exit(code: Int) -> Nil
 ```
 
-Archivos, JSON, red y conversiones más ricas necesitan una API posterior; llegarán con las fases 5e a 5h.
+Archivos, JSON, red y conversiones más ricas necesitan una API posterior; ver [`future.md`](future.md).
 
-## 7. Extensión futura: enums y pattern matching
+## 7. Diagnósticos para agentes
 
-Esta sección documenta la dirección ya discutida. No pertenece al núcleo inicial y requiere ampliar lexer, parser, checker y evaluador.
-
-```ruby
-enum Result[T, E]
-  Ok(T)
-  Err(E)
-end
-
-enum Option[T]
-  Some(T)
-  None
-end
-
-def label(result: Result[String, String]) -> String
-  case result
-  in Ok(value)
-    return value
-  in Err(error)
-    return error
-  end
-end
-```
-
-Propuesta de extensión EBNF, que se añade a las alternativas de declaraciones e instrucciones:
-
-```ebnf
-enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
-                   variant_decl, { variant_decl }, "end", NL ;
-type_parameters  = "[", TYPE_NAME, { ",", TYPE_NAME }, "]" ;
-variant_decl     = TYPE_NAME,
-                   [ "(", type, { ",", type }, ")" ], NL ;
-
-case_statement   = "case", expression, NL,
-                   match_arm, { match_arm }, "end", NL ;
-match_arm        = "in", pattern, NL, block ;
-pattern          = "_"
-                 | INTEGER | FLOAT | STRING | "true" | "false" | "nil"
-                 | "-", INTEGER | "-", FLOAT
-                 | TYPE_NAME, [ "(", pattern_bindings, ")" ] ;
-pattern_bindings = NAME, { ",", NAME } ;
-```
-
-`_` es un wildcard que no introduce una variable. En el primer matching solo se permiten literales y variantes con bindings directos: sin patrones anidados, guards, regex ni patrones de listas. `case` sigue siendo una instrucción, no una expresión.
-
-El checker verifica exhaustividad para enums: deben cubrirse todas las variantes o existir un wildcard final. Para dominios abiertos como enteros y strings exige wildcard. Los bindings son locales a cada rama; las ramas se prueban en orden y las inalcanzables se diagnostican.
-
-La gramática de expresiones también debe ampliarse para construir variantes, por ejemplo `Ok(value)` y `None`. Antes de implementar esta extensión debe decidirse la resolución de nombres: cualificación de variantes, colisiones con structs y cómo inferir parámetros de tipo que no aparecen en el payload. El núcleo no resuelve esas decisiones por anticipado.
-
-`Point(x: 0, y:)` se discutió como posibilidad, pero queda aplazado: este primer matching no incluye patrones de structs ni abreviaturas de campos.
-
-## 8. Extensiones que todavía no tienen gramática normativa
-
-| Extensión | Dirección | Decisiones pendientes |
-|---|---|---|
-| Interpolación | `"Hola #{user.name}"` | Escapes, expresiones admitidas y conversión a texto |
-| Propagación de errores | `find_user(42)?` | Relación con `Result` y retorno de la función |
-| Generics de funciones | Reutilizar funciones con tipos distintos | Sintaxis, inferencia y restricciones |
-| Closures y métodos | Mejor ergonomía | Captura, representación y resolución |
-| Módulos | Separar programas en archivos | Importación, visibilidad y ciclos |
-| FFI C | Wrappers seguros sobre llamadas nativas | Punteros, ownership, ABI y llamadas desde el intérprete |
-| Async y fibers | Suspender ejecución en I/O; inicialmente un thread | API, cancelación y propagación de errores |
-| Actores | Mensajes y mailboxes propios | Sintaxis, aislamiento, valores compartidos y supervisión |
-
-### Biblioteca estándar y funciones como valores (fases 5c–5m)
-
-Nada de esta subsección está implementado ni forma parte del núcleo. Se fija aquí para que cada fase del roadmap la tome como especificación, y se mueve a las secciones 4–6 cuando la fase termine.
-
-```ebnf
-postfix_expr     = primary, { ".", NAME
-                            | ".", "call", "(", [ arguments ], ")"
-                            | "[", expression, "]" } ;
-
-primary          = (* …formas del núcleo, más: *)
-                 | "&", NAME
-                 | TYPE_NAME ;
-```
-
-- **`&nombre` y `.call(...)`:** `&nombre` convierte una función de nivel superior en un valor de tipo `Fn[...]`, y `valor.call(args)` lo invoca. `call` no es palabra reservada: solo tiene este significado justo después de un `.` y antes de `(`. No hay closures: `&nombre` no captura variables. El checker exige que `nombre` sea una función declarada y compara parámetros y retorno con el tipo esperado. Precedencia 1, como la llamada nombrada.
-- **`TYPE_NAME` solo:** sin `(` ni `.`, es un tipo usado como argumento, como en `JSON.decode(text, User)`. El checker lo acepta únicamente como argumento de las funciones incorporadas que lo piden (`JSON.decode`, `JSON.schema`); en cualquier otro lugar es un error.
-- **Tipos:** `Fn[A, ..., R]` (los tipos finales son el retorno, fase 5j), `Result[T]` (error siempre `String`), `Json`, `Socket`, `Listener`, `Process` y `Response` (struct incorporado con `status`, `body` y `headers`). Los tipos opacos no se pueden construir ni inspeccionar, solo pasar a las funciones incorporadas.
-- **Nombres reservados al empezar cada fase:** `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP` y `HTTP`.
-
-```ruby
-def double(n: Int) -> Int
-  return n * 2
-end
-
-def main() -> Nil
-  f: Fn[Int, Int] = &double
-  puts(String.from_int(f.call(21)))
-  if String.contains?("agentica", "gent")
-    puts("found")
-  end
-end
-```
-
-Programas que esa fase debe rechazar:
-
-```ruby
-x = User               # Un tipo solo es válido como argumento de JSON.decode o JSON.schema.
-f = &missing           # &nombre exige una función declarada.
-ok = done?             # El sufijo ? solo existe seguido de "(".
-```
-
-La integración del host C++ con una librería C no resuelve por sí sola el FFI de Agentica: un intérprete necesita wrappers nativos o una capa de llamadas que respete el ABI. Tampoco incluir libevent proporciona automáticamente fibers o actores.
-
-No se introducen de momento interfaces, traits, herencia, JIT, distribución ni paralelismo. La semántica del lenguaje debe conservarse al cambiar el evaluador de AST por una VM futura.
-
-## 9. Diagnósticos para agentes
-
-Cada error debe incluir código estable, archivo, línea, columna y una explicación concreta. Conservar spans desde los tokens hasta el AST es un requisito de implementación, aunque no afecte a la gramática.
+Cada error incluye un código estable, archivo, línea, columna, una explicación concreta y el fragmento de código con una marca bajo el span. Los spans viajan desde los tokens hasta el AST.
 
 ```text
-example.agc:4:11 error[E_TYPE_MISMATCH]
-Expected Int, found String.
+example.agc:2:14 error[CHECK-TYPE-MISMATCH]
+expected Int, found String
 
-4 | age: Int = "25"
-              ^^^^
+2 |   age: Int = "25"
+  |              ^^^^
 ```
 
-Casos mínimos a distinguir: sintaxis inválida, nombre desconocido, tipo incompatible, aridad incorrecta, campo inexistente o faltante, retorno faltante y error de ejecución. Para matching se añadirán casos no exhaustivos.
+El código lleva el prefijo de la etapa que falló: `LEX-`, `PARSE-`, `CHECK-` (antes de ejecutar) o `RUNTIME-` (al ejecutar). Cada etapa se detiene en el primer error. Los casos mínimos a distinguir son: sintaxis inválida, nombre desconocido, tipo incompatible, aridad incorrecta, campo inexistente o faltante, retorno faltante y error de ejecución.
 
-Los códigos anteriores son propuestas. Los diagnósticos del prototipo deben referirse a Agentica, sin exponer excepciones o tracebacks del host como mensaje principal.
+Los diagnósticos se refieren a Agentica y nunca exponen excepciones o tracebacks del host.
 
-## 10. Ejemplos para revisar el diseño
+## 8. Ejemplos para revisar el diseño
 
 ### Función y control de flujo
 
@@ -559,7 +443,7 @@ puts "hello"           # La llamada requiere paréntesis.
 
 Estas instrucciones se muestran como fragmentos de cuerpo de función. En el nivel superior también serían inválidas por no ser declaraciones.
 
-## 11. Guía para quien implemente el prototipo
+## 9. Guía para quien implemente el prototipo
 
 Implementar primero las reglas de las secciones 4–6. Mantener independientes la gramática, el AST, el checker, el evaluador y las funciones incorporadas. No generar código del host sin preservar las reglas de Agentica: por ejemplo, `if 1` debe rechazarse aunque el host acepte truthiness.
 

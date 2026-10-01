@@ -1,8 +1,9 @@
 # Agentica
 
 Interpreter for the Agentica language, written in Racket. The language is
-defined in [`docs/Agentica-gramatica.md`](docs/Agentica-gramatica.md); the
-phased plan is in [`docs/Agentica-roadmap.md`](docs/Agentica-roadmap.md).
+defined in [`docs/grammar.md`](docs/grammar.md), planned syntax is in
+[`docs/future.md`](docs/future.md), and the phased plan is in
+[`docs/roadmap.md`](docs/roadmap.md).
 
 ## Requirements
 

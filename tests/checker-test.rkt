@@ -30,7 +30,7 @@
   (format "def main() -> Nil\n~a\nend\n" body))
 
 (module+ test
-  (test-case "the section 10 programs pass"
+  (test-case "the section 8 programs pass"
     (check-ok "def main() -> Nil\n  puts(\"hello\")\nend\n")
     (check-ok (string-append
                "def classify(age: Int) -> String\n"
@@ -82,7 +82,7 @@
                "  puts(\"ok\")\n"
                "end\n")))
 
-  (test-case "the rejected section 10 examples fail"
+  (test-case "the rejected section 8 examples fail"
     (check-equal? (check-code (main-with "  age: Int = \"25\"")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  if 1\n    puts(\"hello\")\n  end"))
                   'CHECK-TYPE-MISMATCH)

@@ -5,7 +5,7 @@ description: "Develops the Agentica interpreter in Racket: where each pipeline s
 
 # Agentica development
 
-Agentica is a Racket bootstrap for a small statically typed language. The grammar is `docs/Agentica-gramatica.md`; the phases and the active checklist are `docs/Agentica-roadmap.md`.
+Agentica is a Racket bootstrap for a small statically typed language. The grammar is `docs/grammar.md`; planned syntax is in `docs/future.md`; the phases and the active checklist are `docs/roadmap.md`.
 
 Read the active phase in the roadmap before adding code. Implement only what that phase asks for: the roadmap explicitly forbids placeholder modules and empty nodes for later phases.
 
@@ -47,8 +47,9 @@ tests/
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
 examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc
 docs/
-  Agentica-gramatica.md   # language grammar, the source of truth
-  Agentica-roadmap.md     # phases and the active checklist
+  grammar.md   # language grammar, the source of truth
+  future.md    # planned syntax, not implemented
+  roadmap.md   # phases and the active checklist
 ```
 
 ## Where new code goes
@@ -60,7 +61,7 @@ docs/
 | syntax, statement, or expression form | `src/parser.rkt` |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
-| language rule or example | `docs/Agentica-gramatica.md`; phase scope in `docs/Agentica-roadmap.md` |
+| language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap.md` |
 | test | `tests/<stage>-test.rkt` |
 
 ## Stage contract
