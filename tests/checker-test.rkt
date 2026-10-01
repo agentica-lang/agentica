@@ -246,6 +246,20 @@
     (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
     (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
 
+  (test-case "diagnostics carry types, operand labels, and the enclosing signature"
+    (define problem
+      (check-text "def total(q: Int, p: Float) -> Float\n  return q * p\nend\ndef main() -> Nil\nend\n"))
+    (check-equal? (diagnostic-code problem) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (diagnostic-expected problem) "Int")
+    (check-equal? (diagnostic-actual problem) "Float")
+    (check-equal? (length (diagnostic-labels problem)) 2)
+    (check-true (string? (diagnostic-help problem)))
+    (check-equal? (diagnostic-signature problem) "total(q: Int, p: Float) -> Float")
+    (define arity
+      (check-text "def f(a: Int) -> Int\n  return a\nend\ndef main() -> Nil\n  x = f(1, 2)\nend\n"))
+    (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
+    (check-equal? (diagnostic-callee arity) "f(Int) -> Int"))
+
   (test-case "maps and the Map and List modules"
     (check-ok (main-with (string-append
                           "  m: Map[String, Int] = {\"a\": 1}\n"

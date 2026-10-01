@@ -64,15 +64,23 @@
   (define functions (make-hash))
   (define scopes '())
   (define current-result 'Nil)
+  (define current-signature #f)
 
   (let/ec return
-    (define (bail code message span)
-      (return (diagnostic code message span)))
+    (define (bail code message span
+                  #:expected [expected #f] #:actual [actual #f] #:callee [callee #f]
+                  #:argument [argument #f] #:labels [labels '()] #:help [help #f])
+      (return (diagnostic code message span
+                          #:expected expected #:actual actual #:callee callee
+                          #:argument argument #:signature current-signature
+                          #:labels labels #:help help)))
 
     (define (mismatch! expected actual span)
       (bail 'CHECK-TYPE-MISMATCH
             (format "expected ~a, found ~a" (type->string expected) (type->string actual))
-            span))
+            span
+            #:expected (type->string expected)
+            #:actual (type->string actual)))
 
     (define (ensure actual expected span)
       (when (and expected (not (equal? actual expected)))
@@ -249,7 +257,13 @@
           (bail 'CHECK-TYPE-MISMATCH
                 (format "operator expects two values of the same type, found ~a and ~a"
                         (type->string left) (type->string right))
-                span)))
+                span
+                #:expected (type->string left)
+                #:actual (type->string right)
+                #:labels (list (cons (node-span (binary-left expression)) (format "this is ~a" (type->string left)))
+                               (cons (node-span (binary-right expression)) (format "this is ~a" (type->string right))))
+                #:help (and (memq 'Int (list left right)) (memq 'Float (list left right))
+                            "there is no Int to Float conversion; make both sides the same type"))))
       (case (binary-op expression)
         [(plus)
          (same!)
@@ -423,7 +437,10 @@
         (bail 'CHECK-ARITY
               (format "\"~a\" expects ~a argument(s), found ~a"
                       name (length parameter-types) (length arguments))
-              (call-span expression)))
+              (call-span expression)
+              #:callee (format "~a(~a) -> ~a" name
+                               (string-join (map type->string parameter-types) ", ")
+                               (type->string result-type))))
       (for ([argument (in-list arguments)]
             [parameter-type (in-list parameter-types)])
         (check-expression argument parameter-type))
@@ -611,6 +628,14 @@
     (define (check-function declaration)
       (define result-type (resolve-type (function-decl-result declaration)))
       (set! current-result result-type)
+      (set! current-signature
+            (format "~a(~a) -> ~a"
+                    (function-decl-name declaration)
+                    (string-join (for/list ([parameter (in-list (function-decl-params declaration))])
+                                   (format "~a: ~a" (param-name parameter)
+                                           (type->string (resolve-type (param-type parameter)))))
+                                 ", ")
+                    (type->string result-type)))
       (push-scope!)
       (for ([parameter (in-list (function-decl-params declaration))])
         (introduce! (param-name parameter) (resolve-type (param-type parameter)) (param-span parameter)))
