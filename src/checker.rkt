@@ -46,6 +46,67 @@
     [(eq? value 'nil) 'Nil]
     [else '?]))
 
+(define (edit-distance a b)
+  (define n (string-length b))
+  (define last-row (build-vector (add1 n) values))
+  (for ([i (in-range 1 (add1 (string-length a)))])
+    (define row (make-vector (add1 n) i))
+    (for ([j (in-range 1 (add1 n))])
+      (vector-set! row j
+                   (min (add1 (vector-ref last-row j))
+                        (add1 (vector-ref row (sub1 j)))
+                        (+ (vector-ref last-row (sub1 j))
+                           (if (char=? (string-ref a (sub1 i)) (string-ref b (sub1 j))) 0 1)))))
+    (vector-copy! last-row 0 row))
+  (vector-ref last-row n))
+
+(define (did-you-mean name candidates)
+  (define limit (if (<= (string-length name) 4) 1 2))
+  (define near
+    (sort (for/list ([candidate (in-list (remove-duplicates candidates))]
+                     #:unless (string=? candidate name)
+                     #:when (<= (edit-distance name candidate) limit))
+            candidate)
+          (lambda (x y)
+            (define dx (edit-distance name x))
+            (define dy (edit-distance name y))
+            (or (< dx dy) (and (= dx dy) (string<? x y))))))
+  (and (pair? near) (format "did you mean \"~a\"?" (car near))))
+
+(define (conversion-help expected actual)
+  (cond
+    [(and (eq? expected 'String) (eq? actual 'Int)) "convert it with String.from_int(...)"]
+    [(and (eq? expected 'String) (eq? actual 'Float)) "convert it with String.from_float(...)"]
+    [(and (eq? expected 'Int) (eq? actual 'String)) "convert it with String.to_int!(...)"]
+    [(and (eq? expected 'Float) (eq? actual 'String)) "convert it with String.to_float!(...)"]
+    [else #f]))
+
+(define (contains-return? statements)
+  (for/or ([statement (in-list statements)])
+    (cond
+      [(return-stmt? statement) #t]
+      [(if-stmt? statement)
+       (or (for/or ([branch (in-list (if-stmt-branches statement))])
+             (contains-return? (if-branch-body branch)))
+           (and (if-stmt-else-body statement) (contains-return? (if-stmt-else-body statement))))]
+      [(while-stmt? statement) (contains-return? (while-stmt-body statement))]
+      [(for-stmt? statement) (contains-return? (for-stmt-body statement))]
+      [else #f])))
+
+(define (missing-return-help body type-name)
+  (cond
+    [(not (contains-return? body))
+     (format "add \"return <value>\" of type ~a at the end" type-name)]
+    [(and (pair? body) (if-stmt? (last body)) (not (if-stmt-else-body (last body))))
+     (format "the last \"if\" has no \"else\"; add an \"else\" that returns ~a, or return after it" type-name)]
+    [else #f]))
+
+(define (field-help name fields)
+  (define names (map car fields))
+  (define guess (did-you-mean name names))
+  (define all (format "fields: ~a" (string-join names ", ")))
+  (if guess (string-append guess " " all) all))
+
 (define (block-returns? statements)
   (ormap returns? statements))
 
@@ -80,7 +141,8 @@
             (format "expected ~a, found ~a" (type->string expected) (type->string actual))
             span
             #:expected (type->string expected)
-            #:actual (type->string actual)))
+            #:actual (type->string actual)
+            #:help (conversion-help expected actual)))
 
     (define (ensure actual expected span)
       (when (and expected (not (equal? actual expected)))
@@ -108,7 +170,9 @@
         [else
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
-               (type-ref-span reference))]))
+               (type-ref-span reference)
+               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map")
+                                                 (hash-keys structs))))]))
 
     ;; Scopes ---------------------------------------------------------------
 
@@ -122,11 +186,19 @@
           [(hash-ref (car frames) name #f) => values]
           [else (loop (cdr frames))])))
 
+    (define (visible-names)
+      (append (append-map hash-keys scopes) (hash-keys functions)))
+
     (define (introduce! name type span [immutable? #f])
-      (when (lookup name)
+      (define existing (lookup name))
+      (when existing
         (bail 'CHECK-SHADOWED-NAME
               (format "\"~a\" is already visible; Agentica does not allow shadowing" name)
-              span))
+              span
+              #:help (if (cdr existing)
+                         "choose another name"
+                         (format "assign to it with \"~a = value\" instead of introducing it again, or choose another name"
+                                 name))))
       (hash-set! (car scopes) name (cons type immutable?)))
 
     ;; Registration ---------------------------------------------------------
@@ -212,7 +284,8 @@
                        (format "\"~a\" is a function; functions are not values"
                                (name-ref-name expression))
                        (format "unknown name \"~a\"" (name-ref-name expression)))
-                   (name-ref-span expression)))
+                   (name-ref-span expression)
+                   #:help (did-you-mean (name-ref-name expression) (visible-names))))
            (car binding)]
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]
@@ -429,7 +502,8 @@
       (unless entry
         (bail 'CHECK-UNKNOWN-NAME
               (format "unknown function \"~a\"" name)
-              (call-span expression)))
+              (call-span expression)
+              #:help (did-you-mean name (hash-keys functions))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))
@@ -451,7 +525,8 @@
       (unless (hash-has-key? structs name)
         (bail 'CHECK-UNKNOWN-TYPE
               (format "\"~a\" is not a declared struct" name)
-              (construct-span expression)))
+              (construct-span expression)
+              #:help (did-you-mean name (hash-keys structs))))
       (define fields (hash-ref structs name))
       (define seen '())
       (for ([argument (in-list (construct-args expression))])
@@ -460,7 +535,8 @@
         (unless field
           (bail 'CHECK-UNKNOWN-FIELD
                 (format "\"~a\" has no field \"~a\"" name field-name)
-                (named-arg-span argument)))
+                (named-arg-span argument)
+                #:help (field-help field-name fields)))
         (when (member field-name seen)
           (bail 'CHECK-DUPLICATE-FIELD
                 (format "field \"~a\" is given twice" field-name)
@@ -471,7 +547,8 @@
         (unless (member (car field) seen)
           (bail 'CHECK-MISSING-FIELD
                 (format "constructor \"~a\" is missing field \"~a\"" name (car field))
-                (construct-span expression))))
+                (construct-span expression)
+                #:help (format "add \"~a: ...\" with a value of type ~a" (car field) (type->string (cdr field))))))
       (list 'Struct name))
 
     (define (check-list expression expected)
@@ -537,7 +614,8 @@
       (unless field
         (bail 'CHECK-UNKNOWN-FIELD
               (format "\"~a\" has no field \"~a\"" (cadr target) (field-access-name expression))
-              (field-access-span expression)))
+              (field-access-span expression)
+              #:help (field-help (field-access-name expression) (hash-ref structs (cadr target)))))
       (cdr field))
 
     (define (check-index-access expression)
@@ -584,7 +662,8 @@
          (when (cdr existing)
            (bail 'CHECK-IMMUTABLE-ASSIGNMENT
                  (format "\"~a\" cannot be assigned" name)
-                 (binding-span statement)))
+                 (binding-span statement)
+                 #:help "\"for\" variables cannot be assigned; copy the value to a new name"))
          (check-expression (binding-value statement) (car existing))]
         [else
          (define value-type (check-expression (binding-value statement) declared))
@@ -646,7 +725,8 @@
         (bail 'CHECK-MISSING-RETURN
               (format "function \"~a\" must return ~a on every path"
                       (function-decl-name declaration) (type->string result-type))
-              (function-decl-span declaration))))
+              (function-decl-span declaration)
+              #:help (missing-return-help (function-decl-body declaration) (type->string result-type)))))
 
     ;; Program --------------------------------------------------------------
 

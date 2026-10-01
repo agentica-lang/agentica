@@ -260,6 +260,32 @@
     (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
     (check-equal? (diagnostic-callee arity) "f(Int) -> Int"))
 
+  (test-case "grounded suggestions appear only when the fix is certain"
+    (define (help-of text)
+      (define problem (check-text text))
+      (check-true (diagnostic? problem))
+      (diagnostic-help problem))
+    (define item "struct Item\n  name: String\n  price: Int\nend\n")
+    (check-regexp-match #rx"total"
+                        (help-of "def total() -> Int\n  return 1\nend\ndef main() -> Nil\n  x = totl()\nend\n"))
+    (check-false (help-of (main-with "  x = qqqq")))
+    (check-regexp-match #rx"price"
+                        (help-of (string-append item "def main() -> Nil\n  i = Item(name: \"a\", price: 1)\n  x = i.prise\nend\n")))
+    (check-regexp-match #rx"price: \\.\\.\\.\" with a value of type Int"
+                        (help-of (string-append item "def main() -> Nil\n  i = Item(name: \"a\")\nend\n")))
+    (check-regexp-match #rx"String"
+                        (help-of (main-with "  x: Strng = \"a\"")))
+    (check-regexp-match #rx"String.from_int"
+                        (help-of (main-with "  puts(1)")))
+    (check-regexp-match #rx"else"
+                        (help-of "def f(n: Int) -> Int\n  if n > 0\n    return 1\n  end\nend\ndef main() -> Nil\nend\n"))
+    (check-regexp-match #rx"return <value>"
+                        (help-of "def f(n: Int) -> Int\n  x = n\nend\ndef main() -> Nil\nend\n"))
+    (check-regexp-match #rx"x = value"
+                        (help-of (main-with "  x = 1\n  for x in [1]\n    puts(\"a\")\n  end")))
+    (check-regexp-match #rx"copy the value"
+                        (help-of (main-with "  for i in [1]\n    i = 2\n  end"))))
+
   (test-case "maps and the Map and List modules"
     (check-ok (main-with (string-append
                           "  m: Map[String, Int] = {\"a\": 1}\n"

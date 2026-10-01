@@ -370,6 +370,19 @@ expected Int, found String
   |              ^^^^
 ```
 
+When the checker knows a certain fix, the diagnostic ends with a `= help:` line, and secondary spans are marked with `-` and a short note:
+
+```text
+example.agc:5:7 error[CHECK-UNKNOWN-NAME]
+unknown function "totl"
+
+5 |   x = totl(1)
+  |       ^^^^^^^
+  = help: did you mean "total"?
+```
+
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object.
+
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
