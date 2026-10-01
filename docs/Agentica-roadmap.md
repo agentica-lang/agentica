@@ -2,7 +2,7 @@
 
 This roadmap turns the core specification in [`Agentica-gramatica.md`](Agentica-gramatica.md) into a usable interpreter. Keep every phase focused on the core in sections 4–6 until the prototype can run and diagnose the examples in sections 9–10. Enums and other extensions stay out of the initial milestone.
 
-## Current plan: Phase 1 — source handling and lexer
+## Phase 1: Source handling and lexer
 
 Build only the first working slice: `.agc` text in, located tokens (or a located lexical diagnostic) out. Keep `src/` flat and create modules when this phase needs them; do not add empty parser, checker, evaluator, or pipeline placeholders.
 
@@ -43,14 +43,79 @@ Keep source positions and token/diagnostic data separate from lexing rules. `mai
 
 ## Phase 2: AST and parser
 
-- [ ] Define AST nodes for declarations, statements, types, and expressions; retain source spans.
-- [ ] Parse top-level function and struct declarations, parameters, fields, and type applications.
-- [ ] Parse bindings, returns, `if`/`elsif`/`else`, `while`, and `for` blocks, using `end` rather than indentation.
-- [ ] Parse literals, lists, named struct construction, function calls, fields, indexes, grouping, and operators with the specified precedence and associativity.
-- [ ] Reject chained comparisons, executable top-level statements, and syntax outside the core grammar.
-- [ ] Report syntax errors with locations and stable error codes.
+Turn the located tokens from Phase 1 into a syntax tree, or a located syntax diagnostic. Keep the same shape: `parse` takes the token list `lex` returned and gives back a program or one diagnostic, and stops at the first error. No checker, evaluator, or pipeline module yet.
 
-**Complete when:** the valid examples in section 10 parse, and invalid syntax is rejected without exposing host parser errors.
+### `src/` organization for this phase
+
+```text
+src/
+├── main.rkt       # CLI: lex, parse, show the tree or the first diagnostic
+├── source.rkt     # unchanged
+├── diagnostic.rkt # unchanged
+├── token.rkt      # unchanged
+├── lexer.rkt      # unchanged
+├── ast.rkt        # syntax tree nodes; every node carries a span
+└── parser.rkt     # token list -> program or syntax diagnostic
+
+tests/
+├── lexer-test.rkt  # unchanged
+└── parser-test.rkt # focused parser behavior tests
+```
+
+Keep the AST free of parsing rules and the parser free of checking rules. Do not add checker/evaluator files, and do not add placeholder nodes for enums, generics, or modules.
+
+### AST design
+
+- One `type-ref` node covers `Int`, `List[Int]`, and `List[List[Int]]`: a type name plus a list of type arguments. No separate primitive/application nodes.
+- One `literal` node covers integers, floats, strings, `true`/`false`, and `nil`; the checker dispatches on the Racket value. The parser maps the keyword kinds to `#t`, `#f`, and the symbol `'nil` (the lexer stores the lexeme string as the token value, not the decoded literal).
+- Grouping `( expr )` produces no node; the inner expression is returned unchanged.
+- Every node has a `span`. A composite node's span runs from its first consumed token to its last.
+- Nodes: `program`; `function-decl`, `param`, `struct-decl`, `field-decl`, `type-ref`; `binding`, `return-stmt`, `expr-stmt`, `if-stmt`/`if-branch`, `while-stmt`, `for-stmt`; `literal`, `name-ref`, `call`, `named-arg`, `construct`, `list-lit`, `field-access`, `index-access`, `unary`, `binary`.
+- `call` and `construct` store the callee/type name as a string, not a `name-ref` node; the node's span starts at that name. `unary`/`binary` store the operator as the token-kind symbol (`'plus`, `'and`, `'equal`, …).
+
+### Work sequence
+
+1. Add `src/ast.rkt`: the nodes above, each a `#:transparent` struct with a `span`, and `(provide (struct-out …))` for each.
+2. Add `src/parser.rkt` with a cursor over the token list: `peek`/`current`/`advance!`/`expect`/`skip-newlines!`, and a `fail` that builds a `diagnostic` from a token's span. It returns data, never prints.
+3. Parse types and declarations: `program`, `function-decl`, `struct-decl`, `param`, `field-decl`.
+4. Parse statements and blocks: `binding`, `return-stmt`, `expr-stmt`, `if`/`elsif`/`else`, `while`, `for`. Blocks end at `end`, `elsif`, or `else`, and use `end` rather than indentation.
+5. Parse expressions with the section 5 precedence ladder (or → and → equality → comparison → additive → multiplicative → unary → postfix → primary) and left associativity for the arithmetic levels. Equality and comparison take a single optional operator, so they do not chain.
+6. Wire `main.rkt`: lex, then parse; print the syntax diagnostic on stderr and exit 1, otherwise print the tree. Make `source` opaque (drop `#:transparent`) so `pretty-print` shows `#<source>` instead of repeating the whole file text inside every span.
+7. Add `tests/parser-test.rkt`; change CI to `raco test tests/` (runs both files) and keep the `racket src/main.rkt examples/hello.agc` smoke test.
+
+### Parser rules and edge cases
+
+- Executable statements at top level (`puts("hello")`, `age: Int = "25"`) are `PARSE-TOP-LEVEL-STATEMENT`; the top level accepts only `def` and `struct` declarations.
+- Comparison and equality do not chain: `a < b < c` and `a == b == c` are `PARSE-CHAINED-COMPARISON`. `a < b == c < d` is valid, because the grammar allows one comparison on each side of `==`.
+- A statement that starts with `NAME` is a binding when the next token is `=` or `:`, and an expression otherwise. `x[0] = 1` and `x.y = 1` are `PARSE-INVALID-ASSIGNMENT-TARGET`; the core has no field or index assignment.
+- A bare `TYPE_NAME` in expression position is an error: a type name is only a type or a constructor call.
+- `if 1` and other semantic errors are syntactically valid here; Phase 3 rejects them.
+- Trailing commas are accepted in parameters, arguments, named arguments, and list literals, as the grammar allows.
+- NL handling: skip stray `NL` tokens between declarations, between statements, and before `EOF`. The lexer collapses a run of blank lines into one `NL`, but emits separate `NL` tokens around comment lines, so a blank line or comment between two statements can leave more than one.
+- Stop at the first error and return one diagnostic, as the lexer does. No error recovery in this phase.
+- Diagnostic codes: `PARSE-UNEXPECTED-TOKEN` (expected X, found Y), `PARSE-UNCLOSED-BLOCK` (reached `EOF` before `end`), `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET`. The message for a `NAME` followed by another expression token (`puts "hello"`) should name the missing newline and mention that calls need parentheses.
+
+### Phase 2 checklist
+
+- [x] Define AST nodes for declarations, statements, types, and expressions; retain source spans.
+- [x] Parse top-level function and struct declarations, parameters, fields, and type applications.
+- [x] Parse bindings, returns, `if`/`elsif`/`else`, `while`, and `for` blocks, using `end` rather than indentation.
+- [x] Parse literals, lists, named struct construction, function calls, fields, indexes, grouping, and operators with the specified precedence and associativity.
+- [x] Reject chained comparisons, executable top-level statements, and syntax outside the core grammar.
+- [x] Report syntax errors with locations and stable error codes.
+- [x] Show the parsed tree from the CLI so a sample file is inspectable.
+
+### Focused tests
+
+- Valid: `examples/hello.agc`, and the `classify` and `Task`/`for` programs from section 10.
+- Precedence and associativity: `a + b * c`, `a - b - c`, `-a * b`, `not a and b`, `a or b and c`.
+- Postfix: `user.name`, `users[0]`, `find_user(1).name`.
+- Calls and constructors: `main()`, positional arguments, `Task(done: false, title: "x")`, trailing commas.
+- Types: `List[Int]`, `List[List[Int]]`, `x: List[String] = []`.
+- Spans: a chosen node's line and column match the source.
+- Errors: chained comparison, top-level statement, missing `end`, bare `TYPE_NAME`, index/field assignment, missing newline after a statement, `puts "hello"`.
+
+**Complete when:** the valid examples in section 10 parse into a tree with spans, and invalid syntax is rejected with a `PARSE-*` diagnostic and a location, without exposing host parser errors.
 
 ## Phase 3: Name resolution and type checking
 
