@@ -32,6 +32,21 @@ Agentica runs took about 15–45 s, Python 8–27 s. In `t2-fix-types` the Agent
 
 One run each; not a result, only proof that the arm and the sandbox work.
 
+## `binary` arm, before and after the richer diagnostics
+
+Two full rounds of the `binary` arm (3 reps per task, Firejail, `pi`). Round A used plain one-caret diagnostics. Round B used labels, `help`, and grounded suggestions (phase 5d3, steps 1–4); the agent was not told about `--ai`. Both passed 15/15. One run of A (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since.
+
+| Task | Tokens A → B | Seconds A → B | Failing runs A → B |
+|---|---|---|---|
+| t1-stats | 81,449 → 53,829 | 292 → 105 | 8.3 → 6.7 |
+| t2-fix-types | 37,162 → 10,937 | 152 → 41 | 5.3 → 2.0 |
+| t3-struct-change | 3,740 → 4,082 | 14 → 12 | 0.0 → 0.0 |
+| t4-word-count | 61,995 → 40,438 | 100 → 98 | 0.7 → 1.7 |
+| t5-scope-return | 9,354 → 19,379 | 43 → 34 | 1.7 → 2.3 |
+| All (mean per run) | 38,740 → 25,733 | 120 → 58 | 3.2 → 2.5 |
+
+The mean fell by about a third in tokens and by half in time, and `t2-fix-types` (the type error the help text targets) fell by 70%. `t4` and `t5` got worse in failing runs and `t5` in tokens. Three runs per cell and one model are too few to call this a result: the spread between reps of one cell is as large as the differences here. Treat it as a direction, and repeat with more reps before relying on it.
+
 ## Findings
 
 - The tasks are too easy to separate the arms by accuracy: everything passed. Only token cost differs. The skill used about 14% fewer tokens than grammar plus examples, with the same quality.
