@@ -1,29 +1,29 @@
-# Agentica: gramática y diseño del lenguaje
+# Agentica: grammar and language design
 
-Estado: implementada por el intérprete en Racket (`src/`). Este documento describe solo lo que el intérprete acepta; la sintaxis planeada está en [`future.md`](future.md).
+Status: implemented by the interpreter in Racket (`src/`). This document describes only what the interpreter accepts; planned syntax lives in [`future.md`](future.md).
 
-## 1. Qué queremos validar
+## 1. What we want to validate
 
-Agentica es un lenguaje pensado para que agentes de IA puedan escribir, leer y corregir programas con facilidad. La prioridad es experimentar con la sintaxis, las reglas y los diagnósticos. El rendimiento, la concurrencia y el runtime definitivo se abordarán después.
+Agentica is a language designed so AI agents can write, read, and fix programs easily. The priority is to experiment with the syntax, the rules, and the diagnostics. Performance, concurrency, and the final runtime come later.
 
-La dirección es KISS: una sintaxis cercana a Ruby, tipos estáticos, inferencia local y pocas formas de expresar cada operación. Esta especificación no depende del lenguaje en que se implemente el intérprete.
+The direction is KISS: Ruby-like syntax, static types, local inference, and few ways to express each operation. This specification does not depend on the language the interpreter is written in.
 
-## 2. Decisiones de diseño
+## 2. Design decisions
 
-| Aspecto | Regla |
+| Aspect | Rule |
 |---|---|
-| Sintaxis | `def`, `struct`, `if`, `while`, `for`, `end`; los bloques terminan con `end` |
-| Tipos | Estáticos, con inferencia local donde sea evidente |
-| Llamadas | Paréntesis obligatorios |
-| Firmas | Retorno explícito y anotaciones obligatorias |
-| Datos | Reasignación de variables; listas, maps y structs inmutables |
-| Números | `Int` de 64 bits, sin conversiones implícitas |
-| Nombres | Sufijo `?` (predicado) o `!` (versión que termina la ejecución) en funciones, solo seguido de `(` |
-| Biblioteca | Módulos incorporados `Map`, `List`, `String`, `IO` y `System` |
+| Syntax | `def`, `struct`, `if`, `while`, `for`, `end`; blocks end with `end` |
+| Types | Static, with local inference where it is evident |
+| Calls | Parentheses are required |
+| Signatures | Explicit return type and required annotations |
+| Data | Variables can be reassigned; lists, maps, and structs are immutable |
+| Numbers | 64-bit `Int`, no implicit conversions |
+| Names | A `?` (predicate) or `!` (version that halts the run) suffix on functions, only when followed by `(` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, and `System` |
 
-Enums, `Result`, `Option`, interpolación, funciones como valores, JSON, red y otras extensiones no forman parte del lenguaje actual: están en [`future.md`](future.md).
+Enums, `Result`, `Option`, interpolation, function values, JSON, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
-## 3. Un programa del núcleo
+## 3. A core program
 
 ```ruby
 struct User
@@ -49,26 +49,26 @@ def main() -> Nil
 end
 ```
 
-Los bloques terminan con `end`. La indentación mejora la lectura, pero no determina la estructura. Las llamadas usan paréntesis, incluso cuando no reciben argumentos. Los structs se construyen con campos nombrados; las funciones ordinarias reciben argumentos posicionales.
+Blocks end with `end`. Indentation helps reading but does not determine structure. Calls use parentheses, even when they take no arguments. Structs are built with named fields; ordinary functions take positional arguments.
 
-El ejecutable comienza llamando a `main()`. En el núcleo no hay instrucciones ejecutables en el nivel superior: solo declaraciones. Esto evita tener dos modelos distintos de entrada al programa.
+The executable starts by calling `main()`. The core has no executable statements at the top level, only declarations. This avoids having two different entry models.
 
-## 4. Convenciones léxicas
+## 4. Lexical conventions
 
-- El archivo usa UTF-8; los identificadores del núcleo usan caracteres ASCII.
-- Un comentario empieza con `#` y termina al final de la línea.
-- Los nombres de variables, funciones y campos empiezan con minúscula o `_`.
-- Los nombres de tipos empiezan con mayúscula.
-- Los identificadores distinguen mayúsculas de minúsculas.
-- Las palabras reservadas no pueden usarse como identificadores.
-- Los espacios y tabuladores separan tokens; no tienen significado estructural.
-- Un salto de línea separa instrucciones, salvo dentro de `(...)` y `[...]`.
-- CRLF se normaliza a LF. Un comentario no elimina el salto de línea que lo sigue.
-- El lexer emite un token `NL` por cada salto de línea fuera de delimitadores, salvo que agrupa las líneas vacías consecutivas; una línea con comentario produce su propio `NL`. El parser ignora los `NL` sobrantes entre declaraciones e instrucciones.
-- Si el archivo no termina con salto de línea, el lexer añade uno antes de `EOF`.
-- No se admiten `;`, continuación con barra inversa ni expresiones que continúen implícitamente tras un operador.
+- The file is UTF-8; core identifiers use ASCII characters.
+- A comment starts with `#` and ends at the end of the line.
+- Names of variables, functions, and fields start with a lowercase letter or `_`.
+- Type names start with an uppercase letter.
+- Identifiers are case-sensitive.
+- Reserved words cannot be used as identifiers.
+- Spaces and tabs separate tokens; they have no structural meaning.
+- A newline separates statements, except inside `(...)`, `[...]`, and `{...}`.
+- CRLF is normalized to LF. A comment does not remove the newline that follows it.
+- The lexer emits one `NL` token per newline outside delimiters, except that it groups consecutive blank lines; a comment line produces its own `NL`. The parser ignores the extra `NL` tokens between declarations and statements.
+- If the file does not end with a newline, the lexer adds one before `EOF`.
+- `;`, backslash continuation, and expressions that continue implicitly after an operator are not supported.
 
-Por tanto, una expresión larga debe encerrarse en paréntesis. Dentro de listas y llamadas se pueden usar varias líneas y una coma final.
+So a long expression must be wrapped in parentheses. Inside lists and calls you can use several lines and a trailing comma.
 
 ```ruby
 total = (
@@ -82,20 +82,20 @@ names = [
 ]
 ```
 
-Palabras reservadas del núcleo:
+Reserved words of the core:
 
 ```text
 def struct end if elsif else while for in return
 true false nil and or not
 ```
 
-Las extensiones futuras introducirán más palabras reservadas; no están disponibles.
+Future extensions will introduce more reserved words; they are not available.
 
-El sufijo `?` o `!` solo forma parte del `NAME` cuando el carácter siguiente es `(`: `contains?(`, `to_int!(`. Así `a!=b` sigue siendo `a != b`, y `x?` o `x!` sin paréntesis no son nombres. Por convención, `?` marca un predicado que devuelve `Bool` y `!` marca la versión que termina la ejecución con error en vez de devolver un `Result`. Variables, campos y parámetros no pueden llevar el sufijo.
+The `?` or `!` suffix is part of the `NAME` only when the next character is `(`: `contains?(`, `to_int!(`. So `a!=b` is still `a != b`, and `x?` or `x!` without parentheses are not names. By convention, `?` marks a predicate that returns `Bool`, and `!` marks the version that halts the run with an error instead of returning a `Result`. Variables, fields, and parameters cannot have the suffix.
 
-Los nombres de tipo y módulo `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `IO` y `System` están reservados y no se pueden redefinir.
+The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `IO`, and `System` are reserved and cannot be redefined.
 
-### Literales
+### Literals
 
 ```ebnf
 NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
@@ -106,15 +106,15 @@ STRING     = '"', { STRING_CHAR | ESCAPE }, '"' ;
 ESCAPE     = "\\", ( '"' | "\\" | "n" | "r" | "t" ) ;
 ```
 
-`LETTER` representa `A`–`Z` o `a`–`z`; `DIGIT`, `0`–`9`; `LOWER_OR_UNDERSCORE`, `a`–`z` o `_`; `UPPER`, `A`–`Z`. `STRING_CHAR` es cualquier carácter Unicode salvo comillas dobles, barra inversa y saltos de línea. `NL` y `EOF` son tokens producidos por el lexer.
+`LETTER` is `A`–`Z` or `a`–`z`; `DIGIT`, `0`–`9`; `LOWER_OR_UNDERSCORE`, `a`–`z` or `_`; `UPPER`, `A`–`Z`. `STRING_CHAR` is any Unicode character except double quotes, backslash, and newlines. `NL` and `EOF` are tokens produced by the lexer.
 
-El signo negativo es un operador, no parte del literal. El núcleo no incluye exponentes, bases alternativas, separadores numéricos, strings multilínea ni interpolación. `"#{name}"` es texto literal en esta versión.
+The minus sign is an operator, not part of the literal. The core has no exponents, alternative bases, numeric separators, multiline strings, or interpolation. `"#{name}"` is literal text in this version.
 
-## 5. Gramática EBNF del núcleo
+## 5. Core EBNF grammar
 
-Esta es una gramática descriptiva: se traducirá a la notación de la herramienta elegida. `{ X }` significa cero o más repeticiones, `[ X ]` significa opcional y `|` expresa alternativas. Los terminales aparecen entre comillas; los nombres en mayúsculas son tokens léxicos.
+This is a descriptive grammar: it will be translated to the notation of the chosen tool. `{ X }` means zero or more repetitions, `[ X ]` means optional, and `|` expresses alternatives. Terminals appear in quotes; uppercase names are lexical tokens.
 
-### Archivo y declaraciones
+### File and declarations
 
 ```ebnf
 program          = [ NL ], { declaration }, EOF ;
@@ -132,11 +132,11 @@ field_decl       = NAME, ":", type, NL ;
 type             = TYPE_NAME, [ "[", type, { ",", type }, "]" ] ;
 ```
 
-El parser permite aplicaciones de tipos como `List[Int]`. El checker restringe el núcleo a tipos primitivos, structs y `List[T]`: no basta con que una forma sea sintácticamente válida para que exista ese tipo. No hay parámetros de tipo declarados por el usuario en el núcleo.
+The parser allows type applications such as `List[Int]`. The checker restricts the core to primitive types, structs, `List[T]`, and `Map[K, V]`: a form being syntactically valid does not mean the type exists. There are no user-declared type parameters in the core.
 
-Las declaraciones de structs y funciones solo aparecen en el nivel superior. No hay métodos, clases, herencia, closures ni funciones anidadas.
+Struct and function declarations appear only at the top level. There are no methods, classes, inheritance, closures, or nested functions.
 
-### Instrucciones y bloques
+### Statements and blocks
 
 ```ebnf
 block            = { statement } ;
@@ -157,9 +157,9 @@ for_statement    = "for", NAME, "in", expression, NL,
                    block, "end", NL ;
 ```
 
-Las asignaciones son instrucciones: no producen un valor. `if`, `while` y `for` tampoco son expresiones. El núcleo no incluye `break`, `continue`, asignaciones compuestas ni asignación a campos o índices.
+Assignments are statements: they do not produce a value. `if`, `while`, and `for` are not expressions either. The core has no `break`, `continue`, compound assignments, or assignment to fields or indexes.
 
-### Expresiones y precedencia
+### Expressions and precedence
 
 ```ebnf
 expression       = or_expr ;
@@ -193,16 +193,16 @@ map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
-Las llamadas del núcleo son a funciones nombradas, y no se admite `user.method()`. `user.name`, `users[0]` y `find_user(1).name` sí encajan en la gramática.
+Calls in the core are to named functions, and `user.method()` is not supported. `user.name`, `users[0]`, and `find_user(1).name` do fit the grammar.
 
-`TYPE_NAME, ".", NAME, "(" … ")"` es la llamada a una función de un módulo incorporado (`Map.put(...)`); el núcleo no admite módulos de usuario.
+`TYPE_NAME, ".", NAME, "(" … ")"` is a call to a function of a builtin module (`Map.put(...)`); the core has no user modules.
 
-`and` y `or` evalúan con cortocircuito. Las sumas, restas, multiplicaciones, divisiones y módulos se agrupan de izquierda a derecha. Las comparaciones y comprobaciones de igualdad no se encadenan: `a < b < c` es inválido; se escribe `a < b and b < c`.
+`and` and `or` short-circuit. Additions, subtractions, multiplications, divisions, and modulos group from left to right. Comparisons and equality checks do not chain: `a < b < c` is invalid; write `a < b and b < c`.
 
-| Precedencia, de mayor a menor | Operaciones |
+| Precedence, high to low | Operations |
 |---|---|
-| 1 | Llamada nombrada, campo `.`, índice `[]`, agrupación |
-| 2 | `-`, `not` unarios |
+| 1 | Named call, field `.`, index `[]`, grouping |
+| 2 | Unary `-`, `not` |
 | 3 | `*`, `/`, `%` |
 | 4 | `+`, `-` |
 | 5 | `<`, `<=`, `>`, `>=` |
@@ -210,55 +210,55 @@ Las llamadas del núcleo son a funciones nombradas, y no se admite `user.method(
 | 7 | `and` |
 | 8 | `or` |
 
-`not` tiene precedencia alta: para negar una comparación se recomienda `not (age >= 18)`.
+`not` has high precedence: to negate a comparison, write `not (age >= 18)`.
 
-## 6. Reglas semánticas mínimas
+## 6. Minimal semantic rules
 
-La gramática determina qué se puede escribir. Las siguientes reglas determinan qué programas son válidos y cómo se ejecutan. Son las reglas que implementa el intérprete.
+The grammar determines what can be written. The following rules determine which programs are valid and how they run. They are the rules the interpreter implements.
 
-### Tipos e inferencia
+### Types and inference
 
-| Tipo | Regla |
+| Type | Rule |
 |---|---|
-| `Int` | Entero con signo de 64 bits; overflow produce error de ejecución |
+| `Int` | Signed 64-bit integer; overflow is a runtime error |
 | `Float` | IEEE 754 binary64 |
-| `Bool` | Solo `true` y `false`; no existe truthiness |
-| `String` | Texto Unicode; concatenación con `+` |
-| `Nil` | Un único valor, `nil`; también indica retorno sin resultado |
-| `List[T]` | Lista homogénea e inmutable; índices `Int`, desde cero |
-| `Map[K, V]` | Diccionario homogéneo e inmutable; la clave `K` es `Int` o `String`; conserva el orden de inserción |
-| Struct declarado | Tipo nominal, campos tipados e inmutables |
+| `Bool` | Only `true` and `false`; there is no truthiness |
+| `String` | Unicode text; concatenation with `+` |
+| `Nil` | A single value, `nil`; also marks a return without a result |
+| `List[T]` | Homogeneous, immutable list; `Int` indexes, from zero |
+| `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
+| Declared struct | Nominal type, typed and immutable fields |
 
-Los parámetros y el retorno de las funciones requieren anotación. Las variables locales pueden inferirse del inicializador:
+Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
 
 ```ruby
 count = 3
 names: List[String] = []
 ```
 
-Una lista vacía necesita un tipo esperado, que puede venir de una anotación, un parámetro, un campo o el retorno de una función. Una lista no vacía debe tener elementos del mismo tipo. No hay conversión numérica implícita ni tipo dinámico `Any`.
+An empty list needs an expected type, which can come from an annotation, a parameter, a field, or the return type of a function. A non-empty list must have elements of the same type. There is no implicit numeric conversion and no dynamic `Any` type.
 
-`Nil` no es un comodín nullable: `name: String = nil` es inválido. Los valores opcionales llegarán con `Option[T]`.
+`Nil` is not a nullable wildcard: `name: String = nil` is invalid. Optional values will arrive with `Option[T]`.
 
-### Operadores
+### Operators
 
-- `+`, `-`, `*` y `/` aceptan dos operandos del mismo tipo numérico. Además, `+` concatena dos `String`.
-- La división de enteros trunca hacia cero. `%` solo acepta enteros y se define mediante `a = (a / b) * b + (a % b)`.
-- Dividir por cero es un error de ejecución, también con `Float`. Las operaciones enteras que no caben en `Int` producen error.
-- Los operadores de orden solo aceptan dos números del mismo tipo.
-- `==` y `!=` aceptan valores del mismo tipo primitivo. En el núcleo no hay igualdad de listas ni structs.
-- `and`, `or` y `not` solo aceptan `Bool`.
-- No hay sobrecarga de operadores definida por el usuario.
+- `+`, `-`, `*`, and `/` accept two operands of the same numeric type. Also, `+` concatenates two `String` values.
+- Integer division truncates toward zero. `%` accepts only integers and is defined by `a = (a / b) * b + (a % b)`.
+- Dividing by zero is a runtime error, also for `Float`. Integer operations that do not fit in `Int` produce an error.
+- The ordering operators accept only two numbers of the same type.
+- `==` and `!=` accept values of the same primitive type. The core has no list or struct equality.
+- `and`, `or`, and `not` accept only `Bool`.
+- There is no user-defined operator overloading.
 
-Las expresiones, argumentos y campos de constructor se evalúan de izquierda a derecha. Una comparación entre floats sigue IEEE 754; en particular, un NaN no es igual a sí mismo.
+Expressions, arguments, and constructor fields are evaluated from left to right. A float comparison follows IEEE 754; in particular, a NaN is not equal to itself.
 
-### Variables y scope
+### Variables and scope
 
-La primera asignación introduce una variable en el scope actual. Una asignación posterior cambia su valor sin cambiar su tipo. Una anotación solo puede aparecer al introducir la variable.
+The first assignment introduces a variable in the current scope. A later assignment changes its value without changing its type. An annotation can appear only when the variable is introduced.
 
-Cada función y cada bloque de control introduce un scope léxico. No se permite ocultar una variable visible con otra del mismo nombre. Una asignación sin anotación actualiza la variable visible si ya existe; de lo contrario introduce una local al bloque actual.
+Each function and each control block introduces a lexical scope. A visible variable cannot be shadowed by another with the same name. An assignment without an annotation updates the visible variable if it already exists; otherwise it introduces a local in the current block.
 
-Los parámetros y la variable de `for` son bindings ya inicializados. La variable de `for` es local al cuerpo y no puede reasignarse. Las variables creadas en un bloque no son visibles después de su `end`.
+Parameters and the `for` variable are already-initialized bindings. The `for` variable is local to the body and cannot be reassigned. Variables created in a block are not visible after its `end`.
 
 ```ruby
 count = 0
@@ -268,29 +268,29 @@ while count < 3
 end
 ```
 
-### Funciones y entrada
+### Functions and entry point
 
-- Las funciones pueden llamarse antes de su declaración y ser recursivas.
-- No hay sobrecarga, valores por defecto ni argumentos nombrados en funciones ordinarias.
-- Una función con retorno distinto de `Nil` debe retornar en todos los caminos alcanzables. En el checker inicial, un bucle no garantiza por sí solo un retorno.
-- La última expresión no retorna implícitamente.
-- `return` sin valor equivale a `return nil`.
-- Llegar al final de una función `-> Nil` retorna `nil`.
-- Un ejecutable debe declarar exactamente una función `main() -> Nil` sin parámetros.
+- Functions can be called before their declaration and can be recursive.
+- There is no overloading, default values, or named arguments in ordinary functions.
+- A function with a return type other than `Nil` must return on every reachable path. In the initial checker, a loop does not by itself guarantee a return.
+- The last expression does not return implicitly.
+- `return` without a value is the same as `return nil`.
+- Reaching the end of a `-> Nil` function returns `nil`.
+- An executable must declare exactly one `main() -> Nil` function with no parameters.
 
-### Structs y listas
+### Structs and lists
 
-Todos los campos de un constructor son obligatorios y se proporcionan una sola vez. El orden de los campos nombrados es libre. No hay campos por defecto ni campos adicionales.
+All fields of a constructor are required and given exactly once. The order of named fields is free. There are no default fields and no extra fields.
 
 ```ruby
 user = User(age: 25, name: "Ana")
 ```
 
-Los índices de listas deben estar entre cero y longitud menos uno; un índice negativo o fuera de rango produce error. `for` itera sobre `List[T]` en orden. No se admiten slices ni indexación de strings en el núcleo.
+List indexes must be between zero and length minus one; a negative or out-of-range index is an error. `for` iterates over `List[T]` in order. Slices and string indexing are not supported in the core.
 
 ### Maps
 
-`Map[K, V]` asocia claves con valores. La clave `K` solo puede ser `Int` o `String`; `V` puede ser cualquier tipo. `Map` lleva exactamente dos argumentos de tipo.
+`Map[K, V]` associates keys with values. The key `K` can only be `Int` or `String`; `V` can be any type. `Map` takes exactly two type arguments.
 
 ```ruby
 stock: Map[String, Int] = {"apple": 3, "pear": 0}
@@ -298,21 +298,21 @@ apples = stock["apple"]
 more = Map.put(stock, "kiwi", 7)
 ```
 
-- Un literal usa llaves y `clave: valor`; admite varias líneas y coma final. Un `{}` vacío necesita un tipo esperado, como `[]`.
-- `m[clave]` devuelve el valor. La clave debe tener el tipo `K`. Una clave ausente produce error de ejecución.
-- Si un literal repite una clave, gana la última.
-- Los maps son inmutables, como las listas: no hay `m[clave] = valor`. `Map.put` devuelve un map nuevo y deja el original intacto.
-- No hay igualdad de maps ni `for` sobre un map; se recorre con `Map.keys`, que devuelve las claves en orden de inserción.
+- A literal uses braces and `key: value`; it allows several lines and a trailing comma. An empty `{}` needs an expected type, like `[]`.
+- `m[key]` returns the value. The key must have type `K`. A missing key is a runtime error.
+- If a literal repeats a key, the last one wins.
+- Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
+- There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
 
-### Funciones incorporadas mínimas
+### Minimal builtin functions
 
 ```text
 puts(value: String) -> Nil
 ```
 
-`puts` escribe el texto y un salto de línea. Se reserva ese nombre y no se puede redefinir.
+`puts` writes the text and a newline. The name is reserved and cannot be redefined.
 
-Para trabajar con maps y listas hay dos módulos incorporados, `Map` y `List`, que se llaman con `Modulo.funcion(...)`. Sus funciones son genéricas, así que el checker las trata de forma especial. Los nombres `Map` y `List` están reservados y no se pueden redefinir.
+To work with maps and lists there are two builtin modules, `Map` and `List`, called as `Module.function(...)`. Their functions are generic, so the checker treats them specially. The names `Map` and `List` are reserved and cannot be redefined.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -322,7 +322,7 @@ Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
 List.size(list: List[T]) -> Int
 ```
 
-El módulo `String` opera sobre texto. `String.length` y `String.slice` cuentan caracteres Unicode, no bytes; un `slice` fuera de rango es error de ejecución. `String.split(s, "")` devuelve una lista con un carácter Unicode por elemento. Las conversiones `String.to_int!` y `String.to_float!` aceptan números decimales con signo opcional; `to_int!` falla con `RUNTIME-INVALID-NUMBER` si el texto no es un entero decimal y con `RUNTIME-INTEGER-OVERFLOW` si está fuera del rango de `Int`, mientras `to_float!` rechaza texto que no sea un decimal real con `RUNTIME-INVALID-NUMBER`.
+The `String` module works on text. `String.length` and `String.slice` count Unicode characters, not bytes; a `slice` out of range is a runtime error. `String.split(s, "")` returns a list with one Unicode character per element. The conversions `String.to_int!` and `String.to_float!` accept decimal numbers with an optional sign; `to_int!` fails with `RUNTIME-INVALID-NUMBER` if the text is not a decimal integer and with `RUNTIME-INTEGER-OVERFLOW` if it is outside the range of `Int`, while `to_float!` rejects text that is not a real decimal with `RUNTIME-INVALID-NUMBER`.
 
 ```text
 String.length(s: String) -> Int
@@ -342,7 +342,7 @@ String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
 ```
 
-El módulo `IO` escribe y lee por los puertos estándar; `IO.warn` escribe en la salida de error. `IO.inspect` imprime cualquier valor en forma de depuración estable y lo devuelve. `IO.gets` devuelve la siguiente línea sin su terminador (LF, CR o CRLF) y falla con `RUNTIME-END-OF-INPUT` al final; `IO.eof?` permite comprobarlo antes. El módulo `System` expone los argumentos del programa y termina la ejecución con un código.
+The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns the next line without its terminator (LF, CR, or CRLF) and fails with `RUNTIME-END-OF-INPUT` at the end of input; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 
 ```text
 IO.puts(value: String) -> Nil
@@ -356,11 +356,11 @@ System.args() -> List[String]
 System.exit(code: Int) -> Nil
 ```
 
-Archivos, JSON, red y conversiones más ricas necesitan una API posterior; ver [`future.md`](future.md).
+Files, JSON, networking, and richer conversions need a later API; see [`future.md`](future.md).
 
-## 7. Diagnósticos para agentes
+## 7. Diagnostics for agents
 
-Cada error incluye un código estable, archivo, línea, columna, una explicación concreta y el fragmento de código con una marca bajo el span. Los spans viajan desde los tokens hasta el AST.
+Each error includes a stable code, file, line, column, a concrete explanation, and the source line with a mark under the span. Spans travel from the tokens to the AST.
 
 ```text
 example.agc:2:14 error[CHECK-TYPE-MISMATCH]
@@ -370,13 +370,13 @@ expected Int, found String
   |              ^^^^
 ```
 
-El código lleva el prefijo de la etapa que falló: `LEX-`, `PARSE-`, `CHECK-` (antes de ejecutar) o `RUNTIME-` (al ejecutar). Cada etapa se detiene en el primer error. Los casos mínimos a distinguir son: sintaxis inválida, nombre desconocido, tipo incompatible, aridad incorrecta, campo inexistente o faltante, retorno faltante y error de ejecución.
+The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
-Los diagnósticos se refieren a Agentica y nunca exponen excepciones o tracebacks del host.
+Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
 
-## 8. Ejemplos para revisar el diseño
+## 8. Examples to review the design
 
-### Función y control de flujo
+### Function and control flow
 
 ```ruby
 def classify(age: Int) -> String
@@ -394,7 +394,7 @@ def main() -> Nil
 end
 ```
 
-### Listas y acceso a campos
+### Lists and field access
 
 ```ruby
 struct Task
@@ -430,23 +430,23 @@ def main() -> Nil
 end
 ```
 
-### Programas que deben rechazarse
+### Programs that must be rejected
 
 ```ruby
-age: Int = "25"        # Tipos incompatibles.
-if 1                   # La condición debe ser Bool.
+age: Int = "25"        # Incompatible types.
+if 1                   # The condition must be Bool.
   puts("hello")
 end
-values = []            # Falta tipo esperado para la lista vacía.
-puts "hello"           # La llamada requiere paréntesis.
+values = []            # Missing expected type for the empty list.
+puts "hello"           # The call requires parentheses.
 ```
 
-Estas instrucciones se muestran como fragmentos de cuerpo de función. En el nivel superior también serían inválidas por no ser declaraciones.
+These statements are shown as function body fragments. At the top level they would also be invalid because they are not declarations.
 
-## 9. Guía para quien implemente el prototipo
+## 9. Guide for whoever implements the prototype
 
-Implementar primero las reglas de las secciones 4–6. Mantener independientes la gramática, el AST, el checker, el evaluador y las funciones incorporadas. No generar código del host sin preservar las reglas de Agentica: por ejemplo, `if 1` debe rechazarse aunque el host acepte truthiness.
+Implement the rules of sections 4–6 first. Keep the grammar, the AST, the checker, the evaluator, and the builtin functions independent. Do not generate host code without preserving the rules of Agentica: for example, `if 1` must be rejected even if the host accepts truthiness.
 
-Si una regla resulta demasiado costosa, cambiar explícitamente esta especificación y los ejemplos antes de crear una excepción silenciosa. El objetivo es que cualquier agente pueda consultar un documento breve y predecir el comportamiento del programa.
+If a rule turns out to be too costly, change this specification and the examples explicitly before creating a silent exception. The goal is that any agent can consult a short document and predict the behavior of a program.
 
-La primera evaluación del lenguaje debe medir programas correctos, intentos necesarios y utilidad de los errores. El tiempo de ejecución puede medirse después; la primera pregunta es si la sintaxis y las reglas ayudan a los agentes a producir y reparar código.
+The first evaluation of the language should measure correct programs, attempts needed, and how useful the errors are. Run time can be measured later; the first question is whether the syntax and the rules help agents produce and repair code.
