@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          variant: CS
+          version: '9.3'
+      - run: raco test tests/lexer-test.rkt
+      - run: racket src/main.rkt examples/hello.agc
