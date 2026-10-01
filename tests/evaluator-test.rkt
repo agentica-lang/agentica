@@ -98,7 +98,7 @@
                      "  m: Map[String, Int] = {\"b\": 1, \"a\": 2, \"b\": 3}\n"
                      "  n = Map.put(m, \"c\", 4)\n"
                      "  for k in Map.keys(n)\n    puts(k)\n  end\n"
-                     "  if Map.has(m, \"c\") or m[\"b\"] != 3 or Map.len(m) != 2 or Map.len(n) != 3\n"
+                     "  if Map.has(m, \"c\") or m[\"b\"] != 3 or Map.len(m) != 2 or Map.len(n) != 3 or List.len(Map.keys(n)) != 3\n"
                      "    puts(\"wrong\")\n  end")))
                   "b\na\nc\n"))
 
