@@ -16,10 +16,11 @@
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
      #:args arguments
      arguments))
-  (unless (= (length arguments) 1)
-    (eprintf "usage: agentica [--dump] <source-file>\n")
+  (unless (>= (length arguments) 1)
+    (eprintf "usage: agentica [--dump] <source-file> [args...]\n")
     (exit 2))
   (define source-file (car arguments))
+  (define program-args (cdr arguments))
 
   (define (fail! problem)
     (displayln (format-diagnostic problem) (current-error-port))
@@ -42,5 +43,7 @@
   (cond
     [dump? (pretty-print checked)]
     [else
-     (define result (evaluate checked))
-     (when (diagnostic? result) (fail! result))]))
+     (define result (evaluate checked #:args program-args))
+     (cond
+       [(diagnostic? result) (fail! result)]
+       [(exit-code? result) (exit (exit-code-code result))])]))

@@ -1,14 +1,21 @@
+RACO ?= raco
+JOBS ?= $(shell nproc 2>/dev/null || echo 4)
+TESTS ?= tests/
+
 .PHONY: build test exe clean
 
 build:
-	raco make src/main.rkt
+	$(RACO) make src/main.rkt
 
+# All tests, in parallel:      make test
+# A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"
+# More or fewer workers:       make test JOBS=8
 test:
-	raco test tests/
+	$(RACO) test -j $(JOBS) $(TESTS)
 
 exe: build
 	mkdir -p dist
-	raco exe -o dist/agentica src/main.rkt
+	$(RACO) exe -o dist/agentica src/main.rkt
 
 clean:
 	find . -name compiled -type d -prune -exec rm -rf {} +

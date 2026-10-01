@@ -5,10 +5,12 @@
 
 (provide evaluate
          (struct-out instance)
-         (struct-out mapping))
+         (struct-out mapping)
+         (struct-out exit-code))
 
 (struct instance (type-name fields) #:transparent)
 (struct mapping (pairs) #:transparent)
+(struct exit-code (code) #:transparent)
 
 (define (mapping-put target key value)
   (define pairs (mapping-pairs target))
@@ -23,8 +25,19 @@
 
 (define max-call-depth 10000)
 
-(define (evaluate program)
+(define (evaluate program
+                  #:in [input (current-input-port)]
+                  #:out [output (current-output-port)]
+                  #:err [error-output (current-error-port)]
+                  #:args [program-args '()])
+  (parameterize ([current-input-port input]
+                 [current-output-port output]
+                 [current-error-port error-output])
+    (evaluate-with-ports program program-args)))
+
+(define (evaluate-with-ports program program-args)
   (define functions (make-hash))
+  (define struct-fields (make-hash))
   (define scopes '())
   (define return-to #f)
   (define depth 0)
@@ -144,6 +157,34 @@
            [(not-equal) (not (if (number? left) (= left right) (equal? left right)))]
            [else (unreachable "operator" span)])]))
 
+    (define (value->debug-string value)
+      (cond
+        [(eq? value 'nil) "nil"]
+        [(boolean? value) (if value "true" "false")]
+        [(string? value) (format "~s" value)]
+        [(number? value) (number->string value)]
+        [(instance? value)
+         (define field-order (hash-ref struct-fields (instance-type-name value) '()))
+         (format "~a(~a)"
+                 (instance-type-name value)
+                 (string-join
+                  (for/list ([field (in-list field-order)])
+                    (format "~a: ~a" field
+                            (value->debug-string
+                             (hash-ref (instance-fields value) field))))
+                  ", "))]
+        [(mapping? value)
+         (format "{~a}"
+                 (string-join
+                  (for/list ([pair (in-list (mapping-pairs value))])
+                    (format "~a: ~a"
+                            (value->debug-string (car pair))
+                            (value->debug-string (cdr pair))))
+                  ", "))]
+        [(list? value)
+         (format "[~a]" (string-join (map value->debug-string value) ", "))]
+        [else (format "~s" value)]))
+
     (define (eval-call expression)
       (define arguments
         (for/list ([argument (in-list (call-args expression))])
@@ -151,11 +192,66 @@
       (define name (call-name expression))
       (case name
         [("puts") (displayln (car arguments)) 'nil]
-        [("Map.has") (and (assoc (cadr arguments) (mapping-pairs (car arguments))) #t)]
+        [("IO.puts") (displayln (car arguments)) 'nil]
+        [("IO.print") (display (car arguments)) 'nil]
+        [("IO.warn") (displayln (car arguments) (current-error-port)) 'nil]
+        [("IO.inspect")
+         (displayln (value->debug-string (car arguments)))
+         (car arguments)]
+        [("IO.gets")
+         (define line (read-line (current-input-port)))
+         (if (eof-object? line)
+             (bail 'RUNTIME-END-OF-INPUT
+                   "IO.gets reached the end of input"
+                   (call-span expression))
+             line)]
+        [("IO.read") (port->string (current-input-port))]
+        [("IO.eof?") (eof-object? (peek-char (current-input-port)))]
+        [("System.args") program-args]
+        [("System.exit") (escape (exit-code (car arguments)))]
+        [("Map.has_key?") (and (assoc (cadr arguments) (mapping-pairs (car arguments))) #t)]
         [("Map.keys") (map car (mapping-pairs (car arguments)))]
-        [("Map.len") (length (mapping-pairs (car arguments)))]
+        [("Map.size") (length (mapping-pairs (car arguments)))]
         [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
-        [("List.len") (length (car arguments))]
+        [("List.size") (length (car arguments))]
+        [("String.length") (string-length (car arguments))]
+        [("String.upcase") (string-upcase (car arguments))]
+        [("String.downcase") (string-downcase (car arguments))]
+        [("String.trim") (string-trim (car arguments))]
+        [("String.split") (string-split (car arguments) (cadr arguments))]
+        [("String.join") (string-join (car arguments) (cadr arguments))]
+        [("String.contains?") (string-contains? (car arguments) (cadr arguments))]
+        [("String.starts_with?") (string-prefix? (car arguments) (cadr arguments))]
+        [("String.ends_with?") (string-suffix? (car arguments) (cadr arguments))]
+        [("String.replace") (string-replace (car arguments) (cadr arguments) (caddr arguments))]
+        [("String.slice")
+         (define text (car arguments))
+         (define start (cadr arguments))
+         (define length (caddr arguments))
+         (unless (and (>= start 0)
+                      (>= length 0)
+                      (<= (+ start length) (string-length text)))
+           (bail 'RUNTIME-INDEX-OUT-OF-RANGE
+                 (format "slice ~a,~a is outside a string of length ~a"
+                         start length (string-length text))
+                 (call-span expression)))
+         (substring text start (+ start length))]
+        [("String.from_int") (number->string (car arguments))]
+        [("String.from_float") (number->string (car arguments))]
+        [("String.to_int!")
+         (define parsed-int (string->number (car arguments)))
+         (unless (exact-integer? parsed-int)
+           (bail 'RUNTIME-INVALID-NUMBER
+                 (format "cannot convert ~s to Int" (car arguments))
+                 (call-span expression)))
+         (in-int-range parsed-int (call-span expression))]
+        [("String.to_float!")
+         (define parsed-float (string->number (car arguments)))
+         (unless (number? parsed-float)
+           (bail 'RUNTIME-INVALID-NUMBER
+                 (format "cannot convert ~s to Float" (car arguments))
+                 (call-span expression)))
+         (exact->inexact parsed-float)]
         [else
          (define declaration (hash-ref functions name #f))
          (unless declaration (unreachable "call" (call-span expression)))
@@ -229,6 +325,10 @@
     ;; Program --------------------------------------------------------------
 
     (for ([declaration (in-list (program-declarations program))])
-      (when (function-decl? declaration)
-        (hash-set! functions (function-decl-name declaration) declaration)))
+      (cond
+        [(function-decl? declaration)
+         (hash-set! functions (function-decl-name declaration) declaration)]
+        [(struct-decl? declaration)
+         (hash-set! struct-fields (struct-decl-name declaration)
+                    (map field-decl-name (struct-decl-fields declaration)))]))
     (call-function (hash-ref functions "main") '() (program-span program)))))

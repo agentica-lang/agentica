@@ -24,6 +24,20 @@
                 (if (diagnostic? checked) checked (evaluate checked)))))))
   (values output result))
 
+(define (run-text-io text input)
+  (define result #f)
+  (define output
+    (with-output-to-string
+      (lambda ()
+        (set! result
+              (let* ([lexed (lex (source "test.agc" text))]
+                     [parsed (if (diagnostic? lexed) lexed (parse lexed))]
+                     [checked (if (diagnostic? parsed) parsed (check parsed))])
+                (if (diagnostic? checked)
+                    checked
+                    (evaluate checked #:in (open-input-string input))))))))
+  (values output result))
+
 (define (code-of body)
   (define-values (output result) (run-text (format "def main() -> Nil\n~a\nend\n" body)))
   (if (diagnostic? result) (diagnostic-code result) result))
@@ -42,11 +56,18 @@
     (for ([entry '(("hello.agc" . "hello\n")
                    ("classify.agc" . "adult\n")
                    ("tasks.agc" . "Probar Agentica\n")
-                   ("inventory.agc" . "apple\nkiwi\n"))])
+                   ("inventory.agc" . "apple\nkiwi\n")
+                   ("strings.agc" . "AGENTICA, HELLO\n8\n5\nAgentica, world\n"))])
       (define-values (output result)
         (run-text (file->string (build-path examples-dir (car entry)))))
       (check-equal? result 'nil (car entry))
       (check-equal? output (cdr entry) (car entry))))
+
+  (test-case "echo.agc reads and echoes standard input"
+    (define-values (output result)
+      (run-text-io (file->string (build-path examples-dir "echo.agc")) "one\ntwo\n"))
+    (check-equal? result 'nil)
+    (check-equal? output "one\ntwo\n"))
 
   (test-case "rejected fragments fail with the intended code"
     (check-equal? (code-of "  age: Int = \"25\"") 'CHECK-TYPE-MISMATCH)
@@ -63,4 +84,14 @@
     (define failed (cli (path->string bad)))
     (delete-file bad)
     (check-equal? (car failed) 1)
-    (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))))
+    (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))
+    (define exit-file (make-temporary-file "agentica~a.agc"))
+    (display-to-file "def main() -> Nil\n  System.exit(3)\nend\n" exit-file #:exists 'truncate)
+    (check-equal? (car (cli (path->string exit-file))) 3)
+    (delete-file exit-file)
+    (define args-file (make-temporary-file "agentica~a.agc"))
+    (display-to-file
+     "def main() -> Nil\n  for a in System.args()\n    puts(a)\n  end\nend\n"
+     args-file #:exists 'truncate)
+    (check-equal? (cli (path->string args-file) "x" "y") '(0 "x\ny\n" ""))
+    (delete-file args-file)))

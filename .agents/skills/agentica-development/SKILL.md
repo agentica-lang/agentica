@@ -14,7 +14,9 @@ Read the active phase in the roadmap before adding code. Implement only what tha
 Run all of these before calling a change done:
 
 ```sh
-raco test tests/                          # every stage test
+make test                                 # every stage test, in parallel
+make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
+racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
 racket src/main.rkt examples/classify.agc
 racket src/main.rkt examples/tasks.agc
@@ -43,7 +45,7 @@ tests/
   evaluator-test.rkt
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc
+examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc
 docs/
   Agentica-gramatica.md   # language grammar, the source of truth
   Agentica-roadmap.md     # phases and the active checklist

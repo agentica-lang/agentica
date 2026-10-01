@@ -476,10 +476,10 @@ String.to_float!(s: String) -> Float
 - Length and slice count Unicode characters, not bytes. The grammar keeps "no slices, no string indexing"; `String.slice` is a function, not syntax.
 - A bad `String.to_int!` is `RUNTIME-INVALID-NUMBER`. `String.slice` out of range is `RUNTIME-INDEX-OUT-OF-RANGE`.
 
-- [ ] Allow a trailing `?` and `!` in function names (lexer; spec in the grammar's section 8, move it to sections 4–6 when done). The suffix counts only when the next character is `(`, so `a!=b` still lexes as `a != b`.
-- [ ] Reserve `String` as a type and module name.
-- [ ] Type and evaluate the functions above, with a focused test per stage.
-- [ ] Add `examples/strings.agc`.
+- [x] Allow a trailing `?` and `!` in function names (lexer; spec in the grammar's section 8, move it to sections 4–6 when done). The suffix counts only when the next character is `(`, so `a!=b` still lexes as `a != b`.
+- [x] Reserve `String` as a type and module name.
+- [x] Type and evaluate the functions above, with a focused test per stage.
+- [x] Add `examples/strings.agc`.
 
 ### Phase 5d: Standard input and output
 
@@ -501,9 +501,9 @@ System.exit(code: Int) -> Nil
 - `System.exit` ends the run with that exit code. The evaluator returns it as data, and only `main.rkt` exits.
 - `main.rkt` passes the program arguments to the evaluator.
 
-- [ ] Evaluator takes input and output ports and the argument list as parameters.
-- [ ] Type and evaluate the functions above.
-- [ ] Add `examples/echo.agc` and a test that feeds input through a string port.
+- [x] Evaluator takes input and output ports and the argument list as parameters.
+- [x] Type and evaluate the functions above.
+- [x] Add `examples/echo.agc` and a test that feeds input through a string port.
 
 ### Phase 5e: Result and error handling
 
@@ -615,7 +615,7 @@ HTTP.request(method: String, url: String, body: String, headers: Map[String, Str
 ### Open decisions
 
 - Whether `?` and `!` become part of function names for all functions or only for builtin modules. Recommended: all functions, as in Ruby and Elixir.
-- Whether `Map.has` and `Map.len` get renamed to `Map.has_key?` and `Map.size`. Renaming later breaks stable names, so decide in 5c.
+- ~~Whether `Map.has` and `Map.len` get renamed to `Map.has_key?` and `Map.size`.~~ Decided in 5c: renamed, together with `List.len` → `List.size`.
 - A capability flag for the CLI (`--allow-net`, `--allow-read`): agents run unknown programs, and network access should be opt-in. Decide before 5g.
 
 ### Integration fixtures in Node.js (optional layer)
@@ -634,8 +634,8 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 
 ### Checklist for phases 5c to 5h
 
-- [ ] Phase 5c: String library.
-- [ ] Phase 5d: standard input and output.
+- [x] Phase 5c: String library.
+- [x] Phase 5d: standard input and output.
 - [ ] Phase 5e: `Result[T]` and error handling.
 - [ ] Phase 5f: JSON.
 - [ ] Phase 5f2: typed JSON decoding.

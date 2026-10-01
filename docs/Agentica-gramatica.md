@@ -97,10 +97,14 @@ true false nil and or not
 
 Las extensiones introducirán más palabras reservadas. No se consideran disponibles en el núcleo.
 
+El sufijo `?` o `!` solo forma parte del `NAME` cuando el carácter siguiente es `(`: `contains?(`, `to_int!(`. Así `a!=b` sigue siendo `a != b`, y `x?` o `x!` sin paréntesis no son nombres. Por convención, `?` marca un predicado que devuelve `Bool` y `!` marca la versión que termina la ejecución con error en vez de devolver un `Result`. Variables, campos y parámetros no pueden llevar el sufijo.
+
+Los nombres de tipo y módulo `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `IO` y `System` están reservados y no se pueden redefinir.
+
 ### Literales
 
 ```ebnf
-NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" } ;
+NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
 TYPE_NAME  = UPPER, { LETTER | DIGIT | "_" } ;
 INTEGER    = DIGIT, { DIGIT } ;
 FLOAT      = DIGIT, { DIGIT }, ".", DIGIT, { DIGIT } ;
@@ -317,14 +321,48 @@ puts(value: String) -> Nil
 Para trabajar con maps y listas hay dos módulos incorporados, `Map` y `List`, que se llaman con `Modulo.funcion(...)`. Sus funciones son genéricas, así que el checker las trata de forma especial. Los nombres `Map` y `List` están reservados y no se pueden redefinir.
 
 ```text
-Map.has(map: Map[K, V], key: K) -> Bool
+Map.has_key?(map: Map[K, V], key: K) -> Bool
 Map.keys(map: Map[K, V]) -> List[K]
-Map.len(map: Map[K, V]) -> Int
+Map.size(map: Map[K, V]) -> Int
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
-List.len(list: List[T]) -> Int
+List.size(list: List[T]) -> Int
 ```
 
-Para conservar un primer núcleo pequeño, este documento no fija más funciones incorporadas. Archivos, JSON, argumentos del proceso y conversiones de tipos necesitan una API posterior; se habían sugerido para hacer pruebas útiles, pero no se había definido su forma.
+El módulo `String` opera sobre texto. `String.length` y `String.slice` cuentan caracteres Unicode, no bytes; un `slice` fuera de rango es error de ejecución. `String.to_int!` y `String.to_float!` fallan con `RUNTIME-INVALID-NUMBER` si el texto no es un número.
+
+```text
+String.length(s: String) -> Int
+String.upcase(s: String) -> String
+String.downcase(s: String) -> String
+String.trim(s: String) -> String
+String.split(s: String, separator: String) -> List[String]
+String.join(parts: List[String], separator: String) -> String
+String.contains?(s: String, part: String) -> Bool
+String.starts_with?(s: String, prefix: String) -> Bool
+String.ends_with?(s: String, suffix: String) -> Bool
+String.replace(s: String, from: String, to: String) -> String
+String.slice(s: String, start: Int, length: Int) -> String
+String.from_int(n: Int) -> String
+String.from_float(x: Float) -> String
+String.to_int!(s: String) -> Int
+String.to_float!(s: String) -> Float
+```
+
+El módulo `IO` escribe y lee por los puertos estándar; `IO.warn` escribe en la salida de error. `IO.inspect` imprime cualquier valor en forma de depuración estable y lo devuelve. `IO.gets` devuelve la siguiente línea sin el salto y falla con `RUNTIME-END-OF-INPUT` al final; `IO.eof?` permite comprobarlo antes. El módulo `System` expone los argumentos del programa y termina la ejecución con un código.
+
+```text
+IO.puts(value: String) -> Nil
+IO.print(value: String) -> Nil
+IO.warn(value: String) -> Nil
+IO.inspect(value: T) -> T
+IO.gets() -> String
+IO.read() -> String
+IO.eof?() -> Bool
+System.args() -> List[String]
+System.exit(code: Int) -> Nil
+```
+
+Archivos, JSON, red y conversiones más ricas necesitan una API posterior; llegarán con las fases 5e a 5h.
 
 ## 7. Extensión futura: enums y pattern matching
 
@@ -396,8 +434,6 @@ La gramática de expresiones también debe ampliarse para construir variantes, p
 Nada de esta subsección está implementado ni forma parte del núcleo. Se fija aquí para que cada fase del roadmap la tome como especificación, y se mueve a las secciones 4–6 cuando la fase termine.
 
 ```ebnf
-NAME             = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
-
 postfix_expr     = primary, { ".", NAME
                             | ".", "call", "(", [ arguments ], ")"
                             | "[", expression, "]" } ;
@@ -407,11 +443,10 @@ primary          = (* …formas del núcleo, más: *)
                  | TYPE_NAME ;
 ```
 
-- **Sufijo `?` y `!`:** solo forma parte del `NAME` cuando el carácter siguiente es `(`: `contains?(`, `to_int!(`. Así `a!=b` sigue siendo `a != b`, y `x?` o `x!` sin paréntesis no son nombres. Por convención, `?` marca un predicado que devuelve `Bool` y `!` marca la versión que termina la ejecución con error en vez de devolver un `Result`. Variables, campos y parámetros no pueden llevar el sufijo.
 - **`&nombre` y `.call(...)`:** `&nombre` convierte una función de nivel superior en un valor de tipo `Fn[...]`, y `valor.call(args)` lo invoca. `call` no es palabra reservada: solo tiene este significado justo después de un `.` y antes de `(`. No hay closures: `&nombre` no captura variables. El checker exige que `nombre` sea una función declarada y compara parámetros y retorno con el tipo esperado. Precedencia 1, como la llamada nombrada.
 - **`TYPE_NAME` solo:** sin `(` ni `.`, es un tipo usado como argumento, como en `JSON.decode(text, User)`. El checker lo acepta únicamente como argumento de las funciones incorporadas que lo piden (`JSON.decode`, `JSON.schema`); en cualquier otro lugar es un error.
 - **Tipos:** `Fn[A, ..., R]` (los tipos finales son el retorno, fase 5j), `Result[T]` (error siempre `String`), `Json`, `Socket`, `Listener`, `Process` y `Response` (struct incorporado con `status`, `body` y `headers`). Los tipos opacos no se pueden construir ni inspeccionar, solo pasar a las funciones incorporadas.
-- **Nombres reservados al empezar cada fase:** `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `String`, `IO`, `System`, `JSON`, `TCP` y `HTTP`.
+- **Nombres reservados al empezar cada fase:** `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP` y `HTTP`.
 
 ```ruby
 def double(n: Int) -> Int

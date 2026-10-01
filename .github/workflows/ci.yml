@@ -16,8 +16,9 @@ jobs:
         with:
           variant: CS
           version: '9.3'
-      - run: raco test tests/
+      - run: make test
       - run: racket src/main.rkt examples/hello.agc
       - run: racket src/main.rkt examples/classify.agc
       - run: racket src/main.rkt examples/tasks.agc
       - run: racket src/main.rkt examples/inventory.agc
+      - run: racket src/main.rkt examples/strings.agc
