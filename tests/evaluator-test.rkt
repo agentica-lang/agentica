@@ -34,7 +34,7 @@
   (define out (open-output-string))
   (define err (open-output-string))
   (define result (evaluate checked
-                           #:in (open-input-string input)
+                           #:in (if (bytes? input) (open-input-bytes input) (open-input-string input))
                            #:out out
                            #:err err
                            #:args arguments
@@ -217,6 +217,49 @@
     (check-equal? result 'nil)
     (check-equal? output "one\ntwo\nrest\n\ndone\n"))
 
+  (test-case "counted reads preserve raw bytes, UTF-8 boundaries, and EOF"
+    (define-values (out err result)
+      (run-io
+       (main-with
+        (string-append
+         "  IO.inspect(IO.read_bytes(0))\n  IO.inspect(IO.eof?())\n"
+         "  first = Result.unwrap!(IO.read_bytes(1))\n  IO.inspect(first)\n"
+         "  IO.inspect(Result.ok?(String.from_bytes(first)))\n"
+         "  second = Result.unwrap!(IO.read_bytes(1))\n"
+         "  IO.inspect(String.from_bytes([first[0], second[0]]))\n"
+         "  emoji = Result.unwrap!(IO.read_bytes(4))\n  IO.inspect(String.from_bytes(emoji))\n"
+         "  IO.inspect(IO.eof?())\n  IO.inspect(IO.read_bytes(9))\n"
+         "  IO.inspect(IO.eof?())\n  IO.inspect(IO.read_bytes(1))"))
+       (bytes 195 177 240 159 152 128 255 0)))
+    (check-equal? result 'nil)
+    (check-equal? err "")
+    (check-equal? out "ok([])\nfalse\n[195]\nfalse\nok(\"ñ\")\nok(\"😀\")\nfalse\nok([255, 0])\ntrue\nok([])\n"))
+
+  (test-case "invalid read sizes do not consume input and text reads share the port"
+    (define-values (out err result)
+      (run-io
+       (main-with
+        (string-append
+         "  for count in [-1, 1048577, 9223372036854775807]\n"
+         "    IO.inspect(Result.ok?(IO.read_bytes(count)))\n  end\n"
+         "  puts(IO.gets!())\n  IO.inspect(IO.read_bytes(2))\n"
+         "  IO.inspect(IO.eof?())\n  puts(IO.read())\n"
+         "  IO.inspect(IO.read_bytes(1048576))\n  IO.inspect(IO.read_bytes(0))"))
+       "hello\nxyz"))
+    (check-equal? result 'nil)
+    (check-equal? err "")
+    (check-equal? out "false\nfalse\nfalse\nhello\nok([120, 121])\nfalse\nz\nok([])\nok([])\n"))
+
+  (test-case "String.from_bytes validates byte values and decodes UTF-8 strictly"
+    (for ([data '("[-1]" "[256]" "[9223372036854775807]" "[195]" "[128]"
+                  "[192, 175]" "[237, 160, 128]" "[244, 144, 128, 128]" "[255]")])
+      (check-equal?
+       (output-of (main-with (format "  IO.inspect(Result.ok?(String.from_bytes(~a)))" data)))
+       "false\n" data))
+    (check-equal?
+     (output-of (main-with "  IO.inspect(String.from_bytes([]))\n  IO.inspect(String.from_bytes([65, 10, 66]))\n  IO.inspect(String.length(Result.unwrap!(String.from_bytes([0]))))"))
+     "ok(\"\")\nok(\"A\\nB\")\n1\n"))
+
   (test-case "IO.gets! at end of input is a located diagnostic"
     (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))
     (check-true (diagnostic? result))
@@ -243,6 +286,8 @@
         ("IO.gets" "IO.gets()" "ok(\"line\")\n")
         ("IO.gets!" "IO.gets!()" "\"line\"\n")
         ("IO.read" "IO.read()" "\"line\\n\"\n")
+        ("IO.read_bytes" "IO.read_bytes(1)" "ok([108])\n")
+        ("IO.flush" "IO.flush()" "nil\n")
         ("IO.eof?" "IO.eof?()" "false\n")
         ("System.args" "System.args()" "[\"arg\"]\n")
         ("System.exit" "System.exit(0)" "")
@@ -273,6 +318,7 @@
         ("String.slice" "String.slice(\"ñ😀x\", 1, 2)" "\"😀x\"\n")
         ("String.from_int" "String.from_int(7)" "\"7\"\n")
         ("String.from_float" "String.from_float(1.5)" "\"1.5\"\n")
+        ("String.from_bytes" "String.from_bytes([195, 177])" "ok(\"ñ\")\n")
         ("String.to_int" "String.to_int(\"7\")" "ok(7)\n")
         ("String.to_float" "String.to_float(\"1.5\")" "ok(1.5)\n")
         ("String.to_int!" "String.to_int!(\"7\")" "7\n")

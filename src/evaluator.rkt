@@ -30,6 +30,8 @@
 (define decimal-float-pattern #px"^[+-]?[0-9]+(\\.[0-9]+)?$")
 
 (define max-call-depth 10000)
+;; ponytail: cap eager reads at 1 MiB per call; stream larger inputs in chunks.
+(define max-read-bytes (* 1024 1024))
 
 (define (evaluate program
                   #:in [input (current-input-port)]
@@ -275,6 +277,7 @@
         [("Result.unwrap_or")
          (if (result-ok? (car arguments)) (result-ok-value (car arguments)) (cadr arguments))]
         [("IO.print") (display (car arguments)) 'nil]
+        [("IO.flush") (flush-output (current-output-port)) 'nil]
         [("IO.warn") (displayln (car arguments) (current-error-port)) 'nil]
         [("IO.inspect")
          (displayln (value->debug-string (car arguments)))
@@ -287,7 +290,14 @@
                        (fail 'RUNTIME-END-OF-INPUT "IO.gets reached the end of input" span))
                      line))]
         [("IO.read") (port->string (current-input-port))]
-        [("IO.eof?") (eof-object? (peek-char (current-input-port)))]
+        [("IO.read_bytes")
+         (define count (car arguments))
+         (if (<= 0 count max-read-bytes)
+             (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
+               (define data (read-bytes count (current-input-port)))
+               (result-ok (if (eof-object? data) '() (bytes->list data))))
+             (result-error (format "byte count must be between 0 and ~a" max-read-bytes)))]
+        [("IO.eof?") (eof-object? (peek-byte (current-input-port)))]
         [("System.args") program-args]
         [("System.exit") (escape (exit-code (car arguments)))]
         [("Map.has_key?") (hash-has-key? (mapping-table (car arguments)) (cadr arguments))]
@@ -359,6 +369,12 @@
          (substring text start (+ start length))]
         [("String.from_int") (number->string (car arguments))]
         [("String.from_float") (number->string (car arguments))]
+        [("String.from_bytes")
+         (define data (car arguments))
+         (if (andmap byte? data)
+             (with-handlers ([exn:fail:contract? (lambda (_) (result-error "invalid or incomplete UTF-8"))])
+               (result-ok (bytes->string/utf-8 (list->bytes data) #f)))
+             (result-error "bytes must be integers between 0 and 255"))]
         [("String.to_int" "String.to_int!")
          (fallible (string-suffix? name "!")
                    (lambda (fail)

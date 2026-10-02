@@ -139,6 +139,7 @@ String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
+String.from_bytes(data: List[Int]) -> Result[String]  # strict UTF-8
 String.to_int(s: String) -> Result[Int]
 String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int               # halts on bad text
@@ -150,8 +151,10 @@ IO.warn(value: String) -> Nil                  # standard error
 IO.inspect(value: T) -> T                      # prints a debug form, returns the value
 IO.gets() -> Result[String]                   # ok(line) or error at EOF
 IO.gets!() -> String                          # next line; halts at end of input
-IO.read() -> String
-IO.eof?() -> Bool
+IO.read() -> String                          # drains until EOF
+IO.read_bytes(count: Int) -> Result[List[Int]]
+IO.flush() -> Nil                            # flushes stdout only
+IO.eof?() -> Bool                            # blocking byte peek, not readiness
 System.args() -> List[String]
 System.exit(code: Int) -> Nil
 ```
@@ -160,6 +163,24 @@ System.exit(code: Int) -> Nil
 - Lists have no append or concatenation function. To build a list, write a literal; to change a map, use `Map.put`, which leaves the original unchanged.
 - Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
+
+### Counted input and flushing
+
+- `IO.read_bytes(count)` waits for count bytes or EOF; it returns integers in `0 .. 255`, not decoded text. Short final reads succeed, EOF before any bytes is `ok([])`, and zero returns `ok([])` without consuming input. Count must be `0 .. 1048576` (1 MiB); invalid counts return an error without consuming input. Input-port failures also return an error. Process larger streams in multiple reads.
+- `String.from_bytes` validates byte values and decodes UTF-8 strictly. Empty input succeeds with `""`; invalid, overlong, surrogate, and incomplete sequences return errors, never replacement characters. A byte read can split a UTF-8 character; decode only complete sequences. Text and byte reads share the same port, so switch to text reads only at character boundaries.
+- `IO.eof?()` peeks without consuming the next byte. It may block until a byte or EOF arrives; it does not wait for a complete UTF-8 character and is not a readiness poll. Reads have no timeout; step budgets do not interrupt blocking I/O.
+- `IO.read()` waits for EOF, so use `IO.gets()` for line-delimited live protocols. `IO.flush()` flushes stdout without closing it; it does not flush stderr. Output calls do not auto-flush. For MCP stdio, put one compact JSON message on each line, flush after each response, and send logs to `IO.warn`.
+
+```ruby
+def main() -> Nil
+  data = IO.read_bytes(4)
+  if Result.ok?(data)
+    text = String.from_bytes(Result.unwrap!(data))
+    IO.print(Result.unwrap_or(text, "invalid UTF-8"))
+    IO.flush()
+  end
+end
+```
 
 ## Result and try
 

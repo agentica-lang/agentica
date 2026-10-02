@@ -680,6 +680,13 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 Implemented in `src/json.rkt` (opaque wrapper and strict input guards), the builtin catalog, checker, and evaluator. Parsing and scalar escaping use Racket's library; no parser/AST changes. Access and extraction return Results, Int extraction checks signed 64-bit bounds, and Float extraction checks finiteness. Encoding recursively rejects Results and Int-keyed maps at check time, preserves declared struct/map order, and halts on non-finite Floats with `RUNTIME-JSON-ENCODE`. Parsed object order is unspecified. Tests cover malformed/trailing input, Unicode, null/false, wrong kinds, bounds, recursive encoding eligibility, ordered output, round trips, `try`, and CLI diagnostics. Typed decoding and builders remain in 5f2/5i.
 
+### Stdio transport primitives (after 5f)
+
+- [x] Add `IO.read_bytes(count: Int) -> Result[List[Int]]`, `IO.flush() -> Nil`, and `String.from_bytes(data: List[Int]) -> Result[String]`, using Racket's native port/byte functions and existing catalog typing. Keep IO.read's all-text-until-EOF behavior; no Bytes type, syntax, or dependency additions.
+- [x] Specify byte-counted reads: wait for count bytes or EOF, accept short/empty EOF success, zero consumes nothing, invalid counts consume nothing. A fixed 1 MiB per-call cap bounds eager allocation; larger streams use multiple reads. Decode UTF-8 strictly only once complete bytes are available. Read/conversion failures return Results.
+- [x] Keep `IO.eof?` as a blocking, non-consuming EOF check using peek-byte, not a readiness poll or UTF-8 character peek. Explicit stdout flush does not close ports or flush stderr; blocking stdio still has no timeout.
+- [x] Test byte/character boundaries, invalid counts/UTF-8, mixed text/byte reads, and live pipe replies while stdin stays open. The pipe test fails with a no-op flush or a peek-char EOF mutation; both were restored and rechecked. Update grammar and both skills.
+
 ### Phase 5f2: Typed JSON decoding
 
 ```text
@@ -770,6 +777,7 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 - [x] Phase 5e: Result[T], try, and the builtins catalog.
 - [x] Faster maps (before JSON).
 - [x] Phase 5f: JSON.
+- [x] Stdio transport primitives: counted bytes, strict UTF-8 decoding, flush, and byte-oriented EOF.
 - [ ] Phase 5f2: typed JSON decoding.
 - [ ] Phase 5g: TCP.
 - [ ] Phase 5h: HTTP and HTTPS.

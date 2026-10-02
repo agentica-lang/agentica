@@ -226,13 +226,22 @@
                           "  s: Result[String] = IO.gets()\n"
                           "  line: String = IO.gets!()\n"
                           "  r: String = IO.read()\n"
+                          "  bytes: Result[List[Int]] = IO.read_bytes(3)\n"
+                          "  decoded: Result[String] = String.from_bytes([195, 177])\n"
+                          "  flushed: Nil = IO.flush()\n"
                           "  e: Bool = IO.eof?()\n"
                           "  a: List[String] = System.args()\n"
                           "  System.exit(0)")))
     (check-equal? (check-code (main-with "  IO.puts(1)")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  x = IO.gets(1)")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = IO.nope()")) 'CHECK-UNKNOWN-NAME)
-    (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH))
+    (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH)
+    (for ([body '("  x = IO.read_bytes(\"3\")" "  x = String.from_bytes([\"x\"])"
+                  "  x: String = String.from_bytes([65])" "  x: List[Int] = IO.read_bytes(1)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (for ([body '("  x = IO.read_bytes()" "  x = IO.read_bytes(1, 2)"
+                  "  IO.flush(1)" "  x = String.from_bytes()")])
+      (check-equal? (check-code (main-with body)) 'CHECK-ARITY)))
 
   (test-case "JSON signatures and opaque types"
     (check-ok

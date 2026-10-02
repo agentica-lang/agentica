@@ -156,6 +156,13 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - `evaluate` accepts optional `#:max-steps` (positive integer or #f). Count every expression/statement entry, including loop conditions; reset per run. CLI --max-steps validates the input; check never executes. This is not a blocking-I/O timeout.
 - A rebase changing AST/diagnostic layouts may leave stale ignored Racket bytecode. For an instantiate-linklet struct mismatch, use `make clean && make build && make test`; rebuild the binary with make exe before evaluation.
 
+## Stdio bytes and flushing
+
+- `IO.read()` remains the all-text-until-EOF API. `IO.read_bytes(count)` uses native read-bytes and returns Result[List[Int]]; wait for count bytes or EOF, return short/empty success at EOF, and do not consume input for zero or invalid counts. The fixed 1 MiB per-call cap prevents eager allocations from arbitrary Int sizes; larger streams use repeated reads. Port read failures are local Results, not exceptions around argument evaluation.
+- `String.from_bytes` uses byte? validation, list->bytes, and bytes->string/utf-8 with #f for strict decoding. Invalid byte values and malformed/incomplete UTF-8 return Result errors. No Bytes type or new checker rule is needed: these are fixed catalog signatures.
+- EOF uses peek-byte, not peek-char: a peer may have sent only the leading UTF-8 byte. EOF peeking still blocks if there is no data, so it is not a readiness poll. Text and byte reads share the port; switch to text only at complete character boundaries.
+- `IO.flush` flushes current-output-port and returns nil. Do not auto-flush other output functions or close ports. The live Racket CLI pipe test with stdin held open protects response delivery and byte-oriented EOF peeking; it fails if flushing becomes a no-op or EOF reverts to peek-char. All blocking stdio calls remain without timeouts.
+
 ## JSON (phase 5f)
 
 - `Json` is opaque, not primitive for equality. Reserve `Json` and `JSON`; all calls use existing parser/AST forms. The catalog has nine JSON functions; `json-encode` is the only new generic checker rule.

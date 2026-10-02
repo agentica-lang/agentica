@@ -341,6 +341,7 @@ String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
+String.from_bytes(data: List[Int]) -> Result[String]
 String.to_int(s: String) -> Result[Int]
 String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int
@@ -357,10 +358,18 @@ IO.inspect(value: T) -> T
 IO.gets() -> Result[String]
 IO.gets!() -> String
 IO.read() -> String
+IO.read_bytes(count: Int) -> Result[List[Int]]
+IO.flush() -> Nil
 IO.eof?() -> Bool
 System.args() -> List[String]
 System.exit(code: Int) -> Nil
 ```
+
+- `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both use Racket's buffered input port.
+- `IO.read_bytes(count)` waits for exactly `count` bytes or EOF and returns a list of integers in `0 .. 255`, with no UTF-8 decoding. A short final read succeeds; EOF before any bytes is `ok([])`. Zero returns `ok([])` without consuming input, even before EOF. Counts must be `0 .. 1048576` (1 MiB per call), bounding eager allocation; invalid counts return an error without consuming input. Input-port failures also return an error. Larger streams can be processed in multiple reads.
+- `String.from_bytes(data)` checks every integer is `0 .. 255`, then decodes UTF-8 strictly. Empty bytes produce `ok("")`; invalid, overlong, surrogate, or incomplete sequences return an error, never replacement characters. Byte reads may split a multibyte character; decode only when its complete bytes are available. Existing text and byte readers share one port; text readers should only be used at a complete character boundary.
+- `IO.eof?()` peeks at the next byte without consuming it. It can block while awaiting data or EOF, but never waits to decode a whole UTF-8 character. It is not a readiness poll. Reads have no timeout, and the step budget cannot interrupt blocking I/O.
+- `IO.flush()` flushes stdout and returns nil; it does not close the stream or flush stderr. Output functions do not automatically flush. For interactive stdio protocols, write one compact JSON message per line and flush after each response; logs go to stderr with `IO.warn`.
 
 ### Result and propagation
 
