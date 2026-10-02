@@ -87,6 +87,7 @@
     (check-equal? (hash-ref data 'parameters) (list (hasheq 'name "s" 'type "String")))
     (check-equal? (hash-ref data 'effects) '())
     (check-equal? (cli "--json" "help" "String.to_int") help)
+    (check-equal? (cli "--max-steps" "10" "help" "String.to_int" "--json") help)
     (define unknown (cli "help" "String.to_it" "--json"))
     (check-equal? (car unknown) 2)
     (check-regexp-match #rx"String.to_int" (caddr unknown)))

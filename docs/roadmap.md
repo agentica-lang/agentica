@@ -653,7 +653,7 @@ src/builtins.rkt is the shared table of builtin names, arities, parameter types,
 - The checker, the evaluator, and `agentica help NAME --json` read the same table; effects are information only at first (no mandatory annotations).
 - [x] Catalogue 5b–5e builtins in src/builtins.rkt.
 - [x] Checker and evaluator resolve the same entries; every catalog entry has a real checked program with independent expected output.
-- [x] Add agentica help NAME --json, with no source file required and exit 2 for unknown targets.
+- [x] Add agentica help NAME --json, with no source file required and exit 2 for unknown targets. Trailing --json also works after leading options; the CLI regression was reproduced before the fix.
 
 ### Phase 5f: JSON
 

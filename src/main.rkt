@@ -13,17 +13,9 @@
   (define dump? #f)
   (define style 'plain)
   (define max-steps #f)
-  ;; Only help has a documented trailing option; program args stay untouched.
-  (define supplied (vector->list (current-command-line-arguments)))
-  (define options
-    (if (and (pair? supplied) (equal? (car supplied) "help")
-             (equal? (last supplied) "--json"))
-        (cons "--json" (drop-right supplied 1))
-        supplied))
   (define raw-arguments
     (command-line
      #:program "agentica"
-     #:argv (list->vector options)
      #:once-each
      [("--max-steps") count "limit execution to N expression/statement entries"
       (define parsed (string->number count))
@@ -37,6 +29,10 @@
      #:args arguments
      arguments))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
+    ;; Only help consumes a trailing option; program args stay untouched.
+    (when (equal? (last raw-arguments) "--json")
+      (set! style 'json)
+      (set! raw-arguments (drop-right raw-arguments 1)))
     (unless (= (length raw-arguments) 2)
       (eprintf "usage: agentica help NAME --json\n")
       (exit 2))
