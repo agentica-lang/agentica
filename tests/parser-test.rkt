@@ -29,6 +29,17 @@
   (binding-value (car (function-decl-body fn))))
 
 (module+ test
+  (test-case "try has unary precedence and a source span"
+    (define expression (parse-expr "try ok(1) + 2"))
+    (check-true (binary? expression))
+    (check-true (try-expr? (binary-left expression)))
+    (check-equal? (call-name (try-expr-operand (binary-left expression))) "ok")
+    (check-equal? (source-position-column
+                   (source-span-start (node-span (binary-left expression)))) 7)
+    (check-true (try-expr? (parse-expr "try (ok(1))")))
+    (check-equal? (parse-code "def main() -> Nil\n  ready? = true\nend\n")
+                  'PARSE-UNEXPECTED-TOKEN))
+
   (test-case "hello program parses"
     (define program (parse-ok "def main() -> Nil\n  puts(\"hello\")\nend\n"))
     (check-equal? (length (program-declarations program)) 1)

@@ -1,7 +1,7 @@
 def main() -> Nil
   counts: Map[String, Int] = {}
   while not IO.eof?()
-    line = String.trim(IO.gets())
+    line = String.trim(IO.gets!())
     if String.length(line) > 0
       for word in String.split(String.downcase(line), " ")
         if Map.has_key?(counts, word)

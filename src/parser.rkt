@@ -55,8 +55,11 @@
     (define (bail code message token)
       (return (diagnostic code message (token-span token))))
 
-    (define (expect expected description)
-      (if (kind? expected)
+    (define (expect expected description [suffix? #f])
+      (if (and (kind? expected)
+               (not (and (eq? expected 'name)
+                         (not suffix?)
+                         (regexp-match? #px"[?!]$" (token-lexeme (current))))))
           (advance!)
           (bail 'PARSE-UNEXPECTED-TOKEN
                 (format "expected ~a, found ~a" description (describe (current)))
@@ -90,7 +93,7 @@
 
     (define (parse-function-decl)
       (define start (expect 'def "def"))
-      (define name (expect 'name "a function name"))
+      (define name (expect 'name "a function name" #t))
       (expect 'left-paren "\"(\"")
       (define params (parse-parameters))
       (expect 'right-paren "\")\"")
@@ -313,6 +316,9 @@
     (define (parse-unary)
       (define start (current))
       (cond
+        [(kind? 'try)
+         (advance!)
+         (try-expr (parse-unary) (span-from start))]
         [(or (kind? 'minus) (kind? 'not))
          (define operator (advance!))
          (unary (token-kind operator) (token-span operator) (parse-unary) (span-from start))]
@@ -375,7 +381,7 @@
          (construct (token-lexeme name) arguments (span-from name))]
         [(kind? 'dot)
          (advance!)
-         (define member (expect 'name "a function name"))
+         (define member (expect 'name "a function name" #t))
          (expect 'left-paren "\"(\"")
          (define arguments (parse-expression-list 'right-paren))
          (expect 'right-paren "\")\"")

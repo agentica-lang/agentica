@@ -25,7 +25,7 @@ Interpreter for the Agentica language, written in Racket. The language is define
 
 - Each stage takes the previous stage's output and returns data or exactly one `diagnostic`. It stops at the first error, never prints, and never lets a Racket exception escape.
 - Diagnostic codes are stable and prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`. Every diagnostic carries a source span.
-- Keep to the core grammar (sections 4–6). No enums, user generics, or user modules; the builtin generics `List[T]` and `Map[K, V]` and the builtin modules `Map` and `List` are core. Planned syntax stays in `docs/future.md` until its phase lands. No placeholder files or nodes for later phases.
+- Keep to the core grammar (sections 4–6). No enums, user generics, or user modules; the builtin generics `List[T]`, `Map[K, V]`, and `Result[T]` and their builtin modules are core. `try` is builtin error propagation. Planned syntax stays in `docs/future.md` until its phase lands. No placeholder files or nodes for later phases.
 - Use only Racket's built-in test support (`rackunit`). Add no dependencies.
 - Network and process tests stay hermetic by default (Racket-only, port 0). Optional Node.js fixtures in `tests/fixtures/` may check interoperability: Node standard library only, and the test skips itself when `node` is missing. See "Integration fixtures in Node.js" in the roadmap.
 - Tests assert the diagnostic code (and the span when it matters), not message text.

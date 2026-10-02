@@ -1,6 +1,7 @@
 #lang racket
 
-(require "ast.rkt"
+(require "builtins.rkt"
+         "ast.rkt"
          "diagnostic.rkt")
 
 (provide evaluate
@@ -11,6 +12,8 @@
 (struct instance (type-name fields) #:transparent)
 (struct mapping (pairs) #:transparent)
 (struct exit-code (code) #:transparent)
+(struct result-ok (value) #:transparent)
+(struct result-error (message) #:transparent)
 
 (define (mapping-put target key value)
   (define pairs (mapping-pairs target))
@@ -31,18 +34,20 @@
                   #:in [input (current-input-port)]
                   #:out [output (current-output-port)]
                   #:err [error-output (current-error-port)]
-                  #:args [program-args '()])
+                  #:args [program-args '()]
+                  #:max-steps [max-steps #f])
   (parameterize ([current-input-port input]
                  [current-output-port output]
                  [current-error-port error-output])
-    (evaluate-with-ports program program-args)))
+    (evaluate-with-ports program program-args max-steps)))
 
-(define (evaluate-with-ports program program-args)
+(define (evaluate-with-ports program program-args max-steps)
   (define functions (make-hash))
   (define struct-fields (make-hash))
   (define scopes '())
   (define return-to #f)
   (define depth 0)
+  (define steps 0)
 
   (with-handlers ([exn:fail?
                    (lambda (failure)
@@ -52,6 +57,15 @@
    (let/ec escape
     (define (bail code message span)
       (escape (diagnostic code message span)))
+
+    (unless (or (not max-steps) (exact-positive-integer? max-steps))
+      (bail 'RUNTIME-INTERNAL "max-steps must be a positive integer or #f" (program-span program)))
+
+    (define (step! span)
+      (when max-steps
+        (when (>= steps max-steps)
+          (bail 'RUNTIME-STEP-LIMIT "execution step budget exhausted" span))
+        (set! steps (add1 steps))))
 
     (define (push-scope!) (set! scopes (cons (make-hash) scopes)))
     (define (pop-scope!) (set! scopes (cdr scopes)))
@@ -66,23 +80,34 @@
     (define (assign! name value)
       (set-box! (lookup name) value))
 
-    (define (in-int-range n span)
+    (define (in-int-range n span [fail bail])
       (unless (<= int-min n int-max)
-        (bail 'RUNTIME-INTEGER-OVERFLOW "Int result is outside the 64-bit range" span))
+        (fail 'RUNTIME-INTEGER-OVERFLOW "Int result is outside the 64-bit range" span))
       n)
 
     (define (unreachable what span)
       (bail 'RUNTIME-UNREACHABLE (format "cannot evaluate ~a" what) span))
 
+    (define (fallible bang? operation)
+      (let/ec failed
+        (define (fail code message where)
+          (if bang? (bail code message where) (failed (result-error message))))
+        (define value (operation fail))
+        (if bang? value (result-ok value))))
+
     ;; Expressions ----------------------------------------------------------
 
     (define (eval-expression expression)
+      (step! (node-span expression))
       (cond
         [(literal? expression) (literal-value expression)]
         [(name-ref? expression) (unbox (lookup (name-ref-name expression)))]
         [(unary? expression) (eval-unary expression)]
         [(binary? expression) (eval-binary expression)]
         [(call? expression) (eval-call expression)]
+        [(try-expr? expression)
+         (define result (eval-expression (try-expr-operand expression)))
+         (if (result-ok? result) (result-ok-value result) (return-to result))]
         [(construct? expression)
          (instance (construct-type-name expression)
                    (for/fold ([fields (hash)])
@@ -165,6 +190,8 @@
         [(boolean? value) (if value "true" "false")]
         [(string? value) (format "~s" value)]
         [(number? value) (number->string value)]
+        [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
+        [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
          (define field-order (hash-ref struct-fields (instance-type-name value) '()))
          (format "~a(~a)"
@@ -191,22 +218,35 @@
       (define arguments
         (for/list ([argument (in-list (call-args expression))])
           (eval-expression argument)))
-      (define name (call-name expression))
+      (define entry (builtin-ref (call-name expression)))
+      (define name (if entry (builtin-implementation entry) (call-name expression)))
+      (define span (call-span expression))
       (case name
         [("puts") (displayln (car arguments)) 'nil]
-        [("IO.puts") (displayln (car arguments)) 'nil]
+        [("ok") (result-ok (car arguments))]
+        [("error") (result-error (car arguments))]
+        [("Result.ok?") (result-ok? (car arguments))]
+        [("Result.message")
+         (if (result-error? (car arguments)) (result-error-message (car arguments)) "")]
+        [("Result.unwrap!")
+         (define result (car arguments))
+         (if (result-ok? result)
+             (result-ok-value result)
+             (bail 'RUNTIME-UNWRAP-ERROR (result-error-message result) span))]
+        [("Result.unwrap_or")
+         (if (result-ok? (car arguments)) (result-ok-value (car arguments)) (cadr arguments))]
         [("IO.print") (display (car arguments)) 'nil]
         [("IO.warn") (displayln (car arguments) (current-error-port)) 'nil]
         [("IO.inspect")
          (displayln (value->debug-string (car arguments)))
          (car arguments)]
-        [("IO.gets")
-         (define line (read-line (current-input-port) 'any))
-         (if (eof-object? line)
-             (bail 'RUNTIME-END-OF-INPUT
-                   "IO.gets reached the end of input"
-                   (call-span expression))
-             line)]
+        [("IO.gets" "IO.gets!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define line (read-line (current-input-port) 'any))
+                     (when (eof-object? line)
+                       (fail 'RUNTIME-END-OF-INPUT "IO.gets reached the end of input" span))
+                     line))]
         [("IO.read") (port->string (current-input-port))]
         [("IO.eof?") (eof-object? (peek-char (current-input-port)))]
         [("System.args") program-args]
@@ -245,27 +285,26 @@
          (substring text start (+ start length))]
         [("String.from_int") (number->string (car arguments))]
         [("String.from_float") (number->string (car arguments))]
-        [("String.to_int!")
-         (define text (car arguments))
-         (define parsed-int
-           (and (regexp-match? decimal-integer-pattern text)
-                (string->number text)))
-         (unless (exact-integer? parsed-int)
-           (bail 'RUNTIME-INVALID-NUMBER
-                 (format "cannot convert ~s to Int" text)
-                 (call-span expression)))
-         (in-int-range parsed-int (call-span expression))]
-        [("String.to_float!")
-         (define text (car arguments))
-         (define parsed-float
-           (and (regexp-match? decimal-float-pattern text)
-                (string->number text)))
-         (unless (real? parsed-float)
-           (bail 'RUNTIME-INVALID-NUMBER
-                 (format "cannot convert ~s to Float" text)
-                 (call-span expression)))
-         (exact->inexact parsed-float)]
+        [("String.to_int" "String.to_int!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define text (car arguments))
+                     (define parsed-int
+                       (and (regexp-match? decimal-integer-pattern text) (string->number text)))
+                     (unless (exact-integer? parsed-int)
+                       (fail 'RUNTIME-INVALID-NUMBER (format "cannot convert ~s to Int" text) span))
+                     (in-int-range parsed-int span fail)))]
+        [("String.to_float" "String.to_float!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define text (car arguments))
+                     (define parsed-float
+                       (and (regexp-match? decimal-float-pattern text) (string->number text)))
+                     (unless (real? parsed-float)
+                       (fail 'RUNTIME-INVALID-NUMBER (format "cannot convert ~s to Float" text) span))
+                     (exact->inexact parsed-float)))]
         [else
+         (when entry (unreachable "builtin implementation" span))
          (define declaration (hash-ref functions name #f))
          (unless declaration (unreachable "call" (call-span expression)))
          (call-function declaration arguments (call-span expression))]))
@@ -303,6 +342,7 @@
       (pop-scope!))
 
     (define (exec-statement statement)
+      (step! (node-span statement))
       (cond
         [(binding? statement)
          (define value (eval-expression (binding-value statement)))

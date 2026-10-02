@@ -10,7 +10,8 @@ Agentica is a small statically typed language with Ruby-like syntax. This file i
 - `#` starts a comment that runs to the end of the line.
 - Calls always use parentheses, even with no arguments: `main()`, `puts("hi")`.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
-- Reserved words: `def struct end if elsif else while for in return true false nil and or not`.
+- Reserved words: `def struct end if elsif else while for in return try true false nil and or not`.
+- Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
 
 Full programs are at the end of this file.
 
@@ -25,6 +26,7 @@ Full programs are at the end of this file.
 | `Nil` | the single value `nil`; the result of functions that return nothing |
 | `List[T]` | homogeneous, immutable, indexed from 0 |
 | `Map[K, V]` | homogeneous, immutable; `K` is `Int` or `String`; keeps insertion order |
+| `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
@@ -88,7 +90,7 @@ return count
 - Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value).
 - An empty `[]` or `{}` needs a known type: an annotation, a parameter, a field, or the function result. A non-empty list needs elements of one type.
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
-- Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed.
+- Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
 - Function call `f(a, b)` with positional arguments. Builtin module call `String.upcase(s)`.
 
 Operators, from highest to lowest precedence:
@@ -96,7 +98,7 @@ Operators, from highest to lowest precedence:
 | Level | Operators |
 |---|---|
 | 1 | call, `.field`, `[index]`, `( )` |
-| 2 | unary `-`, `not` |
+| 2 | unary `-`, `not`, `try` |
 | 3 | `*` `/` `%` |
 | 4 | `+` `-` |
 | 5 | `<` `<=` `>` `>=` |
@@ -114,7 +116,7 @@ Operators, from highest to lowest precedence:
 
 ## Builtin functions
 
-`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `IO`, and `System` are reserved.
+`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, and `System` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -136,6 +138,8 @@ String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
+String.to_int(s: String) -> Result[Int]
+String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int               # halts on bad text
 String.to_float!(s: String) -> Float           # halts on bad text
 
@@ -143,16 +147,56 @@ IO.puts(value: String) -> Nil
 IO.print(value: String) -> Nil                 # no newline
 IO.warn(value: String) -> Nil                  # standard error
 IO.inspect(value: T) -> T                      # prints a debug form, returns the value
-IO.gets() -> String                            # next line; halts at end of input
+IO.gets() -> Result[String]                   # ok(line) or error at EOF
+IO.gets!() -> String                          # next line; halts at end of input
 IO.read() -> String
 IO.eof?() -> Bool
 System.args() -> List[String]
 System.exit(code: Int) -> Nil
 ```
 
-- A `?` or `!` suffix belongs to a function name only when `(` follows right away: `String.contains?(a, b)`. By convention `?` means the function returns `Bool`, and `!` means it halts the run on failure.
+- A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
 - Lists have no append or concatenation function. To build a list, write a literal; to change a map, use `Map.put`.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
+
+## Result and try
+
+```text
+ok(value: T) -> Result[T]
+error(message: String) -> Result[T]
+Result.ok?(r: Result[T]) -> Bool
+Result.unwrap!(r: Result[T]) -> T
+Result.unwrap_or(r: Result[T], default: T) -> T
+Result.message(r: Result[T]) -> String
+```
+
+- `ok(1)` infers `Result[Int]`. An expected `Result[T]` checks the payload against T, even for `ok([])` or `ok({})`.
+- `error("bad")` needs an expected Result type from an annotation, an existing binding, a return, argument, field, or typed container element. `r = error("bad")` alone is `CHECK-RESULT-TYPE`; write `r: Result[Int] = error("bad")`.
+- `Result.unwrap!` passes its expected output T into the operand as `Result[T]`; errors halt with `RUNTIME-UNWRAP-ERROR` at that call. `Result.unwrap_or` uses expected T or infers it from the default; both arguments always run left to right, even on success.
+- `Result.ok?` and `Result.message` require a known Result argument; they cannot infer a bare error's payload type. `Result.message` is the stored error message or `""` for a success.
+- `ok(false)` and `ok(nil)` are successes. Results can nest and contain lists/maps/structs; they have no equality, direct fields, or indexing. `IO.inspect` prints recursive `ok(...)` / `error(...)` forms and returns its argument.
+- Lists/maps still infer from the first element. `[ok(1), error("bad")]` infers; the reverse order needs an annotation.
+- Non-bang conversions use the same signed-decimal syntax and 64-bit integer bounds as bang forms, but invalid text/overflow return errors. `IO.gets` returns a line without LF/CR/CRLF; a blank line is `ok("")`, not EOF. Unrelated runtime errors are not converted to Results.
+- `try` evaluates its Result operand once: success produces the payload; an error returns from the current function. Only a function returning Result may use it, but operand and enclosing success types may differ. It binds like unary `not`; use parentheses for a larger operand. Expected output T supplies `Result[T]` to the operand; the function return type alone does not infer that payload. Success paths still need explicit returns.
+
+```ruby
+def read_age(text: String) -> Result[Int]
+  age = try String.to_int(text)
+  return ok(age)
+end
+
+def main() -> Nil
+  age = read_age("bad")
+  if not Result.ok?(age)
+    puts(Result.message(age))
+  end
+  puts(String.from_int(Result.unwrap_or(age, 0)))
+end
+```
+
+`agentica help NAME --json` describes a builtin's signature, parameters, arity, effects, and behavior without a program file. Unknown names exit 2. Effects are informational, not permissions.
+
+`agentica --max-steps N program.agc` limits execution to N expression/statement entries, counting repeated loop conditions. N must be positive; runs are unlimited by default. Exhaustion is `RUNTIME-STEP-LIMIT`, the counter resets each run, and checking never spends steps. This is not a blocking-I/O timeout.
 
 ## Diagnostics
 
@@ -181,7 +225,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING` | duplicate declaration, shadowing, annotation on an existing name |
 | `CHECK-ARITY` | wrong number of arguments |
 | `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD` | struct construction fields |
-| `CHECK-EMPTY-LIST-TYPE` | an empty `[]` or `{}` with no expected type |
+| `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type |
+| `CHECK-RESULT-TYPE` | an error constructor without an expected Result type |
+| `CHECK-TRY-CONTEXT` | try in a function not returning Result |
 | `CHECK-MISSING-RETURN` | a path without `return` in a non-`Nil` function |
 | `CHECK-MAIN` | missing or wrong `main` |
 | `CHECK-NOT-A-STRUCT`, `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | field access on a non-struct, index on a non-list/map, `for` over a non-list |
@@ -191,7 +237,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text |
-| `RUNTIME-END-OF-INPUT` | `IO.gets` with no input left |
+| `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
+| `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |
+| `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
 
 ## Complete programs

@@ -1,6 +1,7 @@
 #lang racket
 
 (require json
+         "builtins.rkt"
          "checker.rkt"
          "diagnostic.rkt"
          "evaluator.rkt"
@@ -11,19 +12,49 @@
 (module+ main
   (define dump? #f)
   (define style 'plain)
+  (define max-steps #f)
+  ;; Only help has a documented trailing option; program args stay untouched.
+  (define supplied (vector->list (current-command-line-arguments)))
+  (define options
+    (if (and (pair? supplied) (equal? (car supplied) "help")
+             (equal? (last supplied) "--json"))
+        (cons "--json" (drop-right supplied 1))
+        supplied))
   (define raw-arguments
     (command-line
      #:program "agentica"
+     #:argv (list->vector options)
      #:once-each
+     [("--max-steps") count "limit execution to N expression/statement entries"
+      (define parsed (string->number count))
+      (unless (and (regexp-match? #px"^[0-9]+$" count) (exact-positive-integer? parsed))
+        (eprintf "agentica: --max-steps needs a positive integer\n")
+        (exit 2))
+      (set! max-steps parsed)]
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
      [("--ai") "print diagnostics as compact text for an agent" (set! style 'ai)]
      [("--json") "print diagnostics as one JSON object" (set! style 'json)]
      #:args arguments
      arguments))
+  (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
+    (unless (= (length raw-arguments) 2)
+      (eprintf "usage: agentica help NAME --json\n")
+      (exit 2))
+    (define name (cadr raw-arguments))
+    (define entry (builtin-ref name))
+    (unless entry
+      (eprintf "agentica: unknown builtin ~a~a\n" name
+               (let ([suggestion (did-you-mean name (hash-keys builtins))])
+                 (if suggestion (string-append "; " suggestion) "")))
+      (exit 2))
+    (displayln (if (eq? style 'json)
+                   (jsexpr->string (builtin->jsexpr entry))
+                   (format "~a\n~a" (builtin-signature entry) (builtin-description entry))))
+    (exit 0))
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
   (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--dump] [--ai|--json] [check] <source-file> [args...]\n")
+    (eprintf "usage: agentica [--dump] [--ai|--json] [--max-steps N] [check] <source-file> [args...]\n       agentica help NAME [--json]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -54,7 +85,7 @@
     [check-only? (displayln (if (eq? style 'json) "{\"ok\":true}" "check ok"))]
     [dump? (pretty-print checked)]
     [else
-     (define result (evaluate checked #:args program-args))
+     (define result (evaluate checked #:args program-args #:max-steps max-steps))
      (cond
        [(diagnostic? result) (fail! result)]
        [(exit-code? result) (exit (exit-code-code result))])]))
