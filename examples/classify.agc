@@ -8,6 +8,11 @@ def classify(age: Int) -> String
   end
 end
 
+def classify_text(text: String) -> Result[String]
+  age = try String.to_int(text)
+  return ok(classify(age))
+end
+
 def main() -> Nil
-  puts(classify(25))
+  puts(Result.unwrap!(classify_text("25")))
 end

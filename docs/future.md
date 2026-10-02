@@ -4,18 +4,12 @@ Status: proposal. Nothing in this document is implemented or normative. The lang
 
 Working rule: when a phase of the [`roadmap.md`](roadmap.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-## 1. Planned changes to the current library
-
-- `IO.gets() -> Result[String]` and `IO.gets!() -> String`. Today `IO.gets` returns `String` and fails with `RUNTIME-END-OF-INPUT`; the change is settled in phase 5d2 so we do not teach a form that 5e would break.
-- `CHECK-EMPTY-MAP-TYPE` for a `{}` with no expected type. Today it uses `CHECK-EMPTY-LIST-TYPE`.
-- The non-`!` forms of `String.to_int` and `String.to_float` return `Result[...]` (phase 5e).
-
 ## 2. Enums and pattern matching
 
-This section documents the direction already discussed. It is not part of the initial core and requires extending the lexer, parser, checker, and evaluator.
+This section documents the direction already discussed. It is not part of the initial core and requires extending the lexer, parser, checker, and evaluator. The illustrative Outcome enum is separate from the already implemented builtin Result[T] with String errors.
 
 ```ruby
-enum Result[T, E]
+enum Outcome[T, E]
   Ok(T)
   Err(E)
 end
@@ -25,12 +19,12 @@ enum Option[T]
   None
 end
 
-def label(result: Result[String, String]) -> String
+def label(result: Outcome[String, String]) -> String
   case result
   in Ok(value)
     return value
-  in Err(error)
-    return error
+  in Err(message)
+    return message
   end
 end
 ```
@@ -67,7 +61,6 @@ The expression grammar must also be extended to build variants, for example `Ok(
 | Extension | Direction | Pending decisions |
 |---|---|---|
 | Interpolation | `"Hello #{user.name}"` | Escapes, allowed expressions, and conversion to text |
-| Error propagation | `value = try find_user(42)` | Phase 5e: `try` returns the error from the current function, which must return `Result[...]` |
 | Function generics | Reuse functions with different types | Syntax, inference, and constraints |
 | Closures and methods | Better ergonomics | Capture, representation, and resolution |
 | Modules | Split programs into files | Import, visibility, and cycles |
@@ -75,7 +68,7 @@ The expression grammar must also be extended to build variants, for example `Ok(
 | Async and fibers | Suspend execution on I/O; initially one thread | API, cancellation, and error propagation |
 | Actors | Own messages and mailboxes | Syntax, isolation, shared values, and supervision |
 
-## 4. Standard library and function values (phases 5e–5m)
+## 4. Standard library and function values (phases 5f–5m)
 
 Fixed here so each roadmap phase can take it as its specification.
 
@@ -91,8 +84,8 @@ primary          = (* …core forms, plus: *)
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
-- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Result[T]` (the error is always `String`), `Json`, `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
-- **Names reserved when each phase starts:** `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP`, and `HTTP`.
+- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Json`, `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
+- **Names reserved when each phase starts:** `Fn`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP`, and `HTTP`.
 
 ```ruby
 def double(n: Int) -> Int
@@ -113,7 +106,7 @@ Programs that phase must reject:
 ```ruby
 x = User               # A type is valid only as an argument of JSON.decode or JSON.schema.
 f = &missing           # &name requires a declared function.
-ok = done?             # The ? suffix exists only when followed by "(".
+ready = done?          # A function name is not a value; use &name when phase 5j lands.
 ```
 
 ## 5. `Enum` module and list building
@@ -189,7 +182,7 @@ Besides `Enum`, function values (5j), and the builtins catalog (5e), these are m
 - **Conversion:** `Int` to `Float` and back (for example `Float.from_int`, `Float.to_int`).
 - **Strings:** the character at an index, a character code, `reverse`, `index_of`.
 - **Maps and sets:** `Map.get` with a default, `Map.delete`, `Map.values` (above); a set type, or `Map[T, Bool]` as the documented way; stack, queue, and priority queue.
-- **Input:** `IO.gets` halts at end of input, so programs use `IO.eof?`; `Result` and `try` (5e) fix it. A helper for lines of integers.
+- **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
 - **Structures:** tuples or pairs, and nested lists and matrices (check that `List[List[Int]]` works end to end).
 - **Performance:** every `Map.put` and list update copies, so a loop of 10^5 steps is O(n²). Needs a persistent vector and map ("Faster maps" in the roadmap).
 - **To verify:** the recursion depth the evaluator allows, and the integer range (arbitrary precision today in Racket; most challenges assume 64 bits).

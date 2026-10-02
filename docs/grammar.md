@@ -18,10 +18,10 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Signatures | Explicit return type and required annotations |
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
-| Names | A `?` (predicate) or `!` (version that halts the run) suffix on functions, only when followed by `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, and `System` |
+| Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, and `Result` |
 
-Enums, `Result`, `Option`, interpolation, function values, JSON, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
+Enums, `Option`, interpolation, function values, JSON, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
 ## 3. A core program
 
@@ -64,7 +64,7 @@ The executable starts by calling `main()`. The core has no executable statements
 - Spaces and tabs separate tokens; they have no structural meaning.
 - A newline separates statements, except inside `(...)`, `[...]`, and `{...}`.
 - CRLF is normalized to LF. A comment does not remove the newline that follows it.
-- The lexer emits one `NL` token per newline outside delimiters, except that it groups consecutive blank lines; a comment line produces its own `NL`. The parser ignores the extra `NL` tokens between declarations and statements.
+- The lexer emits one `NL` token for each LF or CRLF outside delimiters, including blank and comment lines. The parser ignores extra `NL` tokens between declarations and statements.
 - If the file does not end with a newline, the lexer adds one before `EOF`.
 - `;`, backslash continuation, and expressions that continue implicitly after an operator are not supported.
 
@@ -85,15 +85,15 @@ names = [
 Reserved words of the core:
 
 ```text
-def struct end if elsif else while for in return
+def struct end if elsif else while for in return try
 true false nil and or not
 ```
 
 Future extensions will introduce more reserved words; they are not available.
 
-The `?` or `!` suffix is part of the `NAME` only when the next character is `(`: `contains?(`, `to_int!(`. So `a!=b` is still `a != b`, and `x?` or `x!` without parentheses are not names. By convention, `?` marks a predicate that returns `Bool`, and `!` marks the version that halts the run with an error instead of returning a `Result`. Variables, fields, and parameters cannot have the suffix.
+A trailing `?` or `!` is part of a lowercase `NAME`, regardless of the next parenthesis or whitespace: `contains? (s, part)` is valid. `!` is not a suffix when followed by `=`, so `a!=b` still means `a != b`. By convention, `?` marks a predicate that returns `Bool`, and `!` marks the version that halts the run with an error instead of returning a `Result`. Variables, fields, and parameters cannot have the suffix.
 
-The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `IO`, and `System` are reserved and cannot be redefined.
+The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, and `System` are reserved and cannot be redefined. `ok` and `error` remain NAME tokens, but cannot be declared as user functions, variables, parameters, loop variables, or fields (`CHECK-REDEFINED-NAME`).
 
 ### Literals
 
@@ -132,7 +132,7 @@ field_decl       = NAME, ":", type, NL ;
 type             = TYPE_NAME, [ "[", type, { ",", type }, "]" ] ;
 ```
 
-The parser allows type applications such as `List[Int]`. The checker restricts the core to primitive types, structs, `List[T]`, and `Map[K, V]`: a form being syntactically valid does not mean the type exists. There are no user-declared type parameters in the core.
+The parser allows type applications such as `List[Int]`. The checker restricts the core to primitive types, structs, `List[T]`, `Map[K, V]`, and `Result[T]`: a form being syntactically valid does not mean the type exists. There are no user-declared type parameters in the core.
 
 Struct and function declarations appear only at the top level. There are no methods, classes, inheritance, closures, or nested functions.
 
@@ -173,7 +173,7 @@ additive_expr    = multiplicative_expr,
                    { ( "+" | "-" ), multiplicative_expr } ;
 multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
-unary_expr       = ( "-" | "not" ), unary_expr | postfix_expr ;
+unary_expr       = ( "-" | "not" | "try" ), unary_expr | postfix_expr ;
 postfix_expr     = primary, { ".", NAME | "[", expression, "]" } ;
 
 primary          = literal
@@ -202,7 +202,7 @@ Calls in the core are to named functions, and `user.method()` is not supported. 
 | Precedence, high to low | Operations |
 |---|---|
 | 1 | Named call, field `.`, index `[]`, grouping |
-| 2 | Unary `-`, `not` |
+| 2 | Unary `-`, `not`, `try` |
 | 3 | `*`, `/`, `%` |
 | 4 | `+`, `-` |
 | 5 | `<`, `<=`, `>`, `>=` |
@@ -227,6 +227,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Nil` | A single value, `nil`; also marks a return without a result |
 | `List[T]` | Homogeneous, immutable list; `Int` indexes, from zero |
 | `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
+| `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -286,7 +287,7 @@ All fields of a constructor are required and given exactly once. The order of na
 user = User(age: 25, name: "Ana")
 ```
 
-List indexes must be between zero and length minus one; a negative or out-of-range index is an error. `for` iterates over `List[T]` in order. Slices and string indexing are not supported in the core.
+List indexes must be between zero and length minus one; a negative or out-of-range index is an error. Indexing costs O(n) in this interpreter; prefer `for` for traversal rather than repeated indexed access. `for` iterates over `List[T]` in order. Slices and string indexing are not supported in the core.
 
 ### Maps
 
@@ -298,7 +299,7 @@ apples = stock["apple"]
 more = Map.put(stock, "kiwi", 7)
 ```
 
-- A literal uses braces and `key: value`; it allows several lines and a trailing comma. An empty `{}` needs an expected type, like `[]`.
+- A literal uses braces and `key: value`; it allows several lines and a trailing comma. An empty `{}` needs an expected type, like `[]`; without it the diagnostic is `CHECK-EMPTY-MAP-TYPE` (`CHECK-EMPTY-LIST-TYPE` is only for `[]`).
 - `m[key]` returns the value. The key must have type `K`. A missing key is a runtime error.
 - If a literal repeats a key, the last one wins.
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
@@ -338,23 +339,61 @@ String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
+String.to_int(s: String) -> Result[Int]
+String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
 ```
 
-The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns the next line without its terminator (LF, CR, or CRLF) and fails with `RUNTIME-END-OF-INPUT` at the end of input; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
+The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns `ok(line)` without its terminator (LF, CR, or CRLF), or an error value at EOF. A blank line is `ok("")`, not EOF. `IO.gets!` returns the line directly and halts with `RUNTIME-END-OF-INPUT` at EOF; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 
 ```text
 IO.puts(value: String) -> Nil
 IO.print(value: String) -> Nil
 IO.warn(value: String) -> Nil
 IO.inspect(value: T) -> T
-IO.gets() -> String
+IO.gets() -> Result[String]
+IO.gets!() -> String
 IO.read() -> String
 IO.eof?() -> Bool
 System.args() -> List[String]
 System.exit(code: Int) -> Nil
 ```
+
+### Result and propagation
+
+```text
+ok(value: T) -> Result[T]
+error(message: String) -> Result[T]
+Result.ok?(r: Result[T]) -> Bool
+Result.unwrap!(r: Result[T]) -> T
+Result.unwrap_or(r: Result[T], default: T) -> T
+Result.message(r: Result[T]) -> String
+```
+
+- `Result[T]` is builtin, not a user enum. It can nest and contain any valid payload type. Results have no equality, fields, or indexing.
+- `ok(1)` infers `Result[Int]`. An expected `Result[T]` checks the payload against `T`, including empty lists/maps.
+- `error("bad")` needs an expected Result type from an annotation, existing binding, parameter, field, return, or typed container element. Otherwise it is `CHECK-RESULT-TYPE`; no success type is guessed.
+- `Result.unwrap!` passes its expected output type `T` to the operand as `Result[T]`. On an error it halts with `RUNTIME-UNWRAP-ERROR`, the stored message, and the unwrap call span.
+- `Result.unwrap_or` uses the expected output type, or infers it from the default. Both arguments run eagerly, left to right, even for a success.
+- `Result.ok?` and `Result.message` need an argument whose Result type is known. A success's message is `""`. `ok(false)` and `ok(nil)` are successes.
+- Container inference still uses the first element: `[ok(1), error("bad")]` infers, but the reverse order needs an annotation.
+- Non-bang String conversions use the same signed-decimal syntax and integer bounds as bang forms, but invalid text/overflow return errors rather than halting. Unrelated runtime failures are not converted to Results.
+- `IO.inspect` prints recursive `ok(...)` / `error(...)` forms and returns its argument. Error values do not print diagnostics or change the run's exit code.
+- `try` has unary precedence: it evaluates one `Result[T]` operand once and produces `T` on success, or returns its error from the current function. Only a function returning `Result[...]` may use it (`CHECK-TRY-CONTEXT` otherwise). Operand and enclosing success types may differ. An expected expression type `T` supplies `Result[T]` to the operand; the enclosing return type alone does not infer it. A success still needs an explicit return from the function.
+
+```ruby
+def read_age(text: String) -> Result[Int]
+  age = try String.to_int(text)
+  return ok(age)
+end
+```
+
+### Builtin discovery and execution budget
+
+`agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
+
+`agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The counter resets per run. This is not a wall-clock or blocking-I/O timeout.
 
 Files, JSON, networking, and richer conversions need a later API; see [`future.md`](future.md).
 

@@ -2,6 +2,7 @@
 
 (require (except-in rackunit check)
          "../src/checker.rkt"
+         "../src/builtins.rkt"
          "../src/diagnostic.rkt"
          "../src/evaluator.rkt"
          "../src/lexer.rkt"
@@ -24,7 +25,7 @@
     (error 'evaluator-test "unexpected diagnostic: ~a" (format-diagnostic result)))
   output)
 
-(define (run-io text [input ""] [arguments '()])
+(define (run-io text [input ""] [arguments '()] #:max-steps [max-steps #f])
   (define lexed (lex (source "test.agc" text)))
   (define parsed (if (diagnostic? lexed) lexed (parse lexed)))
   (define checked (if (diagnostic? parsed) parsed (check parsed)))
@@ -36,7 +37,8 @@
                            #:in (open-input-string input)
                            #:out out
                            #:err err
-                           #:args arguments))
+                           #:args arguments
+                           #:max-steps max-steps))
   (values (get-output-string out) (get-output-string err) result))
 
 (define (diagnostic-of text)
@@ -122,31 +124,6 @@
     (check-equal? (diagnostic-code missing) 'RUNTIME-KEY-NOT-FOUND)
     (check-equal? (position-of missing) '(3 9)))
 
-  (test-case "the String module"
-    (check-equal? (output-of
-                   (main-with
-                    (string-append
-                     "  puts(String.from_int(String.length(\"hola\")))\n"
-                     "  puts(String.upcase(\"hola\") + String.downcase(\"HOLA\"))\n"
-                     "  puts(String.trim(\"  x  \"))\n"
-                     "  puts(String.join(String.split(\"a,b,c\", \",\"), \"-\"))\n"
-                     "  if String.contains?(\"hola\", \"ol\") and String.starts_with?(\"hola\", \"ho\") and String.ends_with?(\"hola\", \"la\")\n"
-                     "    puts(\"found\")\n"
-                     "  end\n"
-                     "  puts(String.replace(\"aXbX\", \"X\", \"-\"))\n"
-                     "  puts(String.slice(\"hola\", 1, 2))\n"
-                     "  puts(String.join(String.split(\"ñ😀\", \"\"), \"|\"))\n"
-                     "  puts(String.from_float(1.5))\n"
-                     "  puts(String.from_int(String.to_int!(\"42\")))\n"
-                     "  puts(String.from_float(String.to_float!(\"1.25\")))")))
-                  "4\nHOLAhola\nx\na-b-c\nfound\na-b-\nol\nñ|😀\n1.5\n42\n1.25\n"))
-
-  (test-case "String.length and String.slice count characters, not bytes"
-    (check-equal? (output-of
-                   (main-with
-                    "  puts(String.from_int(String.length(\"ñ😀\")))\n  puts(String.slice(\"ñ😀x\", 1, 2))"))
-                  "2\n😀x\n"))
-
   (test-case "String.slice and number conversions fail with located diagnostics"
     (define past-end (diagnostic-of (main-with "  x = String.slice(\"abc\", 2, 5)")))
     (check-equal? (diagnostic-code past-end) 'RUNTIME-INDEX-OUT-OF-RANGE)
@@ -202,21 +179,21 @@
     (check-equal? result 'nil)
     (check-equal? output "Task(title: \"a\", done: true)\n{\"k\": 1}\n\"hi\"\nnil\n"))
 
-  (test-case "IO.gets reads lines, IO.read drains, and IO.eof? peeks"
+  (test-case "IO.gets! reads lines, IO.read drains, and IO.eof? peeks"
     (define-values (output err result)
       (run-io (main-with
                (string-append
                 "  if IO.eof?()\n    puts(\"empty\")\n  end\n"
-                "  puts(IO.gets())\n"
-                "  puts(IO.gets())\n"
+                "  puts(IO.gets!())\n"
+                "  puts(IO.gets!())\n"
                 "  puts(IO.read())\n"
                 "  if IO.eof?()\n    puts(\"done\")\n  end\n"))
               "one\r\ntwo\rrest\n"))
     (check-equal? result 'nil)
     (check-equal? output "one\ntwo\nrest\n\ndone\n"))
 
-  (test-case "IO.gets at end of input is a located diagnostic"
-    (define-values (output err result) (run-io (main-with "  x = IO.gets()") ""))
+  (test-case "IO.gets! at end of input is a located diagnostic"
+    (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))
     (check-true (diagnostic? result))
     (check-equal? (diagnostic-code result) 'RUNTIME-END-OF-INPUT)
     (check-equal? (position-of result) '(2 7)))
@@ -229,6 +206,136 @@
     (define-values (exit-output exit-err result) (run-io (main-with "  System.exit(3)")))
     (check-true (exit-code? result))
     (check-equal? (exit-code-code result) 3))
+
+  (test-case "every catalog entry is typed and dispatched through a real program"
+    ;; Independent examples and expected output, not signatures copied from the catalog.
+    (define samples
+      '(("puts" "puts(\"x\")" "x\nnil\n")
+        ("IO.puts" "IO.puts(\"x\")" "x\nnil\n")
+        ("IO.print" "IO.print(\"x\")" "xnil\n")
+        ("IO.warn" "IO.warn(\"x\")" "nil\n")
+        ("IO.inspect" "IO.inspect(7)" "7\n7\n")
+        ("IO.gets" "IO.gets()" "ok(\"line\")\n")
+        ("IO.gets!" "IO.gets!()" "\"line\"\n")
+        ("IO.read" "IO.read()" "\"line\\n\"\n")
+        ("IO.eof?" "IO.eof?()" "false\n")
+        ("System.args" "System.args()" "[\"arg\"]\n")
+        ("System.exit" "System.exit(0)" "")
+        ("Map.has_key?" "Map.has_key?({\"k\": 1}, \"k\")" "true\n")
+        ("Map.keys" "Map.keys({\"k\": 1})" "[\"k\"]\n")
+        ("Map.size" "Map.size({\"k\": 1})" "1\n")
+        ("Map.put" "Map.put({\"k\": 1}, \"k\", 2)" "{\"k\": 2}\n")
+        ("List.size" "List.size([1, 2])" "2\n")
+        ("String.length" "String.length(\"ñ😀\")" "2\n")
+        ("String.upcase" "String.upcase(\"a\")" "\"A\"\n")
+        ("String.downcase" "String.downcase(\"A\")" "\"a\"\n")
+        ("String.trim" "String.trim(\" a \")" "\"a\"\n")
+        ("String.split" "String.split(\"ñ😀\", \"\")" "[\"ñ\", \"😀\"]\n")
+        ("String.join" "String.join([\"a\", \"b\"], \",\")" "\"a,b\"\n")
+        ("String.contains?" "String.contains?(\"abc\", \"b\")" "true\n")
+        ("String.starts_with?" "String.starts_with?(\"abc\", \"a\")" "true\n")
+        ("String.ends_with?" "String.ends_with?(\"abc\", \"c\")" "true\n")
+        ("String.replace" "String.replace(\"aXb\", \"X\", \"-\")" "\"a-b\"\n")
+        ("String.slice" "String.slice(\"ñ😀x\", 1, 2)" "\"😀x\"\n")
+        ("String.from_int" "String.from_int(7)" "\"7\"\n")
+        ("String.from_float" "String.from_float(1.5)" "\"1.5\"\n")
+        ("String.to_int" "String.to_int(\"7\")" "ok(7)\n")
+        ("String.to_float" "String.to_float(\"1.5\")" "ok(1.5)\n")
+        ("String.to_int!" "String.to_int!(\"7\")" "7\n")
+        ("String.to_float!" "String.to_float!(\"1.5\")" "1.5\n")
+        ("ok" "ok(7)" "ok(7)\n")
+        ("error" "r" "error(\"bad\")\n")
+        ("Result.ok?" "Result.ok?(ok(7))" "true\n")
+        ("Result.unwrap!" "Result.unwrap!(ok(7))" "7\n")
+        ("Result.unwrap_or" "Result.unwrap_or(r, 7)" "7\n")
+        ("Result.message" "Result.message(r)" "\"bad\"\n")))
+    (for ([name (in-list (sort (hash-keys builtins) string<?))])
+      (define sample (assoc name samples))
+      (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
+      (define-values (out err result)
+        (run-io (main-with (format "  r: Result[Int] = error(\"bad\")\n  IO.inspect(~a)" (cadr sample)))
+                "line\n" '("arg")))
+      (check-equal? out (caddr sample) name)
+      (check-equal? err (if (equal? name "IO.warn") "x\n" "") name)
+      (if (equal? name "System.exit")
+          (check-equal? (exit-code-code result) 0)
+          (check-equal? result 'nil name))))
+
+  (test-case "Result values, false/nil successes, and recoverable conversions"
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  IO.inspect(ok(false))\n  IO.inspect(ok(nil))\n"
+        "  r: Result[Int] = error(\"bad\")\n"
+        "  IO.inspect(r)\n  IO.inspect(Result.ok?(r))\n"
+        "  IO.inspect(Result.unwrap!(ok(false)))\n"
+        "  IO.inspect(Result.unwrap!(ok(nil)))\n"
+        "  IO.inspect(Result.message(ok(1)))\n  puts(Result.message(r))\n"
+        "  IO.inspect(Result.unwrap_or(r, 7))\n"
+        "  IO.inspect(String.to_int(\"-9223372036854775808\"))\n"
+        "  IO.inspect(String.to_int(\"9223372036854775807\"))\n"
+        "  IO.inspect(Result.ok?(String.to_int(\"9223372036854775808\")))\n"
+        "  IO.inspect(Result.ok?(String.to_int(\"-9223372036854775809\")))\n"
+        "  IO.inspect(Result.ok?(String.to_int(\"1.5\")))\n"
+        "  IO.inspect(Result.ok?(String.to_int(\"#x10\")))\n"
+        "  IO.inspect(String.to_float(\"+1.25\"))\n"
+        "  IO.inspect(Result.ok?(String.to_float(\"1/2\")))\n"
+        "  IO.inspect(Result.ok?(String.to_float(\"1+2i\")))\n"
+        "  puts(\"continued\")")))
+     (string-append "ok(false)\nok(nil)\nerror(\"bad\")\nfalse\nfalse\nnil\n\"\"\nbad\n7\n"
+                    "ok(-9223372036854775808)\nok(9223372036854775807)\n"
+                    "false\nfalse\nfalse\nfalse\nok(1.25)\nfalse\nfalse\ncontinued\n"))
+    (define problem (diagnostic-of (main-with "  r: Result[Int] = error(\"bad\")\n  x = Result.unwrap!(r)")))
+    (check-equal? (diagnostic-code problem) 'RUNTIME-UNWRAP-ERROR)
+    (check-equal? (position-of problem) '(3 7)))
+
+  (test-case "recoverable IO.gets distinguishes blank lines and EOF"
+    (define-values (out err result)
+      (run-io (main-with "  for n in [1, 2, 3, 4, 5, 6]\n    r = IO.gets()\n    IO.inspect(Result.ok?(r))\n    IO.inspect(Result.unwrap_or(r, \"EOF\"))\n  end")
+              "\none\rtwo\r\nthree\nfour"))
+    (check-equal? result 'nil)
+    (check-equal? err "")
+    (check-equal? out "true\n\"\"\ntrue\n\"one\"\ntrue\n\"two\"\ntrue\n\"three\"\ntrue\n\"four\"\nfalse\n\"EOF\"\n"))
+
+  (test-case "try evaluates once and propagates from the current function only"
+    (check-equal?
+     (output-of
+      (string-append
+       "def operand() -> Result[Int]\n  puts(\"operand\")\n  return error(\"bad\")\nend\n"
+       "def later() -> Int\n  puts(\"later\")\n  return 9\nend\n"
+       "def pair(a: Int, b: Int) -> Int\n  return a + b\nend\n"
+       "def propagate() -> Result[String]\n"
+       "  for n in [1]\n    while true\n"
+       "      value = pair(try operand(), later())\n"
+       "      return ok(String.from_int(value))\n    end\n  end\n"
+       "  return ok(\"empty\")\nend\n"
+       "def success() -> Result[String]\n  n = try ok(7)\n  return ok(String.from_int(n))\nend\n"
+       "def main() -> Nil\n  local = \"caller\"\n"
+       "  r = propagate()\n  puts(Result.message(r))\n  puts(local)\n"
+       "  puts(Result.unwrap!(success()))\nend\n"))
+     "operand\nbad\ncaller\n7\n"))
+
+  (test-case "unwrap_or evaluates its default eagerly after its Result"
+    (check-equal?
+     (output-of
+      (string-append
+       "def first() -> Result[Int]\n  puts(\"first\")\n  return ok(1)\nend\n"
+       "def second() -> Int\n  puts(\"second\")\n  return 2\nend\n"
+       (main-with "  IO.inspect(Result.unwrap_or(first(), second()))")))
+     "first\nsecond\n1\n"))
+
+  (test-case "step budgets bound empty infinite loops and reset each run"
+    (define looping (main-with "  while true\n  end"))
+    (for ([iteration (in-range 2)])
+      (define-values (out err result) (run-io looping #:max-steps 10))
+      (check-equal? out "")
+      (check-equal? err "")
+      (check-equal? (diagnostic-code result) 'RUNTIME-STEP-LIMIT)
+      (check-equal? (position-of result) '(2 9)))
+    (define-values (out err result) (run-io (main-with "  puts(\"done\")") #:max-steps 3))
+    (check-equal? result 'nil)
+    (check-equal? out "done\n"))
 
   (test-case "runtime errors are located diagnostics"
     (define overflow (diagnostic-of (main-with "  x = 9223372036854775807 + 1")))

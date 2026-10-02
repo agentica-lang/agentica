@@ -3,7 +3,7 @@ def main() -> Nil
   sum = 0
   largest = 0
   while not IO.eof?()
-    n = String.to_int!(String.trim(IO.gets()))
+    n = String.to_int!(String.trim(IO.gets!()))
     if count == 0 or n > largest
       largest = n
     end

@@ -45,7 +45,7 @@
                     comma colon dot assign plus minus multiply divide modulo
                     less greater NL EOF)))
 
-  (test-case "a trailing ? or ! joins the name only before a parenthesis"
+  (test-case "function suffixes do not depend on parentheses or whitespace"
     (define qualified (lex-text "String.contains?(s, p)"))
     (check-equal? (kinds qualified)
                   '(type-name dot name left-paren name comma name right-paren NL EOF))
@@ -53,8 +53,13 @@
     (define bang (lex-text "x = to_int!(\"1\")"))
     (check-equal? (token-lexeme (list-ref bang 2)) "to_int!")
     (check-equal? (kinds (lex-text "a!=b")) '(name not-equal name NL EOF))
-    (check-equal? (diagnostic-code (lex-text "x?")) 'LEX-UNEXPECTED-CHAR)
-    (check-equal? (diagnostic-code (lex-text "x!")) 'LEX-UNEXPECTED-CHAR))
+    (check-equal? (map token-lexeme (take (lex-text "ready? save! a!=b") 5))
+                  '("ready?" "save!" "a" "!=" "b"))
+    (check-equal? (token-lexeme (list-ref (lex-text "String.contains? (s, p)") 2)) "contains?"))
+
+  (test-case "each blank or comment newline emits NL without changing parsing"
+    (check-equal? (kinds (lex-text "x\n\n# comment\ny"))
+                  '(name NL NL NL name NL EOF)))
 
   (test-case "strings decode only the specified escapes"
     (define result (lex-text "\"quote: \\\" slash: \\\\ newline: \\n return: \\r tab: \\t\""))

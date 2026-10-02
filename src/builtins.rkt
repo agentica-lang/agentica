@@ -1,0 +1,102 @@
+#lang racket
+
+(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string did-you-mean)
+
+;; Signatures are data; generic rules and runtime implementations stay in their stages.
+(struct builtin (name parameters result rule implementation effects description) #:transparent)
+
+(define (type->string type)
+  (cond
+    [(symbol? type) (symbol->string type)]
+    [(eq? (car type) 'Struct) (cadr type)]
+    [else (format "~a[~a]" (car type) (string-join (map type->string (cdr type)) ", "))]))
+
+(define builtins
+  (for/hash ([row (in-list
+                  '(("puts" ((value String)) Nil #f "puts" (stdout) "Write text and a newline.")
+                    ("IO.puts" ((value String)) Nil #f "puts" (stdout) "Write text and a newline.")
+                    ("IO.print" ((value String)) Nil #f "IO.print" (stdout) "Write text without a newline.")
+                    ("IO.warn" ((value String)) Nil #f "IO.warn" (stderr) "Write text and a newline to stderr.")
+                    ("IO.inspect" ((value T)) T identity "IO.inspect" (stdout) "Print a stable debug form and return the value.")
+                    ("IO.gets" () (Result String) #f "IO.gets" (stdin) "Read a line as a Result; EOF is an error value.")
+                    ("IO.gets!" () String #f "IO.gets!" (stdin) "Read a line; halt at EOF.")
+                    ("IO.read" () String #f "IO.read" (stdin) "Read all remaining input.")
+                    ("IO.eof?" () Bool #f "IO.eof?" (stdin) "Check whether input is exhausted.")
+                    ("System.args" () (List String) #f "System.args" (process) "Return program arguments.")
+                    ("System.exit" ((code Int)) Nil #f "System.exit" (process) "End the run with an exit code.")
+                    ("Map.has_key?" ((map (Map K V)) (key K)) Bool map-has "Map.has_key?" () "Check whether a key exists.")
+                    ("Map.keys" ((map (Map K V))) (List K) map-keys "Map.keys" () "Return keys in insertion order.")
+                    ("Map.size" ((map (Map K V))) Int map-size "Map.size" () "Count map entries.")
+                    ("Map.put" ((map (Map K V)) (key K) (value V)) (Map K V) map-put "Map.put" () "Return a new map with this entry.")
+                    ("List.size" ((list (List T))) Int list-size "List.size" () "Count list elements.")
+                    ("String.length" ((s String)) Int #f "String.length" () "Count Unicode characters.")
+                    ("String.upcase" ((s String)) String #f "String.upcase" () "Uppercase text.")
+                    ("String.downcase" ((s String)) String #f "String.downcase" () "Lowercase text.")
+                    ("String.trim" ((s String)) String #f "String.trim" () "Trim surrounding whitespace.")
+                    ("String.split" ((s String) (separator String)) (List String) #f "String.split" () "Split text; an empty separator gives characters.")
+                    ("String.join" ((parts (List String)) (separator String)) String #f "String.join" () "Join text elements.")
+                    ("String.contains?" ((s String) (part String)) Bool #f "String.contains?" () "Check for a substring.")
+                    ("String.starts_with?" ((s String) (prefix String)) Bool #f "String.starts_with?" () "Check a prefix.")
+                    ("String.ends_with?" ((s String) (suffix String)) Bool #f "String.ends_with?" () "Check a suffix.")
+                    ("String.replace" ((s String) (from String) (to String)) String #f "String.replace" () "Replace occurrences of text.")
+                    ("String.slice" ((s String) (start Int) (length Int)) String #f "String.slice" () "Read a character range; halt outside bounds.")
+                    ("String.from_int" ((n Int)) String #f "String.from_int" () "Format an integer.")
+                    ("String.from_float" ((x Float)) String #f "String.from_float" () "Format a float.")
+                    ("String.to_int" ((s String)) (Result Int) #f "String.to_int" () "Parse signed decimal Int as a Result.")
+                    ("String.to_float" ((s String)) (Result Float) #f "String.to_float" () "Parse signed decimal Float as a Result.")
+                    ("String.to_int!" ((s String)) Int #f "String.to_int!" () "Parse signed decimal Int; halt on invalid text or overflow.")
+                    ("String.to_float!" ((s String)) Float #f "String.to_float!" () "Parse signed decimal Float; halt on invalid text.")
+                    ("ok" ((value T)) (Result T) ok "ok" () "Construct a successful Result.")
+                    ("error" ((message String)) (Result T) error "error" () "Construct an error; needs an expected Result type.")
+                    ("Result.ok?" ((r (Result T))) Bool result-ok "Result.ok?" () "Check whether a Result succeeded.")
+                    ("Result.unwrap!" ((r (Result T))) T result-unwrap "Result.unwrap!" () "Return the success value; halt on error.")
+                    ("Result.unwrap_or" ((r (Result T)) (default T)) T result-default "Result.unwrap_or" () "Return success or default; both arguments run eagerly.")
+                    ("Result.message" ((r (Result T))) String result-message "Result.message" () "Return an error message, or empty text for success.")))])
+    (values (car row) (apply builtin row))))
+
+(define (builtin-ref name) (hash-ref builtins name #f))
+
+(define (edit-distance a b)
+  (define n (string-length b))
+  (define last-row (build-vector (add1 n) values))
+  (for ([i (in-range 1 (add1 (string-length a)))])
+    (define row (make-vector (add1 n) i))
+    (for ([j (in-range 1 (add1 n))])
+      (vector-set! row j
+                   (min (add1 (vector-ref last-row j))
+                        (add1 (vector-ref row (sub1 j)))
+                        (+ (vector-ref last-row (sub1 j))
+                           (if (char=? (string-ref a (sub1 i)) (string-ref b (sub1 j))) 0 1)))))
+    (vector-copy! last-row 0 row))
+  (vector-ref last-row n))
+
+(define (did-you-mean name candidates)
+  (define limit (if (<= (string-length name) 4) 1 2))
+  (define near
+    (sort (for/list ([candidate (in-list (remove-duplicates candidates))]
+                     #:unless (string=? candidate name)
+                     #:when (<= (edit-distance name candidate) limit))
+            candidate)
+          (lambda (x y)
+            (define dx (edit-distance name x))
+            (define dy (edit-distance name y))
+            (or (< dx dy) (and (= dx dy) (string<? x y))))))
+  (and (pair? near) (format "did you mean \"~a\"?" (car near))))
+
+(define (builtin-signature entry)
+  (format "~a(~a) -> ~a" (builtin-name entry)
+          (string-join
+           (for/list ([parameter (in-list (builtin-parameters entry))])
+             (format "~a: ~a" (car parameter) (type->string (cadr parameter)))) ", ")
+          (type->string (builtin-result entry))))
+
+(define (builtin->jsexpr entry)
+  (hasheq 'name (builtin-name entry)
+          'arity (length (builtin-parameters entry))
+          'parameters (for/list ([parameter (in-list (builtin-parameters entry))])
+                        (hasheq 'name (symbol->string (car parameter))
+                                'type (type->string (cadr parameter))))
+          'result (type->string (builtin-result entry))
+          'signature (builtin-signature entry)
+          'effects (map symbol->string (builtin-effects entry))
+          'description (builtin-description entry)))
