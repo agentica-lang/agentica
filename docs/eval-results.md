@@ -16,6 +16,7 @@ Tokens are input plus output per run. Failing runs are interpreter runs in the a
 | 1 | 2026-10-01 | `grammar` | 15 | 15/15 | 15,944 | 32.2 | 0.40 | $0.005 |
 | 2 | 2026-10-01 | `binary`, plain diagnostics (Firejail) | 15 | 15/15 | 38,740 | 120 | 3.2 | $0.014 |
 | 3 | 2026-10-01 | `binary`, labels, `help`, and suggestions | 15 | 15/15 | 25,733 | 58 | 2.5 | $0.009 |
+| 4 | 2026-10-02 | Same as round 3, prompt also says `agentica --help` lists the options | 15 | 15/15 | 24,574 | 70 | 1.33 | $0.008 |
 
 The round-0 count joins two partial runs. A `binary` round run before the sandbox was fixed (15 runs, 15/15) is discarded: the agents found leftover work directories in `/tmp` that contained the skill (`tests/eval/results/20261001-230301-pi-INVALID`). A smoke run of 2 runs (`binary` and `skill`, `t1-stats`) is not counted.
 
@@ -53,6 +54,21 @@ Both rounds ran in Firejail with the repo hidden and the network open. In round 
 - The richer diagnostics lowered the mean by about a third in tokens and by half in time, and `t2-fix-types` by 70% in tokens. `t4-word-count` and `t5-scope-return` got worse in failing runs, and `t5` in tokens.
 - Why `t5` rose: one run (rep 2) spent 38k tokens, 30k of them in a single turn after a `find` over its work directory printed 41k characters while the agent looked for documentation. Without that run the tokens of `t5` stay near 10k. The extra failing runs in `t4` and `t5` come from the agents probing language rules (scoping, `while` variables) with small test programs, which the diagnostics do not explain. Neither is a sign that the new diagnostics misled the agent.
 - Three runs per cell and one model: the spread between reps of one cell is as large as these differences. Treat the change as a direction, not a result.
+
+## Round 4: the prompt mentions `--help`
+
+Same checker and arm as round 3. The only change is one sentence in the `binary` prompt: "`agentica --help` lists the options."
+
+| Task | Tokens (3 → 4) | Seconds (3 → 4) | Failing runs (3 → 4) |
+|---|---|---|---|
+| t1-stats | 53,829 → 39,631 | 105 → 89 | 6.7 → 0.3 |
+| t2-fix-types | 10,937 → 18,732 | 41 → 84 | 2.0 → 3.0 |
+| t3-struct-change | 4,082 → 3,871 | 12 → 13 | 0.0 → 0.0 |
+| t4-word-count | 40,438 → 52,239 | 98 → 128 | 1.7 → 1.3 |
+| t5-scope-return | 19,379 → 8,397 | 34 → 37 | 2.3 → 2.0 |
+
+- Every run read `--help` once or twice (in round 3 they did it unprompted too), but only one run (`t2-fix-types` rep 3) went on to use `--ai` or `--json`. The sentence made no visible difference; the means of rounds 3 and 4 are within the noise of this design.
+- Network: the sandbox leaves the network open, and two `t4-word-count` runs tried to download the language docs from the project's GitHub (`raw.githubusercontent.com/.../grammar.md` and the README) and to list the owner's repositories. The repository is private, so both downloads returned 404 and nothing leaked. If the repository is made public, the `binary` arm needs the network closed for its host (or a different check) before another round. The runs that did this also counted 22 attempts to read the repo path across the round (all blocked).
 
 ## What the results do not show
 
