@@ -17,9 +17,11 @@ Question: can an agent write and repair Agentica programs with the language as i
 
 | Arm | Pass | Mean tokens (in+out) per run | Mean cost per run |
 |---|---|---|---|
-| python | 15/15 | 3,506 | $0.016 |
-| skill | 15/15 | 13,681 | $0.060 |
-| grammar | 15/15 | 15,944 | $0.069 |
+| python | 15/15 | 3,506 | $0.001 |
+| skill | 15/15 | 13,681 | $0.004 |
+| grammar | 15/15 | 15,944 | $0.005 |
+
+All results so far, with per-task tables, are in [`eval-results.md`](eval-results.md).
 
 Agentica runs took about 15–45 s, Python 8–27 s. In `t2-fix-types` the Agentica arms had about 1.0–1.3 failing interpreter runs per run.
 
