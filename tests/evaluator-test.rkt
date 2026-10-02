@@ -53,7 +53,7 @@
   (list (source-position-line start) (source-position-column start)))
 
 (module+ test
-  (test-case "the section 10 programs run"
+  (test-case "the section 8 programs run"
     (check-equal? (output-of "def main() -> Nil\n  puts(\"hello\")\nend\n") "hello\n")
     (check-equal? (output-of (string-append
                               "def classify(age: Int) -> String\n"

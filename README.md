@@ -1,8 +1,9 @@
 # Agentica
 
 Interpreter for the Agentica language, written in Racket. The language is
-defined in [`docs/Agentica-gramatica.md`](docs/Agentica-gramatica.md); the
-phased plan is in [`docs/Agentica-roadmap.md`](docs/Agentica-roadmap.md).
+defined in [`docs/grammar.md`](docs/grammar.md), planned syntax is in
+[`docs/future.md`](docs/future.md), and the phased plan is in
+[`docs/roadmap.md`](docs/roadmap.md).
 
 ## Requirements
 
@@ -44,7 +45,7 @@ bundle the runtime. `compiled/` and `dist/` are in `.gitignore`.
 ## Usage
 
 ```sh
-racket src/main.rkt [--dump] <file.agc>
+racket src/main.rkt [--dump] [--ai|--json] [check] <file.agc>
 ```
 
 Run a program. `main()` is the entry point, and `puts` prints to stdout:
@@ -57,6 +58,9 @@ racket src/main.rkt examples/hello.agc
 | Option   | Effect                                                |
 | -------- | ----------------------------------------------------- |
 | `--dump` | Print the checked syntax tree instead of running it.  |
+| `check`  | Subcommand, only as the first argument: check the file, print `check ok`, run nothing. It ignores `--dump` and program arguments; a program file named `check` runs as `./check`. |
+| `--ai`   | Print a diagnostic as compact text for an agent (stderr).  |
+| `--json` | Print a diagnostic as one JSON object (stderr).            |
 
 ### Exit codes
 

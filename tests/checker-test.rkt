@@ -30,7 +30,7 @@
   (format "def main() -> Nil\n~a\nend\n" body))
 
 (module+ test
-  (test-case "the section 10 programs pass"
+  (test-case "the section 8 programs pass"
     (check-ok "def main() -> Nil\n  puts(\"hello\")\nend\n")
     (check-ok (string-append
                "def classify(age: Int) -> String\n"
@@ -82,7 +82,7 @@
                "  puts(\"ok\")\n"
                "end\n")))
 
-  (test-case "the rejected section 10 examples fail"
+  (test-case "the rejected section 8 examples fail"
     (check-equal? (check-code (main-with "  age: Int = \"25\"")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  if 1\n    puts(\"hello\")\n  end"))
                   'CHECK-TYPE-MISMATCH)
@@ -245,6 +245,46 @@
     (check-true (diagnostic? operator))
     (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
     (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
+
+  (test-case "diagnostics carry types, operand labels, and the enclosing signature"
+    (define problem
+      (check-text "def total(q: Int, p: Float) -> Float\n  return q * p\nend\ndef main() -> Nil\nend\n"))
+    (check-equal? (diagnostic-code problem) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (diagnostic-expected problem) "Int")
+    (check-equal? (diagnostic-actual problem) "Float")
+    (check-equal? (length (diagnostic-labels problem)) 2)
+    (check-true (string? (diagnostic-help problem)))
+    (check-equal? (diagnostic-signature problem) "total(q: Int, p: Float) -> Float")
+    (define arity
+      (check-text "def f(a: Int) -> Int\n  return a\nend\ndef main() -> Nil\n  x = f(1, 2)\nend\n"))
+    (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
+    (check-equal? (diagnostic-callee arity) "f(Int) -> Int"))
+
+  (test-case "grounded suggestions appear only when the fix is certain"
+    (define (help-of text)
+      (define problem (check-text text))
+      (check-true (diagnostic? problem))
+      (diagnostic-help problem))
+    (define item "struct Item\n  name: String\n  price: Int\nend\n")
+    (check-regexp-match #rx"total"
+                        (help-of "def total() -> Int\n  return 1\nend\ndef main() -> Nil\n  x = totl()\nend\n"))
+    (check-false (help-of (main-with "  x = qqqq")))
+    (check-regexp-match #rx"price"
+                        (help-of (string-append item "def main() -> Nil\n  i = Item(name: \"a\", price: 1)\n  x = i.prise\nend\n")))
+    (check-regexp-match #rx"price: \\.\\.\\.\" with a value of type Int"
+                        (help-of (string-append item "def main() -> Nil\n  i = Item(name: \"a\")\nend\n")))
+    (check-regexp-match #rx"String"
+                        (help-of (main-with "  x: Strng = \"a\"")))
+    (check-regexp-match #rx"String.from_int"
+                        (help-of (main-with "  puts(1)")))
+    (check-regexp-match #rx"else"
+                        (help-of "def f(n: Int) -> Int\n  if n > 0\n    return 1\n  end\nend\ndef main() -> Nil\nend\n"))
+    (check-regexp-match #rx"return <value>"
+                        (help-of "def f(n: Int) -> Int\n  x = n\nend\ndef main() -> Nil\nend\n"))
+    (check-regexp-match #rx"x = value"
+                        (help-of (main-with "  x = 1\n  for x in [1]\n    puts(\"a\")\n  end")))
+    (check-regexp-match #rx"copy the value"
+                        (help-of (main-with "  for i in [1]\n    i = 2\n  end"))))
 
   (test-case "maps and the Map and List modules"
     (check-ok (main-with (string-append
