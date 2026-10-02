@@ -872,7 +872,7 @@ Process.close(p: Process) -> Nil
 ### Later, for MCP
 
 - HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
-- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first.
+- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first; the unscheduled design (green threads, channels, `Process.poll_line`, and the evaluator reentrancy constraint) is in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
 - `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
 
 ### Checklist for phases 5i to 5m
@@ -908,6 +908,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
+- [ ] Concurrency and parallelism: unscheduled; the design is in [`future.md` section 8](future.md#8-concurrency-and-parallelism). Schedule after 5m only if a real MCP case (server-initiated requests, multiple connections, or Streamable HTTP) needs it.
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 
