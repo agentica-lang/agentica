@@ -578,7 +578,7 @@ On success it prints `check ok`.
 - Compact text is not proven to help the agent or to save tokens. Measure it in 6a (`--ai` against plain text and `--json`); the defensible gain is choosing relevant information and keeping it predictable.
 
 - [x] `agentica check <file>` subcommand: checks, prints `check ok`, never runs (plain diagnostics; `--ai` and `--json` come next).
-- [x] Add optional `expected`, `actual`, `callee`, `argument`, `labels`, and `help` to `diagnostic`; the checker fills them in `CHECK-TYPE-MISMATCH` and the plain-call `CHECK-ARITY` and records the enclosing function signature. (`argument` and the builtin-call arity are still unfilled.)
+- [x] Add optional `expected`, `actual`, `callee`, `labels`, and `help` to `diagnostic`; the checker fills them in `CHECK-TYPE-MISMATCH` and the plain-call `CHECK-ARITY` and records the enclosing function signature. (The builtin-call arity is still unfilled; add an `argument` field only when a call-argument mismatch fills it.)
 - [x] One structured diagnostic, three printers: plain (with labels and help), `--ai`, and `--json`. They print to stderr, like the plain form.
 - [x] Grounded suggestions in `help`: nearest name (variables, functions, fields, types), field list, missing field type, String/Int/Float conversion functions, missing `return`, shadowing, `for` variable assignment. Builtin-name suggestions wait for the builtins catalog (5e).
 - [ ] Measure with the `binary` arm (`docs/eval-6a.md`) whether `--ai` and labels cut failing runs and tokens.

@@ -10,7 +10,6 @@
          diagnostic-expected
          diagnostic-actual
          diagnostic-callee
-         diagnostic-argument
          diagnostic-signature
          diagnostic-labels
          diagnostic-help
@@ -18,7 +17,7 @@
          format-diagnostic-ai
          diagnostic->jsexpr)
 
-(struct diagnostic (code message span expected actual callee argument signature labels help)
+(struct diagnostic (code message span expected actual callee signature labels help)
   #:transparent
   #:constructor-name make-diagnostic
   #:omit-define-syntaxes)
@@ -27,11 +26,10 @@
                     #:expected [expected #f]
                     #:actual [actual #f]
                     #:callee [callee #f]
-                    #:argument [argument #f]
                     #:signature [signature #f]
                     #:labels [labels '()]
                     #:help [help #f])
-  (make-diagnostic code message span expected actual callee argument signature labels help))
+  (make-diagnostic code message span expected actual callee signature labels help))
 
 (define (source-line text line)
   (define lines (string-split text "\n" #:trim? #f))
@@ -143,7 +141,6 @@
     (optional 'expected (diagnostic-expected problem))
     (optional 'actual (diagnostic-actual problem))
     (optional 'callee (diagnostic-callee problem))
-    (optional 'argument (diagnostic-argument problem))
     (optional 'function (diagnostic-signature problem))
     (optional 'help (diagnostic-help problem))
     (if (null? (diagnostic-labels problem))

@@ -94,6 +94,8 @@
     (check-regexp-match #rx"^check failed: 1 error\n\n\\[CHECK-" (caddr ai))
     (check-equal? (car json) 1)
     (check-equal? (hash-ref (string->jsexpr (caddr json)) 'code) "CHECK-TYPE-MISMATCH")
+    (check-equal? (cadr json) "")
+    (check-equal? (cli "--json" "check" hello) '(0 "{\"ok\":true}\n" ""))
     (define bad (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Nil\n  x = 1 / 0\nend\n" bad #:exists 'truncate)
     (define failed (cli (path->string bad)))

@@ -130,10 +130,10 @@
   (let/ec return
     (define (bail code message span
                   #:expected [expected #f] #:actual [actual #f] #:callee [callee #f]
-                  #:argument [argument #f] #:labels [labels '()] #:help [help #f])
+                  #:labels [labels '()] #:help [help #f])
       (return (diagnostic code message span
                           #:expected expected #:actual actual #:callee callee
-                          #:argument argument #:signature current-signature
+                          #:signature current-signature
                           #:labels labels #:help help)))
 
     (define (mismatch! expected actual span)

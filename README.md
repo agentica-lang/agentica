@@ -58,7 +58,7 @@ racket src/main.rkt examples/hello.agc
 | Option   | Effect                                                |
 | -------- | ----------------------------------------------------- |
 | `--dump` | Print the checked syntax tree instead of running it.  |
-| `check`  | Subcommand: check the file, print `check ok`, run nothing. |
+| `check`  | Subcommand, only as the first argument: check the file, print `check ok`, run nothing. It ignores `--dump` and program arguments; a program file named `check` runs as `./check`. |
 | `--ai`   | Print a diagnostic as compact text for an agent (stderr).  |
 | `--json` | Print a diagnostic as one JSON object (stderr).            |
 
