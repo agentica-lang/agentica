@@ -39,7 +39,7 @@ Failing interpreter runs per run: `python` 0 everywhere; `skill` 1.3 in `t2-fix-
 
 ## Rounds 2 and 3: the `binary` arm, before and after richer diagnostics
 
-Both rounds ran in Firejail with the repo hidden and the network open. In round 2 one run (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since. Round 3 used the checker after phase 5d3 steps 1–4 (labels on operands, the enclosing signature, and grounded `help`). The agent was not told about `--ai`.
+Both rounds ran in Firejail with the repo hidden and the network open. In round 2 one run (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since. Round 3 used the checker after phase 5d3 steps 1–4 (labels on operands, the enclosing signature, and grounded `help`). The prompt did not mention `--ai`, but `agentica --help` lists it and `--json`, so an agent could find them; in the logs only `t5-scope-return` rep 2 clearly ran `--ai`.
 
 | Task | Tokens (2 → 3) | Seconds (2 → 3) | Failing runs (2 → 3) |
 |---|---|---|---|
@@ -51,6 +51,7 @@ Both rounds ran in Firejail with the repo hidden and the network open. In round 
 
 - With no skill and no grammar, the agent learned the language from diagnostics and used about 2.8 times the tokens of the `skill` arm in round 2 (38.7k against 13.7k).
 - The richer diagnostics lowered the mean by about a third in tokens and by half in time, and `t2-fix-types` by 70% in tokens. `t4-word-count` and `t5-scope-return` got worse in failing runs, and `t5` in tokens.
+- Why `t5` rose: one run (rep 2) spent 38k tokens, 30k of them in a single turn after a `find` over its work directory printed 41k characters while the agent looked for documentation. Without that run the tokens of `t5` stay near 10k. The extra failing runs in `t4` and `t5` come from the agents probing language rules (scoping, `while` variables) with small test programs, which the diagnostics do not explain. Neither is a sign that the new diagnostics misled the agent.
 - Three runs per cell and one model: the spread between reps of one cell is as large as these differences. Treat the change as a direction, not a result.
 
 ## What the results do not show

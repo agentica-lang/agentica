@@ -36,7 +36,7 @@ One run each; not a result, only proof that the arm and the sandbox work.
 
 ## `binary` arm, before and after the richer diagnostics
 
-Two full rounds of the `binary` arm (3 reps per task, Firejail, `pi`). Round A used plain one-caret diagnostics. Round B used labels, `help`, and grounded suggestions (phase 5d3, steps 1–4); the agent was not told about `--ai`. Both passed 15/15. One run of A (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since.
+Two full rounds of the `binary` arm (3 reps per task, Firejail, `pi`). Round A used plain one-caret diagnostics. Round B used labels, `help`, and grounded suggestions (phase 5d3, steps 1–4); the prompt did not mention `--ai`, but `agentica --help` lists it, and one run (`t5-scope-return` rep 2) used it. Both passed 15/15. One run of A (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since.
 
 | Task | Tokens A → B | Seconds A → B | Failing runs A → B |
 |---|---|---|---|
