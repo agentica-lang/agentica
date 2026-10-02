@@ -674,9 +674,18 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.encode` accepts `Int`, `Float`, `Bool`, `String`, `Nil` (as `null`), `List`, `Map[String, V]`, structs (as objects, fields in declared order), and `Json`. A map with `Int` keys is a `CHECK-` error.
 - No user generics are needed. Struct decoding needs a type as an argument, which the checker special-cases like the other builtins (see 5f2).
 
-- [ ] Add the `Json` type and the `JSON` module.
-- [ ] Use Racket's `json` library, without new dependencies.
-- [ ] Add `examples/json.agc`.
+- [x] Add the `Json` type and the `JSON` module.
+- [x] Use Racket's `json` library, without new dependencies.
+- [x] Add `examples/json.agc`.
+
+Implemented in `src/json.rkt` (opaque wrapper and strict input guards), the builtin catalog, checker, and evaluator. Parsing and scalar escaping use Racket's library; no parser/AST changes. Access and extraction return Results, Int extraction checks signed 64-bit bounds, and Float extraction checks finiteness. Encoding recursively rejects Results and Int-keyed maps at check time, preserves declared struct/map order, and halts on non-finite Floats with `RUNTIME-JSON-ENCODE`. Parsed object order is unspecified. Tests cover malformed/trailing input, Unicode, null/false, wrong kinds, bounds, recursive encoding eligibility, ordered output, round trips, `try`, and CLI diagnostics. Typed decoding and builders remain in 5f2/5i.
+
+### Stdio transport primitives (after 5f)
+
+- [x] Add `IO.read_bytes(count: Int) -> Result[List[Int]]`, `IO.flush() -> Nil`, and `String.from_bytes(data: List[Int]) -> Result[String]`, using Racket's native port/byte functions and existing catalog typing. Keep IO.read's all-text-until-EOF behavior; no Bytes type, syntax, or dependency additions.
+- [x] Specify byte-counted reads: wait for count bytes or EOF, accept short/empty EOF success, zero consumes nothing, invalid counts consume nothing. A fixed 1 MiB per-call cap bounds eager allocation; larger streams use multiple reads. Decode UTF-8 strictly only once complete bytes are available. Read/conversion failures return Results.
+- [x] Keep `IO.eof?` as a blocking, non-consuming EOF check using peek-byte, not a readiness poll or UTF-8 character peek. Explicit stdout flush does not close ports or flush stderr; blocking stdio still has no timeout.
+- [x] Test byte/character boundaries, invalid counts/UTF-8, mixed text/byte reads, and live pipe replies while stdin stays open. The pipe test fails with a no-op flush or a peek-char EOF mutation; both were restored and rechecked. Update grammar and both skills.
 
 ### Phase 5f2: Typed JSON decoding
 
@@ -767,7 +776,8 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 - [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval-6a.md`).
 - [x] Phase 5e: Result[T], try, and the builtins catalog.
 - [x] Faster maps (before JSON).
-- [ ] Phase 5f: JSON.
+- [x] Phase 5f: JSON.
+- [x] Stdio transport primitives: counted bytes, strict UTF-8 decoding, flush, and byte-oriented EOF.
 - [ ] Phase 5f2: typed JSON decoding.
 - [ ] Phase 5g: TCP.
 - [ ] Phase 5h: HTTP and HTTPS.
@@ -862,7 +872,7 @@ Process.close(p: Process) -> Nil
 ### Later, for MCP
 
 - HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
-- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first.
+- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first; the unscheduled design (green threads, channels, `Process.poll_line`, and the evaluator reentrancy constraint) is in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
 - `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
 
 ### Checklist for phases 5i to 5m
@@ -898,6 +908,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
+- [ ] Concurrency and parallelism: unscheduled; the design is in [`future.md` section 8](future.md#8-concurrency-and-parallelism). Schedule after 5m only if a real MCP case (server-initiated requests, multiple connections, or Streamable HTTP) needs it.
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 

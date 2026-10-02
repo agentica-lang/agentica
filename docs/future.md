@@ -65,10 +65,10 @@ The expression grammar must also be extended to build variants, for example `Ok(
 | Closures and methods | Better ergonomics; possible [module attachment](#7-possible-metatables-ruby-style-modules) | Capture, receiver types, representation, and resolution |
 | Modules | Group behavior and split programs into files | Import, visibility, cycles, and module attachment (section 7) |
 | C FFI | Safe wrappers over native calls | Pointers, ownership, ABI, and calls from the interpreter |
-| Async and fibers | Suspend execution on I/O; initially one thread | API, cancellation, and error propagation |
+| Async and fibers | Suspend execution on I/O; initially one thread. See [section 8](#8-concurrency-and-parallelism) | API, cancellation, and error propagation |
 | Actors | Own messages and mailboxes | Syntax, isolation, shared values, and supervision |
 
-## 4. Standard library and function values (phases 5f–5m)
+## 4. Standard library and function values (phases 5f2–5m)
 
 Fixed here so each roadmap phase can take it as its specification.
 
@@ -84,8 +84,8 @@ primary          = (* …core forms, plus: *)
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
-- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Json`, `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
-- **Names reserved when each phase starts:** `Fn`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP`, and `HTTP`.
+- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
+- **Names reserved when each phase starts:** `Fn`, `Socket`, `Listener`, `Process`, `Response`, `TCP`, and `HTTP`. `Json` and `JSON` are already core; typed decoding and schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int
@@ -253,3 +253,56 @@ Open decisions before implementation:
 - Name resolution for bare module arguments and how module namespaces relate to records and future imports.
 
 **Ruby tooling goal, not a compatibility promise:** existing Agentica `->` signatures and `struct` declarations are not Ruby syntax. The examples use `=>` for String-keyed maps; Ruby's `{"name": value}` creates a Symbol key, unlike Agentica's current map literal. Reusing Ruby linters such as RuboCop requires a Ruby-parsable source subset or a translation step, plus configuration for Agentica conventions. Verify that with real tooling before claiming support. None of these spellings or type alternatives changes the core grammar today.
+
+## 8. Concurrency and parallelism
+
+Status: proposal, unscheduled. Nothing here is normative and no phase is assigned. A sequential loop is enough for the first stdio MCP client and server (5m); add concurrency only when a real case needs it: server-initiated requests while a client waits, a server serving more than one connection, or Streamable HTTP.
+
+### Racket building blocks
+
+| Tool | Module | Parallel? | Notes |
+|---|---|---|---|
+| Green threads, channels, `sync`, semaphores | `racket/base` | One core | Cheapest; enough for I/O concurrency; no new dependency |
+| Places, `place-channel` | `racket/place` | Real multicore | One VM per place; messages serialized; heavy |
+| Futures | `racket/future` | Limited | Parallel only for a safe value subset; finicky performance; not proposed |
+
+Proposal: build on green threads only. Places stay a later optimization if CPU parallelism is ever measured to matter, which is unlikely for a tree-walking interpreter.
+
+### Shape: builtin modules, no grammar change
+
+Like `TCP` and `Process`, concurrency is a builtin module over Racket primitives; no new keywords. It depends on function values (5j) and generic opaque types.
+
+```text
+Task.spawn(f: Fn[A, Nil], arg: A) -> Task
+Task.await(t: Task) -> Nil
+Channel.new() -> Channel[T]
+Channel.send(c: Channel[T], v: T) -> Nil
+Channel.recv(c: Channel[T]) -> T
+```
+
+- `&name` has no closures, so a task body cannot capture locals; everything it needs travels as the argument, or through a `Channel` passed in.
+- `Channel[T]` and `Task` are opaque, special-cased in the checker like `Socket`.
+- Channels are the only way two tasks share data. Values are Agentica values and there is no shared mutable state, so the checker's immutability rules stay intact.
+- A task can halt with a `RUNTIME-` diagnostic. Decide whether the failure propagates from `Task.await` or ends the whole run.
+
+### Minimal first step (if threads are too much)
+
+One non-blocking builtin avoids threads, function values, and reentrancy entirely:
+
+```text
+Process.poll_line(p: Process, timeout: Int) -> Result[String]
+```
+
+A single-threaded loop alternates between sending requests and polling for messages, implemented with `sync/timeout` on the child's output port. Prefer this if it covers the MCP cases.
+
+### Evaluator constraint
+
+`src/evaluator.rkt` keeps `scopes`, `steps`, `depth`, and `return-to` as `set!`-mutated closure state inside one `evaluate-with-ports`. Two tasks running `eval-expression` would race `steps` and share one scope stack. Real concurrency needs a per-task scope stack and a synchronized (or per-task) step counter; budget for that surgery, it is not a thin wrapper.
+
+### Open decisions
+
+- Whether to ship `Task`/`Channel` at all, or only `Process.poll_line`, until a real case needs threads.
+- How a task's failure reaches `Task.await`, and whether an unawaited task's failure ends the run.
+- Whether `--max-steps` counts per task or for the whole run.
+- Whether places are ever added for CPU parallelism; default no.
+- Timeouts, cancellation, and what happens to running tasks when the run ends.

@@ -57,6 +57,7 @@
     (for ([entry '(("hello.agc" . "hello\n")
                    ("classify.agc" . "adult\n")
                    ("result.agc" . "42\nempty count\n0\n")
+                   ("json.agc" . "{\"name\":\"Ana\",\"age\":25}\nhello, Ana\nmissing name\n")
                    ("tasks.agc" . "Probar Agentica\n")
                    ("inventory.agc" . "apple\nkiwi\n")
                    ("strings.agc" . "AGENTICA, HELLO\n8\n5\nAgentica, world\n"))])
@@ -70,6 +71,47 @@
       (run-text-io (file->string (build-path examples-dir "echo.agc")) "one\ntwo\n"))
     (check-equal? result 'nil)
     (check-equal? output "one\ntwo\n"))
+
+  (test-case "stdio peers receive flushed replies while stdin stays open"
+    (define file (make-temporary-file "agentica-stdio~a.agc"))
+    (display-to-file
+     (string-append
+      "def main() -> Nil\n"
+      "  IO.inspect(IO.eof?())\n  IO.flush()\n"
+      "  data = Result.unwrap!(IO.read_bytes(2))\n"
+      "  IO.print(Result.unwrap!(String.from_bytes(data)))\n  IO.flush()\n"
+      "  puts(IO.gets!())\nend\n")
+     file #:exists 'truncate)
+    (define-values (process out in err)
+      (subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) (path->string file)))
+    (dynamic-wind
+      void
+      (lambda ()
+        ;; Only the first byte of ñ is available. EOF peeking must not decode it.
+        (write-byte 195 in)
+        (flush-output in)
+        (check-not-false (sync/timeout 10 out) "initial reply was not flushed, or EOF peeking blocked on UTF-8")
+        (check-equal? (read-line out) "false")
+        (check-equal? (subprocess-status process) 'running)
+        (write-byte 177 in)
+        (flush-output in)
+        (check-not-false (sync/timeout 10 out) "response remained buffered")
+        (check-equal? (read-char out) #\ñ)
+        (check-equal? (subprocess-status process) 'running)
+        (display "done\n" in)
+        (close-output-port in)
+        (check-not-false (sync/timeout 10 process) "stdio program did not finish")
+        (subprocess-wait process)
+        (check-equal? (subprocess-status process) 0)
+        (check-equal? (port->string out) "done\n")
+        (check-equal? (port->string err) ""))
+      (lambda ()
+        (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
+        (subprocess-wait process)
+        (unless (port-closed? in) (close-output-port in))
+        (close-input-port out)
+        (close-input-port err)
+        (delete-file file))))
 
   (test-case "rejected fragments fail with the intended code"
     (check-equal? (code-of "  age: Int = \"25\"") 'CHECK-TYPE-MISMATCH)
@@ -99,6 +141,8 @@
       (lambda ()
         (for ([entry '(("  r = error(\"bad\")" "CHECK-RESULT-TYPE")
                        ("  r = try ok(1)" "CHECK-TRY-CONTEXT")
+                       ("  x = JSON.encode({1: true})" "CHECK-NOT-ENCODABLE")
+                       ("  large = 1.0\n  i = 0\n  while i < 40\n    large = large * 1000000000.0\n    i = i + 1\n  end\n  x = JSON.encode(large)" "RUNTIME-JSON-ENCODE")
                        ("  r: Result[Int] = error(\"bad\")\n  x = Result.unwrap!(r)" "RUNTIME-UNWRAP-ERROR"))])
           (display-to-file (format "def main() -> Nil\n~a\nend\n" (car entry)) file #:exists 'truncate)
           (for ([style '("plain" "--ai" "--json")])

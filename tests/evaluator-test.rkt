@@ -34,7 +34,7 @@
   (define out (open-output-string))
   (define err (open-output-string))
   (define result (evaluate checked
-                           #:in (open-input-string input)
+                           #:in (if (bytes? input) (open-input-bytes input) (open-input-string input))
                            #:out out
                            #:err err
                            #:args arguments
@@ -217,6 +217,49 @@
     (check-equal? result 'nil)
     (check-equal? output "one\ntwo\nrest\n\ndone\n"))
 
+  (test-case "counted reads preserve raw bytes, UTF-8 boundaries, and EOF"
+    (define-values (out err result)
+      (run-io
+       (main-with
+        (string-append
+         "  IO.inspect(IO.read_bytes(0))\n  IO.inspect(IO.eof?())\n"
+         "  first = Result.unwrap!(IO.read_bytes(1))\n  IO.inspect(first)\n"
+         "  IO.inspect(Result.ok?(String.from_bytes(first)))\n"
+         "  second = Result.unwrap!(IO.read_bytes(1))\n"
+         "  IO.inspect(String.from_bytes([first[0], second[0]]))\n"
+         "  emoji = Result.unwrap!(IO.read_bytes(4))\n  IO.inspect(String.from_bytes(emoji))\n"
+         "  IO.inspect(IO.eof?())\n  IO.inspect(IO.read_bytes(9))\n"
+         "  IO.inspect(IO.eof?())\n  IO.inspect(IO.read_bytes(1))"))
+       (bytes 195 177 240 159 152 128 255 0)))
+    (check-equal? result 'nil)
+    (check-equal? err "")
+    (check-equal? out "ok([])\nfalse\n[195]\nfalse\nok(\"ñ\")\nok(\"😀\")\nfalse\nok([255, 0])\ntrue\nok([])\n"))
+
+  (test-case "invalid read sizes do not consume input and text reads share the port"
+    (define-values (out err result)
+      (run-io
+       (main-with
+        (string-append
+         "  for count in [-1, 1048577, 9223372036854775807]\n"
+         "    IO.inspect(Result.ok?(IO.read_bytes(count)))\n  end\n"
+         "  puts(IO.gets!())\n  IO.inspect(IO.read_bytes(2))\n"
+         "  IO.inspect(IO.eof?())\n  puts(IO.read())\n"
+         "  IO.inspect(IO.read_bytes(1048576))\n  IO.inspect(IO.read_bytes(0))"))
+       "hello\nxyz"))
+    (check-equal? result 'nil)
+    (check-equal? err "")
+    (check-equal? out "false\nfalse\nfalse\nhello\nok([120, 121])\nfalse\nz\nok([])\nok([])\n"))
+
+  (test-case "String.from_bytes validates byte values and decodes UTF-8 strictly"
+    (for ([data '("[-1]" "[256]" "[9223372036854775807]" "[195]" "[128]"
+                  "[192, 175]" "[237, 160, 128]" "[244, 144, 128, 128]" "[255]")])
+      (check-equal?
+       (output-of (main-with (format "  IO.inspect(Result.ok?(String.from_bytes(~a)))" data)))
+       "false\n" data))
+    (check-equal?
+     (output-of (main-with "  IO.inspect(String.from_bytes([]))\n  IO.inspect(String.from_bytes([65, 10, 66]))\n  IO.inspect(String.length(Result.unwrap!(String.from_bytes([0]))))"))
+     "ok(\"\")\nok(\"A\\nB\")\n1\n"))
+
   (test-case "IO.gets! at end of input is a located diagnostic"
     (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))
     (check-true (diagnostic? result))
@@ -243,6 +286,8 @@
         ("IO.gets" "IO.gets()" "ok(\"line\")\n")
         ("IO.gets!" "IO.gets!()" "\"line\"\n")
         ("IO.read" "IO.read()" "\"line\\n\"\n")
+        ("IO.read_bytes" "IO.read_bytes(1)" "ok([108])\n")
+        ("IO.flush" "IO.flush()" "nil\n")
         ("IO.eof?" "IO.eof?()" "false\n")
         ("System.args" "System.args()" "[\"arg\"]\n")
         ("System.exit" "System.exit(0)" "")
@@ -250,6 +295,15 @@
         ("Map.keys" "Map.keys({\"k\": 1})" "[\"k\"]\n")
         ("Map.size" "Map.size({\"k\": 1})" "1\n")
         ("Map.put" "Map.put({\"k\": 1}, \"k\", 2)" "{\"k\": 2}\n")
+        ("JSON.parse" "JSON.parse(\"null\")" "ok(<Json>)\n")
+        ("JSON.encode" "JSON.encode(7)" "\"7\"\n")
+        ("JSON.get" "JSON.get(Result.unwrap!(JSON.parse(\"{\\\"k\\\": false}\")), \"k\")" "ok(<Json>)\n")
+        ("JSON.at" "JSON.at(Result.unwrap!(JSON.parse(\"[null]\")), 0)" "ok(<Json>)\n")
+        ("JSON.string" "JSON.string(Result.unwrap!(JSON.parse(\"\\\"x\\\"\")))" "ok(\"x\")\n")
+        ("JSON.int" "JSON.int(Result.unwrap!(JSON.parse(\"7\")))" "ok(7)\n")
+        ("JSON.float" "JSON.float(Result.unwrap!(JSON.parse(\"7\")))" "ok(7.0)\n")
+        ("JSON.bool" "JSON.bool(Result.unwrap!(JSON.parse(\"false\")))" "ok(false)\n")
+        ("JSON.list" "JSON.list(Result.unwrap!(JSON.parse(\"[null,false]\")))" "ok([<Json>, <Json>])\n")
         ("List.size" "List.size([1, 2])" "2\n")
         ("String.length" "String.length(\"ñ😀\")" "2\n")
         ("String.upcase" "String.upcase(\"a\")" "\"A\"\n")
@@ -264,6 +318,7 @@
         ("String.slice" "String.slice(\"ñ😀x\", 1, 2)" "\"😀x\"\n")
         ("String.from_int" "String.from_int(7)" "\"7\"\n")
         ("String.from_float" "String.from_float(1.5)" "\"1.5\"\n")
+        ("String.from_bytes" "String.from_bytes([195, 177])" "ok(\"ñ\")\n")
         ("String.to_int" "String.to_int(\"7\")" "ok(7)\n")
         ("String.to_float" "String.to_float(\"1.5\")" "ok(1.5)\n")
         ("String.to_int!" "String.to_int!(\"7\")" "7\n")
@@ -285,6 +340,112 @@
       (if (equal? name "System.exit")
           (check-equal? (exit-code-code result) 0)
           (check-equal? result 'nil name))))
+
+  (test-case "JSON parsing requires one valid finite value and preserves null and false"
+    (for ([text '("" " \r\n" "true false" "{}x" "nullx" "01" "+1" "1."
+                  "[1,]" "{\"a\":}" "\"bad\nline\"" "\"\\uD800\""
+                  "0.0001e+" "1e400" "[1e400]" "null ")])
+      (check-equal? (output-of (main-with (format "  IO.inspect(Result.ok?(JSON.parse(~s)))" text)))
+                    "false\n" text))
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  j = Result.unwrap!(JSON.parse(\" \\t{\\\"flag\\\": true, \\\"none\\\": null, \\\"flag\\\": false}\\r\\n\"))\n"
+        "  flag = Result.unwrap!(JSON.get(j, \"flag\"))\n"
+        "  IO.inspect(JSON.bool(flag))\n"
+        "  nothing = Result.unwrap!(JSON.get(j, \"none\"))\n"
+        "  puts(JSON.encode(nothing))\n"
+        "  IO.inspect(Result.ok?(JSON.get(j, \"missing\")))\n"
+        "  IO.inspect(Result.ok?(JSON.bool(nothing)))\n"
+        "  IO.inspect(nothing)\n"
+        "  text = Result.unwrap!(JSON.parse(\"\\\"\\\\u00f1\\\\uD83D\\\\uDE00\\\\n\\\"\"))\n"
+        "  IO.inspect(JSON.string(text))")))
+     "ok(false)\nnull\nfalse\nfalse\n<Json>\nok(\"ñ😀\\n\")\n"))
+
+  (test-case "JSON access and extraction reject wrong kinds and array bounds"
+    (for ([expression '("JSON.get(j, \"k\")" "JSON.at(j, 0)" "JSON.string(j)"
+                        "JSON.int(j)" "JSON.float(j)" "JSON.bool(j)" "JSON.list(j)")])
+      (check-equal?
+       (output-of (main-with (format "  j = Result.unwrap!(JSON.parse(\"null\"))\n  IO.inspect(Result.ok?(~a))" expression)))
+       "false\n" expression))
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  j = Result.unwrap!(JSON.parse(\"[false, null, {\\\"n\\\": 3}]\"))\n"
+        "  IO.inspect(JSON.bool(Result.unwrap!(JSON.at(j, 0))))\n"
+        "  puts(JSON.encode(Result.unwrap!(JSON.at(j, 1))))\n"
+        "  IO.inspect(JSON.int(Result.unwrap!(JSON.get(Result.unwrap!(JSON.at(j, 2)), \"n\"))))\n"
+        "  for i in [-1, 3]\n    IO.inspect(Result.ok?(JSON.at(j, i)))\n  end\n"
+        "  empty = Result.unwrap!(JSON.parse(\"[]\"))\n"
+        "  IO.inspect(JSON.list(empty))\n  IO.inspect(Result.ok?(JSON.at(empty, 0)))")))
+     "ok(false)\nnull\nok(3)\nfalse\nfalse\nok([])\nfalse\n"))
+
+  (test-case "JSON numbers respect integer bounds and finite Float conversion"
+    (for ([entry '(("-9223372036854775808" "ok(-9223372036854775808)\n")
+                   ("9223372036854775807" "ok(9223372036854775807)\n"))])
+      (check-equal?
+       (output-of (main-with (format "  IO.inspect(JSON.int(Result.unwrap!(JSON.parse(~s))))" (car entry))))
+       (cadr entry)))
+    (for ([text '("9223372036854775808" "-9223372036854775809" "1.0" "1e0" "true" "\"1\"")])
+      (check-equal?
+       (output-of (main-with (format "  IO.inspect(Result.ok?(JSON.int(Result.unwrap!(JSON.parse(~s)))))" text)))
+       "false\n"))
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  IO.inspect(JSON.float(Result.unwrap!(JSON.parse(\"1.25\"))))\n"
+        "  IO.inspect(JSON.float(Result.unwrap!(JSON.parse(\"2e1\"))))\n"
+        (format "  big = Result.unwrap!(JSON.parse(~s))\n" (make-string 400 #\9))
+        "  IO.inspect(Result.ok?(JSON.float(big)))")))
+     "ok(1.25)\nok(20.0)\nfalse\n"))
+
+  (test-case "JSON encoding preserves declared fields and map order recursively"
+    (check-equal?
+     (output-of
+      (string-append
+       "struct Inner\n  label: String\nend\n"
+       "struct Payload\n  z: Inner\n  a: Map[String, List[Bool]]\n  raw: Json\n  none: Nil\nend\n"
+       "struct Node\n  children: List[Node]\n  value: Int\nend\n"
+       (main-with
+        (string-append
+         "  p = Payload(none: nil, raw: Result.unwrap!(JSON.parse(\"[null,false,1.25]\")),\n"
+         "    a: {\"b\": [false], \"a\": [], \"b\": [true, false]}, z: Inner(label: \"ñ😀\\\"\\n\"))\n"
+         "  puts(JSON.encode(p))\n"
+         "  roundtrip = Result.unwrap!(JSON.parse(JSON.encode(p)))\n"
+         "  inner = Result.unwrap!(JSON.get(roundtrip, \"z\"))\n"
+         "  IO.inspect(JSON.string(Result.unwrap!(JSON.get(inner, \"label\"))))\n"
+         "  puts(JSON.encode(Node(value: 2, children: [Node(value: 1, children: [])])))\n"
+         "  empty: Map[String, Json] = {}\n  puts(JSON.encode(empty))\n"
+         "  puts(JSON.encode([-9223372036854775808, 9223372036854775807]))"))))
+     (string-append
+      "{\"z\":{\"label\":\"ñ😀\\\"\\n\"},\"a\":{\"b\":[true,false],\"a\":[]},\"raw\":[null,false,1.25],\"none\":null}\n"
+      "ok(\"ñ😀\\\"\\n\")\n"
+      "{\"children\":[{\"children\":[],\"value\":1}],\"value\":2}\n{}\n"
+      "[-9223372036854775808,9223372036854775807]\n"))
+    (define bad (diagnostic-of (main-with "  x = JSON.encode({\"bad\": String.to_float!(\"9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999\")})")))
+    (check-equal? (diagnostic-code bad) 'RUNTIME-JSON-ENCODE)
+    (check-equal? (position-of bad) '(2 7)))
+
+  (test-case "JSON parse, encode, extraction and try compose in checked programs"
+    (check-equal?
+     (output-of
+      (string-append
+       "def sum(text: String) -> Result[Int]\n"
+       "  root = try JSON.parse(text)\n  counts = try JSON.get(root, \"counts\")\n"
+       "  items = try JSON.list(counts)\n  total = 0\n"
+       "  for item in items\n    total = total + try JSON.int(item)\n  end\n"
+       "  return ok(total)\nend\n"
+       (main-with
+        (string-append
+         "  IO.inspect(sum(JSON.encode({\"counts\": [1, 2, 3]})))\n"
+         "  IO.inspect(Result.ok?(sum(\"{}\")))\n"
+         "  IO.inspect(Result.ok?(sum(\"bad\")))\n"
+         "  IO.inspect(Result.ok?(sum(\"{\\\"counts\\\": [1, false]}\")))\n"
+         "  puts(\"continued\")"))))
+     "ok(6)\nfalse\nfalse\nfalse\ncontinued\n"))
 
   (test-case "Result values, false/nil successes, and recoverable conversions"
     (check-equal?
