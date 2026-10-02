@@ -674,9 +674,11 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.encode` accepts `Int`, `Float`, `Bool`, `String`, `Nil` (as `null`), `List`, `Map[String, V]`, structs (as objects, fields in declared order), and `Json`. A map with `Int` keys is a `CHECK-` error.
 - No user generics are needed. Struct decoding needs a type as an argument, which the checker special-cases like the other builtins (see 5f2).
 
-- [ ] Add the `Json` type and the `JSON` module.
-- [ ] Use Racket's `json` library, without new dependencies.
-- [ ] Add `examples/json.agc`.
+- [x] Add the `Json` type and the `JSON` module.
+- [x] Use Racket's `json` library, without new dependencies.
+- [x] Add `examples/json.agc`.
+
+Implemented in `src/json.rkt` (opaque wrapper and strict input guards), the builtin catalog, checker, and evaluator. Parsing and scalar escaping use Racket's library; no parser/AST changes. Access and extraction return Results, Int extraction checks signed 64-bit bounds, and Float extraction checks finiteness. Encoding recursively rejects Results and Int-keyed maps at check time, preserves declared struct/map order, and halts on non-finite Floats with `RUNTIME-JSON-ENCODE`. Parsed object order is unspecified. Tests cover malformed/trailing input, Unicode, null/false, wrong kinds, bounds, recursive encoding eligibility, ordered output, round trips, `try`, and CLI diagnostics. Typed decoding and builders remain in 5f2/5i.
 
 ### Phase 5f2: Typed JSON decoding
 
@@ -767,7 +769,7 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 - [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval-6a.md`).
 - [x] Phase 5e: Result[T], try, and the builtins catalog.
 - [x] Faster maps (before JSON).
-- [ ] Phase 5f: JSON.
+- [x] Phase 5f: JSON.
 - [ ] Phase 5f2: typed JSON decoding.
 - [ ] Phase 5g: TCP.
 - [ ] Phase 5h: HTTP and HTTPS.

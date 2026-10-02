@@ -19,9 +19,9 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, and `Result` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, and `JSON` |
 
-Enums, `Option`, interpolation, function values, JSON, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
+Enums, `Option`, interpolation, function values, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
 ## 3. A core program
 
@@ -228,6 +228,7 @@ The grammar determines what can be written. The following rules determine which 
 | `List[T]` | Homogeneous, immutable list; `Int` indexes, from zero |
 | `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
+| `Json` | Opaque JSON value, accessed through the `JSON` module |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -390,13 +391,37 @@ def read_age(text: String) -> Result[Int]
 end
 ```
 
+### JSON
+
+`Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` without exposing its contents. Use the JSON functions to read it or `JSON.encode` to print JSON text.
+
+```text
+JSON.parse(s: String) -> Result[Json]
+JSON.encode(value: T) -> String
+JSON.get(j: Json, key: String) -> Result[Json]
+JSON.at(j: Json, index: Int) -> Result[Json]
+JSON.string(j: Json) -> Result[String]
+JSON.int(j: Json) -> Result[Int]
+JSON.float(j: Json) -> Result[Float]
+JSON.bool(j: Json) -> Result[Bool]
+JSON.list(j: Json) -> Result[List[Json]]
+```
+
+- `JSON.parse` reads exactly one JSON value, with optional surrounding JSON whitespace (space, tab, CR, LF). Empty input, malformed JSON, trailing content, invalid Unicode escapes, raw control characters in strings, or non-finite parsed numbers return an error. A repeated object key keeps the last value.
+- `JSON.get` requires an object and a present key; `JSON.at` requires an array and an index in `0 .. length - 1`. Missing keys, bad indexes, and wrong kinds return errors, not runtime diagnostics. JSON `false` and `null` are valid present values.
+- String and Bool extraction require the exact JSON kind. `JSON.int` requires an integer within signed 64-bit bounds; a decimal or exponent form is not an Int, even if mathematically integral. `JSON.float` accepts an integer or decimal/exponent number and converts it to finite binary64, with normal rounding; conversion overflow returns an error. Parsed integers may exceed Int bounds until extracted.
+- `JSON.list` returns an array's elements as opaque Json values in order; heterogeneous arrays are valid. JSON null stays inside Json, distinct from a Bool or Nil extraction (there is no null extractor yet).
+- `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists, String-keyed maps, and structs whose nested types are also encodable. Results and Int-keyed maps, including empty or nested ones, are `CHECK-NOT-ENCODABLE` errors. Untyped empty containers still need an annotation.
+- Encoding produces compact JSON, preserving struct declaration order and map insertion order. Parsed Json object order is unspecified. Non-finite Floats halt with `RUNTIME-JSON-ENCODE` at the encode call; they are never silently replaced by null. Racket's bundled `json` library supplies parsing and scalar escaping.
+- Typed struct decoding, JSON builders, and schemas are later phases. See `examples/json.agc` for encoding, extraction, and `try`.
+
 ### Builtin discovery and execution budget
 
 `agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The counter resets per run. This is not a wall-clock or blocking-I/O timeout.
 
-Files, JSON, networking, and richer conversions need a later API; see [`future.md`](future.md).
+Files, networking, and richer conversions need a later API; see [`future.md`](future.md).
 
 ## 7. Diagnostics for agents
 

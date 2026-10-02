@@ -96,6 +96,7 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/inventory.agc`](examples/inventory.agc): maps and the `Map` module.
 
 - [`examples/result.agc`](examples/result.agc): Result values, propagation, messages, and fallbacks.
+- [`examples/json.agc`](examples/json.agc): JSON encoding, parsing, extraction, and `try`.
 
 IO.gets now returns Result[String]; IO.gets! is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main still returns Nil. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
 

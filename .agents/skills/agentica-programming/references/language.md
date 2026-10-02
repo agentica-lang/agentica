@@ -27,6 +27,7 @@ Full programs are at the end of this file.
 | `List[T]` | homogeneous, immutable, indexed from 0 |
 | `Map[K, V]` | homogeneous, immutable; `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
+| `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
@@ -109,14 +110,14 @@ Operators, from highest to lowest precedence:
 - `+ - * /` take two numbers of the same type. There is no implicit conversion between `Int` and `Float`. `+` also joins two `String` values.
 - `/` on `Int` truncates toward zero. `%` takes two `Int` values. A zero divisor is a runtime error, also for `Float`.
 - `< <= > >=` take two numbers of the same type.
-- `==` and `!=` take two values of the same primitive type (`Int`, `Float`, `Bool`, `String`, `Nil`). Lists, maps, and structs cannot be compared.
+- `==` and `!=` take two values of the same primitive type (`Int`, `Float`, `Bool`, `String`, `Nil`). Lists, maps, structs, Results, and Json values cannot be compared.
 - Comparisons do not chain: write `a < b and b < c`, not `a < b < c`.
 - `and`, `or`, `not` take `Bool`, and `and` / `or` short-circuit. `not` binds tightly: write `not (a >= b)`.
 - Arguments and operands are evaluated left to right.
 
 ## Builtin functions
 
-`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, and `System` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, and `JSON` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -199,6 +200,43 @@ end
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, counting repeated loop conditions. N must be positive; runs are unlimited by default. Exhaustion is `RUNTIME-STEP-LIMIT`, the counter resets each run, and checking never spends steps. This is not a blocking-I/O timeout.
 
+## JSON
+
+```text
+JSON.parse(s: String) -> Result[Json]
+JSON.encode(value: T) -> String
+JSON.get(j: Json, key: String) -> Result[Json]
+JSON.at(j: Json, index: Int) -> Result[Json]
+JSON.string(j: Json) -> Result[String]
+JSON.int(j: Json) -> Result[Int]
+JSON.float(j: Json) -> Result[Float]
+JSON.bool(j: Json) -> Result[Bool]
+JSON.list(j: Json) -> Result[List[Json]]
+```
+
+- Json is opaque: no constructor, equality, fields, or `j[key]` / `j[index]`. `IO.inspect` prints `<Json>`; `JSON.encode` prints its JSON contents.
+- Parse requires exactly one JSON value, with optional surrounding space/tab/CR/LF. Empty input, malformed JSON, trailing content, bad Unicode escapes, raw control characters in strings, and non-finite parsed numbers return errors. Repeated object keys keep the last value.
+- Get requires an object and a present key; at requires an array and a nonnegative index smaller than its length. Wrong kinds, missing keys, and bad indexes return errors. JSON false and null are present values, not missing-key sentinels.
+- String/Bool extraction requires that exact kind. Int extraction requires a signed 64-bit integer; `1.0` and `1e0` are not Int. Float extraction accepts integers and decimal/exponent numbers, with normal binary64 rounding, and rejects conversion overflow. Parsed integers may exceed Int bounds until extracted.
+- List extraction returns array elements as Json values, including heterogeneous arrays. Null stays inside Json; there is no null extractor yet.
+- Encode accepts Int, Float, Bool, String, Nil (as null), Json, lists, String-keyed maps, and structs, recursively. Results and Int-keyed maps are `CHECK-NOT-ENCODABLE`, even if empty or nested. Empty literals still need a known type.
+- Encoding is compact; structs follow declaration order, maps follow insertion order. Parsed Json object order is unspecified. Non-finite Floats halt with `RUNTIME-JSON-ENCODE` at the encode call.
+- Typed decoding, builders, and schemas are not implemented.
+
+```ruby
+def greet_json(text: String) -> Result[String]
+  root = try JSON.parse(text)
+  member = try JSON.get(root, "name")
+  name = try JSON.string(member)
+  return ok("hello, " + name)
+end
+
+def main() -> Nil
+  text = JSON.encode({"name": "Ana"})
+  puts(Result.unwrap!(greet_json(text)))
+end
+```
+
 ## Diagnostics
 
 A failure prints to stderr and exits 1 (the run stops at the first error):
@@ -233,6 +271,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-MAIN` | missing or wrong `main` |
 | `CHECK-NOT-A-STRUCT`, `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | field access on a non-struct, index on a non-list/map, `for` over a non-list |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
+| `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
@@ -240,6 +279,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text |
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |
+| `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
 

@@ -234,6 +234,65 @@
     (check-equal? (check-code (main-with "  x = IO.nope()")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH))
 
+  (test-case "JSON signatures and opaque types"
+    (check-ok
+     (main-with
+      (string-append
+       "  parsed: Result[Json] = JSON.parse(\"{}\")\n"
+       "  j: Json = Result.unwrap!(parsed)\n"
+       "  member: Result[Json] = JSON.get(j, \"key\")\n"
+       "  item: Result[Json] = JSON.at(j, 0)\n"
+       "  text: Result[String] = JSON.string(j)\n"
+       "  integer: Result[Int] = JSON.int(j)\n"
+       "  decimal: Result[Float] = JSON.float(j)\n"
+       "  flag: Result[Bool] = JSON.bool(j)\n"
+       "  items: Result[List[Json]] = JSON.list(j)\n"
+       "  encoded: String = JSON.encode(j)")))
+    (for ([body '("  x = JSON.parse(1)"
+                  "  x = JSON.get(Result.unwrap!(JSON.parse(\"{}\")), 1)"
+                  "  x = JSON.at(Result.unwrap!(JSON.parse(\"[]\")), \"0\")"
+                  "  x = JSON.string(\"text\")"
+                  "  x = JSON.int(1)"
+                  "  x = JSON.float(1.0)"
+                  "  x = JSON.bool(false)"
+                  "  x = JSON.list([1])"
+                  "  x: Int = JSON.int(Result.unwrap!(JSON.parse(\"1\")))"
+                  "  x = Result.unwrap!(JSON.parse(\"1\")) == Result.unwrap!(JSON.parse(\"1\"))")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (for ([name '("parse" "encode" "get" "at" "string" "int" "float" "bool" "list")])
+      (check-equal? (check-code (main-with (format "  x = JSON.~a()" name))) 'CHECK-ARITY))
+    (check-equal? (check-code (main-with "  x: Json[Int] = Result.unwrap!(JSON.parse(\"1\"))"))
+                  'CHECK-UNKNOWN-TYPE)
+    (check-equal? (check-code (main-with "  x = Json()")) 'CHECK-UNKNOWN-TYPE)
+    (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"{}\"))\n  x = j.key"))
+                  'CHECK-NOT-A-STRUCT)
+    (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"[]\"))\n  x = j[0]"))
+                  'CHECK-NOT-INDEXABLE)
+    (for ([name '("Json" "JSON")])
+      (check-equal? (check-code (string-append (format "struct ~a\nend\n" name) (main-with "")))
+                    'CHECK-REDEFINED-NAME)))
+
+  (test-case "JSON encoding checks nested types, including recursive structs"
+    (define node "struct Node\n  children: List[Node]\n  value: Int\nend\n")
+    (check-ok (string-append node (main-with "  x = JSON.encode(Node(value: 1, children: []))")))
+    (check-ok (string-append
+               "struct A\n  bs: List[B]\nend\nstruct B\n  as: List[A]\nend\n"
+               (main-with "  x = JSON.encode(A(bs: []))")))
+    (for ([body '("  x = JSON.encode(ok(1))"
+                  "  x = JSON.encode([ok(1)])"
+                  "  x = JSON.encode({1: \"one\"})"
+                  "  x = JSON.encode({\"bad\": {1: true}})"
+                  "  m: Map[Int, String] = {}\n  x = JSON.encode(m)"
+                  "  xs: List[Result[Int]] = []\n  x = JSON.encode(xs)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-NOT-ENCODABLE))
+    (define rejected
+      (check-text (string-append
+                   "struct Bad\n  children: List[Bad]\n  value: Result[Int]\nend\n"
+                   (main-with "  x = JSON.encode(Bad(children: [], value: ok(1)))"))))
+    (check-equal? (diagnostic-code rejected) 'CHECK-NOT-ENCODABLE)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span rejected))) 6)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span rejected))) 19))
+
   (test-case "Result inference preserves context across the shared call path"
     (check-ok
      (string-append

@@ -9,7 +9,7 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON"))
 
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
@@ -121,7 +121,7 @@
       (define name (type-ref-name reference))
       (define arguments (type-ref-args reference))
       (cond
-        [(and (member name '("Int" "Float" "Bool" "String" "Nil"))
+        [(and (member name '("Int" "Float" "Bool" "String" "Nil" "Json"))
               (null? arguments))
          (string->symbol name)]
         [(and (string=? name "Result") (= (length arguments) 1))
@@ -141,7 +141,7 @@
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
                (type-ref-span reference)
-               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result")
+               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json")
                                                  (hash-keys structs))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -374,6 +374,19 @@
          'Bool]
         [else (bail 'CHECK-INTERNAL "unsupported operator" span)]))
 
+    (define (encodable-type? type [seen '()])
+      (cond
+        [(or (primitive-type? type) (eq? type 'Json)) #t]
+        [(list-type? type) (encodable-type? (cadr type) seen)]
+        [(map-type? type)
+         (and (eq? (cadr type) 'String) (encodable-type? (caddr type) seen))]
+        [(struct-type? type)
+         (define name (cadr type))
+         (or (member name seen)
+             (for/and ([field (in-list (hash-ref structs name))])
+               (encodable-type? (cdr field) (cons name seen))))]
+        [else #f]))
+
     (define (check-builtin-call expression expected entry)
       (define span (call-span expression))
       (define arguments (call-args expression))
@@ -407,6 +420,13 @@
          (define type (check-expression (car arguments) #f))
          (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
          'Int]
+        [(json-encode)
+         (define type (check-expression (car arguments) #f))
+         (unless (encodable-type? type)
+           (bail 'CHECK-NOT-ENCODABLE
+                 (format "cannot JSON.encode ~a or its nested types" (type->string type))
+                 (node-span (car arguments))))
+         'String]
         [(identity) (check-expression (car arguments) expected)]
         [(ok)
          (list 'Result (check-expression (car arguments)

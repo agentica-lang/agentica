@@ -1,8 +1,10 @@
 #lang racket
 
-(require "builtins.rkt"
+(require json
+         "builtins.rkt"
          "ast.rkt"
-         "diagnostic.rkt")
+         "diagnostic.rkt"
+         "json.rkt")
 
 (provide evaluate
          (struct-out instance)
@@ -93,6 +95,44 @@
           (if bang? (bail code message where) (failed (result-error message))))
         (define value (operation fail))
         (if bang? value (result-ok value))))
+
+    (define (json-extract value predicate expected [convert values])
+      (define data (json-value-data value))
+      (if (predicate data)
+          (result-ok (convert data))
+          (result-error (format "expected ~a" expected))))
+
+    (define (encode-json value span)
+      (with-handlers ([exn:fail?
+                       (lambda (failure)
+                         (bail 'RUNTIME-JSON-ENCODE (exn-message failure) span))])
+        (define out (open-output-string))
+        (define (write-object keys ref)
+          (display "{" out)
+          (for ([key (in-list keys)] [i (in-naturals)])
+            (unless (zero? i) (display "," out))
+            (write-json key out)
+            (display ":" out)
+            (write-value (ref key)))
+          (display "}" out))
+        (define (write-value value)
+          (cond
+            [(json-value? value) (write-json (json-value-data value) out #:null 'nil)]
+            [(instance? value)
+             (write-object (hash-ref struct-fields (instance-type-name value))
+                           (lambda (key) (hash-ref (instance-fields value) key)))]
+            [(mapping? value)
+             (write-object (reverse (mapping-reversed-keys value))
+                           (lambda (key) (hash-ref (mapping-table value) key)))]
+            [(list? value)
+             (display "[" out)
+             (for ([item (in-list value)] [i (in-naturals)])
+               (unless (zero? i) (display "," out))
+               (write-value item))
+             (display "]" out)]
+            [else (write-json value out #:null 'nil)]))
+        (write-value value)
+        (get-output-string out)))
 
     ;; Expressions ----------------------------------------------------------
 
@@ -188,6 +228,7 @@
         [(boolean? value) (if value "true" "false")]
         [(string? value) (format "~s" value)]
         [(number? value) (number->string value)]
+        [(json-value? value) "<Json>"]
         [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
@@ -253,6 +294,41 @@
         [("Map.keys") (reverse (mapping-reversed-keys (car arguments)))]
         [("Map.size") (hash-count (mapping-table (car arguments)))]
         [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
+        [("JSON.parse")
+         ;; Malformed exponents can raise non-read exceptions in Racket's reader.
+         ;; Only parsing is recoverable; argument evaluation stays outside.
+         (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
+           (result-ok (read-json-value (car arguments))))]
+        [("JSON.encode") (encode-json (car arguments) span)]
+        [("JSON.get")
+         (define data (json-value-data (car arguments)))
+         (define key (string->symbol (cadr arguments)))
+         (cond
+           [(not (hash? data)) (result-error "expected a JSON object")]
+           [(not (hash-has-key? data key)) (result-error (format "missing JSON key ~s" (cadr arguments)))]
+           [else (result-ok (json-value (hash-ref data key)))])]
+        [("JSON.at")
+         (define data (json-value-data (car arguments)))
+         (define index (cadr arguments))
+         (cond
+           [(not (list? data)) (result-error "expected a JSON array")]
+           [(not (< -1 index (length data))) (result-error "JSON array index is out of range")]
+           [else (result-ok (json-value (list-ref data index)))])]
+        [("JSON.string") (json-extract (car arguments) string? "a JSON string")]
+        [("JSON.int")
+         (json-extract (car arguments)
+                       (lambda (data) (and (exact-integer? data) (<= int-min data int-max)))
+                       "a signed 64-bit JSON integer")]
+        [("JSON.float")
+         (define data (json-value-data (car arguments)))
+         (define value (and (real? data) (exact->inexact data)))
+         (if (and value (rational? value))
+             (result-ok value)
+             (result-error "expected a JSON number representable as a finite Float"))]
+        [("JSON.bool") (json-extract (car arguments) boolean? "a JSON boolean")]
+        [("JSON.list")
+         (json-extract (car arguments) list? "a JSON array"
+                       (lambda (data) (map json-value data)))]
         [("List.size") (length (car arguments))]
         [("String.length") (string-length (car arguments))]
         [("String.upcase") (string-upcase (car arguments))]

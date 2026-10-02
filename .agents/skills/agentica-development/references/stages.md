@@ -47,8 +47,8 @@ The parser reads the keyword literals from their kind, not from `value`: `true` 
 | --- | --- |
 | lexer | `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE` |
 | parser | `PARSE-UNEXPECTED-TOKEN`, `PARSE-UNCLOSED-BLOCK`, `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET` |
-| checker | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-RESULT-TYPE`, `CHECK-TRY-CONTEXT`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL` |
-| evaluator | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-INVALID-NUMBER`, `RUNTIME-END-OF-INPUT`, `RUNTIME-UNWRAP-ERROR`, `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`, `RUNTIME-UNREACHABLE`, `RUNTIME-INTERNAL` |
+| checker | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-RESULT-TYPE`, `CHECK-TRY-CONTEXT`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-NOT-ENCODABLE`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL` |
+| evaluator | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-INVALID-NUMBER`, `RUNTIME-END-OF-INPUT`, `RUNTIME-UNWRAP-ERROR`, `RUNTIME-JSON-ENCODE`, `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`, `RUNTIME-UNREACHABLE`, `RUNTIME-INTERNAL` |
 
 ## `src/lexer.rkt`
 
@@ -88,7 +88,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 - Struct names are inserted before fields are resolved, and function signatures after, so forward references, recursion, and struct fields that name a later struct all work.
 - Catalogued builtin function names cannot be redefined. `ok` and `error` are additionally reserved on locals, parameters, loop variables, and fields.
-- Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`; `(list 'List T)`; `(list 'Map K V)` with `K` `Int` or `String`; `(list 'Result T)`; `(list 'Struct NAME)`.
+- Types are values, not structs: the symbols `Int`, `Float`, `Bool`, `String`, `Nil`, `Json` (opaque, not primitive for equality); `(list 'List T)`; `(list 'Map K V)` with `K` `Int` or `String`; `(list 'Result T)`; `(list 'Struct NAME)`.
 - Builtin module calls keep their dotted name in `call-name`. `check-builtin-call` reads arity/signature/fixed types from `builtins.rkt`; generic rules remain explicit stage-local branches. The evaluator reads the same entry's implementation key and trusts checked arity.
 - String operations count Unicode characters. Numeric conversions accept signed decimals: non-bang forms return Result; bang failures remain `RUNTIME-INVALID-NUMBER` / `RUNTIME-INTEGER-OVERFLOW`. IO.gets returns Result[String]; IO.gets! retains the old String/EOF diagnostic behavior.
 - Expected types must reach builtin calls for contextual ok/error and unwrap/default. An untyped error is CHECK-RESULT-TYPE. `try-expr` requires a Result-returning function and a Result operand; its payload type may differ from the enclosing success type. It does not guarantee a return.
@@ -108,6 +108,12 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 - Scopes are a list of frames of `name -> box`. A call starts a fresh scope list (callers' locals are not visible) and one `let/ec` per call for `return`.
 - `Int` results of `+ - *` and unary `-` are range-checked to signed 64-bit; `/` and `%` by zero fail for `Int` and `Float`; `==` on numbers uses `=`.
 - Index errors point at the index expression; arithmetic errors point at `op-span`.
+
+## `src/json.rkt`
+
+`(read-json-value text) -> json-value`, an opaque wrapper around Racket's JSON data. This helper raises only within the evaluator's local JSON.parse handler, which returns Result[Json]. It delegates grammar parsing to `read-json`, guards raw string controls, checks complete consumption with direct character iteration, and validates finite numbers with `jsexpr?`. Null is represented by `'nil`, false by `#f`, and missing keys are checked by membership, never a payload sentinel. The wrapper is an internal runtime type, not an Agentica constructor.
+
+JSON.encode recursively writes runtime values in evaluator.rkt, preserving struct/map order while `write-json` escapes scalars; failures become RUNTIME-JSON-ENCODE. JSON access/extraction uses Results, including out-of-range Int/Float conversions. IO.inspect prints `<Json>`.
 
 ## `src/builtins.rkt`
 

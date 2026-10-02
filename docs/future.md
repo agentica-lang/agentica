@@ -68,7 +68,7 @@ The expression grammar must also be extended to build variants, for example `Ok(
 | Async and fibers | Suspend execution on I/O; initially one thread | API, cancellation, and error propagation |
 | Actors | Own messages and mailboxes | Syntax, isolation, shared values, and supervision |
 
-## 4. Standard library and function values (phases 5f–5m)
+## 4. Standard library and function values (phases 5f2–5m)
 
 Fixed here so each roadmap phase can take it as its specification.
 
@@ -84,8 +84,8 @@ primary          = (* …core forms, plus: *)
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
-- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Json`, `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
-- **Names reserved when each phase starts:** `Fn`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP`, and `HTTP`.
+- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
+- **Names reserved when each phase starts:** `Fn`, `Socket`, `Listener`, `Process`, `Response`, `TCP`, and `HTTP`. `Json` and `JSON` are already core; typed decoding and schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int
