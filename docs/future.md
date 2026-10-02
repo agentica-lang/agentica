@@ -184,7 +184,7 @@ Besides `Enum`, function values (5j), and the builtins catalog (5e), these are m
 - **Maps and sets:** `Map.get` with a default, `Map.delete`, `Map.values` (above); a set type, or `Map[T, Bool]` as the documented way; stack, queue, and priority queue.
 - **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
 - **Structures:** tuples or pairs, and nested lists and matrices (check that `List[List[Int]]` works end to end).
-- **Performance:** every `Map.put` and list update copies, so a loop of 10^5 steps is O(n²). Needs a persistent vector and map ("Faster maps" in the roadmap).
+- **Performance:** the proposed `Enum.append` copies the list, so repeated appends are O(n²); a persistent vector remains a possible later optimization. Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
 - **To verify:** the recursion depth the evaluator allows, and the integer range (arbitrary precision today in Racket; most challenges assume 64 bits).
 - **Outside the language:** online judges do not accept Agentica, so challenges run locally against hidden cases, as in `tests/eval/`. The interpreter is a tree walker on Racket, so judge time limits are tight.
 

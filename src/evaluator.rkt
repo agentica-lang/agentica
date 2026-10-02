@@ -10,18 +10,17 @@
          (struct-out exit-code))
 
 (struct instance (type-name fields) #:transparent)
-(struct mapping (pairs) #:transparent)
+(struct mapping (table reversed-keys) #:transparent)
 (struct exit-code (code) #:transparent)
 (struct result-ok (value) #:transparent)
 (struct result-error (message) #:transparent)
 
 (define (mapping-put target key value)
-  (define pairs (mapping-pairs target))
-  (mapping
-   (if (assoc key pairs)
-       (for/list ([pair (in-list pairs)])
-         (if (equal? (car pair) key) (cons key value) pair))
-       (append pairs (list (cons key value))))))
+  (define table (mapping-table target))
+  (mapping (hash-set table key value)
+           (if (hash-has-key? table key)
+               (mapping-reversed-keys target)
+               (cons key (mapping-reversed-keys target)))))
 
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
@@ -118,7 +117,7 @@
          (for/list ([element (in-list (list-lit-elements expression))])
            (eval-expression element))]
         [(map-lit? expression)
-         (for/fold ([result (mapping '())])
+         (for/fold ([result (mapping (hash) '())])
                    ([entry (in-list (map-lit-entries expression))])
            (mapping-put result
                         (eval-expression (map-entry-key entry))
@@ -131,12 +130,11 @@
          (define index (eval-expression (index-access-index expression)))
          (cond
            [(mapping? target)
-            (define pair (assoc index (mapping-pairs target)))
-            (unless pair
-              (bail 'RUNTIME-KEY-NOT-FOUND
-                    (format "key ~s is not in the map" index)
-                    (node-span (index-access-index expression))))
-            (cdr pair)]
+            (hash-ref (mapping-table target) index
+                      (lambda ()
+                        (bail 'RUNTIME-KEY-NOT-FOUND
+                              (format "key ~s is not in the map" index)
+                              (node-span (index-access-index expression)))))]
            [else
             (unless (< -1 index (length target))
               (bail 'RUNTIME-INDEX-OUT-OF-RANGE
@@ -205,10 +203,10 @@
         [(mapping? value)
          (format "{~a}"
                  (string-join
-                  (for/list ([pair (in-list (mapping-pairs value))])
+                  (for/list ([key (in-list (reverse (mapping-reversed-keys value)))])
                     (format "~a: ~a"
-                            (value->debug-string (car pair))
-                            (value->debug-string (cdr pair))))
+                            (value->debug-string key)
+                            (value->debug-string (hash-ref (mapping-table value) key))))
                   ", "))]
         [(list? value)
          (format "[~a]" (string-join (map value->debug-string value) ", "))]
@@ -251,9 +249,9 @@
         [("IO.eof?") (eof-object? (peek-char (current-input-port)))]
         [("System.args") program-args]
         [("System.exit") (escape (exit-code (car arguments)))]
-        [("Map.has_key?") (and (assoc (cadr arguments) (mapping-pairs (car arguments))) #t)]
-        [("Map.keys") (map car (mapping-pairs (car arguments)))]
-        [("Map.size") (length (mapping-pairs (car arguments)))]
+        [("Map.has_key?") (hash-has-key? (mapping-table (car arguments)) (cadr arguments))]
+        [("Map.keys") (reverse (mapping-reversed-keys (car arguments)))]
+        [("Map.size") (hash-count (mapping-table (car arguments)))]
         [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
         [("List.size") (length (car arguments))]
         [("String.length") (string-length (car arguments))]

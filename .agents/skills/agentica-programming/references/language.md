@@ -87,7 +87,7 @@ return count
 ## Expressions
 
 - Literals: `42`, `3.14`, `"text"` (escapes `\" \\ \n \r \t`), `true`, `false`, `nil`. A minus sign is an operator, not part of the literal. There is no string interpolation: `"#{x}"` is plain text.
-- Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value).
+- Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value and its first-insertion position; `Map.put` replacement also keeps that position).
 - An empty `[]` or `{}` needs a known type: an annotation, a parameter, a field, or the function result. A non-empty list needs elements of one type.
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
@@ -156,7 +156,8 @@ System.exit(code: Int) -> Nil
 ```
 
 - A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
-- Lists have no append or concatenation function. To build a list, write a literal; to change a map, use `Map.put`.
+- Lists have no append or concatenation function. To build a list, write a literal; to change a map, use `Map.put`, which leaves the original unchanged.
+- Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
 
 ## Result and try
