@@ -105,36 +105,35 @@
           (result-error (format "expected ~a" expected))))
 
     (define (encode-json value span)
-      (with-handlers ([exn:fail?
-                       (lambda (failure)
-                         (bail 'RUNTIME-JSON-ENCODE (exn-message failure) span))])
-        (define out (open-output-string))
-        (define (write-object keys ref)
-          (display "{" out)
-          (for ([key (in-list keys)] [i (in-naturals)])
-            (unless (zero? i) (display "," out))
-            (write-json key out)
-            (display ":" out)
-            (write-value (ref key)))
-          (display "}" out))
-        (define (write-value value)
-          (cond
-            [(json-value? value) (write-json (json-value-data value) out #:null 'nil)]
-            [(instance? value)
-             (write-object (hash-ref struct-fields (instance-type-name value))
-                           (lambda (key) (hash-ref (instance-fields value) key)))]
-            [(mapping? value)
-             (write-object (reverse (mapping-reversed-keys value))
-                           (lambda (key) (hash-ref (mapping-table value) key)))]
-            [(list? value)
-             (display "[" out)
-             (for ([item (in-list value)] [i (in-naturals)])
-               (unless (zero? i) (display "," out))
-               (write-value item))
-             (display "]" out)]
-            [else (write-json value out #:null 'nil)]))
-        (write-value value)
-        (get-output-string out)))
+      (define out (open-output-string))
+      (define (write-object keys ref)
+        (display "{" out)
+        (for ([key (in-list keys)] [i (in-naturals)])
+          (unless (zero? i) (display "," out))
+          (write-json key out)
+          (display ":" out)
+          (write-value (ref key)))
+        (display "}" out))
+      (define (write-value value)
+        (cond
+          [(json-value? value) (write-json (json-value-data value) out #:null 'nil)]
+          [(instance? value)
+           (write-object (hash-ref struct-fields (instance-type-name value))
+                         (lambda (key) (hash-ref (instance-fields value) key)))]
+          [(mapping? value)
+           (write-object (reverse (mapping-reversed-keys value))
+                         (lambda (key) (hash-ref (mapping-table value) key)))]
+          [(list? value)
+           (display "[" out)
+           (for ([item (in-list value)] [i (in-naturals)])
+             (unless (zero? i) (display "," out))
+             (write-value item))
+           (display "]" out)]
+          [(and (real? value) (not (rational? value)))
+           (bail 'RUNTIME-JSON-ENCODE "cannot encode a non-finite Float" span)]
+          [else (write-json value out #:null 'nil)]))
+      (write-value value)
+      (get-output-string out))
 
     ;; Expressions ----------------------------------------------------------
 
@@ -293,7 +292,7 @@
         [("IO.read_bytes")
          (define count (car arguments))
          (if (<= 0 count max-read-bytes)
-             (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
+             (with-handlers ([exn:fail? (lambda (_) (result-error "input read failed"))])
                (define data (read-bytes count (current-input-port)))
                (result-ok (if (eof-object? data) '() (bytes->list data))))
              (result-error (format "byte count must be between 0 and ~a" max-read-bytes)))]

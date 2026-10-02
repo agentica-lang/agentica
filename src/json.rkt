@@ -19,7 +19,10 @@
       [(char=? ch #\") (values (not quoted?) #f)]
       [else (values quoted? #f)]))
   (define input (open-input-string text))
-  (define data (read-json input #:null 'nil))
+  ;; read-json can raise reader or contract errors; report one Agentica-level message.
+  (define data
+    (with-handlers ([exn:fail? (lambda (_) (error 'JSON.parse "invalid JSON"))])
+      (read-json input #:null 'nil)))
   (when (eof-object? data)
     (error 'JSON.parse "expected a JSON value"))
   (for ([ch (in-port read-char input)])
