@@ -766,7 +766,7 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 - [ ] Phase 5d3: agent API (`check --json`, `symbols`, `show`, `refs`).
 - [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval-6a.md`).
 - [x] Phase 5e: Result[T], try, and the builtins catalog.
-- [ ] Faster maps (before JSON).
+- [x] Faster maps (before JSON).
 - [ ] Phase 5f: JSON.
 - [ ] Phase 5f2: typed JSON decoding.
 - [ ] Phase 5g: TCP.
@@ -886,7 +886,15 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 ## Later extensions
 
-- [ ] Faster maps: `mapping` in `src/evaluator.rkt` is an association list, so `Map.put`, `Map.has_key?`, and `m[key]` are O(n) and building a map of n entries is O(n²). Replace it with an immutable `hash` plus a reversed key list (insertion order), keeping `mapping-put` as the only writer. Do this before JSON (5f), once 5e is done. Lists keep O(n) indexing; document it and favor `for`, with no runtime rewrite yet.
+- [x] Faster maps: replaced association lists in `src/evaluator.rkt` with Racket immutable equal?-based hashes plus reversed insertion-order keys; `mapping-put` remains the only writer. Lookup/update are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison), Map.size is O(1), and Map.keys is O(n). Replacement preserves first-insertion order, old maps stay unchanged, and missing keys keep their diagnostic spans. Extended evaluator coverage for replacements, equal String keys, Int keys, false/nil payloads, empty maps, and nested debug order. `racket benchmarks/maps.rkt` compares checked build/build+read workloads at 1k/10k/50k entries (three-sample medians, no CI timing thresholds). Completed before JSON (5f). Lists retain O(n) indexing; favor `for`, with no runtime rewrite.
+  Local benchmark on Racket CS 9.3: three-sample medians, baseline `27c8cd4` versus hash-backed maps. Timings include evaluation only; build+read includes construction followed by one membership check and indexed read per entry. These are observations, not CI limits or timing guarantees.
+
+  | Entries | Build before / after (ms) | Build+read before / after (ms) |
+  |---|---|---|
+  | 1,000 | 9.94 / 1.23 | 25.11 / 2.85 |
+  | 10,000 | 869.56 / 12.59 | 2,200.83 / 29.21 |
+  | 50,000 | 23,240.65 / 61.62 | 54,904.19 / 146.60 |
+
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.

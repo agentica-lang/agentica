@@ -114,15 +114,40 @@
                     (string-append
                      "  m: Map[String, Int] = {\"b\": 1, \"a\": 2, \"b\": 3}\n"
                      "  n = Map.put(m, \"c\", 4)\n"
-                     "  for k in Map.keys(n)\n    puts(k)\n  end\n"
-                     "  if Map.has_key?(m, \"c\") or m[\"b\"] != 3 or Map.size(m) != 2 or Map.size(n) != 3 or List.size(Map.keys(n)) != 3\n"
+                     "  p = Map.put(n, String.downcase(\"B\"), 9)\n"
+                     "  for k in Map.keys(p)\n    puts(k)\n  end\n"
+                     "  IO.inspect(m)\n  IO.inspect(n)\n  IO.inspect(p)\n"
+                     "  if Map.has_key?(m, \"c\") or m[\"b\"] != 3 or n[\"b\"] != 3 or p[\"b\"] != 9 or Map.size(m) != 2 or Map.size(n) != 3 or Map.size(p) != 3 or List.size(Map.keys(p)) != 3\n"
                      "    puts(\"wrong\")\n  end")))
-                  "b\na\nc\n"))
+                  "b\na\nc\n{\"b\": 3, \"a\": 2}\n{\"b\": 3, \"a\": 2, \"c\": 4}\n{\"b\": 9, \"a\": 2, \"c\": 4}\n"))
+
+  (test-case "maps preserve empty maps, integer keys, false/nil values, and nested order"
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  empty: Map[Int, Bool] = {}\n"
+        "  IO.inspect(empty)\n  IO.inspect(Map.keys(empty))\n  IO.inspect(Map.size(empty))\n"
+        "  flags = Map.put(empty, -1, false)\n"
+        "  changed = Map.put(flags, 9223372036854775807, true)\n"
+        "  changed = Map.put(changed, -1, true)\n"
+        "  IO.inspect(flags[-1])\n  IO.inspect(changed[-1])\n"
+        "  IO.inspect(Map.has_key?(flags, -1))\n"
+        "  IO.inspect(Map.has_key?(flags, 9223372036854775807))\n"
+        "  IO.inspect(Map.size(changed))\n  IO.inspect(Map.keys(changed))\n"
+        "  nothing: Map[String, Nil] = {\"none\": nil}\n"
+        "  IO.inspect(nothing[\"none\"])\n  IO.inspect(Map.has_key?(nothing, \"none\"))\n"
+        "  nested: Map[String, Result[Map[String, Int]]] = {\"z\": ok({\"b\": 1, \"a\": 2, \"b\": 3}), \"a\": error(\"bad\")}\n"
+        "  IO.inspect(nested)")))
+     "{}\n[]\n0\nfalse\ntrue\ntrue\nfalse\n2\n[-1, 9223372036854775807]\nnil\ntrue\n{\"z\": ok({\"b\": 3, \"a\": 2}), \"a\": error(\"bad\")}\n"))
 
   (test-case "a missing map key is a located diagnostic"
-    (define missing (diagnostic-of (main-with "  m = {\"a\": 1}\n  x = m[\"z\"]")))
-    (check-equal? (diagnostic-code missing) 'RUNTIME-KEY-NOT-FOUND)
-    (check-equal? (position-of missing) '(3 9)))
+    (for ([body '("  m = {\"a\": 1}\n  x = m[\"z\"]"
+                  "  m: Map[Int, Bool] = {}\n  x = m[-1]"
+                  "  m = {-1: false}\n  x = m[0]")])
+      (define missing (diagnostic-of (main-with body)))
+      (check-equal? (diagnostic-code missing) 'RUNTIME-KEY-NOT-FOUND)
+      (check-equal? (position-of missing) '(3 9))))
 
   (test-case "String.slice and number conversions fail with located diagnostics"
     (define past-end (diagnostic-of (main-with "  x = String.slice(\"abc\", 2, 5)")))

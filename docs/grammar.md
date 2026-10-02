@@ -301,9 +301,10 @@ more = Map.put(stock, "kiwi", 7)
 
 - A literal uses braces and `key: value`; it allows several lines and a trailing comma. An empty `{}` needs an expected type, like `[]`; without it the diagnostic is `CHECK-EMPTY-MAP-TYPE` (`CHECK-EMPTY-LIST-TYPE` is only for `[]`).
 - `m[key]` returns the value. The key must have type `K`. A missing key is a runtime error.
-- If a literal repeats a key, the last one wins.
+- If a literal repeats a key, the last value wins; the key keeps its first-insertion position. Replacing a key with `Map.put` also preserves its position.
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
 - There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
+- This interpreter uses Racket immutable hashes: lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 
 ### Minimal builtin functions
 
