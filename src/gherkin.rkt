@@ -71,6 +71,8 @@
            (set! cell (open-output-string))]
           [else (write-char ch cell)]))
       (when escaped? (fail 'PARSE-GHERKIN-TABLE "unfinished table escape"))
+      (unless (string=? (get-output-string cell) "")
+        (fail 'PARSE-GHERKIN-TABLE "a table row must end with an unescaped |"))
       (when (null? cells) (fail 'PARSE-GHERKIN-TABLE "a table row needs at least one cell"))
       (reverse cells))
     (define (read-table!)
