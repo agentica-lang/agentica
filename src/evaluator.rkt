@@ -7,7 +7,7 @@
          "bdd.rkt"
          "runtime-values.rkt"
          "task.rkt"
-         "builtin-types.rkt" "network.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
+         "builtin-types.rkt" "network.rkt" "filesystem.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
          "json.rkt")
 
 (provide evaluate
@@ -46,13 +46,22 @@
       (for/fold ([fields builtin-field-order]) ([declaration (in-list (program-declarations program))]
                  #:when (struct-decl? declaration))
         (hash-set fields (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration)))))
+    (define file-handles (make-hasheq))
+    (define file-registry-lock (make-semaphore 1))
+    (define file-registry-closing? (box #f))
     (task-run
      (lambda (run)
        (parameterize ([current-network-owner run]
-                      [current-network-shutdown (lambda (cust) (task-shutdown! run cust))])
+                      [current-network-shutdown (lambda (cust) (task-shutdown! run cust))]
+                      [current-file-owner run]
+                      [current-file-shutdown (lambda (cust) (task-shutdown! run cust))]
+                      [current-file-handles file-handles]
+                      [current-file-registry-lock file-registry-lock]
+                      [current-file-registry-closing file-registry-closing?])
          (evaluate-with-ports program program-args entrypoint arguments builtin-handler
                               functions struct-fields run)))
-     max-steps (program-span program) #:require-complete? require-complete?)))
+     max-steps (program-span program) #:require-complete? require-complete?
+     #:cleanup (lambda () (filesystem-close-all! file-handles file-registry-lock file-registry-closing?)))))
 
 (define (evaluate-with-ports program program-args entrypoint entry-arguments builtin-handler
                              functions struct-fields run)
@@ -246,6 +255,7 @@
         [(http-server? value) "<HttpServer>"]
         [(http-body? value) "<HttpBody>"]
         [(http-writer? value) "<HttpWriter>"]
+        [(file-handle? value) "<FileHandle>"]
         [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
@@ -287,6 +297,9 @@
         (http-client-request client method url headers data (bytes-length data) #f #f
                              invoke-network spawn-network))
       (cond
+        [(string-prefix? name "File.") (filesystem-call name arguments)]
+        [(string-prefix? name "Dir.") (filesystem-call name arguments)]
+        [(string-prefix? name "Path.") (filesystem-call name arguments)]
         [(or (string-prefix? name "TCP.") (string-prefix? name "TLS.")) (network-call name arguments)]
         [(string-prefix? name "HTTP.")
          (match name

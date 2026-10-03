@@ -19,7 +19,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, `Task`, `TCP`, `TLS`, and `HTTP` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and `HTTP` |
 
 Enums, `Option`, interpolation, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
@@ -615,6 +615,51 @@ A handler's explicit unwrap failure remains a global diagnostic.
 HTTP/1.0, upgrades, proxies, automatic redirects/retries, cookie management and
 a dedicated SSE API are outside this phase.
 
+### Files and paths
+
+`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. File handles
+are opaque, belong to one evaluation, and close when it ends. The interpreter
+uses the host user's filesystem permissions; there is no filesystem permission
+flag. File operations accept regular files and symlinks to regular files, and
+reject directories and special files.
+
+```text
+File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
+File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
+File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
+File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Nil]
+File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
+File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
+File.close(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
+File.read_text(path: String, timeout_ms: Int) -> Result[String]
+File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
+File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
+File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
+Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
+Dir.mkdir(path: String, timeout_ms: Int) -> Result[Nil]
+Path.cwd() -> Result[String]
+Path.join(parts: List[String]) -> Result[String]
+Path.resolve(path: String) -> Result[String]
+```
+
+`File.open` modes are `read`, `write` and `append`. Read requires an existing
+regular file; write creates or truncates; append creates or appends. Text is
+strict UTF-8. Whole-text helpers and each stream read/write are limited to
+1 MiB; `read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF.
+`read_line` removes LF or CRLF, accepts a final unterminated line, and returns
+an error for EOF before any line or invalid UTF-8. Byte values are 0..255.
+`File.close` flushes output and is idempotent. Explicit flush and close return
+Results so I/O failures remain recoverable.
+
+Timeouts are positive milliseconds and include the serialized handle lock wait.
+Timing out active I/O closes that handle; timing out while waiting for its lock
+leaves it open. Errors are Results. `File.stat` follows symlinks and reports
+`FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`; directory
+sizes are zero. `Dir.list` returns immediate entry names sorted by name.
+`Dir.mkdir` creates parents and succeeds when the directory already exists.
+`Path.join` follows the host's path rules. `Path.resolve` makes a lexical
+absolute path and does not resolve symlinks.
+
 ### Builtin discovery and execution budget
 
 `Map.get` and `HTTP.client` select signatures by arity. Their text help lists all variants; JSON help contains `name`, `description`, `effects`, and `overloads`, whose entries describe each signature. Other builtin help keeps the single-signature JSON format.
@@ -622,8 +667,6 @@ a dedicated SSE API are outside this phase.
 `agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
-
-Files and richer conversions need a later API; see [`future.md`](future.md).
 
 ## 7. Diagnostics for agents
 

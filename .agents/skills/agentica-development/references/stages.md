@@ -129,6 +129,10 @@ One catalog of name, parameters, result, generic rule tag, implementation key, e
 
 `builtin` has an automatic alternatives field, filled only during catalog initialization. `builtin-ref` optionally selects a signature by arity; checker and evaluator use the same selection. Map.get/2 returns Result[V]; Map.get/3 returns V with an eagerly evaluated default. Text help lists both signatures, and its JSON help carries overloads; single-signature JSON output is unchanged. List.repeat count errors are RUNTIME-INVALID-COUNT at the argument span, with a 1048576-element cap. List.set reuses RUNTIME-INDEX-OUT-OF-RANGE. Map.delete removes both hash storage and insertion-order keys.
 
+## `src/filesystem.rkt`
+
+`filesystem-call` implements the File, Dir and Path catalog entries. Opaque FileHandle and FileInfo record layout live in builtin-types.rkt. The evaluator supplies the execution owner and shutdown hook; file ports are created under child custodians of that execution and close on explicit close, active-I/O timeout or run cleanup. task-run's cleanup hook flushes registered output handles before shutting down the run custodian. The per-handle lock covers full timed operations. Whole-file helpers enforce the UTF-8 byte cap before returning data; filesystem errors are Results.
+
 ## `src/main.rkt`
 
 `test` dispatches to bdd-runner before the normal language pipeline. It accepts feature paths, repeatable --steps and image/runtime options, discovers sorted features, prints plain/AI/JSON reports and enforces report exit_code. Ordinary evaluation installs the BDD.run service. BDD options after test are parsed separately so ordinary program arguments remain untouched.
