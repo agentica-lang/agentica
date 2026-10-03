@@ -9,7 +9,7 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD"))
 
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
@@ -126,6 +126,8 @@
          (string->symbol name)]
         [(and (string=? name "Result") (= (length arguments) 1))
          (list 'Result (resolve-type (car arguments)))]
+        [(and (string=? name "Fn") (pair? arguments))
+         (cons 'Fn (map resolve-type arguments))]
         [(and (string=? name "List") (= (length arguments) 1))
          (list 'List (resolve-type (car arguments)))]
         [(and (string=? name "Map") (= (length arguments) 2))
@@ -141,7 +143,7 @@
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
                (type-ref-span reference)
-               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json")
+               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json" "Fn")
                                                  (hash-keys structs))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -268,6 +270,22 @@
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]
           [(call? expression) (check-call expression expected)]
+          [(function-ref? expression)
+           (define signature (hash-ref functions (function-ref-name expression) #f))
+           (unless signature
+             (bail 'CHECK-UNKNOWN-NAME "a function reference requires a declared function"
+                   (function-ref-span expression)))
+           (cons 'Fn (append (car signature) (list (cadr signature))))]
+          [(invoke? expression)
+           (define target (check-expression (invoke-target expression) #f))
+           (unless (and (pair? target) (eq? (car target) 'Fn))
+             (bail 'CHECK-TYPE-MISMATCH ".call requires a function value" (invoke-span expression)))
+           (define parameters (drop-right (cdr target) 1))
+           (unless (= (length parameters) (length (invoke-args expression)))
+             (bail 'CHECK-ARITY "wrong number of function arguments" (invoke-span expression)))
+           (for ([argument (in-list (invoke-args expression))] [parameter (in-list parameters)])
+             (check-expression argument parameter))
+           (last target)]
           [(try-expr? expression) (check-try expression expected)]
           [(construct? expression) (check-construct expression)]
           [(list-lit? expression) (check-list expression expected)]

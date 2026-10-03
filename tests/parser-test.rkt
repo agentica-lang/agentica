@@ -29,6 +29,15 @@
   (binding-value (car (function-decl-body fn))))
 
 (module+ test
+  (test-case "function references and chained calls retain their spans"
+    (define expression (parse-expr "handlers[\"double\"].call(21)"))
+    (check-true (invoke? expression))
+    (check-true (index-access? (invoke-target expression)))
+    (check-equal? (literal-value (car (invoke-args expression))) 21)
+    (define reference (parse-expr "&done?"))
+    (check-equal? (function-ref-name reference) "done?")
+    (check-equal? (source-position-column (source-span-start (node-span reference))) 7)
+    (check-equal? (parse-code "def main() -> Nil\n  f = &\nend\n") 'PARSE-UNEXPECTED-TOKEN))
   (test-case "try has unary precedence and a source span"
     (define expression (parse-expr "try ok(1) + 2"))
     (check-true (binary? expression))

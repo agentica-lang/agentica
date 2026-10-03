@@ -4,16 +4,19 @@
          "builtins.rkt"
          "ast.rkt"
          "diagnostic.rkt"
+         "bdd.rkt"
          "json.rkt")
 
 (provide evaluate
          (struct-out instance)
          (struct-out mapping)
-         (struct-out exit-code))
+         (struct-out exit-code)
+         (struct-out function-value))
 
 (struct instance (type-name fields) #:transparent)
 (struct mapping (table reversed-keys) #:transparent)
 (struct exit-code (code) #:transparent)
+(struct function-value (name) #:transparent)
 (struct result-ok (value) #:transparent)
 (struct result-error (message) #:transparent)
 
@@ -38,13 +41,16 @@
                   #:out [output (current-output-port)]
                   #:err [error-output (current-error-port)]
                   #:args [program-args '()]
-                  #:max-steps [max-steps #f])
+                  #:max-steps [max-steps #f]
+                  #:entrypoint [entrypoint "main"]
+                  #:arguments [arguments '()]
+                  #:builtin-handler [builtin-handler #f])
   (parameterize ([current-input-port input]
                  [current-output-port output]
                  [current-error-port error-output])
-    (evaluate-with-ports program program-args max-steps)))
+    (evaluate-with-ports program program-args max-steps entrypoint arguments builtin-handler)))
 
-(define (evaluate-with-ports program program-args max-steps)
+(define (evaluate-with-ports program program-args max-steps entrypoint entry-arguments builtin-handler)
   (define functions (make-hash))
   (define struct-fields (make-hash))
   (define scopes '())
@@ -145,6 +151,11 @@
         [(unary? expression) (eval-unary expression)]
         [(binary? expression) (eval-binary expression)]
         [(call? expression) (eval-call expression)]
+        [(function-ref? expression) (function-value (function-ref-name expression))]
+        [(invoke? expression)
+         (define target (eval-expression (invoke-target expression)))
+         (define arguments (map eval-expression (invoke-args expression)))
+         (call-function (hash-ref functions (function-value-name target)) arguments (invoke-span expression))]
         [(try-expr? expression)
          (define result (eval-expression (try-expr-operand expression)))
          (if (result-ok? result) (result-ok-value result) (return-to result))]
@@ -230,6 +241,7 @@
         [(string? value) (format "~s" value)]
         [(number? value) (number->string value)]
         [(json-value? value) "<Json>"]
+        [(function-value? value) "<Fn>"]
         [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
@@ -262,6 +274,19 @@
       (define name (if entry (builtin-implementation entry) (call-name expression)))
       (define span (call-span expression))
       (case name
+        [("BDD.run" "BDD.step" "BDD.doc_string" "BDD.table" "BDD.assert" "BDD.set" "BDD.get"
+          "BDD.given_program" "BDD.when_line" "BDD.when_input" "BDD.when_eof" "BDD.then_line"
+          "BDD.then_json_line" "BDD.then_stdin_open" "BDD.then_exit" "BDD.then_stdout" "BDD.then_stderr")
+         (unless builtin-handler
+           (bail 'RUNTIME-BDD-CONTEXT "BDD needs a runner context" span))
+         (define value (builtin-handler name arguments span))
+         (cond
+           [(diagnostic? value) (escape value)]
+           [(bdd-result? value)
+            (if (bdd-result-ok? value)
+                (result-ok (bdd-result-value value))
+                (result-error (bdd-result-value value)))]
+           [else value])]
         [("puts") (displayln (car arguments)) 'nil]
         [("ok") (result-ok (car arguments))]
         [("error") (result-error (car arguments))]
@@ -505,4 +530,4 @@
         [(struct-decl? declaration)
          (hash-set! struct-fields (struct-decl-name declaration)
                     (map field-decl-name (struct-decl-fields declaration)))]))
-    (call-function (hash-ref functions "main") '() (program-span program)))))
+    (call-function (hash-ref functions entrypoint) entry-arguments (program-span program)))))

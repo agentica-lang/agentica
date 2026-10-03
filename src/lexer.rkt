@@ -203,7 +203,7 @@
                      "," 'comma ":" 'colon "." 'dot
                      "=" 'assign "+" 'plus "-" 'minus
                      "*" 'multiply "/" 'divide "%" 'modulo
-                     "<" 'less ">" 'greater)
+                     "<" 'less ">" 'greater "&" 'ampersand)
                lexeme
                #f))
             (unless kind

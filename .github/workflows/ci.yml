@@ -17,6 +17,8 @@ jobs:
           variant: CS
           version: '9.3'
       - run: make test
+      - run: make test-bdd
+      - run: racket src/main.rkt examples/dispatch.agc
       - run: racket src/main.rkt examples/hello.agc
       - run: racket src/main.rkt examples/classify.agc
       - run: racket src/main.rkt examples/tasks.agc
