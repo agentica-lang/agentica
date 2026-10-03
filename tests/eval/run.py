@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -17,27 +18,51 @@ EVAL = ROOT / "tests" / "eval"
 TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
 ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py"}
-HOME = Path.home()
-HIDDEN_PATHS = [ROOT, HOME / ".graphmem", HOME / ".claude", HOME / ".cache" / "gmem-bench"]
 NET_WORDS = ("curl", "wget", "git clone", "github.com")
 CASE_TIMEOUT = 10
 WRITE_LOCK = threading.Lock()
+WORKSPACE = Path("/workspace")
+SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
+ROOTFS_PATH = f"/workspace/bin:{SYSTEM_PATH}"
+SAFE_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONUTF8": "1"}
 
 
-def build():
+def build() -> None:
     subprocess.run(["make", "exe"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
 
 
-def prepare(work, task, arm):
+def clone_rootfs(template: Path, destination: Path) -> Path:
+    if not template.is_dir():
+        raise SystemExit(f"chroot root filesystem not found: {template}")
+    shutil.copytree(template, destination, symlinks=True)
+    workspace = destination / "workspace"
+    if workspace.is_symlink() or workspace.is_file():
+        workspace.unlink()
+    elif workspace.exists():
+        shutil.rmtree(workspace)
+    home = destination / "home"
+    if home.is_symlink() or home.is_file():
+        home.unlink()
+    home.mkdir(exist_ok=True)
+    agent_home = home / "agent"
+    if agent_home.is_symlink() or agent_home.is_file():
+        agent_home.unlink()
+    elif agent_home.exists():
+        shutil.rmtree(agent_home)
+    return destination
+
+
+def prepare(work: Path, task: str, arm: str) -> None:
     ext = ARMS[arm]
-    work.mkdir(parents=True)
+    work.mkdir(parents=True, exist_ok=True)
     shutil.copy(TASKS / task / "task.md", work / "task.md")
     start = TASKS / task / f"start.{ext}"
     if start.exists():
         shutil.copy(start, work / start.name)
-    (work / "bin").mkdir()
+    (work / "bin").mkdir(exist_ok=True)
     shutil.copy(ROOT / "dist" / "agentica", work / "bin" / "agentica")
     if arm == "skill":
+        (work / "skills").mkdir()
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
     if arm == "grammar":
         (work / "docs").mkdir()
@@ -45,7 +70,7 @@ def prepare(work, task, arm):
         shutil.copytree(ROOT / "examples", work / "examples")
 
 
-def prompt(work, arm):
+def prompt(work: Path, arm: str) -> str:
     ext = ARMS[arm]
     lines = ["Read task.md in the current directory and do what it asks."]
     if (work / f"start.{ext}").exists():
@@ -66,11 +91,12 @@ def prompt(work, arm):
     return " ".join(lines)
 
 
-def agent_command(agent, work, arm, model):
+def agent_command(agent: str, work: Path, arm: str, model: str | None, *, in_chroot: bool) -> list[str]:
     text = prompt(work, arm)
+    workspace = WORKSPACE if in_chroot else work
     if agent == "pi":
         cmd = ["pi", "-p", "--mode", "json", "--no-session", "--no-context-files", "--no-extensions"]
-        cmd += ["--skill", str(work / "skills" / "agentica-programming")] if arm == "skill" else ["--no-skills"]
+        cmd += ["--skill", str(workspace / "skills" / "agentica-programming")] if arm == "skill" else ["--no-skills"]
         if model:
             cmd += ["--model", model]
         return cmd + [text]
@@ -79,7 +105,7 @@ def agent_command(agent, work, arm, model):
         if arm != "skill":
             cmd += ["--disable-slash-commands"]
         else:
-            target = work / ".claude" / "skills"
+            target = work.parent / "home" / "agent" / ".claude" / "skills"
             target.mkdir(parents=True, exist_ok=True)
             shutil.copytree(work / "skills" / "agentica-programming", target / "agentica-programming")
         if model:
@@ -88,30 +114,127 @@ def agent_command(agent, work, arm, model):
     raise SystemExit(f"unknown agent {agent}")
 
 
-def run_agent(agent, work, task, arm, model, timeout, sandbox=False):
+def jail_prefix(rootfs: Path, *, network: bool) -> list[str]:
+    command = [
+        shutil.which("firejail") or "firejail",
+        "--quiet",
+        "--noprofile",
+        f"--chroot={rootfs}",
+        "--private-tmp",
+        "--nonewprivs",
+        "--caps.drop=all",
+        "--seccomp",
+    ]
+    if not network:
+        command.append("--net=none")
+    return command
+
+
+def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) -> dict[str, str]:
+    env = dict(SAFE_ENV)
+    env["HOME"] = "/home/agent" if in_chroot else str(workspace.parent / "home" / "agent")
+    env["PATH"] = ROOTFS_PATH if in_chroot else f"{workspace / 'bin'}:{os.environ['PATH']}"
+    for name in pass_env:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise SystemExit(f"invalid environment variable name: {name}")
+        if name in {"HOME", "PATH", "LANG", "LC_ALL", "PYTHONUTF8"}:
+            raise SystemExit(f"cannot pass reserved environment variable: {name}")
+        if name not in os.environ:
+            raise SystemExit(f"environment variable is not set: {name}")
+        env[name] = os.environ[name]
+    return env
+
+
+def redact_secrets(output: str, pass_env: list[str]) -> str:
+    for name in pass_env:
+        value = os.environ[name]
+        if value:
+            output = output.replace(value, "[REDACTED]")
+    return output
+
+
+def grader_environment() -> dict[str, str]:
+    return dict(SAFE_ENV, HOME="/home/agent", PATH=ROOTFS_PATH)
+
+
+def rootfs_has_executable(rootfs: Path, name: str) -> bool:
+    for directory in SYSTEM_PATH.split(":"):
+        candidate = rootfs / directory.lstrip("/") / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return True
+    return False
+
+
+def validate_sandbox(rootfs: Path, agent: str) -> None:
+    if not rootfs.is_dir():
+        raise SystemExit(f"chroot root filesystem not found: {rootfs}")
+    if not shutil.which("firejail"):
+        raise SystemExit("firejail not found; it is required to isolate grading")
+    version = subprocess.run(["firejail", "--version"], capture_output=True, text=True, check=True).stdout
+    if "chroot support is enabled" not in version:
+        raise SystemExit("installed firejail does not support --chroot")
+    if "networking support is enabled" not in version:
+        raise SystemExit("installed firejail does not support network namespaces")
+    if agent != "reference" and not rootfs_has_executable(rootfs, agent):
+        raise SystemExit(f"{agent} executable not found in chroot system PATH ({SYSTEM_PATH})")
+    if not rootfs_has_executable(rootfs, "python3"):
+        raise SystemExit(f"python3 executable not found in chroot system PATH ({SYSTEM_PATH})")
+    smoke = jail_prefix(rootfs, network=False) + ["python3", "-I", "-c", "pass"]
+    try:
+        result = subprocess.run(
+            smoke,
+            cwd=rootfs,
+            env=dict(SAFE_ENV, HOME="/", PATH=ROOTFS_PATH),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SystemExit(f"Firejail chroot preflight failed: {exc}") from exc
+    if result.returncode:
+        details = result.stderr.strip() or result.stdout.strip()
+        raise SystemExit(f"Firejail chroot preflight failed: {details}")
+
+
+def copy_candidate(source: Path, destination: Path) -> bool:
+    if source.is_symlink() or not source.is_file():
+        return False
+    shutil.copyfile(source, destination)
+    return True
+
+
+def run_agent(
+    agent: str,
+    work: Path,
+    rootfs: Path,
+    task: str,
+    arm: str,
+    model: str | None,
+    timeout: int,
+    sandbox: bool,
+    pass_env: list[str],
+) -> tuple[str, bool]:
     ext = ARMS[arm]
     if agent == "reference":
         shutil.copy(TASKS / task / f"reference.{ext}", work / f"solution.{ext}")
         return "", False
-    env = dict(os.environ, PATH=f"{work / 'bin'}:{os.environ['PATH']}")
-    command = agent_command(agent, work, arm, model)
+    env = child_environment(pass_env, in_chroot=sandbox, workspace=work)
+    command = agent_command(agent, work, arm, model, in_chroot=sandbox)
     if sandbox:
-        jail = ["firejail", "--quiet", "--noprofile", f"--whitelist={work}"]
-        jail += [f"--blacklist={path}" for path in HIDDEN_PATHS if path.exists()]
-        command = jail + command
+        command = jail_prefix(rootfs, network=True) + command
     proc = subprocess.Popen(command, cwd=work, env=env, text=True,
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             start_new_session=True)
     try:
         out, _ = proc.communicate(timeout=timeout)
-        return out, False
+        return redact_secrets(out, pass_env), False
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
         out, _ = proc.communicate()
-        return out or "", True
+        return redact_secrets(out or "", pass_env), True
 
 
-def pi_metrics(out):
+def pi_metrics(out: str) -> dict[str, int | float]:
     m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "cost": 0.0, "turns": 0,
          "interpreter_runs": 0, "failing_runs": 0, "outside_reads": 0, "net_commands": 0}
     pending = {}
@@ -147,7 +270,7 @@ def pi_metrics(out):
     return m
 
 
-def claude_metrics(out):
+def claude_metrics(out: str) -> dict[str, int | float]:
     try:
         data = json.loads(out)
     except json.JSONDecodeError:
@@ -158,18 +281,28 @@ def claude_metrics(out):
             "turns": data.get("num_turns", 0)}
 
 
-def grade(work, task, arm):
+def grade(solution: Path, task: str, arm: str, rootfs_template: Path, scratch: Path, name: str) -> dict:
     ext = ARMS[arm]
-    solution = work / f"solution.{ext}"
     cases = sorted((TASKS / task / "hidden").glob("*.in"))
-    if not solution.exists():
+    if solution.is_symlink() or not solution.is_file():
         return {"status": "no-file", "passed": 0, "total": len(cases), "failure": None, "code": None}
-    cmd = [str(work / "bin" / "agentica"), "solution.agc"] if ext == "agc" else ["python3", "solution.py"]
+    grade_root = clone_rootfs(rootfs_template, scratch / f"{name}-grader-root")
+    work = grade_root / WORKSPACE.relative_to("/")
+    work.mkdir(parents=True)
+    shutil.copyfile(solution, work / solution.name)
+    if ext == "agc":
+        (work / "bin").mkdir()
+        shutil.copy(ROOT / "dist" / "agentica", work / "bin" / "agentica")
+        cmd = ["/workspace/bin/agentica", "solution.agc"]
+    else:
+        cmd = ["python3", "-I", "solution.py"]
+    env = grader_environment()
     passed, failure, code = 0, None, None
     for case in cases:
         expected = case.with_suffix(".out").read_text().rstrip("\n")
         try:
-            done = subprocess.run(cmd, cwd=work, input=case.read_text(), capture_output=True, text=True, timeout=CASE_TIMEOUT)
+            jailed = jail_prefix(grade_root, network=False) + cmd
+            done = subprocess.run(jailed, cwd=work, env=env, input=case.read_text(), capture_output=True, text=True, timeout=CASE_TIMEOUT)
             actual, err = done.stdout.rstrip("\n"), done.stderr
         except subprocess.TimeoutExpired:
             actual, err = None, "timeout"
@@ -182,7 +315,7 @@ def grade(work, task, arm):
             "failure": failure, "code": code}
 
 
-def classify(err, ext):
+def classify(err: str, ext: str) -> tuple[str, str | None]:
     if err == "timeout":
         return "timeout", None
     if ext == "agc":
@@ -198,12 +331,16 @@ def classify(err, ext):
     return "logic", None
 
 
-def one_run(args, results, scratch, task, arm, rep):
+def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, arm: str, rep: int) -> None:
     name = f"{task}-{arm}-{rep}"
-    work = scratch / name
+    agent_root = clone_rootfs(args.chroot_root, scratch / f"{name}-agent-root")
+    work = agent_root / WORKSPACE.relative_to("/")
     prepare(work, task, arm)
+    (agent_root / "home" / "agent").mkdir(parents=True, exist_ok=True)
     began = time.time()
-    out, timed_out = run_agent(args.agent, work, task, arm, args.model, args.timeout, args.sandbox)
+    out, timed_out = run_agent(
+        args.agent, work, agent_root, task, arm, args.model, args.timeout, args.sandbox, args.pass_env
+    )
     seconds = round(time.time() - began, 1)
     row = {"task": task, "arm": arm, "rep": rep, "agent": args.agent, "model": args.model or "default",
            "seconds": seconds, "agent_timeout": timed_out}
@@ -211,19 +348,19 @@ def one_run(args, results, scratch, task, arm, rep):
         row.update(pi_metrics(out))
     elif args.agent == "claude":
         row.update(claude_metrics(out))
-    row.update(grade(work, task, arm))
+    solution = work / f"solution.{ARMS[arm]}"
+    row.update(grade(solution, task, arm, args.chroot_root, scratch, name))
     run_dir = results / name
     run_dir.mkdir(parents=True)
     (run_dir / "agent.jsonl").write_text(out)
-    for path in work.glob("solution.*"):
-        shutil.copy(path, run_dir / path.name)
+    copy_candidate(solution, run_dir / solution.name)
     with WRITE_LOCK:
         with (results / "results.jsonl").open("a") as handle:
             handle.write(json.dumps(row) + "\n")
         print(f"{name}: {row['status']} {row['passed']}/{row['total']} {seconds}s", flush=True)
 
 
-def summarize(results):
+def summarize(results: Path) -> None:
     rows = [json.loads(line) for line in (results / "results.jsonl").read_text().splitlines()]
     groups = {}
     for row in rows:
@@ -242,7 +379,7 @@ def summarize(results):
     print(text)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--agent", choices=["pi", "claude", "reference"], default="pi")
     parser.add_argument("--model")
@@ -252,24 +389,33 @@ def main():
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--jobs", type=int, default=1, help="runs in parallel")
     parser.add_argument("--no-build", action="store_true")
-    parser.add_argument("--no-sandbox", dest="sandbox", action="store_false", help="run the agent without firejail")
+    parser.add_argument("--chroot-root", type=Path,
+                        help="prepared minimal Firejail root filesystem")
+    parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
+                        help="pass one provider-auth environment variable to the agent; repeat as needed")
+    parser.add_argument("--no-sandbox", dest="sandbox", action="store_false",
+                        help="run the agent outside Firejail (grading remains isolated)")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
     args = parser.parse_args()
     if args.summarize:
         summarize(Path(args.summarize))
         return
-    if args.sandbox and args.agent != "reference" and not shutil.which("firejail"):
-        raise SystemExit("firejail not found; install it or pass --no-sandbox")
+    if args.chroot_root is None:
+        raise SystemExit("--chroot-root is required for evaluation")
+    args.chroot_root = args.chroot_root.resolve()
+    child_environment(args.pass_env, in_chroot=args.sandbox, workspace=WORKSPACE)
+    validate_sandbox(args.chroot_root, args.agent if args.sandbox else "reference")
     if not args.no_build:
         build()
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
-    scratch = Path(tempfile.mkdtemp(prefix="agentica-eval-"))
     jobs = [(task, arm, rep) for task in args.tasks for arm in args.arms for rep in range(1, args.reps + 1)]
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for future in [pool.submit(one_run, args, results, scratch, *job) for job in jobs]:
-            future.result()
+    with tempfile.TemporaryDirectory(prefix="agentica-eval-") as scratch_dir:
+        scratch = Path(scratch_dir)
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            for future in [pool.submit(one_run, args, results, scratch, *job) for job in jobs]:
+                future.result()
     summarize(results)
     print(f"results: {results}")
 

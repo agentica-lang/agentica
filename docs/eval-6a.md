@@ -11,7 +11,8 @@ Question: can an agent write and repair Agentica programs with the language as i
   - `grammar`: `docs/grammar.md` and `examples/`, no skill.
   - `binary`: only the binary, `agentica check`, and a one-line hint.
   - `python`: the same task in Python.
-- Each run gets a fresh temp directory with no hidden tests. Later rounds run inside Firejail with the repo hidden (network open); round 1 did not, but a log check found no reads of the repo and no gmem or MCP calls.
+- Current runner setup: every run receives a fresh copy of a prepared root filesystem via `--chroot-root PATH`. It must contain Python 3 and, for model runs, the selected agent CLI and its runtime dependencies; Agentica arms also use the built `agentica` executable. The agent can use the network to reach its provider. Provider credentials are exposed only when named with repeatable `--pass-env NAME` options. Hidden cases stay on the host and are sent to a separate grader chroot over stdin; the grader has no network or provider credentials. `--no-sandbox` opts the agent process out of Firejail, while grading remains isolated.
+- Historical rounds documented below used earlier sandbox setups. Their measurements remain useful for comparing those runs, but they do not validate the current chroot boundary. Round 1 ran without Firejail; later rounds hid the repo with Firejail but did not use the current prepared-chroot setup.
 
 ## Round 1 (3 reps per task and arm, 45 runs; arms `skill`, `grammar`, `python`)
 

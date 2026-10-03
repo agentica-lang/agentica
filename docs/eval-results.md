@@ -1,6 +1,6 @@
 # Evaluation results so far
 
-All runs use `tests/eval/run.py` with `pi` and Fireworks DeepSeek V4.1 flash, one session per run, 10 minute limit, hidden cases graded at the end. Method and caveats are in [`eval-6a.md`](eval-6a.md). Raw logs are in `tests/eval/results/` (not versioned).
+These are historical runs of `tests/eval/run.py` with `pi` and Fireworks DeepSeek V4.1 flash, one session per run, 10 minute limit, hidden cases graded at the end. They used earlier sandbox setups and do not validate the current prepared-chroot boundary. Method and caveats are in [`eval-6a.md`](eval-6a.md). Raw logs are in `tests/eval/results/` (not versioned).
 
 Arms: `python` (same task in Python), `skill` (the `agentica-programming` skill), `grammar` (`docs/grammar.md` and `examples/`, no skill), `binary` (only the `agentica` binary, `agentica check`, and a one-line hint).
 
@@ -22,7 +22,7 @@ The round-0 count joins two partial runs. A `binary` round run before the sandbo
 
 ## Round 1: `python`, `skill`, `grammar` (3 reps per task)
 
-Run without Firejail. A log check found no reads of the repo, no network commands, and no gmem or MCP calls.
+Round 1 ran without Firejail. A log check found no reads of the repo, no network commands, and no gmem or MCP calls.
 
 | Task | `python` tokens / s | `skill` tokens / s | `grammar` tokens / s |
 |---|---|---|---|
@@ -40,7 +40,7 @@ Failing interpreter runs per run: `python` 0 everywhere; `skill` 1.3 in `t2-fix-
 
 ## Rounds 2 and 3: the `binary` arm, before and after richer diagnostics
 
-Both rounds ran in Firejail with the repo hidden and the network open. In round 2 one run (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since. Round 3 used the checker after phase 5d3 steps 1–4 (labels on operands, the enclosing signature, and grounded `help`). The prompt did not mention `--ai`, but `agentica --help` lists it and `--json`, so an agent could find them; in the logs only `t5-scope-return` rep 2 clearly ran `--ai`.
+Both rounds ran in Firejail with the repo hidden and the network open, but before the current prepared-chroot boundary. In round 2 one run (`t4-word-count` rep 2) read a leftover planning file from `~/.claude`; that path is hidden since. Round 3 used the checker after phase 5d3 steps 1–4 (labels on operands, the enclosing signature, and grounded `help`). The prompt did not mention `--ai`, but `agentica --help` lists it and `--json`, so an agent could find them; in the logs only `t5-scope-return` rep 2 clearly ran `--ai`.
 
 | Task | Tokens (2 → 3) | Seconds (2 → 3) | Failing runs (2 → 3) |
 |---|---|---|---|
@@ -81,7 +81,9 @@ Same checker and arm as round 3. The only change is one sentence in the `binary`
 ## How to reproduce
 
 ```text
-python3 tests/eval/run.py --agent pi --arms python skill grammar --reps 3 --jobs 4 --no-sandbox   # round 1 shape
-python3 tests/eval/run.py --agent pi --arms binary --reps 3 --jobs 4                                # rounds 2 and 3 shape
+python3 tests/eval/run.py --chroot-root /path/to/prepared-rootfs --pass-env FIREWORKS_API_KEY --agent pi --arms python skill grammar --reps 3 --jobs 4
+python3 tests/eval/run.py --chroot-root /path/to/prepared-rootfs --pass-env FIREWORKS_API_KEY --agent pi --arms binary --reps 3 --jobs 4
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
 ```
+
+The root filesystem must contain `pi`, its runtime dependencies, and `python3` under `/usr/local/bin`, `/usr/bin`, or `/bin`; the runner stages Agentica at `/workspace/bin/agentica`. Use `--no-sandbox` only when intentionally running the agent with host filesystem access; the grader stays chrooted with networking disabled.

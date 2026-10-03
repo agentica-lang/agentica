@@ -8,7 +8,7 @@ Interpreter for the Agentica language, written in Racket. The language is define
 - Run a subset: `make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"`.
 - Control workers: `make test JOBS=8`.
 - Run a program: `racket src/main.rkt examples/hello.agc`; check only: `racket src/main.rkt check file.agc`
-- Agent evaluation (phase 6a, not part of `make test`): `python3 tests/eval/run.py --help`. It runs `pi` inside Firejail; `--jobs N` runs in parallel.
+- Agent evaluation (phase 6a, not part of `make test`): `python3 tests/eval/run.py --help`. Supply a prepared Firejail root filesystem with `--chroot-root PATH`; allow provider credentials explicitly with repeatable `--pass-env NAME`. `--jobs N` runs in parallel.
 - CI runs `make test` and the example smoke tests (`.github/workflows/ci.yml`), on Racket CS 9.3.
 
 `make test` wraps `raco test`; a single stage still works directly with `raco test tests/<stage>-test.rkt`.
