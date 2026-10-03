@@ -18,13 +18,18 @@ function echo(socket) {
 }
 
 let connection = 0;
+let stalledConnections = 0;
+const stalledSockets = new Set();
 function handler(req, res) {
   req.on('error', () => {});
   res.on('error', () => {});
   req.socket.peerId ??= ++connection;
   res.setHeader('X-Connection', String(req.socket.peerId));
   res.setHeader('Set-Cookie', ['one=1', 'two=2']);
-  if (req.url === '/chunked') {
+  if (req.url === '/pending-tls') {
+    const timer = setTimeout(() => res.end(`${stalledConnections}:${stalledSockets.size}`), 250);
+    res.on('close', () => clearTimeout(timer));
+  } else if (req.url === '/chunked') {
     res.write('ñ');
     res.addTrailers({ 'X-Trailer': 'finished' });
     res.end('😀');
@@ -89,6 +94,22 @@ async function peers() {
   for (const [name, server] of Object.entries({ tcp, tls: secureTcp, http: web, https: secureWeb, raw })) {
     ports[name] = await listen(server);
   }
+  let accepted = 0;
+  const delayedTls = net.createServer(socket => {
+    socket.on('error', () => {});
+    if (++accepted === 1) {
+      const upstream = net.connect(ports.https, '127.0.0.1');
+      upstream.on('error', () => socket.destroy());
+      socket.on('close', () => upstream.destroy());
+      socket.pipe(upstream).pipe(socket);
+    } else {
+      stalledConnections++;
+      stalledSockets.add(socket);
+      socket.on('close', () => stalledSockets.delete(socket));
+      socket.resume();
+    }
+  });
+  ports.delayedTls = await listen(delayedTls);
   console.log(JSON.stringify(ports));
 }
 

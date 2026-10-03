@@ -93,6 +93,34 @@ AGC
 
 (module+ test
   (when (node-available?)
+    (test-case "request timeout closes TLS setup after waiting for a pool slot"
+      (with-peers
+       (lambda (ports)
+         (check-equal?
+          (run-program
+           (format
+            #<<AGC
+def release(body: HttpBody) -> Nil
+  Task.sleep(1000)
+  HTTP.close_body(body)
+end
+def main() -> Nil
+  options = HttpClientOptions(timeout_ms: 2000, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 100, ca_file: ~s)
+  client = Result.unwrap!(HTTP.client(options))
+  first = Result.unwrap!(HTTP.get(client, "https://localhost:~a/fixed"))
+  worker = Task.spawn(&release, first.body)
+  IO.inspect(Result.ok?(HTTP.get(client, "https://localhost:~a/fixed")))
+  Task.await(worker)
+  observer = Result.unwrap!(HTTP.client())
+  response = Result.unwrap!(HTTP.get(observer, "http://localhost:~a/pending-tls"))
+  puts(Result.unwrap!(HTTP.text(response.body, 1000)))
+  HTTP.close_client(observer)
+  HTTP.close_client(client)
+end
+AGC
+            (path->string ca-path) (hash-ref ports 'delayedTls)
+            (hash-ref ports 'delayedTls) (hash-ref ports 'http)))
+          "false\n1:0\n"))))
     (test-case "Buffered POST receives a large echo while uploading under backpressure"
       (with-peers
        (lambda (ports)

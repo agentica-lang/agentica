@@ -78,7 +78,7 @@
           (string-append (if (string-contains? host ":") (string-append "[" host "]") host)
                          (if (url-port parsed) (format ":~a" port) ""))))
 
-(define (acquire client key host port tls? timeout slot)
+(define (acquire client key host port tls? timeout slot pending)
   (define p
     (call-with-semaphore (http-client-lock client)
       (lambda () (check-client client)
@@ -104,14 +104,17 @@
     (cond
       [(not choice) (sync (pool-changed p) (semaphore-peek-evt (http-client-stopped client))) (loop)]
       [(eq? choice 'connect)
+       (define connection-cust (make-custodian (http-client-custodian client)))
+       (set-box! pending connection-cust)
        (define socket
-         (parameterize ([current-custodian (http-client-custodian client)])
+         (parameterize ([current-custodian connection-cust])
            (network-connect host port timeout (and tls? (record-ref (http-client-options client) "ca_file")))))
        (call-with-semaphore (http-client-lock client)
          (lambda ()
            (when (http-client-closed client) (network-close socket) (error 'HTTP "client is closed"))
+           (set-box! slot (cons p socket))
            (hash-set! (pool-sockets p) socket #t)
-           (set-box! slot (cons p socket))))
+           (set-box! pending #f)))
        socket]
       [(sync/timeout 0 (net-socket-input choice))
        (return-slot client slot #f)
@@ -140,6 +143,7 @@
   (define timeout (record-ref options "timeout_ms"))
   (define limit (record-ref options "max_body_bytes"))
   (define slot (box #f))
+  (define pending (box #f))
   (define body #f)
   (define cust (make-custodian (http-client-custodian client)))
   (define lock (make-semaphore 1))
@@ -158,13 +162,16 @@
         (when (or (not complete?) uploaded?) (return-slot client slot reusable?))))
     (unless complete? ((current-network-shutdown) cust)))
   (define (abort)
+    (when (unbox pending)
+      (custodian-shutdown-all (unbox pending))
+      (set-box! pending #f))
     (return-slot client slot #f)
     (custodian-shutdown-all cust))
   (with-handlers ([exn:fail? (lambda (e) (abort) (raise e))])
     (network-timed timeout
       (lambda ()
         (define-values (scheme host port target authority) (parse-destination url))
-        (define socket (acquire client (list scheme host port) host port (string=? scheme "https") timeout slot))
+        (define socket (acquire client (list scheme host port) host port (string=? scheme "https") timeout slot pending))
         (define writer (make-http-writer socket limit))
         (write-request-head writer method target authority headers length timeout)
         (set! reusable? (not (connection-close? headers)))

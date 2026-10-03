@@ -21,7 +21,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
 | Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, `Task`, `TCP`, `TLS`, and `HTTP` |
 
-Enums, `Option`, interpolation, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
+Enums, `Option`, interpolation, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
 ## 3. A core program
 
