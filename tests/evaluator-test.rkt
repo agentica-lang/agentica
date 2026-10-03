@@ -350,7 +350,8 @@
         ("Result.unwrap_or" "Result.unwrap_or(r, 7)" "7\n")
         ("Result.message" "Result.message(r)" "\"bad\"\n")))
     (for ([name (in-list (sort (hash-keys builtins) string<?))]
-          #:unless (string-prefix? name "BDD."))
+          #:unless (or (string-prefix? name "BDD.")
+                       (member 'network (builtin-effects (hash-ref builtins name)))))
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)

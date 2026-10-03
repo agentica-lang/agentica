@@ -7,6 +7,7 @@
          "bdd.rkt"
          "runtime-values.rkt"
          "task.rkt"
+         "builtin-types.rkt" "network.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
          "json.rkt")
 
 (provide evaluate
@@ -42,13 +43,15 @@
                  #:when (function-decl? declaration))
         (values (function-decl-name declaration) declaration)))
     (define struct-fields
-      (for/hash ([declaration (in-list (program-declarations program))]
+      (for/fold ([fields builtin-field-order]) ([declaration (in-list (program-declarations program))]
                  #:when (struct-decl? declaration))
-        (values (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration)))))
+        (hash-set fields (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration)))))
     (task-run
      (lambda (run)
-       (evaluate-with-ports program program-args entrypoint arguments builtin-handler
-                            functions struct-fields run))
+       (parameterize ([current-network-owner run]
+                      [current-network-shutdown (lambda (cust) (task-shutdown! run cust))])
+         (evaluate-with-ports program program-args entrypoint arguments builtin-handler
+                              functions struct-fields run)))
      max-steps (program-span program) #:require-complete? require-complete?)))
 
 (define (evaluate-with-ports program program-args entrypoint entry-arguments builtin-handler
@@ -237,6 +240,12 @@
         [(json-value? value) "<Json>"]
         [(function-value? value) "<Fn>"]
         [(task-value? value) "<Task>"]
+        [(net-socket? value) "<Socket>"]
+        [(net-listener? value) "<Listener>"]
+        [(http-client? value) "<HttpClient>"]
+        [(http-server? value) "<HttpServer>"]
+        [(http-body? value) "<HttpBody>"]
+        [(http-writer? value) "<HttpWriter>"]
         [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
@@ -268,7 +277,42 @@
       (define entry (builtin-ref (call-name expression) (length arguments)))
       (define name (if entry (builtin-implementation entry) (call-name expression)))
       (define span (call-span expression))
-      (case name
+      (define (invoke-network callback args)
+        (evaluate-with-ports program program-args (function-value-name callback) args
+                             builtin-handler functions struct-fields run))
+      (define (spawn-network thunk cust)
+        (task-spawn run thunk span #:custodian cust))
+      (define (request client method url headers text)
+        (define data (string->bytes/utf-8 text))
+        (http-client-request client method url headers data (bytes-length data) #f #f
+                             invoke-network spawn-network))
+      (cond
+        [(or (string-prefix? name "TCP.") (string-prefix? name "TLS.")) (network-call name arguments)]
+        [(string-prefix? name "HTTP.")
+         (match name
+           ["HTTP.client_options" (default-client-options)]
+           ["HTTP.server_options" (default-server-options)]
+           ["HTTP.close_client" (close-http-client (car arguments))]
+           ["HTTP.close_server" (close-http-server (car arguments))]
+           ["HTTP.local_port" (http-server-port (car arguments))]
+           [(or "HTTP.client" "HTTP.get" "HTTP.post" "HTTP.request" "HTTP.request_stream" "HTTP.listen" "HTTP.listen_tls" "HTTP.wait")
+            (network-result
+             (lambda ()
+               (match name
+                 ["HTTP.client" (make-http-client (if (null? arguments) (default-client-options) (car arguments)))]
+                 ["HTTP.get" (request (car arguments) "GET" (cadr arguments) '() "")]
+                 ["HTTP.post" (match-define (list client url headers text) arguments) (request client "POST" url headers text)]
+                 ["HTTP.request" (apply request arguments)]
+                 ["HTTP.request_stream"
+                  (match-define (list client method url headers length callback arg) arguments)
+                  (http-client-request client method url headers #f length callback arg invoke-network spawn-network)]
+                 ["HTTP.listen" (match-define (list host port callback opts) arguments)
+                                (make-http-server host port callback opts invoke-network spawn-network)]
+                 ["HTTP.listen_tls" (match-define (list host port cert key callback opts) arguments)
+                                    (make-http-server host port callback opts invoke-network spawn-network cert key)]
+                 ["HTTP.wait" (wait-http-server (car arguments))])))]
+           [else (http-call-wire name arguments)])]
+        [else (case name
         [("Task.spawn")
          (define callback (function-value-name (car arguments)))
          (task-spawn run
@@ -464,7 +508,7 @@
          (when entry (unreachable "builtin implementation" span))
          (define declaration (hash-ref functions name #f))
          (unless declaration (unreachable "call" (call-span expression)))
-         (call-function declaration arguments (call-span expression))]))
+         (call-function declaration arguments (call-span expression))])]))
 
     (define (call-function declaration arguments span)
       (when (>= depth max-call-depth)

@@ -2,10 +2,10 @@
 
 (require "diagnostic.rkt" "runtime-values.rkt")
 
-(provide task-run task-spawn task-await task-value? task-step!)
+(provide task-run task-spawn task-await task-value? task-step! task-done-evt task-shutdown!)
 
 (struct execution (custodian lock tasks steps limit finished outcome) #:mutable)
-(struct task-value (owner ready outcome))
+(struct task-value (owner ready outcome worker))
 
 (define (publish! run value)
   (unless (unbox (execution-outcome run))
@@ -51,12 +51,35 @@
          (custodian-shutdown-all (execution-custodian run))
          (semaphore-post cleaned)))]))
 
-(define (task-spawn run thunk span)
-  (define task (task-value run (make-semaphore 0) (box #f)))
+(define (cancelled! run task span)
+  (unless (unbox (task-value-outcome task))
+    (set-box! (task-value-outcome task)
+              (box (diagnostic 'RUNTIME-TASK-CANCELLED "task was cancelled" span)))
+    (set-execution-tasks! run (remq task (execution-tasks run)))
+    (semaphore-post (task-value-ready task))))
+
+(define (task-done-evt task) (semaphore-peek-evt (task-value-ready task)))
+
+(define (task-shutdown! run custodian)
+  (custodian-shutdown-all custodian)
+  (call-with-semaphore (execution-lock run)
+    (lambda ()
+      (for ([task (in-list (execution-tasks run))])
+        (define worker (unbox (task-value-worker task)))
+        (when (and worker (thread-dead? (car worker)))
+          (cancelled! run task (cdr worker)))))))
+
+(define (task-spawn run thunk span #:custodian [custodian (current-custodian)])
+  (define task (task-value run (make-semaphore 0) (box #f) (box #f)))
   (call-with-semaphore (execution-lock run)
     (lambda () (set-execution-tasks! run (cons task (execution-tasks run)))))
-  (parameterize ([current-custodian (execution-custodian run)])
-    (thread
+  (define worker
+    (with-handlers ([exn:fail? (lambda (e)
+                               (call-with-semaphore (execution-lock run)
+                                 (lambda () (cancelled! run task span)))
+                               (raise e))])
+     (parameterize ([current-custodian custodian])
+      (thread
      (lambda ()
        (define value (protect thunk span))
        (call-with-semaphore (execution-lock run)
@@ -64,7 +87,15 @@
            (set-box! (task-value-outcome task) (box value))
            (set-execution-tasks! run (remq task (execution-tasks run)))
            (when (or (diagnostic? value) (exit-code? value)) (publish! run value))
-           (semaphore-post (task-value-ready task)))))))
+           (semaphore-post (task-value-ready task)))))))))
+  (set-box! (task-value-worker task) (cons worker span))
+  (parameterize ([current-custodian (execution-custodian run)])
+    (thread
+     (lambda ()
+       (sync (thread-dead-evt worker))
+       (call-with-semaphore (execution-lock run)
+         (lambda ()
+           (cancelled! run task span))))))
   task)
 
 (define (task-await run task span)

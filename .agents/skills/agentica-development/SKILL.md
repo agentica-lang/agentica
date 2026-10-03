@@ -205,6 +205,16 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - Synchronize BDD registration/state/assertions and quiet-output counters. Separate stdin and stdout locks, include lock wait in deadlines, serialize startup and reject streams until startup completes. Never hold the state lock around blocking I/O.
 - tests/task-test.rkt owns checked-program task behavior with injected ports/events. BDD tests own contextual behavior; tests/bdd-integration.rkt verifies real concurrent local streams and cleanup. examples/concurrency.agc is a hermetic CI smoke check.
 
+## TCP, TLS and HTTP/1.1
+
+- network.rkt owns sockets/listeners, secure TLS contexts and full-operation deadlines. Resource custodians are distinct from temporary timeout workers, so failure during DNS/connect/handshake cannot leak ports. Force custodian shutdown before closing ports to avoid a blocking flush during cleanup. Read and write locks are independent; timing out lock acquisition alone preserves the other task's socket.
+- builtin-types.rkt centralizes opaque atoms and builtin record field layouts. Seed checker structs and evaluator field order from it; generic HTTP upload callbacks infer their context argument. Handles cannot be constructed, compared or JSON encoded. Grammar and the programming reference describe the same public API.
+- http-wire.rkt owns strict HTTP/1.1 framing, bounded headers, fixed/chunked/EOF bodies, trailers, HEAD/no-body responses, writer states and flushing. Headers use ordered Header records; preserve duplicates. Framing headers and Host are managed by the transport. Reject ambiguous framing and CR/LF injection.
+- http-client.rkt pools by origin with bounded connections and idle expiry. Release a lease only after both upload and response finish. Abort unread or invalid bodies. Upload producers run as supervised tasks concurrently with response reception; Result errors remain recoverable, diagnostics retain their source location. No transparent retries or redirects.
+- http-server.rkt uses one supervised task per connection and fresh evaluator invocations for handlers. TLS handshakes occur after acceptance in connection tasks. Requests are sequential on each connection. Close cancels all owned tasks synchronously; connection completion also cancels nested work. Do not call public evaluate from a callback: it would reset the global budget and supervision.
+- task-spawn accepts an internal custodian; task-shutdown! finalizes dead tasks and removes them from the pending registry. Awaiting cancelled work yields RUNTIME-TASK-CANCELLED. Intentional resource cancellation does not publish a global failure. Watchers still cover kill-thread bypassing dynamic-wind.
+- tests/tcp-test.rkt and tests/http-test.rkt use independent Node standard-library peers in tests/fixtures/network-peer.js. CI installs Node 24; absence fails CI and visibly skips locally. Checked-in localhost test certificates exercise trusted TLS, untrusted certificates and hostname rejection. CLI checks prove progressive uploads/responses and connection reuse; task-test owns budget/diagnostic/cleanup boundaries.
+
 ## Reference
 
 Read `references/stages.md` for the full token-kind table, the diagnostic-code list, the AST node list, and each module's public API. Load it when adding or renaming tokens, AST nodes, or diagnostic codes.

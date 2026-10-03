@@ -1,0 +1,92 @@
+#lang racket
+
+(require (except-in rackunit check) json racket/runtime-path
+         "../src/checker.rkt" "../src/lexer.rkt" "../src/parser.rkt" "../src/source.rkt"
+         "../src/evaluator.rkt" "../src/diagnostic.rkt" "../src/network.rkt")
+
+(provide with-peers run-program with-program-server node-client node-available? fixture-path ca-path cert-path key-path)
+
+(define-runtime-path fixture-path "fixtures/network-peer.js")
+(define-runtime-path ca-path "fixtures/tls/ca.pem")
+(define-runtime-path cert-path "fixtures/tls/server.pem")
+(define-runtime-path key-path "fixtures/tls/server-key.pem")
+(define-runtime-path main-path "../src/main.rkt")
+(define node (find-executable-path "node"))
+
+(define (node-available?)
+  (cond [node #t]
+        [(getenv "CI") (error 'network-tests "Node is required in CI")]
+        [else (displayln "SKIP TCP/HTTP interoperability: node is unavailable") #f]))
+
+(define (compile-program text)
+  (define tokens (lex (source "network.agc" text)))
+  (define tree (if (diagnostic? tokens) tokens (parse tokens)))
+  (define program (if (diagnostic? tree) tree (check tree)))
+  (when (diagnostic? program) (error 'network-program "~a" (format-diagnostic program)))
+  program)
+
+(define (run-program text #:input [text-input ""] #:limit [limit #f])
+  (define output (open-output-string))
+  (define result (evaluate (compile-program text) #:in (open-input-string text-input)
+                           #:out output #:max-steps limit))
+  (when (diagnostic? result) (error 'network-program "~a" (format-diagnostic result)))
+  (check-equal? result 'nil)
+  (get-output-string output))
+
+(define (with-peers thunk)
+  (define cust (make-custodian))
+  (define process #f)
+  (dynamic-wind void
+    (lambda ()
+      (parameterize ([current-custodian cust])
+        (define-values (child output input errors) (subprocess #f #f #f node fixture-path "peers"))
+        (set! process child)
+        (close-output-port input)
+        (define line (network-timed 10000 (lambda () (read-line output))))
+        (when (eof-object? line) (error 'fixture "Node failed: ~a" (port->string errors)))
+        (thunk (string->jsexpr line))))
+    (lambda ()
+      (when process (subprocess-kill process #t) (subprocess-wait process))
+      (custodian-shutdown-all cust))))
+
+(define (node-client mode port secure?)
+  (define-values (process output input errors)
+    (subprocess #f #f #f node fixture-path mode (number->string port) (if secure? "tls" "plain")))
+  (close-output-port input)
+  (dynamic-wind void
+    (lambda ()
+      (define text (network-timed 10000 (lambda () (port->string output))))
+      (subprocess-wait process)
+      (check-equal? (subprocess-status process) 0 (port->string errors))
+      text)
+    (lambda ()
+      (subprocess-kill process #t)
+      (subprocess-wait process)
+      (close-input-port output)
+      (close-input-port errors))))
+
+(define (with-program-server text thunk)
+  (compile-program text)
+  (define file (make-temporary-file "agentica-network-~a.agc"))
+  (define cust (make-custodian))
+  (define process #f)
+  (dynamic-wind void
+    (lambda ()
+      (call-with-output-file file #:exists 'truncate (lambda (port) (display text port)))
+      (parameterize ([current-custodian cust])
+        (define-values (child output input errors)
+          (if (getenv "AGENTICA_TEST_EXECUTABLE")
+              (subprocess #f #f #f (string->path (getenv "AGENTICA_TEST_EXECUTABLE")) file)
+              (subprocess #f #f #f (find-executable-path "racket") main-path file)))
+        (set! process child)
+        (define line (network-timed 10000 (lambda () (read-line output))))
+        (when (eof-object? line) (error 'server "CLI failed: ~a" (port->string errors)))
+        (thunk (string->number line))
+        (displayln "stop" input)
+        (flush-output input)
+        (network-timed 5000 (lambda () (subprocess-wait child)))
+        (check-equal? (subprocess-status child) 0 (port->string errors))))
+    (lambda ()
+      (when process (subprocess-kill process #t) (subprocess-wait process))
+      (custodian-shutdown-all cust)
+      (delete-file file))))
