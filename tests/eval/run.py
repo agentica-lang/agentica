@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -25,10 +26,14 @@ WORKSPACE = Path("/workspace")
 SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
 ROOTFS_PATH = f"/workspace/bin:{SYSTEM_PATH}"
 SAFE_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONUTF8": "1"}
+DEFAULT_IMAGE = "agentica-eval:local"
 
 
 def build() -> None:
     subprocess.run(["make", "exe"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+    runtime = ROOT / "dist" / "runtime"
+    shutil.rmtree(runtime, ignore_errors=True)
+    subprocess.run(["raco", "distribute", str(runtime), str(ROOT / "dist" / "agentica")], check=True)
 
 
 def clone_rootfs(template: Path, destination: Path) -> Path:
@@ -59,8 +64,7 @@ def prepare(work: Path, task: str, arm: str) -> None:
     start = TASKS / task / f"start.{ext}"
     if start.exists():
         shutil.copy(start, work / start.name)
-    (work / "bin").mkdir(exist_ok=True)
-    shutil.copy(ROOT / "dist" / "agentica", work / "bin" / "agentica")
+    shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
     if arm == "skill":
         (work / "skills").mkdir()
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
@@ -105,7 +109,7 @@ def agent_command(agent: str, work: Path, arm: str, model: str | None, *, in_chr
         if arm != "skill":
             cmd += ["--disable-slash-commands"]
         else:
-            target = work.parent / "home" / "agent" / ".claude" / "skills"
+            target = work / ".claude" / "skills"
             target.mkdir(parents=True, exist_ok=True)
             shutil.copytree(work / "skills" / "agentica-programming", target / "agentica-programming")
         if model:
@@ -128,6 +132,50 @@ def jail_prefix(rootfs: Path, *, network: bool) -> list[str]:
     if not network:
         command.append("--net=none")
     return command
+
+
+def docker_prefix(work: Path, image: str, name: str, *, network: bool, pass_env: list[str]) -> list[str]:
+    uid, gid = os.getuid(), os.getgid()
+    command = [
+        shutil.which("docker") or "docker", "run", "--rm", "--interactive",
+        "--name", name, "--user", f"{uid}:{gid}",
+        "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+        "--pids-limit=256", "--memory=2g", "--cpus=2",
+        "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
+        "--tmpfs", f"/home/agent:rw,nosuid,nodev,uid={uid},gid={gid},size=128m",
+        "--mount", f"type=bind,src={work},dst=/workspace" + ("" if network else ",readonly"),
+        "--workdir", "/workspace",
+    ]
+    if not network:
+        command.append("--network=none")
+    for key in [*grader_environment(), *pass_env]:
+        command += ["--env", key]
+    return command + [image]
+
+
+def remove_container(name: str) -> None:
+    subprocess.run([shutil.which("docker") or "docker", "rm", "--force", name],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+
+
+def validate_docker(image: str) -> None:
+    if not shutil.which("docker"):
+        raise SystemExit("docker is required for evaluation; alternatively select --sandbox firejail")
+    found = subprocess.run(["docker", "image", "inspect", image], capture_output=True)
+    if found.returncode:
+        if image != DEFAULT_IMAGE:
+            raise SystemExit(f"Docker image not found: {image}")
+        subprocess.run(["docker", "build", "--tag", image, "--file", str(EVAL / "Dockerfile"), str(EVAL)], check=True)
+    with tempfile.TemporaryDirectory(prefix="agentica-docker-probe-") as directory:
+        name = f"agentica-probe-{uuid.uuid4().hex}"
+        command = docker_prefix(Path(directory), image, name, network=False, pass_env=[])
+        try:
+            subprocess.run(command + ["python3", "-I", "-c", "pass"],
+                           env=grader_environment(), capture_output=True, text=True, timeout=30, check=True)
+        except subprocess.CalledProcessError as exc:
+            raise SystemExit(f"Docker preflight failed: {exc.stderr}") from exc
+        finally:
+            remove_container(name)
 
 
 def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) -> dict[str, str]:
@@ -211,27 +259,34 @@ def run_agent(
     arm: str,
     model: str | None,
     timeout: int,
-    sandbox: bool,
+    sandbox: str,
     pass_env: list[str],
-) -> tuple[str, bool]:
+    image: str,
+) -> tuple[str, str, bool]:
     ext = ARMS[arm]
     if agent == "reference":
         shutil.copy(TASKS / task / f"reference.{ext}", work / f"solution.{ext}")
-        return "", False
-    env = child_environment(pass_env, in_chroot=sandbox, workspace=work)
-    command = agent_command(agent, work, arm, model, in_chroot=sandbox)
-    if sandbox:
+        return "", "", False
+    env = child_environment(pass_env, in_chroot=True, workspace=work)
+    command = agent_command(agent, work, arm, model, in_chroot=True)
+    container = f"agentica-agent-{uuid.uuid4().hex}"
+    if sandbox == "docker":
+        command = docker_prefix(work, image, container, network=True, pass_env=pass_env) + command
+    else:
         command = jail_prefix(rootfs, network=True) + command
     proc = subprocess.Popen(command, cwd=work, env=env, text=True,
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             start_new_session=True)
     try:
-        out, _ = proc.communicate(timeout=timeout)
-        return redact_secrets(out, pass_env), False
+        out, err = proc.communicate(timeout=timeout)
+        return redact_secrets(out, pass_env), redact_secrets(err, pass_env), False
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
-        out, _ = proc.communicate()
-        return redact_secrets(out or "", pass_env), True
+        out, err = proc.communicate()
+        return redact_secrets(out or "", pass_env), redact_secrets(err or "", pass_env), True
+    finally:
+        if sandbox == "docker":
+            remove_container(container)
 
 
 def pi_metrics(out: str) -> dict[str, int | float]:
@@ -281,32 +336,37 @@ def claude_metrics(out: str) -> dict[str, int | float]:
             "turns": data.get("num_turns", 0)}
 
 
-def grade(solution: Path, task: str, arm: str, rootfs_template: Path, scratch: Path, name: str) -> dict:
+def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch: Path, name: str) -> dict:
     ext = ARMS[arm]
     cases = sorted((TASKS / task / "hidden").glob("*.in"))
     if solution.is_symlink() or not solution.is_file():
         return {"status": "no-file", "passed": 0, "total": len(cases), "failure": None, "code": None}
-    grade_root = clone_rootfs(rootfs_template, scratch / f"{name}-grader-root")
+    grade_root = (clone_rootfs(args.chroot_root, scratch / f"{name}-grader-root")
+                  if args.sandbox == "firejail" else scratch / f"{name}-grader-root")
     work = grade_root / WORKSPACE.relative_to("/")
     work.mkdir(parents=True)
     shutil.copyfile(solution, work / solution.name)
     if ext == "agc":
-        (work / "bin").mkdir()
-        shutil.copy(ROOT / "dist" / "agentica", work / "bin" / "agentica")
+        shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
         cmd = ["/workspace/bin/agentica", "solution.agc"]
     else:
         cmd = ["python3", "-I", "solution.py"]
     env = grader_environment()
     passed, failure, code = 0, None, None
     for case in cases:
+        container = f"agentica-grade-{uuid.uuid4().hex}"
         expected = case.with_suffix(".out").read_text().rstrip("\n")
         try:
-            jailed = jail_prefix(grade_root, network=False) + cmd
+            jailed = (docker_prefix(work, args.image, container, network=False, pass_env=[])
+                      if args.sandbox == "docker" else jail_prefix(grade_root, network=False)) + cmd
             done = subprocess.run(jailed, cwd=work, env=env, input=case.read_text(), capture_output=True, text=True, timeout=CASE_TIMEOUT)
-            actual, err = done.stdout.rstrip("\n"), done.stderr
+            actual, err, returncode = done.stdout.rstrip("\n"), done.stderr, done.returncode
         except subprocess.TimeoutExpired:
-            actual, err = None, "timeout"
-        if actual == expected:
+            actual, err, returncode = None, "timeout", None
+        finally:
+            if args.sandbox == "docker":
+                remove_container(container)
+        if actual == expected and returncode == 0:
             passed += 1
             continue
         if failure is None:
@@ -333,26 +393,28 @@ def classify(err: str, ext: str) -> tuple[str, str | None]:
 
 def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, arm: str, rep: int) -> None:
     name = f"{task}-{arm}-{rep}"
-    agent_root = clone_rootfs(args.chroot_root, scratch / f"{name}-agent-root")
+    agent_root = (clone_rootfs(args.chroot_root, scratch / f"{name}-agent-root")
+                  if args.sandbox == "firejail" else scratch / f"{name}-agent-root")
     work = agent_root / WORKSPACE.relative_to("/")
     prepare(work, task, arm)
     (agent_root / "home" / "agent").mkdir(parents=True, exist_ok=True)
     began = time.time()
-    out, timed_out = run_agent(
-        args.agent, work, agent_root, task, arm, args.model, args.timeout, args.sandbox, args.pass_env
+    out, err, timed_out = run_agent(
+        args.agent, work, agent_root, task, arm, args.model, args.timeout, args.sandbox, args.pass_env, args.image
     )
     seconds = round(time.time() - began, 1)
     row = {"task": task, "arm": arm, "rep": rep, "agent": args.agent, "model": args.model or "default",
-           "seconds": seconds, "agent_timeout": timed_out}
+           "seconds": seconds, "agent_timeout": timed_out, "sandbox": args.sandbox, "image": args.image}
     if args.agent == "pi":
         row.update(pi_metrics(out))
     elif args.agent == "claude":
         row.update(claude_metrics(out))
     solution = work / f"solution.{ARMS[arm]}"
-    row.update(grade(solution, task, arm, args.chroot_root, scratch, name))
+    row.update(grade(solution, task, arm, args, scratch, name))
     run_dir = results / name
     run_dir.mkdir(parents=True)
     (run_dir / "agent.jsonl").write_text(out)
+    (run_dir / "agent.stderr").write_text(err)
     copy_candidate(solution, run_dir / solution.name)
     with WRITE_LOCK:
         with (results / "results.jsonl").open("a") as handle:
@@ -393,20 +455,25 @@ def main() -> None:
                         help="prepared minimal Firejail root filesystem")
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="pass one provider-auth environment variable to the agent; repeat as needed")
-    parser.add_argument("--no-sandbox", dest="sandbox", action="store_false",
-                        help="run the agent outside Firejail (grading remains isolated)")
+    parser.add_argument("--sandbox", choices=["docker", "firejail"], default="docker")
+    parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image; the default is built when missing")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
     args = parser.parse_args()
     if args.summarize:
         summarize(Path(args.summarize))
         return
-    if args.chroot_root is None:
-        raise SystemExit("--chroot-root is required for evaluation")
-    args.chroot_root = args.chroot_root.resolve()
-    child_environment(args.pass_env, in_chroot=args.sandbox, workspace=WORKSPACE)
-    validate_sandbox(args.chroot_root, args.agent if args.sandbox else "reference")
+    child_environment(args.pass_env, in_chroot=True, workspace=WORKSPACE)
+    if args.sandbox == "docker":
+        validate_docker(args.image)
+    else:
+        if args.chroot_root is None:
+            raise SystemExit("--sandbox firejail requires --chroot-root")
+        args.chroot_root = args.chroot_root.resolve()
+        validate_sandbox(args.chroot_root, args.agent)
     if not args.no_build:
         build()
+    if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
+        raise SystemExit("dist/runtime is missing; rerun without --no-build")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)

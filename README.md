@@ -97,6 +97,19 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 
 - [`examples/result.agc`](examples/result.agc): Result values, propagation, messages, and fallbacks.
 - [`examples/json.agc`](examples/json.agc): JSON encoding, parsing, extraction, and `try`.
+- [`examples/json-config.agc`](examples/json-config.agc): extract and validate a nested service config, then encode a typed struct.
+- [`examples/json-expenses.agc`](examples/json-expenses.agc): aggregate a JSON array into a map of category totals; amounts are integer cents, with negative amounts for refunds.
+- [`examples/json-lines.agc`](examples/json-lines.agc): transform one JSON record per line, recover from invalid records, and flush each response.
+
+The three input-driven JSON examples read stdin:
+
+```sh
+printf '%s\n' '{"service":{"name":"api","port":8080,"enabled":false}}' | dist/agentica examples/json-config.agc
+printf '%s\n' '[{"category":"food","amount":1200},{"category":"food","amount":-200}]' | dist/agentica examples/json-expenses.agc
+printf '%s\n' '{"name":"Ana","score":75,"active":true}' 'not json' | dist/agentica examples/json-lines.agc
+```
+
+They print compact JSON on stdout. Configs require a nonempty name and port 1–65535; scores must be 0–100, and an active score of at least 60 passes. Extraction failures produce an error object, and the JSON-lines example continues with the next record.
 
 IO.gets now returns Result[String]; IO.gets! is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main still returns Nil. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
 

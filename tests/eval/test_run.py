@@ -1,6 +1,10 @@
+import json
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -80,6 +84,74 @@ class CandidateBoundaryTests(unittest.TestCase):
             self.assertFalse((clone / "workspace").exists())
             self.assertFalse((clone / "home" / "agent").exists())
             self.assertEqual((outside_home / "agent" / "credentials").read_text(), "old credentials")
+
+
+class DockerBoundaryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not shutil.which("docker"):
+            raise unittest.SkipTest("Docker is unavailable")
+        image = subprocess.run(["docker", "image", "inspect", run.DEFAULT_IMAGE], capture_output=True)
+        if image.returncode:
+            raise unittest.SkipTest("evaluation image has not been built")
+
+    def test_agent_can_write_workspace_without_host_files_or_unlisted_secrets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            work = root / "workspace"
+            work.mkdir()
+            canary = root / "host-secret"
+            canary.write_text("host only")
+            script = (
+                "import json,os; from pathlib import Path; "
+                "Path('/workspace/probe.txt').write_text('ok'); "
+                f"print(json.dumps([Path({str(canary)!r}).exists(), "
+                "os.getenv('PROVIDER_TOKEN'), os.getenv('OTHER_SECRET'), os.geteuid()]))"
+            )
+            name = f"agentica-test-{uuid.uuid4().hex}"
+            with patch.dict(os.environ, {"PROVIDER_TOKEN": "test-token", "OTHER_SECRET": "host-secret"}):
+                env = run.child_environment(["PROVIDER_TOKEN"], in_chroot=True, workspace=work)
+                command = run.docker_prefix(work, run.DEFAULT_IMAGE, name, network=True, pass_env=["PROVIDER_TOKEN"])
+                try:
+                    result = subprocess.run(command + ["python3", "-I", "-c", script], env=env,
+                                            capture_output=True, text=True, timeout=30, check=True)
+                finally:
+                    run.remove_container(name)
+            self.assertEqual(json.loads(result.stdout), [False, "test-token", None, os.getuid()])
+            self.assertEqual((work / "probe.txt").read_text(), "ok")
+
+    def test_grader_has_no_secret_network_or_workspace_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            candidate = work / "solution.py"
+            candidate.write_text("original")
+            script = """import json,os,socket
+from pathlib import Path
+writable = False
+network = False
+try:
+    Path('/workspace/solution.py').write_text('changed')
+    writable = True
+except OSError:
+    pass
+try:
+    socket.create_connection(('1.1.1.1', 443), timeout=0.5).close()
+    network = True
+except OSError:
+    pass
+print(json.dumps([os.getenv('PROVIDER_TOKEN'), writable, network]))
+"""
+            name = f"agentica-test-{uuid.uuid4().hex}"
+            with patch.dict(os.environ, {"PROVIDER_TOKEN": "host-secret"}):
+                command = run.docker_prefix(work, run.DEFAULT_IMAGE, name, network=False, pass_env=[])
+                try:
+                    result = subprocess.run(command + ["python3", "-I", "-c", script],
+                                            env=run.grader_environment(), capture_output=True,
+                                            text=True, timeout=30, check=True)
+                finally:
+                    run.remove_container(name)
+            self.assertEqual(json.loads(result.stdout), [None, False, False])
+            self.assertEqual(candidate.read_text(), "original")
 
 
 if __name__ == "__main__":

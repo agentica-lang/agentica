@@ -72,6 +72,30 @@
     (check-equal? result 'nil)
     (check-equal? output "one\ntwo\n"))
 
+  (test-case "JSON examples validate documents and recover within streams"
+    (for ([entry '(("json-config.agc"
+                    "{\"service\":{\"name\":\"api\",\"port\":8080,\"enabled\":false}}"
+                    "{\"name\":\"api\",\"port\":8080,\"enabled\":false}\n")
+                   ("json-config.agc"
+                    "{\"service\":{\"name\":\"api\",\"port\":0,\"enabled\":true}}"
+                    "{\"error\":\"invalid config\"}\n")
+                   ("json-expenses.agc"
+                    "[{\"category\":\"food\",\"amount\":1200},{\"category\":\"travel\",\"amount\":500},{\"category\":\"food\",\"amount\":-200}]"
+                    "{\"totals\":{\"food\":1000,\"travel\":500}}\n")
+                   ("json-expenses.agc"
+                    "[{\"category\":\"food\",\"amount\":true}]"
+                    "{\"error\":\"invalid expense\"}\n")
+                   ("json-lines.agc"
+                    "{\"name\":\"Ana\",\"score\":75,\"active\":true}\nnot json\n{\"name\":\"Luis\",\"score\":60,\"active\":false}\n"
+                    "{\"name\":\"Ana\",\"passed\":true}\n{\"error\":\"invalid record\"}\n{\"name\":\"Luis\",\"passed\":false}\n")
+                   ("json-lines.agc"
+                    "{\"name\":\"Ana\",\"score\":101,\"active\":true}\n"
+                    "{\"error\":\"invalid record\"}\n"))])
+      (define-values (output result)
+        (run-text-io (file->string (build-path examples-dir (car entry))) (cadr entry)))
+      (check-equal? result 'nil (car entry))
+      (check-equal? output (caddr entry) (car entry))))
+
   (test-case "stdio peers receive flushed replies while stdin stays open"
     (define file (make-temporary-file "agentica-stdio~a.agc"))
     (display-to-file

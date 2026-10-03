@@ -1,0 +1,3 @@
+{"id":true,"op":"sum","values":[1]}
+{"id":1.0,"op":"count","values":[]}
+{"id":-9,"op":"sum","values":[-10,3,-2]}

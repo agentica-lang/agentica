@@ -1,0 +1,3 @@
+{"id":1,"op":"sum","values":[2,-1,4]}
+{"id":2,"op":"count","values":[false,null,"tea",{"a":1},[]]}
+{"id":3,"op":"sum","values":[]}

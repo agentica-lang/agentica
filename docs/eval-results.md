@@ -1,6 +1,8 @@
 # Evaluation results so far
 
-These are historical runs of `tests/eval/run.py` with `pi` and Fireworks DeepSeek V4.1 flash, one session per run, 10 minute limit, hidden cases graded at the end. They used earlier sandbox setups and do not validate the current prepared-chroot boundary. Method and caveats are in [`eval-6a.md`](eval-6a.md). Raw logs are in `tests/eval/results/` (not versioned).
+The new JSON tasks and their reference validation are documented in [eval-json.md](eval-json.md). Their model evaluation is tracked separately from the historical rounds below.
+
+These are historical runs of `tests/eval/run.py` with `pi` and Fireworks DeepSeek V4.1 flash, one session per run, 10 minute limit, hidden cases graded at the end. They used earlier sandbox setups and do not validate the current Docker boundary. Method and caveats are in [`eval-6a.md`](eval-6a.md). Raw logs are in `tests/eval/results/` (not versioned).
 
 Arms: `python` (same task in Python), `skill` (the `agentica-programming` skill), `grammar` (`docs/grammar.md` and `examples/`, no skill), `binary` (only the `agentica` binary, `agentica check`, and a one-line hint).
 
@@ -81,9 +83,11 @@ Same checker and arm as round 3. The only change is one sentence in the `binary`
 ## How to reproduce
 
 ```text
-python3 tests/eval/run.py --chroot-root /path/to/prepared-rootfs --pass-env FIREWORKS_API_KEY --agent pi --arms python skill grammar --reps 3 --jobs 4
-python3 tests/eval/run.py --chroot-root /path/to/prepared-rootfs --pass-env FIREWORKS_API_KEY --agent pi --arms binary --reps 3 --jobs 4
+python3 tests/eval/run.py --pass-env FIREWORKS_API_KEY --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --agent pi --arms python skill grammar --reps 3 --jobs 4
+python3 tests/eval/run.py --pass-env FIREWORKS_API_KEY --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --agent pi --arms binary --reps 3 --jobs 4
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
 ```
 
-The root filesystem must contain `pi`, its runtime dependencies, and `python3` under `/usr/local/bin`, `/usr/bin`, or `/bin`; the runner stages Agentica at `/workspace/bin/agentica`. Use `--no-sandbox` only when intentionally running the agent with host filesystem access; the grader stays chrooted with networking disabled.
+To select only the historical five tasks, add `--tasks t1-stats t2-fix-types t3-struct-change t4-word-count t5-scope-return`; the default task set now includes the JSON tasks.
+
+Docker must be available. The default image is built automatically; `--image NAME` selects a prepared custom image, which is also needed for `--agent claude` because the default image contains Pi only. Firejail is optional: add `--sandbox firejail --chroot-root /path/to/prepared-rootfs`. Its rootfs must contain the selected agent CLI and Python under `/usr/local/bin`, `/usr/bin`, or `/bin`; users enable and configure Firejail themselves.

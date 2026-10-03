@@ -1,0 +1,4 @@
+{"id":20,"op":"unknown","values":[]}
+{"id":21,"op":"sum"}
+{"id":22,"op":"count","values":null}
+{"id":23,"op":"count","values":["ñ","a\"b","\n"]}
