@@ -15,6 +15,9 @@
 (define builtins
   (for/hash ([row (in-list
                   '(("puts" ((value String)) Nil #f "puts" (stdout) "Write text and a newline.")
+                    ("Task.spawn" ((function (Fn A R)) (argument A)) (Task R) task-spawn "Task.spawn" (concurrency) "Start a named function with one argument in a lightweight task.")
+                    ("Task.await" ((task (Task R))) R task-await "Task.await" (concurrency) "Wait for a task and return its cached result; task failures terminate the execution.")
+                    ("Task.sleep" ((milliseconds Int)) Nil #f "Task.sleep" (concurrency) "Suspend this task for nonnegative milliseconds; zero yields execution.")
                     ("BDD.run" ((feature_path String) (step_files (List String))) (Result Json) #f "BDD.run" (process) "Run features; the report ok field is the test verdict, not Result.ok?.")
                     ("BDD.step" ((pattern String) (handler (Fn (List String) Nil))) Nil #f "BDD.step" () "Register a step during handler main; supports {string} and {int} captures.")
                     ("BDD.doc_string" () String #f "BDD.doc_string" () "Read this step's Doc String; absence halts.")
@@ -22,7 +25,7 @@
                     ("BDD.assert" ((condition Bool) (message String)) Nil #f "BDD.assert" () "Check a condition in the current scenario.")
                     ("BDD.set" ((name String) (value Json)) Nil #f "BDD.set" () "Store scenario-local JSON state.")
                     ("BDD.get" ((name String)) (Result Json) #f "BDD.get" () "Read scenario-local JSON state; missing keys return errors.")
-                    ("BDD.given_program" ((path String)) Nil #f "BDD.given_program" (process) "Start one Agentica program in Docker, relative to the feature file.")
+                    ("BDD.given_program" ((path String)) Nil #f "BDD.given_program" (process) "Start one local Agentica process, relative to the feature file.")
                     ("BDD.when_line" ((text String)) Nil #f "BDD.when_line" (stdin) "Send text and a newline, then flush.")
                     ("BDD.when_input" ((text String)) Nil #f "BDD.when_input" (stdin) "Send literal text, then flush.")
                     ("BDD.when_eof" () Nil #f "BDD.when_eof" (stdin) "Close the program's stdin.")

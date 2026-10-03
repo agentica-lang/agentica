@@ -21,6 +21,49 @@
   (list (subprocess-status process) text error-text))
 
 (module+ test
+  (test-case "concurrent handlers preserve state, reject pending tasks and continue after failures"
+    (define directory (make-temporary-file "agentica-bdd-task~a" 'directory))
+    (dynamic-wind void
+      (lambda ()
+        (define feature-path (build-path directory "tasks.feature"))
+        (define step-path (build-path directory "steps.agc"))
+        (display-to-file
+         (string-append "Feature: Tasks\nScenario: parallel\nThen state is concurrent\n"
+                        "Scenario: pending\nThen tasks are pending\n"
+                        "Scenario: failure\nThen a task crashes\n"
+                        "Scenario: later\nThen later works\n") feature-path)
+        (display-to-file
+         (string-append
+          "def worker(n: Int) -> Nil\n  Task.sleep(0)\n  key = String.from_int(n)\n"
+          "  BDD.set(key, Result.unwrap!(JSON.parse(key)))\n  BDD.assert(n > 0, \"worker\")\nend\n"
+          "def parallel(args: List[String]) -> Nil\n  tasks: List[Task[Nil]] = []\n"
+          "  for n in [1, 2, 3, 4]\n    tasks = List.append(tasks, Task.spawn(&worker, n))\n  end\n"
+          "  for task in tasks\n    Task.await(task)\n  end\n"
+          "  for n in [1, 2, 3, 4]\n    BDD.assert(Result.ok?(BDD.get(String.from_int(n))), \"state lost\")\n  end\nend\n"
+          "def wait(n: Int) -> Nil\n  Task.sleep(60000)\nend\n"
+          "def pending(args: List[String]) -> Nil\n  task = Task.spawn(&wait, 0)\nend\n"
+          "def crash(n: Int) -> Int\n  return 1 / 0\nend\n"
+          "def broken(args: List[String]) -> Nil\n  task = Task.spawn(&crash, 0)\n  Task.sleep(60000)\nend\n"
+          "def good(args: List[String]) -> Nil\n  BDD.assert(not Result.ok?(BDD.get(\"1\")), \"state leaked\")\nend\n"
+          "def register_a(n: Int) -> Nil\n  BDD.step(\"state is concurrent\", &parallel)\n  BDD.step(\"tasks are pending\", &pending)\nend\n"
+          "def register_b(n: Int) -> Nil\n  BDD.step(\"a task crashes\", &broken)\n  BDD.step(\"later works\", &good)\nend\n"
+          "def main() -> Nil\n  a = Task.spawn(&register_a, 0)\n  b = Task.spawn(&register_b, 0)\n  Task.await(a)\n  Task.await(b)\nend\n") step-path)
+        (define report (run-bdd (list feature-path) #:steps (list step-path)))
+        (check-equal? (hash-ref report 'passed) 2)
+        (check-equal? (hash-ref report 'failed) 2)
+        (define results (cases report))
+        (check-equal? (hash-ref (hash-ref (cadr results) 'error) 'code) "RUNTIME-BDD-PENDING-TASKS")
+        (check-equal? (hash-ref (hash-ref (caddr results) 'error) 'code) "RUNTIME-DIVISION-BY-ZERO")
+        (display-to-file
+         (string-append "def good(args: List[String]) -> Nil\n  BDD.assert(true, \"ok\")\nend\n"
+                        "def register(name: String) -> Nil\n  BDD.step(name, &good)\nend\n"
+                        "def main() -> Nil\n  a = Task.spawn(&register, \"duplicate\")\n"
+                        "  b = Task.spawn(&register, \"duplicate\")\n  Task.await(a)\n  Task.await(b)\nend\n")
+         step-path #:exists 'truncate)
+        (define duplicate (run-bdd (list feature-path) #:steps (list step-path)))
+        (check-equal? (hash-ref (hash-ref (car (hash-ref duplicate 'files)) 'error) 'code) "RUNTIME-BDD-DUPLICATE"))
+      (lambda () (delete-directory/files directory))))
+
   (test-case "custom handlers receive arguments and share only scenario-local state"
     (define report (run-bdd (list custom (build-path (path-only custom) "." "custom.feature")) #:steps (list handlers)))
     (check-true (hash-ref report 'ok))

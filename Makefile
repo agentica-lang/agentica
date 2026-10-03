@@ -2,7 +2,7 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 
-.PHONY: build test exe clean bdd-prepare test-bdd
+.PHONY: build test exe clean test-bdd
 
 build:
 	$(RACO) make src/main.rkt
@@ -17,13 +17,7 @@ exe: build
 	mkdir -p dist
 	$(RACO) exe -o dist/agentica src/main.rkt
 
-bdd-prepare: exe
-	rm -rf dist/runtime
-	$(RACO) distribute dist/runtime dist/agentica
-	docker image inspect agentica-eval:local >/dev/null 2>&1 || docker build -f tests/eval/Dockerfile -t agentica-eval:local .
-
-test-bdd: bdd-prepare
-	AGENTICA_BDD_INTEGRATION=1 $(RACO) test tests/bdd-integration.rkt
+test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 
 clean:

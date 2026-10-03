@@ -9,7 +9,7 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task"))
 
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
@@ -126,6 +126,8 @@
          (string->symbol name)]
         [(and (string=? name "Result") (= (length arguments) 1))
          (list 'Result (resolve-type (car arguments)))]
+        [(and (string=? name "Task") (= (length arguments) 1))
+         (list 'Task (resolve-type (car arguments)))]
         [(and (string=? name "Fn") (pair? arguments))
          (cons 'Fn (map resolve-type arguments))]
         [(and (string=? name "List") (= (length arguments) 1))
@@ -143,7 +145,7 @@
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
                (type-ref-span reference)
-               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json" "Fn")
+               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json" "Fn" "Task")
                                                  (hash-keys structs))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -437,6 +439,18 @@
         (unless (result-type? type) (mismatch! '(Result T) type (node-span (car arguments))))
         type)
       (case (builtin-rule selected)
+        [(task-spawn)
+         (define callback (check-expression (car arguments) #f))
+         (unless (and (list? callback) (= (length callback) 3) (eq? (car callback) 'Fn))
+           (bail 'CHECK-TYPE-MISMATCH "Task.spawn requires a function with one parameter"
+                 (node-span (car arguments))))
+         (check-expression (cadr arguments) (cadr callback))
+         (list 'Task (caddr callback))]
+        [(task-await)
+         (define target (check-expression (car arguments) (and expected (list 'Task expected))))
+         (unless (and (pair? target) (eq? (car target) 'Task))
+           (bail 'CHECK-TYPE-MISMATCH "Task.await requires a task" (node-span (car arguments))))
+         (cadr target)]
         [(map-has)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))

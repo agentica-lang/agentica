@@ -107,10 +107,10 @@ Keep the AST free of parsing rules and the parser free of checking rules. Do not
 
 ### Focused tests
 
-- Valid: `examples/hello.agc`, and the `classify` and `Task`/`for` programs from section 8.
+- Valid: `examples/hello.agc`, and the `classify` and `Todo`/`for` programs from section 8.
 - Precedence and associativity: `a + b * c`, `a - b - c`, `-a * b`, `not a and b`, `a or b and c`.
 - Postfix: `user.name`, `users[0]`, `find_user(1).name`.
-- Calls and constructors: `main()`, positional arguments, `Task(done: false, title: "x")`, trailing commas.
+- Calls and constructors: `main()`, positional arguments, `Todo(done: false, title: "x")`, trailing commas.
 - Types: `List[Int]`, `List[List[Int]]`, `x: List[String] = []`.
 - Spans: a chosen node's line and column match the source.
 - Errors: chained comparison, top-level statement, missing `end`, bare `TYPE_NAME`, index/field assignment, missing newline after a statement, `puts "hello"`.
@@ -217,7 +217,7 @@ Defaults are chosen so work can start; change the spec first if a different answ
 
 ### Focused tests
 
-- Valid: `examples/hello.agc`, the `classify` and `Task`/`for` programs from section 8, a forward call, and a recursive function.
+- Valid: `examples/hello.agc`, the `classify` and `Todo`/`for` programs from section 8, a forward call, and a recursive function.
 - Rejected from section 8: `age: Int = "25"` and `if 1` are `CHECK-TYPE-MISMATCH`; `values = []` is `CHECK-EMPTY-LIST-TYPE`; `puts "hello"` stays a parse error.
 - Names and types: unknown name, unknown type, `List` with the wrong arity, duplicate function or struct, redefined `puts`.
 - Calls and constructors: wrong arity, unknown field, missing field, duplicate field, wrong field value type.
@@ -322,7 +322,7 @@ Add a catch-all `RUNTIME-UNREACHABLE` only as a guard that turns an unexpected e
 
 ### Focused tests
 
-- Valid: `examples/hello.agc`, the `classify` and `Task`/`for` programs from section 8, a forward call, and a recursive function.
+- Valid: `examples/hello.agc`, the `classify` and `Todo`/`for` programs from section 8, a forward call, and a recursive function.
 - Control flow: `if`/`elsif`/`else` selection, `while` counting, `for` over a non-empty and an empty list, and an early `return` inside a loop.
 - Values: integer, float, string, boolean, and `nil` literals; list literals; struct construction, field access, and index access.
 - Operators: short-circuit `and`/`or` (a side effect in the skipped operand does not run), string concatenation, truncated integer division with negative operands, and `remainder` sign.
@@ -707,6 +707,8 @@ The second argument is a struct name, not a value, as in `JSON.decode(text, User
 
 ### Phase 5g: TCP
 
+Prerequisite: lightweight tasks and evaluator isolation in phase 5j2, implemented before networking.
+
 Opaque builtin types `Socket` and `Listener`. Every blocking call takes a timeout in milliseconds, so a program cannot hang an agent forever.
 
 ```text
@@ -831,9 +833,26 @@ result = handlers["add"].call(args)
 
 - [x] Parse an English Gherkin subset in `.feature` files: Background, Scenario/Example, Scenario Outline/Examples, steps, Doc Strings, Data Tables, tags and locations. Unsupported syntax fails explicitly.
 - [x] Add `agentica test` and `BDD.run(...)->Result[Json]`, deterministic predefined steps and typed Agentica handlers registered with `BDD.step(..., &handler)`.
-- [x] Execute independent scenarios with fresh state and Docker candidates. Assertion/runtime/timeout failures stop only the current scenario; missing/ambiguous steps and assertion-free Then steps fail; remaining steps are reported as not executed.
-- [x] Keep specs/handlers outside candidate mounts, disable network and provider environment, bound execution/output, remove containers on all exits, and require Docker integration in `make test-bdd` and CI.
-- [x] Cover flushed replies before EOF, failure continuation, outline arguments/state, no-flush timeout, exact output/exit checks, and actual container isolation. Document the catalog, report verdict and trusted-verifier boundary in `docs/bdd.md` and both development/programming skills.
+- [x] Execute independent scenarios with fresh state and local processes. Assertion/runtime/timeout failures stop only the current scenario; missing/ambiguous steps and assertion-free Then steps fail; remaining steps are reported as not executed.
+- [x] Bound execution/output and clean up processes and ports on all exits. Run native process integration with `make test` and verify the compiled CLI with `make test-bdd` in CI; no container preparation or runtime distribution.
+- [x] Cover flushed replies before EOF, failure continuation, outline arguments/state, no-flush timeout, exact output/exit checks, and blocked-process cleanup. Document the catalog, report verdict and host execution in `docs/bdd.md` and both development/programming skills.
+
+### Phase 5j2: Lightweight I/O concurrency
+
+Implement before TCP and HTTP, using Racket coroutine threads. No scheduler, closures, channels or CPU parallelism.
+
+```text
+Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
+Task.await(task: Task[R]) -> R
+Task.sleep(milliseconds: Int) -> Nil
+```
+
+- [x] Separate shared immutable program tables from task-local scopes, depth and return/diagnostic escapes; extract runtime values and task supervision into separate Racket modules.
+- [x] Add typed task results, repeated awaits, nonnegative sleep and a synchronized global --max-steps budget. Any task diagnostic or System.exit terminates its evaluation, including unawaited failures.
+- [x] Cancel tasks and close newly created resources at entrypoint return or external interruption while preserving borrowed ports.
+- [x] Support BDD tasks, synchronize registration/state/assertions and independent input/output operations, reject pending tasks at handler return and preserve scenario continuation.
+- [x] Rename the demonstration Task struct to Todo in examples, docs and tests; add examples/concurrency.agc and its CI smoke check.
+- [x] Validate task results, scope isolation, blocked I/O, global failures/budget, cancellation and concurrent local BDD streams. Update grammar and both skills together.
 
 ### Phase 5k: Error propagation
 
@@ -885,7 +904,7 @@ Process.close(p: Process) -> Nil
 ### Later, for MCP
 
 - HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
-- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first; the unscheduled design (green threads, channels, `Process.poll_line`, and the evaluator reentrancy constraint) is in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
+- Task concurrency is available for handling notifications while a client waits. Channels and `Process.poll_line` remain proposed in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
 - `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
 
 ### Checklist for phases 5i to 5m
@@ -921,7 +940,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
-- [ ] Concurrency and parallelism: unscheduled; the design is in [`future.md` section 8](future.md#8-concurrency-and-parallelism). Schedule after 5m only if a real MCP case (server-initiated requests, multiple connections, or Streamable HTTP) needs it.
+- [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels and CPU parallelism remain unscheduled; [`future.md` section 8](future.md#8-concurrency-and-parallelism) records their remaining decisions.
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 

@@ -76,12 +76,12 @@
                               "  puts(classify(25))\n  puts(classify(15))\n  puts(classify(3))\nend\n"))
                   "adult\nteen\nchild\n")
     (check-equal? (output-of (string-append
-                              "struct Task\n  title: String\n  done: Bool\nend\n\n"
+                              "struct Todo\n  title: String\n  done: Bool\nend\n\n"
                               "def main() -> Nil\n"
-                              "  tasks: List[Task] = [\n"
-                              "    Task(title: \"a\", done: false),\n"
-                              "    Task(done: true, title: \"b\"),\n"
-                              "    Task(title: \"c\", done: false)\n  ]\n"
+                              "  tasks: List[Todo] = [\n"
+                              "    Todo(title: \"a\", done: false),\n"
+                              "    Todo(done: true, title: \"b\"),\n"
+                              "    Todo(title: \"c\", done: false)\n  ]\n"
                               "  for task in tasks\n    if not task.done\n      puts(task.title)\n    end\n  end\nend\n"))
                   "a\nc\n"))
 
@@ -203,16 +203,16 @@
   (test-case "IO.inspect prints structs, lists, and maps in a stable form"
     (define-values (output err result)
       (run-io (string-append
-               "struct Task\n  title: String\n  done: Bool\nend\n\n"
+               "struct Todo\n  title: String\n  done: Bool\nend\n\n"
                "def main() -> Nil\n"
-               "  t = Task(done: true, title: \"a\")\n"
+               "  t = Todo(done: true, title: \"a\")\n"
                "  IO.inspect(t)\n"
                "  IO.inspect({\"k\": 1})\n"
                "  IO.inspect(\"hi\")\n"
                "  IO.inspect(nil)\n"
                "end\n")))
     (check-equal? result 'nil)
-    (check-equal? output "Task(title: \"a\", done: true)\n{\"k\": 1}\n\"hi\"\nnil\n"))
+    (check-equal? output "Todo(title: \"a\", done: true)\n{\"k\": 1}\n\"hi\"\nnil\n"))
 
   (test-case "IO.gets! reads lines, IO.read drains, and IO.eof? peeks"
     (define-values (output err result)
@@ -289,6 +289,9 @@
     ;; Independent examples and expected output, not signatures copied from the catalog.
     (define samples
       '(("puts" "puts(\"x\")" "x\nnil\n")
+        ("Task.spawn" "Task.spawn(&identity, 7)" "<Task>\n")
+        ("Task.await" "Task.await(Task.spawn(&identity, 7))" "7\n")
+        ("Task.sleep" "Task.sleep(0)" "nil\n")
         ("IO.puts" "IO.puts(\"x\")" "x\nnil\n")
         ("IO.print" "IO.print(\"x\")" "xnil\n")
         ("IO.warn" "IO.warn(\"x\")" "nil\n")
@@ -351,7 +354,8 @@
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)
-        (run-io (main-with (format "  r: Result[Int] = error(\"bad\")\n  IO.inspect(~a)" (cadr sample)))
+        (run-io (string-append "def identity(n: Int) -> Int\n  return n\nend\n"
+                              (main-with (format "  r: Result[Int] = error(\"bad\")\n  IO.inspect(~a)" (cadr sample))))
                 "line\n" '("arg")))
       (check-equal? out (caddr sample) name)
       (check-equal? err (if (equal? name "IO.warn") "x\n" "") name)

@@ -27,19 +27,24 @@
 (define (guard context span thunk)
   (with-handlers ([exn:fail:bdd? exn:fail:bdd-problem]
                   [exn:fail? (lambda (failure) (diagnostic 'RUNTIME-BDD-IO (exn-message failure) span))])
-    (bdd-limit context thunk 30000 span)))
+    (parameterize ([current-custodian (bdd-context-custodian context)])
+      (bdd-limit context thunk 30000 span))))
 
 (define (quiet-output)
   (define count 0)
+  (define lock (make-semaphore 1))
   (make-output-port 'bdd-output always-evt
     (lambda (data start end non-block? breakable?)
-      (set! count (+ count (- end start)))
-      (when (> count 1048576) (error 'BDD "handler output exceeds 1 MiB"))
-      (- end start)) void))
+      (call-with-semaphore lock
+        (lambda ()
+          (set! count (+ count (- end start)))
+          (when (> count 1048576) (error 'BDD "handler output exceeds 1 MiB"))
+          (- end start)))) void))
 
 (define (evaluate-handler program context handler #:entrypoint [entrypoint "main"] #:arguments [arguments '()])
   (evaluate program #:in (open-input-string "") #:out (quiet-output) #:err (quiet-output)
-            #:entrypoint entrypoint #:arguments arguments #:max-steps 1000000 #:builtin-handler handler))
+            #:entrypoint entrypoint #:arguments arguments #:max-steps 1000000 #:builtin-handler handler
+            #:require-complete-tasks? #t))
 
 (define (built-in-definitions)
   (define (entry pattern name build-arguments)
@@ -66,12 +71,13 @@
     (entry "stdout is:" "BDD.then_stdout" (lambda (context args) (list (doc context))))
     (entry "stderr is:" "BDD.then_stderr" (lambda (context args) (list (doc context))))))
 
-(define (load-definitions path registry image runtime)
+(define (load-definitions path registry command)
   (define program (read-program path))
   (if (diagnostic? program) program
       (let ()
         (define additions '())
-        (define context (make-bdd-context (or (path-only (path->complete-path path)) (current-directory)) image runtime))
+        (define registration-lock (make-semaphore 1))
+        (define context (make-bdd-context (or (path-only (path->complete-path path)) (current-directory)) command))
         (define result
           (dynamic-wind void
             (lambda ()
@@ -79,7 +85,8 @@
                 (lambda ()
                   (evaluate-handler program context
                     (lambda (name arguments span)
-                      (cond
+                      (call-with-semaphore registration-lock
+                        (lambda () (cond
                         [(not (equal? name "BDD.step"))
                          (diagnostic 'RUNTIME-BDD-CONTEXT "handler main may only register BDD.step definitions" span)]
                         [(member (car arguments) (map definition-pattern (append registry additions)))
@@ -94,7 +101,7 @@
                                        (evaluate-handler program scenario-context
                                          (lambda (builtin args where) (bdd-call scenario-context builtin args where))
                                          #:entrypoint callback #:arguments (list captures)))) additions))
-                           'nil)]))))))
+                           'nil)]))))))))
             (lambda () (bdd-cleanup! context))))
         (cond
           [(diagnostic? result) result]
@@ -116,12 +123,12 @@
   (define start (source-span-start span))
   (hasheq 'file (source-name (source-span-source span)) 'line (source-position-line start) 'column (source-position-column start)))
 
-(define (run-scenario item feature-path registry image runtime)
+(define (run-scenario item feature-path registry command)
   (define started (current-inexact-monotonic-milliseconds))
   (define actions (scenario-steps item))
   (define bindings (map (lambda (action) (resolve action registry)) actions))
   (define preflight (findf diagnostic? bindings))
-  (define context (make-bdd-context (path-only (path->complete-path feature-path)) image runtime))
+  (define context (make-bdd-context (path-only (path->complete-path feature-path)) command))
   (define failure preflight)
   (define records '())
   (dynamic-wind void
@@ -158,7 +165,7 @@
           'duration_ms (inexact->exact (round (- (current-inexact-monotonic-milliseconds) started)))
           'steps (reverse records) 'error (if failure (diagnostic->jsexpr failure) 'null)))
 
-(define (run-bdd paths #:steps [step-files '()] #:image [image "agentica-eval:local"] #:runtime [runtime "dist/runtime"])
+(define (run-bdd paths #:steps [step-files '()] #:command [command (default-bdd-command)])
   (define files '())
   (define registry (built-in-definitions))
   (define targets '())
@@ -166,7 +173,7 @@
     (set! files (cons (hasheq 'path (path->string (path->complete-path path)) 'feature "" 'status "failed"
                               'scenarios '() 'error (diagnostic->jsexpr problem)) files)))
   (for ([path (in-list step-files)])
-    (define result (load-definitions path registry image runtime))
+    (define result (load-definitions path registry command))
     (if (diagnostic? result) (file-error path result) (set! registry (append registry result))))
   (for ([path (in-list paths)])
     (cond
@@ -185,7 +192,7 @@
     (cond
       [(diagnostic? parsed) (file-error path parsed)]
       [else
-       (define results (for/list ([item (in-list (feature-scenarios parsed))]) (run-scenario item path registry image runtime)))
+       (define results (for/list ([item (in-list (feature-scenarios parsed))]) (run-scenario item path registry command)))
        (set! files (cons (hasheq 'path (path->string path) 'feature (feature-name parsed)
                                  'status (if (andmap (lambda (item) (equal? (hash-ref item 'status) "passed")) results) "passed" "failed")
                                  'scenarios results 'error 'null) files))]))
@@ -201,7 +208,7 @@
   (hasheq 'ok (and ok? #t) 'passed passed 'failed failed 'not_executed 0 'file_errors (count (lambda (file) (hash? (hash-ref file 'error))) ordered)
           'files ordered 'exit_code (cond [ok? 0] [infra? 2] [else 1])))
 
-(define (make-bdd-service #:image [image "agentica-eval:local"] #:runtime [runtime "dist/runtime"])
+(define (make-bdd-service #:command [command (default-bdd-command)])
   (define (runtime-json value)
     (cond
       [(eq? value 'null) 'nil]
@@ -211,7 +218,7 @@
   (lambda (name arguments span)
     (cond
       [(equal? name "BDD.run")
-       (define report (run-bdd (list (car arguments)) #:steps (cadr arguments) #:image image #:runtime runtime))
+       (define report (run-bdd (list (car arguments)) #:steps (cadr arguments) #:command command))
        (if (= (hash-ref report 'exit_code) 2)
            (bdd-result #f "BDD infrastructure unavailable; use agentica test --json for details")
            (bdd-result #t (json-value (runtime-json report))))]

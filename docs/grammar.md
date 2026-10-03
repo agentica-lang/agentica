@@ -19,7 +19,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, and `BDD` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, and `Task` |
 
 Enums, `Option`, interpolation, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
@@ -233,6 +233,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
 | `Json` | Opaque JSON value, accessed through the `JSON` module |
 | `Fn[A, ..., R]` | Named function value; final type is its return, preceding types are parameters; no closures |
+| `Task[R]` | Opaque lightweight task with exactly one result type |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -444,7 +445,25 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 `Fn` and `BDD` are reserved builtin names. `f: Fn[Int, Int] = &double` refers to a declared function with exactly those parameter and return types; `f.call(21)` invokes it. References can travel through lists, maps, parameters, returns, and fields. A bare function name remains invalid as a value. Functions have no equality, field access, indexing, or JSON encoding; `IO.inspect` prints `<Fn>`.
 
-`BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Nil]) -> Nil`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and Docker setup.
+`BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications using local processes. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Nil]) -> Nil`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and process lifetime.
+
+### Lightweight tasks
+
+`Task` is reserved. Tasks use Racket coroutine threads for I/O concurrency, without closures, new keywords or CPU parallelism.
+
+```text
+Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
+Task.await(task: Task[R]) -> R
+Task.sleep(milliseconds: Int) -> Nil
+```
+
+Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Handles belong to one execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
+
+Any task diagnostic terminates the whole evaluation with its original code and span, even when unawaited. System.exit in any task terminates the evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending tasks: explicitly await work that must finish. External interruption also cancels tasks and closes resources created under the execution custodian, preserving caller-supplied ports.
+
+Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, arguments and contextual builtin services. Shared streams have no cross-task ordering guarantee; coordinate who reads input. All tasks, including nested tasks, share the execution's synchronized --max-steps counter.
+
+BDD registration and step handlers support tasks but must finish them before returning, normally through Task.await. Pending work fails that handler with RUNTIME-BDD-PENDING-TASKS. Child failures stop the current handler while later scenarios continue. BDD registration, state and assertions are synchronized; stdin and stdout have independent locks whose wait counts against the operation timeout.
 
 ### Builtin discovery and execution budget
 
@@ -452,7 +471,7 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 `agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
 
-`agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The counter resets per run. This is not a wall-clock or blocking-I/O timeout.
+`agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
 
 Files, networking, and richer conversions need a later API; see [`future.md`](future.md).
 
@@ -508,15 +527,15 @@ end
 ### Lists and field access
 
 ```ruby
-struct Task
+struct Todo
   title: String
   done: Bool
 end
 
 def main() -> Nil
-  tasks: List[Task] = [
-    Task(title: "Probar Agentica", done: false),
-    Task(title: "Revisar gramática", done: true)
+  tasks: List[Todo] = [
+    Todo(title: "Probar Agentica", done: false),
+    Todo(title: "Revisar gramática", done: true)
   ]
 
   for task in tasks

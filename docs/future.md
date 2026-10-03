@@ -244,53 +244,50 @@ Open decisions before implementation:
 
 ## 8. Concurrency and parallelism
 
-Status: proposal, unscheduled. Nothing here is normative and no phase is assigned. A sequential loop is enough for the first stdio MCP client and server (5m); add concurrency only when a real case needs it: server-initiated requests while a client waits, a server serving more than one connection, or Streamable HTTP.
+Lightweight I/O tasks are implemented before networking in phase 5j2. Their normative API lives in grammar.md: Task.spawn takes Fn[A, R] and one argument and returns Task[R]; Task.await returns R; Task.sleep takes nonnegative milliseconds. Channels and CPU parallelism remain proposals. Supporting multiple connections is the concrete reason to prepare evaluator isolation before TCP and HTTP.
 
 ### Racket building blocks
 
 | Tool | Module | Parallel? | Notes |
 |---|---|---|---|
 | Green threads, channels, `sync`, semaphores | `racket/base` | One core | Cheapest; enough for I/O concurrency; no new dependency |
+| Parallel threads, `thread #:pool` | `racket/base` | Multicore on supported CS builds | Available since 8.18.0.2; synchronization costs need measurement |
 | Places, `place-channel` | `racket/place` | Real multicore | One VM per place; messages serialized; heavy |
 | Futures | `racket/future` | Limited | Parallel only for a safe value subset; finicky performance; not proposed |
 
-Proposal: build on green threads only. Places stay a later optimization if CPU parallelism is ever measured to matter, which is unlikely for a tree-walking interpreter.
+The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). Add CPU parallelism only after measuring a concrete workload and reviewing shared state.
 
 ### Shape: builtin modules, no grammar change
 
-Like `TCP` and `Process`, concurrency is a builtin module over Racket primitives; no new keywords. It depends on function values (5j) and generic opaque types.
+Task is a builtin module over Racket primitives using function values (5j) and a generic opaque result type, with no new keywords. The remaining channel proposal is:
 
 ```text
-Task.spawn(f: Fn[A, Nil], arg: A) -> Task
-Task.await(t: Task) -> Nil
 Channel.new() -> Channel[T]
 Channel.send(c: Channel[T], v: T) -> Nil
 Channel.recv(c: Channel[T]) -> T
 ```
 
-- `&name` has no closures, so a task body cannot capture locals; everything it needs travels as the argument, or through a `Channel` passed in.
-- `Channel[T]` and `Task` are opaque, special-cased in the checker like `Socket`.
-- Channels are the only way two tasks share data. Values are Agentica values and there is no shared mutable state, so the checker's immutability rules stay intact.
-- A task can halt with a `RUNTIME-` diagnostic. Decide whether the failure propagates from `Task.await` or ends the whole run.
+- Named functions have no closures. Task inputs travel through one argument and results through Task.await; future channels could provide repeated exchanges.
+- Channel[T] would be a builtin opaque generic. Buffering, close, timeout and cancellation rules must be decided together.
+- Immutable values can be shared safely, but ports, future sockets and contextual services are resources with state. They still need ownership or synchronization rules.
+- Task diagnostics already terminate the whole evaluation, even when unawaited; Result.error remains a normal result.
 
-### Minimal first step (if threads are too much)
+### Future process polling
 
-One non-blocking builtin avoids threads, function values, and reentrancy entirely:
+Process spawning may later expose a non-blocking helper:
 
 ```text
 Process.poll_line(p: Process, timeout: Int) -> Result[String]
 ```
 
-A single-threaded loop alternates between sending requests and polling for messages, implemented with `sync/timeout` on the child's output port. Prefer this if it covers the MCP cases.
+A loop can alternate between requests and polling with sync/timeout on child output. This is not part of the task phase.
 
-### Evaluator constraint
+### Implemented evaluator isolation
 
-`src/evaluator.rkt` keeps `scopes`, `steps`, `depth`, and `return-to` as `set!`-mutated closure state inside one `evaluate-with-ports`. Two tasks running `eval-expression` would race `steps` and share one scope stack. Real concurrency needs a per-task scope stack and a synchronized (or per-task) step counter; budget for that surgery, it is not a thin wrapper.
+The evaluator prepares immutable function/struct tables once per evaluation, then creates independent scopes, depth, returns and diagnostic escapes for each task. src/task.rkt owns supervision, cached results and the synchronized global step budget. A run custodian cancels pending tasks and closes new resources at completion or interruption; borrowed ports remain open. BDD rejects pending tasks on handler return and keeps scenario continuation.
 
 ### Open decisions
 
-- Whether to ship `Task`/`Channel` at all, or only `Process.poll_line`, until a real case needs threads.
-- How a task's failure reaches `Task.await`, and whether an unawaited task's failure ends the run.
-- Whether `--max-steps` counts per task or for the whole run.
-- Whether places are ever added for CPU parallelism; default no.
-- Timeouts, cancellation, and what happens to running tasks when the run ends.
+- Whether a concrete application needs channels or Process.poll_line.
+- Whether measured CPU workloads justify parallel thread pools or places; default no.
+- Whether to expose task timeouts or explicit cancellation. Current await has no timeout; returning from the entrypoint cancels pending work.

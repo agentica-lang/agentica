@@ -1,0 +1,19 @@
+#lang racket
+
+(provide (struct-out instance) (struct-out mapping) (struct-out exit-code)
+         (struct-out function-value) (struct-out result-ok) (struct-out result-error)
+         mapping-put)
+
+(struct instance (type-name fields) #:transparent)
+(struct mapping (table reversed-keys) #:transparent)
+(struct exit-code (code) #:transparent)
+(struct function-value (name) #:transparent)
+(struct result-ok (value) #:transparent)
+(struct result-error (message) #:transparent)
+
+(define (mapping-put target key value)
+  (define table (mapping-table target))
+  (mapping (hash-set table key value)
+           (if (hash-has-key? table key)
+               (mapping-reversed-keys target)
+               (cons key (mapping-reversed-keys target)))))

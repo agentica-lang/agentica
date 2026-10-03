@@ -1,12 +1,12 @@
-struct Task
+struct Todo
   title: String
   done: Bool
 end
 
 def main() -> Nil
-  tasks: List[Task] = [
-    Task(title: "Probar Agentica", done: false),
-    Task(title: "Revisar gramática", done: true)
+  tasks: List[Todo] = [
+    Todo(title: "Probar Agentica", done: false),
+    Todo(title: "Revisar gramática", done: true)
   ]
 
   for task in tasks

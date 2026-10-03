@@ -41,9 +41,11 @@ src/
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
   evaluator.rkt   # evaluate: program -> 'nil | diagnostic (RUNTIME-); puts writes to current-output-port
+  runtime-values.rkt # shared runtime values, results and immutable map updates
+  task.rkt        # coroutine task results, supervision, global budget and cleanup
   json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
   gherkin.rkt     # English feature parser, expansion and source locations
-  bdd.rkt         # scenario context, assertions and supervised Docker streams
+  bdd.rkt         # scenario context, assertions and supervised local process streams
   bdd-runner.rkt  # deterministic step registration/resolution, execution and reports
   main.rkt        # thin CLI driver: lex, parse, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
 tests/
@@ -190,8 +192,18 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - The catalog contains BDD signatures; evaluator dispatch delegates to its `#:builtin-handler` service. The CLI installs `make-bdd-service`; the runner installs registration/scenario handlers, avoiding a runner/evaluator import cycle. `#:entrypoint` and `#:arguments` invoke checked callbacks with fresh scopes.
 - `BDD.step` takes `Fn[List[String], Nil]`. Resolve all step text before any scenario actions; duplicate patterns, undefined steps, or ambiguous matches fail. Then/And/But must increase the BDD assertion count; early System.exit never approves a step. JSON state belongs to one scenario.
 - `BDD.run` returns Result[Json]: Result success means evaluation completed, while report `ok` is the verdict. Normalize report JSON null to the evaluator's `'nil` representation before wrapping it. CLI `test` enforces exit_code and prints reports only; suppress/bound handler output.
-- Candidate processes use Docker with read-only mounts of copied source and distributed runtime, UID/GID 65534, no network/capabilities/provider credentials. Specs/handlers are not mounted. Register cleanup before container creation; custodians and deadlines cover blocked reads/writes and startup. Drain available bytes, not fixed-size reads that wait for a full buffer or EOF.
-- `make test` stays hermetic. `make test-bdd` prepares the runtime/image and sets AGENTICA_BDD_INTEGRATION=1 to require real Docker tests. Negative no-flush tests and actual filesystem/environment/network checks protect supervision and isolation; CI runs both commands.
+- Programs under test run directly on the host with inherited environment and permissions, using the current compiled Agentica executable or Racket and src/main.rkt for source execution. The feature directory is their working directory. Scenario custodians own processes and stream workers; cleanup kills and reaps processes. Drain available bytes, not fixed-size reads that wait for a full buffer or EOF.
+- `make test` includes local process integration tests, with no opt-in or image preparation; JOBS controls parallel Racket test workers. `make test-bdd` builds and verifies the compiled CLI against the feature suite. Negative no-flush tests, exact stream/exit checks and blocked-process cleanup protect supervision; CI runs both commands.
+
+## Lightweight I/O tasks
+
+- Task.spawn takes Fn[A, R] and one argument and returns Task[R]; await returns the cached R, including false/nil/error Results. Sleep takes nonnegative milliseconds, zero yields and negative values halt with RUNTIME-INVALID-DURATION. Reserve Task; use Todo for the demonstration struct. No channels, closures or CPU parallelism.
+- Build immutable program tables once per evaluate. Each evaluate-with-ports invocation has independent scopes, depth, returns and diagnostic escapes. Spawn calls that worker with the same execution; calling public evaluate would reset supervision and budget.
+- task.rkt supervises main and children outside their run custodian. Any diagnostic or System.exit publishes a terminal outcome and interrupts even blocked main I/O. First publication wins. The shared step counter is synchronized; completed handles leave the active registry but retain cached results.
+- Entrypoint return cancels pending work. A watcher also cleans up if the supervisor is killed without dynamic-wind cleanup. Newly created resources close; borrowed ports remain open. Tasks inherit ports, arguments and services; cross-task stream ordering is unspecified.
+- BDD passes require-complete-tasks? to evaluate; pending work fails with RUNTIME-BDD-PENDING-TASKS. Timed-operation custodians nest under their caller, and the outer guard nests under the scenario custodian, so cancellation covers nested I/O workers.
+- Synchronize BDD registration/state/assertions and quiet-output counters. Separate stdin and stdout locks, include lock wait in deadlines, serialize startup and reject streams until startup completes. Never hold the state lock around blocking I/O.
+- tests/task-test.rkt owns checked-program task behavior with injected ports/events. BDD tests own contextual behavior; tests/bdd-integration.rkt verifies real concurrent local streams and cleanup. examples/concurrency.agc is a hermetic CI smoke check.
 
 ## Reference
 

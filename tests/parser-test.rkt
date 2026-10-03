@@ -84,15 +84,15 @@
   (test-case "struct, list literal, constructor, for, and field access parse"
     (define program
       (parse-ok (string-append
-                 "struct Task\n"
+                 "struct Todo\n"
                  "  title: String\n"
                  "  done: Bool\n"
                  "end\n"
                  "\n"
                  "def main() -> Nil\n"
-                 "  tasks: List[Task] = [\n"
-                 "    Task(title: \"Probar\", done: false),\n"
-                 "    Task(title: \"Revisar\", done: true)\n"
+                 "  tasks: List[Todo] = [\n"
+                 "    Todo(title: \"Probar\", done: false),\n"
+                 "    Todo(title: \"Revisar\", done: true)\n"
                  "  ]\n"
                  "  for task in tasks\n"
                  "    if not task.done\n"
@@ -148,7 +148,7 @@
     (define two-args (parse-expr "f(1, 2,)"))
     (check-equal? (length (call-args two-args)) 2)
 
-    (define constructor (parse-expr "Task(done: false, title: \"x\")"))
+    (define constructor (parse-expr "Todo(done: false, title: \"x\")"))
     (check-true (construct? constructor))
     (check-equal? (named-arg-name (car (construct-args constructor))) "done")
 
