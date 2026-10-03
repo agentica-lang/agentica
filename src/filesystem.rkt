@@ -19,14 +19,24 @@
 (define current-file-registry-lock (make-parameter #f))
 (define current-file-registry-closing (make-parameter #f))
 (define bytes-limit 1048576)
+(define close-wait-ms 1000)
 
 (define (filesystem-result thunk)
-  (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
+  (with-handlers ([exn:network-timeout? (lambda (_failure) (result-error "filesystem: operation timed out"))]
+                  [exn:fail? (lambda (failure) (result-error (exn-message failure)))])
     (result-ok (thunk))))
 
 (define (check-owner handle)
   (unless (eq? (file-handle-owner handle) (current-file-owner))
     (error 'filesystem "file handle belongs to another execution")))
+
+(define (require-input handle)
+  (unless (file-handle-input handle)
+    (error 'filesystem "file handle is not open for reading")))
+
+(define (require-output handle)
+  (unless (file-handle-output handle)
+    (error 'filesystem "file handle is not open for writing")))
 
 (define (close-handle handle)
   (unless (file-handle-closed? handle)
@@ -55,12 +65,20 @@
               (when (and close-on-timeout? (unbox active?))
                 (close-handle handle)))))
 
+(define (resolve-link-target path)
+  (define absolute (path->complete-path path))
+  (path->complete-path (resolve-path absolute) (path-only absolute)))
+
 (define (effective-kind path)
-  (let loop ([target path])
+  (let loop ([target path] [seen (list (path->complete-path path))])
     (define kind (file-or-directory-type target #f))
-    (if (member kind '(link directory-link))
-        (loop (resolve-path target))
-        kind)))
+    (cond
+      [(not (member kind '(link directory-link))) kind]
+      [else
+       (define next (resolve-link-target target))
+       (if (member next seen)
+           kind
+           (loop next (cons next seen)))])))
 
 (define (regular-file? path)
   (eq? (effective-kind path) 'file))
@@ -118,7 +136,9 @@
    (lambda ()
      (set-box! closing? #t)
      (for ([handle (in-list (hash-keys handles))])
-       (when (semaphore-try-wait? (file-handle-lock handle))
+       ;; Give a task that is mid-operation a bounded chance to release the
+       ;; handle lock so its buffered output is flushed before the port closes.
+       (when (sync/timeout (/ close-wait-ms 1000) (file-handle-lock handle))
          (dynamic-wind
            void
            (lambda ()
@@ -135,7 +155,12 @@
     (cond
       [(eof-object? byte)
        (if (zero? count) eof (get-output-bytes out))]
-      [(= byte 10) (get-output-bytes out)]
+      [(= byte 10)
+       (define line (get-output-bytes out))
+       (if (and (positive? (bytes-length line))
+                (= (bytes-ref line (sub1 (bytes-length line))) 13))
+           (subbytes line 0 (sub1 (bytes-length line)))
+           line)]
       [(>= count bytes-limit) (error 'filesystem "line exceeds 1048576 bytes")]
       [else (write-byte byte out) (loop (add1 count))])))
 
@@ -146,9 +171,10 @@
       (define size (file-size path))
       (when (> size bytes-limit) (error 'filesystem "file exceeds 1048576 bytes"))
       (define bytes (call-with-input-file path (lambda (port) (read-bytes (+ size 1) port)) #:mode 'binary))
-      (when (or (eof-object? bytes) (> (bytes-length bytes) bytes-limit))
-        (error 'filesystem "file exceeds 1048576 bytes"))
-      (bytes->string/utf-8 bytes #f))))
+      (cond
+        [(eof-object? bytes) ""]
+        [(> (bytes-length bytes) bytes-limit) (error 'filesystem "file exceeds 1048576 bytes")]
+        [else (bytes->string/utf-8 bytes #f)]))))
 
 (define (write-whole path text append? timeout)
   (define bytes (string->bytes/utf-8 text))
@@ -188,36 +214,42 @@
               (error 'filesystem "max_bytes must be between 1 and 1048576"))
             (timed-handle-operation handle timeout
               (lambda ()
+                (require-input handle)
                 (define bytes (read-bytes max-bytes (file-handle-input handle)))
                 (if (eof-object? bytes) '() (bytes->list bytes))))))]
     [(File.read_line)
      (match-define (list handle timeout) args)
      (res (lambda ()
             (define bytes (timed-handle-operation handle timeout
-                            (lambda () (read-line-bytes (file-handle-input handle)))))
+                            (lambda ()
+                              (require-input handle)
+                              (read-line-bytes (file-handle-input handle)))))
             (when (eof-object? bytes) (error 'filesystem "end of file"))
-            (define clean (if (and (positive? (bytes-length bytes))
-                                  (= (bytes-ref bytes (sub1 (bytes-length bytes))) 13))
-                              (subbytes bytes 0 (sub1 (bytes-length bytes))) bytes))
-            (bytes->string/utf-8 clean #f)))]
+            (bytes->string/utf-8 bytes #f)))]
     [(File.write)
      (match-define (list handle text timeout) args)
      (res (lambda ()
             (define bytes (string->bytes/utf-8 text))
             (when (> (bytes-length bytes) bytes-limit) (error 'filesystem "text exceeds 1048576 bytes"))
             (timed-handle-operation handle timeout
-              (lambda () (write-bytes bytes (file-handle-output handle)) 'nil))))]
+              (lambda ()
+                (require-output handle)
+                (write-bytes bytes (file-handle-output handle)) 'nil))))]
     [(File.write_bytes)
      (match-define (list handle values timeout) args)
      (res (lambda ()
             (define bytes (valid-bytes values))
             (timed-handle-operation handle timeout
-              (lambda () (write-bytes bytes (file-handle-output handle)) 'nil))))]
+              (lambda ()
+                (require-output handle)
+                (write-bytes bytes (file-handle-output handle)) 'nil))))]
     [(File.flush)
      (match-define (list handle timeout) args)
      (res (lambda ()
             (timed-handle-operation handle timeout
-              (lambda () (flush-output (file-handle-output handle)) 'nil))))]
+              (lambda ()
+                (require-output handle)
+                (flush-output (file-handle-output handle)) 'nil))))]
     [(File.close)
      (define handle (car args))
      (res (lambda ()

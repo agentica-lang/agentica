@@ -180,6 +180,33 @@
        (check-true (string-contains? output "ok(\"linked\")"))
        (check-true (string-contains? output "FileInfo(kind: \"file\", size_bytes: 6")))))
 
+  (test-case "empty files read as empty text and relative symlinks resolve from the link directory"
+    (with-temp-dir
+     (lambda (root)
+       (define nested (build-path root "nested"))
+       (define empty-path (build-path root "empty.txt"))
+       (define target (build-path nested "target.txt"))
+       (define alias (build-path nested "alias.txt"))
+       (make-directory* nested)
+       (call-with-output-file empty-path void #:exists 'truncate)
+       (call-with-output-file target (lambda (port) (display "linked" port)) #:exists 'truncate)
+       (make-file-or-directory-link "target.txt" alias)
+       (define-values (output result)
+         (run-program
+          (format
+           (string-append
+            "def main() -> Nil\n"
+            "  empty: Result[String] = File.read_text(~a, 1000)\n"
+            "  linked: Result[String] = File.read_text(~a, 1000)\n"
+            "  IO.inspect(empty)\n"
+            "  IO.inspect(linked)\n"
+            "end\n")
+           (literal (path->string empty-path))
+           (literal (path->string alias)))))
+       (check-equal? result 'nil)
+       (check-true (string-contains? output "ok(\"\")"))
+       (check-true (string-contains? output "ok(\"linked\")")))))
+
   (test-case "evaluation cleanup closes an unclosed file handle"
     (with-temp-dir
      (lambda (root)
