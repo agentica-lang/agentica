@@ -25,6 +25,7 @@
          (struct-out map-lit)
          (struct-out field-access)
          (struct-out index-access)
+         (struct-out try-expr)
          (struct-out unary)
          (struct-out binary)
          node-span)
@@ -55,6 +56,7 @@
 (struct map-lit (entries span) #:transparent)
 (struct field-access (target name span) #:transparent)
 (struct index-access (target index span) #:transparent)
+(struct try-expr (operand span) #:transparent)
 (struct unary (op op-span operand span) #:transparent)
 (struct binary (op op-span left right span) #:transparent)
 
@@ -83,6 +85,7 @@
     [(map-lit? node) (map-lit-span node)]
     [(field-access? node) (field-access-span node)]
     [(index-access? node) (index-access-span node)]
+    [(try-expr? node) (try-expr-span node)]
     [(unary? node) (unary-span node)]
     [(binary? node) (binary-span node)]
     [else #f]))

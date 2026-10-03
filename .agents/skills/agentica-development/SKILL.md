@@ -17,10 +17,13 @@ Run all of these before calling a change done:
 make test                                 # every stage test, in parallel
 make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
-racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
+racket src/main.rkt --json check examples/result.agc
 racket src/main.rkt examples/classify.agc
 racket src/main.rkt examples/tasks.agc
 racket src/main.rkt examples/inventory.agc
+racket src/main.rkt examples/strings.agc
+racket src/main.rkt examples/result.agc
+racket src/main.rkt examples/json.agc
 ```
 
 CI (`.github/workflows/ci.yml`) runs exactly these on Racket CS 9.3. Use the standard library only; the project adds no dependencies.
@@ -35,8 +38,10 @@ src/
   lexer.rkt       # lex: source -> (listof token) | diagnostic
   ast.rkt         # syntax tree nodes; every node carries a span
   parser.rkt      # parse: (listof token) -> program | diagnostic
+  builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
   evaluator.rkt   # evaluate: program -> 'nil | diagnostic (RUNTIME-); puts writes to current-output-port
+  json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
   main.rkt        # thin CLI driver: lex, parse, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
 tests/
   lexer-test.rkt
@@ -45,7 +50,7 @@ tests/
   evaluator-test.rkt
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc
+examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc, result.agc, json.agc
 docs/
   grammar.md   # language grammar, the source of truth
   future.md    # planned syntax, not implemented
@@ -59,6 +64,7 @@ docs/
 | keyword, operator, or literal form | `src/lexer.rkt` lookup tables |
 | AST node | `src/ast.rkt` struct plus `provide`; construct it from `src/parser.rkt` |
 | syntax, statement, or expression form | `src/parser.rkt` |
+| builtin | `src/builtins.rkt` metadata; checker generic rule and evaluator implementation; exercise a real checked call |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
 | language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap.md`; also update `.agents/skills/agentica-programming/references/language.md` (the reference evaluators read instead of the grammar) |
@@ -132,7 +138,7 @@ Every stage follows the same shape; keep new stages consistent with it.
 
 ## Lexer gotcha: stray NL tokens
 
-The lexer emits one `NL` per newline sequence outside `()` and `[]`, but a comment line splits a sequence, so a comment or blank line between statements can leave more than one `NL` token. The grammar's `program` and `block` rules do not model this. The parser therefore skips stray `NL` at the top level and between statements. Keep that skip when adding statement forms, or valid files with comments between statements will fail to parse.
+The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including every blank/comment line, so extra lines between statements can leave more than one `NL` token. The grammar's `program` and `block` rules do not model this. The parser therefore skips stray `NL` at the top level and between statements. Keep that skip when adding statement forms, or valid files with comments between statements will fail to parse.
 
 ## Error handling
 
@@ -140,6 +146,30 @@ The lexer emits one `NL` per newline sequence outside `()` and `[]`, but a comme
 - Smoke test exits 1: `main.rkt` printed `file:line:column error[CODE]`, the message, and a source excerpt with a caret on stderr. That is a stage diagnostic, not a crash.
 - A Racket traceback instead of a diagnostic means a stage raised or indexed out of range. Find the token or index and turn it into a `bail`/`fail`; the roadmap requires Agentica diagnostics, never host tracebacks.
 - A stage unexpectedly returns a diagnostic: check the first-error rule and that `main.rkt` guards with `diagnostic?` before passing data to the next stage.
+
+## Result, propagation, and runtime bounds
+
+- `Result[T]` is builtin, with String errors and contextual `ok`/`error` typing. Forward expected types through the shared call path; do not add global inference or dummy payload types. Untyped errors are `CHECK-RESULT-TYPE`.
+- `try` is a unary expression node. It requires a Result-returning function (`CHECK-TRY-CONTEXT` otherwise), unwraps successes, and returns errors through the current function's escape, not the evaluator's diagnostic escape. It does not guarantee a return.
+- IO.gets now returns Result[String]; IO.gets! is the old String-returning/halting form. Migrate callers in tests/eval/tasks as well as examples, without repairing intentional starter bugs or changing hidden cases. Non-bang conversions recover only their documented failures.
+- Function suffixes allow whitespace before `(`; `!=` remains an operator. Empty map inference uses `CHECK-EMPTY-MAP-TYPE`.
+- `evaluate` accepts optional `#:max-steps` (positive integer or #f). Count every expression/statement entry, including loop conditions; reset per run. CLI --max-steps validates the input; check never executes. This is not a blocking-I/O timeout.
+- A rebase changing AST/diagnostic layouts may leave stale ignored Racket bytecode. For an instantiate-linklet struct mismatch, use `make clean && make build && make test`; rebuild the binary with make exe before evaluation.
+
+## Stdio bytes and flushing
+
+- `IO.read()` remains the all-text-until-EOF API. `IO.read_bytes(count)` uses native read-bytes and returns Result[List[Int]]; wait for count bytes or EOF, return short/empty success at EOF, and do not consume input for zero or invalid counts. The fixed 1 MiB per-call cap prevents eager allocations from arbitrary Int sizes; larger streams use repeated reads. Port read failures are local Results, not exceptions around argument evaluation.
+- `String.from_bytes` uses byte? validation, list->bytes, and bytes->string/utf-8 with #f for strict decoding. Invalid byte values and malformed/incomplete UTF-8 return Result errors. No Bytes type or new checker rule is needed: these are fixed catalog signatures.
+- EOF uses peek-byte, not peek-char: a peer may have sent only the leading UTF-8 byte. EOF peeking still blocks if there is no data, so it is not a readiness poll. Text and byte reads share the port; switch to text only at complete character boundaries.
+- `IO.flush` flushes current-output-port and returns nil. Do not auto-flush other output functions or close ports. The live Racket CLI pipe test with stdin held open protects response delivery and byte-oriented EOF peeking; it fails if flushing becomes a no-op or EOF reverts to peek-char. All blocking stdio calls remain without timeouts.
+
+## JSON (phase 5f)
+
+- `Json` is opaque, not primitive for equality. Reserve `Json` and `JSON`; all calls use existing parser/AST forms. The catalog has nine JSON functions; `json-encode` is the only new generic checker rule.
+- Recursively check encoding eligibility, including declared struct fields and empty containers. A seen-struct path prevents infinite recursion without skipping other fields. Results and Int-keyed maps are CHECK-NOT-ENCODABLE.
+- `src/json.rkt` delegates parsing to bundled `read-json`. Use direct character checks for raw controls and trailing JSON whitespace. Racket CS 9.3 accepts raw controls in strings and can raise a non-read exception for malformed exponents such as `0.0001e+`; the evaluator catches parsing failures locally as Results, never around argument evaluation.
+- False/null are present values. Int extraction is signed 64-bit and rejects decimal/exponent forms; Float extraction permits integer conversion only if finite. Parse rejects non-finite numbers, while large integer Json payloads remain valid.
+- Encoding stays beside runtime values in evaluator.rkt; write objects in stored map/declared field order and use write-json for scalar escaping. Non-finite Floats halt with RUNTIME-JSON-ENCODE at the call span. Debug output is `<Json>`, not the host contents. Decoding/builders/schemas remain later phases.
 
 ## Reference
 

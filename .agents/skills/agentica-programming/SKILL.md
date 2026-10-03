@@ -16,11 +16,15 @@ agentica program.agc            # check, then run main()
 agentica check program.agc      # check only; prints "check ok", runs nothing
 agentica --dump program.agc     # check only; prints the checked tree, runs nothing
 agentica program.agc a b        # extra arguments reach System.args()
+agentica help String.to_int --json  # builtin signature and behavior, no program required
+agentica --max-steps 10000 program.agc  # bound expression/statement evaluation
 ```
 
 If `agentica` is not on the `PATH`, use the path the user gave you.
 
 Exit codes: `0` ok, `1` the program has a diagnostic (the stage that failed stopped at its first error), `2` bad usage or unreadable file.
+
+IO.gets returns Result[String]; use IO.gets! for a String that halts at EOF. In a Result-returning function, `try` propagates errors; main still returns Nil. See the reference for contextual Result inference and eager fallback evaluation.
 
 ## Read a diagnostic
 

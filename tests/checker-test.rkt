@@ -193,6 +193,11 @@
     (check-equal? (check-code (main-with "  x: Int = -9223372036854775809")) 'CHECK-INT-RANGE)
     (check-ok (main-with "  x: Float = 1.0")))
 
+  (test-case "function suffixes allow whitespace before call and declaration parentheses"
+    (check-ok (string-append
+               "def ready? () -> Bool\n  return true\nend\n"
+               "def main() -> Nil\n  x = ready? ()\n  y = String.contains? (\"a\", \"a\")\nend\n")))
+
   (test-case "the String module"
     (check-ok (main-with (string-append
                           "  a: Int = String.length(\"hola\")\n"
@@ -218,15 +223,157 @@
                           "  IO.print(\"b\")\n"
                           "  IO.warn(\"c\")\n"
                           "  x: Int = IO.inspect(1)\n"
-                          "  s: String = IO.gets()\n"
+                          "  s: Result[String] = IO.gets()\n"
+                          "  line: String = IO.gets!()\n"
                           "  r: String = IO.read()\n"
+                          "  bytes: Result[List[Int]] = IO.read_bytes(3)\n"
+                          "  decoded: Result[String] = String.from_bytes([195, 177])\n"
+                          "  flushed: Nil = IO.flush()\n"
                           "  e: Bool = IO.eof?()\n"
                           "  a: List[String] = System.args()\n"
                           "  System.exit(0)")))
     (check-equal? (check-code (main-with "  IO.puts(1)")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  x = IO.gets(1)")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = IO.nope()")) 'CHECK-UNKNOWN-NAME)
-    (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH))
+    (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH)
+    (for ([body '("  x = IO.read_bytes(\"3\")" "  x = String.from_bytes([\"x\"])"
+                  "  x: String = String.from_bytes([65])" "  x: List[Int] = IO.read_bytes(1)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (for ([body '("  x = IO.read_bytes()" "  x = IO.read_bytes(1, 2)"
+                  "  IO.flush(1)" "  x = String.from_bytes()")])
+      (check-equal? (check-code (main-with body)) 'CHECK-ARITY)))
+
+  (test-case "JSON signatures and opaque types"
+    (check-ok
+     (main-with
+      (string-append
+       "  parsed: Result[Json] = JSON.parse(\"{}\")\n"
+       "  j: Json = Result.unwrap!(parsed)\n"
+       "  member: Result[Json] = JSON.get(j, \"key\")\n"
+       "  item: Result[Json] = JSON.at(j, 0)\n"
+       "  text: Result[String] = JSON.string(j)\n"
+       "  integer: Result[Int] = JSON.int(j)\n"
+       "  decimal: Result[Float] = JSON.float(j)\n"
+       "  flag: Result[Bool] = JSON.bool(j)\n"
+       "  items: Result[List[Json]] = JSON.list(j)\n"
+       "  encoded: String = JSON.encode(j)")))
+    (for ([body '("  x = JSON.parse(1)"
+                  "  x = JSON.get(Result.unwrap!(JSON.parse(\"{}\")), 1)"
+                  "  x = JSON.at(Result.unwrap!(JSON.parse(\"[]\")), \"0\")"
+                  "  x = JSON.string(\"text\")"
+                  "  x = JSON.int(1)"
+                  "  x = JSON.float(1.0)"
+                  "  x = JSON.bool(false)"
+                  "  x = JSON.list([1])"
+                  "  x: Int = JSON.int(Result.unwrap!(JSON.parse(\"1\")))"
+                  "  x = Result.unwrap!(JSON.parse(\"1\")) == Result.unwrap!(JSON.parse(\"1\"))")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (for ([name '("parse" "encode" "get" "at" "string" "int" "float" "bool" "list")])
+      (check-equal? (check-code (main-with (format "  x = JSON.~a()" name))) 'CHECK-ARITY))
+    (check-equal? (check-code (main-with "  x: Json[Int] = Result.unwrap!(JSON.parse(\"1\"))"))
+                  'CHECK-UNKNOWN-TYPE)
+    (check-equal? (check-code (main-with "  x = Json()")) 'CHECK-UNKNOWN-TYPE)
+    (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"{}\"))\n  x = j.key"))
+                  'CHECK-NOT-A-STRUCT)
+    (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"[]\"))\n  x = j[0]"))
+                  'CHECK-NOT-INDEXABLE)
+    (for ([name '("Json" "JSON")])
+      (check-equal? (check-code (string-append (format "struct ~a\nend\n" name) (main-with "")))
+                    'CHECK-REDEFINED-NAME)))
+
+  (test-case "JSON encoding checks nested types, including recursive structs"
+    (define node "struct Node\n  children: List[Node]\n  value: Int\nend\n")
+    (check-ok (string-append node (main-with "  x = JSON.encode(Node(value: 1, children: []))")))
+    (check-ok (string-append
+               "struct A\n  bs: List[B]\nend\nstruct B\n  as: List[A]\nend\n"
+               (main-with "  x = JSON.encode(A(bs: []))")))
+    (for ([body '("  x = JSON.encode(ok(1))"
+                  "  x = JSON.encode([ok(1)])"
+                  "  x = JSON.encode({1: \"one\"})"
+                  "  x = JSON.encode({\"bad\": {1: true}})"
+                  "  m: Map[Int, String] = {}\n  x = JSON.encode(m)"
+                  "  xs: List[Result[Int]] = []\n  x = JSON.encode(xs)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-NOT-ENCODABLE))
+    (define rejected
+      (check-text (string-append
+                   "struct Bad\n  children: List[Bad]\n  value: Result[Int]\nend\n"
+                   (main-with "  x = JSON.encode(Bad(children: [], value: ok(1)))"))))
+    (check-equal? (diagnostic-code rejected) 'CHECK-NOT-ENCODABLE)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span rejected))) 6)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span rejected))) 19))
+
+  (test-case "Result inference preserves context across the shared call path"
+    (check-ok
+     (string-append
+      "struct Box\n  value: Result[List[Int]]\nend\n"
+      "def consume(value: Result[Map[String, Int]]) -> Nil\nend\n"
+      "def make() -> Result[List[Int]]\n  return ok([])\nend\n"
+      "def main() -> Nil\n"
+      "  inferred = ok(1)\n"
+      "  r: Result[Int] = error(\"bad\")\n  r = ok(2)\n  r = error(\"again\")\n"
+      "  nested: Result[Result[Bool]] = ok(ok(false))\n"
+      "  box = Box(value: error(\"bad\"))\n"
+      "  consume(ok({}))\n"
+      "  xs: List[Result[Int]] = [error(\"bad\"), ok(1)]\n"
+      "  map: Map[String, Result[Int]] = {\"k\": error(\"bad\")}\n"
+      "  inferred_list = [ok(1), error(\"bad\")]\n"
+      "  a: Int = Result.unwrap!(error(\"bad\"))\n"
+      "  b = Result.unwrap_or(error(\"bad\"), 7)\n"
+      "  c: List[Int] = Result.unwrap_or(ok([]), [])\nend\n")))
+
+  (test-case "Result and builtin failures retain structured diagnostics"
+    (for ([body '("  r = error(\"bad\")"
+                  "  r = Result.message(error(\"bad\"))"
+                  "  r = [error(\"bad\"), ok(1)]")])
+      (check-equal? (check-code (main-with body)) 'CHECK-RESULT-TYPE))
+    (for ([body '("  r: Result[Int, String] = ok(1)"
+                  "  r: Result = ok(1)"
+                  "  r: Result[Missing] = ok(1)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-UNKNOWN-TYPE))
+    (for ([body '("  r: Result[Int] = ok(\"x\")"
+                  "  r: Result[Int] = error(1)"
+                  "  r = Result.ok?(1)"
+                  "  r = Result.unwrap_or(ok(1), \"x\")"
+                  "  r = ok(1) == ok(1)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (for ([body '("  r = ok()" "  r = error()" "  r = Result.ok?()"
+                  "  r = Result.message()" "  r = Result.unwrap!()"
+                  "  r = Result.unwrap_or(ok(1))")])
+      (check-equal? (check-code (main-with body)) 'CHECK-ARITY))
+    (define arity (check-text (main-with "  r = String.to_int()")))
+    (check-equal? (diagnostic-callee arity) "String.to_int(s: String) -> Result[Int]")
+    (define mismatch (check-text (main-with "  r: Result[Int] = ok(\"x\")")))
+    (check-equal? (diagnostic-expected mismatch) "Int")
+    (check-equal? (diagnostic-actual mismatch) "String")
+    (check-equal? (diagnostic-signature mismatch) "main() -> Nil"))
+
+  (test-case "Result constructor names cannot be declared by users"
+    (for ([name '("ok" "error")])
+      (for ([text (list (main-with (format "  ~a = 1" name))
+                        (main-with (format "  for ~a in [1]\n  end" name))
+                        (format "def ~a() -> Nil\nend\n~a" name (main-with ""))
+                        (format "def f(~a: Int) -> Nil\nend\n~a" name (main-with ""))
+                        (format "struct Box\n  ~a: Int\nend\n~a" name (main-with "")))])
+        (check-equal? (check-code text) 'CHECK-REDEFINED-NAME)))
+    (check-equal? (check-code (string-append "struct Result\nend\n" (main-with "")))
+                  'CHECK-REDEFINED-NAME))
+
+  (test-case "try checks context separately from operand and return types"
+    (check-ok (string-append
+               "def f() -> Result[String]\n"
+               "  xs: List[Int] = try ok([])\n"
+               "  n = try String.to_int(\"7\")\n"
+               "  return ok(String.from_int(n))\nend\n" (main-with "")))
+    (check-equal? (check-code (main-with "  x = try ok(1)")) 'CHECK-TRY-CONTEXT)
+    (define bad (check-text (string-append
+                            "def f() -> Result[Int]\n  x = try 1\n  return ok(x)\nend\n"
+                            (main-with ""))))
+    (check-equal? (diagnostic-code bad) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (diagnostic-expected bad) "Result[T]")
+    (check-equal? (diagnostic-actual bad) "Int")
+    (check-equal? (check-code (string-append
+                             "def f() -> Result[Int]\n  x = try ok(1)\nend\n" (main-with "")))
+                  'CHECK-MISSING-RETURN))
 
   (test-case "check diagnostics carry spans"
     (define mismatch (check-text "def main() -> Nil\n  x: Int = \"s\"\nend\n"))
@@ -300,7 +447,7 @@
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m[1]")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = Map.put(m, \"b\", \"c\")"))
                   'CHECK-TYPE-MISMATCH)
-    (check-equal? (check-code (main-with "  m = {}")) 'CHECK-EMPTY-LIST-TYPE)
+    (check-equal? (check-code (main-with "  m = {}")) 'CHECK-EMPTY-MAP-TYPE)
     (check-equal? (check-code (main-with "  x = Map.size()")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = Map.nope(1)")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = Mpa.put(1)")) 'CHECK-UNKNOWN-NAME)

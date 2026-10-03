@@ -45,7 +45,8 @@ bundle the runtime. `compiled/` and `dist/` are in `.gitignore`.
 ## Usage
 
 ```sh
-racket src/main.rkt [--dump] [--ai|--json] [check] <file.agc>
+racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [check] <file.agc>
+racket src/main.rkt help String.to_int --json
 ```
 
 Run a program. `main()` is the entry point, and `puts` prints to stdout:
@@ -61,6 +62,8 @@ racket src/main.rkt examples/hello.agc
 | `check`  | Subcommand, only as the first argument: check the file, print `check ok`, run nothing. It ignores `--dump` and program arguments; a program file named `check` runs as `./check`. |
 | `--ai`   | Print a diagnostic as compact text for an agent (stderr).  |
 | `--json` | Print a diagnostic as one JSON object (stderr).            |
+| `help NAME --json` | Describe a builtin from the shared catalog, without a program file. Unknown targets exit 2. |
+| `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
 
 ### Exit codes
 
@@ -88,8 +91,13 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 ## Examples
 
 - [`examples/hello.agc`](examples/hello.agc): a minimal program.
-- [`examples/classify.agc`](examples/classify.agc): functions and control flow.
+- [`examples/classify.agc`](examples/classify.agc): functions, control flow, and `try` propagation.
 - [`examples/tasks.agc`](examples/tasks.agc): structs, lists, and field access.
 - [`examples/inventory.agc`](examples/inventory.agc): maps and the `Map` module.
+
+- [`examples/result.agc`](examples/result.agc): Result values, propagation, messages, and fallbacks.
+- [`examples/json.agc`](examples/json.agc): JSON encoding, parsing, extraction, and `try`.
+
+IO.gets now returns Result[String]; IO.gets! is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main still returns Nil. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
 
 Enums and pattern matching are future extensions.

@@ -4,18 +4,12 @@ Status: proposal. Nothing in this document is implemented or normative. The lang
 
 Working rule: when a phase of the [`roadmap.md`](roadmap.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-## 1. Planned changes to the current library
-
-- `IO.gets() -> Result[String]` and `IO.gets!() -> String`. Today `IO.gets` returns `String` and fails with `RUNTIME-END-OF-INPUT`; the change is settled in phase 5d2 so we do not teach a form that 5e would break.
-- `CHECK-EMPTY-MAP-TYPE` for a `{}` with no expected type. Today it uses `CHECK-EMPTY-LIST-TYPE`.
-- The non-`!` forms of `String.to_int` and `String.to_float` return `Result[...]` (phase 5e).
-
 ## 2. Enums and pattern matching
 
-This section documents the direction already discussed. It is not part of the initial core and requires extending the lexer, parser, checker, and evaluator.
+This section documents the direction already discussed. It is not part of the initial core and requires extending the lexer, parser, checker, and evaluator. The illustrative Outcome enum is separate from the already implemented builtin Result[T] with String errors.
 
 ```ruby
-enum Result[T, E]
+enum Outcome[T, E]
   Ok(T)
   Err(E)
 end
@@ -25,12 +19,12 @@ enum Option[T]
   None
 end
 
-def label(result: Result[String, String]) -> String
+def label(result: Outcome[String, String]) -> String
   case result
   in Ok(value)
     return value
-  in Err(error)
-    return error
+  in Err(message)
+    return message
   end
 end
 ```
@@ -67,15 +61,14 @@ The expression grammar must also be extended to build variants, for example `Ok(
 | Extension | Direction | Pending decisions |
 |---|---|---|
 | Interpolation | `"Hello #{user.name}"` | Escapes, allowed expressions, and conversion to text |
-| Error propagation | `value = try find_user(42)` | Phase 5e: `try` returns the error from the current function, which must return `Result[...]` |
 | Function generics | Reuse functions with different types | Syntax, inference, and constraints |
-| Closures and methods | Better ergonomics | Capture, representation, and resolution |
-| Modules | Split programs into files | Import, visibility, and cycles |
+| Closures and methods | Better ergonomics; possible [module attachment](#7-possible-metatables-ruby-style-modules) | Capture, receiver types, representation, and resolution |
+| Modules | Group behavior and split programs into files | Import, visibility, cycles, and module attachment (section 7) |
 | C FFI | Safe wrappers over native calls | Pointers, ownership, ABI, and calls from the interpreter |
-| Async and fibers | Suspend execution on I/O; initially one thread | API, cancellation, and error propagation |
+| Async and fibers | Suspend execution on I/O; initially one thread. See [section 8](#8-concurrency-and-parallelism) | API, cancellation, and error propagation |
 | Actors | Own messages and mailboxes | Syntax, isolation, shared values, and supervision |
 
-## 4. Standard library and function values (phases 5e–5m)
+## 4. Standard library and function values (phases 5f2–5m)
 
 Fixed here so each roadmap phase can take it as its specification.
 
@@ -91,8 +84,8 @@ primary          = (* …core forms, plus: *)
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
-- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Result[T]` (the error is always `String`), `Json`, `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
-- **Names reserved when each phase starts:** `Fn`, `Result`, `Json`, `Socket`, `Listener`, `Process`, `Response`, `JSON`, `TCP`, and `HTTP`.
+- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
+- **Names reserved when each phase starts:** `Fn`, `Socket`, `Listener`, `Process`, `Response`, `TCP`, and `HTTP`. `Json` and `JSON` are already core; typed decoding and schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int
@@ -113,7 +106,7 @@ Programs that phase must reject:
 ```ruby
 x = User               # A type is valid only as an argument of JSON.decode or JSON.schema.
 f = &missing           # &name requires a declared function.
-ok = done?             # The ? suffix exists only when followed by "(".
+ready = done?          # A function name is not a value; use &name when phase 5j lands.
 ```
 
 ## 5. `Enum` module and list building
@@ -189,9 +182,9 @@ Besides `Enum`, function values (5j), and the builtins catalog (5e), these are m
 - **Conversion:** `Int` to `Float` and back (for example `Float.from_int`, `Float.to_int`).
 - **Strings:** the character at an index, a character code, `reverse`, `index_of`.
 - **Maps and sets:** `Map.get` with a default, `Map.delete`, `Map.values` (above); a set type, or `Map[T, Bool]` as the documented way; stack, queue, and priority queue.
-- **Input:** `IO.gets` halts at end of input, so programs use `IO.eof?`; `Result` and `try` (5e) fix it. A helper for lines of integers.
+- **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
 - **Structures:** tuples or pairs, and nested lists and matrices (check that `List[List[Int]]` works end to end).
-- **Performance:** every `Map.put` and list update copies, so a loop of 10^5 steps is O(n²). Needs a persistent vector and map ("Faster maps" in the roadmap).
+- **Performance:** the proposed `Enum.append` copies the list, so repeated appends are O(n²); a persistent vector remains a possible later optimization. Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
 - **To verify:** the recursion depth the evaluator allows, and the integer range (arbitrary precision today in Racket; most challenges assume 64 bits).
 - **Outside the language:** online judges do not accept Agentica, so challenges run locally against hidden cases, as in `tests/eval/`. The interpreter is a tree walker on Racket, so judge time limits are tight.
 
@@ -202,3 +195,114 @@ For a later native runtime, procedural C++20, structs and free functions, the Bo
 Integrating the C++ host with a C library does not by itself solve the FFI of Agentica: an interpreter needs native wrappers or a call layer that respects the ABI. Including libevent does not automatically provide fibers or actors either.
 
 For now we do not introduce interfaces, traits, inheritance, JIT, distribution, or parallelism. The semantics of the language must be preserved when the AST evaluator is replaced by a future VM.
+
+## 7. Possible metatables: Ruby-style modules
+
+Exploratory only: no implementation or phase is assigned. Group shared behavior visually, then attach it to maps, lists, or records. Prefer Ruby's `module ... end`, `def ... end`, `self`, and `.extend(...)` over new spellings such as `defmod` or Elixir's `defmodule`. Borrow Elixir's immutable-value approach and keep static checking; adopting this syntax does not require classes or inheritance.
+
+Possible shape, deliberately Ruby-parsable rather than current Agentica syntax:
+
+```ruby
+module User
+  # Proposed receiver: Map[String, String]; result: String.
+  # These comments illustrate types, not a settled annotation syntax.
+  def name()
+    return self["name"]
+  end
+
+  def greet()
+    return "Hello " + self.name()
+  end
+end
+
+def main()
+  ana = {"name" => "Ana"}.extend(User)
+  bob = {"name" => "Bob"}.extend(User)
+  puts(ana.greet()) # Hello Ana
+  puts(bob.greet()) # Hello Bob
+end
+```
+
+The same idea could give a list named methods without changing its normal indexing:
+
+```ruby
+module Numbers
+  # Proposed receiver: List[Int]; result: Int.
+  def first()
+    return self[0]
+  end
+end
+
+numbers = [10, 20, 30].extend(Numbers) # Fragment inside main.
+puts(String.from_int(numbers.first())) # 10
+puts(String.from_int(numbers[1]))      # 20
+```
+
+Candidate semantics and boundaries:
+
+- A module holds shared methods, not per-object state. A method's `self` is the attached receiver; methods can call sibling methods through `self`.
+- Unlike Ruby's mutating `extend`, the candidate Agentica form returns a new immutable wrapper. The original value is unchanged. Module selection and method signatures must be known to the checker; incompatible receivers and unknown methods are check errors.
+- Normal map/list indexing, insertion order, and missing-key/index diagnostics stay unchanged initially. Attachment adds behavior; it does not make collection lookup faster or combine List and Map into a mixed PHP-style array.
+- Lua-style fallback lookup (`__index`), custom indexing, operators, or callable objects could be a later layer. Decide which typed hooks are useful before adding them; do not make every lookup run arbitrary callbacks by default.
+
+Open decisions before implementation:
+
+- How receiver, argument, and result types are declared while keeping Ruby-parsable syntax: signature comments or a separate RBS-style file are possibilities, not decisions.
+- The static type of an attached value, visibility, method collisions, multiple modules, and whether collection operations preserve attached behavior.
+- Whether `.extend(Module)` is sufficient or an explicit `Meta.attach(value, Module)` API is also needed. Prefer one spelling, not both without a real need.
+- Name resolution for bare module arguments and how module namespaces relate to records and future imports.
+
+**Ruby tooling goal, not a compatibility promise:** existing Agentica `->` signatures and `struct` declarations are not Ruby syntax. The examples use `=>` for String-keyed maps; Ruby's `{"name": value}` creates a Symbol key, unlike Agentica's current map literal. Reusing Ruby linters such as RuboCop requires a Ruby-parsable source subset or a translation step, plus configuration for Agentica conventions. Verify that with real tooling before claiming support. None of these spellings or type alternatives changes the core grammar today.
+
+## 8. Concurrency and parallelism
+
+Status: proposal, unscheduled. Nothing here is normative and no phase is assigned. A sequential loop is enough for the first stdio MCP client and server (5m); add concurrency only when a real case needs it: server-initiated requests while a client waits, a server serving more than one connection, or Streamable HTTP.
+
+### Racket building blocks
+
+| Tool | Module | Parallel? | Notes |
+|---|---|---|---|
+| Green threads, channels, `sync`, semaphores | `racket/base` | One core | Cheapest; enough for I/O concurrency; no new dependency |
+| Places, `place-channel` | `racket/place` | Real multicore | One VM per place; messages serialized; heavy |
+| Futures | `racket/future` | Limited | Parallel only for a safe value subset; finicky performance; not proposed |
+
+Proposal: build on green threads only. Places stay a later optimization if CPU parallelism is ever measured to matter, which is unlikely for a tree-walking interpreter.
+
+### Shape: builtin modules, no grammar change
+
+Like `TCP` and `Process`, concurrency is a builtin module over Racket primitives; no new keywords. It depends on function values (5j) and generic opaque types.
+
+```text
+Task.spawn(f: Fn[A, Nil], arg: A) -> Task
+Task.await(t: Task) -> Nil
+Channel.new() -> Channel[T]
+Channel.send(c: Channel[T], v: T) -> Nil
+Channel.recv(c: Channel[T]) -> T
+```
+
+- `&name` has no closures, so a task body cannot capture locals; everything it needs travels as the argument, or through a `Channel` passed in.
+- `Channel[T]` and `Task` are opaque, special-cased in the checker like `Socket`.
+- Channels are the only way two tasks share data. Values are Agentica values and there is no shared mutable state, so the checker's immutability rules stay intact.
+- A task can halt with a `RUNTIME-` diagnostic. Decide whether the failure propagates from `Task.await` or ends the whole run.
+
+### Minimal first step (if threads are too much)
+
+One non-blocking builtin avoids threads, function values, and reentrancy entirely:
+
+```text
+Process.poll_line(p: Process, timeout: Int) -> Result[String]
+```
+
+A single-threaded loop alternates between sending requests and polling for messages, implemented with `sync/timeout` on the child's output port. Prefer this if it covers the MCP cases.
+
+### Evaluator constraint
+
+`src/evaluator.rkt` keeps `scopes`, `steps`, `depth`, and `return-to` as `set!`-mutated closure state inside one `evaluate-with-ports`. Two tasks running `eval-expression` would race `steps` and share one scope stack. Real concurrency needs a per-task scope stack and a synchronized (or per-task) step counter; budget for that surgery, it is not a thin wrapper.
+
+### Open decisions
+
+- Whether to ship `Task`/`Channel` at all, or only `Process.poll_line`, until a real case needs threads.
+- How a task's failure reaches `Task.await`, and whether an unawaited task's failure ends the run.
+- Whether `--max-steps` counts per task or for the whole run.
+- Whether places are ever added for CPU parallelism; default no.
+- Timeouts, cancellation, and what happens to running tasks when the run ends.

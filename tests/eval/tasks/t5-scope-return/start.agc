@@ -11,7 +11,7 @@ end
 def main() -> Nil
   negatives = 0
   while not IO.eof?()
-    n = String.to_int!(String.trim(IO.gets()))
+    n = String.to_int!(String.trim(IO.gets!()))
     label = classify(n)
     puts(label)
     if label == "negative"

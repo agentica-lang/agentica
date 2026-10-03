@@ -91,7 +91,7 @@ Keep the AST free of parsing rules and the parser free of checking rules. Do not
 - A bare `TYPE_NAME` in expression position is an error: a type name is only a type or a constructor call.
 - `if 1` and other semantic errors are syntactically valid here; Phase 3 rejects them.
 - Trailing commas are accepted in parameters, arguments, named arguments, and list literals, as the grammar allows.
-- NL handling: skip stray `NL` tokens between declarations, between statements, and before `EOF`. The lexer collapses a run of blank lines into one `NL`, but emits separate `NL` tokens around comment lines, so a blank line or comment between two statements can leave more than one.
+- NL handling: skip stray `NL` tokens between declarations, between statements, and before `EOF`. Each LF/CRLF outside delimiters emits NL, including blank/comment lines; the parser tolerates the extra tokens. Phase 5d2 aligned the docs without changing accepted programs.
 - Stop at the first error and return one diagnostic, as the lexer does. No error recovery in this phase.
 - Diagnostic codes: `PARSE-UNEXPECTED-TOKEN` (expected X, found Y), `PARSE-UNCLOSED-BLOCK` (reached `EOF` before `end`), `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET`. The message for a `NAME` followed by another expression token (`puts "hello"`) should name the missing newline and mention that calls need parentheses.
 
@@ -477,7 +477,7 @@ String.to_float!(s: String) -> Float
 - String conversions accept decimal notation with an optional sign. Invalid text is `RUNTIME-INVALID-NUMBER`; an integer outside the signed 64-bit range is `RUNTIME-INTEGER-OVERFLOW`. Splitting on an empty separator returns one Unicode character per list element.
 - `String.slice` out of range is `RUNTIME-INDEX-OUT-OF-RANGE`.
 
-- [x] Allow a trailing `?` and `!` in function names (lexer; now in sections 4–6 of `grammar.md`). The suffix counts only when the next character is `(`, so `a!=b` still lexes as `a != b`.
+- [x] Allow a trailing `?` and `!` in function names (lexer; now in sections 4–6 of `grammar.md`). Phase 5d2 decoupled suffix recognition from `(`; `!` followed by `=` remains an operator, so `a!=b` still lexes as `a != b`.
 - [x] Reserve `String` as a type and module name.
 - [x] Type and evaluate the functions above, with a focused test per stage.
 - [x] Add `examples/strings.agc`.
@@ -489,7 +489,8 @@ IO.puts(value: String) -> Nil
 IO.print(value: String) -> Nil
 IO.warn(value: String) -> Nil
 IO.inspect(value: T) -> T
-IO.gets() -> String
+IO.gets() -> Result[String]
+IO.gets!() -> String
 IO.read() -> String
 IO.eof?() -> Bool
 System.args() -> List[String]
@@ -498,7 +499,7 @@ System.exit(code: Int) -> Nil
 
 - `puts` stays as a global alias of `IO.puts`.
 - `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form (structs, lists, maps) and returns it, like Elixir.
-- `IO.gets` returns the next line without the newline, and halts with `RUNTIME-END-OF-INPUT` at end of input; check `IO.eof?()` first. Phase 5d2 closes the final API: `IO.gets()` returns `Result[String]` and `IO.gets!()` is the halting form.
+- Final API (5d2 + 5e): IO.gets returns Result[String], with an error at EOF; IO.gets! returns a line without its newline and halts with RUNTIME-END-OF-INPUT at EOF. The Result-dependent 5d2 item landed with 5e, not as a temporary API.
 - `System.exit` ends the run with that exit code. The evaluator returns it as data, and only `main.rkt` exits.
 - `main.rkt` passes the program arguments to the evaluator.
 
@@ -514,13 +515,13 @@ Measure before growing the language. The order from here is: 5d2 (consistency fi
 
 The spec and the implementation must agree, because an agent that reads both learns the contradiction. Reproduce each item as a failing test first, then fix it.
 
-- [ ] `?` and `!` suffix: today the lexer accepts the suffix only when `(` is the next character, so `String.contains?("a", "a")` works and `String.contains? ("a", "a")` does not. Separate recognizing the name from the call syntax: the suffix belongs to the name, and `a!=b` still lexes as `a != b`. This also unblocks `&predicate?` in 5j.
-- [ ] Newlines: the spec says a run of newlines is one `NL`, but the lexer emits one per newline around comment lines (the parser tolerates it). Make the lexer and the contract (grammar and Phase 1 notes) say the same thing; verify first that no accepted program changes.
-- [ ] Add `CHECK-EMPTY-MAP-TYPE`: an empty map with no expected type currently reuses `CHECK-EMPTY-LIST-TYPE`.
+- [x] Separate suffix recognition from call syntax: `String.contains? ("a", "a")` and whitespace in declarations work; `a!=b` remains `a != b`. Regression reproduced before the fix. Function values still wait for 5j.
+- [x] Align the newline contract with emission: one NL per LF/CRLF outside delimiters, including blank/comment lines. Kept scanner/parser acceptance unchanged and tested the exact token sequence.
+- [x] Add CHECK-EMPTY-MAP-TYPE for an untyped empty map; lists keep CHECK-EMPTY-LIST-TYPE. Regression reproduced before the fix.
 - [x] Clean `grammar.md`: removed "no implementation yet", the native runtime notes, and the old decisions; planned syntax moved to `future.md`; the docs were renamed to `grammar.md`, `roadmap.md`, and `future.md`.
-- [ ] Close the `IO.gets` API now: `IO.gets() -> Result[String]` and `IO.gets!() -> String` (halts with `RUNTIME-END-OF-INPUT`). Do not teach a form that 5e breaks.
-- [ ] Execution budget: the call-depth limit does not stop infinite loops. Add an optional step budget or timeout (`--max-steps N`, `RUNTIME-STEP-LIMIT`) so automatic evaluations always end.
-- [ ] Document that list indexing is O(n) and prefer `for` in the examples.
+- [x] Close IO.gets -> Result[String] and IO.gets! -> String with 5e. Migrated all existing String-consuming example/evaluation callers, preserving intentional starter bugs.
+- [x] Add optional --max-steps N / RUNTIME-STEP-LIMIT, counting expression/statement entries including repeated loop conditions. Empty infinite loops are bounded and counts reset per evaluation. No default limit or blocking-I/O timeout; existing evaluation subprocess timeouts remain.
+- [x] Document O(n) list indexing and prefer for traversal; no list representation change.
 
 ### Phase 5d3: Agent API (P0 and P1)
 
@@ -578,9 +579,9 @@ On success it prints `check ok`.
 - Compact text is not proven to help the agent or to save tokens. Measure it in 6a (`--ai` against plain text and `--json`); the defensible gain is choosing relevant information and keeping it predictable.
 
 - [x] `agentica check <file>` subcommand: checks, prints `check ok`, never runs (plain diagnostics; `--ai` and `--json` come next).
-- [x] Add optional `expected`, `actual`, `callee`, `labels`, and `help` to `diagnostic`; the checker fills them in `CHECK-TYPE-MISMATCH` and the plain-call `CHECK-ARITY` and records the enclosing function signature. (The builtin-call arity is still unfilled; add an `argument` field only when a call-argument mismatch fills it.)
+- [x] Add optional `expected`, `actual`, `callee`, `labels`, and `help` to `diagnostic`; the checker fills them in `CHECK-TYPE-MISMATCH` and the plain-call `CHECK-ARITY` and records the enclosing function signature. (Builtin-call arity now fills callee from the 5e catalog; add an argument field only when a call-argument mismatch fills it.)
 - [x] One structured diagnostic, three printers: plain (with labels and help), `--ai`, and `--json`. They print to stderr, like the plain form.
-- [x] Grounded suggestions in `help`: nearest name (variables, functions, fields, types), field list, missing field type, String/Int/Float conversion functions, missing `return`, shadowing, `for` variable assignment. Builtin-name suggestions wait for the builtins catalog (5e).
+- [x] Grounded suggestions in `help`: nearest name (variables, functions, fields, types), field list, missing field type, String/Int/Float conversion functions, missing `return`, shadowing, `for` variable assignment. Builtin-name suggestions now use the 5e catalog.
 - [ ] Measure with the `binary` arm (`docs/eval-6a.md`) whether `--ai` and labels cut failing runs and tokens.
 - [ ] `symbols`, `show`, `refs` (P1).
 - [ ] One test per command over `examples/`.
@@ -627,7 +628,7 @@ Result.message(r: Result[T]) -> String
 - The error is always a `String`. A richer error type waits for enums.
 - Add the non-bang forms from 5c and 5d: `String.to_int`, `String.to_float`, `IO.gets` return `Result[...]`.
 - `Result.unwrap!` on an error is `RUNTIME-UNWRAP-ERROR`.
-- Open decision: use `Result.ok?` or add pattern matching (`case r in ok(v)`) with the enum extension. Start with the functions.
+- Use Result.ok? and module functions; matching stays deferred. Result.message is empty text for success. unwrap_or evaluates both arguments eagerly. error needs an expected Result type (CHECK-RESULT-TYPE); try outside a Result-returning function is CHECK-TRY-CONTEXT.
 
 Propagation rule: `try` unwraps an `ok` or returns the `error` from the current function, and is allowed only inside a function that returns `Result[...]` (otherwise a `CHECK-` error). The error stays a `String`; no enums or exceptions.
 
@@ -638,21 +639,21 @@ def read_age(text: String) -> Result[Int]
 end
 ```
 
-- [ ] Add the `Result[T]` type, `ok`, `error`, and the `Result` module.
-- [ ] Reserve `Result`, `ok`, `error`, `try`.
-- [ ] Add the Result forms to `String` and `IO`.
-- [ ] Write `try` in `future.md`, then move it to `grammar.md` when implement it across lexer, parser, checker, and evaluator.
-- [ ] Add `examples/result.agc`, using `try`, and rewrite one earlier example with it.
+- [x] Add Result[T], ok, error, and the Result module with contextual typing and explicit runtime tags.
+- [x] Reserve Result, ok, error, try.
+- [x] Add Result forms to String and IO, retaining bang codes and injected ports.
+- [x] Specify try in future.md, then implement across lexer, parser, checker, and evaluator and move it into grammar.md. Both language references are updated.
+- [x] Add examples/result.agc using try; examples/classify.agc now parses text through a Result-returning helper and preserves adult output.
 
 ### Builtins catalog
 
-Builtins are described today by branches in `check-builtin-call` and implemented by other branches in `eval-call`, so names and arities can drift. Add one `src/builtins.rkt` table before the library grows further.
+src/builtins.rkt is the shared table of builtin names, arities, parameter types, signatures/type-rule tags, implementation keys, effects, and descriptions. Generic typing and implementation functions remain in their stages; no plugin framework or general type solver.
 
 - Each entry has: name, type rule or signature, effects (`stdin`, `stdout`, `net`, `process`), and a short description. Implementations stay normal functions.
 - The checker, the evaluator, and `agentica help NAME --json` read the same table; effects are information only at first (no mandatory annotations).
-- [ ] Add `src/builtins.rkt` and move the 5b to 5d builtins into it.
-- [ ] Make the checker and evaluator read it; add a test that every entry is both typed and evaluated.
-- [ ] Add `agentica help NAME --json`.
+- [x] Catalogue 5b–5e builtins in src/builtins.rkt.
+- [x] Checker and evaluator resolve the same entries; every catalog entry has a real checked program with independent expected output.
+- [x] Add agentica help NAME --json, with no source file required and exit 2 for unknown targets. Trailing --json also works after leading options; the CLI regression was reproduced before the fix.
 
 ### Phase 5f: JSON
 
@@ -673,9 +674,18 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.encode` accepts `Int`, `Float`, `Bool`, `String`, `Nil` (as `null`), `List`, `Map[String, V]`, structs (as objects, fields in declared order), and `Json`. A map with `Int` keys is a `CHECK-` error.
 - No user generics are needed. Struct decoding needs a type as an argument, which the checker special-cases like the other builtins (see 5f2).
 
-- [ ] Add the `Json` type and the `JSON` module.
-- [ ] Use Racket's `json` library, without new dependencies.
-- [ ] Add `examples/json.agc`.
+- [x] Add the `Json` type and the `JSON` module.
+- [x] Use Racket's `json` library, without new dependencies.
+- [x] Add `examples/json.agc`.
+
+Implemented in `src/json.rkt` (opaque wrapper and strict input guards), the builtin catalog, checker, and evaluator. Parsing and scalar escaping use Racket's library; no parser/AST changes. Access and extraction return Results, Int extraction checks signed 64-bit bounds, and Float extraction checks finiteness. Encoding recursively rejects Results and Int-keyed maps at check time, preserves declared struct/map order, and halts on non-finite Floats with `RUNTIME-JSON-ENCODE`. Parsed object order is unspecified. Tests cover malformed/trailing input, Unicode, null/false, wrong kinds, bounds, recursive encoding eligibility, ordered output, round trips, `try`, and CLI diagnostics. Typed decoding and builders remain in 5f2/5i.
+
+### Stdio transport primitives (after 5f)
+
+- [x] Add `IO.read_bytes(count: Int) -> Result[List[Int]]`, `IO.flush() -> Nil`, and `String.from_bytes(data: List[Int]) -> Result[String]`, using Racket's native port/byte functions and existing catalog typing. Keep IO.read's all-text-until-EOF behavior; no Bytes type, syntax, or dependency additions.
+- [x] Specify byte-counted reads: wait for count bytes or EOF, accept short/empty EOF success, zero consumes nothing, invalid counts consume nothing. A fixed 1 MiB per-call cap bounds eager allocation; larger streams use multiple reads. Decode UTF-8 strictly only once complete bytes are available. Read/conversion failures return Results.
+- [x] Keep `IO.eof?` as a blocking, non-consuming EOF check using peek-byte, not a readiness poll or UTF-8 character peek. Explicit stdout flush does not close ports or flush stderr; blocking stdio still has no timeout.
+- [x] Test byte/character boundaries, invalid counts/UTF-8, mixed text/byte reads, and live pipe replies while stdin stays open. The pipe test fails with a no-op flush or a peek-char EOF mutation; both were restored and rechecked. Update grammar and both skills.
 
 ### Phase 5f2: Typed JSON decoding
 
@@ -761,12 +771,13 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 
 - [x] Phase 5c: String library.
 - [x] Phase 5d: standard input and output.
-- [ ] Phase 5d2: consistency fixes.
+- [x] Phase 5d2: consistency fixes (Result-dependent I/O landed with 5e).
 - [ ] Phase 5d3: agent API (`check --json`, `symbols`, `show`, `refs`).
 - [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval-6a.md`).
-- [ ] Phase 5e: `Result[T]`, `try`, and the builtins catalog.
-- [ ] Faster maps (before JSON).
-- [ ] Phase 5f: JSON.
+- [x] Phase 5e: Result[T], try, and the builtins catalog.
+- [x] Faster maps (before JSON).
+- [x] Phase 5f: JSON.
+- [x] Stdio transport primitives: counted bytes, strict UTF-8 decoding, flush, and byte-oriented EOF.
 - [ ] Phase 5f2: typed JSON decoding.
 - [ ] Phase 5g: TCP.
 - [ ] Phase 5h: HTTP and HTTPS.
@@ -861,7 +872,7 @@ Process.close(p: Process) -> Nil
 ### Later, for MCP
 
 - HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
-- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first.
+- Concurrency, so a client can handle notifications while it waits. A sequential loop is enough at first; the unscheduled design (green threads, channels, `Process.poll_line`, and the evaluator reentrancy constraint) is in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
 - `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
 
 ### Checklist for phases 5i to 5m
@@ -885,10 +896,19 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 ## Later extensions
 
-- [ ] Faster maps: `mapping` in `src/evaluator.rkt` is an association list, so `Map.put`, `Map.has_key?`, and `m[key]` are O(n) and building a map of n entries is O(n²). Replace it with an immutable `hash` plus a reversed key list (insertion order), keeping `mapping-put` as the only writer. Do this before JSON (5f), once 5e is done. Lists keep O(n) indexing; document it and favor `for`, with no runtime rewrite yet.
+- [x] Faster maps: replaced association lists in `src/evaluator.rkt` with Racket immutable equal?-based hashes plus reversed insertion-order keys; `mapping-put` remains the only writer. Lookup/update are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison), Map.size is O(1), and Map.keys is O(n). Replacement preserves first-insertion order, old maps stay unchanged, and missing keys keep their diagnostic spans. Extended evaluator coverage for replacements, equal String keys, Int keys, false/nil payloads, empty maps, and nested debug order. `racket benchmarks/maps.rkt` compares checked build/build+read workloads at 1k/10k/50k entries (three-sample medians, no CI timing thresholds). Completed before JSON (5f). Lists retain O(n) indexing; favor `for`, with no runtime rewrite.
+  Local benchmark on Racket CS 9.3: three-sample medians, baseline `27c8cd4` versus hash-backed maps. Timings include evaluation only; build+read includes construction followed by one membership check and indexed read per entry. These are observations, not CI limits or timing guarantees.
+
+  | Entries | Build before / after (ms) | Build+read before / after (ms) |
+  |---|---|---|
+  | 1,000 | 9.94 / 1.23 | 25.11 / 2.85 |
+  | 10,000 | 869.56 / 12.59 | 2,200.83 / 29.21 |
+  | 50,000 | 23,240.65 / 61.62 | 54,904.19 / 146.60 |
+
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
 - [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
+- [ ] Concurrency and parallelism: unscheduled; the design is in [`future.md` section 8](future.md#8-concurrency-and-parallelism). Schedule after 5m only if a real MCP case (server-initiated requests, multiple connections, or Streamable HTTP) needs it.
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 

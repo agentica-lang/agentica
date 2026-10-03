@@ -5,7 +5,7 @@ end
 def main() -> Nil
   total = 0.0
   while not IO.eof?()
-    parts = String.split(String.trim(IO.gets()), " ")
+    parts = String.split(String.trim(IO.gets!()), " ")
     quantity = String.to_float!(parts[1])
     price = String.to_float!(parts[2])
     amount = line_total(quantity, price)

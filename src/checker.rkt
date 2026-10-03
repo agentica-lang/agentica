@@ -1,6 +1,7 @@
 #lang racket
 
-(require "ast.rkt"
+(require "builtins.rkt"
+         "ast.rkt"
          "diagnostic.rkt"
          "source.rkt")
 
@@ -8,16 +9,10 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "IO" "System"))
+(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON"))
 
-(define (type->string type)
-  (cond
-    [(symbol? type) (symbol->string type)]
-    [(eq? (car type) 'List) (format "List[~a]" (type->string (cadr type)))]
-    [(eq? (car type) 'Map)
-     (format "Map[~a, ~a]" (type->string (cadr type)) (type->string (caddr type)))]
-    [(eq? (car type) 'Struct) (cadr type)]
-    [else "?"]))
+(define (result-type? type)
+  (and (pair? type) (eq? (car type) 'Result)))
 
 (define (numeric-type? type)
   (or (eq? type 'Int) (eq? type 'Float)))
@@ -45,33 +40,6 @@
     [(string? value) 'String]
     [(eq? value 'nil) 'Nil]
     [else '?]))
-
-(define (edit-distance a b)
-  (define n (string-length b))
-  (define last-row (build-vector (add1 n) values))
-  (for ([i (in-range 1 (add1 (string-length a)))])
-    (define row (make-vector (add1 n) i))
-    (for ([j (in-range 1 (add1 n))])
-      (vector-set! row j
-                   (min (add1 (vector-ref last-row j))
-                        (add1 (vector-ref row (sub1 j)))
-                        (+ (vector-ref last-row (sub1 j))
-                           (if (char=? (string-ref a (sub1 i)) (string-ref b (sub1 j))) 0 1)))))
-    (vector-copy! last-row 0 row))
-  (vector-ref last-row n))
-
-(define (did-you-mean name candidates)
-  (define limit (if (<= (string-length name) 4) 1 2))
-  (define near
-    (sort (for/list ([candidate (in-list (remove-duplicates candidates))]
-                     #:unless (string=? candidate name)
-                     #:when (<= (edit-distance name candidate) limit))
-            candidate)
-          (lambda (x y)
-            (define dx (edit-distance name x))
-            (define dy (edit-distance name y))
-            (or (< dx dy) (and (= dx dy) (string<? x y))))))
-  (and (pair? near) (format "did you mean \"~a\"?" (car near))))
 
 (define (conversion-help expected actual)
   (cond
@@ -153,9 +121,11 @@
       (define name (type-ref-name reference))
       (define arguments (type-ref-args reference))
       (cond
-        [(and (member name '("Int" "Float" "Bool" "String" "Nil"))
+        [(and (member name '("Int" "Float" "Bool" "String" "Nil" "Json"))
               (null? arguments))
          (string->symbol name)]
+        [(and (string=? name "Result") (= (length arguments) 1))
+         (list 'Result (resolve-type (car arguments)))]
         [(and (string=? name "List") (= (length arguments) 1))
          (list 'List (resolve-type (car arguments)))]
         [(and (string=? name "Map") (= (length arguments) 2))
@@ -171,7 +141,7 @@
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
                (type-ref-span reference)
-               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map")
+               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json")
                                                  (hash-keys structs))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -187,9 +157,14 @@
           [else (loop (cdr frames))])))
 
     (define (visible-names)
-      (append (append-map hash-keys scopes) (hash-keys functions)))
+      (append (append-map hash-keys scopes) (hash-keys functions) (hash-keys builtins)))
+
+    (define (reserve-constructor! name span)
+      (when (member name '("ok" "error"))
+        (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is a builtin constructor" name) span)))
 
     (define (introduce! name type span [immutable? #f])
+      (reserve-constructor! name span)
       (define existing (lookup name))
       (when existing
         (bail 'CHECK-SHADOWED-NAME
@@ -220,6 +195,7 @@
           (hash-set! structs (struct-decl-name declaration)
                      (for/list ([field (in-list (struct-decl-fields declaration))])
                        (define field-name (field-decl-name field))
+                       (reserve-constructor! field-name (field-decl-span field))
                        (when (member field-name seen)
                          (bail 'CHECK-REDEFINED-NAME
                                (format "duplicate field \"~a\"" field-name)
@@ -231,7 +207,8 @@
       (for ([declaration (in-list (program-declarations program))])
         (when (function-decl? declaration)
           (define name (function-decl-name declaration))
-          (when (or (hash-has-key? functions name)
+          (when (or (builtin-ref name)
+                    (hash-has-key? functions name)
                     (hash-has-key? structs name))
             (bail 'CHECK-REDEFINED-NAME
                   (format "\"~a\" is already defined" name)
@@ -280,7 +257,8 @@
            (define binding (lookup (name-ref-name expression)))
            (unless binding
              (bail 'CHECK-UNKNOWN-NAME
-                   (if (hash-has-key? functions (name-ref-name expression))
+                   (if (or (hash-has-key? functions (name-ref-name expression))
+                           (builtin-ref (name-ref-name expression)))
                        (format "\"~a\" is a function; functions are not values"
                                (name-ref-name expression))
                        (format "unknown name \"~a\"" (name-ref-name expression)))
@@ -289,7 +267,8 @@
            (car binding)]
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]
-          [(call? expression) (check-call expression)]
+          [(call? expression) (check-call expression expected)]
+          [(try-expr? expression) (check-try expression expected)]
           [(construct? expression) (check-construct expression)]
           [(list-lit? expression) (check-list expression expected)]
           [(map-lit? expression) (check-map expression expected)]
@@ -297,6 +276,16 @@
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
       (ensure actual expected (node-span expression)))
+
+    (define (check-try expression expected)
+      (unless (result-type? current-result)
+        (bail 'CHECK-TRY-CONTEXT "try requires a function returning Result" (try-expr-span expression)
+              #:help "return Result[T] from this function, or handle the Result explicitly"))
+      (define operand (try-expr-operand expression))
+      (define type (check-expression operand (and expected (list 'Result expected))))
+      (unless (result-type? type)
+        (mismatch! '(Result T) type (node-span operand)))
+      (cadr type))
 
     (define (check-unary expression)
       (define inner (unary-operand expression))
@@ -385,115 +374,88 @@
          'Bool]
         [else (bail 'CHECK-INTERNAL "unsupported operator" span)]))
 
-    (define (check-builtin-call expression)
-      (define name (call-name expression))
+    (define (encodable-type? type [seen '()])
+      (cond
+        [(or (primitive-type? type) (eq? type 'Json)) #t]
+        [(list-type? type) (encodable-type? (cadr type) seen)]
+        [(map-type? type)
+         (and (eq? (cadr type) 'String) (encodable-type? (caddr type) seen))]
+        [(struct-type? type)
+         (define name (cadr type))
+         (or (member name seen)
+             (for/and ([field (in-list (hash-ref structs name))])
+               (encodable-type? (cdr field) (cons name seen))))]
+        [else #f]))
+
+    (define (check-builtin-call expression expected entry)
       (define span (call-span expression))
       (define arguments (call-args expression))
-      (define (arity! count)
-        (unless (= (length arguments) count)
-          (bail 'CHECK-ARITY
-                (format "\"~a\" expects ~a argument(s), found ~a"
-                        name count (length arguments))
-                span)))
+      (define parameters (builtin-parameters entry))
+      (unless (= (length arguments) (length parameters))
+        (bail 'CHECK-ARITY
+              (format "\"~a\" expects ~a argument(s), found ~a"
+                      (builtin-name entry) (length parameters) (length arguments))
+              span #:callee (builtin-signature entry)))
       (define (map-argument)
         (define type (check-expression (car arguments) #f))
-        (unless (map-type? type) (mismatch! 'Map type (node-span (car arguments))))
+        (unless (map-type? type) (mismatch! '(Map K V) type (node-span (car arguments))))
         type)
-      (case name
-        [("Map.has_key?")
-         (arity! 2)
+      (define (result-argument [context #f])
+        (define type (check-expression (car arguments) context))
+        (unless (result-type? type) (mismatch! '(Result T) type (node-span (car arguments))))
+        type)
+      (case (builtin-rule entry)
+        [(map-has)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
          'Bool]
-        [("Map.keys") (arity! 1) (list 'List (cadr (map-argument)))]
-        [("Map.size") (arity! 1) (map-argument) 'Int]
-        [("Map.put")
-         (arity! 3)
+        [(map-keys) (list 'List (cadr (map-argument)))]
+        [(map-size) (map-argument) 'Int]
+        [(map-put)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
          (check-expression (caddr arguments) (caddr target))
          target]
-        [("List.size")
-         (arity! 1)
+        [(list-size)
          (define type (check-expression (car arguments) #f))
          (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
          'Int]
-        [("String.length")
-         (arity! 1)
-         (check-expression (car arguments) 'String)
-         'Int]
-        [("String.upcase" "String.downcase" "String.trim")
-         (arity! 1)
-         (check-expression (car arguments) 'String)
+        [(json-encode)
+         (define type (check-expression (car arguments) #f))
+         (unless (encodable-type? type)
+           (bail 'CHECK-NOT-ENCODABLE
+                 (format "cannot JSON.encode ~a or its nested types" (type->string type))
+                 (node-span (car arguments))))
          'String]
-        [("String.split")
-         (arity! 2)
+        [(identity) (check-expression (car arguments) expected)]
+        [(ok)
+         (list 'Result (check-expression (car arguments)
+                                        (and (result-type? expected) (cadr expected))))]
+        [(error)
          (check-expression (car arguments) 'String)
-         (check-expression (cadr arguments) 'String)
-         '(List String)]
-        [("String.join")
-         (arity! 2)
-         (check-expression (car arguments) '(List String))
-         (check-expression (cadr arguments) 'String)
-         'String]
-        [("String.contains?" "String.starts_with?" "String.ends_with?")
-         (arity! 2)
-         (check-expression (car arguments) 'String)
-         (check-expression (cadr arguments) 'String)
-         'Bool]
-        [("String.replace")
-         (arity! 3)
-         (check-expression (car arguments) 'String)
-         (check-expression (cadr arguments) 'String)
-         (check-expression (caddr arguments) 'String)
-         'String]
-        [("String.slice")
-         (arity! 3)
-         (check-expression (car arguments) 'String)
-         (check-expression (cadr arguments) 'Int)
-         (check-expression (caddr arguments) 'Int)
-         'String]
-        [("String.from_int")
-         (arity! 1)
-         (check-expression (car arguments) 'Int)
-         'String]
-        [("String.from_float")
-         (arity! 1)
-         (check-expression (car arguments) 'Float)
-         'String]
-        [("String.to_int!")
-         (arity! 1)
-         (check-expression (car arguments) 'String)
-         'Int]
-        [("String.to_float!")
-         (arity! 1)
-         (check-expression (car arguments) 'String)
-         'Float]
-        [("IO.puts" "IO.print" "IO.warn")
-         (arity! 1)
-         (check-expression (car arguments) 'String)
-         'Nil]
-        [("IO.inspect")
-         (arity! 1)
-         (check-expression (car arguments) #f)]
-        [("IO.gets" "IO.read")
-         (arity! 0)
-         'String]
-        [("IO.eof?")
-         (arity! 0)
-         'Bool]
-        [("System.args")
-         (arity! 0)
-         '(List String)]
-        [("System.exit")
-         (arity! 1)
-         (check-expression (car arguments) 'Int)
-         'Nil]
-        [else (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span)]))
+         (when (and expected (not (result-type? expected)))
+           (mismatch! expected '(Result T) span))
+         (unless expected
+           (bail 'CHECK-RESULT-TYPE "an error needs an expected Result type" span
+                 #:help "add a Result[T] annotation, for example r: Result[Int] = error(message)"))
+         expected]
+        [(result-ok) (result-argument) 'Bool]
+        [(result-message) (result-argument) 'String]
+        [(result-unwrap)
+         (cadr (result-argument (and expected (list 'Result expected))))]
+        [(result-default)
+         (define type (check-expression (cadr arguments) expected))
+         (result-argument (list 'Result type))
+         type]
+        [else
+         (for ([argument (in-list arguments)] [parameter (in-list parameters)])
+           (check-expression argument (cadr parameter)))
+         (builtin-result entry)]))
 
-    (define (check-call expression)
-      (if (string-contains? (call-name expression) ".")
-          (check-builtin-call expression)
+    (define (check-call expression expected)
+      (define entry (builtin-ref (call-name expression)))
+      (if entry
+          (check-builtin-call expression expected entry)
           (check-plain-call expression)))
 
     (define (check-plain-call expression)
@@ -503,7 +465,7 @@
         (bail 'CHECK-UNKNOWN-NAME
               (format "unknown function \"~a\"" name)
               (call-span expression)
-              #:help (did-you-mean name (hash-keys functions))))
+              #:help (did-you-mean name (append (hash-keys functions) (hash-keys builtins)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))
@@ -585,7 +547,7 @@
       (cond
         [(null? entries)
          (unless expected
-           (bail 'CHECK-EMPTY-LIST-TYPE
+           (bail 'CHECK-EMPTY-MAP-TYPE
                  "an empty map needs an expected type, for example \"Map[String, Int]\""
                  span))
          expected]
@@ -650,6 +612,7 @@
 
     (define (check-binding statement)
       (define name (binding-name statement))
+      (reserve-constructor! name (binding-span statement))
       (define annotation (binding-type statement))
       (define declared (and annotation (resolve-type annotation)))
       (define existing (lookup name))
@@ -730,7 +693,6 @@
 
     ;; Program --------------------------------------------------------------
 
-    (hash-set! functions "puts" (list (list 'String) 'Nil))
     (register-structs!)
     (register-functions!)
     (check-main!)

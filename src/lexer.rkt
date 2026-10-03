@@ -9,7 +9,7 @@
 (define keywords
   (hash "def" 'def "struct" 'struct "end" 'end
         "if" 'if "elsif" 'elsif "else" 'else
-        "while" 'while "for" 'for "in" 'in "return" 'return
+        "while" 'while "for" 'for "in" 'in "return" 'return "try" 'try
         "true" 'true "false" 'false "nil" 'nil
         "and" 'and "or" 'or "not" 'not))
 
@@ -118,12 +118,12 @@
             (scan-while! (lambda (c) (or (ascii-letter? c)
                                          (ascii-digit? c)
                                          (char=? c #\_))))
-            ;; A trailing "?" or "!" is part of the name only when a "("
-            ;; follows, so "a!=b" still lexes as "a != b".
+            ;; Suffixes belong to names, but "!=" remains an operator.
             (when (and (not (char<=? #\A char #\Z))
                        (< index source-length)
                        (memv (current) '(#\? #\!))
-                       (equal? (peek 1) #\())
+                       (not (and (char=? (current) #\!)
+                                 (equal? (peek 1) #\=))))
               (advance!))
             (define lexeme (substring text (source-position-offset start) index))
             (define kind

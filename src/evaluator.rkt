@@ -1,7 +1,10 @@
 #lang racket
 
-(require "ast.rkt"
-         "diagnostic.rkt")
+(require json
+         "builtins.rkt"
+         "ast.rkt"
+         "diagnostic.rkt"
+         "json.rkt")
 
 (provide evaluate
          (struct-out instance)
@@ -9,16 +12,17 @@
          (struct-out exit-code))
 
 (struct instance (type-name fields) #:transparent)
-(struct mapping (pairs) #:transparent)
+(struct mapping (table reversed-keys) #:transparent)
 (struct exit-code (code) #:transparent)
+(struct result-ok (value) #:transparent)
+(struct result-error (message) #:transparent)
 
 (define (mapping-put target key value)
-  (define pairs (mapping-pairs target))
-  (mapping
-   (if (assoc key pairs)
-       (for/list ([pair (in-list pairs)])
-         (if (equal? (car pair) key) (cons key value) pair))
-       (append pairs (list (cons key value))))))
+  (define table (mapping-table target))
+  (mapping (hash-set table key value)
+           (if (hash-has-key? table key)
+               (mapping-reversed-keys target)
+               (cons key (mapping-reversed-keys target)))))
 
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
@@ -26,23 +30,27 @@
 (define decimal-float-pattern #px"^[+-]?[0-9]+(\\.[0-9]+)?$")
 
 (define max-call-depth 10000)
+;; ponytail: cap eager reads at 1 MiB per call; stream larger inputs in chunks.
+(define max-read-bytes (* 1024 1024))
 
 (define (evaluate program
                   #:in [input (current-input-port)]
                   #:out [output (current-output-port)]
                   #:err [error-output (current-error-port)]
-                  #:args [program-args '()])
+                  #:args [program-args '()]
+                  #:max-steps [max-steps #f])
   (parameterize ([current-input-port input]
                  [current-output-port output]
                  [current-error-port error-output])
-    (evaluate-with-ports program program-args)))
+    (evaluate-with-ports program program-args max-steps)))
 
-(define (evaluate-with-ports program program-args)
+(define (evaluate-with-ports program program-args max-steps)
   (define functions (make-hash))
   (define struct-fields (make-hash))
   (define scopes '())
   (define return-to #f)
   (define depth 0)
+  (define steps 0)
 
   (with-handlers ([exn:fail?
                    (lambda (failure)
@@ -52,6 +60,15 @@
    (let/ec escape
     (define (bail code message span)
       (escape (diagnostic code message span)))
+
+    (unless (or (not max-steps) (exact-positive-integer? max-steps))
+      (bail 'RUNTIME-INTERNAL "max-steps must be a positive integer or #f" (program-span program)))
+
+    (define (step! span)
+      (when max-steps
+        (when (>= steps max-steps)
+          (bail 'RUNTIME-STEP-LIMIT "execution step budget exhausted" span))
+        (set! steps (add1 steps))))
 
     (define (push-scope!) (set! scopes (cons (make-hash) scopes)))
     (define (pop-scope!) (set! scopes (cdr scopes)))
@@ -66,23 +83,71 @@
     (define (assign! name value)
       (set-box! (lookup name) value))
 
-    (define (in-int-range n span)
+    (define (in-int-range n span [fail bail])
       (unless (<= int-min n int-max)
-        (bail 'RUNTIME-INTEGER-OVERFLOW "Int result is outside the 64-bit range" span))
+        (fail 'RUNTIME-INTEGER-OVERFLOW "Int result is outside the 64-bit range" span))
       n)
 
     (define (unreachable what span)
       (bail 'RUNTIME-UNREACHABLE (format "cannot evaluate ~a" what) span))
 
+    (define (fallible bang? operation)
+      (let/ec failed
+        (define (fail code message where)
+          (if bang? (bail code message where) (failed (result-error message))))
+        (define value (operation fail))
+        (if bang? value (result-ok value))))
+
+    (define (json-extract value predicate expected [convert values])
+      (define data (json-value-data value))
+      (if (predicate data)
+          (result-ok (convert data))
+          (result-error (format "expected ~a" expected))))
+
+    (define (encode-json value span)
+      (define out (open-output-string))
+      (define (write-object keys ref)
+        (display "{" out)
+        (for ([key (in-list keys)] [i (in-naturals)])
+          (unless (zero? i) (display "," out))
+          (write-json key out)
+          (display ":" out)
+          (write-value (ref key)))
+        (display "}" out))
+      (define (write-value value)
+        (cond
+          [(json-value? value) (write-json (json-value-data value) out #:null 'nil)]
+          [(instance? value)
+           (write-object (hash-ref struct-fields (instance-type-name value))
+                         (lambda (key) (hash-ref (instance-fields value) key)))]
+          [(mapping? value)
+           (write-object (reverse (mapping-reversed-keys value))
+                         (lambda (key) (hash-ref (mapping-table value) key)))]
+          [(list? value)
+           (display "[" out)
+           (for ([item (in-list value)] [i (in-naturals)])
+             (unless (zero? i) (display "," out))
+             (write-value item))
+           (display "]" out)]
+          [(and (real? value) (not (rational? value)))
+           (bail 'RUNTIME-JSON-ENCODE "cannot encode a non-finite Float" span)]
+          [else (write-json value out #:null 'nil)]))
+      (write-value value)
+      (get-output-string out))
+
     ;; Expressions ----------------------------------------------------------
 
     (define (eval-expression expression)
+      (step! (node-span expression))
       (cond
         [(literal? expression) (literal-value expression)]
         [(name-ref? expression) (unbox (lookup (name-ref-name expression)))]
         [(unary? expression) (eval-unary expression)]
         [(binary? expression) (eval-binary expression)]
         [(call? expression) (eval-call expression)]
+        [(try-expr? expression)
+         (define result (eval-expression (try-expr-operand expression)))
+         (if (result-ok? result) (result-ok-value result) (return-to result))]
         [(construct? expression)
          (instance (construct-type-name expression)
                    (for/fold ([fields (hash)])
@@ -93,7 +158,7 @@
          (for/list ([element (in-list (list-lit-elements expression))])
            (eval-expression element))]
         [(map-lit? expression)
-         (for/fold ([result (mapping '())])
+         (for/fold ([result (mapping (hash) '())])
                    ([entry (in-list (map-lit-entries expression))])
            (mapping-put result
                         (eval-expression (map-entry-key entry))
@@ -106,12 +171,11 @@
          (define index (eval-expression (index-access-index expression)))
          (cond
            [(mapping? target)
-            (define pair (assoc index (mapping-pairs target)))
-            (unless pair
-              (bail 'RUNTIME-KEY-NOT-FOUND
-                    (format "key ~s is not in the map" index)
-                    (node-span (index-access-index expression))))
-            (cdr pair)]
+            (hash-ref (mapping-table target) index
+                      (lambda ()
+                        (bail 'RUNTIME-KEY-NOT-FOUND
+                              (format "key ~s is not in the map" index)
+                              (node-span (index-access-index expression)))))]
            [else
             (unless (< -1 index (length target))
               (bail 'RUNTIME-INDEX-OUT-OF-RANGE
@@ -165,6 +229,9 @@
         [(boolean? value) (if value "true" "false")]
         [(string? value) (format "~s" value)]
         [(number? value) (number->string value)]
+        [(json-value? value) "<Json>"]
+        [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
+        [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
          (define field-order (hash-ref struct-fields (instance-type-name value) '()))
          (format "~a(~a)"
@@ -178,10 +245,10 @@
         [(mapping? value)
          (format "{~a}"
                  (string-join
-                  (for/list ([pair (in-list (mapping-pairs value))])
+                  (for/list ([key (in-list (reverse (mapping-reversed-keys value)))])
                     (format "~a: ~a"
-                            (value->debug-string (car pair))
-                            (value->debug-string (cdr pair))))
+                            (value->debug-string key)
+                            (value->debug-string (hash-ref (mapping-table value) key))))
                   ", "))]
         [(list? value)
          (format "[~a]" (string-join (map value->debug-string value) ", "))]
@@ -191,30 +258,86 @@
       (define arguments
         (for/list ([argument (in-list (call-args expression))])
           (eval-expression argument)))
-      (define name (call-name expression))
+      (define entry (builtin-ref (call-name expression)))
+      (define name (if entry (builtin-implementation entry) (call-name expression)))
+      (define span (call-span expression))
       (case name
         [("puts") (displayln (car arguments)) 'nil]
-        [("IO.puts") (displayln (car arguments)) 'nil]
+        [("ok") (result-ok (car arguments))]
+        [("error") (result-error (car arguments))]
+        [("Result.ok?") (result-ok? (car arguments))]
+        [("Result.message")
+         (if (result-error? (car arguments)) (result-error-message (car arguments)) "")]
+        [("Result.unwrap!")
+         (define result (car arguments))
+         (if (result-ok? result)
+             (result-ok-value result)
+             (bail 'RUNTIME-UNWRAP-ERROR (result-error-message result) span))]
+        [("Result.unwrap_or")
+         (if (result-ok? (car arguments)) (result-ok-value (car arguments)) (cadr arguments))]
         [("IO.print") (display (car arguments)) 'nil]
+        [("IO.flush") (flush-output (current-output-port)) 'nil]
         [("IO.warn") (displayln (car arguments) (current-error-port)) 'nil]
         [("IO.inspect")
          (displayln (value->debug-string (car arguments)))
          (car arguments)]
-        [("IO.gets")
-         (define line (read-line (current-input-port) 'any))
-         (if (eof-object? line)
-             (bail 'RUNTIME-END-OF-INPUT
-                   "IO.gets reached the end of input"
-                   (call-span expression))
-             line)]
+        [("IO.gets" "IO.gets!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define line (read-line (current-input-port) 'any))
+                     (when (eof-object? line)
+                       (fail 'RUNTIME-END-OF-INPUT "IO.gets reached the end of input" span))
+                     line))]
         [("IO.read") (port->string (current-input-port))]
-        [("IO.eof?") (eof-object? (peek-char (current-input-port)))]
+        [("IO.read_bytes")
+         (define count (car arguments))
+         (if (<= 0 count max-read-bytes)
+             (with-handlers ([exn:fail? (lambda (_) (result-error "input read failed"))])
+               (define data (read-bytes count (current-input-port)))
+               (result-ok (if (eof-object? data) '() (bytes->list data))))
+             (result-error (format "byte count must be between 0 and ~a" max-read-bytes)))]
+        [("IO.eof?") (eof-object? (peek-byte (current-input-port)))]
         [("System.args") program-args]
         [("System.exit") (escape (exit-code (car arguments)))]
-        [("Map.has_key?") (and (assoc (cadr arguments) (mapping-pairs (car arguments))) #t)]
-        [("Map.keys") (map car (mapping-pairs (car arguments)))]
-        [("Map.size") (length (mapping-pairs (car arguments)))]
+        [("Map.has_key?") (hash-has-key? (mapping-table (car arguments)) (cadr arguments))]
+        [("Map.keys") (reverse (mapping-reversed-keys (car arguments)))]
+        [("Map.size") (hash-count (mapping-table (car arguments)))]
         [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
+        [("JSON.parse")
+         ;; Malformed exponents can raise non-read exceptions in Racket's reader.
+         ;; Only parsing is recoverable; argument evaluation stays outside.
+         (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
+           (result-ok (read-json-value (car arguments))))]
+        [("JSON.encode") (encode-json (car arguments) span)]
+        [("JSON.get")
+         (define data (json-value-data (car arguments)))
+         (define key (string->symbol (cadr arguments)))
+         (cond
+           [(not (hash? data)) (result-error "expected a JSON object")]
+           [(not (hash-has-key? data key)) (result-error (format "missing JSON key ~s" (cadr arguments)))]
+           [else (result-ok (json-value (hash-ref data key)))])]
+        [("JSON.at")
+         (define data (json-value-data (car arguments)))
+         (define index (cadr arguments))
+         (cond
+           [(not (list? data)) (result-error "expected a JSON array")]
+           [(not (< -1 index (length data))) (result-error "JSON array index is out of range")]
+           [else (result-ok (json-value (list-ref data index)))])]
+        [("JSON.string") (json-extract (car arguments) string? "a JSON string")]
+        [("JSON.int")
+         (json-extract (car arguments)
+                       (lambda (data) (and (exact-integer? data) (<= int-min data int-max)))
+                       "a signed 64-bit JSON integer")]
+        [("JSON.float")
+         (define data (json-value-data (car arguments)))
+         (define value (and (real? data) (exact->inexact data)))
+         (if (and value (rational? value))
+             (result-ok value)
+             (result-error "expected a JSON number representable as a finite Float"))]
+        [("JSON.bool") (json-extract (car arguments) boolean? "a JSON boolean")]
+        [("JSON.list")
+         (json-extract (car arguments) list? "a JSON array"
+                       (lambda (data) (map json-value data)))]
         [("List.size") (length (car arguments))]
         [("String.length") (string-length (car arguments))]
         [("String.upcase") (string-upcase (car arguments))]
@@ -245,27 +368,32 @@
          (substring text start (+ start length))]
         [("String.from_int") (number->string (car arguments))]
         [("String.from_float") (number->string (car arguments))]
-        [("String.to_int!")
-         (define text (car arguments))
-         (define parsed-int
-           (and (regexp-match? decimal-integer-pattern text)
-                (string->number text)))
-         (unless (exact-integer? parsed-int)
-           (bail 'RUNTIME-INVALID-NUMBER
-                 (format "cannot convert ~s to Int" text)
-                 (call-span expression)))
-         (in-int-range parsed-int (call-span expression))]
-        [("String.to_float!")
-         (define text (car arguments))
-         (define parsed-float
-           (and (regexp-match? decimal-float-pattern text)
-                (string->number text)))
-         (unless (real? parsed-float)
-           (bail 'RUNTIME-INVALID-NUMBER
-                 (format "cannot convert ~s to Float" text)
-                 (call-span expression)))
-         (exact->inexact parsed-float)]
+        [("String.from_bytes")
+         (define data (car arguments))
+         (if (andmap byte? data)
+             (with-handlers ([exn:fail:contract? (lambda (_) (result-error "invalid or incomplete UTF-8"))])
+               (result-ok (bytes->string/utf-8 (list->bytes data) #f)))
+             (result-error "bytes must be integers between 0 and 255"))]
+        [("String.to_int" "String.to_int!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define text (car arguments))
+                     (define parsed-int
+                       (and (regexp-match? decimal-integer-pattern text) (string->number text)))
+                     (unless (exact-integer? parsed-int)
+                       (fail 'RUNTIME-INVALID-NUMBER (format "cannot convert ~s to Int" text) span))
+                     (in-int-range parsed-int span fail)))]
+        [("String.to_float" "String.to_float!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define text (car arguments))
+                     (define parsed-float
+                       (and (regexp-match? decimal-float-pattern text) (string->number text)))
+                     (unless (real? parsed-float)
+                       (fail 'RUNTIME-INVALID-NUMBER (format "cannot convert ~s to Float" text) span))
+                     (exact->inexact parsed-float)))]
         [else
+         (when entry (unreachable "builtin implementation" span))
          (define declaration (hash-ref functions name #f))
          (unless declaration (unreachable "call" (call-span expression)))
          (call-function declaration arguments (call-span expression))]))
@@ -303,6 +431,7 @@
       (pop-scope!))
 
     (define (exec-statement statement)
+      (step! (node-span statement))
       (cond
         [(binding? statement)
          (define value (eval-expression (binding-value statement)))
