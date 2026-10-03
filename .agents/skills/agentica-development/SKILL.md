@@ -178,6 +178,7 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - Generic rules propagate expected types into list construction/updates and Map.get. Keep false/nil lookup payloads distinct from absent keys. Map.delete updates both the hash and insertion-order keys; reinsertion goes last. Map.values follows Map.keys order.
 - `examples/knight-tour.agc` uses degree-ordered backtracking for open tours, sizes 1..8. `examples/traveling-salesman.agc` searches optimal directed circuits over 1..8 cities with nonnegative bounded Int weights. The examples tests validate complete routes and known optimal costs with a 5000000-step budget. A runtime limit is not an unsolvable-result signal.
 - Callback operations remain pending in 5n and require 5j; these primitive operations do not. Grammar and programming reference are kept together; stages.md includes the catalog arity contract.
+- `examples/maze-bfs.agc` demonstrates Map.get/2 for discovery, Map.get/3 for passable cells, and Map.delete for a numeric-keyed FIFO queue. Rectangular grids are capped at 32×32; tests check legal shortest paths and distinguish invalid input from an unreachable goal. Queue deletion is O(n), so do not claim linear runtime from BFS alone.
 
 ## Reference
 

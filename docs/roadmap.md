@@ -865,6 +865,7 @@ Process.close(p: Process) -> Nil
 - [x] `List.append`, `List.set`, `List.repeat`, `List.reverse`: immutable operations with contextual generic typing and explicit index/count diagnostics. Keep the existing linked-list representation and document O(n) indexing/updates.
 - [x] `Map.values`, `Map.get`, `Map.delete`: insertion-order traversal/deletion, Result lookup with two arguments, eager-default lookup with three. The catalog/checker/runtime/help share arity selection.
 - [x] Algorithm examples and functional tests: open knight tours with degree-ordered backtracking; exact small traveling-salesman circuits with cost pruning. Validate complete paths and optimal costs rather than a particular route.
+- [x] Map-based BFS maze example: distance and predecessor maps, numeric-keyed queue with deletion, and path reconstruction. Functional tests validate legal shortest paths, cycles, row boundaries, unreachable goals, start equal to goal, malformed inputs, and 32×32 grids. Map.delete remains O(n) for insertion-order maintenance.
 - [x] Update grammar, programming reference, and development skill for these operations.
 - [ ] `List.concat`, `take`, `drop`, `at`.
 - [ ] Settle `reduce` argument order before implementing callbacks.

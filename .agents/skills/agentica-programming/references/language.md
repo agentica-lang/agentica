@@ -168,7 +168,7 @@ System.exit(code: Int) -> Nil
 ```
 
 - A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
-- Lists have no append or concatenation function. To build a list, write a literal; to change a map, use `Map.put`, which leaves the original unchanged.
+- Build lists with literals or `List.append`/`List.repeat`; update them with `List.set`. Concatenation remains unimplemented. To change a map, use `Map.put`/`Map.delete`; these operations leave the original unchanged.
 - Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
 

@@ -102,6 +102,7 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/json-lines.agc`](examples/json-lines.agc): transform one JSON record per line, recover from invalid records, and flush each response.
 - [`examples/knight-tour.agc`](examples/knight-tour.agc): find an open knight tour with degree-ordered backtracking, visiting every square once.
 - [`examples/traveling-salesman.agc`](examples/traveling-salesman.agc): find an optimal circuit through a small directed distance matrix.
+- [`examples/maze-bfs.agc`](examples/maze-bfs.agc): find a shortest maze path with BFS, using maps for distances, predecessors, and a queue.
 
 The three input-driven JSON examples read stdin:
 
@@ -118,10 +119,13 @@ The algorithm examples also read JSON from stdin:
 ```sh
 printf '%s\n' '{"size":8,"start":0}' | dist/agentica --max-steps 5000000 examples/knight-tour.agc
 printf '%s\n' '{"distances":[[0,10,15,20],[10,0,35,25],[15,35,0,30],[20,25,30,0]]}' | dist/agentica --max-steps 5000000 examples/traveling-salesman.agc
+printf '%s\n' '{"grid":[".#.","..."],"start":0,"goal":2}' | dist/agentica --max-steps 5000000 examples/maze-bfs.agc
 ```
 
 Knight tours accept square boards of size 1–8 and a zero-based starting square (`row * size + column`). Output is `{"found":true,"path":[...]}` or `{"found":false,"path":[]}` after exhausting the search. Tours are open. The traveling salesman accepts a complete directed square matrix of 1–8 cities, with zero diagonal and integer costs from 0 to 1,000,000,000. It returns an optimal `{"cost":...,"route":[0,...,0]}` circuit; one city yields `[0,0]` and cost zero. Both validate input and print `{"error":"invalid input"}` on invalid documents. Searches can be expensive: a runtime step-limit diagnostic does not mean there is no solution.
 
 IO.gets now returns Result[String]; IO.gets! is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main still returns Nil. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
+
+The maze accepts rectangular grids with 1–32 rows and columns. `.` is open and `#` is blocked; only horizontal and vertical steps are allowed. Start and goal use `row * width + column` and must be open, in-range cells. The example above returns `{"found":true,"distance":4,"path":[0,3,4,5,2]}`. An unreachable goal returns `{"found":false,"distance":-1,"path":[]}`; invalid input returns `{"error":"invalid input"}`. Start equal to goal returns distance zero and a one-cell path. The queue uses numeric keys and deletes consumed entries; `Map.delete` maintains insertion order in O(n), so this example demonstrates the API rather than a queue with constant-time operations.
 
 Enums and pattern matching are future extensions.

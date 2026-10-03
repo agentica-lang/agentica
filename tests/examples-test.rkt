@@ -140,8 +140,66 @@
                       (list-ref (list-ref matrix from) to))
                     (hash-ref data 'cost))))
 
+  (test-case "maze BFS returns shortest legal paths and reports unreachable goals"
+    (define program (file->string (build-path examples-dir "maze-bfs.agc")))
+    (for ([entry (append '(((".") 0 0 0)
+                          (("....") 3 0 3)
+                          (("..." "...") 2 3 3)
+                          ((".#." "...") 0 2 4)
+                          (("..." "..." "...") 0 8 4)
+                          ((".#." "###" "...") 0 8 -1))
+                        (list (list (make-list 32 (make-string 32 #\.)) 0 1023 62)))])
+      (define grid (car entry))
+      (define start (cadr entry))
+      (define goal (caddr entry))
+      (define expected-distance (cadddr entry))
+      (define width (string-length (car grid)))
+      (define-values (out result)
+        (run-text-io program (jsexpr->string (hasheq 'grid grid 'start start 'goal goal))
+                     #:max-steps 5000000))
+      (check-equal? result 'nil)
+      (define data (string->jsexpr out))
+      (check-equal? (hash-ref data 'found) (>= expected-distance 0))
+      (check-equal? (hash-ref data 'distance) expected-distance)
+      (define path (hash-ref data 'path))
+      (if (< expected-distance 0)
+          (check-equal? path '())
+          (begin
+            (check-equal? (length path) (add1 expected-distance))
+            (check-equal? (car path) start)
+            (check-equal? (last path) goal)
+            (check-equal? (length (remove-duplicates path)) (length path))
+            (for ([square (in-list path)])
+              (check-true (and (exact-integer? square) (<= 0 square)
+                               (< square (* width (length grid)))))
+              (check-equal? (string-ref (list-ref grid (quotient square width))
+                                       (remainder square width)) #\.))
+            (for ([from (in-list path)] [to (in-list (cdr path))])
+              (check-equal? (+ (abs (- (quotient from width) (quotient to width)))
+                              (abs (- (remainder from width) (remainder to width))))
+                            1))))))
+
   (test-case "algorithm examples reject malformed input before producing a solution"
-    (for ([entry '(("knight-tour.agc" "not JSON" "{\"size\":0,\"start\":0}"
+    (define maze-program (file->string (build-path examples-dir "maze-bfs.agc")))
+    (for ([grid (list (list (make-string 33 #\.)) (make-list 33 "."))])
+      (define-values (out result)
+        (run-text-io maze-program (jsexpr->string (hasheq 'grid grid 'start 0 'goal 0))
+                     #:max-steps 5000000))
+      (check-equal? result 'nil)
+      (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))
+    (for ([entry '(("maze-bfs.agc" "not JSON" "{\"grid\":[],\"start\":0,\"goal\":0}"
+                   "{\"grid\":[\"\"],\"start\":0,\"goal\":0}"
+                   "{\"grid\":[\"..\",\".\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\",\".x\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\",false],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":true,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":0,\"goal\":1.0}"
+                   "{\"grid\":[\"..\"],\"start\":-1,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":0,\"goal\":2}"
+                   "{\"grid\":[\"#.\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\".#\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":0}")
+                  ("knight-tour.agc" "not JSON" "{\"size\":0,\"start\":0}"
                    "{\"size\":9,\"start\":0}" "{\"size\":8,\"start\":64}"
                    "{\"size\":8,\"start\":-1}" "{\"size\":true,\"start\":0}" "{\"size\":8}")
                   ("traveling-salesman.agc" "not JSON" "{\"distances\":[]}"
