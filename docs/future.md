@@ -84,8 +84,8 @@ primary          = (* …core forms, plus: *)
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
-- **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
-- **Names reserved when each phase starts:** `Socket`, `Listener`, `Process`, `Response`, `TCP`, and `HTTP`. `Fn`, `BDD`, `Json` and `JSON` are already core; typed decoding and schema functions remain planned.
+- **Remaining types:** `Process`. Function values and TCP/TLS/HTTP handles and records are core; their normative APIs live in grammar.md. Opaque handles have no constructor or fields; inspect prints a type marker.
+- **Names reserved when their phase starts:** `Process`. `Fn`, `BDD`, `Json`, `JSON`, `Task`, `TCP`, `TLS`, `HTTP` and networking types are already core; typed decoding and schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int

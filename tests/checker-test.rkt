@@ -30,6 +30,15 @@
   (format "def main() -> Nil\n~a\nend\n" body))
 
 (module+ test
+  (test-case "network handles are opaque and HTTP records and callbacks are checked"
+    (check-ok (string-append
+               "def handler(request: Request, writer: HttpWriter) -> Nil\n  HTTP.respond(writer, 200, [], request.path, 1000)\nend\n"
+               (main-with "  options: HttpServerOptions = HTTP.server_options()\n  server: Result[HttpServer] = HTTP.listen(\"127.0.0.1\", 0, &handler, options)")))
+    (for ([entry '(("  socket = Socket()" CHECK-UNKNOWN-TYPE)
+                   ("  response = Result.unwrap!(HTTP.get(Result.unwrap!(HTTP.client()), \"http://localhost\"))\n  text: String = response.body" CHECK-TYPE-MISMATCH)
+                   ("  client = Result.unwrap!(HTTP.client())\n  JSON.encode(client)" CHECK-NOT-ENCODABLE)
+                   ("  header = Header(name: \"x\", value: 1)" CHECK-TYPE-MISMATCH))])
+      (check-equal? (check-code (main-with (car entry))) (cadr entry))))
   (test-case "function values check references, parameters, returns and BDD handlers"
     (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n")
     (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))

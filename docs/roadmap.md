@@ -20,7 +20,7 @@ tests/
 └── lexer-test.rkt # focused lexer behavior tests
 ```
 
-Keep source positions and token/diagnostic data separate from lexing rules. `main.rkt` remains a thin driver; no general pipeline module is needed until multiple stages are connected. Use Racket's built-in test support; add no dependencies.
+Keep source positions and token/diagnostic data separate from lexing rules. `main.rkt` remains a thin driver; no general pipeline module is needed until multiple stages are connected. Use Racket's built-in test support (`rackunit`) as the test framework; add no third-party libraries or test frameworks. Independent integration counterparts may use Node.js, Python, or curl as described below and in `AGENTS.md`.
 
 ### Work sequence
 
@@ -705,69 +705,51 @@ The second argument is a struct name, not a value, as in `JSON.decode(text, User
 - [ ] Decode nested structs, lists, and maps, with the path in error messages.
 - [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
 
-### Phase 5g: TCP
+### Phase 5g: TCP and TLS
 
-Prerequisite: lightweight tasks and evaluator isolation in phase 5j2, implemented before networking.
+Implemented after the lightweight tasks and evaluator isolation in phase 5j2.
+The normative API is in grammar.md, section "TCP, TLS and HTTP/1.1".
 
-Opaque builtin types `Socket` and `Listener`. Every blocking call takes a timeout in milliseconds, so a program cannot hang an agent forever.
+- [x] Opaque Socket and Listener handles with explicit and automatic cleanup.
+- [x] TCP.connect/listen/accept/send/send_bytes/recv_bytes/read_line/close/close_listener/local_port.
+- [x] Positive full-operation deadlines, independent read/write locks, UTF-8 lines and bounded byte streams.
+- [x] Verified TLS clients and PEM-configured TLS listeners using Racket OpenSSL.
+- [x] Independent Node TCP/TLS counterparts on localhost port zero, required in CI.
+- [x] Add examples/tcp_echo.agc.
 
-```text
-TCP.connect(host: String, port: Int, timeout: Int) -> Result[Socket]
-TCP.listen(port: Int) -> Result[Listener]
-TCP.accept(listener: Listener, timeout: Int) -> Result[Socket]
-TCP.send(socket: Socket, data: String) -> Result[Nil]
-TCP.recv(socket: Socket, max: Int, timeout: Int) -> Result[String]
-TCP.read_line(socket: Socket, timeout: Int) -> Result[String]
-TCP.close(socket: Socket) -> Nil
-TCP.local_port(listener: Listener) -> Int
-```
+### Phase 5h: HTTP/1.1 and HTTPS clients and servers
 
-- `TCP.listen(0)` picks a free port; `TCP.local_port` reports it, so tests can run a client and a listener in one program without a fixed port.
-- Sockets close when the run ends, even after a halting error.
-- Strings are UTF-8. Binary data is out of scope.
+The normative signatures, options and lifetime rules live in grammar.md and
+the self-contained programming reference. HTTP/1.0 is not implemented.
 
-- [ ] Add `Socket` and `Listener` types and the `TCP` module.
-- [ ] Test with a local listener on port 0. No outside network in tests or CI.
-- [ ] Add `examples/tcp_echo.agc`.
-
-### Phase 5h: HTTP and HTTPS
-
-A client only. `Response` is a builtin struct with fields `status: Int`, `body: String`, `headers: Map[String, String]`, so `response.status` works with the existing field access.
-
-```text
-HTTP.get(url: String) -> Result[Response]
-HTTP.post(url: String, body: String, headers: Map[String, String]) -> Result[Response]
-HTTP.request(method: String, url: String, body: String, headers: Map[String, String]) -> Result[Response]
-```
-
-- `http://` and `https://` both work; HTTPS uses Racket's `openssl` and verifies certificates. A bad certificate is an `error`, not a halt.
-- A fixed default timeout, with a limit on the body size.
-- Builtin structs are new: the checker needs to know their fields. Keep it to `Response`.
-- Tests talk to a local HTTP server written in Racket in the test file. A Node fixture (see "Integration fixtures in Node.js") adds an independent server. HTTPS is covered by one test against a local self-signed server that must be rejected.
-
-- [ ] Support builtin structs in the checker (`Response` only).
-- [ ] Add the `HTTP` module over `net/http-client`.
-- [ ] Add `examples/http_get.agc`. CI does not run it, because it needs the network.
+- [x] Builtin Header, Request, Response and client/server options records, plus opaque client/server/body/writer handles.
+- [x] Racket-only HTTP/1.1 framing over TCP/TLS, with fixed lengths, chunked streams, trailers, informational responses and 100 Continue.
+- [x] Explicit client pools, keep-alive, bounded acquisition/operation deadlines and body sizes; no transparent retries or redirects.
+- [x] Progressive uploads and response reads, with context-taking supervised upload producers.
+- [x] Concurrent connection handlers with isolated scopes, shared global budget and explicit server wait/close.
+- [x] Verified HTTPS in both directions; local test CA, rejection without trust and hostname validation.
+- [x] Independent Node clients/servers, actual persistent-connection checks, full-duplex progress, invalid framing and cleanup checks.
+- [x] Add examples/http_get.agc and examples/http_server.agc. Network examples require a local counterpart; integration tests exercise the same APIs through the CLI.
 
 ### Open decisions
 
 - Whether `?` and `!` become part of function names for all functions or only for builtin modules. Recommended: all functions, as in Ruby and Elixir.
 - ~~Whether `Map.has` and `Map.len` get renamed to `Map.has_key?` and `Map.size`.~~ Decided in 5c: renamed, together with `List.len` → `List.size`.
-- A capability flag for the CLI (`--allow-net`, `--allow-read`): agents run unknown programs, and network access should be opt-in. Decide before 5g.
+- Network access follows the existing I/O model without a capability flag. A future filesystem capability policy remains separate.
 
-### Integration fixtures in Node.js (optional layer)
+### Independent integration fixtures
 
-The Racket-only tests stay the base: they are fast and need nothing installed. On top of them, small Node.js fixtures check interoperability, because a server written independently of the client catches mistakes that both sides would share (chunked bodies, header case, JSON-RPC line framing).
+TCP/HTTP interoperability tests use a protocol implementation independent of the Agentica component under test, so a shared client/server bug cannot satisfy both sides of the test. These tests are required in CI. Racket-only tests may complement them; they are not a required base layer. Keep `rackunit` as the test framework, with Node.js, Python, or curl as counterpart tools.
 
-- Fixtures live in `tests/fixtures/*.js` and use only Node's standard library (`http`, `https`, `net`, `readline`). No `npm install`, no `package.json`.
-- A fixture listens on port 0 and prints the port as its first line of standard output. The Racket test starts it with `racket/subprocess`, reads the port, runs the Agentica program against it, and kills the process at the end.
-- The test finds Node with `find-executable-path` and skips itself, with a visible message, when Node is missing. `raco test tests/` must pass without Node.
-- CI uses the Node that ships on the runner. Add no setup step unless the version causes trouble.
+- Fixtures live in `tests/fixtures/` and use standard libraries only: for example Node's `http`, `https`, `net`, and `readline`, or Python's HTTP and socket modules. Add no third-party libraries or test frameworks.
+- Tests stay hermetic: localhost, dynamically assigned ports (port 0), and no external services. A server fixture reports its assigned port after listening; the Racket test starts it with `racket/subprocess`, waits for readiness, runs the Agentica program against it, and cleans up processes, ports, and resources on every exit. Client fixtures wait for the Agentica server's readiness in the same way.
+- Find the chosen tool with `find-executable-path`. Local runs may skip with a visible message when it is missing; CI must fail rather than skip.
+- CI installs Node 24 for the selected TCP/TLS/HTTP/HTTPS standard-library fixtures; no npm packages are needed.
 - The fixtures are tests only. They are not part of the language and add no Racket dependency.
 - A test against the official MCP SDK needs `npx` and the network. Keep it manual and out of CI.
 - An `.agc` example that starts a fixture with `Process.spawn` (5l) is allowed as a demo, but CI does not run it.
 
-Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a self-signed certificate to reject), 5l (a child process to spawn), 5m (a hand-written stdio MCP server to run the Agentica client against, and an Agentica server checked by a Node client).
+Where it applies: 5g (TCP counterpart), 5h (HTTP/HTTPS counterparts, including a self-signed certificate to reject), 5l (a child process to spawn), 5m (an independent stdio MCP server to run the Agentica client against, and an Agentica server checked by an independent client).
 
 ### Checklist for phases 5c to 5h
 
@@ -781,8 +763,8 @@ Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a s
 - [x] Phase 5f: JSON.
 - [x] Stdio transport primitives: counted bytes, strict UTF-8 decoding, flush, and byte-oriented EOF.
 - [ ] Phase 5f2: typed JSON decoding.
-- [ ] Phase 5g: TCP.
-- [ ] Phase 5h: HTTP and HTTPS.
+- [x] Phase 5g: TCP and TLS.
+- [x] Phase 5h: HTTP/1.1 and HTTPS clients and servers.
 
 ## Phases 5i to 5m: MCP support
 
@@ -882,7 +864,7 @@ Process.close(p: Process) -> Nil
 - [ ] `examples/mcp_server.agc`: a stdio server that answers `initialize`, `tools/list`, and `tools/call` for one or two tools. Logs go to standard error with `IO.warn`, so standard output carries only protocol messages.
 - [ ] `examples/mcp_client.agc`: spawns the server above, initializes, lists tools, and calls one.
 - [ ] A test that runs the client against the server and checks the result.
-- [ ] Node fixtures (see "Integration fixtures in Node.js"): the Agentica client against a Node stdio server, and a Node client against the Agentica server. Skipped when Node is missing.
+- [ ] Independent fixtures (see "Independent integration fixtures"): the Agentica client against an independent stdio server, and an independent client against the Agentica server. Required in CI; local runs may visibly skip when the chosen tool is missing.
 
 ### Phase 5n: List operations and list building
 
@@ -903,7 +885,7 @@ Process.close(p: Process) -> Nil
 
 ### Later, for MCP
 
-- HTTP server and streaming responses (SSE) for Streamable HTTP, after 5h.
+- A dedicated SSE and Streamable HTTP API remains future work; HTTP/1.1 servers and progressive request/response bodies are available from 5h.
 - Task concurrency is available for handling notifications while a client waits. Channels and `Process.poll_line` remain proposed in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
 - `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
 

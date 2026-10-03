@@ -1,6 +1,6 @@
 #lang racket
 
-(require "builtins.rkt"
+(require "builtins.rkt" "builtin-types.rkt"
          "ast.rkt"
          "diagnostic.rkt"
          "source.rkt")
@@ -9,7 +9,9 @@
 
 (define int-max (sub1 (expt 2 63)))
 
-(define reserved-type-names '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task"))
+(define reserved-type-names
+  (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "TCP" "TLS" "HTTP")
+          (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
@@ -89,7 +91,7 @@
     [else #f]))
 
 (define (check program)
-  (define structs (make-hash))
+  (define structs (hash-copy builtin-records))
   (define functions (make-hash))
   (define scopes '())
   (define current-result 'Nil)
@@ -124,6 +126,7 @@
         [(and (member name '("Int" "Float" "Bool" "String" "Nil" "Json"))
               (null? arguments))
          (string->symbol name)]
+        [(and (member (string->symbol name) opaque-types) (null? arguments)) (string->symbol name)]
         [(and (string=? name "Result") (= (length arguments) 1))
          (list 'Result (resolve-type (car arguments)))]
         [(and (string=? name "Task") (= (length arguments) 1))
@@ -439,6 +442,16 @@
         (unless (result-type? type) (mismatch! '(Result T) type (node-span (car arguments))))
         type)
       (case (builtin-rule selected)
+        [(http-producer)
+         (for ([argument (in-list (take arguments 5))] [parameter (in-list (take parameters 5))])
+           (check-expression argument (cadr parameter)))
+         (define callback (check-expression (list-ref arguments 5) #f))
+         (unless (and (list? callback) (= (length callback) 4) (eq? (car callback) 'Fn)
+                      (equal? (caddr callback) 'HttpWriter) (equal? (cadddr callback) '(Result Nil)))
+           (bail 'CHECK-TYPE-MISMATCH "producer must have type Fn[A, HttpWriter, Result[Nil]]"
+                 (node-span (list-ref arguments 5))))
+         (check-expression (list-ref arguments 6) (cadr callback))
+         '(Result (Struct "Response"))]
         [(task-spawn)
          (define callback (check-expression (car arguments) #f))
          (unless (and (list? callback) (= (length callback) 3) (eq? (car callback) 'Fn))
