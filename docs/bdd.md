@@ -12,7 +12,7 @@ dist/agentica --ai test tests/bdd/specs/json-lines.feature
 make test-bdd
 ```
 
-`make exe` builds the CLI. You can also run `racket src/main.rkt test tests/bdd/specs/ --steps tests/bdd/handlers.agc` directly from source. `make test` includes local process integration tests and supports parallel workers with `JOBS=N`; `make test-bdd` builds and checks the compiled CLI against the feature suite. Running `agentica test` does not install or build anything.
+`make exe` builds the CLI. You can also run `racket src/main.rkt test tests/bdd/specs/ --steps tests/bdd/handlers.agc` directly from source. `make test` compiles the CLI modules before running local process integration tests and supports parallel workers with `JOBS=N`; this keeps initial module compilation outside BDD response deadlines. `make test-bdd` builds and checks the compiled CLI against the feature suite. Running `agentica test` does not install or build anything.
 
 With no paths, `agentica test` searches `specs/`. Directories are searched recursively for `.feature` files, with duplicate paths removed and files sorted. Explicit files are also accepted. `--steps FILE` is repeatable and can precede `test` or follow it.
 
