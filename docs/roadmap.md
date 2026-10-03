@@ -2,6 +2,31 @@
 
 This roadmap turns the core specification in [`grammar.md`](grammar.md) into a usable interpreter. Planned syntax lives in [`future.md`](future.md) until its phase lands. Keep every phase focused on the core in sections 4–6 until the prototype can run and diagnose the examples in sections 7–8. Enums and other extensions stay out of the initial milestone.
 
+## Current implementation order
+
+The core interpreter, Results, JSON primitives, function values, lightweight
+tasks, BDD, and TCP/TLS/HTTP are implemented. The next priority is general
+programming: useful standalone programs first, larger applications next, then
+MCP. Historical phase numbers below remain stable; this order governs pending
+work rather than their numeric order.
+
+| Order | Next work | Outcome |
+|---|---|---|
+| 1 | Files and paths | Process local files and directories |
+| 2 | Processes (5l) | Run tools and communicate with child programs |
+| 3 | Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
+| 4 | Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
+| 5 | Modules and imports | Split larger programs across files |
+| 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+
+After steps 1–3, target everyday scripts and automation. After steps 4–6,
+target larger general-purpose programs. Keep diagnostics, behavior tests,
+grammar, and the self-contained programming reference part of every phase.
+Specify new APIs in `future.md` before implementation; move them into the
+grammar only when they land. Detailed pending work appears after the completed
+foundations below.
+
 ## Phase 1: Source handling and lexer
 
 Build only the first working slice: `.agc` text in, located tokens (or a located lexical diagnostic) out. Keep `src/` flat and create modules when this phase needs them; do not add empty parser, checker, evaluator, or pipeline placeholders.
@@ -507,9 +532,12 @@ System.exit(code: Int) -> Nil
 - [x] Type and evaluate the functions above.
 - [x] Add `examples/echo.agc` and a test that feeds input through a string port.
 
-### Revised order (after the static review of `cd33a26`)
+### Historical order (after the static review of `cd33a26`)
 
 Measure before growing the language. The order from here is: 5d2 (consistency fixes) → 5d3 (agent API) → 6a (first agent evaluation) → 5e with `try` (Result and propagation together) → faster maps → 5f (JSON) → 6b (second evaluation) → the rest (5f2, 5g, 5h, 5i, 5j, 5l, 5m). Each later phase should answer a problem seen in 6a or 6b.
+
+This records the earlier sequence. The current implementation order above
+supersedes its ordering of remaining phases.
 
 ### Phase 5d2: Consistency fixes (P0)
 
@@ -687,24 +715,6 @@ Implemented in `src/json.rkt` (opaque wrapper and strict input guards), the buil
 - [x] Keep `IO.eof?` as a blocking, non-consuming EOF check using peek-byte, not a readiness poll or UTF-8 character peek. Explicit stdout flush does not close ports or flush stderr; blocking stdio still has no timeout.
 - [x] Test byte/character boundaries, invalid counts/UTF-8, mixed text/byte reads, and live pipe replies while stdin stays open. The pipe test fails with a no-op flush or a peek-char EOF mutation; both were restored and rechecked. Update grammar and both skills.
 
-### Phase 5f2: Typed JSON decoding
-
-```text
-JSON.decode(s: String, type: T) -> Result[T]
-```
-
-The second argument is a struct name, not a value, as in `JSON.decode(text, User)`. This is similar to Go's `json.Unmarshal` into a typed target, or Elixir's `struct(User, map)`. The checker types the call as `Result[User]`, and the evaluator walks the declared fields.
-
-- The target type may contain only `Int`, `Float`, `Bool`, `String`, `List[T]`, `Map[String, V]`, and other structs. Anything else is `CHECK-NOT-DECODABLE`, reported before the program runs.
-- Fields map to JSON keys by name. Struct tags such as Go's `json:"user_name"` are out of scope.
-- A missing field or a wrong type is `error("age: expected Int, found String")`, with the path to the field. Extra keys are ignored.
-- A JSON integer decodes to `Float` when the field is `Float`, but a JSON float never decodes to `Int`.
-
-- [ ] Parse a bare type name as an expression (spec in `future.md`; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
-- [ ] Check that the target type is decodable.
-- [ ] Decode nested structs, lists, and maps, with the path in error messages.
-- [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
-
 ### Phase 5g: TCP and TLS
 
 Implemented after the lightweight tasks and evaluator isolation in phase 5j2.
@@ -766,29 +776,7 @@ Where it applies: 5g (TCP counterpart), 5h (HTTP/HTTPS counterparts, including a
 - [x] Phase 5g: TCP and TLS.
 - [x] Phase 5h: HTTP/1.1 and HTTPS clients and servers.
 
-## Phases 5i to 5m: MCP support
-
-Goal: write an MCP client and an MCP server in Agentica. MCP is JSON-RPC 2.0 over stdio (one JSON message per line) or Streamable HTTP. Do stdio first. The first client and server are plain example programs, which also give Phase 6 real material. Add `require` or modules only if those examples get too big to read.
-
-### Phase 5i: JSON builders and schemas
-
-A JSON-RPC reply needs JSON built at run time, not only read.
-
-```text
-JSON.object(fields: Map[String, Json]) -> Json
-JSON.array(items: List[Json]) -> Json
-JSON.from(value: T) -> Json
-JSON.null() -> Json
-JSON.null?(j: Json) -> Bool
-JSON.schema(type: T) -> Json
-```
-
-- `JSON.from` accepts the same types as `JSON.encode`.
-- `JSON.schema(AddArgs)` takes a struct name, as in `JSON.decode`, and returns its JSON Schema (`type`, `properties`, `required`). MCP tools declare an `inputSchema`, so a tool is a struct plus a function.
-- Same decodable-type rule as 5f2: `CHECK-NOT-DECODABLE` otherwise.
-
-- [ ] Add the functions above and a focused test for each stage.
-- [ ] Add a test that `JSON.schema` output matches a fixed string for one struct.
+## Completed foundations for general programming and MCP
 
 ### Phase 5j: Function values
 
@@ -840,33 +828,7 @@ Task.sleep(milliseconds: Int) -> Nil
 
 Moved into Phase 5e: `try` ships together with `Result`. The decision is made: a `try` expression that returns the error from the enclosing function, which must return `Result[...]`. Nothing is left to do here.
 
-### Phase 5l: Process spawning
-
-An MCP client for stdio servers has to launch the server and use its stdin and stdout.
-
-```text
-Process.spawn(command: String, args: List[String]) -> Result[Process]
-Process.send(p: Process, data: String) -> Result[Nil]
-Process.read_line(p: Process, timeout: Int) -> Result[String]
-Process.close(p: Process) -> Nil
-```
-
-- Opaque `Process` type. Every blocking call has a timeout, as in 5g.
-- Processes are killed when the run ends.
-- Needs the capability flag `--allow-run`, off by default (see Open decisions above).
-- The child's standard error goes to the parent's standard error.
-
-- [ ] Add the `Process` type and module over `racket/subprocess`.
-- [ ] Test with a small child program, not an outside tool.
-
-### Phase 5m: MCP examples
-
-- [ ] `examples/mcp_server.agc`: a stdio server that answers `initialize`, `tools/list`, and `tools/call` for one or two tools. Logs go to standard error with `IO.warn`, so standard output carries only protocol messages.
-- [ ] `examples/mcp_client.agc`: spawns the server above, initializes, lists tools, and calls one.
-- [ ] A test that runs the client against the server and checks the result.
-- [ ] Independent fixtures (see "Independent integration fixtures"): the Agentica client against an independent stdio server, and an independent client against the Agentica server. Required in CI; local runs may visibly skip when the chosen tool is missing.
-
-### Phase 5n: List operations and list building
+### Phase 5n: Completed collection primitives
 
 6a exposed the lack of list construction and sorting. The design is in `future.md` section 5. Primitive operations are now implemented through the builtins catalog (5e); only operations taking callbacks depend on 5j (function values). `List` is the chosen module, keeping `List.size` and avoiding an `Enum` module beside the planned `enum` keyword.
 
@@ -876,27 +838,135 @@ Process.close(p: Process) -> Nil
 - [x] Algorithm examples and functional tests: open knight tours with degree-ordered backtracking; exact small traveling-salesman circuits with cost pruning. Validate complete paths and optimal costs rather than a particular route.
 - [x] Map-based BFS maze example: distance and predecessor maps, numeric-keyed queue with deletion, and path reconstruction. Functional tests validate legal shortest paths, cycles, row boundaries, unreachable goals, start equal to goal, malformed inputs, and 32×32 grids. Map.delete remains O(n) for insertion-order maintenance.
 - [x] Update grammar, programming reference, and development skill for these operations.
+
+## Next work: General programming before MCP
+
+### 1. Files and paths
+
+Make local data processing possible before adding more protocol-specific APIs.
+
+- [ ] Specify file and path APIs, error behavior, byte limits, and the filesystem capability policy in `future.md`.
+- [ ] Read and write text and bytes, including explicit overwrite/append behavior and strict UTF-8 decoding.
+- [ ] List directories, create directories, inspect file metadata, and join/resolve paths.
+- [ ] Cover failures and resource cleanup with temporary-directory integration tests; add a small file-processing example.
+
+### 2. Processes (phase 5l)
+
+Run existing tools for automation, then reuse the same API for stdio MCP clients.
+
+```text
+Process.spawn(command: String, args: List[String]) -> Result[Process]
+Process.send(p: Process, data: String) -> Result[Nil]
+Process.read_line(p: Process, timeout: Int) -> Result[String]
+Process.close(p: Process) -> Nil
+```
+
+- Opaque `Process` type. Every blocking call has a timeout, as in 5g; finalize the signatures before implementation.
+- Processes are killed when the run ends.
+- Retain the planned capability flag `--allow-run`, off by default.
+- The child's standard error goes to the parent's standard error.
+
+- [ ] Specify exit-code retrieval, stdin closure, output limits, and deadline/cleanup behavior alongside spawn/send/read/close.
+- [ ] Add the `Process` type and module over `racket/subprocess`, without shell interpolation of command arguments.
+- [ ] Test with a small local child program, including nonzero exits, blocked I/O, cancellation and cleanup.
+- [ ] Add an automation example that runs a tool and checks its result.
+
+### 3. Everyday library (remaining phase 5n and supporting utilities)
+
+Function values are already available, so collection callbacks need no new
+closure or scheduler feature. Keep names and argument order consistent with
+the existing builtin library.
+
 - [ ] `List.concat`, `take`, `drop`, `at`.
 - [ ] Settle `reduce` argument order before implementing callbacks.
-- [ ] `List.map`, `filter`, `reduce` (after 5j).
-- [ ] `List.sort`, `sort_by` (`sort_by` after 5j).
-- [ ] Decide which of the other gaps in `future.md` ("Other gaps for code-challenge programs": math, conversions, strings, sets, input, performance) join this phase, after a real task needs them.
+- [ ] `List.map`, `filter`, `reduce`.
+- [ ] `List.sort`, `sort_by`.
+- [ ] Add string search/replacement and missing numeric conversions needed by representative scripts.
+- [ ] Specify and add basic time and randomness APIs; define clock, seed and bounds behavior before implementation.
+- [ ] Decide which other gaps in `future.md` ("Other gaps for code-challenge programs": math, conversions, strings, sets, input, performance) belong here after a real task needs them.
 - [ ] Add harder 6b model-evaluation tasks that need sorting.
 
-### Later, for MCP
+**Milestone:** useful everyday scripts and automation using files, processes
+and the basic library.
 
-- A dedicated SSE and Streamable HTTP API remains future work; HTTP/1.1 servers and progressive request/response bodies are available from 5h.
-- Task concurrency is available for handling notifications while a client waits. Channels and `Process.poll_line` remain proposed in [`future.md` section 8](future.md#8-concurrency-and-parallelism).
-- `Time`, `Random`, UUID, Base64, and a Ruby-style `Regex`.
+### 4. Typed JSON, builders and schemas
 
-### Checklist for phases 5i to 5m
+#### Phase 5f2: Typed JSON decoding
 
-- [ ] Phase 5i: JSON builders and schemas.
-- [ ] Phase 5j: function values.
-- [x] Phase 5k: error propagation (merged into 5e).
-- [ ] Phase 5l: process spawning.
-- [ ] Phase 5m: MCP client and server examples.
-- [ ] Phase 5n: remaining `List` operations and callbacks.
+```text
+JSON.decode(s: String, type: T) -> Result[T]
+```
+
+The second argument is a struct name, not a value, as in `JSON.decode(text, User)`. The checker types the call as `Result[User]`, and the evaluator walks the declared fields.
+
+- The target type may contain only `Int`, `Float`, `Bool`, `String`, `List[T]`, `Map[String, V]`, and other structs. Anything else is `CHECK-NOT-DECODABLE`, reported before the program runs.
+- Fields map to JSON keys by name. Struct tags such as Go's `json:"user_name"` are out of scope.
+- A missing field or a wrong type is `error("age: expected Int, found String")`, with the path to the field. Extra keys are ignored.
+- A JSON integer decodes to `Float` when the field is `Float`, but a JSON float never decodes to `Int`.
+
+- [ ] Parse a bare type name as an expression (spec in `future.md`; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
+- [ ] Check that the target type is decodable.
+- [ ] Decode nested structs, lists, and maps, with the path in error messages.
+- [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
+
+#### Phase 5i: JSON builders and schemas
+
+Construct structured output at run time, including future JSON-RPC replies.
+
+```text
+JSON.object(fields: Map[String, Json]) -> Json
+JSON.array(items: List[Json]) -> Json
+JSON.from(value: T) -> Json
+JSON.null() -> Json
+JSON.null?(j: Json) -> Bool
+JSON.schema(type: T) -> Json
+```
+
+- `JSON.from` accepts the same types as `JSON.encode`.
+- `JSON.schema(AddArgs)` takes a struct name, as in `JSON.decode`, and returns its JSON Schema (`type`, `properties`, `required`). MCP tools declare an `inputSchema`, so a tool is a struct plus a function.
+- Same decodable-type rule as 5f2: `CHECK-NOT-DECODABLE` otherwise.
+
+- [ ] Add the functions above and focused behavior tests.
+- [ ] Verify `JSON.schema` output against an independent expected schema for one struct.
+
+### 5. Modules and imports
+
+Split larger programs across files with explicit exports and predictable
+resolution. This is planned language syntax, not an extension to implement
+without a specification.
+
+- [ ] Define import/export syntax, module naming, path resolution and the entrypoint rule in `future.md`.
+- [ ] Decide visibility, duplicate-name handling, import cycles and diagnostic spans across files.
+- [ ] Implement loading, checking and execution without resetting the execution's shared budget or resource ownership.
+- [ ] Test a program spanning multiple files and controlled diagnostics for missing imports, cycles and private names.
+
+### 6. Real applications
+
+Use complete programs to expose missing APIs before broadening the language.
+
+- [ ] Build a file-processing CLI with useful error handling and structured output.
+- [ ] Build a tool-running automation script that checks exits and cleans up children.
+- [ ] Build a small HTTP service using typed JSON and modules.
+- [ ] Add functional tests at each application's boundary and use Phase 6 agent evaluations to identify the next gaps.
+
+**Milestone:** practical larger general-purpose programs, demonstrated by
+these applications rather than a feature checklist alone.
+
+### 7. MCP examples (phase 5m), then Streamable HTTP
+
+Build stdio examples first on the file/process/JSON/module foundations.
+
+- [ ] `examples/mcp_server.agc`: a stdio server that answers `initialize`, `tools/list`, and `tools/call` for one or two tools. Logs go to standard error with `IO.warn`, so standard output carries only protocol messages.
+- [ ] `examples/mcp_client.agc`: spawns the server above, initializes, lists tools, and calls one.
+- [ ] A test that runs the client against the server and checks the result.
+- [ ] Independent fixtures (see "Independent integration fixtures"): the Agentica client against an independent stdio server, and an independent client against the Agentica server. Required in CI; local runs may visibly skip when the chosen tool is missing.
+- [ ] Specify dedicated SSE and Streamable HTTP behavior, then implement it over the existing HTTP/1.1 streaming APIs with independent interoperability tests.
+
+Task concurrency is already available for handling notifications while a
+client waits. Channels and `Process.poll_line` remain proposed in
+[`future.md` section 8](future.md#8-concurrency-and-parallelism). UUID, Base64
+and a Ruby-style `Regex` remain later utilities unless a real application
+establishes an earlier need.
 
 ## Phase 6: Validate the language design
 
@@ -921,7 +991,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 - [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
 - [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
-- [ ] Define normative designs for modules, interpolation, error propagation, generics, methods, FFI, async, or actors before implementing them.
+- [ ] Define normative designs for interpolation, generics, methods, FFI, async, or actors before implementing them. Modules/imports have an explicit place in the current implementation order; error propagation is already implemented in 5e.
 - [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels and CPU parallelism remain unscheduled; [`future.md` section 8](future.md#8-concurrency-and-parallelism) records their remaining decisions.
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
