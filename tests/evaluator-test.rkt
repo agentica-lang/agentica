@@ -295,6 +295,9 @@
         ("Map.keys" "Map.keys({\"k\": 1})" "[\"k\"]\n")
         ("Map.size" "Map.size({\"k\": 1})" "1\n")
         ("Map.put" "Map.put({\"k\": 1}, \"k\", 2)" "{\"k\": 2}\n")
+        ("Map.get" "Map.get({\"k\": 1}, \"k\")" "ok(1)\n")
+        ("Map.delete" "Map.delete({\"k\": 1}, \"k\")" "{}\n")
+        ("Map.values" "Map.values({\"k\": 1})" "[1]\n")
         ("JSON.parse" "JSON.parse(\"null\")" "ok(<Json>)\n")
         ("JSON.encode" "JSON.encode(7)" "\"7\"\n")
         ("JSON.get" "JSON.get(Result.unwrap!(JSON.parse(\"{\\\"k\\\": false}\")), \"k\")" "ok(<Json>)\n")
@@ -305,6 +308,10 @@
         ("JSON.bool" "JSON.bool(Result.unwrap!(JSON.parse(\"false\")))" "ok(false)\n")
         ("JSON.list" "JSON.list(Result.unwrap!(JSON.parse(\"[null,false]\")))" "ok([<Json>, <Json>])\n")
         ("List.size" "List.size([1, 2])" "2\n")
+        ("List.append" "List.append([1], 2)" "[1, 2]\n")
+        ("List.set" "List.set([1, 2], 1, 3)" "[1, 3]\n")
+        ("List.repeat" "List.repeat(false, 2)" "[false, false]\n")
+        ("List.reverse" "List.reverse([1, 2])" "[2, 1]\n")
         ("String.length" "String.length(\"ñ😀\")" "2\n")
         ("String.upcase" "String.upcase(\"a\")" "\"A\"\n")
         ("String.downcase" "String.downcase(\"A\")" "\"a\"\n")
@@ -340,6 +347,49 @@
       (if (equal? name "System.exit")
           (check-equal? (exit-code-code result) 0)
           (check-equal? result 'nil name))))
+
+  (test-case "collection operations preserve originals, order, and present false/nil values"
+    (check-equal?
+     (output-of
+      (string-append
+       "def fallback() -> Int\n  puts(\"default\")\n  return 9\nend\n"
+       (main-with
+        (string-append
+         "  xs = [1, 2]\n  ys = List.set(xs, 0, 3)\n"
+         "  IO.inspect(xs)\n  IO.inspect(List.append(ys, 4))\n"
+         "  nested = List.repeat(xs, 2)\n  IO.inspect(List.set(nested, 1, ys))\n"
+         "  IO.inspect(nested)\n  IO.inspect(List.reverse(xs))\n"
+         "  empty: List[Int] = List.repeat(7, 0)\n  IO.inspect(empty)\n"
+         "  IO.inspect(List.size(List.repeat(nil, 1048576)))\n"
+         "  m = {\"a\": 1, \"b\": 2, \"c\": 3}\n"
+         "  deleted = Map.delete(m, \"b\")\n  absent = Map.delete(deleted, \"missing\")\n"
+         "  replaced = Map.put(absent, \"a\", 7)\n  added = Map.put(replaced, \"b\", 8)\n"
+         "  IO.inspect(Map.values(m))\n  IO.inspect(Map.keys(added))\n"
+         "  IO.inspect(Map.values(added))\n  IO.inspect(Map.size(deleted))\n"
+         "  IO.inspect(Map.get(m, \"a\", fallback()))\n  IO.inspect(Map.get(m, \"missing\", 9))\n"
+         "  IO.inspect(Result.ok?(Map.get(m, \"missing\")))\n"
+         "  IO.inspect(Map.get({\"f\": false}, \"f\"))\n"
+         "  IO.inspect(Map.get({\"n\": nil}, \"n\"))\n"
+         "  IO.inspect(Map.get({\"f\": false}, \"f\", true))\n"
+         "  IO.inspect(Map.get({\"n\": nil}, \"n\", nil))\n"
+         "  IO.inspect(Map.delete(Map.delete(m, \"a\"), \"b\"))"))))
+     (string-append
+      "[1, 2]\n[3, 2, 4]\n[[1, 2], [3, 2]]\n[[1, 2], [1, 2]]\n[2, 1]\n[]\n1048576\n"
+      "[1, 2, 3]\n[\"a\", \"c\", \"b\"]\n[7, 3, 8]\n2\ndefault\n1\n9\nfalse\n"
+      "ok(false)\nok(nil)\nfalse\nnil\n{\"c\": 3}\n")))
+
+  (test-case "list updates and allocations reject invalid arguments at their spans"
+    (for ([entry '(("List.set([1], -1, 2)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.set([1], 1, 2)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.set([], 0, 2)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.repeat(1, -1)" RUNTIME-INVALID-COUNT)
+                   ("List.repeat(1, 1048577)" RUNTIME-INVALID-COUNT))])
+      (define problem (diagnostic-of (main-with (string-append "  x = " (car entry)))))
+      (check-equal? (diagnostic-code problem) (cadr entry))
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
+      (define prefix (car (string-split (car entry) ", ")))
+      (check-equal? (source-position-column (source-span-start (diagnostic-span problem)))
+                    (+ 9 (string-length prefix)))))
 
   (test-case "JSON parsing requires one valid finite value and preserves null and false"
     (for ([text '("" " \r\n" "true false" "{}x" "nullx" "01" "+1" "1."

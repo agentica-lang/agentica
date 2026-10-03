@@ -25,7 +25,7 @@
                 (if (diagnostic? checked) checked (evaluate checked)))))))
   (values output result))
 
-(define (run-text-io text input)
+(define (run-text-io text input #:max-steps [max-steps #f])
   (define result #f)
   (define output
     (with-output-to-string
@@ -36,7 +36,7 @@
                      [checked (if (diagnostic? parsed) parsed (check parsed))])
                 (if (diagnostic? checked)
                     checked
-                    (evaluate checked #:in (open-input-string input))))))))
+                    (evaluate checked #:in (open-input-string input) #:max-steps max-steps)))))))
   (values output result))
 
 (define (code-of body)
@@ -96,6 +96,64 @@
       (check-equal? result 'nil (car entry))
       (check-equal? output (caddr entry) (car entry))))
 
+  (test-case "knight tours cover every square exactly once with legal moves"
+    (define program (file->string (build-path examples-dir "knight-tour.agc")))
+    (for ([entry '((1 0) (5 0) (8 0) (8 27))])
+      (define size (car entry))
+      (define start (cadr entry))
+      (define-values (out result)
+        (run-text-io program (jsexpr->string (hasheq 'size size 'start start)) #:max-steps 5000000))
+      (check-equal? result 'nil)
+      (define data (string->jsexpr out))
+      (check-true (hash-ref data 'found))
+      (define path (hash-ref data 'path))
+      (check-equal? (car path) start)
+      (check-equal? (sort path <) (range (* size size)))
+      (for ([from (in-list path)] [to (in-list (cdr path))])
+        (define dx (abs (- (remainder from size) (remainder to size))))
+        (define dy (abs (- (quotient from size) (quotient to size))))
+        (check-equal? (sort (list dx dy) <) '(1 2))))
+    (define-values (out result)
+      (run-text-io program "{\"size\":3,\"start\":0}" #:max-steps 5000000))
+    (check-equal? result 'nil)
+    (check-equal? (string->jsexpr out) (hasheq 'found #f 'path '())))
+
+  (test-case "traveling salesman returns an optimal complete circuit"
+    (define program (file->string (build-path examples-dir "traveling-salesman.agc")))
+    (for ([entry '((((0)) 0)
+                   (((0 10 15 20) (10 0 35 25) (15 35 0 30) (20 25 30 0)) 80)
+                   (((0 1 9) (9 0 1) (1 9 0)) 3)
+                   (((0 1 2 2) (1 0 1 2) (2 1 0 100) (2 2 100 0)) 7)
+                   (((0 0 0) (0 0 0) (0 0 0)) 0)
+                   (((0 1000000000) (1000000000 0)) 2000000000))])
+      (define matrix (car entry))
+      (define-values (out result)
+        (run-text-io program (jsexpr->string (hasheq 'distances matrix)) #:max-steps 5000000))
+      (check-equal? result 'nil)
+      (define data (string->jsexpr out))
+      (define route (hash-ref data 'route))
+      (check-equal? (hash-ref data 'cost) (cadr entry))
+      (check-equal? (car route) 0)
+      (check-equal? (last route) 0)
+      (check-equal? (sort (drop-right route 1) <) (range (length matrix)))
+      (check-equal? (for/sum ([from (in-list route)] [to (in-list (cdr route))])
+                      (list-ref (list-ref matrix from) to))
+                    (hash-ref data 'cost))))
+
+  (test-case "algorithm examples reject malformed input before producing a solution"
+    (for ([entry '(("knight-tour.agc" "not JSON" "{\"size\":0,\"start\":0}"
+                   "{\"size\":9,\"start\":0}" "{\"size\":8,\"start\":64}"
+                   "{\"size\":8,\"start\":-1}" "{\"size\":true,\"start\":0}" "{\"size\":8}")
+                  ("traveling-salesman.agc" "not JSON" "{\"distances\":[]}"
+                   "{\"distances\":[[0,1],[1]]}" "{\"distances\":[[1]]}"
+                   "{\"distances\":[[0,-1],[1,0]]}" "{\"distances\":[[0,1],[false,0]]}"
+                   "{\"distances\":[[0,1],[1,0.0]]}" "{\"distances\":[[0,1000000001],[1,0]]}"))])
+      (define program (file->string (build-path examples-dir (car entry))))
+      (for ([input (in-list (cdr entry))])
+        (define-values (out result) (run-text-io program input #:max-steps 5000000))
+        (check-equal? result 'nil)
+        (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))))
+
   (test-case "stdio peers receive flushed replies while stdin stays open"
     (define file (make-temporary-file "agentica-stdio~a.agc"))
     (display-to-file
@@ -154,6 +212,16 @@
     (check-equal? (hash-ref data 'effects) '())
     (check-equal? (cli "--json" "help" "String.to_int") help)
     (check-equal? (cli "--max-steps" "10" "help" "String.to_int" "--json") help)
+    (define get-help (cli "help" "Map.get" "--json"))
+    (check-equal? (car get-help) 0)
+    (check-equal? (caddr get-help) "")
+    (define variants (hash-ref (string->jsexpr (cadr get-help)) 'overloads))
+    (check-equal? (map (lambda (variant) (hash-ref variant 'arity)) variants) '(2 3))
+    (check-equal? (map (lambda (variant) (hash-ref variant 'result)) variants) '("Result[V]" "V"))
+    (define get-text (cli "help" "Map.get"))
+    (check-equal? (car get-text) 0)
+    (check-regexp-match #rx"Map.get\\(map: Map\\[K, V\\], key: K\\) -> Result\\[V\\]" (cadr get-text))
+    (check-regexp-match #rx"default: V\\) -> V" (cadr get-text))
     (define unknown (cli "help" "String.to_it" "--json"))
     (check-equal? (car unknown) 2)
     (check-regexp-match #rx"String.to_int" (caddr unknown)))
@@ -163,7 +231,8 @@
     (dynamic-wind
       void
       (lambda ()
-        (for ([entry '(("  r = error(\"bad\")" "CHECK-RESULT-TYPE")
+        (for ([entry '(("  x = List.repeat(1, -1)" "RUNTIME-INVALID-COUNT")
+                       ("  r = error(\"bad\")" "CHECK-RESULT-TYPE")
                        ("  r = try ok(1)" "CHECK-TRY-CONTEXT")
                        ("  x = JSON.encode({1: true})" "CHECK-NOT-ENCODABLE")
                        ("  large = 1.0\n  i = 0\n  while i < 40\n    large = large * 1000000000.0\n    i = i + 1\n  end\n  x = JSON.encode(large)" "RUNTIME-JSON-ENCODE")

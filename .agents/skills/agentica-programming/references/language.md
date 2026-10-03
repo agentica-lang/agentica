@@ -124,7 +124,15 @@ Map.has_key?(map: Map[K, V], key: K) -> Bool
 Map.keys(map: Map[K, V]) -> List[K]            # insertion order
 Map.size(map: Map[K, V]) -> Int
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
+Map.get(map: Map[K, V], key: K) -> Result[V]
+Map.get(map: Map[K, V], key: K, default: V) -> V
+Map.delete(map: Map[K, V], key: K) -> Map[K, V]
+Map.values(map: Map[K, V]) -> List[V]
 List.size(list: List[T]) -> Int
+List.append(list: List[T], value: T) -> List[T]
+List.set(list: List[T], index: Int, value: T) -> List[T]
+List.repeat(value: T, count: Int) -> List[T]
+List.reverse(list: List[T]) -> List[T]
 
 String.length(s: String) -> Int                # counts Unicode characters
 String.upcase(s: String) -> String
@@ -163,6 +171,14 @@ System.exit(code: Int) -> Nil
 - Lists have no append or concatenation function. To build a list, write a literal; to change a map, use `Map.put`, which leaves the original unchanged.
 - Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
+
+### Collections
+
+All collection updates preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends cost O(n²). Indexing is still O(n). `List.repeat` costs O(count) and accepts 0..1048576; zero returns an empty list of the inferred element type, and invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` requires an index in 0..length-1; otherwise it halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument. Expected types support empty collections and Result elements; annotate when there is insufficient context.
+
+`Map.get(map, key)` returns `Result[V]`: `ok(value)` if present, `error(message)` if missing. `Map.get(map, key, default)` returns V and eagerly evaluates the default even when the key exists. False and nil are present values. `Map.delete` ignores absent keys, preserves remaining insertion order, and costs O(n); reinsertion adds the key at the end. `Map.values` costs O(n) and follows `Map.keys` order.
+
+`agentica help Map.get` shows both signatures. Its JSON help contains `overloads`, with one entry per arity. Other builtin JSON help retains the single-signature format.
 
 ### Counted input and flushing
 
@@ -297,6 +313,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
+| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576 |
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text |
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |

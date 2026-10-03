@@ -100,6 +100,8 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/json-config.agc`](examples/json-config.agc): extract and validate a nested service config, then encode a typed struct.
 - [`examples/json-expenses.agc`](examples/json-expenses.agc): aggregate a JSON array into a map of category totals; amounts are integer cents, with negative amounts for refunds.
 - [`examples/json-lines.agc`](examples/json-lines.agc): transform one JSON record per line, recover from invalid records, and flush each response.
+- [`examples/knight-tour.agc`](examples/knight-tour.agc): find an open knight tour with degree-ordered backtracking, visiting every square once.
+- [`examples/traveling-salesman.agc`](examples/traveling-salesman.agc): find an optimal circuit through a small directed distance matrix.
 
 The three input-driven JSON examples read stdin:
 
@@ -110,6 +112,15 @@ printf '%s\n' '{"name":"Ana","score":75,"active":true}' 'not json' | dist/agenti
 ```
 
 They print compact JSON on stdout. Configs require a nonempty name and port 1–65535; scores must be 0–100, and an active score of at least 60 passes. Extraction failures produce an error object, and the JSON-lines example continues with the next record.
+
+The algorithm examples also read JSON from stdin:
+
+```sh
+printf '%s\n' '{"size":8,"start":0}' | dist/agentica --max-steps 5000000 examples/knight-tour.agc
+printf '%s\n' '{"distances":[[0,10,15,20],[10,0,35,25],[15,35,0,30],[20,25,30,0]]}' | dist/agentica --max-steps 5000000 examples/traveling-salesman.agc
+```
+
+Knight tours accept square boards of size 1–8 and a zero-based starting square (`row * size + column`). Output is `{"found":true,"path":[...]}` or `{"found":false,"path":[]}` after exhausting the search. Tours are open. The traveling salesman accepts a complete directed square matrix of 1–8 cities, with zero diagonal and integer costs from 0 to 1,000,000,000. It returns an optimal `{"cost":...,"route":[0,...,0]}` circuit; one city yields `[0,0]` and cost zero. Both validate input and print `{"error":"invalid input"}` on invalid documents. Searches can be expensive: a runtime step-limit diagnostic does not mean there is no solution.
 
 IO.gets now returns Result[String]; IO.gets! is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main still returns Nil. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
 

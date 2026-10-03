@@ -322,8 +322,20 @@ Map.has_key?(map: Map[K, V], key: K) -> Bool
 Map.keys(map: Map[K, V]) -> List[K]
 Map.size(map: Map[K, V]) -> Int
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
+Map.get(map: Map[K, V], key: K) -> Result[V]
+Map.get(map: Map[K, V], key: K, default: V) -> V
+Map.delete(map: Map[K, V], key: K) -> Map[K, V]
+Map.values(map: Map[K, V]) -> List[V]
 List.size(list: List[T]) -> Int
+List.append(list: List[T], value: T) -> List[T]
+List.set(list: List[T], index: Int, value: T) -> List[T]
+List.repeat(value: T, count: Int) -> List[T]
+List.reverse(list: List[T]) -> List[T]
 ```
+
+Collection operations preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends can cost O(n²). `List.repeat` costs O(count), accepts 0..1048576, and returns an empty typed list for zero. Invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` uses zero-based indexes and halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument if it is negative or outside the list.
+
+`Map.get` with two arguments returns `ok(value)` for a present key and `error(message)` for an absent key. With three arguments it returns the present value or the default; the default is always evaluated, even when the key exists. False and nil are present values. `Map.delete` ignores absent keys, preserves the order of remaining keys, and costs O(n) to maintain that order. A deleted key reinserted with `Map.put` goes to the end. `Map.values` follows `Map.keys` order and costs O(n). Expected types flow into these operations for contextual empty collections and Results; without enough context the existing empty-collection diagnostics apply.
 
 The `String` module works on text. `String.length` and `String.slice` count Unicode characters, not bytes; a `slice` out of range is a runtime error. `String.split(s, "")` returns a list with one Unicode character per element. The conversions `String.to_int!` and `String.to_float!` accept decimal numbers with an optional sign; `to_int!` fails with `RUNTIME-INVALID-NUMBER` if the text is not a decimal integer and with `RUNTIME-INTEGER-OVERFLOW` if it is outside the range of `Int`, while `to_float!` rejects text that is not a real decimal with `RUNTIME-INVALID-NUMBER`.
 
@@ -425,6 +437,8 @@ JSON.list(j: Json) -> Result[List[Json]]
 - Typed struct decoding, JSON builders, and schemas are later phases. See `examples/json.agc` for encoding, extraction, and `try`.
 
 ### Builtin discovery and execution budget
+
+`Map.get` has two signatures selected by arity. Its text help lists both; JSON help contains `name`, `description`, `effects`, and `overloads`, whose entries describe each signature. Other builtin help keeps the single-signature JSON format.
 
 `agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
 

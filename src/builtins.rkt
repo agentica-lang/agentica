@@ -3,7 +3,8 @@
 (provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string did-you-mean)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
-(struct builtin (name parameters result rule implementation effects description) #:transparent)
+(struct builtin (name parameters result rule implementation effects description
+                      [alternatives #:auto #:mutable]) #:auto-value '() #:transparent)
 
 (define (type->string type)
   (cond
@@ -30,6 +31,9 @@
                     ("Map.keys" ((map (Map K V))) (List K) map-keys "Map.keys" () "Return keys in insertion order.")
                     ("Map.size" ((map (Map K V))) Int map-size "Map.size" () "Count map entries.")
                     ("Map.put" ((map (Map K V)) (key K) (value V)) (Map K V) map-put "Map.put" () "Return a new map with this entry.")
+                    ("Map.get" ((map (Map K V)) (key K)) (Result V) map-get "Map.get" () "Read a value as a Result, or supply an eagerly evaluated default as a third argument.")
+                    ("Map.delete" ((map (Map K V)) (key K)) (Map K V) map-delete "Map.delete" () "Return a new map without this key; missing keys leave it unchanged.")
+                    ("Map.values" ((map (Map K V))) (List V) map-values "Map.values" () "Return values in insertion order.")
                     ("JSON.parse" ((s String)) (Result Json) #f "JSON.parse" () "Parse exactly one JSON value; invalid input returns an error.")
                     ("JSON.encode" ((value T)) String json-encode "JSON.encode" () "Encode JSON-compatible values; halt on non-finite Float values.")
                     ("JSON.get" ((j Json) (key String)) (Result Json) #f "JSON.get" () "Read an object member; wrong kind or missing key returns an error.")
@@ -40,6 +44,10 @@
                     ("JSON.bool" ((j Json)) (Result Bool) #f "JSON.bool" () "Extract a JSON boolean; wrong kind returns an error.")
                     ("JSON.list" ((j Json)) (Result (List Json)) #f "JSON.list" () "Extract an array as a list of opaque JSON values; wrong kind returns an error.")
                     ("List.size" ((list (List T))) Int list-size "List.size" () "Count list elements.")
+                    ("List.append" ((list (List T)) (value T)) (List T) list-append "List.append" () "Return a new list with this value appended; O(n).")
+                    ("List.set" ((list (List T)) (index Int) (value T)) (List T) list-set "List.set" () "Return a new list with an element replaced; invalid indexes halt; O(n).")
+                    ("List.repeat" ((value T) (count Int)) (List T) list-repeat "List.repeat" () "Repeat a value 0..1048576 times; invalid counts halt; O(n).")
+                    ("List.reverse" ((list (List T))) (List T) list-reverse "List.reverse" () "Return a reversed list; O(n).")
                     ("String.length" ((s String)) Int #f "String.length" () "Count Unicode characters.")
                     ("String.upcase" ((s String)) String #f "String.upcase" () "Uppercase text.")
                     ("String.downcase" ((s String)) String #f "String.downcase" () "Lowercase text.")
@@ -64,9 +72,20 @@
                     ("Result.unwrap!" ((r (Result T))) T result-unwrap "Result.unwrap!" () "Return the success value; halt on error.")
                     ("Result.unwrap_or" ((r (Result T)) (default T)) T result-default "Result.unwrap_or" () "Return success or default; both arguments run eagerly.")
                     ("Result.message" ((r (Result T))) String result-message "Result.message" () "Return an error message, or empty text for success.")))])
-    (values (car row) (apply builtin row))))
+    (define entry (apply builtin row))
+    (when (equal? (builtin-name entry) "Map.get")
+      (set-builtin-alternatives!
+       entry
+       (list (builtin "Map.get" '((map (Map K V)) (key K) (default V))
+                      'V 'map-get-default "Map.get" '() (builtin-description entry)))))
+    (values (car row) entry)))
 
-(define (builtin-ref name) (hash-ref builtins name #f))
+(define (builtin-ref name [arity #f])
+  (define entry (hash-ref builtins name #f))
+  (if (and entry arity)
+      (findf (lambda (variant) (= arity (length (builtin-parameters variant))))
+             (cons entry (builtin-alternatives entry)))
+      entry))
 
 (define (edit-distance a b)
   (define n (string-length b))
@@ -95,20 +114,31 @@
             (or (< dx dy) (and (= dx dy) (string<? x y))))))
   (and (pair? near) (format "did you mean \"~a\"?" (car near))))
 
-(define (builtin-signature entry)
+(define (single-signature entry)
   (format "~a(~a) -> ~a" (builtin-name entry)
           (string-join
            (for/list ([parameter (in-list (builtin-parameters entry))])
              (format "~a: ~a" (car parameter) (type->string (cadr parameter)))) ", ")
           (type->string (builtin-result entry))))
 
-(define (builtin->jsexpr entry)
+(define (builtin-signature entry)
+  (string-join (map single-signature (cons entry (builtin-alternatives entry))) "\n"))
+
+(define (single-jsexpr entry)
   (hasheq 'name (builtin-name entry)
           'arity (length (builtin-parameters entry))
           'parameters (for/list ([parameter (in-list (builtin-parameters entry))])
                         (hasheq 'name (symbol->string (car parameter))
                                 'type (type->string (cadr parameter))))
           'result (type->string (builtin-result entry))
-          'signature (builtin-signature entry)
+          'signature (single-signature entry)
           'effects (map symbol->string (builtin-effects entry))
           'description (builtin-description entry)))
+
+(define (builtin->jsexpr entry)
+  (if (null? (builtin-alternatives entry))
+      (single-jsexpr entry)
+      (hasheq 'name (builtin-name entry)
+              'description (builtin-description entry)
+              'effects (map symbol->string (builtin-effects entry))
+              'overloads (map single-jsexpr (cons entry (builtin-alternatives entry))))))

@@ -390,36 +390,82 @@
     (define (check-builtin-call expression expected entry)
       (define span (call-span expression))
       (define arguments (call-args expression))
-      (define parameters (builtin-parameters entry))
-      (unless (= (length arguments) (length parameters))
+      (define selected (builtin-ref (builtin-name entry) (length arguments)))
+      (unless selected
         (bail 'CHECK-ARITY
               (format "\"~a\" expects ~a argument(s), found ~a"
-                      (builtin-name entry) (length parameters) (length arguments))
+                      (builtin-name entry)
+                      (string-join
+                       (map (lambda (variant) (number->string (length (builtin-parameters variant))))
+                            (cons entry (builtin-alternatives entry))) " or ")
+                      (length arguments))
               span #:callee (builtin-signature entry)))
-      (define (map-argument)
-        (define type (check-expression (car arguments) #f))
+      (define parameters (builtin-parameters selected))
+      (define (map-argument [context #f])
+        (define type (check-expression (car arguments) context))
         (unless (map-type? type) (mismatch! '(Map K V) type (node-span (car arguments))))
         type)
+      (define (list-argument [context #f])
+        (define type (check-expression (car arguments) context))
+        (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
+        type)
+      (define (empty-list? argument)
+        (and (list-lit? argument) (null? (list-lit-elements argument))))
+      (define (map-context value-type)
+        (and value-type
+             (list 'Map (check-expression (cadr arguments) #f) value-type)))
       (define (result-argument [context #f])
         (define type (check-expression (car arguments) context))
         (unless (result-type? type) (mismatch! '(Result T) type (node-span (car arguments))))
         type)
-      (case (builtin-rule entry)
+      (case (builtin-rule selected)
         [(map-has)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
          'Bool]
         [(map-keys) (list 'List (cadr (map-argument)))]
+        [(map-values) (list 'List (caddr (map-argument)))]
+        [(map-get map-get-default)
+         (define with-default? (eq? (builtin-rule selected) 'map-get-default))
+         (define value-context (if with-default? expected
+                                   (and (result-type? expected) (cadr expected))))
+         (define default-context
+           (and (not value-context) with-default? (map-lit? (car arguments))
+                (null? (map-lit-entries (car arguments)))
+                (check-expression (caddr arguments) #f)))
+         (define target
+           (map-argument (map-context (or value-context default-context))))
+         (check-expression (cadr arguments) (cadr target))
+         (when with-default? (check-expression (caddr arguments) (caddr target)))
+         (if with-default? (caddr target) (list 'Result (caddr target)))]
+        [(map-delete)
+         (define target (map-argument (and (map-type? expected) expected)))
+         (check-expression (cadr arguments) (cadr target))
+         target]
         [(map-size) (map-argument) 'Int]
         [(map-put)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
          (check-expression (caddr arguments) (caddr target))
          target]
-        [(list-size)
-         (define type (check-expression (car arguments) #f))
-         (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
-         'Int]
+        [(list-size) (list-argument) 'Int]
+        [(list-reverse) (list-argument (and (list-type? expected) expected))]
+        [(list-append list-set)
+         (define value (last arguments))
+         (define target
+           (list-argument
+            (or (and (list-type? expected) expected)
+                (and (empty-list? (car arguments))
+                     (list 'List (check-expression value #f))))))
+         (when (eq? (builtin-rule selected) 'list-set)
+           (check-expression (cadr arguments) 'Int))
+         (check-expression value (cadr target))
+         target]
+        [(list-repeat)
+         (define element (check-expression (car arguments)
+                                           (and (list-type? expected) (cadr expected))))
+         (check-expression (cadr arguments) 'Int)
+         (list 'List element)]
         [(json-encode)
          (define type (check-expression (car arguments) #f))
          (unless (encodable-type? type)
@@ -450,7 +496,7 @@
         [else
          (for ([argument (in-list arguments)] [parameter (in-list parameters)])
            (check-expression argument (cadr parameter)))
-         (builtin-result entry)]))
+         (builtin-result selected)]))
 
     (define (check-call expression expected)
       (define entry (builtin-ref (call-name expression)))

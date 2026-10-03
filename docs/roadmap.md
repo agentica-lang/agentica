@@ -857,17 +857,21 @@ Process.close(p: Process) -> Nil
 - [ ] A test that runs the client against the server and checks the result.
 - [ ] Node fixtures (see "Integration fixtures in Node.js"): the Agentica client against a Node stdio server, and a Node client against the Agentica server. Skipped when Node is missing.
 
-### Phase 5n: Enum module and list building
+### Phase 5n: List operations and list building
 
-6a showed that a program cannot build or sort a list (only `List.size` exists). The design is in `future.md` section 5. It depends on 5j (function values) and on the builtins catalog (5e).
+6a exposed the lack of list construction and sorting. The design is in `future.md` section 5. Primitive operations are now implemented through the builtins catalog (5e); only operations taking callbacks depend on 5j (function values). `List` is the chosen module, keeping `List.size` and avoiding an `Enum` module beside the planned `enum` keyword.
 
-- [ ] Settle the open decisions: `reduce` argument order and the `Enum` module versus the future `enum` keyword.
-- [ ] `Enum.append`, `concat`, `reverse`, `take`, `drop`, `at`.
-- [ ] `Enum.map`, `filter`, `reduce`.
-- [ ] `Enum.sort`, `sort_by`.
-- [ ] `Map.values`, `Map.get`, `Map.delete`.
+- [x] Choose `List` as the collection module.
+- [x] `List.append`, `List.set`, `List.repeat`, `List.reverse`: immutable operations with contextual generic typing and explicit index/count diagnostics. Keep the existing linked-list representation and document O(n) indexing/updates.
+- [x] `Map.values`, `Map.get`, `Map.delete`: insertion-order traversal/deletion, Result lookup with two arguments, eager-default lookup with three. The catalog/checker/runtime/help share arity selection.
+- [x] Algorithm examples and functional tests: open knight tours with degree-ordered backtracking; exact small traveling-salesman circuits with cost pruning. Validate complete paths and optimal costs rather than a particular route.
+- [x] Update grammar, programming reference, and development skill for these operations.
+- [ ] `List.concat`, `take`, `drop`, `at`.
+- [ ] Settle `reduce` argument order before implementing callbacks.
+- [ ] `List.map`, `filter`, `reduce` (after 5j).
+- [ ] `List.sort`, `sort_by` (`sort_by` after 5j).
 - [ ] Decide which of the other gaps in `future.md` ("Other gaps for code-challenge programs": math, conversions, strings, sets, input, performance) join this phase, after a real task needs them.
-- [ ] Update `grammar.md` and the programming skill reference; add harder 6b tasks that need sorting.
+- [ ] Add harder 6b model-evaluation tasks that need sorting.
 
 ### Later, for MCP
 
@@ -882,7 +886,7 @@ Process.close(p: Process) -> Nil
 - [x] Phase 5k: error propagation (merged into 5e).
 - [ ] Phase 5l: process spawning.
 - [ ] Phase 5m: MCP client and server examples.
-- [ ] Phase 5n: `Enum` module and list building.
+- [ ] Phase 5n: remaining `List` operations and callbacks.
 
 ## Phase 6: Validate the language design
 

@@ -171,6 +171,14 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - False/null are present values. Int extraction is signed 64-bit and rejects decimal/exponent forms; Float extraction permits integer conversion only if finite. Parse rejects non-finite numbers, while large integer Json payloads remain valid.
 - Encoding stays beside runtime values in evaluator.rkt; write objects in stored map/declared field order and use write-json for scalar escaping. Non-finite Floats halt with RUNTIME-JSON-ENCODE at the call span. Debug output is `<Json>`, not the host contents. Decoding/builders/schemas remain later phases.
 
+## Collections and algorithm examples (phase 5n, primitive operations)
+
+- `List.append`, `set`, `repeat`, and `reverse` preserve inputs and use the existing Racket lists. Indexing and updates remain O(n); repeat is capped at 1048576 and reports RUNTIME-INVALID-COUNT at the count argument. List.set uses the existing index diagnostic at the index argument.
+- Catalog entries have an automatic alternatives field. Only catalog initialization fills it; builtin-ref optionally selects by arity. Map.get has two signatures: Result[V] with two arguments, V with an eagerly evaluated default with three. Text help lists both; its JSON help has an overloads array, while existing single-signature help stays unchanged. Do not add user-function overloading.
+- Generic rules propagate expected types into list construction/updates and Map.get. Keep false/nil lookup payloads distinct from absent keys. Map.delete updates both the hash and insertion-order keys; reinsertion goes last. Map.values follows Map.keys order.
+- `examples/knight-tour.agc` uses degree-ordered backtracking for open tours, sizes 1..8. `examples/traveling-salesman.agc` searches optimal directed circuits over 1..8 cities with nonnegative bounded Int weights. The examples tests validate complete routes and known optimal costs with a 5000000-step budget. A runtime limit is not an unsolvable-result signal.
+- Callback operations remain pending in 5n and require 5j; these primitive operations do not. Grammar and programming reference are kept together; stages.md includes the catalog arity contract.
+
 ## Reference
 
 Read `references/stages.md` for the full token-kind table, the diagnostic-code list, the AST node list, and each module's public API. Load it when adding or renaming tokens, AST nodes, or diagnostic codes.

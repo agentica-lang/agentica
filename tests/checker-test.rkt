@@ -434,6 +434,41 @@
                         (help-of (main-with "  for i in [1]\n    i = 2\n  end"))))
 
   (test-case "maps and the Map and List modules"
+    (check-ok
+     (main-with
+      (string-append
+       "  xs: List[List[Int]] = List.append([], [])\n"
+       "  ys: List[List[Int]] = List.repeat([], 2)\n"
+       "  zs: List[Int] = List.reverse([])\n"
+       "  rs: List[Result[Int]] = List.repeat(error(\"bad\"), 0)\n"
+       "  filled = List.append([], 1)\n"
+       "  replaced: List[List[Int]] = List.set(ys, 0, [])\n"
+       "  m: Map[String, List[Int]] = {}\n"
+       "  r: Result[List[Int]] = Map.get(m, \"x\")\n"
+       "  value: List[Int] = Map.get(m, \"x\", [])\n"
+       "  inferred = Map.get({}, \"x\", 1)\n"
+       "  missing: Result[Int] = Map.get({}, \"x\")\n"
+       "  nested: Result[Int] = Map.get({}, \"x\", error(\"bad\"))\n"
+       "  deleted: Map[String, Int] = Map.delete({}, \"x\")\n"
+       "  values: List[List[Int]] = Map.values(m)")))
+    (for ([body '("  x = List.append([1], false)"
+                  "  x = List.set([1], true, 2)"
+                  "  x = List.set([1], 0, \"x\")"
+                  "  x = List.repeat(1, false)"
+                  "  x = List.reverse(1)"
+                  "  x = Map.get({\"x\": 1}, 0)"
+                  "  x = Map.get({\"x\": 1}, \"x\", false)"
+                  "  x: Int = Map.get({\"x\": 1}, \"x\")"
+                  "  x: Result[Int] = Map.get({\"x\": 1}, \"x\", 2)"
+                  "  x = Map.delete({\"x\": 1}, 0)"
+                  "  x = Map.values([1])")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (for ([body '("  x = Map.get()" "  x = Map.get({\"x\": 1})"
+                  "  x = Map.get({\"x\": 1}, \"x\", 2, 3)"
+                  "  x = List.append([1])" "  x = List.set([1], 0)"
+                  "  x = List.repeat(1)" "  x = List.reverse()"
+                  "  x = Map.delete({\"x\": 1})" "  x = Map.values()")])
+      (check-equal? (check-code (main-with body)) 'CHECK-ARITY))
     (check-ok (main-with (string-append
                           "  m: Map[String, Int] = {\"a\": 1}\n"
                           "  n = Map.put(m, \"b\", m[\"a\"])\n"

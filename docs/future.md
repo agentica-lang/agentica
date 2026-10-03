@@ -109,51 +109,39 @@ f = &missing           # &name requires a declared function.
 ready = done?          # A function name is not a value; use &name when phase 5j lands.
 ```
 
-## 5. `Enum` module and list building
+## 5. Remaining `List` operations
 
-Today a program cannot build or sort a list: lists are immutable and the only list function is `List.size`. There is no append, concatenation, slice, reverse, or sort, and no way to pass a function. Many ordinary programs (sort these numbers, double every element, sum a list) cannot be written. This section fixes that with an Elixir-like `Enum` module. Not part of the core until its phase lands.
+The collection module is `List`, keeping `List.size`; the earlier `Enum` proposal is superseded. Phase 5n already implements `List.append`, `List.set`, `List.repeat`, `List.reverse`, and `Map.values/get/delete`. Their current contracts live in `grammar.md` and the programming reference. Knight-tour and small traveling-salesman examples exercise construction, persistent updates, and nested lists. Operations below remain planned, not part of the implemented core.
 
-**Depends on function values** (section 4, phase 5j): `Enum.map`, `Enum.filter`, `Enum.reduce`, and `Enum.sort_by` take a function, written `&name` and called by the module. Without closures, a function cannot capture variables; extra state travels as an argument (`reduce` already passes the accumulator).
-
-```text
-Enum.map(list: List[A], f: Fn[A, B]) -> List[B]
-Enum.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
-Enum.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B     # f(accumulator, item)
-Enum.sort(list: List[T]) -> List[T]                               # T is Int, Float, or String
-Enum.sort_by(list: List[A], key: Fn[A, K]) -> List[A]             # K is Int, Float, or String; stable
-Enum.reverse(list: List[T]) -> List[T]
-Enum.concat(a: List[T], b: List[T]) -> List[T]
-Enum.append(list: List[T], item: T) -> List[T]                    # a new list; the original is unchanged
-Enum.take(list: List[T], count: Int) -> List[T]
-Enum.drop(list: List[T], count: Int) -> List[T]
-Enum.at(list: List[T], index: Int) -> T                           # out of range is RUNTIME-INDEX-OUT-OF-RANGE
-Enum.count(list: List[T]) -> Int
-Enum.sum(list: List[Int]) -> Int
-Enum.member?(list: List[T], item: T) -> Bool                      # T is a primitive type
-Enum.any?(list: List[A], f: Fn[A, Bool]) -> Bool
-Enum.all?(list: List[A], f: Fn[A, Bool]) -> Bool
-```
-
-Companions for maps, so a map can be traversed and rebuilt without tuples:
+Only callbacks depend on function values (section 4, phase 5j): `List.map`, `List.filter`, `List.reduce`, `List.sort_by`, `List.any?`, and `List.all?`. Without closures, a function cannot capture variables; extra state travels through parameters or the accumulator.
 
 ```text
-Map.values(map: Map[K, V]) -> List[V]                             # insertion order, like Map.keys
-Map.get(map: Map[K, V], key: K, default: V) -> V
-Map.delete(map: Map[K, V], key: K) -> Map[K, V]
+List.map(list: List[A], f: Fn[A, B]) -> List[B]
+List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
+List.sort(list: List[T]) -> List[T]
+List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
+List.concat(a: List[T], b: List[T]) -> List[T]
+List.take(list: List[T], count: Int) -> List[T]
+List.drop(list: List[T], count: Int) -> List[T]
+List.at(list: List[T], index: Int) -> T
+List.sum(list: List[Int]) -> Int
+List.member?(list: List[T], item: T) -> Bool
+List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
+List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
 ```
 
-Rules:
+Planned rules:
 
-- The functions are generic and builtin, special-cased in the checker like `List` and `Map`. No user generics.
-- `Enum.sort` and `Enum.sort_by` need an ordered element type: `Int`, `Float`, or `String`. Strings compare by Unicode code point; `Float` uses IEEE 754 order with a NaN placed last. Any other type is a `CHECK-TYPE-MISMATCH`. A `sort_by` key may not be a struct.
-- The sort is stable.
-- `Enum.reduce` passes the accumulator first: `f(accumulator, item)`. (Elixir passes the item first; Agentica chooses the accumulator first so the call reads like a left fold. Decide before the phase starts.)
-- A function argument is checked exactly: parameter and result types must match (`CHECK-TYPE-MISMATCH` otherwise), as for any `Fn` value.
-- All functions return a new list. `List.size` stays; `Enum.count` is the same thing and `List.size` may become an alias, or be dropped.
-- Name clash to settle first: the future sum-type keyword is `enum` (section 2) and this module is `Enum`. They differ in case and position (keyword versus module name), but an agent may confuse them. Alternatives: rename the module to `Lists`, or the keyword to `variants`.
-- Cost: each function copies, so `Enum.append` in a loop is O(n²). Acceptable for the prototype; a persistent vector is a later optimization (see the roadmap's "Later extensions").
+- Generic builtins, no user generics. Collection operations preserve their inputs.
+- `List.sort` and `sort_by` are stable and require Int, Float, or String ordering; strings use Unicode code points and Float NaN goes last. Invalid ordered types produce CHECK-TYPE-MISMATCH.
+- `List.at` retains RUNTIME-INDEX-OUT-OF-RANGE for invalid indexes. `List.member?` requires primitive equality.
+- Settle reduce argument order before implementation; the current proposal is accumulator first, `f(accumulator, item)`.
+- Callbacks require exact parameter and return types. Primitive operations and plain sorting do not require 5j.
+- `List.size` remains the count operation; no duplicate `count` alias is planned.
+- Linked-list operations remain linear; repeated append costs O(n²). A persistent vector is a later optimization.
 
-Example, once phase 5j and this phase exist:
+Future example, after function values and the remaining operations land:
 
 ```ruby
 def double(n: Int) -> Int
@@ -166,26 +154,26 @@ end
 
 def main() -> Nil
   numbers = [3, 1, 2]
-  sorted = Enum.sort(numbers)
-  doubled = Enum.map(sorted, &double)
-  puts(String.from_int(Enum.reduce(doubled, 0, &add)))
+  sorted = List.sort(numbers)
+  doubled = List.map(sorted, &double)
+  puts(String.from_int(List.reduce(doubled, 0, &add)))
 end
 ```
 
-Order of work: function values first (5j), then `Enum.append`, `Enum.concat`, `Enum.reverse`, `Enum.take`, `Enum.drop`, `Enum.at`, then `Enum.map`, `Enum.filter`, `Enum.reduce`, then `Enum.sort` and `Enum.sort_by`, then the `Map` companions. Each step needs the builtins catalog (phase 5e) so the checker, the evaluator, and the skill reference stay in sync.
+Continue primitive operations through the builtins catalog independently of 5j. Add callbacks after function values, keeping checker, evaluator, grammar, and programming reference in sync.
 
 ### Other gaps for code-challenge programs
 
-Besides `Enum`, function values (5j), and the builtins catalog (5e), these are missing. Check each against a real task in 6b before building it.
+Besides remaining List operations and function values (5j), these gaps remain. Check each against a real task before building it.
 
 - **Math:** `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`, `gcd`.
 - **Conversion:** `Int` to `Float` and back (for example `Float.from_int`, `Float.to_int`).
 - **Strings:** the character at an index, a character code, `reverse`, `index_of`.
-- **Maps and sets:** `Map.get` with a default, `Map.delete`, `Map.values` (above); a set type, or `Map[T, Bool]` as the documented way; stack, queue, and priority queue.
+- **Maps and sets:** a set type; meanwhile use `Map[Int, Bool]` or `Map[String, Bool]`. Dedicated stack, queue, and priority queue APIs remain future work.
 - **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
-- **Structures:** tuples or pairs, and nested lists and matrices (check that `List[List[Int]]` works end to end).
-- **Performance:** the proposed `Enum.append` copies the list, so repeated appends are O(n²); a persistent vector remains a possible later optimization. Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
-- **To verify:** the recursion depth the evaluator allows, and the integer range (arbitrary precision today in Racket; most challenges assume 64 bits).
+- **Structures:** tuples or pairs. Nested lists and matrices are exercised by the traveling-salesman example.
+- **Performance:** `List.append` copies the list, so repeated appends are O(n²); a persistent vector remains a possible later optimization. Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
+- **Bounds:** Int is signed 64-bit and recursion has a 10000-call limit. Large challenge workloads still need practical runtime measurements.
 - **Outside the language:** online judges do not accept Agentica, so challenges run locally against hidden cases, as in `tests/eval/`. The interpreter is a tree walker on Racket, so judge time limits are tight.
 
 ## 6. Native runtime

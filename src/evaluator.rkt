@@ -258,7 +258,7 @@
       (define arguments
         (for/list ([argument (in-list (call-args expression))])
           (eval-expression argument)))
-      (define entry (builtin-ref (call-name expression)))
+      (define entry (builtin-ref (call-name expression) (length arguments)))
       (define name (if entry (builtin-implementation entry) (call-name expression)))
       (define span (call-span expression))
       (case name
@@ -303,6 +303,23 @@
         [("Map.keys") (reverse (mapping-reversed-keys (car arguments)))]
         [("Map.size") (hash-count (mapping-table (car arguments)))]
         [("Map.put") (mapping-put (car arguments) (cadr arguments) (caddr arguments))]
+        [("Map.get")
+         (define table (mapping-table (car arguments)))
+         (define key (cadr arguments))
+         (cond
+           [(hash-has-key? table key)
+            (if (= (length arguments) 2) (result-ok (hash-ref table key)) (hash-ref table key))]
+           [(= (length arguments) 3) (caddr arguments)]
+           [else (result-error (format "key ~s is not in the map" key))])]
+        [("Map.delete")
+         (define target (car arguments))
+         (define key (cadr arguments))
+         (mapping (hash-remove (mapping-table target) key)
+                  (remove key (mapping-reversed-keys target)))]
+        [("Map.values")
+         (define target (car arguments))
+         (for/list ([key (in-list (reverse (mapping-reversed-keys target)))])
+           (hash-ref (mapping-table target) key))]
         [("JSON.parse")
          ;; Malformed exponents can raise non-read exceptions in Racket's reader.
          ;; Only parsing is recoverable; argument evaluation stays outside.
@@ -339,6 +356,21 @@
          (json-extract (car arguments) list? "a JSON array"
                        (lambda (data) (map json-value data)))]
         [("List.size") (length (car arguments))]
+        [("List.append") (append (car arguments) (list (cadr arguments)))]
+        [("List.set")
+         (define target (car arguments))
+         (define index (cadr arguments))
+         (unless (< -1 index (length target))
+           (bail 'RUNTIME-INDEX-OUT-OF-RANGE "list index is out of range"
+                 (node-span (cadr (call-args expression)))))
+         (list-set target index (caddr arguments))]
+        [("List.repeat")
+         (define count (cadr arguments))
+         (unless (<= 0 count (* 1024 1024))
+           (bail 'RUNTIME-INVALID-COUNT "count must be between 0 and 1048576"
+                 (node-span (cadr (call-args expression)))))
+         (make-list count (car arguments))]
+        [("List.reverse") (reverse (car arguments))]
         [("String.length") (string-length (car arguments))]
         [("String.upcase") (string-upcase (car arguments))]
         [("String.downcase") (string-downcase (car arguments))]
