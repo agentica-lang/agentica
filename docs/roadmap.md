@@ -20,7 +20,7 @@ tests/
 └── lexer-test.rkt # focused lexer behavior tests
 ```
 
-Keep source positions and token/diagnostic data separate from lexing rules. `main.rkt` remains a thin driver; no general pipeline module is needed until multiple stages are connected. Use Racket's built-in test support; add no dependencies.
+Keep source positions and token/diagnostic data separate from lexing rules. `main.rkt` remains a thin driver; no general pipeline module is needed until multiple stages are connected. Use Racket's built-in test support (`rackunit`) as the test framework; add no third-party libraries or test frameworks. Independent integration counterparts may use Node.js, Python, or curl as described below and in `AGENTS.md`.
 
 ### Work sequence
 
@@ -727,7 +727,7 @@ TCP.local_port(listener: Listener) -> Int
 - Strings are UTF-8. Binary data is out of scope.
 
 - [ ] Add `Socket` and `Listener` types and the `TCP` module.
-- [ ] Test with a local listener on port 0. No outside network in tests or CI.
+- [ ] Test against an independent local TCP counterpart on port 0. No outside network in tests or CI; interoperability tests are required in CI.
 - [ ] Add `examples/tcp_echo.agc`.
 
 ### Phase 5h: HTTP and HTTPS
@@ -743,7 +743,7 @@ HTTP.request(method: String, url: String, body: String, headers: Map[String, Str
 - `http://` and `https://` both work; HTTPS uses Racket's `openssl` and verifies certificates. A bad certificate is an `error`, not a halt.
 - A fixed default timeout, with a limit on the body size.
 - Builtin structs are new: the checker needs to know their fields. Keep it to `Response`.
-- Tests talk to a local HTTP server written in Racket in the test file. A Node fixture (see "Integration fixtures in Node.js") adds an independent server. HTTPS is covered by one test against a local self-signed server that must be rejected.
+- Client tests talk to an independent local HTTP server; server tests use an independent HTTP client (see "Independent integration fixtures"). Node.js, Python, or curl may provide the counterpart. Racket-only tests may complement this coverage. HTTPS is covered by one test against a local self-signed server that must be rejected.
 
 - [ ] Support builtin structs in the checker (`Response` only).
 - [ ] Add the `HTTP` module over `net/http-client`.
@@ -755,19 +755,19 @@ HTTP.request(method: String, url: String, body: String, headers: Map[String, Str
 - ~~Whether `Map.has` and `Map.len` get renamed to `Map.has_key?` and `Map.size`.~~ Decided in 5c: renamed, together with `List.len` → `List.size`.
 - A capability flag for the CLI (`--allow-net`, `--allow-read`): agents run unknown programs, and network access should be opt-in. Decide before 5g.
 
-### Integration fixtures in Node.js (optional layer)
+### Independent integration fixtures
 
-The Racket-only tests stay the base: they are fast and need nothing installed. On top of them, small Node.js fixtures check interoperability, because a server written independently of the client catches mistakes that both sides would share (chunked bodies, header case, JSON-RPC line framing).
+TCP/HTTP interoperability tests use a protocol implementation independent of the Agentica component under test, so a shared client/server bug cannot satisfy both sides of the test. These tests are required in CI. Racket-only tests may complement them; they are not a required base layer. Keep `rackunit` as the test framework, with Node.js, Python, or curl as counterpart tools.
 
-- Fixtures live in `tests/fixtures/*.js` and use only Node's standard library (`http`, `https`, `net`, `readline`). No `npm install`, no `package.json`.
-- A fixture listens on port 0 and prints the port as its first line of standard output. The Racket test starts it with `racket/subprocess`, reads the port, runs the Agentica program against it, and kills the process at the end.
-- The test finds Node with `find-executable-path` and skips itself, with a visible message, when Node is missing. `raco test tests/` must pass without Node.
-- CI uses the Node that ships on the runner. Add no setup step unless the version causes trouble.
+- Fixtures live in `tests/fixtures/` and use standard libraries only: for example Node's `http`, `https`, `net`, and `readline`, or Python's HTTP and socket modules. Add no third-party libraries or test frameworks.
+- Tests stay hermetic: localhost, dynamically assigned ports (port 0), and no external services. A server fixture reports its assigned port after listening; the Racket test starts it with `racket/subprocess`, waits for readiness, runs the Agentica program against it, and cleans up processes, ports, and resources on every exit. Client fixtures wait for the Agentica server's readiness in the same way.
+- Find the chosen tool with `find-executable-path`. Local runs may skip with a visible message when it is missing; CI must fail rather than skip.
+- CI installs or explicitly verifies the chosen counterpart tools. No particular runtime is required until its fixture is selected.
 - The fixtures are tests only. They are not part of the language and add no Racket dependency.
 - A test against the official MCP SDK needs `npx` and the network. Keep it manual and out of CI.
 - An `.agc` example that starts a fixture with `Process.spawn` (5l) is allowed as a demo, but CI does not run it.
 
-Where it applies: 5g (TCP echo server), 5h (HTTP and HTTPS server, including a self-signed certificate to reject), 5l (a child process to spawn), 5m (a hand-written stdio MCP server to run the Agentica client against, and an Agentica server checked by a Node client).
+Where it applies: 5g (TCP counterpart), 5h (HTTP/HTTPS counterparts, including a self-signed certificate to reject), 5l (a child process to spawn), 5m (an independent stdio MCP server to run the Agentica client against, and an Agentica server checked by an independent client).
 
 ### Checklist for phases 5c to 5h
 
@@ -882,7 +882,7 @@ Process.close(p: Process) -> Nil
 - [ ] `examples/mcp_server.agc`: a stdio server that answers `initialize`, `tools/list`, and `tools/call` for one or two tools. Logs go to standard error with `IO.warn`, so standard output carries only protocol messages.
 - [ ] `examples/mcp_client.agc`: spawns the server above, initializes, lists tools, and calls one.
 - [ ] A test that runs the client against the server and checks the result.
-- [ ] Node fixtures (see "Integration fixtures in Node.js"): the Agentica client against a Node stdio server, and a Node client against the Agentica server. Skipped when Node is missing.
+- [ ] Independent fixtures (see "Independent integration fixtures"): the Agentica client against an independent stdio server, and an independent client against the Agentica server. Required in CI; local runs may visibly skip when the chosen tool is missing.
 
 ### Phase 5n: List operations and list building
 
