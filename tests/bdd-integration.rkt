@@ -1,38 +1,47 @@
 #lang racket
 
-(require rackunit json racket/runtime-path
+(require rackunit racket/runtime-path
          "../src/bdd.rkt" "../src/bdd-runner.rkt" "../src/diagnostic.rkt" "../src/source.rkt")
 
-(define-runtime-path repository "..")
 (define-runtime-path stream-spec "bdd/specs/json-lines.feature")
 
-(define (docker . arguments)
-  (define-values (process output input errors)
-    (apply subprocess #f #f #f (find-executable-path "docker") arguments))
-  (close-output-port input)
-  (define text (port->string output))
-  (define error-text (port->string errors))
-  (subprocess-wait process)
-  (close-input-port output)
-  (close-input-port errors)
-  (unless (zero? (subprocess-status process)) (error 'docker error-text))
-  text)
-
-(define (containers)
-  (sort (string-split (docker "ps" "--all" "--filter" "name=agentica-bdd-" "--format" "{{.Names}}")) string<?))
-
 (module+ test
-  (when (equal? (getenv "AGENTICA_BDD_INTEGRATION") "1")
+    (test-case "BDD tasks receive while sending and clean up pending tasks"
+      (define directory (make-temporary-file "agentica-bdd-concurrent~a" 'directory))
+      (dynamic-wind void
+        (lambda ()
+          (display-to-file
+           "def main() -> Nil\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  ending = IO.gets()\nend\n"
+           (build-path directory "echo.agc"))
+          (define steps (build-path directory "steps.agc"))
+          (display-to-file
+           (string-append
+            "def receive(n: Int) -> Nil\n  BDD.then_line(\"hello\", 5000)\nend\n"
+            "def exchange(args: List[String]) -> Nil\n  task = Task.spawn(&receive, 0)\n"
+            "  Task.sleep(0)\n  BDD.when_line(\"hello\")\n  Task.await(task)\nend\n"
+            "def wait(n: Int) -> Nil\n  BDD.then_line(\"never\", 5000)\nend\n"
+            "def pending(args: List[String]) -> Nil\n  task = Task.spawn(&wait, 0)\n  Task.sleep(0)\nend\n"
+            "def main() -> Nil\n  BDD.step(\"exchange concurrently\", &exchange)\n  BDD.step(\"leave a pending read\", &pending)\nend\n") steps)
+          (display-to-file
+           (string-append "Feature: Concurrent streams\nBackground:\nGiven the Agentica program \"echo.agc\"\n"
+                          "Scenario: exchange\nThen exchange concurrently\nWhen I close stdin\nThen the program exits with code 0 within 5000 milliseconds\n"
+                          "Scenario: pending\nThen leave a pending read\n"
+                          "Scenario: later\nThen exchange concurrently\nWhen I close stdin\nThen the program exits with code 0 within 5000 milliseconds\n")
+           (build-path directory "tasks.feature"))
+          (define report (run-bdd (list directory) #:steps (list steps)))
+          (check-equal? (hash-ref report 'passed) 2 (format "~s" report))
+          (check-equal? (hash-ref report 'failed) 1)
+          (define results (hash-ref (car (hash-ref report 'files)) 'scenarios))
+          (check-equal? (hash-ref (hash-ref (cadr results) 'error) 'code) "RUNTIME-BDD-PENDING-TASKS"))
+        (lambda () (delete-directory/files directory))))
+
     (test-case "live JSON responses arrive before EOF and recover after errors"
-      (define before (containers))
-      (define report (run-bdd (list stream-spec) #:runtime (build-path repository "dist/runtime")))
+      (define report (run-bdd (list stream-spec)))
       (check-true (hash-ref report 'ok) (format "~s" report))
-      (check-equal? (hash-ref report 'passed) 2)
-      (check-equal? (containers) before))
+      (check-equal? (hash-ref report 'passed) 2))
 
     (test-case "unflushed output times out, wrong output fails and later scenarios run"
       (define directory (make-temporary-file "agentica-bdd-integration~a" 'directory))
-      (define before (containers))
       (dynamic-wind void
         (lambda ()
           (display-to-file "def main() -> Nil\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n" (build-path directory "buffered.agc"))
@@ -52,7 +61,7 @@
             "Scenario: later\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 3 within 5000 milliseconds\n"
             "And stdout is:\n  \"\"\"\n  actual\n\n  \"\"\"\nAnd stderr is:\n  \"\"\"\n  warning\n\n  \"\"\"\n")
            (build-path directory "lifecycle.feature"))
-          (define report (run-bdd (list directory) #:runtime (build-path repository "dist/runtime")))
+          (define report (run-bdd (list directory)))
           (check-equal? (hash-ref report 'passed) 2 (format "~s" report))
           (check-equal? (hash-ref report 'failed) 5)
           (define results (hash-ref (car (hash-ref report 'files)) 'scenarios))
@@ -60,34 +69,21 @@
           (for ([item (in-list (take (cdr results) 3))])
             (check-equal? (hash-ref (hash-ref item 'error) 'code) "RUNTIME-BDD-ASSERTION"))
           (check-equal? (hash-ref (hash-ref (list-ref results 4) 'error) 'code) "RUNTIME-BDD-OUTPUT-LIMIT"))
-        (lambda () (delete-directory/files directory)))
-      (check-equal? (containers) before))
+        (lambda () (delete-directory/files directory))))
 
-    (test-case "candidate sees neither host specs nor provider environment and cannot write its source"
-      (define directory (make-temporary-file "agentica-bdd-isolation~a" 'directory))
-      (define context (make-bdd-context directory "agentica-eval:local" (build-path repository "dist/runtime")))
-      (define span (source-span (source "isolation.feature" "") (source-position 0 1 1) (source-position 0 1 1)))
-      (define before (containers))
+    (test-case "scenario cleanup terminates a blocked native process"
+      (define directory (make-temporary-file "agentica-bdd-cleanup~a" 'directory))
+      (define context (make-bdd-context directory))
+      (define span (source-span (source "cleanup.feature" "") (source-position 0 1 1) (source-position 0 1 1)))
       (dynamic-wind void
         (lambda ()
           (display-to-file "def main() -> Nil\n  line = IO.gets!()\nend\n" (build-path directory "blocked.agc"))
-          (display-to-file "protected specification" (build-path directory "secret.feature"))
-          (define environment (environment-variables-copy (current-environment-variables)))
-          (environment-variables-set! environment #"AGENTICA_BDD_PROVIDER_SENTINEL" #"private-test-value")
-          (parameterize ([current-environment-variables environment])
-            (check-equal? (bdd-call context "BDD.given_program" '("blocked.agc") span) 'nil))
-          (define created (filter (lambda (name) (not (member name before))) (containers)))
-          (check-equal? (length created) 1)
-          (define data
-            (string->jsexpr
-             (docker "exec" (car created) "node" "-e"
-               (string-append
-                "const fs=require('fs'),os=require('os');let writable=true;"
-                "try{fs.writeFileSync('/workspace/target.agc','tampered')}catch(e){writable=false}"
-                "process.stdout.write(JSON.stringify({uid:process.getuid(),writable,"
-                "spec:fs.existsSync(process.argv[1]),provider:!!process.env.AGENTICA_BDD_PROVIDER_SENTINEL,"
-                "network:Object.values(os.networkInterfaces()).flat().some(x=>!x.internal)}));")
-               (path->string (build-path directory "secret.feature")))))
-          (check-equal? data (hasheq 'uid 65534 'writable #f 'spec #f 'provider #f 'network #f)))
-        (lambda () (bdd-cleanup! context) (delete-directory/files directory)))
-      (check-equal? (containers) before))))
+          (check-equal? (bdd-call context "BDD.given_program" '("blocked.agc") span) 'nil)
+          (define processes
+            (filter subprocess? (custodian-managed-list (bdd-context-custodian context) (current-custodian))))
+          (check-equal? (length processes) 1)
+          (define process (car processes))
+          (check-equal? (subprocess-status process) 'running)
+          (bdd-cleanup! context)
+          (check-true (exact-integer? (subprocess-status process))))
+        (lambda () (bdd-cleanup! context) (delete-directory/files directory)))))

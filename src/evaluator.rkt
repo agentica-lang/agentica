@@ -5,6 +5,8 @@
          "ast.rkt"
          "diagnostic.rkt"
          "bdd.rkt"
+         "runtime-values.rkt"
+         "task.rkt"
          "json.rkt")
 
 (provide evaluate
@@ -12,20 +14,6 @@
          (struct-out mapping)
          (struct-out exit-code)
          (struct-out function-value))
-
-(struct instance (type-name fields) #:transparent)
-(struct mapping (table reversed-keys) #:transparent)
-(struct exit-code (code) #:transparent)
-(struct function-value (name) #:transparent)
-(struct result-ok (value) #:transparent)
-(struct result-error (message) #:transparent)
-
-(define (mapping-put target key value)
-  (define table (mapping-table target))
-  (mapping (hash-set table key value)
-           (if (hash-has-key? table key)
-               (mapping-reversed-keys target)
-               (cons key (mapping-reversed-keys target)))))
 
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
@@ -44,19 +32,30 @@
                   #:max-steps [max-steps #f]
                   #:entrypoint [entrypoint "main"]
                   #:arguments [arguments '()]
-                  #:builtin-handler [builtin-handler #f])
+                  #:builtin-handler [builtin-handler #f]
+                  #:require-complete-tasks? [require-complete? #f])
   (parameterize ([current-input-port input]
                  [current-output-port output]
                  [current-error-port error-output])
-    (evaluate-with-ports program program-args max-steps entrypoint arguments builtin-handler)))
+    (define functions
+      (for/hash ([declaration (in-list (program-declarations program))]
+                 #:when (function-decl? declaration))
+        (values (function-decl-name declaration) declaration)))
+    (define struct-fields
+      (for/hash ([declaration (in-list (program-declarations program))]
+                 #:when (struct-decl? declaration))
+        (values (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration)))))
+    (task-run
+     (lambda (run)
+       (evaluate-with-ports program program-args entrypoint arguments builtin-handler
+                            functions struct-fields run))
+     max-steps (program-span program) #:require-complete? require-complete?)))
 
-(define (evaluate-with-ports program program-args max-steps entrypoint entry-arguments builtin-handler)
-  (define functions (make-hash))
-  (define struct-fields (make-hash))
+(define (evaluate-with-ports program program-args entrypoint entry-arguments builtin-handler
+                             functions struct-fields run)
   (define scopes '())
   (define return-to #f)
   (define depth 0)
-  (define steps 0)
 
   (with-handlers ([exn:fail?
                    (lambda (failure)
@@ -67,14 +66,9 @@
     (define (bail code message span)
       (escape (diagnostic code message span)))
 
-    (unless (or (not max-steps) (exact-positive-integer? max-steps))
-      (bail 'RUNTIME-INTERNAL "max-steps must be a positive integer or #f" (program-span program)))
-
     (define (step! span)
-      (when max-steps
-        (when (>= steps max-steps)
-          (bail 'RUNTIME-STEP-LIMIT "execution step budget exhausted" span))
-        (set! steps (add1 steps))))
+      (define problem (task-step! run span))
+      (when problem (escape problem)))
 
     (define (push-scope!) (set! scopes (cons (make-hash) scopes)))
     (define (pop-scope!) (set! scopes (cdr scopes)))
@@ -242,6 +236,7 @@
         [(number? value) (number->string value)]
         [(json-value? value) "<Json>"]
         [(function-value? value) "<Fn>"]
+        [(task-value? value) "<Task>"]
         [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
@@ -274,6 +269,22 @@
       (define name (if entry (builtin-implementation entry) (call-name expression)))
       (define span (call-span expression))
       (case name
+        [("Task.spawn")
+         (define callback (function-value-name (car arguments)))
+         (task-spawn run
+           (lambda ()
+             (evaluate-with-ports program program-args callback (list (cadr arguments))
+                                  builtin-handler functions struct-fields run)) span)]
+        [("Task.await")
+         (define value (task-await run (car arguments) span))
+         (if (or (diagnostic? value) (exit-code? value)) (escape value) value)]
+        [("Task.sleep")
+         (define duration (car arguments))
+         (when (negative? duration)
+           (bail 'RUNTIME-INVALID-DURATION "sleep duration must be nonnegative"
+                 (node-span (car (call-args expression)))))
+         (sleep (/ duration 1000))
+         'nil]
         [("BDD.run" "BDD.step" "BDD.doc_string" "BDD.table" "BDD.assert" "BDD.set" "BDD.get"
           "BDD.given_program" "BDD.when_line" "BDD.when_input" "BDD.when_eof" "BDD.then_line"
           "BDD.then_json_line" "BDD.then_stdin_open" "BDD.then_exit" "BDD.then_stdout" "BDD.then_stderr")
@@ -523,11 +534,4 @@
 
     ;; Program --------------------------------------------------------------
 
-    (for ([declaration (in-list (program-declarations program))])
-      (cond
-        [(function-decl? declaration)
-         (hash-set! functions (function-decl-name declaration) declaration)]
-        [(struct-decl? declaration)
-         (hash-set! struct-fields (struct-decl-name declaration)
-                    (map field-decl-name (struct-decl-fields declaration)))]))
     (call-function (hash-ref functions entrypoint) entry-arguments (program-span program)))))

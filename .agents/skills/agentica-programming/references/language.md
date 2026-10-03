@@ -29,6 +29,7 @@ Full programs are at the end of this file.
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
 | `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Fn[A, ..., R]` | named function value; last type is the return, preceding types are parameters; `Fn[Nil]` takes no arguments |
+| `Task[R]` | opaque lightweight task; exactly one result type |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
@@ -119,7 +120,7 @@ Operators, from highest to lowest precedence:
 
 ## Builtin functions
 
-`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, and `BDD` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, and `Task` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -237,11 +238,41 @@ end
 
 `agentica help NAME --json` describes a builtin's signature, parameters, arity, effects, and behavior without a program file. Unknown names exit 2. Effects are informational, not permissions.
 
-`agentica --max-steps N program.agc` limits execution to N expression/statement entries, counting repeated loop conditions. N must be positive; runs are unlimited by default. Exhaustion is `RUNTIME-STEP-LIMIT`, the counter resets each run, and checking never spends steps. This is not a blocking-I/O timeout.
+`agentica --max-steps N program.agc` limits execution to N expression/statement entries, counting repeated loop conditions across all tasks and nested tasks. N must be positive; runs are unlimited by default. Exhaustion is `RUNTIME-STEP-LIMIT`, the synchronized counter resets each evaluation, and checking never spends steps. This is not a blocking-I/O timeout.
+
+## Lightweight tasks
+
+```text
+Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
+Task.await(task: Task[R]) -> R
+Task.sleep(milliseconds: Int) -> Nil
+```
+
+Start tasks before awaiting them to overlap I/O. They call named functions with one argument; pass a struct for multiple values. Each has independent variables, scopes and returns. Await returns the cached value and can be repeated. False, nil and error Results are normal values, with no extra Result wrapper. Task[R] has no constructor, equality, fields, indexing or JSON encoding; inspect prints `<Task>`. A handle belongs to its execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT.
+
+Any task diagnostic terminates the evaluation with its original code and span, even when unawaited. System.exit in any task terminates that evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending work; explicitly await tasks that must finish. External interruption cancels tasks and closes newly created resources while preserving caller-supplied ports. No channels, closures or CPU parallelism are exposed.
+
+Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
+
+```ruby
+def double(n: Int) -> Int
+  Task.sleep(0)
+  return n * 2
+end
+
+def main() -> Nil
+  first = Task.spawn(&double, 21)
+  second = Task.spawn(&double, 7)
+  puts(String.from_int(Task.await(first)))
+  puts(String.from_int(Task.await(second)))
+end
+```
+
+BDD registration and steps may spawn tasks. Finish them before returning, normally by awaiting them; pending work fails with RUNTIME-BDD-PENDING-TASKS. Child failures stop only their current handler; later scenarios continue. Completed child assertions count toward the current Then step; Doc Strings and tables remain those of that step. BDD registration/state/assertions are synchronized and stream lock wait counts against the operation timeout.
 
 ## BDD feature specifications
 
-`agentica test [PATH...] [--steps FILE] [--ai|--json]` executes `.feature` files, recursively searching directories in sorted order; default path is `specs/`. `--steps` is repeatable and loads explicit `.agc` handlers. Empty discovery fails. Exit codes: 0 all pass, 1 verification fails, 2 infrastructure/usage fails. `--docker-image` defaults to `agentica-eval:local`, `--runtime-dir` to `dist/runtime`. Prepare the repository CLI/runtime and Docker image with `make bdd-prepare`; `make test-bdd` runs mandatory Docker integration tests.
+`agentica test [PATH...] [--steps FILE] [--ai|--json]` executes `.feature` files, recursively searching directories in sorted order; default path is `specs/`. `--steps` is repeatable and loads explicit `.agc` handlers. Empty discovery fails. Exit codes: 0 all pass, 1 verification fails, 2 infrastructure/usage fails. Programs under test run as local processes. Use `make exe` to build the CLI or run `racket src/main.rkt test ...` directly; `make test` includes process integration tests and `make test-bdd` checks the compiled CLI against the feature suite. `make test JOBS=N` controls parallel test workers.
 
 English syntax: `Feature`, one optional `Background` before scenarios, `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario, substituting `<column>` in names, steps, Doc Strings and tables. Comments, tags and descriptions before steps are accepted. Tags never skip tests. `Rule`, `*`, other keyword aliases and localized syntax fail explicitly. `And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented; include a final empty line to retain a trailing newline. Data Tables decode `\|`, `\\`, `\n`. One argument per step.
 
@@ -285,7 +316,7 @@ BDD.then_stderr(expected: String) -> Nil
 
 `BDD.run` accepts a file or directory. An infrastructure failure returns an error Result. A completed evaluation returns JSON containing `ok`, `passed`, `failed`, `not_executed`, `file_errors`, `exit_code`, and detailed `files`. A successful Result can contain failed tests: inspect `JSON.bool(Result.unwrap!(JSON.get(report, "ok")))` and choose `System.exit(1)` when false. The CLI enforces this automatically. `BDD.run` is unavailable recursively inside handlers.
 
-Only registration permits `BDD.step`; actions/state/assertions require a running scenario. Missing Doc Strings/tables halt; absent state returns an error Result. Every `Then` (including its And/But) must perform a BDD assertion. Premature System.exit, even zero, fails. Failure stops only that scenario's remaining steps, marked `not_executed`; other scenarios/files continue. Each scenario starts with empty state and a fresh container, executing Background again. Docker mounts only the candidate and runtime, read-only, with no network, host specs or provider credentials. Timeouts are positive; each scenario has 30 seconds, operations without explicit deadlines 5 seconds, each callback one million evaluator steps, each stream 1 MiB. Pure handlers without a candidate need no Docker. Keep specs/handlers outside candidate control.
+Only registration permits `BDD.step`; actions/state/assertions require a running scenario. Missing Doc Strings/tables halt; absent state returns an error Result. Every `Then` (including its And/But) must perform a BDD assertion. Premature System.exit, even zero, fails. Failure stops only that scenario's remaining steps, marked `not_executed`; other scenarios/files continue. Each scenario starts with empty state and a fresh local process, executing Background again. Programs run with host permissions and environment, with the feature directory as their working directory; BDD provides no filesystem or network isolation. Timeouts are positive; each scenario has 30 seconds, operations without explicit deadlines 5 seconds, each callback one million evaluator steps, each stream 1 MiB. Scenario cleanup terminates processes and closes their ports on all outcomes.
 
 ## JSON
 
@@ -394,15 +425,15 @@ end
 Structs and lists:
 
 ```ruby
-struct Task
+struct Todo
   title: String
   done: Bool
 end
 
 def main() -> Nil
-  tasks: List[Task] = [
-    Task(title: "write code", done: false),
-    Task(title: "review code", done: true)
+  tasks: List[Todo] = [
+    Todo(title: "write code", done: false),
+    Todo(title: "review code", done: true)
   ]
 
   for task in tasks

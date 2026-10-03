@@ -1,18 +1,27 @@
 #lang racket
 
-(require racket/async-channel "diagnostic.rkt" "json.rkt")
+(require racket/async-channel racket/runtime-path "diagnostic.rkt" "json.rkt")
 
 (provide (struct-out bdd-result) (struct-out bdd-context) (struct-out exn:fail:bdd)
-         make-bdd-context bdd-call bdd-cleanup! bdd-limit bdd-output-problem compile-step-pattern match-step-pattern)
+         make-bdd-context default-bdd-command bdd-call bdd-cleanup! bdd-limit bdd-output-problem compile-step-pattern match-step-pattern)
 
 (struct bdd-result (ok? value) #:transparent)
-(struct bdd-context (base image runtime state child custodian assertions doc table deadline) #:mutable)
-(struct child (name process input output stdout stderr workers directory overflow) #:transparent)
+(struct bdd-context (base command state child custodian assertions doc table deadline
+                          state-lock input-lock output-lock lifecycle-lock) #:mutable)
+(struct child (process input output stdout stderr workers overflow) #:transparent)
 (struct exn:fail:bdd exn:fail (problem) #:transparent)
 
-(define (make-bdd-context base image runtime)
-  (bdd-context base image runtime (make-hash) #f (make-custodian) 0 #f #f
-               (+ (current-inexact-monotonic-milliseconds) 30000)))
+(define-runtime-path main-program "main.rkt")
+
+(define (default-bdd-command)
+  (if (path? (variable-reference->module-source (#%variable-reference)))
+      (list (or (find-executable-path "racket") (error 'BDD "Racket is not installed")) main-program)
+      (list (path->complete-path (find-system-path 'exec-file)))))
+
+(define (make-bdd-context base [command (default-bdd-command)])
+  (bdd-context base command (make-hash) #f (make-custodian) 0 #f #f
+               (+ (current-inexact-monotonic-milliseconds) 30000)
+               (make-semaphore 1) (make-semaphore 1) (make-semaphore 1) (make-semaphore 1)))
 
 (define (bdd-output-problem context span)
   (define target (bdd-context-child context))
@@ -31,66 +40,29 @@
     (bdd-fail 'RUNTIME-BDD-TIMEOUT "timeout must be a positive integer" span))
   (define remaining (- (bdd-context-deadline context) (current-inexact-monotonic-milliseconds)))
   (define result (make-async-channel))
-  (define worker
-    (parameterize ([current-custodian (bdd-context-custodian context)]
-                   [current-subprocess-custodian-mode 'kill])
-      (thread (lambda ()
-                (async-channel-put result
-                  (with-handlers ([exn? values]) (box (thunk))))))))
-  (define answer (sync/timeout (/ (max 0 (min timeout remaining)) 1000.0) result))
-  (unless answer
-    (kill-thread worker)
-    (bdd-fail 'RUNTIME-BDD-TIMEOUT "BDD operation timed out" span))
-  (if (exn? answer) (raise answer) (unbox answer)))
-
-(define (docker-command context arguments span)
-  (define docker (find-executable-path "docker"))
-  (unless docker (bdd-fail 'RUNTIME-BDD-INFRA "Docker is not installed" span))
-  (bdd-limit context
+  (define operation-custodian (make-custodian))
+  (dynamic-wind void
     (lambda ()
-      (define-values (process output input errors) (apply subprocess #f #f #f docker arguments))
-      (dynamic-wind void
-        (lambda ()
-          (close-output-port input)
-          (define out-result (make-async-channel))
-          (define err-result (make-async-channel))
-          (define out-reader (thread (lambda () (async-channel-put out-result (with-handlers ([exn:fail? values]) (port->string output))))))
-          (define err-reader (thread (lambda () (async-channel-put err-result (with-handlers ([exn:fail? values]) (port->string errors))))))
-          (subprocess-wait process)
-          (define out-text (sync out-result))
-          (define err-text (sync err-result))
-          (when (exn:fail? out-text) (raise out-text))
-          (when (exn:fail? err-text) (raise err-text))
-          (thread-wait out-reader)
-          (thread-wait err-reader)
-          (unless (zero? (subprocess-status process))
-            (bdd-fail 'RUNTIME-BDD-INFRA (string-append "Docker failed: " (string-trim err-text)) span))
-          out-text)
-        (lambda ()
-          (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
-          (close-input-port output)
-          (close-input-port errors))))
-    5000 span))
+      (parameterize ([current-custodian operation-custodian]
+                     [current-subprocess-custodian-mode 'kill])
+        (thread (lambda ()
+                  (async-channel-put result
+                    (with-handlers ([exn? values]) (box (thunk)))))))
+      (define answer (sync/timeout (/ (max 0 (min timeout remaining)) 1000.0) result))
+      (unless answer
+        (bdd-fail 'RUNTIME-BDD-TIMEOUT "BDD operation timed out" span))
+      (if (exn? answer) (raise answer) (unbox answer)))
+    (lambda () (custodian-shutdown-all operation-custodian))))
 
 (define (bdd-cleanup! context)
   (define target (bdd-context-child context))
   (when target
     (with-handlers ([exn:fail? void])
-      (define docker (find-executable-path "docker"))
-      (when docker
-        (define-values (process output input errors)
-          (subprocess #f #f #f docker "rm" "--force" (child-name target)))
-        (close-output-port input)
-        (unless (sync/timeout 5 process) (subprocess-kill process #t))
-        (close-input-port output)
-        (close-input-port errors)))
-    (with-handlers ([exn:fail? void])
       (when (eq? (subprocess-status (child-process target)) 'running)
-        (subprocess-kill (child-process target) #t)))
+        (subprocess-kill (child-process target) #t))
+      (subprocess-wait (child-process target)))
     (with-handlers ([exn:fail? void]) (close-output-port (child-input target))))
-  (custodian-shutdown-all (bdd-context-custodian context))
-  (when target
-    (with-handlers ([exn:fail? void]) (delete-directory/files (child-directory target)))))
+  (custodian-shutdown-all (bdd-context-custodian context)))
 
 (define (start-program! context path span)
   (when (bdd-context-child context)
@@ -98,32 +70,18 @@
   (define source-path (simplify-path (path->complete-path path (bdd-context-base context))))
   (unless (and (file-exists? source-path) (equal? (path-get-extension source-path) #".agc"))
     (bdd-fail 'RUNTIME-BDD-PROGRAM "expected an existing .agc program" span))
-  (define runtime (path->complete-path (bdd-context-runtime context)))
-  (unless (file-exists? (build-path runtime "bin" "agentica"))
-    (bdd-fail 'RUNTIME-BDD-INFRA "runtime missing; run make bdd-prepare" span))
-  (docker-command context (list "image" "inspect" (bdd-context-image context)) span)
-  (define directory (make-temporary-file "agentica-bdd-~a" 'directory))
-  (define name (path->string (file-name-from-path directory)))
-  (set-bdd-context-child! context (child name #f #f #f #f #f '() directory (box #f)))
-  (with-handlers ([exn? (lambda (failure) (delete-directory/files directory) (raise failure))])
-    (file-or-directory-permissions directory #o755)
-    (copy-file source-path (build-path directory "target.agc"))
-    (file-or-directory-permissions (build-path directory "target.agc") #o644)
-    (docker-command context
-      (list "create" "--interactive" "--name" name "--user" "65534:65534"
-            "--read-only" "--cap-drop=ALL" "--security-opt=no-new-privileges"
-            "--pids-limit=256" "--memory=2g" "--cpus=2" "--network=none"
-            "--tmpfs" "/tmp:rw,nosuid,nodev,size=128m"
-            "--tmpfs" "/home/agent:rw,nosuid,nodev,uid=65534,gid=65534,size=128m"
-            "--mount" (format "type=bind,src=~a,dst=/workspace,readonly" directory)
-            "--mount" (format "type=bind,src=~a,dst=/runtime,readonly" runtime)
-            "--workdir" "/workspace" "--env" "LANG=C.UTF-8"
-            (bdd-context-image context) "/runtime/bin/agentica" "--max-steps" "1000000" "/workspace/target.agc") span)
+  (define command (bdd-context-command context))
+  (unless (and (pair? command) (file-exists? (car command)))
+    (bdd-fail 'RUNTIME-BDD-INFRA "Agentica executable is unavailable" span))
+  (let ()
     (define-values (process output input errors)
       (parameterize ([current-custodian (bdd-context-custodian context)]
-                     [current-subprocess-custodian-mode 'kill])
-        (subprocess #f #f #f (find-executable-path "docker") "start" "--attach" "--interactive" name)))
-    (define-values (line-input line-output) (make-pipe))
+                     [current-subprocess-custodian-mode 'kill]
+                     [current-directory (bdd-context-base context)])
+        (apply subprocess #f #f #f (car command)
+               (append (cdr command) (list "--max-steps" "1000000" (path->string source-path))))))
+    (define-values (line-input line-output)
+      (parameterize ([current-custodian (bdd-context-custodian context)]) (make-pipe)))
     (define stdout (open-output-bytes))
     (define stderr (open-output-bytes))
     (define overflow (box #f))
@@ -149,28 +107,42 @@
                 (close-input-port port)
                 (when relay (close-output-port relay))))))))
     (define workers (list (drain output stdout line-output) (drain errors stderr #f)))
-    (set-bdd-context-child! context (child name process input line-input stdout stderr workers directory overflow))
-    (bdd-limit context
-      (lambda ()
-        (let wait-start ()
-          (define state (string-trim (docker-command context (list "inspect" "--format" "{{.State.Status}}" name) span)))
-          (unless (member state '("running" "exited" "dead"))
-            (sleep 0.02)
-            (wait-start))))
-      5000 span)))
+    (set-bdd-context-child! context (child process input line-input stdout stderr workers overflow))))
 
 (define (bdd-call context name arguments span)
+  (with-handlers ([exn:fail:bdd? exn:fail:bdd-problem]
+                  [exn:fail? (lambda (failure) (diagnostic 'RUNTIME-BDD-IO (exn-message failure) span))])
+    (define (invoke) (bdd-call/unlocked context name arguments span))
+    (define (locked semaphore timeout)
+      (bdd-limit context (lambda () (call-with-semaphore semaphore invoke)) timeout span))
+    (cond
+      [(member name '("BDD.set" "BDD.get" "BDD.assert"))
+       (call-with-semaphore (bdd-context-state-lock context) invoke)]
+      [(equal? name "BDD.given_program")
+       (locked (bdd-context-lifecycle-lock context) 30000)]
+      [(member name '("BDD.when_line" "BDD.when_input" "BDD.when_eof"))
+       (locked (bdd-context-input-lock context) 5000)]
+      [(member name '("BDD.then_line" "BDD.then_json_line"))
+       (locked (bdd-context-output-lock context) (cadr arguments))]
+      [(member name '("BDD.then_stdout" "BDD.then_stderr"))
+       (locked (bdd-context-output-lock context) 5000)]
+      [else (invoke)])))
+
+(define (bdd-call/unlocked context name arguments span)
   (with-handlers ([exn:fail:bdd? exn:fail:bdd-problem]
                   [exn:fail? (lambda (failure) (diagnostic 'RUNTIME-BDD-IO (exn-message failure) span))])
     (define (fail message) (bdd-fail 'RUNTIME-BDD-CONTEXT message span))
     (define (target!)
       (define target (bdd-context-child context))
       (unless target (fail "start a program before using its streams"))
+      (unless (child-process target) (fail "program startup is not complete"))
       (define problem (bdd-output-problem context span))
       (when problem (raise (exn:fail:bdd (diagnostic-message problem) (current-continuation-marks) problem)))
       target)
     (define (assert! condition expected actual)
-      (set-bdd-context-assertions! context (add1 (bdd-context-assertions context)))
+      (call-with-semaphore (bdd-context-state-lock context)
+        (lambda ()
+          (set-bdd-context-assertions! context (add1 (bdd-context-assertions context)))))
       (unless condition
         (bdd-fail 'RUNTIME-BDD-ASSERTION "BDD assertion failed" span #:expected expected #:actual actual)))
     (define (read-line!)
@@ -220,9 +192,8 @@
        'nil]
       [("BDD.then_stdin_open")
        (define target (target!))
-       (define running? (equal? "true" (string-trim (docker-command context (list "inspect" "--format" "{{.State.Running}}" (child-name target)) span))))
        (assert! (and (not (port-closed? (child-input target)))
-                     (eq? (subprocess-status (child-process target)) 'running) running?) "open stdin and active program" "closed stdin or stopped program")
+                     (eq? (subprocess-status (child-process target)) 'running)) "open stdin and active program" "closed stdin or stopped program")
        'nil]
       [("BDD.then_exit")
        (define target (target!))
@@ -231,16 +202,12 @@
            (subprocess-wait (child-process target))
            (for-each thread-wait (child-workers target))) (cadr arguments) span)
        (target!)
-       (unless (equal? "exited" (string-trim (docker-command context (list "inspect" "--format" "{{.State.Status}}" (child-name target)) span)))
-         (bdd-fail 'RUNTIME-BDD-INFRA "Docker attachment ended before program exit" span))
-       (define actual (string->number (string-trim (docker-command context (list "inspect" "--format" "{{.State.ExitCode}}" (child-name target)) span))))
+       (define actual (subprocess-status (child-process target)))
        (assert! (equal? actual (car arguments)) (number->string (car arguments)) (format "~a" actual))
        'nil]
       [("BDD.then_stdout" "BDD.then_stderr")
        (define target (target!))
        (when (eq? (subprocess-status (child-process target)) 'running)
-         (fail "complete output requires program exit"))
-       (unless (equal? "exited" (string-trim (docker-command context (list "inspect" "--format" "{{.State.Status}}" (child-name target)) span)))
          (fail "complete output requires program exit"))
        (bdd-limit context (lambda () (for-each thread-wait (child-workers target))) 5000 span)
        (target!)

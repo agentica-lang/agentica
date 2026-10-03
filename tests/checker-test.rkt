@@ -60,15 +60,15 @@
                "  puts(classify(25))\n"
                "end\n"))
     (check-ok (string-append
-               "struct Task\n"
+               "struct Todo\n"
                "  title: String\n"
                "  done: Bool\n"
                "end\n"
                "\n"
                "def main() -> Nil\n"
-               "  tasks: List[Task] = [\n"
-               "    Task(title: \"Probar\", done: false),\n"
-               "    Task(title: \"Revisar\", done: true)\n"
+               "  tasks: List[Todo] = [\n"
+               "    Todo(title: \"Probar\", done: false),\n"
+               "    Todo(title: \"Revisar\", done: true)\n"
                "  ]\n"
                "  for task in tasks\n"
                "    if not task.done\n"
@@ -139,7 +139,7 @@
   (test-case "calls and constructors"
     (define task
       (string-append
-       "struct Task\n  title: String\n  done: Bool\nend\n\n"))
+       "struct Todo\n  title: String\n  done: Bool\nend\n\n"))
     (check-equal? (check-code (string-append
                                "def f(a: Int) -> Int\n  return a\nend\n\n"
                                "def main() -> Nil\n  x = f(1, 2)\nend\n"))
@@ -147,25 +147,25 @@
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Nil\n"
-                                  "  t = Task(title: \"x\", done: false, extra: 1)\n"
+                                  "  t = Todo(title: \"x\", done: false, extra: 1)\n"
                                   "end\n"))
                   'CHECK-UNKNOWN-FIELD)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Nil\n"
-                                  "  t = Task(title: \"x\")\n"
+                                  "  t = Todo(title: \"x\")\n"
                                   "end\n"))
                   'CHECK-MISSING-FIELD)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Nil\n"
-                                  "  t = Task(title: \"x\", title: \"y\", done: false)\n"
+                                  "  t = Todo(title: \"x\", title: \"y\", done: false)\n"
                                   "end\n"))
                   'CHECK-DUPLICATE-FIELD)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Nil\n"
-                                  "  t = Task(title: 1, done: false)\n"
+                                  "  t = Todo(title: 1, done: false)\n"
                                   "end\n"))
                   'CHECK-TYPE-MISMATCH))
 

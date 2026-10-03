@@ -15,8 +15,6 @@
   (define style 'plain)
   (define max-steps #f)
   (define step-files '())
-  (define docker-image "agentica-eval:local")
-  (define runtime-directory "dist/runtime")
   (define raw-arguments
     (command-line
      #:program "agentica"
@@ -30,8 +28,6 @@
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
      [("--ai") "print diagnostics as compact text for an agent" (set! style 'ai)]
      [("--json") "print diagnostics as one JSON object" (set! style 'json)]
-     [("--docker-image") name "BDD Docker image" (set! docker-image name)]
-     [("--runtime-dir") path "BDD distributed runtime" (set! runtime-directory path)]
      #:multi
      [("--steps") path "load Agentica BDD step definitions" (set! step-files (append step-files (list path)))]
      #:args arguments
@@ -53,13 +49,10 @@
     (let loop ([arguments (cdr raw-arguments)])
       (cond
         [(null? arguments) (void)]
-        [(member (car arguments) '("--steps" "--docker-image" "--runtime-dir"))
+        [(equal? (car arguments) "--steps")
          (when (null? (cdr arguments))
            (usage-error "option needs a value"))
-         (case (string->symbol (car arguments))
-           [(--steps) (set! step-files (append step-files (list (cadr arguments))))]
-           [(--docker-image) (set! docker-image (cadr arguments))]
-           [(--runtime-dir) (set! runtime-directory (cadr arguments))])
+         (set! step-files (append step-files (list (cadr arguments))))
          (loop (cddr arguments))]
         [(member (car arguments) '("--json" "--ai"))
          (set! style (if (equal? (car arguments) "--json") 'json 'ai))
@@ -67,8 +60,7 @@
         [(string-prefix? (car arguments) "--")
          (usage-error (format "unknown option ~a" (car arguments)))]
         [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
-    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files
-                            #:image docker-image #:runtime runtime-directory))
+    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files))
     (show-report report))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
@@ -92,7 +84,7 @@
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
   (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--dump] [--ai|--json] [--max-steps N] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] test [PATH...] [--steps FILE] [--docker-image IMAGE] [--runtime-dir PATH]\n")
+    (eprintf "usage: agentica [--dump] [--ai|--json] [--max-steps N] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -124,7 +116,7 @@
     [dump? (pretty-print checked)]
     [else
      (define result (evaluate checked #:args program-args #:max-steps max-steps
-                              #:builtin-handler (make-bdd-service #:image docker-image #:runtime runtime-directory)))
+                              #:builtin-handler (make-bdd-service)))
      (cond
        [(diagnostic? result) (fail! result)]
        [(exit-code? result) (exit (exit-code-code result))])]))
