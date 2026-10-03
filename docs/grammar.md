@@ -19,9 +19,9 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, and `JSON` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, and `BDD` |
 
-Enums, `Option`, interpolation, function values, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
+Enums, `Option`, interpolation, networking, and other extensions are not part of the current language; they are in [`future.md`](future.md).
 
 ## 3. A core program
 
@@ -174,9 +174,12 @@ additive_expr    = multiplicative_expr,
 multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
 unary_expr       = ( "-" | "not" | "try" ), unary_expr | postfix_expr ;
-postfix_expr     = primary, { ".", NAME | "[", expression, "]" } ;
+postfix_expr     = primary, { ".", NAME
+                            | ".", "call", "(", [ arguments ], ")"
+                            | "[", expression, "]" } ;
 
 primary          = literal
+                 | "&", NAME
                  | NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
                  | TYPE_NAME, "(", [ named_arguments ], ")"
@@ -193,7 +196,7 @@ map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
-Calls in the core are to named functions, and `user.method()` is not supported. `user.name`, `users[0]`, and `find_user(1).name` do fit the grammar.
+Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
 
 `TYPE_NAME, ".", NAME, "(" … ")"` is a call to a function of a builtin module (`Map.put(...)`); the core has no user modules.
 
@@ -229,6 +232,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
 | `Json` | Opaque JSON value, accessed through the `JSON` module |
+| `Fn[A, ..., R]` | Named function value; final type is its return, preceding types are parameters; no closures |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -435,6 +439,12 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists, String-keyed maps, and structs whose nested types are also encodable. Results and Int-keyed maps, including empty or nested ones, are `CHECK-NOT-ENCODABLE` errors. Untyped empty containers still need an annotation.
 - Encoding produces compact JSON, preserving struct declaration order and map insertion order. Parsed Json object order is unspecified. Non-finite Floats halt with `RUNTIME-JSON-ENCODE` at the encode call; they are never silently replaced by null. Racket's bundled `json` library supplies parsing and scalar escaping.
 - Typed struct decoding, JSON builders, and schemas are later phases. See `examples/json.agc` for encoding, extraction, and `try`.
+
+### Function values and BDD
+
+`Fn` and `BDD` are reserved builtin names. `f: Fn[Int, Int] = &double` refers to a declared function with exactly those parameter and return types; `f.call(21)` invokes it. References can travel through lists, maps, parameters, returns, and fields. A bare function name remains invalid as a value. Functions have no equality, field access, indexing, or JSON encoding; `IO.inspect` prints `<Fn>`.
+
+`BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Nil]) -> Nil`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and Docker setup.
 
 ### Builtin discovery and execution budget
 

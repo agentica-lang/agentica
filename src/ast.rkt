@@ -18,6 +18,8 @@
          (struct-out literal)
          (struct-out name-ref)
          (struct-out call)
+         (struct-out function-ref)
+         (struct-out invoke)
          (struct-out named-arg)
          (struct-out construct)
          (struct-out list-lit)
@@ -49,6 +51,8 @@
 (struct literal (value span) #:transparent)
 (struct name-ref (name span) #:transparent)
 (struct call (name args span) #:transparent)
+(struct function-ref (name span) #:transparent)
+(struct invoke (target args span) #:transparent)
 (struct named-arg (name value span) #:transparent)
 (struct construct (type-name args span) #:transparent)
 (struct list-lit (elements span) #:transparent)
@@ -78,6 +82,8 @@
     [(literal? node) (literal-span node)]
     [(name-ref? node) (name-ref-span node)]
     [(call? node) (call-span node)]
+    [(function-ref? node) (function-ref-span node)]
+    [(invoke? node) (invoke-span node)]
     [(named-arg? node) (named-arg-span node)]
     [(construct? node) (construct-span node)]
     [(list-lit? node) (list-lit-span node)]

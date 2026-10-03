@@ -331,7 +331,13 @@
           [(kind? 'dot)
            (advance!)
            (define name (expect 'name "a field name"))
-           (loop (field-access target (token-lexeme name) (span-from start)))]
+           (if (and (equal? (token-lexeme name) "call") (kind? 'left-paren))
+               (let ()
+                 (advance!)
+                 (define arguments (parse-expression-list 'right-paren))
+                 (expect 'right-paren "\")\"")
+                 (loop (invoke target arguments (span-from start))))
+               (loop (field-access target (token-lexeme name) (span-from start))))]
           [(kind? 'left-bracket)
            (advance!)
            (define index (parse-expression))
@@ -347,6 +353,10 @@
         [(false) (advance!) (literal #f (token-span token))]
         [(nil) (advance!) (literal 'nil (token-span token))]
         [(name) (parse-name-primary)]
+        [(ampersand)
+         (advance!)
+         (define name (expect 'name "a function name" #t))
+         (function-ref (token-lexeme name) (span-from token))]
         [(type-name) (parse-construct)]
         [(left-paren)
          (advance!)

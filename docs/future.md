@@ -70,7 +70,7 @@ The expression grammar must also be extended to build variants, for example `Ok(
 
 ## 4. Standard library and function values (phases 5f2–5m)
 
-Fixed here so each roadmap phase can take it as its specification.
+Fixed here so each roadmap phase can take it as its specification. Named function values (5j) now ship in the core; their normative grammar is in `grammar.md`. The other extensions below remain planned unless explicitly marked complete.
 
 ```ebnf
 postfix_expr     = primary, { ".", NAME
@@ -85,7 +85,7 @@ primary          = (* …core forms, plus: *)
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
 - **Types:** `Fn[A, ..., R]` (the final type is the return, phase 5j), `Socket`, `Listener`, `Process`, and `Response` (builtin struct with `status`, `body`, and `headers`). Opaque types cannot be built or inspected, only passed to builtin functions.
-- **Names reserved when each phase starts:** `Fn`, `Socket`, `Listener`, `Process`, `Response`, `TCP`, and `HTTP`. `Json` and `JSON` are already core; typed decoding and schema functions remain planned.
+- **Names reserved when each phase starts:** `Socket`, `Listener`, `Process`, `Response`, `TCP`, and `HTTP`. `Fn`, `BDD`, `Json` and `JSON` are already core; typed decoding and schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int
@@ -106,7 +106,7 @@ Programs that phase must reject:
 ```ruby
 x = User               # A type is valid only as an argument of JSON.decode or JSON.schema.
 f = &missing           # &name requires a declared function.
-ready = done?          # A function name is not a value; use &name when phase 5j lands.
+ready = done?          # A function name is not a value; use &done?.
 ```
 
 ## 5. Remaining `List` operations
@@ -160,11 +160,11 @@ def main() -> Nil
 end
 ```
 
-Continue primitive operations through the builtins catalog independently of 5j. Add callbacks after function values, keeping checker, evaluator, grammar, and programming reference in sync.
+Continue primitive operations through the builtins catalog. Function values (5j) are now available, but collection callbacks remain pending; keep checker, evaluator, grammar, and programming reference in sync when adding them.
 
 ### Other gaps for code-challenge programs
 
-Besides remaining List operations and function values (5j), these gaps remain. Check each against a real task before building it.
+Besides remaining List operations, these gaps remain. Check each against a real task before building it.
 
 - **Math:** `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`, `gcd`.
 - **Conversion:** `Int` to `Float` and back (for example `Float.from_int`, `Float.to_int`).

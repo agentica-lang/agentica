@@ -30,6 +30,19 @@
   (format "def main() -> Nil\n~a\nend\n" body))
 
 (module+ test
+  (test-case "function values check references, parameters, returns and BDD handlers"
+    (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n")
+    (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))
+    (for ([entry '(("  f: Fn[String, Int] = &double" CHECK-TYPE-MISMATCH)
+                   ("  f: Fn[Int, Nil] = &double" CHECK-TYPE-MISMATCH)
+                   ("  f = &missing" CHECK-UNKNOWN-NAME)
+                   ("  value = (&double).call()" CHECK-ARITY)
+                   ("  value = (&double).call(\"x\")" CHECK-TYPE-MISMATCH)
+                   ("  value = 1.call()" CHECK-TYPE-MISMATCH)
+                   ("  BDD.step(\"double\", &double)" CHECK-TYPE-MISMATCH)
+                   ("  text = JSON.encode(&double)" CHECK-NOT-ENCODABLE))])
+      (check-equal? (check-code (string-append prefix (main-with (car entry)))) (cadr entry)))
+    (check-ok "def handler(args: List[String]) -> Nil\nend\ndef main() -> Nil\n  BDD.step(\"hello\", &handler)\nend\n"))
   (test-case "the section 8 programs pass"
     (check-ok "def main() -> Nil\n  puts(\"hello\")\nend\n")
     (check-ok (string-append

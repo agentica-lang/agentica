@@ -42,6 +42,9 @@ src/
   checker.rkt     # check: program -> program | diagnostic
   evaluator.rkt   # evaluate: program -> 'nil | diagnostic (RUNTIME-); puts writes to current-output-port
   json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
+  gherkin.rkt     # English feature parser, expansion and source locations
+  bdd.rkt         # scenario context, assertions and supervised Docker streams
+  bdd-runner.rkt  # deterministic step registration/resolution, execution and reports
   main.rkt        # thin CLI driver: lex, parse, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
 tests/
   lexer-test.rkt
@@ -179,6 +182,16 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - `examples/knight-tour.agc` uses degree-ordered backtracking for open tours, sizes 1..8. `examples/traveling-salesman.agc` searches optimal directed circuits over 1..8 cities with nonnegative bounded Int weights. The examples tests validate complete routes and known optimal costs with a 5000000-step budget. A runtime limit is not an unsolvable-result signal.
 - Callback operations remain pending in 5n and require 5j; these primitive operations do not. Grammar and programming reference are kept together; stages.md includes the catalog arity contract.
 - `examples/maze-bfs.agc` demonstrates Map.get/2 for discovery, Map.get/3 for passable cells, and Map.delete for a numeric-keyed FIFO queue. Rectangular grids are capped at 32×32; tests check legal shortest paths and distinguish invalid input from an unreachable goal. Queue deletion is O(n), so do not claim linear runtime from BFS alone.
+
+## Function values and BDD
+
+- `&name` creates a named `function-value`; `Fn[A, ..., R]` uses the final argument as return type, and `.call(...)` is a dedicated invoke AST node. Resolve only declared functions; no closures, builtin references, function equality or JSON encoding. Inspect is `<Fn>`.
+- BDD specs are `.feature`, not `.agc` scenario registrations. Keep the Gherkin parser separate from the language parser; it returns one PARSE-GHERKIN diagnostic with a span. English subset only, with Background replay and independent outline rows. Reject unsupported syntax instead of omitting it.
+- The catalog contains BDD signatures; evaluator dispatch delegates to its `#:builtin-handler` service. The CLI installs `make-bdd-service`; the runner installs registration/scenario handlers, avoiding a runner/evaluator import cycle. `#:entrypoint` and `#:arguments` invoke checked callbacks with fresh scopes.
+- `BDD.step` takes `Fn[List[String], Nil]`. Resolve all step text before any scenario actions; duplicate patterns, undefined steps, or ambiguous matches fail. Then/And/But must increase the BDD assertion count; early System.exit never approves a step. JSON state belongs to one scenario.
+- `BDD.run` returns Result[Json]: Result success means evaluation completed, while report `ok` is the verdict. Normalize report JSON null to the evaluator's `'nil` representation before wrapping it. CLI `test` enforces exit_code and prints reports only; suppress/bound handler output.
+- Candidate processes use Docker with read-only mounts of copied source and distributed runtime, UID/GID 65534, no network/capabilities/provider credentials. Specs/handlers are not mounted. Register cleanup before container creation; custodians and deadlines cover blocked reads/writes and startup. Drain available bytes, not fixed-size reads that wait for a full buffer or EOF.
+- `make test` stays hermetic. `make test-bdd` prepares the runtime/image and sets AGENTICA_BDD_INTEGRATION=1 to require real Docker tests. Negative no-flush tests and actual filesystem/environment/network checks protect supervision and isolation; CI runs both commands.
 
 ## Reference
 

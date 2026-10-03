@@ -34,6 +34,7 @@ Accessors: `source-name`, `source-text`, `source-position-offset`/`-line`/`-colu
 | `arrow` `equal` `not-equal` `less-equal` `greater-equal` | `->` `==` `!=` `<=` `>=` |
 | `left-paren` `right-paren` `left-bracket` `right-bracket` `left-brace` `right-brace` | `(` `)` `[` `]` `{` `}` |
 | `comma` `colon` `dot` | `,` `:` `.` |
+| `ampersand` | `&` |
 | `assign` `plus` `minus` `multiply` `divide` `modulo` `less` `greater` | `=` `+` `-` `*` `/` `%` `<` `>` |
 | `NL` `EOF` | newline token, end of input |
 
@@ -68,7 +69,7 @@ Every node is `#:transparent` with `span` as the last field.
 | --- | --- |
 | declarations | `program`, `function-decl`, `param`, `struct-decl`, `field-decl`, `type-ref` |
 | statements | `binding`, `return-stmt`, `expr-stmt`, `if-branch`, `if-stmt`, `while-stmt`, `for-stmt` |
-| expressions | `literal`, `name-ref`, `call`, `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access`, `index-access`, `try-expr` (operand, span), `unary`, `binary` |
+| expressions | `literal`, `name-ref`, `call`, `function-ref` (name, span), `invoke` (target, args, span), `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access`, `index-access`, `try-expr` (operand, span), `unary`, `binary` |
 
 Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; one `literal` covers integers, floats, strings, booleans, and `nil`; grouping `( expr )` produces no node; `call`/`construct` store the name as a string; `unary`/`binary` store the operator as the token-kind symbol (`'plus`, `'and`, `'equal`).
 
@@ -98,11 +99,12 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 ## `src/evaluator.rkt`
 
-`(evaluate program #:in #:out #:err #:args #:max-steps) -> 'nil | exit-code | diagnostic`. Runs `main()` and trusts the checker. Ports default to the current ports and the arguments to `'()`; the body runs inside `parameterize` so `IO.*` honors them.
+`(evaluate program #:in #:out #:err #:args #:max-steps #:entrypoint #:arguments #:builtin-handler) -> value | exit-code | diagnostic`. Runs `main()` by default and trusts the checker. BDD uses entrypoint/arguments for checked named callbacks and builtin-handler for contextual operations. Ports default to the current ports and the arguments to `'()`; the body runs inside `parameterize` so `IO.*` honors them.
 
 - Values: Racket integers, flonums, booleans, strings, `'nil`, lists, a `mapping` struct (immutable equal?-based hash plus reversed insertion-order keys), an `instance` struct (type name plus an immutable field hash), and `exit-code` for `System.exit`.
 - `mapping-put` is the only map writer. Add a key to the reversed key list only on first insertion; replacement keeps its position. `hash-ref` uses a failure thunk for missing keys, never a false/nil sentinel. `Map.size` uses hash-count; Map.keys and debug output follow the stored order. Lookup/update use Racket's effectively constant-time immutable hashes. Run `racket benchmarks/maps.rkt` for three-sample median build/build+read timings outside CI, with checked programs and independent result assertions.
 - Results are private tagged `result-ok` and `result-error` structs; false/nil payloads are successes. `try-expr` uses the current function's return escape for errors, so caller restoration remains in call-function. `fallible` converts only documented conversion/EOF failures to Results and preserves bang diagnostic codes.
+- Function values use a `function-value` name handle, invoked through the same call-function path as direct calls. Checker types are `(list 'Fn PARAM ... RETURN)`; Fn and BDD names are reserved. No closures, equality or JSON encoding.
 - `IO.read_bytes(count)` returns Result[List[Int]] using native read-bytes, waiting for count bytes or EOF; short/empty EOF succeeds. Validate 0..1048576 before allocation/consumption; zero reads nothing. Input-port failures are recoverable. `String.from_bytes` validates 0..255 then strictly decodes UTF-8 with bytes->string/utf-8 and no replacement character.
 - `IO.flush` flushes current-output-port only, returning nil. EOF uses peek-byte rather than peek-char, so partial UTF-8 input is data, not a reason to wait for a whole character. EOF peeking can still block and is not a readiness poll. Text/byte readers share the same buffered port; IO.read still drains until EOF. Reads have no timeout.
 - Optional max-steps counts expression/statement entries, including repeated loop conditions; each evaluation resets the count. Exhaustion is RUNTIME-STEP-LIMIT; it is not a blocking-I/O timeout.
@@ -125,4 +127,12 @@ One catalog of name, parameters, result, generic rule tag, implementation key, e
 
 ## `src/main.rkt`
 
-Reads the file (a missing file prints one plain line and exits 2), builds a `source`, and calls `lex`, `parse`, `check`, then `evaluate`. A diagnostic is printed by `format-diagnostic` (header, message, source line, caret run) on stderr with exit 1. `--dump` pretty-prints the checked tree instead of running it. Arguments after the source file are passed to the evaluator as `System.args`, and an `exit-code` result exits with that code. No source file exits 2. `check` never runs; --ai/--json use the same structured diagnostic. `help NAME --json` reads the catalog without a source file (unknown target exits 2). Only help handles a trailing --json option, after leading options have been parsed; options on other commands precede the command/file so program args stay intact. --max-steps accepts a positive integer and reaches only evaluation.
+`test` dispatches to bdd-runner before the normal language pipeline. It accepts feature paths, repeatable --steps and image/runtime options, discovers sorted features, prints plain/AI/JSON reports and enforces report exit_code. Ordinary evaluation installs the BDD.run service. BDD options after test are parsed separately so ordinary program arguments remain untouched.
+
+Reads the file (a missing file prints one plain line and exits 2), builds a `source`, and calls `lex`, `parse`, `check`, then `evaluate`. A diagnostic is printed by `format-diagnostic` (header, message, source line, caret run) on stderr with exit 1. `--dump` pretty-prints the checked tree instead of running it. Arguments after the source file are passed to the evaluator as `System.args`, and an `exit-code` result exits with that code. No source file exits 2. `check` never runs; --ai/--json use the same structured diagnostic. `help NAME --json` reads the catalog without a source file (unknown target exits 2). Help and test handle trailing style options; options on other commands precede the command/file so program args stay intact. --max-steps accepts a positive integer and reaches only evaluation.
+
+## Gherkin and BDD modules
+
+- `parse-gherkin(source)` returns a feature with expanded scenarios or one diagnostic. Nodes retain spans; scenario Examples rows have separate locations. Parser codes use `PARSE-GHERKIN-HEADER`, `STEP`, `ARGUMENT`, `TABLE`, `EXAMPLES`, `TAGS`, `EMPTY`, `PARAMETER`, and `UNSUPPORTED` with the same prefix.
+- `run-bdd(paths #:steps #:image #:runtime)` returns a JSON-compatible report, accumulating independent file/scenario results. `make-bdd-service` supplies the evaluator's BDD.run bridge. Resolution errors use `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, and `CHECK-BDD-EMPTY`.
+- `bdd-call` executes contextual operations and returns a value, `bdd-result` or diagnostic. `bdd-limit` supervises operations under a scenario custodian/deadline; `bdd-cleanup!` removes its container and shuts down ports/workers. Runtime codes use `RUNTIME-BDD-CONTEXT`, `ASSERTION`, `NO-ASSERTION`, `PREMATURE-EXIT`, `DUPLICATE`, `PATTERN`, `TIMEOUT`, `OUTPUT-LIMIT`, `PROGRAM`, `JSON`, `IO`, `INFRA`, and `USAGE` with the same prefix. These are independent of errors emitted by candidate programs on their captured stderr.

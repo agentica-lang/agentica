@@ -823,9 +823,17 @@ result = handlers["add"].call(args)
 - The checker compares parameter and return types exactly. A wrong shape is `CHECK-TYPE-MISMATCH`.
 - Reserve `Fn`. Lambdas and closures stay a later extension.
 
-- [ ] Lex `&`, and parse `Fn[...]` types, `&name`, and `.call(...)`.
-- [ ] Check and evaluate function values.
-- [ ] Add `examples/dispatch.agc`.
+- [x] Lex `&`, and parse `Fn[...]` types, `&name`, and `.call(...)`.
+- [x] Check and evaluate function values. Exact parameter/return matching, first-class named references in containers/fields/arguments/returns, no closures or JSON encoding; inspect is `<Fn>`.
+- [x] Add `examples/dispatch.agc`.
+
+### Executable BDD features
+
+- [x] Parse an English Gherkin subset in `.feature` files: Background, Scenario/Example, Scenario Outline/Examples, steps, Doc Strings, Data Tables, tags and locations. Unsupported syntax fails explicitly.
+- [x] Add `agentica test` and `BDD.run(...)->Result[Json]`, deterministic predefined steps and typed Agentica handlers registered with `BDD.step(..., &handler)`.
+- [x] Execute independent scenarios with fresh state and Docker candidates. Assertion/runtime/timeout failures stop only the current scenario; missing/ambiguous steps and assertion-free Then steps fail; remaining steps are reported as not executed.
+- [x] Keep specs/handlers outside candidate mounts, disable network and provider environment, bound execution/output, remove containers on all exits, and require Docker integration in `make test-bdd` and CI.
+- [x] Cover flushed replies before EOF, failure continuation, outline arguments/state, no-flush timeout, exact output/exit checks, and actual container isolation. Document the catalog, report verdict and trusted-verifier boundary in `docs/bdd.md` and both development/programming skills.
 
 ### Phase 5k: Error propagation
 
