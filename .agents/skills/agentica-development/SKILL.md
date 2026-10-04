@@ -178,6 +178,7 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 
 ## Collections and algorithm examples (phase 5n, primitive operations)
 
+- `List.concat/take/drop/at` are implemented through the catalog and generic checker. Concat propagates expected types and can infer an empty first list from the second. Take/drop accept all nonnegative Int counts, clamp to length, and report RUNTIME-INVALID-COUNT at negative counts. At propagates the expected element type and reuses RUNTIME-INDEX-OUT-OF-RANGE at the index argument. Inputs stay immutable; concat costs O(length of first list), and take/drop/at are O(n).
 - `List.append`, `set`, `repeat`, and `reverse` preserve inputs and use the existing Racket lists. Indexing and updates remain O(n); repeat is capped at 1048576 and reports RUNTIME-INVALID-COUNT at the count argument. List.set uses the existing index diagnostic at the index argument.
 - Catalog entries have an automatic alternatives field. Only catalog initialization fills it; builtin-ref optionally selects by arity. Map.get has two signatures: Result[V] with two arguments, V with an eagerly evaluated default with three. Text help lists both; its JSON help has an overloads array, while existing single-signature help stays unchanged. Do not add user-function overloading.
 - Generic rules propagate expected types into list construction/updates and Map.get. Keep false/nil lookup payloads distinct from absent keys. Map.delete updates both the hash and insertion-order keys; reinsertion goes last. Map.values follows Map.keys order.

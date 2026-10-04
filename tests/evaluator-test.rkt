@@ -333,6 +333,10 @@
         ("List.set" "List.set([1, 2], 1, 3)" "[1, 3]\n")
         ("List.repeat" "List.repeat(false, 2)" "[false, false]\n")
         ("List.reverse" "List.reverse([1, 2])" "[2, 1]\n")
+        ("List.concat" "List.concat([1], [2])" "[1, 2]\n")
+        ("List.take" "List.take([1, 2], 1)" "[1]\n")
+        ("List.drop" "List.drop([1, 2], 1)" "[2]\n")
+        ("List.at" "List.at([false, true], 0)" "false\n")
         ("String.length" "String.length(\"ñ😀\")" "2\n")
         ("String.upcase" "String.upcase(\"a\")" "\"A\"\n")
         ("String.downcase" "String.downcase(\"A\")" "\"a\"\n")
@@ -406,18 +410,47 @@
       "[1, 2, 3]\n[\"a\", \"c\", \"b\"]\n[7, 3, 8]\n2\ndefault\n1\n9\nfalse\n"
       "ok(false)\nok(nil)\nfalse\nnil\n{\"c\": 3}\n")))
 
+  (test-case "list helpers handle boundaries without changing their inputs"
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  xs = [1, 2]\n  ys = [3]\n"
+        "  IO.inspect(List.concat(xs, ys))\n"
+        "  IO.inspect(List.take(xs, 0))\n"
+        "  IO.inspect(List.drop(xs, 0))\n"
+        "  IO.inspect(List.take(xs, 2))\n"
+        "  IO.inspect(List.drop(xs, 2))\n"
+        "  IO.inspect(List.take(xs, 9223372036854775807))\n"
+        "  IO.inspect(List.drop(xs, 9223372036854775807))\n"
+        "  empty: List[Int] = []\n"
+        "  IO.inspect(List.concat(empty, xs))\n"
+        "  IO.inspect(List.concat(xs, empty))\n"
+        "  IO.inspect(List.take(empty, 1))\n"
+        "  IO.inspect(List.drop(empty, 1))\n"
+        "  IO.inspect(List.at(xs, 1))\n"
+        "  IO.inspect(List.at([nil], 0))\n"
+        "  IO.inspect(xs)\n  IO.inspect(ys)")))
+     "[1, 2, 3]\n[]\n[1, 2]\n[1, 2]\n[]\n[1, 2]\n[]\n[1, 2]\n[1, 2]\n[]\n[]\n2\nnil\n[1, 2]\n[3]\n"))
+
   (test-case "list updates and allocations reject invalid arguments at their spans"
     (for ([entry '(("List.set([1], -1, 2)" RUNTIME-INDEX-OUT-OF-RANGE)
                    ("List.set([1], 1, 2)" RUNTIME-INDEX-OUT-OF-RANGE)
                    ("List.set([], 0, 2)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.at([1], -1)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.at([1], 1)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.at([], 0)" RUNTIME-INDEX-OUT-OF-RANGE)
+                   ("List.take([1], -1)" RUNTIME-INVALID-COUNT)
+                   ("List.drop([1], -1)" RUNTIME-INVALID-COUNT)
                    ("List.repeat(1, -1)" RUNTIME-INVALID-COUNT)
                    ("List.repeat(1, 1048577)" RUNTIME-INVALID-COUNT))])
-      (define problem (diagnostic-of (main-with (string-append "  x = " (car entry)))))
+      (define binding-prefix (if (equal? (car entry) "List.at([], 0)") "  x: Int = " "  x = "))
+      (define problem (diagnostic-of (main-with (string-append binding-prefix (car entry)))))
       (check-equal? (diagnostic-code problem) (cadr entry))
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
       (define prefix (car (string-split (car entry) ", ")))
       (check-equal? (source-position-column (source-span-start (diagnostic-span problem)))
-                    (+ 9 (string-length prefix)))))
+                    (+ 3 (string-length binding-prefix) (string-length prefix)))))
 
   (test-case "JSON parsing requires one valid finite value and preserves null and false"
     (for ([text '("" " \r\n" "true false" "{}x" "nullx" "01" "+1" "1."

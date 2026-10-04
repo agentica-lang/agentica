@@ -149,6 +149,10 @@ List.append(list: List[T], value: T) -> List[T]
 List.set(list: List[T], index: Int, value: T) -> List[T]
 List.repeat(value: T, count: Int) -> List[T]
 List.reverse(list: List[T]) -> List[T]
+List.concat(a: List[T], b: List[T]) -> List[T]
+List.take(list: List[T], count: Int) -> List[T]
+List.drop(list: List[T], count: Int) -> List[T]
+List.at(list: List[T], index: Int) -> T
 
 String.length(s: String) -> Int                # counts Unicode characters
 String.upcase(s: String) -> String
@@ -184,11 +188,13 @@ System.exit(code: Int) -> Void
 ```
 
 - A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
-- Build lists with literals or `List.append`/`List.repeat`; update them with `List.set`. Concatenation remains unimplemented. To change a map, use `Map.put`/`Map.delete`; these operations leave the original unchanged.
+- Build lists with literals or `List.append`/`List.repeat`; update them with `List.set`. Concatenate lists with `List.concat`. To change a map, use `Map.put`/`Map.delete`; these operations leave the original unchanged.
 - Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
 
 ### Collections
+
+`List.concat` joins lists of the same element type in O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Nonnegative counts above length return the whole list or empty list, respectively; negative counts halt with `RUNTIME-INVALID-COUNT` at the count argument. Both cost O(n). `List.at` reads a zero-based index in O(n); negative or out-of-range indexes halt with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
 
 All collection updates preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends cost O(n²). Indexing is still O(n). `List.repeat` costs O(count) and accepts 0..1048576; zero returns an empty list of the inferred element type, and invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` requires an index in 0..length-1; otherwise it halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument. Expected types support empty collections and Result elements; annotate when there is insufficient context.
 
@@ -628,7 +634,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
-| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576 |
+| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count |
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text |
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |

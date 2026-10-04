@@ -348,7 +348,13 @@ List.append(list: List[T], value: T) -> List[T]
 List.set(list: List[T], index: Int, value: T) -> List[T]
 List.repeat(value: T, count: Int) -> List[T]
 List.reverse(list: List[T]) -> List[T]
+List.concat(a: List[T], b: List[T]) -> List[T]
+List.take(list: List[T], count: Int) -> List[T]
+List.drop(list: List[T], count: Int) -> List[T]
+List.at(list: List[T], index: Int) -> T
 ```
+
+`List.concat` joins lists of the same element type and costs O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Counts must be nonnegative (otherwise RUNTIME-INVALID-COUNT at the count argument); counts greater than length return the whole list or an empty list, respectively. Both cost O(n) with the current list representation. `List.at` is zero-based, costs O(n), and reports RUNTIME-INDEX-OUT-OF-RANGE at the index argument for negative or out-of-range indexes, like indexing syntax.
 
 Collection operations preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends can cost O(n²). `List.repeat` costs O(count), accepts 0..1048576, and returns an empty typed list for zero. Invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` uses zero-based indexes and halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument if it is negative or outside the list.
 
