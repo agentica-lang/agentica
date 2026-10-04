@@ -1,66 +1,21 @@
 ---
 name: agentica-programming
-description: Write, run, and repair programs in the Agentica language (`.agc` files) using the `agentica` binary and its diagnostics. Use when asked to write or fix an Agentica program. Do not use for changing the interpreter itself (lexer, parser, checker, evaluator, tests); that is the agentica-development skill.
+description: Write, check, run, and repair Agentica programs (`.agc` files). Use for Agentica application code; use agentica-development for interpreter, tests, or language implementation changes.
 ---
 
-# Programming in Agentica
+# Agentica programming
 
-Agentica is a small statically typed language with Ruby-like syntax. Read [references/language.md](references/language.md) before writing code: it is the whole language, with its builtin functions, diagnostic codes, and complete example programs. Do not guess syntax that is not in it.
+## Before coding
 
-## Run and check
+Read [references/language.md](references/language.md). It is the self-contained language reference; do not guess syntax or APIs that are not documented there.
 
-Use the `agentica` binary, not `racket`:
+## Write and verify
 
-```sh
-agentica program.agc            # check, then run main()
-agentica check program.agc      # check only; prints "check ok", runs nothing
-agentica --dump program.agc     # check only; prints the checked tree, runs nothing
-agentica program.agc a b        # extra arguments reach System.args()
-agentica help String.to_int --json  # builtin signature and behavior, no program required
-agentica --allow-run program.agc  # enable Process.spawn
-agentica --max-steps 10000 program.agc  # bound expression/statement evaluation
-```
+1. Save the requested program as a `.agc` file. It needs one `main() -> Void`.
+2. Check and run it with `agentica program.agc`. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree.
+3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`).
+4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
-If `agentica` is not on the `PATH`, use the path the user gave you.
+Use `agentica help NAME --json` to inspect a builtin. If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`; execution can be bounded with `--max-steps N`.
 
-Exit codes: `0` ok, `1` the program has a diagnostic (the stage that failed stopped at its first error), `2` bad usage or unreadable file.
-
-IO.gets returns Result[String]; use IO.gets! for a String that halts at EOF. In a Result-returning function, `try` propagates errors; main returns Void. See the reference for contextual Result inference and eager fallback evaluation.
-
-## Choose JSON shapes
-
-For fixed protocol messages and records, prefer structs with native typed fields
-and call `JSON.encode(record)` directly. Separate message shapes keep
-absent fields absent; do not add null placeholders. `ok` and `error` are reserved
-field names: a JSON-RPC error envelope needs a String-keyed map, though its
-nested error payload can still be a struct. Keep genuinely dynamic
-payloads as `Json` fields and convert those payloads once with `JSON.from`.
-
-Use `JSON.object`/`JSON.array` for dynamic shapes. Maps and lists are homogeneous:
-a `Map[String, Json]` needs `JSON.from("2.0")`, but a struct's `String` field
-accepts `"2.0"` directly. Avoid wrapping an already encodable map or struct in
-`JSON.object` just to encode it. See the JSON section of
-[references/language.md](references/language.md) for a response example.
-For stdio protocols, share a text-writing helper that prints one encoded message
-and calls `IO.flush`; keep logs on stderr with `IO.warn`.
-
-## Read a diagnostic
-
-Diagnostics go to stderr:
-
-```text
-bad.agc:2:14 error[CHECK-TYPE-MISMATCH]
-expected Int, found String
-
-2 |   age: Int = "25"
-  |              ^^^^
-```
-
-The header gives the file, line, column, and a stable code. The code prefix names the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-` (while running). The caret marks the offending source. Only the first error is reported, so fixing it can reveal the next one. Extra `-` marks under other parts of the line, with a short note, show the values involved (for example `this is Int`), and a final `= help:` line gives a fix when the checker knows one. `agentica --ai check program.agc` prints the same diagnostic as compact text (`expected`, `actual`, the enclosing function) if the plain form is not enough.
-
-## Work loop
-
-1. Read `references/language.md`.
-2. Write the program to a `.agc` file. Every program needs one `main() -> Void`.
-3. Run `agentica` on it. If it exits `1`, fix the code at the reported position and run again.
-4. Stop when it exits `0` and the output is what the task asked for. A program that only passes the checker is not done: run it and compare the output.
+For fixed JSON records, prefer structs with typed fields. Use `Json`/`JSON.object` for genuinely dynamic data; maps and lists are homogeneous. For stdio protocols, write one message per line, flush stdout with `IO.flush()`, and send logs to stderr with `IO.warn()`.
