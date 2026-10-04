@@ -6,7 +6,7 @@
          current-process-owner current-process-registry current-process-registry-lock
          current-process-closing current-process-custodian current-process-allowed?)
 
-(struct process-handle (owner custodian process input output worker failure
+(struct process-handle (owner registry registry-lock custodian process input output worker failure
                              read-lock write-lock state-lock closed? stdin-closed?) #:mutable)
 (define current-process-owner (make-parameter #f))
 (define current-process-registry (make-parameter #f))
@@ -25,7 +25,9 @@
         (custodian-shutdown-all (process-handle-custodian p))
         (when child
           (subprocess-kill child #t)
-          (subprocess-wait child)))))
+          (subprocess-wait child)))
+      (call-with-semaphore (process-handle-registry-lock p)
+        (lambda () (hash-remove! (process-handle-registry p) p)))))
   (void))
 
 (define (process-close-all! registry lock closing)
@@ -49,7 +51,8 @@
                (andmap (lambda (s) (not (string-contains? s (string #\nul)))) (cons command arguments)))
     (error 'process "command must be nonempty and arguments cannot contain NUL"))
   (define p
-    (process-handle (current-process-owner) (make-custodian (current-process-custodian))
+    (process-handle (current-process-owner) (current-process-registry) (current-process-registry-lock)
+                    (make-custodian (current-process-custodian))
                     #f #f #f #f (box #f) (make-semaphore 1) (make-semaphore 1)
                     (make-semaphore 1) #f #f))
   (call-with-semaphore (current-process-registry-lock)

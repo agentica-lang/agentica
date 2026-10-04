@@ -2,7 +2,8 @@
 
 (require (except-in rackunit check) racket/runtime-path racket/system json
          "../src/lexer.rkt" "../src/parser.rkt" "../src/checker.rkt"
-         "../src/source.rkt" "../src/diagnostic.rkt" "../src/evaluator.rkt")
+         "../src/source.rkt" "../src/diagnostic.rkt" "../src/evaluator.rkt"
+         "../src/process.rkt")
 
 (define-runtime-path peer "fixtures/process-peer.js")
 (define-runtime-path main-file "../src/main.rkt")
@@ -64,6 +65,20 @@
       (close-input-port err))))
 
 (module+ test
+  (test-case "failed and explicitly closed processes leave the active registry"
+    (define executable (path->string (find-executable-path "racket")))
+    (define counts '())
+    (define text
+      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    BDD.assert(not Result.ok?(failed), \"failed spawn\")\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    BDD.assert(true, \"closed process\")\n  end\nend\n" executable))
+    (define result
+      (evaluate (compile-program text) #:allow-run #t
+                #:err (open-output-nowhere)
+                #:builtin-handler
+                (lambda (name arguments span)
+                  (set! counts (cons (hash-count (current-process-registry)) counts))
+                  (void))))
+    (check-pred void? result)
+    (check-equal? counts '(0 0 0 0 0 0)))
   (cond
     [(not node)
      (if (getenv "CI") (error 'process-test "Node.js is required in CI")
