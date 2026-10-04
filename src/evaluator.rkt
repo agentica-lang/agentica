@@ -467,6 +467,22 @@
                        (lambda (data) (map json-value data)))]
         [("List.size") (length (car arguments))]
         [("List.append") (append (car arguments) (list (cadr arguments)))]
+        [("List.map" "List.filter" "List.reduce")
+         (define target (car arguments))
+         (define callback (hash-ref functions (function-value-name (last arguments))))
+         (define (invoke-callback args)
+           (call-function callback args span))
+         (cond
+           [(equal? name "List.map")
+            (for/list ([item (in-list target)])
+              (invoke-callback (list item)))]
+           [(equal? name "List.filter")
+            (for/list ([item (in-list target)]
+                       #:when (invoke-callback (list item)))
+              item)]
+           [else
+            (for/fold ([accumulator (cadr arguments)]) ([item (in-list target)])
+              (invoke-callback (list accumulator item)))])]
         [("List.concat") (append (car arguments) (cadr arguments))]
         [("List.take" "List.drop")
          (define target (car arguments))

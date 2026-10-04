@@ -333,6 +333,9 @@
         ("List.set" "List.set([1, 2], 1, 3)" "[1, 3]\n")
         ("List.repeat" "List.repeat(false, 2)" "[false, false]\n")
         ("List.reverse" "List.reverse([1, 2])" "[2, 1]\n")
+        ("List.map" "List.map([1, 2], &identity)" "[1, 2]\n")
+        ("List.filter" "List.filter([1, 2], &positive)" "[1, 2]\n")
+        ("List.reduce" "List.reduce([1, 2], 0, &add)" "3\n")
         ("List.concat" "List.concat([1], [2])" "[1, 2]\n")
         ("List.take" "List.take([1, 2], 1)" "[1]\n")
         ("List.drop" "List.drop([1, 2], 1)" "[2]\n")
@@ -369,7 +372,7 @@
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)
-        (run-io (string-append "def identity(n: Int) -> Int\n  return n\nend\n"
+        (run-io (string-append "def positive(n: Int) -> Bool\n  return n > 0\nend\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\ndef identity(n: Int) -> Int\n  return n\nend\n"
                               (main-with (format "  r: Result[Int] = error(\"bad\")\n  ~a"
                                   (if (eq? (builtin-result (hash-ref builtins name)) 'Void)
                                       (cadr sample) (format "IO.inspect(~a)" (cadr sample))))))
@@ -409,6 +412,78 @@
       "[1, 2]\n[3, 2, 4]\n[[1, 2], [3, 2]]\n[[1, 2], [1, 2]]\n[2, 1]\n[]\n1048576\n"
       "[1, 2, 3]\n[\"a\", \"c\", \"b\"]\n[7, 3, 8]\n2\ndefault\n1\n9\nfalse\n"
       "ok(false)\nok(nil)\nfalse\nnil\n{\"c\": 3}\n")))
+
+  (test-case "collection callbacks run left to right and preserve inputs"
+    (define callbacks
+      (string-append
+       "def show(n: Int) -> String\n  IO.inspect(n)\n  return String.from_int(n)\nend\n"
+       "def keep(n: Int) -> Bool\n  IO.inspect(n)\n  return n > 1\nend\n"
+       "def digits(acc: Int, n: Int) -> Int\n  return acc * 10 + n\nend\n"
+       "def wrap(n: Int) -> Result[Int]\n  return ok(n)\nend\n"
+       "def negate(b: Bool) -> Bool\n  return not b\nend\n"
+       "def nothing(acc: Nil, n: Int) -> Nil\n  return nil\nend\n"))
+    (check-equal?
+     (output-of
+      (string-append callbacks
+       (main-with (string-append
+        "  xs = [1, 2, 3]\n  mapper = &show\n"
+        "  IO.inspect(List.map(xs, mapper))\n"
+        "  IO.inspect(List.filter(xs, &keep))\n"
+        "  IO.inspect(List.reduce(xs, 0, &digits))\n"
+        "  IO.inspect(List.map([], &show))\n"
+        "  IO.inspect(List.filter([], &keep))\n"
+        "  IO.inspect(List.reduce([], 7, &digits))\n"
+        "  IO.inspect(List.map([1], &wrap))\n"
+        "  IO.inspect(List.map([true, false], &negate))\n"
+        "  IO.inspect(List.filter([true, false], &negate))\n"
+        "  IO.inspect(List.reduce([1, 2], nil, &nothing))\n"
+        "  IO.inspect(xs)"))))
+     "1\n2\n3\n[\"1\", \"2\", \"3\"]\n1\n2\n3\n[2, 3]\n123\n[]\n[]\n7\n[ok(1)]\n[false, true]\n[false]\nnil\n[1, 2, 3]\n"))
+
+  (test-case "collection callbacks restore caller scopes and return targets"
+    (define callbacks
+      (string-append
+       "def change(n: Int) -> Int\n  saved = n + 10\n  return saved\nend\n"
+       "def keep(n: Int) -> Bool\n  saved = n > 1\n  return saved\nend\n"
+       "def add(acc: Int, n: Int) -> Int\n  saved = acc + n\n  return saved\nend\n"
+       "def caller() -> Int\n  saved = 42\n"
+       "  if true\n"
+       "    local = 7\n"
+       "    IO.inspect(List.map([1, 2], &change))\n"
+       "    IO.inspect(List.filter([1, 2], &keep))\n"
+       "    IO.inspect(List.reduce([1, 2], 0, &add))\n"
+       "    IO.inspect(local)\n"
+       "  end\n"
+       "  return saved\nend\n"))
+    (check-equal?
+     (output-of (string-append callbacks (main-with "  IO.inspect(caller())")))
+     "[11, 12]\n[2]\n3\n7\n42\n"))
+
+  (test-case "recursive collection callbacks share the call-depth limit"
+    ;; Bounded recursion would finish if each traversal reset call depth.
+    (define callbacks
+      (string-append
+       "def descend(n: Int) -> Int\n"
+       "  if n == 0\n    return 0\n  end\n"
+       "  return List.map([n - 1], &descend)[0]\nend\n"))
+    (define problem
+      (diagnostic-of (string-append callbacks
+                       (main-with "  IO.inspect(descend(10001))"))))
+    (check-equal? (diagnostic-code problem) 'RUNTIME-STACK-OVERFLOW)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 5))
+
+  (test-case "collection callbacks propagate failure and share the step budget"
+    (define callbacks "def fail(n: Int) -> Int\n  return 1 / n\nend\n")
+    (define problem
+      (diagnostic-of (string-append callbacks
+                       (main-with "  xs = List.map([1, 0, 2], &fail)"))))
+    (check-equal? (diagnostic-code problem) 'RUNTIME-DIVISION-BY-ZERO)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
+    (define-values (out err result)
+      (run-io (string-append callbacks
+                (main-with "  xs = List.map(List.repeat(1, 100), &fail)"))
+              #:max-steps 30))
+    (check-equal? (diagnostic-code result) 'RUNTIME-STEP-LIMIT))
 
   (test-case "list helpers handle boundaries without changing their inputs"
     (check-equal?

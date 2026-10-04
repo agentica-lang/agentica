@@ -892,8 +892,8 @@ closure or scheduler feature. Keep names and argument order consistent with
 the existing builtin library.
 
 - [x] `List.concat`, `take`, `drop`, `at`: immutable operations, clamped nonnegative counts, and zero-based checked indexes.
-- [ ] Settle `reduce` argument order before implementing callbacks.
-- [ ] `List.map`, `filter`, `reduce`.
+- [x] Settle `reduce` argument order before implementing callbacks: accumulator first, `f(accumulator, item)`.
+- [x] `List.map`, `filter`, `reduce`: exact callback signatures, ordered immutable traversal, contextual empty inputs, and shared execution limits.
 - [ ] `List.sort`, `sort_by`.
 - [ ] Add string search/replacement and missing numeric conversions needed by representative scripts.
 - [ ] Specify and add basic time and randomness APIs; define clock, seed and bounds behavior before implementation.

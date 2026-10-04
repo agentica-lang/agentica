@@ -111,14 +111,11 @@ ready = done?          # A function name is not a value; use &done?.
 
 ## 5. Remaining `List` operations
 
-The collection module is `List`, keeping `List.size`; the earlier `Enum` proposal is superseded. Phase 5n already implements `List.append`, `List.set`, `List.repeat`, `List.reverse`, `List.concat/take/drop/at`, and `Map.values/get/delete`. Their current contracts live in `grammar.md` and the programming reference. Knight-tour and small traveling-salesman examples exercise construction, persistent updates, and nested lists. Operations below remain planned, not part of the implemented core.
+The collection module is `List`, keeping `List.size`; the earlier `Enum` proposal is superseded. Phase 5n already implements `List.append`, `List.set`, `List.repeat`, `List.reverse`, `List.concat/take/drop/at`, `List.map/filter/reduce`, and `Map.values/get/delete`. Their current contracts live in `grammar.md` and the programming reference. Knight-tour and small traveling-salesman examples exercise construction, persistent updates, and nested lists. Operations below remain planned, not part of the implemented core.
 
-Only callbacks depend on function values (section 4, phase 5j): `List.map`, `List.filter`, `List.reduce`, `List.sort_by`, `List.any?`, and `List.all?`. Without closures, a function cannot capture variables; extra state travels through parameters or the accumulator.
+Remaining callback operations depend on function values (section 4, phase 5j): `List.sort_by`, `List.any?`, and `List.all?`. Without closures, a function cannot capture variables; extra state travels through parameters or the accumulator.
 
 ```text
-List.map(list: List[A], f: Fn[A, B]) -> List[B]
-List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
-List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
 List.sort(list: List[T]) -> List[T]
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 List.sum(list: List[Int]) -> Int
@@ -132,7 +129,6 @@ Planned rules:
 - Generic builtins, no user generics. Collection operations preserve their inputs.
 - `List.sort` and `sort_by` are stable and require Int, Float, or String ordering; strings use Unicode code points and Float NaN goes last. Invalid ordered types produce CHECK-TYPE-MISMATCH.
 - `List.member?` requires primitive equality.
-- Settle reduce argument order before implementation; the current proposal is accumulator first, `f(accumulator, item)`.
 - Callbacks require exact parameter and return types. Primitive operations and plain sorting do not require 5j.
 - `List.size` remains the count operation; no duplicate `count` alias is planned.
 - Linked-list operations remain linear; repeated append costs O(n²). A persistent vector is a later optimization.
