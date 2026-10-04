@@ -440,6 +440,38 @@
         "  IO.inspect(xs)"))))
      "1\n2\n3\n[\"1\", \"2\", \"3\"]\n1\n2\n3\n[2, 3]\n123\n[]\n[]\n7\n[ok(1)]\n[false, true]\n[false]\nnil\n[1, 2, 3]\n"))
 
+  (test-case "collection callbacks restore caller scopes and return targets"
+    (define callbacks
+      (string-append
+       "def change(n: Int) -> Int\n  saved = n + 10\n  return saved\nend\n"
+       "def keep(n: Int) -> Bool\n  saved = n > 1\n  return saved\nend\n"
+       "def add(acc: Int, n: Int) -> Int\n  saved = acc + n\n  return saved\nend\n"
+       "def caller() -> Int\n  saved = 42\n"
+       "  if true\n"
+       "    local = 7\n"
+       "    IO.inspect(List.map([1, 2], &change))\n"
+       "    IO.inspect(List.filter([1, 2], &keep))\n"
+       "    IO.inspect(List.reduce([1, 2], 0, &add))\n"
+       "    IO.inspect(local)\n"
+       "  end\n"
+       "  return saved\nend\n"))
+    (check-equal?
+     (output-of (string-append callbacks (main-with "  IO.inspect(caller())")))
+     "[11, 12]\n[2]\n3\n7\n42\n"))
+
+  (test-case "recursive collection callbacks share the call-depth limit"
+    ;; Bounded recursion would finish if each traversal reset call depth.
+    (define callbacks
+      (string-append
+       "def descend(n: Int) -> Int\n"
+       "  if n == 0\n    return 0\n  end\n"
+       "  return List.map([n - 1], &descend)[0]\nend\n"))
+    (define problem
+      (diagnostic-of (string-append callbacks
+                       (main-with "  IO.inspect(descend(10001))"))))
+    (check-equal? (diagnostic-code problem) 'RUNTIME-STACK-OVERFLOW)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 5))
+
   (test-case "collection callbacks propagate failure and share the step budget"
     (define callbacks "def fail(n: Int) -> Int\n  return 1 / n\nend\n")
     (define problem
