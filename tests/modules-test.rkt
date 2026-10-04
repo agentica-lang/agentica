@@ -30,6 +30,95 @@
   (values (get-output-string out) result))
 
 (module+ test
+  (test-case "embedded String queue preserves FIFO and old values without local std files"
+    (with-files
+     '(("std/queue.agc" . "this local file must not be loaded\n")
+       ("root.agc" . "import \"std/queue.agc\" as Queue\nimport \"std/queue.agc\" as Again\ndef main() -> Void\n  original = Queue.new()\n  q: Again.QueueState = Queue.push(original, \"\")\n  q = Queue.push(q, \"same\")\n  q = Queue.push(q, \"same\")\n  IO.inspect(Queue.size(q))\n  IO.inspect(Queue.empty?(original))\n  IO.inspect(not Result.ok?(Queue.pop(original)))\n  IO.inspect(not Result.ok?(Queue.peek(original)))\n  IO.inspect(Result.unwrap!(Queue.peek(q)))\n  while not Queue.empty?(q)\n    item = Result.unwrap!(Queue.pop(q))\n    puts(item.value)\n    q = item.remaining\n  end\n  IO.inspect(Queue.size(q))\nend\n"))
+     (lambda (directory)
+       (define path (build-path directory "root.agc"))
+       (define-values (out result) (run path))
+       (check-equal? out "3\ntrue\ntrue\ntrue\n\"\"\n\nsame\nsame\n0\n")
+       (check-equal? result (void))
+       ;; Exercise the same import with the release executable in compiled CI.
+       (define executable (getenv "AGENTICA_TEST_EXECUTABLE"))
+       (define-values (process output input errors)
+         (parameterize ([current-directory (find-system-path 'temp-dir)])
+           (if executable
+               (subprocess #f #f #f executable path)
+               (subprocess #f #f #f (find-system-path 'exec-file) main-file path))))
+       (close-output-port input)
+       (define cli-out (port->string output))
+       (define cli-err (port->string errors))
+       (subprocess-wait process)
+       (close-input-port output)
+       (close-input-port errors)
+       (check-equal? (subprocess-status process) 0 cli-err)
+       (check-equal? cli-err "")
+       (check-equal? cli-out out))))
+
+  (test-case "pkg roots search project, environment, then user data independent of cwd"
+    (with-files
+     '(("root.agc" . "import \"pkg/value.agc\" as Value\ndef main() -> Void\n  puts(Value.read())\nend\n")
+       ("agc_libs/value.agc" . "export def read() -> String\n  return \"project\"\nend\n")
+       ("first/value.agc" . "import \"helper.agc\" as Helper\nexport def read() -> String\n  return Helper.read()\nend\n")
+       ("first/helper.agc" . "export def read() -> String\n  return \"first\"\nend\n")
+       ("second/value.agc" . "export def read() -> String\n  return \"second\"\nend\n")
+       ("data/agentica/lib/value.agc" . "export def read() -> String\n  return \"user\"\nend\n"))
+     (lambda (directory)
+       (define env (environment-variables-copy (current-environment-variables)))
+       (define windows? (eq? (system-type 'os) 'windows))
+       (environment-variables-set! env #"AGENTICA_PATH"
+         (string->bytes/utf-8
+          (string-join (map (lambda (name) (path->string (build-path directory name)))
+                            '("absent" "first" "second")) (if windows? ";" ":"))))
+       (environment-variables-set! env (if windows? #"LOCALAPPDATA" #"XDG_DATA_HOME")
+                                   (path->bytes (build-path directory "data")))
+       (parameterize ([current-environment-variables env]
+                      [current-directory (find-system-path 'temp-dir)])
+         (for ([expected '("project\n" "first\n" "second\n" "user\n")]
+               [remove '("agc_libs" "first" "second" #f)])
+           (define-values (out result) (run (build-path directory "root.agc")))
+           (check-equal? out expected)
+           (check-equal? result (void))
+           (when remove (delete-directory/files (build-path directory remove))))))))
+
+  (test-case "reserved library namespaces reject traversal and retain import spans"
+    (for ([entry '(("std/../queue.agc" CHECK-IMPORT-PATH)
+                   ("std//queue.agc" CHECK-IMPORT-PATH)
+                   ("std/missing.agc" CHECK-IMPORT-IO)
+                   ("pkg/../outside.agc" CHECK-IMPORT-PATH)
+                   ("pkg/agentica-test-nonexistent-stdlib-library.agc" CHECK-IMPORT-IO))])
+      (with-files
+       (list (cons "root.agc" (format "import ~s as Q\ndef main() -> Void\nend\n" (car entry))))
+       (lambda (directory)
+         (define env (environment-variables-copy (current-environment-variables)))
+         (environment-variables-set! env #"AGENTICA_PATH" #"")
+         (define problem (parameterize ([current-environment-variables env])
+                           (checked (build-path directory "root.agc"))))
+         (check-true (diagnostic? problem))
+         (check-equal? (diagnostic-code problem) (cadr entry))
+         (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 1)))))
+
+  (test-case "pkg imports reject relative environment roots and escaping symlinks"
+    (with-files
+     '(("root.agc" . "import \"pkg/value.agc\" as Value\ndef main() -> Void\nend\n")
+       ("outside.agc" . "export def read() -> Int\n  return 1\nend\n"))
+     (lambda (directory)
+       (define env (environment-variables-copy (current-environment-variables)))
+       (environment-variables-set! env #"AGENTICA_PATH" #"relative")
+       (parameterize ([current-environment-variables env])
+         (check-equal? (diagnostic-code (checked (build-path directory "root.agc")))
+                       'CHECK-IMPORT-PATH))
+       ;; Unix symlinks need no privilege; Windows link creation may require it.
+       (unless (eq? (system-type 'os) 'windows)
+         (make-directory (build-path directory "agc_libs"))
+         (make-file-or-directory-link (build-path directory "outside.agc")
+                                      (build-path directory "agc_libs" "value.agc"))
+         (environment-variables-set! env #"AGENTICA_PATH" #"")
+         (parameterize ([current-environment-variables env])
+           (check-equal? (diagnostic-code (checked (build-path directory "root.agc")))
+                         'CHECK-IMPORT-PATH))))))
+
   (test-case "imports share canonical identities and resolve relative to each file"
     (with-files
      '(("library/models.agc" . "export struct Value\n  n: Int\nend\nexport def read(value: Value) -> Int\n  return value.n\nend\ndef main() -> Void\n  puts(\"must not run\")\nend\n")
@@ -105,7 +194,7 @@
   (test-case "BDD can register imported handlers"
     (with-files
      '(("steps.agc" . "import \"assertions.agc\" as Assertions\ndef main() -> Void\n  BDD.step(\"it works\", &Assertions.verify)\nend\n")
-       ("assertions.agc" . "export def verify(args: List[String]) -> Void\n  BDD.assert(true, \"imported handler\")\nend\n")
+       ("assertions.agc" . "import \"std/queue.agc\" as Queue\nexport def verify(args: List[String]) -> Void\n  q = Queue.push(Queue.new(), \"imported handler\")\n  BDD.assert(Result.unwrap!(Queue.peek(q)) == \"imported handler\", \"imported handler\")\nend\n")
        ("test.feature" . "Feature: Modules\nScenario: Imported handler\nThen it works\n"))
      (lambda (directory)
        (define report (run-bdd (list (build-path directory "test.feature"))

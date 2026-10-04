@@ -34,12 +34,15 @@ jobs:
           make exe
           ./dist/agentica examples/hello.agc
           ./dist/agentica --version
+          ./dist/agentica examples/queue.agc
+          raco test tests/stdlib-distribution-test.rkt
       - name: Package distributed executable
         run: |
           name="agentica-${{ steps.version.outputs.version }}-linux-x86_64"
           raco distribute "dist/$name" dist/agentica
           "./dist/$name/bin/agentica" examples/hello.agc
           "./dist/$name/bin/agentica" --version
+          "./dist/$name/bin/agentica" examples/queue.agc
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
           tar -tzf "dist/$name.tar.gz" >/dev/null
