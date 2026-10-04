@@ -36,7 +36,7 @@ src/
   diagnostic.rkt  # diagnostic struct and format-diagnostic
   token.rkt       # token struct
   lexer.rkt       # lex: source -> (listof token) | diagnostic
-  ast.rkt         # syntax tree nodes; every node carries a span
+  ast.rkt         # syntax tree nodes (including enums and case patterns); every node carries a span
   parser.rkt      # parse: (listof token) -> program | diagnostic
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
@@ -194,6 +194,16 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - modules.rkt links parsed files before checking: canonical paths deduplicate imports and detect cycles; aliases resolve only exported declarations. Dependencies get unique internal identities while root names remain stable for CLI/BDD entrypoints. Preserve every original span when rewriting nodes; never restart evaluation for imported calls/tasks. Imports resolve relative to their source, not cwd. Alias/declaration collisions and builtin-name redefinitions are rejected before renaming. as is contextual, import/export are keywords.
 - CLI check/run/dump and BDD handler loading share this resolver. Raw import/export nodes passed directly to check give CHECK-MODULE-CONTEXT. Exported signatures may mention private types; importers cannot name/construct those types. `std/` reads compile-time embedded Agentica sources from stdlib.rkt, with virtual source names and no filesystem fallback. Add shipped modules to its explicit registry; embed-source tracks external source dependencies with register-external-file. `pkg/` searches entrypoint-local agc_libs, absolute AGENTICA_PATH roots, user data and Unix system data; first existing file wins. Skip missing candidates before normalize-path (it fails for absent parent directories); validate namespace components and canonical symlink containment. Other paths remain source-relative. No package registry, wildcard imports, module state, cycles, or receiver attachment.
 - tests/modules-test.rkt owns linking/visibility, cross-file diagnostics, shared task budgets, BDD imports, and the combined JSON example. Its CLI test honors AGENTICA_TEST_EXECUTABLE for compiled CI coverage. Unknown dotted calls without a matching import alias pass to the checker so misspelled builtin calls retain CHECK-UNKNOWN-NAME; unknown qualified type aliases remain CHECK-IMPORT-NAME.
+
+## Enums and pattern matching
+
+- `enum-decl` and `enum-variant` live in `ast.rkt`; `case-stmt`, `case-arm`, `wildcard-pattern`, `literal-pattern`, `variant-pattern`, and `enum-constructor` are the matching nodes. The parser maps `true`/`false`/`nil` patterns to `#t`/`#f`/`'nil`, just like expression literals. `_` in a payload slot is represented by `#f` in the bindings list; it never introduces a variable.
+- Generic type variables exist only while resolving an enum's payload declarations. Preserve those names while the module linker rewrites type references; otherwise `T` becomes a module-qualified ordinary type and generic enum registration fails. Imported enum references resolve `Alias.Enum`; variants need `Alias.Enum.Variant`.
+- Nullary enum construction with `Option.None()` is parsed as a general `construct` node (empty argument list); module linking/checking/evaluation must recognize the enum prefix. Payload variants parse as `enum-constructor`. Imported nullary calls have three segments and must be rewritten before ordinary struct constructor resolution.
+- Checker enum types are nominal and retain their enum name plus resolved type arguments. Infer type variables structurally from payload types and seed inference from a matching expected enum type. `Result[T]` is still the builtin Result, but case patterns use tags `Result.Ok` and `Result.Err`; `Result[Void]` can only discard its Ok payload with `_`.
+- Enum cases require every variant or `_`. All non-enum scrutinees—including Bool and Nil—require `_`. Reject repeated/covered arms, require `_` last, and validate pattern payload arity/types before checking each arm in a fresh scope. Exhaustive case branches participate in all-path return analysis.
+- Runtime enums use a tagged `enum-value` carrying canonical enum name, variant name, and payload list. Result values remain `result-ok`/`result-error`; matching adapts those runtime values to the Result variant tags. Keep the independent module-linker tests for exported/private enums and imported patterns.
+- Stable checker diagnostics include `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE`, `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, and `CHECK-UNREACHABLE-CASE-ARM`; tests should assert codes, not wording.
 
 ## Function values and BDD
 

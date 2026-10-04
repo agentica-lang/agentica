@@ -8,6 +8,8 @@
          (struct-out function-decl)
          (struct-out param)
          (struct-out struct-decl)
+         (struct-out enum-decl)
+         (struct-out enum-variant)
          (struct-out field-decl)
          (struct-out type-ref)
          (struct-out type-expression)
@@ -18,6 +20,12 @@
          (struct-out if-stmt)
          (struct-out while-stmt)
          (struct-out for-stmt)
+         (struct-out case-stmt)
+         (struct-out case-arm)
+         (struct-out wildcard-pattern)
+         (struct-out literal-pattern)
+         (struct-out variant-pattern)
+         (struct-out enum-constructor)
          (struct-out literal)
          (struct-out name-ref)
          (struct-out call)
@@ -41,6 +49,8 @@
 (struct function-decl (name params result body span) #:transparent)
 (struct param (name type span) #:transparent)
 (struct struct-decl (name fields span) #:transparent)
+(struct enum-decl (name type-parameters variants span) #:transparent)
+(struct enum-variant (name payload-types span) #:transparent)
 (struct field-decl (name type span) #:transparent)
 
 (struct type-ref (name args span) #:transparent)
@@ -53,10 +63,16 @@
 (struct if-stmt (branches else-body span) #:transparent)
 (struct while-stmt (condition body span) #:transparent)
 (struct for-stmt (var iterable body span) #:transparent)
+(struct case-stmt (value arms span) #:transparent)
+(struct case-arm (pattern body span) #:transparent)
+(struct wildcard-pattern (span) #:transparent)
+(struct literal-pattern (value span) #:transparent)
+(struct variant-pattern (enum-name variant-name bindings span) #:transparent)
 
 (struct literal (value span) #:transparent)
 (struct name-ref (name span) #:transparent)
 (struct call (name args span) #:transparent)
+(struct enum-constructor (enum-name variant-name args span) #:transparent)
 (struct function-ref (name span) #:transparent)
 (struct invoke (target args span) #:transparent)
 (struct named-arg (name value span) #:transparent)
@@ -78,6 +94,8 @@
     [(function-decl? node) (function-decl-span node)]
     [(param? node) (param-span node)]
     [(struct-decl? node) (struct-decl-span node)]
+    [(enum-decl? node) (enum-decl-span node)]
+    [(enum-variant? node) (enum-variant-span node)]
     [(field-decl? node) (field-decl-span node)]
     [(type-ref? node) (type-ref-span node)]
     [(type-expression? node) (type-expression-span node)]
@@ -88,9 +106,15 @@
     [(if-stmt? node) (if-stmt-span node)]
     [(while-stmt? node) (while-stmt-span node)]
     [(for-stmt? node) (for-stmt-span node)]
+    [(case-stmt? node) (case-stmt-span node)]
+    [(case-arm? node) (case-arm-span node)]
+    [(wildcard-pattern? node) (wildcard-pattern-span node)]
+    [(literal-pattern? node) (literal-pattern-span node)]
+    [(variant-pattern? node) (variant-pattern-span node)]
     [(literal? node) (literal-span node)]
     [(name-ref? node) (name-ref-span node)]
     [(call? node) (call-span node)]
+    [(enum-constructor? node) (enum-constructor-span node)]
     [(function-ref? node) (function-ref-span node)]
     [(invoke? node) (invoke-span node)]
     [(named-arg? node) (named-arg-span node)]

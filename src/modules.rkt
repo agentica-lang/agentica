@@ -95,7 +95,10 @@
       (define (unwrap declaration)
         (if (export-decl? declaration) (export-decl-declaration declaration) declaration))
       (define (declaration-name declaration)
-        (if (struct-decl? declaration) (struct-decl-name declaration) (function-decl-name declaration)))
+        (cond
+          [(struct-decl? declaration) (struct-decl-name declaration)]
+          [(enum-decl? declaration) (enum-decl-name declaration)]
+          [else (function-decl-name declaration)]))
       (define (visit key tree where)
         (when (member key active) (bail 'CHECK-IMPORT-CYCLE "import cycle" where))
         (unless (hash-has-key? trees key)
@@ -157,7 +160,10 @@
               (define declaration (hash-ref (hash-ref exports target) member #f))
               (unless declaration
                 (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span))
-              (unless (if (eq? kind 'type) (struct-decl? declaration) (function-decl? declaration))
+              (unless (case kind
+                        [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
+                        [(enum) (enum-decl? declaration)]
+                        [else (function-decl? declaration)])
                 (bail 'CHECK-TYPE-MISMATCH "wrong kind of imported declaration" span))
               (identity target member)]
              ;; Unknown calls belong to the checker, including misspelled
@@ -165,6 +171,7 @@
              [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span)])]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
+          [(and (eq? kind 'enum) (string=? name "Result")) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]
           [else (identity key name)]))
       (define (rewrite key node)
@@ -176,17 +183,55 @@
           [(function-decl name params result body span)
            (function-decl (identity key name) (walks params) (walk result) (walks body) span)]
           [(struct-decl name fields span) (struct-decl (identity key name) (walks fields) span)]
+          [(enum-decl name parameters variants span)
+           (define (rewrite-enum-type node)
+             (match node
+               [(type-ref type-name args type-span)
+                (type-ref (if (and (member type-name parameters) (null? args))
+                              type-name
+                              (resolve key type-name 'type type-span))
+                          (map rewrite-enum-type args) type-span)]
+               [_ (walk node)]))
+           (enum-decl (identity key name) parameters
+                      (for/list ([variant (in-list variants)])
+                        (enum-variant (enum-variant-name variant)
+                                      (map rewrite-enum-type (enum-variant-payload-types variant))
+                                      (enum-variant-span variant)))
+                      span)]
+          [(enum-variant name payload-types span)
+           (enum-variant name (walks payload-types) span)]
+          [(variant-pattern enum-name variant-name bindings span)
+           (variant-pattern (resolve key enum-name 'enum span) variant-name bindings span)]
+          [(enum-constructor enum-name variant-name args span)
+           (enum-constructor (resolve key enum-name 'enum span) variant-name (walks args) span)]
           [(param name type span) (param name (walk type) span)]
           [(field-decl name type span) (field-decl name (walk type) span)]
           [(call name args span) (call (resolve key name 'function span) (walks args) span)]
           [(function-ref name span) (function-ref (resolve key name 'function span) span)]
-          [(construct name args span) (construct (resolve key name 'type span) (walks args) span)]
+          [(construct name args span)
+           (define parts (string-split name "."))
+           (define alias-imports (hash-ref imports key))
+           (cond
+             [(and (= (length parts) 2)
+                   (enum-decl? (hash-ref (hash-ref locals key) (car parts) #f)))
+              (enum-constructor (identity key (car parts)) (cadr parts) (walks args) span)]
+             [(and (= (length parts) 3)
+                   (hash-has-key? alias-imports (car parts))
+                   (enum-decl? (hash-ref (hash-ref exports (hash-ref alias-imports (car parts)))
+                                         (cadr parts) #f)))
+              (enum-constructor (resolve key (string-append (car parts) "." (cadr parts)) 'enum span)
+                                (caddr parts) (walks args) span)]
+             [else (construct (resolve key name 'type span) (walks args) span)])]
           [(binding name type value span) (binding name (and type (walk type)) (walk value) span)]
           [(return-stmt value span) (return-stmt (and value (walk value)) span)]
           [(expr-stmt value span) (expr-stmt (walk value) span)]
           [(if-branch condition body span) (if-branch (walk condition) (walks body) span)]
           [(if-stmt branches otherwise span)
            (if-stmt (walks branches) (and otherwise (walks otherwise)) span)]
+          [(case-stmt value arms span) (case-stmt (walk value) (walks arms) span)]
+          [(case-arm pattern body span) (case-arm (walk pattern) (walks body) span)]
+          [(literal-pattern _ _) node]
+          [(wildcard-pattern _) node]
           [(while-stmt condition body span) (while-stmt (walk condition) (walks body) span)]
           [(for-stmt name iterable body span) (for-stmt name (walk iterable) (walks body) span)]
           [(invoke target args span) (invoke (walk target) (walks args) span)]

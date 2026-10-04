@@ -247,4 +247,40 @@
     (define node (parse-expr "a < b == c < d"))
     (check-equal? (binary-op node) 'equal)
     (check-equal? (binary-op (binary-left node)) 'less)
-    (check-equal? (binary-op (binary-right node)) 'less)))
+    (check-equal? (binary-op (binary-right node)) 'less))
+
+  (test-case "generic enum declarations, constructors, and case patterns parse"
+    (define program
+      (parse-ok (string-append
+                 "enum Option[T]\n  Some(T)\n  None\nend\n"
+                 "def main() -> Void\n"
+                 "  value = Option.Some(3)\n"
+                 "  case value do\n"
+                 "    Option.Some(item) ->\n      puts(item)\n"
+                 "    Option.None ->\n      puts(0)\n"
+                 "  end\nend\n")))
+    (define enum (car (program-declarations program)))
+    (check-true (enum-decl? enum))
+    (check-equal? (enum-decl-type-parameters enum) '("T"))
+    (check-equal? (length (enum-decl-variants enum)) 2)
+    (define main (cadr (program-declarations program)))
+    (check-true (enum-constructor? (binding-value (car (function-decl-body main)))))
+    (define matched (cadr (function-decl-body main)))
+    (check-true (case-stmt? matched))
+    (check-true (variant-pattern? (case-arm-pattern (car (case-stmt-arms matched)))))
+    (check-equal? (variant-pattern-bindings (case-arm-pattern (car (case-stmt-arms matched))))
+                  '("item"))
+    (check-true (variant-pattern? (case-arm-pattern (cadr (case-stmt-arms matched)))))
+    (check-equal? (variant-pattern-bindings (case-arm-pattern (cadr (case-stmt-arms matched)))) '()))
+
+  (test-case "underscore discards direct enum payloads and imported patterns keep qualification"
+    (define matched
+      (parse-ok (string-append
+                 "def main() -> Void\n  case value do\n"
+                 "    Domain.Option.Some(_, other) ->\n      puts(other)\n"
+                 "    _ ->\n      puts(0)\n  end\nend\n")))
+    (define arms (case-stmt-arms (car (function-decl-body (car (program-declarations matched))))))
+    (define pattern (case-arm-pattern (car arms)))
+    (check-equal? (variant-pattern-enum-name pattern) "Domain.Option")
+    (check-equal? (variant-pattern-bindings pattern) (list #f "other"))
+    (check-true (wildcard-pattern? (case-arm-pattern (cadr arms))))))

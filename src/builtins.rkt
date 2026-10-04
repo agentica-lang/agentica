@@ -10,6 +10,11 @@
   (cond
     [(symbol? type) (symbol->string type)]
     [(eq? (car type) 'Struct) (cadr type)]
+    [(eq? (car type) 'TypeVar) (cadr type)]
+    [(eq? (car type) 'Enum)
+     (if (null? (cddr type))
+         (cadr type)
+         (format "~a[~a]" (cadr type) (string-join (map type->string (cddr type)) ", ")))]
     [else (format "~a[~a]" (car type) (string-join (map type->string (cdr type)) ", "))]))
 
 (define builtins

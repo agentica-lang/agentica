@@ -1,6 +1,6 @@
 # Agentica: grammar and language design
 
-Status: implemented by the interpreter in Racket (`src/`). This document describes only what the interpreter accepts; planned syntax lives in [`future.md`](future.md).
+Status: implemented by the interpreter in Racket (`src/`). This document describes what the interpreter accepts; remaining proposals live in [`future.md`](future.md).
 
 ## 1. What we want to validate
 
@@ -12,7 +12,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 
 | Aspect | Rule |
 |---|---|
-| Syntax | `def`, `struct`, `if`, `while`, `for`, `end`; blocks end with `end` |
+| Syntax | `def`, `struct`, `enum`, `case`, `if`, `while`, `for`, `end`; blocks end with `end` |
 | Types | Static, with local inference where it is evident |
 | Calls | Parentheses are required |
 | Signatures | Explicit return type and required annotations |
@@ -21,7 +21,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
 | Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and `HTTP` |
 
-Enums, `Option`, interpolation, and other extensions are not part of the current language; they are in [`future.md`](future.md).
+Generic enums and exhaustive `case` matching are part of the current language. Other proposals remain in [`future.md`](future.md).
 
 ## 3. A core program
 
@@ -85,7 +85,7 @@ names = [
 Reserved words of the core:
 
 ```text
-def struct import export end if elsif else while for in return try
+def struct enum case do import export end if elsif else while for in return try
 true false nil and or not
 ```
 
@@ -118,8 +118,8 @@ This is a descriptive grammar: it will be translated to the notation of the chos
 
 ```ebnf
 program          = [ NL ], { declaration }, EOF ;
-declaration      = function_decl | struct_decl | import_decl
-                 | "export", ( function_decl | struct_decl ) ;
+declaration      = function_decl | struct_decl | enum_decl | import_decl
+                 | "export", ( function_decl | struct_decl | enum_decl ) ;
 import_decl      = "import", STRING, "as", TYPE_NAME, NL ;
 
 function_decl    = "def", NAME, "(", [ parameters ], ")",
@@ -131,13 +131,18 @@ struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
 field_decl       = NAME, ":", type, NL ;
 
+enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
+                   variant_decl, { variant_decl }, "end", NL ;
+type_parameters  = "[", TYPE_NAME, { ",", TYPE_NAME }, "]" ;
+variant_decl     = TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL ;
+
 qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
 
-The parser allows type applications such as `List[Int]`. The checker restricts the core to primitive types, structs, `List[T]`, `Map[K, V]`, and `Result[T]`: a form being syntactically valid does not mean the type exists. There are no user-declared type parameters in the core.
+The parser allows type applications such as `List[Int]` and `Option[String]`. The checker restricts applications to supported builtins and declared enums; only enum declarations may declare type parameters. Generic functions and generic structs are not supported.
 
-Struct and function declarations appear only at the top level. There are no methods, classes, inheritance, closures, or nested functions.
+Struct, enum, and function declarations appear only at the top level. There are no methods, classes, inheritance, closures, or nested functions.
 
 ### File modules and imports
 
@@ -146,10 +151,10 @@ Relative paths ending in .agc resolve from the importing file, not the working
 directory. Canonical paths identify files; each file is linked once. Cycles and
 missing/unreadable imports give located CHECK-IMPORT diagnostics.
 
-`export struct User ... end` and `export def greet(...) ... end` expose
+`export struct User ... end`, `export enum Option[T] ... end`, and `export def greet(...) ... end` expose
 declarations; everything else is private. Use `Models.User` in annotations and
 JSON type arguments, `Models.User(name: "Ana")` for construction,
-`Models.greet(user)` for calls, and `&Models.greet` for callbacks.
+`Models.greet(user)` for calls, and `&Models.greet` for callbacks. For enums, use `Domain.Option[T]` as a type and `Domain.Option.Some(value)` or `Domain.Option.None()` for variants.
 Local names remain unqualified inside their file. Import aliases are uppercase
 and cannot collide with declarations, other aliases, or builtin names.
 Imports cannot be re-exported. Exported signatures may mention private types,
@@ -226,6 +231,7 @@ performance is promised.
 block            = { statement } ;
 statement        = simple_statement, NL
                  | if_statement
+                 | case_statement
                  | while_statement
                  | for_statement ;
 
@@ -239,6 +245,14 @@ if_statement     = "if", expression, NL, block,
 while_statement  = "while", expression, NL, block, "end", NL ;
 for_statement    = "for", NAME, "in", expression, NL,
                    block, "end", NL ;
+case_statement   = "case", expression, "do", NL,
+                   match_arm, { match_arm }, "end", NL ;
+match_arm        = pattern, "->", NL, block ;
+pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
+                 | qualified_variant, [ "(", pattern_bindings, ")" ] ;
+qualified_variant = TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ] ;
+pattern_bindings = pattern_binding, { ",", pattern_binding } ;
+pattern_binding  = NAME | "_" ;
 ```
 
 Assignments are statements: they do not produce a value. `if`, `while`, and `for` are not expressions either. The core has no `break`, `continue`, compound assignments, or assignment to fields or indexes.
@@ -265,7 +279,7 @@ postfix_expr     = primary, { ".", NAME
 primary          = literal
                  | "&", ( NAME | TYPE_NAME, ".", NAME )
                  | NAME, [ "(", [ arguments ], ")" ]
-                 | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
+                 | TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ], "(", [ arguments ], ")"
                  | qualified_type, "(", [ named_arguments ], ")"
                  | qualified_type
                  | list_literal
@@ -320,6 +334,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Json` | Opaque JSON value, accessed through the `JSON` module |
 | `Fn[A, ..., R]` | Named function value; final type is its return, preceding types are parameters; no closures |
 | `Task[R]` | Opaque lightweight task with exactly one result type |
+| `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
 | Network handles | Opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
 | Builtin records | `Header`, `Request`, `Response`, `HttpClientOptions`, `HttpServerOptions` |
 | Declared struct | Nominal type, typed and immutable fields |
@@ -333,7 +348,7 @@ names: List[String] = []
 
 An empty list needs an expected type, which can come from an annotation, a parameter, a field, or the return type of a function. A non-empty list must have elements of the same type. There is no implicit numeric conversion and no dynamic `Any` type.
 
-`Nil` is not a nullable wildcard: `name: String = nil` is invalid. Optional values will arrive with `Option[T]`.
+`Nil` is not a nullable wildcard: `name: String = nil` is invalid. Define an enum such as `Option[T]` when an optional value is needed.
 
 ### Operators
 
@@ -377,10 +392,30 @@ ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(n
 - Functions can be called before their declaration and can be recursive.
 - There is no overloading, default values, or named arguments in ordinary functions.
 - A function with a return type other than `Void` must return on every reachable path. In the initial checker, a loop does not by itself guarantee a return.
-- The last expression does not return implicitly.
+- The last expression does not return implicitly. Exhaustive `case` is a statement; a non-`Void` function may use it to return only when every arm returns.
 - `return` without a value completes a `Void` function. Functions returning `Nil` explicitly use `return nil`.
 - Reaching the end of a `-> Void` function completes without a value.
 - An executable must declare exactly one `main() -> Void` function with no parameters.
+
+### Enums and pattern matching
+
+Enums are nominal sum types and may declare type parameters. Variant names are qualified by the enum; payloads are positional, and a nullary variant is constructed with empty parentheses. Constructor type parameters are inferred from payloads and the expected enum type; unresolved or conflicting parameters are errors. Imported enum variants use the import alias plus enum and variant names.
+
+`case value do ... end` is a statement. Patterns are primitive literals, `_`, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
+
+```ruby
+enum Option[T]
+  Some(T)
+  None
+end
+
+def display(option: Option[Int]) -> Void
+  case option do
+    Option.Some(item) -> puts(String.from_int(item))
+    Option.None -> puts("empty")
+  end
+end
+```
 
 ### Structs and lists
 

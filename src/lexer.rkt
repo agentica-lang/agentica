@@ -8,7 +8,7 @@
 
 (define keywords
   (hash "import" 'import "export" 'export
-        "def" 'def "struct" 'struct "end" 'end
+        "def" 'def "struct" 'struct "enum" 'enum "case" 'case "do" 'do "end" 'end
         "if" 'if "elsif" 'elsif "else" 'else
         "while" 'while "for" 'for "in" 'in "return" 'return "try" 'try
         "true" 'true "false" 'false "nil" 'nil
