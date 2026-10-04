@@ -85,7 +85,7 @@ names = [
 Reserved words of the core:
 
 ```text
-def struct end if elsif else while for in return try
+def struct import export end if elsif else while for in return try
 true false nil and or not
 ```
 
@@ -118,7 +118,9 @@ This is a descriptive grammar: it will be translated to the notation of the chos
 
 ```ebnf
 program          = [ NL ], { declaration }, EOF ;
-declaration      = function_decl | struct_decl ;
+declaration      = function_decl | struct_decl | import_decl
+                 | "export", ( function_decl | struct_decl ) ;
+import_decl      = "import", STRING, "as", TYPE_NAME, NL ;
 
 function_decl    = "def", NAME, "(", [ parameters ], ")",
                    "->", type, NL, block, "end", NL ;
@@ -129,12 +131,36 @@ struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
 field_decl       = NAME, ":", type, NL ;
 
-type             = TYPE_NAME, [ "[", type, { ",", type }, "]" ] ;
+qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
+type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
 
 The parser allows type applications such as `List[Int]`. The checker restricts the core to primitive types, structs, `List[T]`, `Map[K, V]`, and `Result[T]`: a form being syntactically valid does not mean the type exists. There are no user-declared type parameters in the core.
 
 Struct and function declarations appear only at the top level. There are no methods, classes, inheritance, closures, or nested functions.
+
+### File modules and imports
+
+Each file is a module. Use `import "models.agc" as Models` at the top level.
+Relative paths ending in .agc resolve from the importing file, not the working
+directory. Canonical paths identify files; each file is linked once. Cycles and
+missing/unreadable imports give located CHECK-IMPORT diagnostics.
+
+`export struct User ... end` and `export def greet(...) ... end` expose
+declarations; everything else is private. Use `Models.User` in annotations and
+JSON type arguments, `Models.User(name: "Ana")` for construction,
+`Models.greet(user)` for calls, and `&Models.greet` for callbacks.
+Local names remain unqualified inside their file. Import aliases are uppercase
+and cannot collide with declarations, other aliases, or builtin names.
+Imports cannot be re-exported. Exported signatures may mention private types,
+but importers cannot name or construct those private types.
+
+Only the root file supplies the executable `main() -> Void`. Imported main
+functions do not run automatically. Linking preserves source spans and distinct
+module identities; imported calls/tasks share the program's execution budget
+and resource ownership. CLI check/run/dump and BDD handlers use the same loader.
+There are no wildcard imports, package registry, module state, nested module
+blocks, or receiver attachment. `as` is contextual in imports, not reserved.
 
 ### Statements and blocks
 
@@ -179,10 +205,11 @@ postfix_expr     = primary, { ".", NAME
                             | "[", expression, "]" } ;
 
 primary          = literal
-                 | "&", NAME
+                 | "&", ( NAME | TYPE_NAME, ".", NAME )
                  | NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
-                 | TYPE_NAME, "(", [ named_arguments ], ")"
+                 | qualified_type, "(", [ named_arguments ], ")"
+                 | qualified_type
                  | list_literal
                  | map_literal
                  | "(", expression, ")" ;
@@ -198,7 +225,7 @@ literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 
 Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
 
-`TYPE_NAME, ".", NAME, "(" … ")"` is a call to a function of a builtin module (`Map.put(...)`); the core has no user modules.
+`TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias.
 
 `and` and `or` short-circuit. Additions, subtractions, multiplications, divisions, and modulos group from left to right. Comparisons and equality checks do not chain: `a < b < c` is invalid; write `a < b and b < c`.
 
@@ -446,6 +473,13 @@ end
 `Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` without exposing its contents. Use the JSON functions to read it or `JSON.encode` to print JSON text.
 
 ```text
+JSON.object(fields: Map[String, Json]) -> Json
+JSON.array(items: List[Json]) -> Json
+JSON.from(value: T) -> Json
+JSON.null() -> Json
+JSON.null?(value: Json) -> Bool
+JSON.schema(type: T) -> Json
+JSON.decode(s: String, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -456,6 +490,28 @@ JSON.float(j: Json) -> Result[Float]
 JSON.bool(j: Json) -> Result[Bool]
 JSON.list(j: Json) -> Result[List[Json]]
 ```
+
+
+JSON builders create Json values directly: object takes Map[String, Json],
+array takes List[Json], and from accepts the same recursively encodable data
+as JSON.encode. Non-finite Float conversion halts with RUNTIME-JSON-ENCODE.
+Null and false remain distinct, as do empty objects and arrays.
+
+JSON.schema(User) accepts the same named structs as JSON.decode and returns
+an object schema with properties and required fields. Int schemas specify
+signed 64-bit bounds; lists use items and String-keyed maps use
+additionalProperties. Nested/recursive structs use $defs/$ref. Extra struct
+keys remain allowed, matching decoding. Schema is a Json value, not text.
+
+`JSON.decode(text, User)` returns Result[User]. Its second argument is a named
+struct type, not a runtime value; bare type names are valid only for decode/schema.
+Fields may contain Int, Float, Bool, String, lists, String-keyed maps, and nested
+or recursive structs. Unsupported nested types give CHECK-NOT-DECODABLE.
+Malformed JSON, missing fields, wrong types, Int overflow, or non-finite Float
+conversion return errors with field/index paths. Extra object keys are ignored.
+Integer JSON values may decode as Float; decimal/exponent values never decode
+as Int. Maps decoded from JSON use sorted key order.
+
 
 - `JSON.parse` reads exactly one JSON value, with optional surrounding JSON whitespace (space, tab, CR, LF). Empty input, malformed JSON, trailing content, invalid Unicode escapes, raw control characters in strings, or non-finite parsed numbers return an error. A repeated object key keeps the last value.
 - `JSON.get` requires an object and a present key; `JSON.at` requires an array and an index in `0 .. length - 1`. Missing keys, bad indexes, and wrong kinds return errors, not runtime diagnostics. JSON `false` and `null` are valid present values.

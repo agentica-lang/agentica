@@ -918,10 +918,10 @@ The second argument is a struct name, not a value, as in `JSON.decode(text, User
 - A missing field or a wrong type is `error("age: expected Int, found String")`, with the path to the field. Extra keys are ignored.
 - A JSON integer decodes to `Float` when the field is `Float`, but a JSON float never decodes to `Int`.
 
-- [ ] Parse a bare type name as an expression (spec in `future.md`; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
-- [ ] Check that the target type is decodable.
-- [ ] Decode nested structs, lists, and maps, with the path in error messages.
-- [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
+- [x] Parse a bare type name as an expression and accept it only in JSON type argument positions (JSON.decode and JSON.schema).
+- [x] Check that the target type is decodable.
+- [x] Decode nested structs, lists, and maps, with the path in error messages.
+- [x] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
 
 #### Phase 5i: JSON builders and schemas
 
@@ -940,8 +940,8 @@ JSON.schema(type: T) -> Json
 - `JSON.schema(AddArgs)` takes a struct name, as in `JSON.decode`, and returns its JSON Schema (`type`, `properties`, `required`). MCP tools declare an `inputSchema`, so a tool is a struct plus a function.
 - Same decodable-type rule as 5f2: `CHECK-NOT-DECODABLE` otherwise.
 
-- [ ] Add the functions above and focused behavior tests.
-- [ ] Verify `JSON.schema` output against an independent expected schema for one struct.
+- [x] Add the functions above and focused behavior tests.
+- [x] Verify `JSON.schema` output against an independent expected schema for one struct.
 
 ### 3. Modules and imports
 
@@ -949,10 +949,10 @@ Split larger programs across files with explicit exports and predictable
 resolution. This is planned language syntax, not an extension to implement
 without a specification.
 
-- [ ] Define import/export syntax, module naming, path resolution and the entrypoint rule in `future.md`.
-- [ ] Decide visibility, duplicate-name handling, import cycles and diagnostic spans across files.
-- [ ] Implement loading, checking and execution without resetting the execution's shared budget or resource ownership.
-- [ ] Test a program spanning multiple files and controlled diagnostics for missing imports, cycles and private names.
+- [x] Define import/export syntax, module naming, path resolution and the entrypoint rule; normative rules now live in grammar.md.
+- [x] Decide visibility, duplicate-name handling, import cycles and diagnostic spans across files.
+- [x] Implement loading, checking and execution without resetting the execution's shared budget or resource ownership.
+- [x] Test a program spanning multiple files and controlled diagnostics for missing imports, cycles and private names.
 
 ### 4. Real applications
 

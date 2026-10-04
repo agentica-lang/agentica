@@ -28,7 +28,7 @@ Accessors: `source-name`, `source-text`, `source-position-offset`/`-line`/`-colu
 | --- | --- |
 | `name` | identifier starting with a lowercase letter or `_` |
 | `type-name` | identifier starting with an uppercase letter |
-| `def` `struct` `end` `if` `elsif` `else` `while` `for` `in` `return` `try` `true` `false` `nil` `and` `or` `not` | the reserved words |
+| `def` `struct` `import` `export` `end` `if` `elsif` `else` `while` `for` `in` `return` `try` `true` `false` `nil` `and` `or` `not` | the reserved words |
 | `integer` `float` | decimal number literal |
 | `string` | decoded string contents |
 | `arrow` `equal` `not-equal` `less-equal` `greater-equal` | `->` `==` `!=` `<=` `>=` |
@@ -48,7 +48,7 @@ The parser reads the keyword literals from their kind, not from `value`: `true` 
 | --- | --- |
 | lexer | `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE` |
 | parser | `PARSE-UNEXPECTED-TOKEN`, `PARSE-UNCLOSED-BLOCK`, `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET` |
-| checker | `CHECK-VOID-TYPE`, `CHECK-VOID-VALUE`, `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-RESULT-TYPE`, `CHECK-TRY-CONTEXT`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-NOT-ENCODABLE`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL` |
+| checker | `CHECK-VOID-TYPE`, `CHECK-VOID-VALUE`, `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`, `CHECK-ARITY`, `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-RESULT-TYPE`, `CHECK-TRY-CONTEXT`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD`, `CHECK-NOT-A-STRUCT`, `CHECK-NOT-A-LIST`, `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`, `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL`, `CHECK-MODULE-CONTEXT`, `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` |
 | evaluator | `RUNTIME-PROCESS-CONTEXT`, `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-INVALID-NUMBER`, `RUNTIME-END-OF-INPUT`, `RUNTIME-UNWRAP-ERROR`, `RUNTIME-JSON-ENCODE`, `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`, `RUNTIME-UNREACHABLE`, `RUNTIME-INTERNAL` |
 
 Networking adds RUNTIME-TASK-CANCELLED when awaiting work cancelled by resource
@@ -71,9 +71,9 @@ Every node is `#:transparent` with `span` as the last field.
 
 | Group | Nodes |
 | --- | --- |
-| declarations | `program`, `function-decl`, `param`, `struct-decl`, `field-decl`, `type-ref` |
+| declarations | `program`, `import-decl` (path, alias, span), `export-decl` (declaration, span), `function-decl`, `param`, `struct-decl`, `field-decl`, `type-ref` |
 | statements | `binding`, `return-stmt`, `expr-stmt`, `if-branch`, `if-stmt`, `while-stmt`, `for-stmt` |
-| expressions | `literal`, `name-ref`, `call`, `function-ref` (name, span), `invoke` (target, args, span), `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access`, `index-access`, `try-expr` (operand, span), `unary`, `binary` |
+| expressions | `literal`, `type-expression` (name, span; JSON type arguments only), `name-ref`, `call`, `function-ref` (name, span), `invoke` (target, args, span), `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access`, `index-access`, `try-expr` (operand, span), `unary`, `binary` |
 
 Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; one `literal` covers integers, floats, strings, booleans, and `nil`; grouping `( expr )` produces no node; `call`/`construct` store the name as a string; `unary`/`binary` store the operator as the token-kind symbol (`'plus`, `'and`, `'equal`).
 
@@ -83,7 +83,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 - Precedence ladder: or → and → equality → comparison → additive → multiplicative → unary → postfix → primary.
 - Arithmetic levels are left-associative; equality and comparison take a single optional operator, so `a < b < c` and `a == b == c` are `PARSE-CHAINED-COMPARISON`, while `a < b == c < d` is valid.
-- Top level accepts only `def` and `struct`; anything else is `PARSE-TOP-LEVEL-STATEMENT`.
+- Top level accepts def/struct/import and export def/struct. as is contextual. Qualified names cover imported types, constructors, calls and function references. Module nodes must pass through modules.rkt before check.
 - A statement starting with `name` is a binding when the next token is `=` or `:`; otherwise it is an expression.
 - Stray `NL` tokens are skipped at the top level and between statements (see the gotcha in `SKILL.md`).
 

@@ -223,7 +223,7 @@
     (check-equal? (parse-code "puts(\"hello\")\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "age: Int = \"25\"\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "def f() -> Int\n  return 1\n") 'PARSE-UNCLOSED-BLOCK)
-    (check-equal? (parse-code "def f() -> Void\n  x = Foo\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-true (type-expression? (parse-expr "Foo")))
     (check-equal? (parse-code "def f() -> Void\n  x[0] = 1\nend\n")
                   'PARSE-INVALID-ASSIGNMENT-TARGET)
     (check-equal? (parse-code "def f() -> Void\n  x.y = 1\nend\n")

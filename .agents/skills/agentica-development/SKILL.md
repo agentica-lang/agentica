@@ -170,6 +170,8 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 
 ## JSON (phase 5f)
 
+- Typed decoding (5f2) uses a type-expression AST node accepted only in JSON type argument positions. json-typed.rkt walks checker-validated declarations into existing runtime instances/mappings; JSON.decode returns located-path Result errors for bad data, validates signed Int/finite Float bounds, and ignores extra fields. Recursive type validation visits each struct once. Decoded map keys are sorted. JSON.schema uses the same eligibility check, emits required fields/64-bit bounds and $defs/$ref for nested or recursive types. Builders construct opaque Json directly; JSON.from shares encode eligibility and non-finite diagnostics. Builtin record declarations participate in decoding and schemas.
+
 - `Json` is opaque, not primitive for equality. Reserve `Json` and `JSON`; all calls use existing parser/AST forms. The catalog has nine JSON functions; `json-encode` is the only new generic checker rule.
 - Recursively check encoding eligibility, including declared struct fields and empty containers. A seen-struct path prevents infinite recursion without skipping other fields. Results and Int-keyed maps are CHECK-NOT-ENCODABLE.
 - `src/json.rkt` delegates parsing to bundled `read-json`. Use direct character checks for raw controls and trailing JSON whitespace. Racket CS 9.3 accepts raw controls in strings and can raise a non-read exception for malformed exponents such as `0.0001e+`; the evaluator catches parsing failures locally as Results, never around argument evaluation.
@@ -186,6 +188,12 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - `examples/knight-tour.agc` uses degree-ordered backtracking for open tours, sizes 1..8. `examples/traveling-salesman.agc` searches optimal directed circuits over 1..8 cities with nonnegative bounded Int weights. The examples tests validate complete routes and known optimal costs with a 5000000-step budget. A runtime limit is not an unsolvable-result signal.
 - Callback operations remain pending in 5n and require 5j; these primitive operations do not. Grammar and programming reference are kept together; stages.md includes the catalog arity contract.
 - `examples/maze-bfs.agc` demonstrates Map.get/2 for discovery, Map.get/3 for passable cells, and Map.delete for a numeric-keyed FIFO queue. Rectangular grids are capped at 32×32; tests check legal shortest paths and distinguish invalid input from an unreachable goal. Queue deletion is O(n), so do not claim linear runtime from BFS alone.
+
+## File modules
+
+- modules.rkt links parsed files before checking: canonical paths deduplicate imports and detect cycles; aliases resolve only exported declarations. Dependencies get unique internal identities while root names remain stable for CLI/BDD entrypoints. Preserve every original span when rewriting nodes; never restart evaluation for imported calls/tasks. Imports resolve relative to their source, not cwd. Alias/declaration collisions and builtin-name redefinitions are rejected before renaming. as is contextual, import/export are keywords.
+- CLI check/run/dump and BDD handler loading share this resolver. Raw import/export nodes passed directly to check give CHECK-MODULE-CONTEXT. Exported signatures may mention private types; importers cannot name/construct those types. No package lookup, wildcard imports, module state, cycles, or receiver attachment.
+- tests/modules-test.rkt owns linking/visibility, cross-file diagnostics, shared task budgets, BDD imports, and the combined JSON example. Its CLI test honors AGENTICA_TEST_EXECUTABLE for compiled CI coverage. Unknown dotted calls without a matching import alias pass to the checker so misspelled builtin calls retain CHECK-UNKNOWN-NAME; unknown qualified type aliases remain CHECK-IMPORT-NAME.
 
 ## Function values and BDD
 

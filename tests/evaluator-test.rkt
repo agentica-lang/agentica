@@ -1,6 +1,7 @@
 #lang racket
 
 (require (except-in rackunit check)
+         (only-in json string->jsexpr)
          "../src/checker.rkt"
          "../src/builtins.rkt"
          "../src/diagnostic.rkt"
@@ -319,6 +320,13 @@
         ("Map.get" "Map.get({\"k\": 1}, \"k\")" "ok(1)\n")
         ("Map.delete" "Map.delete({\"k\": 1}, \"k\")" "{}\n")
         ("Map.values" "Map.values({\"k\": 1})" "[1]\n")
+        ("JSON.object" "JSON.object({})" "<Json>\n")
+        ("JSON.array" "JSON.array([])" "<Json>\n")
+        ("JSON.from" "JSON.from(false)" "<Json>\n")
+        ("JSON.null" "JSON.null()" "<Json>\n")
+        ("JSON.null?" "JSON.null?(JSON.null())" "true\n")
+        ("JSON.schema" "JSON.schema(Empty)" "<Json>\n")
+        ("JSON.decode" "JSON.decode(\"{}\", Empty)" "ok(Empty())\n")
         ("JSON.parse" "JSON.parse(\"null\")" "ok(<Json>)\n")
         ("JSON.encode" "JSON.encode(7)" "\"7\"\n")
         ("JSON.get" "JSON.get(Result.unwrap!(JSON.parse(\"{\\\"k\\\": false}\")), \"k\")" "ok(<Json>)\n")
@@ -372,7 +380,7 @@
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)
-        (run-io (string-append "def positive(n: Int) -> Bool\n  return n > 0\nend\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\ndef identity(n: Int) -> Int\n  return n\nend\n"
+        (run-io (string-append "struct Empty\nend\ndef positive(n: Int) -> Bool\n  return n > 0\nend\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\ndef identity(n: Int) -> Int\n  return n\nend\n"
                               (main-with (format "  r: Result[Int] = error(\"bad\")\n  ~a"
                                   (if (eq? (builtin-result (hash-ref builtins name)) 'Void)
                                       (cadr sample) (format "IO.inspect(~a)" (cadr sample))))))
@@ -614,6 +622,60 @@
     (define bad (diagnostic-of (main-with "  x = JSON.encode({\"bad\": String.to_float!(\"9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999\")})")))
     (check-equal? (diagnostic-code bad) 'RUNTIME-JSON-ENCODE)
     (check-equal? (position-of bad) '(2 7)))
+
+  (test-case "JSON builders distinguish null, false and empty containers"
+    (check-equal?
+     (output-of (main-with
+       "  puts(JSON.encode(JSON.object({})))\n  puts(JSON.encode(JSON.array([])))\n  puts(JSON.encode(JSON.array([JSON.from(false), JSON.null(), JSON.from([1, 2])])))\n  IO.inspect(JSON.null?(JSON.from(false)))\n  IO.inspect(JSON.null?(JSON.from(nil)))\n  obj = JSON.object({\"flag\": JSON.from(false)})\n  IO.inspect(Result.unwrap!(JSON.bool(Result.unwrap!(JSON.get(obj, \"flag\")))))"))
+     "{}\n[]\n[false,null,[1,2]]\nfalse\ntrue\nfalse\n")
+    (check-equal?
+     (output-of (main-with
+       "  header = Result.unwrap!(JSON.decode(\"{\\\"name\\\":\\\"x\\\",\\\"value\\\":\\\"y\\\"}\", Header))\n  IO.inspect(header.name)\n  IO.inspect(header.value)\n  fields = Result.unwrap!(JSON.get(JSON.schema(Header), \"required\"))\n  puts(JSON.encode(fields))"))
+     "\"x\"\n\"y\"\n[\"name\",\"value\"]\n")
+    (define problem
+      (diagnostic-of (main-with (format "  value = JSON.from([String.to_float!(~s)])" (make-string 400 #\9)))))
+    (check-equal? (diagnostic-code problem) 'RUNTIME-JSON-ENCODE))
+
+  (test-case "JSON schemas describe structs and recursive references independently"
+    (define prefix
+      "struct Args\n  count: Int\n  ratio: Float\n  active: Bool\n  names: List[String]\n  scores: Map[String, Int]\nend\n")
+    (check-equal?
+     (string->jsexpr (output-of (string-append prefix (main-with "  puts(JSON.encode(JSON.schema(Args)))"))))
+     (hasheq 'type "object"
+             'properties (hasheq 'count (hasheq 'type "integer" 'minimum (- (expt 2 63)) 'maximum (sub1 (expt 2 63)))
+                                 'ratio (hasheq 'type "number")
+                                 'active (hasheq 'type "boolean")
+                                 'names (hasheq 'type "array" 'items (hasheq 'type "string"))
+                                 'scores (hasheq 'type "object" 'additionalProperties
+                                                 (hasheq 'type "integer" 'minimum (- (expt 2 63)) 'maximum (sub1 (expt 2 63)))))
+             'required '("count" "ratio" "active" "names" "scores")))
+    (define recursive
+      (string->jsexpr (output-of (string-append "struct Node\n  children: List[Node]\nend\n"
+                                              (main-with "  puts(JSON.encode(JSON.schema(Node)))")))))
+    (define expected
+      (hasheq 'type "object" 'properties (hasheq 'children (hasheq 'type "array" 'items (hasheq '$ref "#/$defs/Node")))
+              'required '("children")))
+    (check-equal? recursive (hash-set expected '$defs (hasheq 'Node expected))))
+
+  (test-case "typed JSON decoding validates nested fields and preserves data"
+    (define prefix
+      "struct Item\n  count: Int\n  active: Bool\nend\nstruct Payload\n  items: List[Item]\n  weights: Map[String, Float]\nend\n")
+    (check-equal?
+     (output-of (string-append prefix
+       (main-with "  p = Result.unwrap!(JSON.decode(\"{\\\"items\\\":[{\\\"count\\\":3,\\\"active\\\":false}],\\\"weights\\\":{\\\"a\\\":2},\\\"extra\\\":true}\", Payload))\n  IO.inspect(p.items[0].count)\n  IO.inspect(p.items[0].active)\n  IO.inspect(p.weights[\"a\"])\n  q = Result.unwrap!(JSON.decode(JSON.encode(p), Payload))\n  IO.inspect(q.items[0].count)")))
+     "3\nfalse\n2.0\n3\n")
+    (for ([text '("{\"items\":[{\"count\":1.0,\"active\":false}],\"weights\":{}}"
+                  "{\"items\":[{\"count\":9223372036854775808,\"active\":false}],\"weights\":{}}"
+                  "{\"items\":[{\"active\":false}],\"weights\":{}}")])
+      (check-equal?
+       (output-of (string-append prefix
+         (main-with (format "  r = JSON.decode(~s, Payload)\n  IO.inspect(Result.ok?(r))\n  IO.inspect(String.starts_with?(Result.message(r), \"items[0].count:\"))" text))))
+       "false\ntrue\n"))
+    (for ([text '("invalid" "{}" "{\"items\":false,\"weights\":{}}" "{\"items\":[],\"weights\":{\"a\":\"bad\"}}")])
+      (check-equal?
+       (output-of (string-append prefix
+         (main-with (format "  IO.inspect(Result.ok?(JSON.decode(~s, Payload)))" text))))
+       "false\n")))
 
   (test-case "JSON parse, encode, extraction and try compose in checked programs"
     (check-equal?

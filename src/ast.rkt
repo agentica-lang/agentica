@@ -3,11 +3,14 @@
 (require "source.rkt")
 
 (provide (struct-out program)
+         (struct-out import-decl)
+         (struct-out export-decl)
          (struct-out function-decl)
          (struct-out param)
          (struct-out struct-decl)
          (struct-out field-decl)
          (struct-out type-ref)
+         (struct-out type-expression)
          (struct-out binding)
          (struct-out return-stmt)
          (struct-out expr-stmt)
@@ -33,12 +36,15 @@
          node-span)
 
 (struct program (declarations span) #:transparent)
+(struct import-decl (path alias span) #:transparent)
+(struct export-decl (declaration span) #:transparent)
 (struct function-decl (name params result body span) #:transparent)
 (struct param (name type span) #:transparent)
 (struct struct-decl (name fields span) #:transparent)
 (struct field-decl (name type span) #:transparent)
 
 (struct type-ref (name args span) #:transparent)
+(struct type-expression (name span) #:transparent)
 
 (struct binding (name type value span) #:transparent)
 (struct return-stmt (value span) #:transparent)
@@ -67,11 +73,14 @@
 (define (node-span node)
   (cond
     [(program? node) (program-span node)]
+    [(import-decl? node) (import-decl-span node)]
+    [(export-decl? node) (export-decl-span node)]
     [(function-decl? node) (function-decl-span node)]
     [(param? node) (param-span node)]
     [(struct-decl? node) (struct-decl-span node)]
     [(field-decl? node) (field-decl-span node)]
     [(type-ref? node) (type-ref-span node)]
+    [(type-expression? node) (type-expression-span node)]
     [(binding? node) (binding-span node)]
     [(return-stmt? node) (return-stmt-span node)]
     [(expr-stmt? node) (expr-stmt-span node)]

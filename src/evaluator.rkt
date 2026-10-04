@@ -8,7 +8,8 @@
          "runtime-values.rkt"
          "task.rkt"
          "builtin-types.rkt" "network.rkt" "filesystem.rkt" "process.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
-         "json.rkt")
+         "json.rkt"
+         "json-typed.rkt")
 
 (provide evaluate
          (struct-out instance)
@@ -128,6 +129,20 @@
           (result-ok (convert data))
           (result-error (format "expected ~a" expected))))
 
+    (define (json-data value span)
+      (cond
+        [(json-value? value) (json-value-data value)]
+        [(instance? value)
+         (for/hasheq ([key (in-list (hash-ref struct-fields (instance-type-name value)))])
+           (values (string->symbol key) (json-data (hash-ref (instance-fields value) key) span)))]
+        [(mapping? value)
+         (for/hasheq ([(key item) (in-hash (mapping-table value))])
+           (values (string->symbol key) (json-data item span)))]
+        [(list? value) (map (lambda (item) (json-data item span)) value)]
+        [(and (real? value) (not (rational? value)))
+         (bail 'RUNTIME-JSON-ENCODE "cannot encode a non-finite Float" span)]
+        [else value]))
+
     (define (encode-json value span)
       (define out (open-output-string))
       (define (write-object keys ref)
@@ -153,9 +168,7 @@
              (unless (zero? i) (display "," out))
              (write-value item))
            (display "]" out)]
-          [(and (real? value) (not (rational? value)))
-           (bail 'RUNTIME-JSON-ENCODE "cannot encode a non-finite Float" span)]
-          [else (write-json value out #:null 'nil)]))
+          [else (write-json (json-data value span) out #:null 'nil)]))
       (write-value value)
       (get-output-string out))
 
@@ -164,6 +177,7 @@
     (define (eval-expression expression)
       (step! (node-span expression))
       (cond
+        [(type-expression? expression) (type-expression-name expression)]
         [(literal? expression) (literal-value expression)]
         [(name-ref? expression) (unbox (lookup (name-ref-name expression)))]
         [(unary? expression) (eval-unary expression)]
@@ -435,6 +449,13 @@
          ;; Only parsing is recoverable; argument evaluation stays outside.
          (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
            (result-ok (read-json-value (car arguments))))]
+        [("JSON.object" "JSON.array" "JSON.from")
+         (json-value (json-data (car arguments) span))]
+        [("JSON.null") (json-value 'nil)]
+        [("JSON.null?") (eq? (json-value-data (car arguments)) 'nil)]
+        [("JSON.schema") (json-schema (car arguments) (program-declarations program))]
+        [("JSON.decode")
+         (decode-json (car arguments) (cadr arguments) (program-declarations program))]
         [("JSON.encode") (encode-json (car arguments) span)]
         [("JSON.get")
          (define data (json-value-data (car arguments)))

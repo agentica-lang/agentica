@@ -1,7 +1,7 @@
 #lang racket
 
 (require "ast.rkt" "bdd.rkt" "checker.rkt" "diagnostic.rkt" "evaluator.rkt"
-         "gherkin.rkt" "json.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "process.rkt")
+         "gherkin.rkt" "json.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "process.rkt" "modules.rkt")
 
 (provide run-bdd make-bdd-service format-bdd-report bdd-error-report)
 
@@ -19,10 +19,8 @@
 
 (define (read-program path)
   (with-handlers ([exn:fail? (lambda (failure) (diagnostic 'RUNTIME-BDD-INFRA (exn-message failure) (file-span path)))])
-    (define input (source (path->string (path->complete-path path)) (file->string path)))
-    (define tokens (lex input))
-    (define parsed (if (diagnostic? tokens) tokens (parse tokens)))
-    (if (diagnostic? parsed) parsed (check parsed))))
+    (define linked (load-program path))
+    (if (diagnostic? linked) linked (check linked))))
 
 (define (guard context span thunk)
   (with-handlers ([exn:fail:bdd? exn:fail:bdd-problem]

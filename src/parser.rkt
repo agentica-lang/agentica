@@ -82,6 +82,22 @@
           (skip-newlines!)
           (cond
             [(kind? 'EOF) (reverse acc)]
+            [(kind? 'import)
+             (define begin (advance!))
+             (define path (expect 'string "an import path"))
+             (define as-token (expect 'name "as"))
+             (unless (equal? (token-lexeme as-token) "as")
+               (bail 'PARSE-UNEXPECTED-TOKEN "expected as" as-token))
+             (define alias (expect 'type-name "a module alias"))
+             (expect 'NL "a newline after import")
+             (loop (cons (import-decl (token-value path) (token-lexeme alias) (span-from begin)) acc))]
+            [(kind? 'export)
+             (define begin (advance!))
+             (define declaration
+               (cond [(kind? 'def) (parse-function-decl)]
+                     [(kind? 'struct) (parse-struct-decl)]
+                     [else (bail 'PARSE-UNEXPECTED-TOKEN "export requires def or struct" (current))]))
+             (loop (cons (export-decl declaration (span-from begin)) acc))]
             [(kind? 'def) (loop (cons (parse-function-decl) acc))]
             [(kind? 'struct) (loop (cons (parse-struct-decl) acc))]
             [else
@@ -125,6 +141,12 @@
 
     (define (parse-type)
       (define start (expect 'type-name "a type name"))
+      (define name
+        (if (kind? 'dot)
+            (begin (advance!)
+                   (string-append (token-lexeme start) "."
+                                  (token-lexeme (expect 'type-name "an imported type name"))))
+            (token-lexeme start)))
       (define arguments
         (if (kind? 'left-bracket)
             (let ()
@@ -138,7 +160,7 @@
               (expect 'right-bracket "\"]\"")
               (cons first rest))
             '()))
-      (type-ref (token-lexeme start) arguments (span-from start)))
+      (type-ref name arguments (span-from start)))
 
     (define (parse-struct-decl)
       (define start (expect 'struct "struct"))
@@ -355,8 +377,14 @@
         [(name) (parse-name-primary)]
         [(ampersand)
          (advance!)
-         (define name (expect 'name "a function name" #t))
-         (function-ref (token-lexeme name) (span-from token))]
+         (define name
+           (if (kind? 'type-name)
+               (let ([alias (advance!)])
+                 (expect 'dot "a dot")
+                 (string-append (token-lexeme alias) "."
+                                (token-lexeme (expect 'name "a function name" #t))))
+               (token-lexeme (expect 'name "a function name" #t))))
+         (function-ref name (span-from token))]
         [(type-name) (parse-construct)]
         [(left-paren)
          (advance!)
@@ -391,17 +419,26 @@
          (construct (token-lexeme name) arguments (span-from name))]
         [(kind? 'dot)
          (advance!)
-         (define member (expect 'name "a function name" #t))
-         (expect 'left-paren "\"(\"")
-         (define arguments (parse-expression-list 'right-paren))
-         (expect 'right-paren "\")\"")
-         (call (string-append (token-lexeme name) "." (token-lexeme member))
-               arguments
-               (span-from name))]
-        [else
-         (bail 'PARSE-UNEXPECTED-TOKEN
-               "a type name is only a type or a constructor call; add \"(\""
-               name)]))
+         (cond
+           [(kind? 'type-name)
+            (define member (advance!))
+            (define qualified (string-append (token-lexeme name) "." (token-lexeme member)))
+            (if (kind? 'left-paren)
+                (let ()
+                  (advance!)
+                  (define arguments (parse-named-arguments))
+                  (expect 'right-paren "\")\"")
+                  (construct qualified arguments (span-from name)))
+                (type-expression qualified (span-from name)))]
+           [else
+            (define member (expect 'name "a function name" #t))
+            (expect 'left-paren "\"(\"")
+            (define arguments (parse-expression-list 'right-paren))
+            (expect 'right-paren "\")\"")
+            (call (string-append (token-lexeme name) "." (token-lexeme member))
+                  arguments
+                  (span-from name))])]
+        [else (type-expression (token-lexeme name) (token-span name))]))
 
     (define (parse-expression-list terminator)
       (if (kind? terminator)
