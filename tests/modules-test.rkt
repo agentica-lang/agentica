@@ -34,10 +34,10 @@
     (with-files
      '(("library/models.agc" . "export struct Value\n  n: Int\nend\nexport def read(value: Value) -> Int\n  return value.n\nend\ndef main() -> Void\n  puts(\"must not run\")\nend\n")
        ("library/outer.agc" . "import \"models.agc\" as Models\nexport def make(n: Int) -> Models.Value\n  return Models.Value(n: n)\nend\n")
-       ("root.agc" . "import \"library/models.agc\" as First\nimport \"library/../library/models.agc\" as Second\nimport \"library/outer.agc\" as Outer\ndef main() -> Void\n  value: Second.Value = Outer.make(42)\n  IO.inspect(First.read(value))\nend\n"))
+       ("root.agc" . "import \"library/models.agc\" as First\nimport \"library/../library/models.agc\" as Second\nimport \"library/outer.agc\" as Outer\ndef main() -> Void\n  value: Second.Value = Outer.make(42)\n  IO.inspect(First.read(value))\n  IO.inspect(Second.read(First.Value(n: 7)))\nend\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
-       (check-equal? out "42\n")
+       (check-equal? out "42\n7\n")
        (check-equal? result (void)))))
 
   (test-case "private helpers and same names in different modules stay separate"
@@ -57,7 +57,11 @@
              ("import \"module.agc\" as M\n" "  x = M.Secret(value: 1)\n" CHECK-IMPORT-NAME)
              ("import \"module.agc\" as M\nimport \"module.agc\" as M\n" "" CHECK-REDEFINED-NAME)
              ("import \"module.agc\" as JSON\n" "" CHECK-REDEFINED-NAME)
-             ("import \"module.txt\" as M\n" "" CHECK-IMPORT-PATH))])
+             ("import \"module.txt\" as M\n" "" CHECK-IMPORT-PATH)
+             ("" "  x = String.nope(\"a\")\n" CHECK-UNKNOWN-NAME)
+             ("" "  x = Mpa.put(1)\n" CHECK-UNKNOWN-NAME)
+             ("" "  x = IO.nope()\n" CHECK-UNKNOWN-NAME)
+             ("" "  x: Missing.Value = 1\n" CHECK-IMPORT-NAME))])
       (with-files
        (list (cons "module.agc" "struct Secret\n  value: Int\nend\ndef hidden() -> Void\nend\nexport struct Public\nend\n")
              (cons "root.agc" (string-append (car entry) "def main() -> Void\n" (cadr entry) "end\n")))

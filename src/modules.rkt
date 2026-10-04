@@ -100,7 +100,9 @@
               (unless (if (eq? kind 'type) (struct-decl? declaration) (function-decl? declaration))
                 (bail 'CHECK-TYPE-MISMATCH "wrong kind of imported declaration" span))
               (identity target member)]
-             [(and (eq? kind 'function) (builtin-ref name)) name]
+             ;; Unknown calls belong to the checker, including misspelled
+             ;; builtin module functions. Keep their stable diagnostic code.
+             [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span)])]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]

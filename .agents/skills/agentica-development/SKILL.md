@@ -193,7 +193,7 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 
 - modules.rkt links parsed files before checking: canonical paths deduplicate imports and detect cycles; aliases resolve only exported declarations. Dependencies get unique internal identities while root names remain stable for CLI/BDD entrypoints. Preserve every original span when rewriting nodes; never restart evaluation for imported calls/tasks. Imports resolve relative to their source, not cwd. Alias/declaration collisions and builtin-name redefinitions are rejected before renaming. as is contextual, import/export are keywords.
 - CLI check/run/dump and BDD handler loading share this resolver. Raw import/export nodes passed directly to check give CHECK-MODULE-CONTEXT. Exported signatures may mention private types; importers cannot name/construct those types. No package lookup, wildcard imports, module state, cycles, or receiver attachment.
-- tests/modules-test.rkt owns linking/visibility, cross-file diagnostics, shared task budgets, BDD imports, and the combined JSON example. Its CLI test honors AGENTICA_TEST_EXECUTABLE for compiled CI coverage.
+- tests/modules-test.rkt owns linking/visibility, cross-file diagnostics, shared task budgets, BDD imports, and the combined JSON example. Its CLI test honors AGENTICA_TEST_EXECUTABLE for compiled CI coverage. Unknown dotted calls without a matching import alias pass to the checker so misspelled builtin calls retain CHECK-UNKNOWN-NAME; unknown qualified type aliases remain CHECK-IMPORT-NAME.
 
 ## Function values and BDD
 
