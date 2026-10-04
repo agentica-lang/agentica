@@ -6,7 +6,9 @@ Working rule: when a phase of the [`roadmap.md`](roadmap.md) finishes, its synta
 
 ## 2. Enums and pattern matching
 
-This section documents the direction already discussed. It is not part of the initial core and requires extending the lexer, parser, checker, and evaluator. The illustrative Outcome enum is separate from the already implemented builtin Result[T] with String errors.
+**Design settled; not implemented or normative.** This proposal requires extending the lexer, parser, checker, evaluator, diagnostics, and module-name resolution. User-generic enums are in scope; generic functions and generic structs are not. The illustrative `Outcome` is distinct from the implemented builtin `Result[T]`, whose errors are Strings.
+
+### Declaration and construction
 
 ```ruby
 enum Outcome[T, E]
@@ -19,17 +21,34 @@ enum Option[T]
   None
 end
 
+def main() -> Void
+  value: Option[String] = Option.Some("hello")
+  absent: Option[String] = Option.None()
+end
+```
+
+Variants are qualified by their enum to prevent collisions: local construction uses `Option.Some(value)` and `Option.None()`. A variant with payloads takes positional arguments matching its declared payload types. A nullary variant is constructed with empty call parentheses, consistent with Agentica's call syntax. Duplicate type parameters or variant names are rejected.
+
+For imported enums, qualify through the existing import alias: `Domain.Option.Some(value)` and `Domain.Option[T]`. This requires name resolution to support the three segments `alias.enum.variant` for constructors and patterns; it does not introduce wildcard imports or re-exports. An enum's variants have the same visibility as the enum.
+
+Type arguments are inferred from constructor payloads and any expected enum type. Every parameter must be determined: for example, `Option.None()` needs an expected `Option[T]`, and `Outcome.Ok("x")` still needs context to determine `E`. If inference leaves a parameter unknown or conflicts with the expected type, checking fails with a located diagnostic. Exact diagnostic codes are assigned with implementation.
+
+### Matching
+
+```ruby
 def label(result: Outcome[String, String]) -> String
-  case result
-  in Ok(value)
-    return value
-  in Err(message)
-    return message
+  case result do
+    Outcome.Ok(value) -> return value
+    Outcome.Err(message) -> return message
   end
 end
 ```
 
-Proposed EBNF extension, added to the alternatives for declarations and statements:
+`case expression do ... -> ... end` is a **statement**, not an expression; each arm body is a normal Agentica block. Arms are tested in source order. Patterns in v1 are limited to primitive literals (`Int`, `Float`, `String`, `Bool`, and `nil`), `_`, and enum variants with direct name bindings. A variant pattern binds one name per payload position, for example `Pair(left, right)`. A nullary variant pattern has no parentheses, for example `Option.None`. Bindings exist only within their arm. Nested patterns, guards, struct/list patterns, and field shorthand are postponed.
+
+The scrutinee determines which patterns are valid. Enum cases must cover every variant or include `_`; open primitive domains require `_`. `_` is a catch-all and must be the last arm. Duplicate or already-covered arms are unreachable and rejected. Exhaustive `case` statements participate in return analysis: the statement guarantees a return only when every arm returns. A non-exhaustive or unreachable match is never deferred to a runtime failure.
+
+Proposed grammar additions:
 
 ```ebnf
 enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
@@ -38,23 +57,21 @@ type_parameters  = "[", TYPE_NAME, { ",", TYPE_NAME }, "]" ;
 variant_decl     = TYPE_NAME,
                    [ "(", type, { ",", type }, ")" ], NL ;
 
-case_statement   = "case", expression, NL,
+case_statement   = "case", expression, "do", NL,
                    match_arm, { match_arm }, "end", NL ;
-match_arm        = "in", pattern, NL, block ;
+match_arm        = pattern, "->", block ;
 pattern          = "_"
                  | INTEGER | FLOAT | STRING | "true" | "false" | "nil"
                  | "-", INTEGER | "-", FLOAT
-                 | TYPE_NAME, [ "(", pattern_bindings, ")" ] ;
+                 | qualified_variant, [ "(", pattern_bindings, ")" ] ;
+qualified_variant = TYPE_NAME, ".", TYPE_NAME,
+                   [ ".", TYPE_NAME ] ;
 pattern_bindings = NAME, { ",", NAME } ;
 ```
 
-`_` is a wildcard that does not introduce a variable. The first version of matching allows only literals and variants with direct bindings: no nested patterns, guards, regex, or list patterns. `case` remains a statement, not an expression.
+Implementation should add examples and rejection cases for generic inference, duplicate/unknown variants, payload arity and types, wrong pattern types, arm-local bindings, exhaustiveness, wildcard placement, unreachable arms, imported variants, and all-path returns. Promote this syntax to `grammar.md` only when the implementation and tests land.
 
-The checker verifies exhaustiveness for enums: all variants must be covered or a final wildcard must exist. For open domains such as integers and strings it requires a wildcard. Bindings are local to each arm; arms are tried in order and unreachable ones are diagnosed.
-
-The expression grammar must also be extended to build variants, for example `Ok(value)` and `None`. Before implementing this extension, name resolution must be decided: variant qualification, collisions with structs, and how to infer type parameters that do not appear in the payload. The core does not settle those decisions in advance.
-
-`Point(x: 0, y:)` was discussed as a possibility but is postponed: this first matching has no struct patterns or field shorthand.
+Struct patterns such as `Point(x: 0, y:)` remain postponed; v1 has no nested patterns or field shorthand.
 
 ## 3. Extensions without a normative grammar
 

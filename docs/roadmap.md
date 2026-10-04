@@ -1016,8 +1016,12 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
   | 10,000 | 869.56 / 12.59 | 2,200.83 / 29.21 |
   | 50,000 | 23,240.65 / 61.62 | 54,904.19 / 146.60 |
 
-- [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
-- [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
+### Enums and pattern matching: design settled, implementation pending
+
+- [x] Choose generic enums, enum-qualified variants, and qualified imported names (`Domain.Option.Some`).
+- [x] Choose Elixir-inspired `case expression do ... -> ... end` as a statement, with direct-binding patterns and arm-local scopes.
+- [x] Define enum exhaustiveness, wildcard handling for open domains, unreachable arms, and generic constructor inference in `future.md`.
+- [ ] Implement enum construction and matching across lexer, parser, checker, evaluator, diagnostics, and module resolution; add focused tests before moving the syntax into `grammar.md`.
 - [ ] Define normative designs for interpolation, generics, methods, FFI, async, or actors before implementing them. Modules/imports have an explicit place in the current implementation order; error propagation is already implemented in 5e.
 - [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels and CPU parallelism remain unscheduled; [`future.md` section 8](future.md#8-concurrency-and-parallelism) records their remaining decisions.
 
