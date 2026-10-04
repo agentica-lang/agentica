@@ -84,7 +84,7 @@ def prompt(work: Path, arm: str) -> str:
         if arm == "skill":
             lines.append("Use the agentica-programming skill.")
         elif arm == "binary":
-            lines.append("The language is Agentica: Ruby-like syntax, statically typed, programs start with `def main() -> Nil`. "
+            lines.append("The language is Agentica: Ruby-like syntax, statically typed, programs start with `def main() -> Void`. "
                          "`agentica file.agc` runs a program and `agentica check file.agc` checks it without running. "
                          "`agentica --help` lists the options.")
         else:

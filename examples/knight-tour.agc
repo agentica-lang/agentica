@@ -74,7 +74,7 @@ def solve(text: String) -> Result[Tour]
   return ok(Tour(found: false, path: []))
 end
 
-def main() -> Nil
+def main() -> Void
   result = solve(IO.read())
   if Result.ok?(result)
     puts(JSON.encode(Result.unwrap!(result)))

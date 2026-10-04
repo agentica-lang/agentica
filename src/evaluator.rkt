@@ -7,7 +7,7 @@
          "bdd.rkt"
          "runtime-values.rkt"
          "task.rkt"
-         "builtin-types.rkt" "network.rkt" "filesystem.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
+         "builtin-types.rkt" "network.rkt" "filesystem.rkt" "process.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
          "json.rkt")
 
 (provide evaluate
@@ -34,7 +34,8 @@
                   #:entrypoint [entrypoint "main"]
                   #:arguments [arguments '()]
                   #:builtin-handler [builtin-handler #f]
-                  #:require-complete-tasks? [require-complete? #f])
+                  #:require-complete-tasks? [require-complete? #f]
+                  #:allow-run [allow-run? (current-process-allowed?)])
   (parameterize ([current-input-port input]
                  [current-output-port output]
                  [current-error-port error-output])
@@ -49,6 +50,9 @@
     (define file-handles (make-hasheq))
     (define file-registry-lock (make-semaphore 1))
     (define file-registry-closing? (box #f))
+    (define processes (make-hasheq))
+    (define process-lock (make-semaphore 1))
+    (define process-closing? (box #f))
     (task-run
      (lambda (run)
        (parameterize ([current-network-owner run]
@@ -57,11 +61,19 @@
                       [current-file-shutdown (lambda (cust) (task-shutdown! run cust))]
                       [current-file-handles file-handles]
                       [current-file-registry-lock file-registry-lock]
-                      [current-file-registry-closing file-registry-closing?])
+                      [current-file-registry-closing file-registry-closing?]
+                      [current-process-owner run]
+                      [current-process-registry processes]
+                      [current-process-registry-lock process-lock]
+                      [current-process-closing process-closing?]
+                      [current-process-custodian (current-custodian)]
+                      [current-process-allowed? allow-run?])
          (evaluate-with-ports program program-args entrypoint arguments builtin-handler
                               functions struct-fields run)))
      max-steps (program-span program) #:require-complete? require-complete?
-     #:cleanup (lambda () (filesystem-close-all! file-handles file-registry-lock file-registry-closing?)))))
+     #:cleanup (lambda ()
+                 (process-close-all! processes process-lock process-closing?)
+                 (filesystem-close-all! file-handles file-registry-lock file-registry-closing?)))))
 
 (define (evaluate-with-ports program program-args entrypoint entry-arguments builtin-handler
                              functions struct-fields run)
@@ -256,7 +268,9 @@
         [(http-body? value) "<HttpBody>"]
         [(http-writer? value) "<HttpWriter>"]
         [(file-handle? value) "<FileHandle>"]
-        [(result-ok? value) (format "ok(~a)" (value->debug-string (result-ok-value value)))]
+        [(process-handle? value) "<Process>"]
+        [(result-ok? value) (if (void? (result-ok-value value)) "ok()"
+                               (format "ok(~a)" (value->debug-string (result-ok-value value))))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(instance? value)
          (define field-order (hash-ref struct-fields (instance-type-name value) '()))
@@ -297,6 +311,9 @@
         (http-client-request client method url headers data (bytes-length data) #f #f
                              invoke-network spawn-network))
       (cond
+        [(string-prefix? name "Process.")
+         (define result (process-call name arguments span))
+         (if (diagnostic? result) (escape result) result)]
         [(string-prefix? name "File.") (filesystem-call name arguments)]
         [(string-prefix? name "Dir.") (filesystem-call name arguments)]
         [(string-prefix? name "Path.") (filesystem-call name arguments)]
@@ -341,7 +358,7 @@
            (bail 'RUNTIME-INVALID-DURATION "sleep duration must be nonnegative"
                  (node-span (car (call-args expression)))))
          (sleep (/ duration 1000))
-         'nil]
+         (void)]
         [("BDD.run" "BDD.step" "BDD.doc_string" "BDD.table" "BDD.assert" "BDD.set" "BDD.get"
           "BDD.given_program" "BDD.when_line" "BDD.when_input" "BDD.when_eof" "BDD.then_line"
           "BDD.then_json_line" "BDD.then_stdin_open" "BDD.then_exit" "BDD.then_stdout" "BDD.then_stderr")
@@ -355,8 +372,8 @@
                 (result-ok (bdd-result-value value))
                 (result-error (bdd-result-value value)))]
            [else value])]
-        [("puts") (displayln (car arguments)) 'nil]
-        [("ok") (result-ok (car arguments))]
+        [("puts") (displayln (car arguments)) (void)]
+        [("ok") (result-ok (if (null? arguments) (void) (car arguments)))]
         [("error") (result-error (car arguments))]
         [("Result.ok?") (result-ok? (car arguments))]
         [("Result.message")
@@ -368,9 +385,9 @@
              (bail 'RUNTIME-UNWRAP-ERROR (result-error-message result) span))]
         [("Result.unwrap_or")
          (if (result-ok? (car arguments)) (result-ok-value (car arguments)) (cadr arguments))]
-        [("IO.print") (display (car arguments)) 'nil]
-        [("IO.flush") (flush-output (current-output-port)) 'nil]
-        [("IO.warn") (displayln (car arguments) (current-error-port)) 'nil]
+        [("IO.print") (display (car arguments)) (void)]
+        [("IO.flush") (flush-output (current-output-port)) (void)]
+        [("IO.warn") (displayln (car arguments) (current-error-port)) (void)]
         [("IO.inspect")
          (displayln (value->debug-string (car arguments)))
          (car arguments)]
@@ -538,7 +555,7 @@
                 [argument (in-list arguments)])
             (define! (param-name parameter) argument))
           (exec-block (function-decl-body declaration))
-          'nil))
+          (void)))
       (set! depth (sub1 depth))
       (set! scopes saved-scopes)
       (set! return-to saved-return)
@@ -566,7 +583,7 @@
         [(return-stmt? statement)
          (return-to (if (return-stmt-value statement)
                         (eval-expression (return-stmt-value statement))
-                        'nil))]
+                        (void)))]
         [(expr-stmt? statement) (eval-expression (expr-stmt-value statement))]
         [(if-stmt? statement)
          (define branch

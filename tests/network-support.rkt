@@ -30,7 +30,7 @@
   (define result (evaluate (compile-program text) #:in (open-input-string text-input)
                            #:out output #:max-steps limit))
   (when (diagnostic? result) (error 'network-program "~a" (format-diagnostic result)))
-  (check-equal? result 'nil)
+  (check-equal? result (void))
   (get-output-string output))
 
 (define (with-peers thunk)

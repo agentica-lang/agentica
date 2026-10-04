@@ -10,7 +10,7 @@ def greet(text: String) -> Result[String]
   return ok("hello, " + name)
 end
 
-def main() -> Nil
+def main() -> Void
   text = JSON.encode(User(age: 25, name: "Ana"))
   puts(text)
   puts(Result.unwrap!(greet(text)))

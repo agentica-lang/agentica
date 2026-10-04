@@ -46,7 +46,7 @@
                                                (file-handle-output handle))))])
       (with-handlers ([exn:fail? void])
         (if (input-port? port) (close-input-port port) (close-output-port port)))))
-  'nil)
+  (void))
 
 (define (timed-handle-operation handle timeout thunk #:close-on-timeout? [close-on-timeout? #t]
                                #:allow-closed? [allow-closed? #f])
@@ -185,7 +185,7 @@
       (validate-write-target path)
       (call-with-output-file path (lambda (port) (write-bytes bytes port))
         #:mode 'binary #:exists (if append? 'append 'truncate))
-      'nil)))
+      (void))))
 
 (define (stat-path path timeout)
   (network-timed timeout
@@ -234,7 +234,7 @@
             (timed-handle-operation handle timeout
               (lambda ()
                 (require-output handle)
-                (write-bytes bytes (file-handle-output handle)) 'nil))))]
+                (write-bytes bytes (file-handle-output handle)) (void)))))]
     [(File.write_bytes)
      (match-define (list handle values timeout) args)
      (res (lambda ()
@@ -242,14 +242,14 @@
             (timed-handle-operation handle timeout
               (lambda ()
                 (require-output handle)
-                (write-bytes bytes (file-handle-output handle)) 'nil))))]
+                (write-bytes bytes (file-handle-output handle)) (void)))))]
     [(File.flush)
      (match-define (list handle timeout) args)
      (res (lambda ()
             (timed-handle-operation handle timeout
               (lambda ()
                 (require-output handle)
-                (flush-output (file-handle-output handle)) 'nil))))]
+                (flush-output (file-handle-output handle)) (void)))))]
     [(File.close)
      (define handle (car args))
      (res (lambda ()
@@ -259,7 +259,7 @@
                 (unless (file-handle-closed? handle)
                   (when (file-handle-output handle) (flush-output (file-handle-output handle)))
                   (close-handle handle))
-                'nil)
+                (void))
               #:allow-closed? #t)))]
     [(File.read_text) (res (lambda () (read-whole (car args) (cadr args))))]
     [(File.write_text) (res (lambda () (write-whole (car args) (cadr args) #f (caddr args))))]
@@ -270,7 +270,7 @@
               (lambda () (sort (map path->string (directory-list (car args))) string<?)))))]
     [(Dir.mkdir)
      (res (lambda () (network-timed (cadr args)
-              (lambda () (make-directory* (car args)) 'nil))))]
+              (lambda () (make-directory* (car args)) (void)))))]
     [(Path.cwd) (res (lambda () (path->string (current-directory))))]
     [(Path.join)
      (res (lambda ()

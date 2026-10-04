@@ -37,7 +37,7 @@
     (define reference (parse-expr "&done?"))
     (check-equal? (function-ref-name reference) "done?")
     (check-equal? (source-position-column (source-span-start (node-span reference))) 7)
-    (check-equal? (parse-code "def main() -> Nil\n  f = &\nend\n") 'PARSE-UNEXPECTED-TOKEN))
+    (check-equal? (parse-code "def main() -> Void\n  f = &\nend\n") 'PARSE-UNEXPECTED-TOKEN))
   (test-case "try has unary precedence and a source span"
     (define expression (parse-expr "try ok(1) + 2"))
     (check-true (binary? expression))
@@ -46,16 +46,16 @@
     (check-equal? (source-position-column
                    (source-span-start (node-span (binary-left expression)))) 7)
     (check-true (try-expr? (parse-expr "try (ok(1))")))
-    (check-equal? (parse-code "def main() -> Nil\n  ready? = true\nend\n")
+    (check-equal? (parse-code "def main() -> Void\n  ready? = true\nend\n")
                   'PARSE-UNEXPECTED-TOKEN))
 
   (test-case "hello program parses"
-    (define program (parse-ok "def main() -> Nil\n  puts(\"hello\")\nend\n"))
+    (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
     (check-equal? (length (program-declarations program)) 1)
     (define fn (car (program-declarations program)))
     (check-true (function-decl? fn))
     (check-equal? (function-decl-name fn) "main")
-    (check-equal? (type-ref-name (function-decl-result fn)) "Nil")
+    (check-equal? (type-ref-name (function-decl-result fn)) "Void")
     (check-equal? (length (function-decl-params fn)) 0)
     (define statement (car (function-decl-body fn)))
     (check-true (expr-stmt? statement))
@@ -89,7 +89,7 @@
                  "  done: Bool\n"
                  "end\n"
                  "\n"
-                 "def main() -> Nil\n"
+                 "def main() -> Void\n"
                  "  tasks: List[Todo] = [\n"
                  "    Todo(title: \"Probar\", done: false),\n"
                  "    Todo(title: \"Revisar\", done: true)\n"
@@ -174,14 +174,14 @@
     (check-true (list-lit? (binding-value binding-node))))
 
   (test-case "nodes carry source spans"
-    (define program (parse-ok "def main() -> Nil\n  puts(\"hello\")\nend\n"))
+    (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
     (define fn (car (program-declarations program)))
     (check-equal? (source-position-line (source-span-start (function-decl-span fn))) 1)
     (check-equal? (source-position-column (source-span-start (function-decl-span fn))) 1)
     (define node (expr-stmt-value (car (function-decl-body fn))))
     (check-equal? (source-position-line (source-span-start (call-span node))) 2)
     (check-equal? (source-position-column (source-span-start (call-span node))) 3)
-    (check-equal? (source-span-end (call-span node)) (source-position 33 2 16))
+    (check-equal? (source-span-end (call-span node)) (source-position 34 2 16))
     (define composite (parse-expr "a + b * c"))
     (check-equal? (source-span-start (binary-span composite)) (source-position 21 2 7))
     (check-equal? (source-span-end (binary-span composite)) (source-position 30 2 16))
@@ -196,7 +196,7 @@
   (test-case "while, reassignment, and bare return parse"
     (define program
       (parse-ok (string-append
-                 "def countdown(n: Int) -> Nil\n"
+                 "def countdown(n: Int) -> Void\n"
                  "  count = 0\n"
                  "  while count < n\n"
                  "    count = count + 1\n"
@@ -223,14 +223,14 @@
     (check-equal? (parse-code "puts(\"hello\")\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "age: Int = \"25\"\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "def f() -> Int\n  return 1\n") 'PARSE-UNCLOSED-BLOCK)
-    (check-equal? (parse-code "def f() -> Nil\n  x = Foo\nend\n") 'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def f() -> Nil\n  x[0] = 1\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  x = Foo\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-equal? (parse-code "def f() -> Void\n  x[0] = 1\nend\n")
                   'PARSE-INVALID-ASSIGNMENT-TARGET)
-    (check-equal? (parse-code "def f() -> Nil\n  x.y = 1\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  x.y = 1\nend\n")
                   'PARSE-INVALID-ASSIGNMENT-TARGET)
-    (check-equal? (parse-code "def f() -> Nil\n  x = 1 y = 2\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  x = 1 y = 2\nend\n")
                   'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def f() -> Nil\n  puts \"hello\"\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  puts \"hello\"\nend\n")
                   'PARSE-UNEXPECTED-TOKEN))
 
   (test-case "map literals and builtin module calls"

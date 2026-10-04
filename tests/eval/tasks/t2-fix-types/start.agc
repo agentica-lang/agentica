@@ -2,7 +2,7 @@ def line_total(quantity: Int, price: Float) -> Float
   return quantity * price
 end
 
-def main() -> Nil
+def main() -> Void
   total: Int = 0.0
   while not IO.eof?()
     parts = String.split(String.trim(IO.gets!()), " ")

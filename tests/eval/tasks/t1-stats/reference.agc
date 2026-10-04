@@ -1,4 +1,4 @@
-def main() -> Nil
+def main() -> Void
   count = 0
   sum = 0
   largest = 0

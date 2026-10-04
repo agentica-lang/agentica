@@ -4,7 +4,7 @@
 
 (require "runtime-values.rkt")
 
-(define opaque-types '(Socket Listener HttpClient HttpServer HttpBody HttpWriter FileHandle))
+(define opaque-types '(Socket Listener HttpClient HttpServer HttpBody HttpWriter FileHandle Process))
 
 (define builtin-records
   (hash "Header" '(("name" . String) ("value" . String))

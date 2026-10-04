@@ -54,13 +54,13 @@
     (for ([port (in-list (list (net-socket-input socket) (net-socket-output socket)))])
       (with-handlers ([exn:fail? void])
         (if (input-port? port) (close-input-port port) (close-output-port port)))))
-  'nil)
+  (void))
 
 (define (network-close-listener listener)
   (unless (net-listener-closed listener)
     (set-net-listener-closed! listener #t)
     (tcp-close (net-listener-listener listener)))
-  'nil)
+  (void))
 
 (define (make-socket input output cust)
   (net-socket (current-network-owner) input output (make-semaphore 1) (make-semaphore 1) #f cust))
@@ -160,7 +160,7 @@
            (define bytes (if (string? data) (string->bytes/utf-8 data) (valid-bytes data)))
            (socket-operation socket 'write timeout
              (lambda () (write-bytes bytes (net-socket-output socket))
-                        (flush-output (net-socket-output socket)) 'nil))]
+                        (flush-output (net-socket-output socket)) (void)))]
           ["TCP.recv_bytes"
            (match-define (list socket count timeout) args)
            (unless (and (exact-positive-integer? count) (<= count bytes-limit))

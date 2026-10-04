@@ -21,7 +21,7 @@ def handle_request(text: String) -> Result[Reply]
   end
 end
 
-def main() -> Nil
+def main() -> Void
   while not IO.eof?()
     reply = handle_request(IO.gets!())
     if Result.ok?(reply)

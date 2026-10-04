@@ -48,13 +48,21 @@
   result)
 
 (define (main-with body)
-  (format "def main() -> Nil\n~a\nend\n" body))
+  (format "def main() -> Void\n~a\nend\n" body))
 
 (define (position-of problem)
   (define start (source-span-start (diagnostic-span problem)))
   (list (source-position-line start) (source-position-column start)))
 
 (module+ test
+  (test-case "Void Results and tasks complete without turning nil data into completion"
+    (check-equal?
+     (output-of
+      (string-append "def effect(n: Int) -> Void\n  return\nend\n"
+                     "def finish() -> Result[Void]\n  return ok()\nend\n"
+                     "def propagate() -> Result[Void]\n  try finish()\n  failure: Result[Void] = error(\"bad\")\n  try failure\n  return ok()\nend\n"
+                     (main-with "  IO.inspect(ok())\n  IO.inspect(ok(nil))\n  task: Task[Void] = Task.spawn(&effect, 0)\n  Task.await(task)\n  Task.await(task)\n  Result.unwrap!(finish())\n  IO.inspect(propagate())\n  puts(\"done\")")))
+     "ok()\nok(nil)\nerror(\"bad\")\ndone\n"))
   (test-case "function values travel through parameters, returns and maps"
     (check-equal?
      (output-of
@@ -62,22 +70,22 @@
        "def double(n: Int) -> Int\n  return n * 2\nend\n"
        "def select() -> Fn[Int, Int]\n  return &double\nend\n"
        "def apply(f: Fn[Int, Int], n: Int) -> Int\n  return f.call(n)\nend\n"
-       "def main() -> Nil\n  handlers: Map[String, Fn[Int, Int]] = {\"double\": select()}\n"
+       "def main() -> Void\n  handlers: Map[String, Fn[Int, Int]] = {\"double\": select()}\n"
        "  IO.inspect(apply(handlers[\"double\"], 21))\n  IO.inspect(handlers[\"double\"])\nend\n"))
      "42\n<Fn>\n"))
   (test-case "the section 8 programs run"
-    (check-equal? (output-of "def main() -> Nil\n  puts(\"hello\")\nend\n") "hello\n")
+    (check-equal? (output-of "def main() -> Void\n  puts(\"hello\")\nend\n") "hello\n")
     (check-equal? (output-of (string-append
                               "def classify(age: Int) -> String\n"
                               "  if age >= 18\n    return \"adult\"\n"
                               "  elsif age >= 13\n    return \"teen\"\n"
                               "  else\n    return \"child\"\n  end\nend\n\n"
-                              "def main() -> Nil\n"
+                              "def main() -> Void\n"
                               "  puts(classify(25))\n  puts(classify(15))\n  puts(classify(3))\nend\n"))
                   "adult\nteen\nchild\n")
     (check-equal? (output-of (string-append
                               "struct Todo\n  title: String\n  done: Bool\nend\n\n"
-                              "def main() -> Nil\n"
+                              "def main() -> Void\n"
                               "  tasks: List[Todo] = [\n"
                               "    Todo(title: \"a\", done: false),\n"
                               "    Todo(done: true, title: \"b\"),\n"
@@ -91,18 +99,18 @@
                               "  if n <= 1\n    return 1\n  end\n  return n * fact(n - 1)\nend\n\n"
                               "def find(xs: List[Int], target: Int) -> Int\n"
                               "  for x in xs\n    if x == target\n      return x\n    end\n  end\n  return 0\nend\n\n"
-                              "def main() -> Nil\n"
+                              "def main() -> Void\n"
                               "  i = 0\n  total = 0\n"
                               "  while i < 4\n    total = total + i\n    i = i + 1\n  end\n"
                               "  empty: List[Int] = []\n  for e in empty\n    puts(\"never\")\n  end\n"
                               "  if total == 6\n    puts(\"six\")\n  end\n"
                               "  puts(\"ok\")\nend\n"
-                              "def unused() -> Nil\n  puts(\"\")\nend\n"))
+                              "def unused() -> Void\n  puts(\"\")\nend\n"))
                   "six\nok\n")
     (check-equal? (output-of (string-append
                               "def fact(n: Int) -> Int\n"
                               "  if n <= 1\n    return 1\n  end\n  return n * fact(n - 1)\nend\n\n"
-                              "def main() -> Nil\n  if fact(5) == 120 and later() == 1\n    puts(\"yes\")\n  end\nend\n"
+                              "def main() -> Void\n  if fact(5) == 120 and later() == 1\n    puts(\"yes\")\n  end\nend\n"
                               "def later() -> Int\n  return 1\nend\n"))
                   "yes\n"))
 
@@ -110,7 +118,7 @@
     (check-equal? (output-of
                    (string-append
                     "def noisy() -> Bool\n  puts(\"ran\")\n  return true\nend\n\n"
-                    "def main() -> Nil\n"
+                    "def main() -> Void\n"
                     "  if false and noisy()\n    puts(\"no\")\n  end\n"
                     "  if true or noisy()\n    puts(\"skip\")\n  end\n"
                     "  a = 0 - 7\n"
@@ -182,7 +190,7 @@
                    (string-append
                     "def ready?() -> Bool\n  return true\nend\n\n"
                     "def value!() -> String\n  return \"ok\"\nend\n\n"
-                    "def main() -> Nil\n"
+                    "def main() -> Void\n"
                     "  if ready?()\n    puts(value!())\n  end\n"
                     "end\n"))
                   "ok\n"))
@@ -196,7 +204,7 @@
                 "  IO.warn(\"w\")\n"
                 "  x = IO.inspect([1, 2])\n"
                 "  puts(String.from_int(List.size(x)))"))))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? output "a\nb[1, 2]\n2\n")
     (check-equal? err "w\n"))
 
@@ -204,14 +212,14 @@
     (define-values (output err result)
       (run-io (string-append
                "struct Todo\n  title: String\n  done: Bool\nend\n\n"
-               "def main() -> Nil\n"
+               "def main() -> Void\n"
                "  t = Todo(done: true, title: \"a\")\n"
                "  IO.inspect(t)\n"
                "  IO.inspect({\"k\": 1})\n"
                "  IO.inspect(\"hi\")\n"
                "  IO.inspect(nil)\n"
                "end\n")))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? output "Todo(title: \"a\", done: true)\n{\"k\": 1}\n\"hi\"\nnil\n"))
 
   (test-case "IO.gets! reads lines, IO.read drains, and IO.eof? peeks"
@@ -224,7 +232,7 @@
                 "  puts(IO.read())\n"
                 "  if IO.eof?()\n    puts(\"done\")\n  end\n"))
               "one\r\ntwo\rrest\n"))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? output "one\ntwo\nrest\n\ndone\n"))
 
   (test-case "counted reads preserve raw bytes, UTF-8 boundaries, and EOF"
@@ -241,7 +249,7 @@
          "  IO.inspect(IO.eof?())\n  IO.inspect(IO.read_bytes(9))\n"
          "  IO.inspect(IO.eof?())\n  IO.inspect(IO.read_bytes(1))"))
        (bytes 195 177 240 159 152 128 255 0)))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? err "")
     (check-equal? out "ok([])\nfalse\n[195]\nfalse\nok(\"ñ\")\nok(\"😀\")\nfalse\nok([255, 0])\ntrue\nok([])\n"))
 
@@ -256,7 +264,7 @@
          "  IO.inspect(IO.eof?())\n  puts(IO.read())\n"
          "  IO.inspect(IO.read_bytes(1048576))\n  IO.inspect(IO.read_bytes(0))"))
        "hello\nxyz"))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? err "")
     (check-equal? out "false\nfalse\nfalse\nhello\nok([120, 121])\nfalse\nz\nok([])\nok([])\n"))
 
@@ -279,7 +287,7 @@
   (test-case "System.args and System.exit"
     (define-values (args-output err args-result)
       (run-io (main-with "  for a in System.args()\n    puts(a)\n  end") "" '("x" "y")))
-    (check-equal? args-result 'nil)
+    (check-equal? args-result (void))
     (check-equal? args-output "x\ny\n")
     (define-values (exit-output exit-err result) (run-io (main-with "  System.exit(3)")))
     (check-true (exit-code? result))
@@ -288,19 +296,19 @@
   (test-case "ordinary catalog entries are typed and dispatched through a real program"
     ;; Independent examples and expected output, not signatures copied from the catalog.
     (define samples
-      '(("puts" "puts(\"x\")" "x\nnil\n")
+      '(("puts" "puts(\"x\")" "x\n")
         ("Task.spawn" "Task.spawn(&identity, 7)" "<Task>\n")
         ("Task.await" "Task.await(Task.spawn(&identity, 7))" "7\n")
-        ("Task.sleep" "Task.sleep(0)" "nil\n")
-        ("IO.puts" "IO.puts(\"x\")" "x\nnil\n")
-        ("IO.print" "IO.print(\"x\")" "xnil\n")
-        ("IO.warn" "IO.warn(\"x\")" "nil\n")
+        ("Task.sleep" "Task.sleep(0)" "")
+        ("IO.puts" "IO.puts(\"x\")" "x\n")
+        ("IO.print" "IO.print(\"x\")" "x")
+        ("IO.warn" "IO.warn(\"x\")" "")
         ("IO.inspect" "IO.inspect(7)" "7\n7\n")
         ("IO.gets" "IO.gets()" "ok(\"line\")\n")
         ("IO.gets!" "IO.gets!()" "\"line\"\n")
         ("IO.read" "IO.read()" "\"line\\n\"\n")
         ("IO.read_bytes" "IO.read_bytes(1)" "ok([108])\n")
-        ("IO.flush" "IO.flush()" "nil\n")
+        ("IO.flush" "IO.flush()" "")
         ("IO.eof?" "IO.eof?()" "false\n")
         ("System.args" "System.args()" "[\"arg\"]\n")
         ("System.exit" "System.exit(0)" "")
@@ -352,18 +360,21 @@
     (for ([name (in-list (sort (hash-keys builtins) string<?))]
           #:unless (or (string-prefix? name "BDD.")
                        (member 'filesystem (builtin-effects (hash-ref builtins name)))
-                       (member 'network (builtin-effects (hash-ref builtins name)))))
+                       (member 'network (builtin-effects (hash-ref builtins name)))
+                       (member 'subprocess (builtin-effects (hash-ref builtins name)))))
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)
         (run-io (string-append "def identity(n: Int) -> Int\n  return n\nend\n"
-                              (main-with (format "  r: Result[Int] = error(\"bad\")\n  IO.inspect(~a)" (cadr sample))))
+                              (main-with (format "  r: Result[Int] = error(\"bad\")\n  ~a"
+                                  (if (eq? (builtin-result (hash-ref builtins name)) 'Void)
+                                      (cadr sample) (format "IO.inspect(~a)" (cadr sample))))))
                 "line\n" '("arg")))
       (check-equal? out (caddr sample) name)
       (check-equal? err (if (equal? name "IO.warn") "x\n" "") name)
       (if (equal? name "System.exit")
           (check-equal? (exit-code-code result) 0)
-          (check-equal? result 'nil name))))
+          (check-equal? result (void) name))))
 
   (test-case "collection operations preserve originals, order, and present false/nil values"
     (check-equal?
@@ -547,7 +558,7 @@
     (define-values (out err result)
       (run-io (main-with "  for n in [1, 2, 3, 4, 5, 6]\n    r = IO.gets()\n    IO.inspect(Result.ok?(r))\n    IO.inspect(Result.unwrap_or(r, \"EOF\"))\n  end")
               "\none\rtwo\r\nthree\nfour"))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? err "")
     (check-equal? out "true\n\"\"\ntrue\n\"one\"\ntrue\n\"two\"\ntrue\n\"three\"\ntrue\n\"four\"\nfalse\n\"EOF\"\n"))
 
@@ -564,7 +575,7 @@
        "      return ok(String.from_int(value))\n    end\n  end\n"
        "  return ok(\"empty\")\nend\n"
        "def success() -> Result[String]\n  n = try ok(7)\n  return ok(String.from_int(n))\nend\n"
-       "def main() -> Nil\n  local = \"caller\"\n"
+       "def main() -> Void\n  local = \"caller\"\n"
        "  r = propagate()\n  puts(Result.message(r))\n  puts(local)\n"
        "  puts(Result.unwrap!(success()))\nend\n"))
      "operand\nbad\ncaller\n7\n"))
@@ -587,7 +598,7 @@
       (check-equal? (diagnostic-code result) 'RUNTIME-STEP-LIMIT)
       (check-equal? (position-of result) '(2 9)))
     (define-values (out err result) (run-io (main-with "  puts(\"done\")") #:max-steps 3))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? out "done\n"))
 
   (test-case "runtime errors are located diagnostics"
@@ -610,5 +621,5 @@
     (check-equal? (diagnostic-code
                    (diagnostic-of (string-append
                                    "def loop(n: Int) -> Int\n  return loop(n + 1)\nend\n"
-                                   "def main() -> Nil\n  x = loop(0)\nend\n")))
+                                   "def main() -> Void\n  x = loop(0)\nend\n")))
                   'RUNTIME-STACK-OVERFLOW)))

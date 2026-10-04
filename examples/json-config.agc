@@ -16,7 +16,7 @@ def read_service(text: String) -> Result[Service]
   return ok(Service(name: name, port: port, enabled: enabled))
 end
 
-def main() -> Nil
+def main() -> Void
   config = read_service(IO.read())
   if Result.ok?(config)
     puts(JSON.encode(Result.unwrap!(config)))

@@ -1,7 +1,7 @@
 #lang racket
 
 (require "ast.rkt" "bdd.rkt" "checker.rkt" "diagnostic.rkt" "evaluator.rkt"
-         "gherkin.rkt" "json.rkt" "lexer.rkt" "parser.rkt" "source.rkt")
+         "gherkin.rkt" "json.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "process.rkt")
 
 (provide run-bdd make-bdd-service format-bdd-report bdd-error-report)
 
@@ -101,7 +101,7 @@
                                        (evaluate-handler program scenario-context
                                          (lambda (builtin args where) (bdd-call scenario-context builtin args where))
                                          #:entrypoint callback #:arguments (list captures)))) additions))
-                           'nil)]))))))))
+                           (void))]))))))))
             (lambda () (bdd-cleanup! context))))
         (cond
           [(diagnostic? result) result]
@@ -165,7 +165,10 @@
           'duration_ms (inexact->exact (round (- (current-inexact-monotonic-milliseconds) started)))
           'steps (reverse records) 'error (if failure (diagnostic->jsexpr failure) 'null)))
 
-(define (run-bdd paths #:steps [step-files '()] #:command [command (default-bdd-command)])
+(define (run-bdd paths #:steps [step-files '()] #:command [base-command (default-bdd-command)]
+                 #:allow-run [allow-run? (current-process-allowed?)])
+  (parameterize ([current-process-allowed? allow-run?])
+  (define command (if allow-run? (append base-command '("--allow-run")) base-command))
   (define files '())
   (define registry (built-in-definitions))
   (define targets '())
@@ -206,7 +209,7 @@
   (define infra? (ormap (lambda (error) (equal? (hash-ref error 'code) "RUNTIME-BDD-INFRA")) errors))
   (define ok? (and (pair? scenarios) (zero? failed) (null? errors)))
   (hasheq 'ok (and ok? #t) 'passed passed 'failed failed 'not_executed 0 'file_errors (count (lambda (file) (hash? (hash-ref file 'error))) ordered)
-          'files ordered 'exit_code (cond [ok? 0] [infra? 2] [else 1])))
+          'files ordered 'exit_code (cond [ok? 0] [infra? 2] [else 1]))))
 
 (define (make-bdd-service #:command [command (default-bdd-command)])
   (define (runtime-json value)

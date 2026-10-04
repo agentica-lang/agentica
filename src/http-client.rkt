@@ -62,7 +62,7 @@
           (for ([socket (in-hash-keys (pool-sockets p))]) (network-close socket))
           (semaphore-post (pool-changed p))))))
   ((current-network-shutdown) (http-client-custodian client))
-  'nil)
+  (void))
 
 (define (parse-destination text)
   (define parsed (string->url text))
@@ -182,7 +182,7 @@
                                      (set! failure e)
                                      (when body (set-http-body-failure! body e))
                                      (return-slot client slot #f)
-                                     'nil)])
+                                     (void))])
             (cond
               [producer
                (define result (invoke producer (list arg writer)))
@@ -197,7 +197,7 @@
             (set-http-writer-active! writer #f)
             (call-with-semaphore lock
               (lambda () (set! uploaded? #t) (when consumed? (return-slot client slot reusable?))))
-            'nil)))
+            (void))))
         (set! upload-task (spawn upload cust))
         (parameterize ([current-custodian (http-client-custodian client)])
           (thread (lambda ()

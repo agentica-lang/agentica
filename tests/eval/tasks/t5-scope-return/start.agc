@@ -8,7 +8,7 @@ def classify(n: Int) -> String
   end
 end
 
-def main() -> Nil
+def main() -> Void
   negatives = 0
   while not IO.eof?()
     n = String.to_int!(String.trim(IO.gets!()))

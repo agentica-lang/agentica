@@ -14,7 +14,7 @@ def classify_record(text: String) -> Result[ScoreResult]
   return ok(ScoreResult(name: name, passed: active and score >= 60))
 end
 
-def main() -> Nil
+def main() -> Void
   while not IO.eof?()
     record = classify_record(IO.gets!())
     if Result.ok?(record)

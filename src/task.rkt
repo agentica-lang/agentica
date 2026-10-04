@@ -26,12 +26,15 @@
                             (make-semaphore 0) (box #f)))
      (define supervisor (current-thread))
      (define cleaned (make-semaphore 0))
+     (define cleanup-request (make-semaphore 0))
      (dynamic-wind void
        (lambda ()
          (thread
           (lambda ()
-            (sync (thread-dead-evt supervisor) (semaphore-peek-evt cleaned))
-            (custodian-shutdown-all (execution-custodian run))))
+            (sync (thread-dead-evt supervisor) (semaphore-peek-evt cleanup-request))
+            (with-handlers ([exn:fail? void]) (cleanup))
+            (custodian-shutdown-all (execution-custodian run))
+            (semaphore-post cleaned)))
          (parameterize ([current-custodian (execution-custodian run)])
            (thread
             (lambda ()
@@ -48,9 +51,8 @@
          (sync (semaphore-peek-evt (execution-finished run)))
          (unbox (unbox (execution-outcome run))))
        (lambda ()
-         (with-handlers ([exn:fail? void]) (cleanup))
-         (custodian-shutdown-all (execution-custodian run))
-         (semaphore-post cleaned)))]))
+         (semaphore-post cleanup-request)
+         (sync (semaphore-peek-evt cleaned))))]))
 
 (define (cancelled! run task span)
   (unless (unbox (task-value-outcome task))

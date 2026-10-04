@@ -5,7 +5,7 @@ Agentica is a small statically typed language with Ruby-like syntax. This file i
 ## Program shape
 
 - A file has only top-level `def` and `struct` declarations. No statements at the top level.
-- It needs exactly one `def main() -> Nil` with no parameters. Running a program calls `main()`.
+- It needs exactly one `def main() -> Void` with no parameters. Running a program calls `main()`.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
 - Calls always use parentheses, even with no arguments: `main()`, `puts("hi")`.
@@ -23,18 +23,29 @@ Full programs are at the end of this file.
 | `Float` | IEEE 754 double |
 | `Bool` | `true` / `false` only |
 | `String` | Unicode text |
-| `Nil` | the single value `nil`; the result of functions that return nothing |
+| `Nil` | the single data value `nil` |
+| `Void` | completion without a usable value; no literal |
+| `Process` | opaque child process; inspect prints `<Process>` |
 | `List[T]` | homogeneous, immutable, indexed from 0 |
 | `Map[K, V]` | homogeneous, immutable; `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
 | `Json` | opaque JSON value; use `JSON` functions to access it |
-| `Fn[A, ..., R]` | named function value; last type is the return, preceding types are parameters; `Fn[Nil]` takes no arguments |
+| `Fn[A, ..., R]` | named function value; last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
 | `Task[R]` | opaque lightweight task; exactly one result type |
 | Network handles | opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
 | Builtin records | `Header`, `Request`, `Response`, `HttpClientOptions`, `HttpServerOptions` |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
+
+
+## Void completion
+
+`Void` has no literal or usable payload. It is permitted as a function return, the final type of `Fn`, or the completion type of `Result`/`Task`. Bare Void variables, parameters, fields, List elements, and Map values are `CHECK-VOID-TYPE`. Wrappers such as `List[Result[Void]]` are valid data.
+
+A Void call may be a statement or be forwarded from a Void function with return another_void_call(). Assignment, argument passing, construction, operators, and inspection of bare completion fail with CHECK-VOID-VALUE. The same restriction applies to Result.unwrap!(Result[Void]), Task.await(Task[Void]), and successful try on Result[Void].
+
+ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(nil). Result[Void] functions explicitly return ok() or error(message); try still requires an enclosing Result-returning function. Result.unwrap_or needs a data fallback and cannot operate on Result[Void].
 
 ## Declarations
 
@@ -52,8 +63,8 @@ end
 - Every parameter and the return type need an annotation.
 - Struct and function declarations are top level only. There are no methods, closures, nested functions, default arguments, or overloading.
 - Functions can be called before they are declared, and can be recursive.
-- A function whose result is not `Nil` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
-- `return` alone is `return nil`. Reaching the end of a `-> Nil` function returns `nil`.
+- A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
+- `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
 
 ## Statements
 
@@ -122,7 +133,7 @@ Operators, from highest to lowest precedence:
 
 ## Builtin functions
 
-`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types listed below are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value: String) -> Void` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types listed below are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -158,18 +169,18 @@ String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int               # halts on bad text
 String.to_float!(s: String) -> Float           # halts on bad text
 
-IO.puts(value: String) -> Nil
-IO.print(value: String) -> Nil                 # no newline
-IO.warn(value: String) -> Nil                  # standard error
+IO.puts(value: String) -> Void
+IO.print(value: String) -> Void                 # no newline
+IO.warn(value: String) -> Void                  # standard error
 IO.inspect(value: T) -> T                      # prints a debug form, returns the value
 IO.gets() -> Result[String]                   # ok(line) or error at EOF
 IO.gets!() -> String                          # next line; halts at end of input
 IO.read() -> String                          # drains until EOF
 IO.read_bytes(count: Int) -> Result[List[Int]]
-IO.flush() -> Nil                            # flushes stdout only
+IO.flush() -> Void                            # flushes stdout only
 IO.eof?() -> Bool                            # blocking byte peek, not readiness
 System.args() -> List[String]
-System.exit(code: Int) -> Nil
+System.exit(code: Int) -> Void
 ```
 
 - A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
@@ -193,7 +204,7 @@ All collection updates preserve their inputs. `List.append`, `List.set`, and `Li
 - `IO.read()` waits for EOF, so use `IO.gets()` for line-delimited live protocols. `IO.flush()` flushes stdout without closing it; it does not flush stderr. Output calls do not auto-flush. For MCP stdio, put one compact JSON message on each line, flush after each response, and send logs to `IO.warn`.
 
 ```ruby
-def main() -> Nil
+def main() -> Void
   data = IO.read_bytes(4)
   if Result.ok?(data)
     text = String.from_bytes(Result.unwrap!(data))
@@ -207,6 +218,7 @@ end
 
 ```text
 ok(value: T) -> Result[T]
+ok() -> Result[Void]
 error(message: String) -> Result[T]
 Result.ok?(r: Result[T]) -> Bool
 Result.unwrap!(r: Result[T]) -> T
@@ -229,7 +241,7 @@ def read_age(text: String) -> Result[Int]
   return ok(age)
 end
 
-def main() -> Nil
+def main() -> Void
   age = read_age("bad")
   if not Result.ok?(age)
     puts(Result.message(age))
@@ -247,7 +259,7 @@ end
 ```text
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.await(task: Task[R]) -> R
-Task.sleep(milliseconds: Int) -> Nil
+Task.sleep(milliseconds: Int) -> Void
 ```
 
 Start tasks before awaiting them to overlap I/O. They call named functions with one argument; pass a struct for multiple values. Each has independent variables, scopes and returns. Await returns the cached value and can be repeated. False, nil and error Results are normal values, with no extra Result wrapper. Task[R] has no constructor, equality, fields, indexing or JSON encoding; inspect prints `<Task>`. A handle belongs to its execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT.
@@ -262,7 +274,7 @@ def double(n: Int) -> Int
   return n * 2
 end
 
-def main() -> Nil
+def main() -> Void
   first = Task.spawn(&double, 21)
   second = Task.spawn(&double, 7)
   puts(String.from_int(Task.await(first)))
@@ -271,6 +283,32 @@ end
 ```
 
 BDD registration and steps may spawn tasks. Finish them before returning, normally by awaiting them; pending work fails with RUNTIME-BDD-PENDING-TASKS. Child failures stop only their current handler; later scenarios continue. Completed child assertions count toward the current Then step; Doc Strings and tables remain those of that step. BDD registration/state/assertions are synchronized and stream lock wait counts against the operation timeout.
+
+
+## Processes
+
+Process is an opaque handle with no constructor, fields, equality, or JSON encoding. IO.inspect prints <Process>.
+
+~~~text
+Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]
+Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
+Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
+Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
+Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
+Process.close(p: Process) -> Void
+~~~
+
+- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks, HTTP callbacks, BDD handlers, and programs started by BDD. The existing BDD runner can still launch its programs without granting them Process.spawn.
+- Commands resolve through PATH or an explicit path relative to the inherited working directory. Children inherit the environment. Arguments are passed directly without shell interpolation. Empty commands, NUL-containing arguments, unavailable executables, and Windows batch commands fail. OS execution failure after creation may appear as stderr and a nonzero child exit.
+- Timeouts are positive milliseconds, including lock wait. Read and write locks are independent. A timeout after starting stream I/O kills and closes the child; timing out while waiting for its lock preserves it. Waiting for exit times out without terminating the child.
+- Sends accept at most 1048576 UTF-8 bytes or integers 0..255 and flush before succeeding. Invalid data consumes nothing. read_bytes accepts 0..1048576 and waits for that count or EOF: short/empty EOF succeeds, and zero consumes nothing.
+- read_line consumes a line of at most 1 MiB, strips LF/CRLF, and strictly decodes UTF-8. An unterminated final line succeeds; empty EOF is an error. Invalid UTF-8 consumes the completed line. An oversized line closes the child.
+- close_stdin flushes and closes input idempotently; further sends fail. wait returns the host exit code, including nonzero codes, and can be repeated. It preserves unread stdout and waits for stderr forwarding to finish.
+- Stderr streams separately to the evaluation's error port with a fixed-size buffer. Output has no lifetime cap. A child can block when stdout's pipe fills: use Task to read concurrently with sending or waiting.
+- Handles belong to their evaluation. close force-kills a running child, reaps it, closes owned ports/workers, and is idempotent. Other operations on closed handles fail. Main return, System.exit, diagnostics, task failures, step exhaustion, and external interruption also clean up directly spawned children. Arbitrary descendant trees are outside the cleanup guarantee. Borrowed ports remain open.
+- Operational failures return String error Results. Cross-evaluation access is RUNTIME-PROCESS-CONTEXT; explicit cleanup failures are RUNTIME-PROCESS-CLOSE, at the call span.
 
 ## Files and paths
 
@@ -284,16 +322,16 @@ reject directories and special files.
 File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
 File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
-File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Nil]
-File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
-File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
-File.close(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
+File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
+File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
+File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
-File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
-File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
+File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
+File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
 Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
-Dir.mkdir(path: String, timeout_ms: Int) -> Result[Nil]
+Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
 Path.cwd() -> Result[String]
 Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
@@ -330,12 +368,12 @@ Network access needs no CLI permission flag.
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.listen(host: String, port: Int) -> Result[Listener]
 TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
-TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Nil]
-TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
+TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
+TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Void]
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
-TCP.close(socket: Socket) -> Nil
-TCP.close_listener(listener: Listener) -> Nil
+TCP.close(socket: Socket) -> Void
+TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
 TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket]
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
@@ -381,15 +419,15 @@ HTTP.client_options() -> HttpClientOptions
 HTTP.server_options() -> HttpServerOptions
 HTTP.client() -> Result[HttpClient]
 HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
-HTTP.close_client(client: HttpClient) -> Nil
+HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[Response]
 HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[Response]
 HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Nil]], argument: A) -> Result[Response]
+HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Void]], argument: A) -> Result[Response]
 HTTP.read(body: HttpBody, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 HTTP.text(body: HttpBody, timeout_ms: Int) -> Result[String]
 HTTP.trailers(body: HttpBody) -> Result[List[Header]]
-HTTP.close_body(body: HttpBody) -> Nil
+HTTP.close_body(body: HttpBody) -> Void
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 ```
 
@@ -424,16 +462,16 @@ close_body abandons an unread body. Header lookup is case-insensitive.
 Content encoding remains raw: there is no automatic gzip decompression.
 
 ```text
-HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Nil], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Nil], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Nil]
-HTTP.close_server(server: HttpServer) -> Nil
-HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Nil]
-HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Nil]
-HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
-HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Nil]
-HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Nil]
+HTTP.wait(server: HttpServer) -> Result[Void]
+HTTP.close_server(server: HttpServer) -> Void
+HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Void]
+HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Void]
+HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Void]
+HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Void]
 ```
 
 Connections run concurrently with independent evaluator contexts and one
@@ -486,26 +524,26 @@ Predefined step patterns (keyword is irrelevant for matching):
 | `the program exits with code {int} within {int} milliseconds` | wait and check exit code |
 | `stdout is:` / `stderr is:` | complete Doc String after exit |
 
-Custom handler files register in `main() -> Nil`: `BDD.step("I submit a record:", &submit)`. `submit(args: List[String]) -> Nil` can use `BDD.when_line(BDD.doc_string())`. Patterns are literal text plus `{string}` and `{int}`; unknown captures and duplicate/ambiguous patterns fail. Captures are strings in order; quoted strings lose delimiters and unescape backslash-prefixed characters. Decimal integers may have a minus sign.
+Custom handler files register in `main() -> Void`: `BDD.step("I submit a record:", &submit)`. `submit(args: List[String]) -> Void` can use `BDD.when_line(BDD.doc_string())`. Patterns are literal text plus `{string}` and `{int}`; unknown captures and duplicate/ambiguous patterns fail. Captures are strings in order; quoted strings lose delimiters and unescape backslash-prefixed characters. Decimal integers may have a minus sign.
 
 ```text
 BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]
-BDD.step(pattern: String, handler: Fn[List[String], Nil]) -> Nil
+BDD.step(pattern: String, handler: Fn[List[String], Void]) -> Void
 BDD.doc_string() -> String
 BDD.table() -> List[List[String]]
-BDD.assert(condition: Bool, message: String) -> Nil
-BDD.set(name: String, value: Json) -> Nil
+BDD.assert(condition: Bool, message: String) -> Void
+BDD.set(name: String, value: Json) -> Void
 BDD.get(name: String) -> Result[Json]
-BDD.given_program(path: String) -> Nil
-BDD.when_line(text: String) -> Nil
-BDD.when_input(text: String) -> Nil
-BDD.when_eof() -> Nil
-BDD.then_line(expected: String, timeout_ms: Int) -> Nil
-BDD.then_json_line(expected: String, timeout_ms: Int) -> Nil
-BDD.then_stdin_open() -> Nil
-BDD.then_exit(code: Int, timeout_ms: Int) -> Nil
-BDD.then_stdout(expected: String) -> Nil
-BDD.then_stderr(expected: String) -> Nil
+BDD.given_program(path: String) -> Void
+BDD.when_line(text: String) -> Void
+BDD.when_input(text: String) -> Void
+BDD.when_eof() -> Void
+BDD.then_line(expected: String, timeout_ms: Int) -> Void
+BDD.then_json_line(expected: String, timeout_ms: Int) -> Void
+BDD.then_stdin_open() -> Void
+BDD.then_exit(code: Int, timeout_ms: Int) -> Void
+BDD.then_stdout(expected: String) -> Void
+BDD.then_stderr(expected: String) -> Void
 ```
 
 `BDD.run` accepts a file or directory. An infrastructure failure returns an error Result. A completed evaluation returns JSON containing `ok`, `passed`, `failed`, `not_executed`, `file_errors`, `exit_code`, and detailed `files`. A successful Result can contain failed tests: inspect `JSON.bool(Result.unwrap!(JSON.get(report, "ok")))` and choose `System.exit(1)` when false. The CLI enforces this automatically. `BDD.run` is unavailable recursively inside handlers.
@@ -543,13 +581,15 @@ def greet_json(text: String) -> Result[String]
   return ok("hello, " + name)
 end
 
-def main() -> Nil
+def main() -> Void
   text = JSON.encode({"name": "Ana"})
   puts(Result.unwrap!(greet_json(text)))
 end
 ```
 
 ## Diagnostics
+
+`CHECK-VOID-TYPE` rejects Void in a data type position; `CHECK-VOID-VALUE` rejects using completion as data. Process ownership and explicit cleanup diagnostics are `RUNTIME-PROCESS-CONTEXT` and `RUNTIME-PROCESS-CLOSE` at the call span. Expected process failures return error Results.
 
 A failure prints to stderr and exits 1 (the run stops at the first error):
 
@@ -579,7 +619,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type |
 | `CHECK-RESULT-TYPE` | an error constructor without an expected Result type |
 | `CHECK-TRY-CONTEXT` | try in a function not returning Result |
-| `CHECK-MISSING-RETURN` | a path without `return` in a non-`Nil` function |
+| `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function |
 | `CHECK-MAIN` | missing or wrong `main` |
 | `CHECK-NOT-A-STRUCT`, `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | field access on a non-struct, index on a non-list/map, `for` over a non-list |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
@@ -611,7 +651,7 @@ def classify(age: Int) -> String
   end
 end
 
-def main() -> Nil
+def main() -> Void
   puts(classify(25))
 end
 ```
@@ -624,7 +664,7 @@ struct Todo
   done: Bool
 end
 
-def main() -> Nil
+def main() -> Void
   tasks: List[Todo] = [
     Todo(title: "write code", done: false),
     Todo(title: "review code", done: true)
@@ -641,7 +681,7 @@ end
 Maps and strings:
 
 ```ruby
-def main() -> Nil
+def main() -> Void
   stock: Map[String, Int] = {"apple": 3, "pear": 0}
   stock = Map.put(stock, "kiwi", 7)
   for name in Map.keys(stock)

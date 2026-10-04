@@ -6,7 +6,7 @@ def read_count(text: String) -> Result[Int]
   return ok(count)
 end
 
-def main() -> Nil
+def main() -> Void
   count = read_count("42")
   puts(String.from_int(Result.unwrap!(count)))
   missing = read_count("")

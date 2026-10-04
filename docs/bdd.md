@@ -71,35 +71,39 @@ Object key order does not affect JSON equality. Arrays retain order; value kinds
 
 ## Custom steps
 
+Use `agentica --allow-run test ...` or `agentica test ... --allow-run` when
+handlers or programs under test call `Process.spawn`. The allowance reaches
+both; the BDD runner's existing program launch does not itself grant it.
+
 ```ruby
-def submit_record(args: List[String]) -> Nil
+def submit_record(args: List[String]) -> Void
   BDD.when_line(BDD.doc_string())
 end
 
-def main() -> Nil
+def main() -> Void
   BDD.step("I submit a score record", &submit_record)
 end
 ```
 
-Load this file explicitly with `--steps FILE`. Its `main() -> Nil` registers callbacks once; the callback runs for each matching step. Callback functions have type `Fn[List[String], Nil]`. Patterns support literal text, `{string}` for single/double quoted strings, and `{int}` for decimal digits with an optional minus sign. Captures arrive as strings in order; quoted captures remove delimiters and unescape backslash-prefixed characters. This is a small pattern language, not the full Cucumber Expressions syntax.
+Load this file explicitly with `--steps FILE`. Its `main() -> Void` registers callbacks once; the callback runs for each matching step. Callback functions have type `Fn[List[String], Void]`. Patterns support literal text, `{string}` for single/double quoted strings, and `{int}` for decimal digits with an optional minus sign. Captures arrive as strings in order; quoted captures remove delimiters and unescape backslash-prefixed characters. This is a small pattern language, not the full Cucumber Expressions syntax.
 
 ```text
-BDD.step(pattern: String, handler: Fn[List[String], Nil]) -> Nil
+BDD.step(pattern: String, handler: Fn[List[String], Void]) -> Void
 BDD.doc_string() -> String
 BDD.table() -> List[List[String]]
-BDD.assert(condition: Bool, message: String) -> Nil
-BDD.set(name: String, value: Json) -> Nil
+BDD.assert(condition: Bool, message: String) -> Void
+BDD.set(name: String, value: Json) -> Void
 BDD.get(name: String) -> Result[Json]
-BDD.given_program(path: String) -> Nil
-BDD.when_line(text: String) -> Nil
-BDD.when_input(text: String) -> Nil
-BDD.when_eof() -> Nil
-BDD.then_line(expected: String, timeout_ms: Int) -> Nil
-BDD.then_json_line(expected: String, timeout_ms: Int) -> Nil
-BDD.then_stdin_open() -> Nil
-BDD.then_exit(code: Int, timeout_ms: Int) -> Nil
-BDD.then_stdout(expected: String) -> Nil
-BDD.then_stderr(expected: String) -> Nil
+BDD.given_program(path: String) -> Void
+BDD.when_line(text: String) -> Void
+BDD.when_input(text: String) -> Void
+BDD.when_eof() -> Void
+BDD.then_line(expected: String, timeout_ms: Int) -> Void
+BDD.then_json_line(expected: String, timeout_ms: Int) -> Void
+BDD.then_stdin_open() -> Void
+BDD.then_exit(code: Int, timeout_ms: Int) -> Void
+BDD.then_stdout(expected: String) -> Void
+BDD.then_stderr(expected: String) -> Void
 ```
 
 Only registration allows `BDD.step`; actions, state, and assertions require a running scenario. Missing Doc Strings/tables fail; missing state returns an error Result. A second program start, an unknown pattern, or multiple matching definitions fail. Every `Then` step, including its following `And`/`But`, must perform at least one BDD assertion; every scenario must perform a check. Handler calls to `System.exit`, including code zero, fail. Calling `BDD.run` recursively from handlers is unavailable.
@@ -111,7 +115,7 @@ Registration and step handlers support Task.spawn and Task.await. Every invocati
 Registration duplicate checks, scenario state and assertion counters are atomic. Stdin writes/close and stdout reads use independent locks, so a receive task can wait while another sends. Operations on the same stream serialize; timeout includes waiting for the lock. Startup serializes; streams used before it completes fail with RUNTIME-BDD-CONTEXT. Operation workers stay inside the task/timeout scope and are cancelled before the next step. Handler output remains suppressed and bounded across tasks.
 
 ```ruby
-def main() -> Nil
+def main() -> Void
   result = BDD.run("specs/", ["steps.agc"])
   if not Result.ok?(result)
     IO.warn(Result.message(result))

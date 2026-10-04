@@ -14,11 +14,13 @@
   (define dump? #f)
   (define style 'plain)
   (define max-steps #f)
+  (define allow-run? #f)
   (define step-files '())
   (define raw-arguments
     (command-line
      #:program "agentica"
      #:once-each
+     [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]
      [("--max-steps") count "limit execution to N expression/statement entries"
       (define parsed (string->number count))
       (unless (and (regexp-match? #px"^[0-9]+$" count) (exact-positive-integer? parsed))
@@ -57,10 +59,13 @@
         [(member (car arguments) '("--json" "--ai"))
          (set! style (if (equal? (car arguments) "--json") 'json 'ai))
          (loop (cdr arguments))]
+        [(equal? (car arguments) "--allow-run")
+         (set! allow-run? #t)
+         (loop (cdr arguments))]
         [(string-prefix? (car arguments) "--")
          (usage-error (format "unknown option ~a" (car arguments)))]
         [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
-    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files))
+    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files #:allow-run allow-run?))
     (show-report report))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
@@ -84,7 +89,7 @@
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
   (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--dump] [--ai|--json] [--max-steps N] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--dump] [--ai|--json] [--max-steps N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -115,7 +120,7 @@
     [check-only? (displayln (if (eq? style 'json) "{\"ok\":true}" "check ok"))]
     [dump? (pretty-print checked)]
     [else
-     (define result (evaluate checked #:args program-args #:max-steps max-steps
+     (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
                               #:builtin-handler (make-bdd-service)))
      (cond
        [(diagnostic? result) (fail! result)]

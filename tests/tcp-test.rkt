@@ -5,7 +5,7 @@
 (define (client-program host port secure?)
   (format
    #<<AGC
-def main() -> Nil
+def main() -> Void
   socket = Result.unwrap!(~a)
   Result.unwrap!(TCP.send_bytes(socket, [195], 1000))
   Result.unwrap!(TCP.send_bytes(socket, [177, 240, 159, 152, 128, 10], 1000))
@@ -34,13 +34,13 @@ AGC
 (define (server-program secure?)
   (format
    #<<AGC
-def echo(listener: Listener) -> Nil
+def echo(listener: Listener) -> Void
   socket = Result.unwrap!(TCP.accept(listener, 3000))
   line = Result.unwrap!(TCP.read_line(socket, 3000))
   Result.unwrap!(TCP.send(socket, line + "\n", 1000))
   TCP.close(socket)
 end
-def main() -> Nil
+def main() -> Void
   listener = Result.unwrap!(~a)
   puts(String.from_int(TCP.local_port(listener)))
   IO.flush()
@@ -64,7 +64,7 @@ AGC
          (check-equal? (run-program (client-program "localhost" (hash-ref ports 'tls) #t)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
          (check-equal?
           (run-program
-           (format "def main() -> Nil\n  IO.inspect(Result.ok?(TLS.connect(\"127.0.0.1\", ~a, ~s, 1000)))\nend\n"
+           (format "def main() -> Void\n  IO.inspect(Result.ok?(TLS.connect(\"127.0.0.1\", ~a, ~s, 1000)))\nend\n"
                    (hash-ref ports 'tls) (path->string ca-path))) "false\n"))))
     (test-case "Node clients verify Agentica TCP and TLS listeners through the real CLI"
       (for ([secure? '(#f #t)])

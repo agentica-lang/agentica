@@ -1,3 +1,3 @@
-def main() -> Nil
+def main() -> Void
   puts("hello")
 end

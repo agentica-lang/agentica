@@ -109,7 +109,7 @@ def shortest_route(maze: Maze) -> Route
   return Route(found: false, distance: -1, path: [])
 end
 
-def main() -> Nil
+def main() -> Void
   maze = read_maze(IO.read())
   if Result.ok?(maze)
     puts(JSON.encode(shortest_route(Result.unwrap!(maze))))

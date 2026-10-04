@@ -14,7 +14,7 @@
 
 (module+ test
   (test-case "keywords, identifiers, numeric literals, and EOF"
-    (define result (lex-text "def main() -> Nil\n  count = 12\n  ratio = 1.25"))
+    (define result (lex-text "def main() -> Void\n  count = 12\n  ratio = 1.25"))
     (check-equal? (kinds result)
                   '(def name left-paren right-paren arrow type-name NL
                     name assign integer NL name assign float NL EOF))

@@ -1,4 +1,4 @@
-def main() -> Nil
+def main() -> Void
   text = "  Agentica, hello  "
   clean = String.trim(text)
   puts(String.upcase(clean))

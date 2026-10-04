@@ -1,4 +1,4 @@
-def main() -> Nil
+def main() -> Void
   args = System.args()
   path: String = args[0]
   contents: Result[String] = File.read_text(path, 1000)

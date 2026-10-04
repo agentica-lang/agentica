@@ -84,15 +84,15 @@ primary          = (* …core forms, plus: *)
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
 - **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
-- **Remaining types:** `Process`. Function values and TCP/TLS/HTTP handles and records are core; their normative APIs live in grammar.md. Opaque handles have no constructor or fields; inspect prints a type marker.
-- **Names reserved when their phase starts:** `Process`. `Fn`, `BDD`, `Json`, `JSON`, `Task`, `TCP`, `TLS`, `HTTP` and networking types are already core; typed decoding and schema functions remain planned.
+- Function values, `Void`, `Process`, and TCP/TLS/HTTP handles and records are core; their normative APIs live in grammar.md. Opaque handles have no constructor or fields; inspect prints a type marker.
+- `Void`, `Process`, `Fn`, `BDD`, `Json`, `JSON`, `Task`, `TCP`, `TLS`, `HTTP` and networking types are reserved in the core; typed decoding and schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int
   return n * 2
 end
 
-def main() -> Nil
+def main() -> Void
   f: Fn[Int, Int] = &double
   puts(String.from_int(f.call(21)))
   if String.contains?("agentica", "gent")
@@ -152,7 +152,7 @@ def add(total: Int, n: Int) -> Int
   return total + n
 end
 
-def main() -> Nil
+def main() -> Void
   numbers = [3, 1, 2]
   sorted = List.sort(numbers)
   doubled = List.map(sorted, &double)
@@ -263,7 +263,7 @@ Task is a builtin module over Racket primitives using function values (5j) and a
 
 ```text
 Channel.new() -> Channel[T]
-Channel.send(c: Channel[T], v: T) -> Nil
+Channel.send(c: Channel[T], v: T) -> Void
 Channel.recv(c: Channel[T]) -> T
 ```
 
@@ -303,3 +303,16 @@ text helpers and each stream operation cap data at 1 MiB and use strict UTF-8.
 Timed stream operations serialize per handle and close the handle only when
 active I/O times out. `Dir.mkdir` is recursive and idempotent; path resolution
 is lexical and does not resolve symlinks.
+
+## 10. Void and processes (implemented)
+
+Strict `Void` and the `Process` module are core. Their normative signatures,
+completion/type restrictions, stream limits, deadlines, and cleanup rules live
+in `grammar.md`. `Nil` remains data; successful fallible completion uses
+`Result[Void]` and `ok()`. Native FFI can map a foreign void return to the same
+completion concept when its ABI and ownership design lands.
+
+Process spawning requires `--allow-run`, off by default. Operations use literal
+arguments, inherited environment/working directory, and per-call 1 MiB stream
+limits. Direct children are killed and reaped when evaluation ends. Process
+polling and arbitrary descendant-tree supervision remain future designs.
