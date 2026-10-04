@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -94,7 +94,7 @@
   (define structs (hash-copy builtin-records))
   (define functions (make-hash))
   (define scopes '())
-  (define current-result 'Nil)
+  (define current-result 'Void)
   (define current-signature #f)
 
   (let/ec return
@@ -119,20 +119,25 @@
         (mismatch! expected actual span))
       actual)
 
-    (define (resolve-type reference)
+    (define (resolve-type reference [completion? #f])
       (define name (type-ref-name reference))
       (define arguments (type-ref-args reference))
       (cond
+        [(and (string=? name "Void") (null? arguments))
+         (unless completion?
+           (bail 'CHECK-VOID-TYPE "Void is only valid in a completion type position" (type-ref-span reference)))
+         'Void]
         [(and (member name '("Int" "Float" "Bool" "String" "Nil" "Json"))
               (null? arguments))
          (string->symbol name)]
         [(and (member (string->symbol name) opaque-types) (null? arguments)) (string->symbol name)]
         [(and (string=? name "Result") (= (length arguments) 1))
-         (list 'Result (resolve-type (car arguments)))]
+         (list 'Result (resolve-type (car arguments) #t))]
         [(and (string=? name "Task") (= (length arguments) 1))
-         (list 'Task (resolve-type (car arguments)))]
+         (list 'Task (resolve-type (car arguments) #t))]
         [(and (string=? name "Fn") (pair? arguments))
-         (cons 'Fn (map resolve-type arguments))]
+         (cons 'Fn (append (map resolve-type (drop-right arguments 1))
+                          (list (resolve-type (last arguments) #t))))]
         [(and (string=? name "List") (= (length arguments) 1))
          (list 'List (resolve-type (car arguments)))]
         [(and (string=? name "Map") (= (length arguments) 2))
@@ -148,7 +153,8 @@
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
                (type-ref-span reference)
-               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "List" "Map" "Result" "Json" "Fn" "Task")
+               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
+                                                 (map symbol->string opaque-types)
                                                  (hash-keys structs))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -230,7 +236,7 @@
               (set! seen (cons (param-name parameter) seen))
               (resolve-type (param-type parameter))))
           (hash-set! functions name
-                     (list parameter-types (resolve-type (function-decl-result declaration)))))))
+                     (list parameter-types (resolve-type (function-decl-result declaration) #t))))))
 
     (define (check-main!)
       (define mains
@@ -240,17 +246,17 @@
           declaration))
       (cond
         [(null? mains)
-         (bail 'CHECK-MAIN "a program must declare exactly one main() -> Nil" (program-span program))]
+         (bail 'CHECK-MAIN "a program must declare exactly one main() -> Void" (program-span program))]
         [else
          (define main (car mains))
          (unless (and (null? (function-decl-params main))
-                      (eq? (resolve-type (function-decl-result main)) 'Nil))
-           (bail 'CHECK-MAIN "main must take no parameters and return Nil"
+                      (eq? (resolve-type (function-decl-result main) #t) 'Void))
+           (bail 'CHECK-MAIN "main must take no parameters and return Void"
                  (function-decl-span main)))]))
 
     ;; Expressions ----------------------------------------------------------
 
-    (define (check-expression expression expected)
+    (define (check-expression expression expected #:completion? [completion? #f])
       (define actual
         (cond
           [(literal? expression)
@@ -298,6 +304,8 @@
           [(field-access? expression) (check-field-access expression)]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
+      (when (and (eq? actual 'Void) (not completion?))
+        (bail 'CHECK-VOID-VALUE "a Void call has no value; use it as a statement" (node-span expression)))
       (ensure actual expected (node-span expression)))
 
     (define (check-try expression expected)
@@ -447,8 +455,8 @@
            (check-expression argument (cadr parameter)))
          (define callback (check-expression (list-ref arguments 5) #f))
          (unless (and (list? callback) (= (length callback) 4) (eq? (car callback) 'Fn)
-                      (equal? (caddr callback) 'HttpWriter) (equal? (cadddr callback) '(Result Nil)))
-           (bail 'CHECK-TYPE-MISMATCH "producer must have type Fn[A, HttpWriter, Result[Nil]]"
+                      (equal? (caddr callback) 'HttpWriter) (equal? (cadddr callback) '(Result Void)))
+           (bail 'CHECK-TYPE-MISMATCH "producer must have type Fn[A, HttpWriter, Result[Void]]"
                  (node-span (list-ref arguments 5))))
          (check-expression (list-ref arguments 6) (cadr callback))
          '(Result (Struct "Response"))]
@@ -522,6 +530,7 @@
         [(ok)
          (list 'Result (check-expression (car arguments)
                                         (and (result-type? expected) (cadr expected))))]
+        [(ok-void) '(Result Void)]
         [(error)
          (check-expression (car arguments) 'String)
          (when (and expected (not (result-type? expected)))
@@ -695,7 +704,7 @@
       (cond
         [(binding? statement) (check-binding statement)]
         [(return-stmt? statement) (check-return statement)]
-        [(expr-stmt? statement) (check-expression (expr-stmt-value statement) #f)]
+        [(expr-stmt? statement) (check-expression (expr-stmt-value statement) #f #:completion? #t)]
         [(if-stmt? statement) (check-if statement)]
         [(while-stmt? statement) (check-while statement)]
         [(for-stmt? statement) (check-for statement)]
@@ -726,8 +735,8 @@
     (define (check-return statement)
       (define value (return-stmt-value statement))
       (if value
-          (check-expression value current-result)
-          (ensure 'Nil current-result (return-stmt-span statement))))
+          (check-expression value current-result #:completion? (eq? current-result 'Void))
+          (ensure 'Void current-result (return-stmt-span statement))))
 
     (define (check-if statement)
       (for ([branch (in-list (if-stmt-branches statement))])
@@ -759,7 +768,7 @@
       (pop-scope!))
 
     (define (check-function declaration)
-      (define result-type (resolve-type (function-decl-result declaration)))
+      (define result-type (resolve-type (function-decl-result declaration) #t))
       (set! current-result result-type)
       (set! current-signature
             (format "~a(~a) -> ~a"
@@ -774,7 +783,7 @@
         (introduce! (param-name parameter) (resolve-type (param-type parameter)) (param-span parameter)))
       (check-block (function-decl-body declaration))
       (pop-scope!)
-      (when (and (not (eq? result-type 'Nil))
+      (when (and (not (eq? result-type 'Void))
                  (not (block-returns? (function-decl-body declaration))))
         (bail 'CHECK-MISSING-RETURN
               (format "function \"~a\" must return ~a on every path"

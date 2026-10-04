@@ -40,7 +40,7 @@
   (values output result))
 
 (define (code-of body)
-  (define-values (output result) (run-text (format "def main() -> Nil\n~a\nend\n" body)))
+  (define-values (output result) (run-text (format "def main() -> Void\n~a\nend\n" body)))
   (if (diagnostic? result) (diagnostic-code result) result))
 
 (define (cli . arguments)
@@ -63,13 +63,13 @@
                    ("strings.agc" . "AGENTICA, HELLO\n8\n5\nAgentica, world\n"))])
       (define-values (output result)
         (run-text (file->string (build-path examples-dir (car entry)))))
-      (check-equal? result 'nil (car entry))
+      (check-equal? result (void) (car entry))
       (check-equal? output (cdr entry) (car entry))))
 
   (test-case "echo.agc reads and echoes standard input"
     (define-values (output result)
       (run-text-io (file->string (build-path examples-dir "echo.agc")) "one\ntwo\n"))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? output "one\ntwo\n"))
 
   (test-case "JSON examples validate documents and recover within streams"
@@ -93,7 +93,7 @@
                     "{\"error\":\"invalid record\"}\n"))])
       (define-values (output result)
         (run-text-io (file->string (build-path examples-dir (car entry))) (cadr entry)))
-      (check-equal? result 'nil (car entry))
+      (check-equal? result (void) (car entry))
       (check-equal? output (caddr entry) (car entry))))
 
   (test-case "knight tours cover every square exactly once with legal moves"
@@ -103,7 +103,7 @@
       (define start (cadr entry))
       (define-values (out result)
         (run-text-io program (jsexpr->string (hasheq 'size size 'start start)) #:max-steps 5000000))
-      (check-equal? result 'nil)
+      (check-equal? result (void))
       (define data (string->jsexpr out))
       (check-true (hash-ref data 'found))
       (define path (hash-ref data 'path))
@@ -115,7 +115,7 @@
         (check-equal? (sort (list dx dy) <) '(1 2))))
     (define-values (out result)
       (run-text-io program "{\"size\":3,\"start\":0}" #:max-steps 5000000))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? (string->jsexpr out) (hasheq 'found #f 'path '())))
 
   (test-case "traveling salesman returns an optimal complete circuit"
@@ -129,7 +129,7 @@
       (define matrix (car entry))
       (define-values (out result)
         (run-text-io program (jsexpr->string (hasheq 'distances matrix)) #:max-steps 5000000))
-      (check-equal? result 'nil)
+      (check-equal? result (void))
       (define data (string->jsexpr out))
       (define route (hash-ref data 'route))
       (check-equal? (hash-ref data 'cost) (cadr entry))
@@ -157,7 +157,7 @@
       (define-values (out result)
         (run-text-io program (jsexpr->string (hasheq 'grid grid 'start start 'goal goal))
                      #:max-steps 5000000))
-      (check-equal? result 'nil)
+      (check-equal? result (void))
       (define data (string->jsexpr out))
       (check-equal? (hash-ref data 'found) (>= expected-distance 0))
       (check-equal? (hash-ref data 'distance) expected-distance)
@@ -185,7 +185,7 @@
       (define-values (out result)
         (run-text-io maze-program (jsexpr->string (hasheq 'grid grid 'start 0 'goal 0))
                      #:max-steps 5000000))
-      (check-equal? result 'nil)
+      (check-equal? result (void))
       (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))
     (for ([entry '(("maze-bfs.agc" "not JSON" "{\"grid\":[],\"start\":0,\"goal\":0}"
                    "{\"grid\":[\"\"],\"start\":0,\"goal\":0}"
@@ -209,14 +209,14 @@
       (define program (file->string (build-path examples-dir (car entry))))
       (for ([input (in-list (cdr entry))])
         (define-values (out result) (run-text-io program input #:max-steps 5000000))
-        (check-equal? result 'nil)
+        (check-equal? result (void))
         (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))))
 
   (test-case "stdio peers receive flushed replies while stdin stays open"
     (define file (make-temporary-file "agentica-stdio~a.agc"))
     (display-to-file
      (string-append
-      "def main() -> Nil\n"
+      "def main() -> Void\n"
       "  IO.inspect(IO.eof?())\n  IO.flush()\n"
       "  data = Result.unwrap!(IO.read_bytes(2))\n"
       "  IO.print(Result.unwrap!(String.from_bytes(data)))\n  IO.flush()\n"
@@ -295,7 +295,7 @@
                        ("  x = JSON.encode({1: true})" "CHECK-NOT-ENCODABLE")
                        ("  large = 1.0\n  i = 0\n  while i < 40\n    large = large * 1000000000.0\n    i = i + 1\n  end\n  x = JSON.encode(large)" "RUNTIME-JSON-ENCODE")
                        ("  r: Result[Int] = error(\"bad\")\n  x = Result.unwrap!(r)" "RUNTIME-UNWRAP-ERROR"))])
-          (display-to-file (format "def main() -> Nil\n~a\nend\n" (car entry)) file #:exists 'truncate)
+          (display-to-file (format "def main() -> Void\n~a\nend\n" (car entry)) file #:exists 'truncate)
           (for ([style '("plain" "--ai" "--json")])
             (define args (if (equal? style "plain") '() (list style)))
             (define result (apply cli (append args (list (path->string file)))))
@@ -313,7 +313,7 @@
     (dynamic-wind
       void
       (lambda ()
-        (display-to-file "def main() -> Nil\n  while true\n  end\nend\n" file #:exists 'truncate)
+        (display-to-file "def main() -> Void\n  while true\n  end\nend\n" file #:exists 'truncate)
         (define path (path->string file))
         (check-equal? (cli "--max-steps" "1" "check" path) '(0 "check ok\n" ""))
         (define result (cli "--json" "--max-steps" "10" path))
@@ -329,7 +329,7 @@
     (check-equal? (car (cli "no-such-file.agc")) 2)
     (check-equal? (cli "check" hello) '(0 "check ok\n" ""))
     (define type-error (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Nil\n  puts(1)\nend\n" type-error #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  puts(1)\nend\n" type-error #:exists 'truncate)
     (define checked (cli "check" (path->string type-error)))
     (define ai (cli "--ai" "check" (path->string type-error)))
     (define json (cli "--json" "check" (path->string type-error)))
@@ -344,18 +344,18 @@
     (check-equal? (cadr json) "")
     (check-equal? (cli "--json" "check" hello) '(0 "{\"ok\":true}\n" ""))
     (define bad (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Nil\n  x = 1 / 0\nend\n" bad #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  x = 1 / 0\nend\n" bad #:exists 'truncate)
     (define failed (cli (path->string bad)))
     (delete-file bad)
     (check-equal? (car failed) 1)
     (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))
     (define exit-file (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Nil\n  System.exit(3)\nend\n" exit-file #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  System.exit(3)\nend\n" exit-file #:exists 'truncate)
     (check-equal? (car (cli (path->string exit-file))) 3)
     (delete-file exit-file)
     (define args-file (make-temporary-file "agentica~a.agc"))
     (display-to-file
-     "def main() -> Nil\n  for a in System.args()\n    puts(a)\n  end\nend\n"
+     "def main() -> Void\n  for a in System.args()\n    puts(a)\n  end\nend\n"
      args-file #:exists 'truncate)
     (check-equal? (cli (path->string args-file) "x" "y" "--json") '(0 "x\ny\n--json\n" ""))
     (delete-file args-file)))

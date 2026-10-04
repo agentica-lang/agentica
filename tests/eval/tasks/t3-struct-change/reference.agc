@@ -12,7 +12,7 @@ def describe(item: Item) -> String
   return item.name + ": " + String.from_int(item.price) + " x " + String.from_int(item.quantity) + " = " + String.from_int(line_total(item))
 end
 
-def main() -> Nil
+def main() -> Void
   total = 0
   while not IO.eof?()
     parts = String.split(String.trim(IO.gets!()), " ")

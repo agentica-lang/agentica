@@ -155,7 +155,7 @@
     (case name
       [("BDD.doc_string") (or (bdd-context-doc context) (fail "this step has no Doc String"))]
       [("BDD.table") (or (bdd-context-table context) (fail "this step has no Data Table"))]
-      [("BDD.set") (hash-set! (bdd-context-state context) (car arguments) (cadr arguments)) 'nil]
+      [("BDD.set") (hash-set! (bdd-context-state context) (car arguments) (cadr arguments)) (void)]
       [("BDD.get")
        (if (hash-has-key? (bdd-context-state context) (car arguments))
            (bdd-result #t (hash-ref (bdd-context-state context) (car arguments)))
@@ -163,8 +163,8 @@
       [("BDD.assert")
        (set-bdd-context-assertions! context (add1 (bdd-context-assertions context)))
        (unless (car arguments) (bdd-fail 'RUNTIME-BDD-ASSERTION (cadr arguments) span))
-       'nil]
-      [("BDD.given_program") (start-program! context (car arguments) span) 'nil]
+       (void)]
+      [("BDD.given_program") (start-program! context (car arguments) span) (void)]
       [("BDD.when_line" "BDD.when_input")
        (define target (target!))
        (when (port-closed? (child-input target)) (fail "stdin is already closed"))
@@ -173,28 +173,28 @@
            (display (car arguments) (child-input target))
            (when (equal? name "BDD.when_line") (newline (child-input target)))
            (flush-output (child-input target))) 5000 span)
-       'nil]
+       (void)]
       [("BDD.when_eof")
        (define target (target!))
        (when (port-closed? (child-input target)) (fail "stdin is already closed"))
        (bdd-limit context (lambda () (close-output-port (child-input target))) 5000 span)
-       'nil]
+       (void)]
       [("BDD.then_line")
        (define actual (read-line!))
        (assert! (equal? actual (car arguments)) (car arguments) actual)
-       'nil]
+       (void)]
       [("BDD.then_json_line")
        (define actual (read-line!))
        (define-values (expected-data actual-data)
          (with-handlers ([exn:fail? (lambda (_) (bdd-fail 'RUNTIME-BDD-JSON "expected and received lines must be valid JSON" span))])
            (values (json-value-data (read-json-value (car arguments))) (json-value-data (read-json-value actual)))))
        (assert! (equal? expected-data actual-data) (car arguments) actual)
-       'nil]
+       (void)]
       [("BDD.then_stdin_open")
        (define target (target!))
        (assert! (and (not (port-closed? (child-input target)))
                      (eq? (subprocess-status (child-process target)) 'running)) "open stdin and active program" "closed stdin or stopped program")
-       'nil]
+       (void)]
       [("BDD.then_exit")
        (define target (target!))
        (bdd-limit context
@@ -204,7 +204,7 @@
        (target!)
        (define actual (subprocess-status (child-process target)))
        (assert! (equal? actual (car arguments)) (number->string (car arguments)) (format "~a" actual))
-       'nil]
+       (void)]
       [("BDD.then_stdout" "BDD.then_stderr")
        (define target (target!))
        (when (eq? (subprocess-status (child-process target)) 'running)
@@ -213,7 +213,7 @@
        (target!)
        (define actual (bytes->string/utf-8 (get-output-bytes (if (equal? name "BDD.then_stdout") (child-stdout target) (child-stderr target))) #f))
        (assert! (equal? actual (car arguments)) (car arguments) actual)
-       'nil]
+       (void)]
       [else (fail "builtin is unavailable during scenario execution")])))
 
 (define (compile-step-pattern pattern)

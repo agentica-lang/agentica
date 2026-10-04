@@ -14,7 +14,7 @@
 
 (module+ test
   (test-case "header, excerpt, and caret run"
-    (check-equal? (format-diagnostic (problem "def main() -> Nil\n  age: Int = \"25\"\nend\n" 2 14 2 18))
+    (check-equal? (format-diagnostic (problem "def main() -> Void\n  age: Int = \"25\"\nend\n" 2 14 2 18))
                   (string-append "t.agc:2:14 error[CHECK-TYPE-MISMATCH]\n"
                                  "expected Int, found String\n\n"
                                  "2 |   age: Int = \"25\"\n"

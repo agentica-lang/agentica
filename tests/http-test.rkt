@@ -5,12 +5,12 @@
 (define (client-program port secure?)
   (format
    #<<AGC
-def produce(text: String, writer: HttpWriter) -> Result[Nil]
+def produce(text: String, writer: HttpWriter) -> Result[Void]
   try HTTP.write(writer, text, 1000)
   try HTTP.write_bytes(writer, [195, 177], 1000)
   return HTTP.finish(writer, [Header(name: "X-Upload", value: "done")], 1000)
 end
-def main() -> Nil
+def main() -> Void
   defaults = HTTP.client_options()
   options = HttpClientOptions(timeout_ms: 2000, idle_timeout_ms: defaults.idle_timeout_ms, max_connections: 1, max_body_bytes: defaults.max_body_bytes, ca_file: ~s)
   client = Result.unwrap!(HTTP.client(options))
@@ -56,7 +56,7 @@ AGC
 (define (server-program secure?)
   (format
    #<<AGC
-def handler(request: Request, writer: HttpWriter) -> Nil
+def handler(request: Request, writer: HttpWriter) -> Void
   if request.path == "/stream"
     Result.unwrap!(HTTP.begin(writer, 200, [Header(name: "Set-Cookie", value: "one=1"), Header(name: "Set-Cookie", value: "two=2"), Header(name: "Trailer", value: "X-Trailer")], -1, 1000))
     Result.unwrap!(HTTP.write(writer, "ñ", 1000))
@@ -76,7 +76,7 @@ def handler(request: Request, writer: HttpWriter) -> Nil
     Result.unwrap!(HTTP.respond(writer, 404, [], "missing", 1000))
   end
 end
-def main() -> Nil
+def main() -> Void
   server = Result.unwrap!(~a)
   puts(String.from_int(HTTP.local_port(server)))
   IO.flush()
@@ -100,11 +100,11 @@ AGC
           (run-program
            (format
             #<<AGC
-def release(body: HttpBody) -> Nil
+def release(body: HttpBody) -> Void
   Task.sleep(1000)
   HTTP.close_body(body)
 end
-def main() -> Nil
+def main() -> Void
   options = HttpClientOptions(timeout_ms: 2000, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 100, ca_file: ~s)
   client = Result.unwrap!(HTTP.client(options))
   first = Result.unwrap!(HTTP.get(client, "https://localhost:~a/fixed"))
@@ -128,7 +128,7 @@ AGC
           (run-program
            (format
             #<<AGC
-def main() -> Nil
+def main() -> Void
   defaults = HTTP.client_options()
   options = HttpClientOptions(timeout_ms: 15000, idle_timeout_ms: defaults.idle_timeout_ms, max_connections: 1, max_body_bytes: defaults.max_body_bytes, ca_file: "")
   client = Result.unwrap!(HTTP.client(options))
@@ -159,7 +159,7 @@ AGC
           (run-program
            (format
             #<<AGC
-def main() -> Nil
+def main() -> Void
   client = Result.unwrap!(HTTP.client())
   IO.inspect(Result.ok?(HTTP.get(client, "http://localhost:~a/ambiguous")))
   IO.inspect(Result.ok?(HTTP.get(client, "http://localhost:~a/version")))
@@ -181,7 +181,7 @@ AGC
           (run-program
            (format
             #<<AGC
-def main() -> Nil
+def main() -> Void
   opts = HttpClientOptions(timeout_ms: 100, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 100, ca_file: "")
   client = Result.unwrap!(HTTP.client(opts))
   first = Result.unwrap!(HTTP.get(client, "http://localhost:~a/fixed"))
@@ -205,12 +205,12 @@ AGC
          (with-program-server
           (format
            #<<AGC
-def produce(n: Int, writer: HttpWriter) -> Result[Nil]
+def produce(n: Int, writer: HttpWriter) -> Result[Void]
   try HTTP.write(writer, "first", 1000)
   IO.gets!()
   return HTTP.write(writer, "last", 1000)
 end
-def main() -> Nil
+def main() -> Void
   client = Result.unwrap!(HTTP.client())
   response = Result.unwrap!(HTTP.request_stream(client, "POST", "http://localhost:~a/duplex", [], -1, &produce, 0))
   bytes: List[Int] = []

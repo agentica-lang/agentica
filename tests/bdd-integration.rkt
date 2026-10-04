@@ -11,17 +11,17 @@
       (dynamic-wind void
         (lambda ()
           (display-to-file
-           "def main() -> Nil\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  ending = IO.gets()\nend\n"
+           "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  ending = IO.gets()\nend\n"
            (build-path directory "echo.agc"))
           (define steps (build-path directory "steps.agc"))
           (display-to-file
            (string-append
-            "def receive(n: Int) -> Nil\n  BDD.then_line(\"hello\", 5000)\nend\n"
-            "def exchange(args: List[String]) -> Nil\n  task = Task.spawn(&receive, 0)\n"
+            "def receive(n: Int) -> Void\n  BDD.then_line(\"hello\", 5000)\nend\n"
+            "def exchange(args: List[String]) -> Void\n  task = Task.spawn(&receive, 0)\n"
             "  Task.sleep(0)\n  BDD.when_line(\"hello\")\n  Task.await(task)\nend\n"
-            "def wait(n: Int) -> Nil\n  BDD.then_line(\"never\", 5000)\nend\n"
-            "def pending(args: List[String]) -> Nil\n  task = Task.spawn(&wait, 0)\n  Task.sleep(0)\nend\n"
-            "def main() -> Nil\n  BDD.step(\"exchange concurrently\", &exchange)\n  BDD.step(\"leave a pending read\", &pending)\nend\n") steps)
+            "def wait(n: Int) -> Void\n  BDD.then_line(\"never\", 5000)\nend\n"
+            "def pending(args: List[String]) -> Void\n  task = Task.spawn(&wait, 0)\n  Task.sleep(0)\nend\n"
+            "def main() -> Void\n  BDD.step(\"exchange concurrently\", &exchange)\n  BDD.step(\"leave a pending read\", &pending)\nend\n") steps)
           (display-to-file
            (string-append "Feature: Concurrent streams\nBackground:\nGiven the Agentica program \"echo.agc\"\n"
                           "Scenario: exchange\nThen exchange concurrently\nWhen I close stdin\nThen the program exits with code 0 within 5000 milliseconds\n"
@@ -44,9 +44,9 @@
       (define directory (make-temporary-file "agentica-bdd-integration~a" 'directory))
       (dynamic-wind void
         (lambda ()
-          (display-to-file "def main() -> Nil\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n" (build-path directory "buffered.agc"))
-          (display-to-file "def main() -> Nil\n  puts(\"actual\")\n  IO.warn(\"warning\")\n  System.exit(3)\nend\n" (build-path directory "output.agc"))
-          (display-to-file "def main() -> Nil\n  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\nend\n" (build-path directory "oversized.agc"))
+          (display-to-file "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n" (build-path directory "buffered.agc"))
+          (display-to-file "def main() -> Void\n  puts(\"actual\")\n  IO.warn(\"warning\")\n  System.exit(3)\nend\n" (build-path directory "output.agc"))
+          (display-to-file "def main() -> Void\n  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\nend\n" (build-path directory "oversized.agc"))
           (display-to-file
            (string-append
             "Feature: Lifecycle\nScenario: no flush\nGiven the Agentica program \"buffered.agc\"\n"
@@ -77,8 +77,8 @@
       (define span (source-span (source "cleanup.feature" "") (source-position 0 1 1) (source-position 0 1 1)))
       (dynamic-wind void
         (lambda ()
-          (display-to-file "def main() -> Nil\n  line = IO.gets!()\nend\n" (build-path directory "blocked.agc"))
-          (check-equal? (bdd-call context "BDD.given_program" '("blocked.agc") span) 'nil)
+          (display-to-file "def main() -> Void\n  line = IO.gets!()\nend\n" (build-path directory "blocked.agc"))
+          (check-equal? (bdd-call context "BDD.given_program" '("blocked.agc") span) (void))
           (define processes
             (filter subprocess? (custodian-managed-list (bdd-context-custodian context) (current-custodian))))
           (check-equal? (length processes) 1)

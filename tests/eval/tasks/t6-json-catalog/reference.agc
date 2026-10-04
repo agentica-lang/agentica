@@ -24,7 +24,7 @@ def filter_catalog(text: String) -> Result[String]
   return ok(output)
 end
 
-def main() -> Nil
+def main() -> Void
   result = filter_catalog(IO.read())
   if Result.ok?(result)
     IO.print(Result.unwrap!(result))

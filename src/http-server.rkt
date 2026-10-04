@@ -20,12 +20,12 @@
         (network-close-listener (http-server-listener server))
         (semaphore-post (http-server-stopped server)))))
   ((current-network-shutdown) (http-server-custodian server))
-  'nil)
+  (void))
 
 (define (wait-http-server server)
   (check-owner (http-server-owner server))
   (sync (semaphore-peek-evt (http-server-stopped server)))
-  'nil)
+  (void))
 
 (define (make-http-server host port handler options invoke spawn [cert #f] [key #f])
   (validate-options options)
@@ -47,7 +47,7 @@
                                      (writer-respond (make-http-writer socket limit) (exn:http-status e)
                                                      (list (record "Header" "Connection" "close")) "" timeout)))
                                  (network-close socket)
-                                 'nil)])
+                                 (void))])
         (when (net-listener-context listener)
           (network-upgrade socket (net-listener-context listener) timeout))
         (let loop ([first? #t])
@@ -59,7 +59,7 @@
                     (error 'HTTP "idle connection timed out"))
                   (read-request-head socket timeout))))
           (cond
-            [(not request-head) 'nil]
+            [(not request-head) (void)]
             [else
              (match-define (list method target headers mode body-length) request-head)
              (when (pair? (header-values headers "upgrade"))
@@ -88,7 +88,7 @@
                 (when (and (eq? mode 'length) (zero? body-length)) (body-read body 1 timeout))
                 (cond
                   [(or (net-socket-closed socket) (connection-close? headers) (http-writer-close writer)
-                       (not (http-body-done body))) 'nil]
+                       (not (http-body-done body))) (void)]
                   [else (loop #f)])])]))))
     (spawn
      (lambda ()

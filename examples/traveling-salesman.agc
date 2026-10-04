@@ -66,7 +66,7 @@ def solve(text: String) -> Result[Circuit]
   return ok(search(distances, visited, [0], 0, best))
 end
 
-def main() -> Nil
+def main() -> Void
   result = solve(IO.read())
   if Result.ok?(result)
     puts(JSON.encode(Result.unwrap!(result)))

@@ -15,7 +15,7 @@
   (for* ([count '(1000 10000 50000)] [reads? '(#f #t)])
     (define text
       (format (string-append
-               "def main() -> Nil\n"
+               "def main() -> Void\n"
                "  m: Map[Int, Int] = {}\n  i = 0\n"
                "  while i < ~a\n    m = Map.put(m, i, i)\n    i = i + 1\n  end\n"
                "~a"

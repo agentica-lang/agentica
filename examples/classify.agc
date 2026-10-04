@@ -13,6 +13,6 @@ def classify_text(text: String) -> Result[String]
   return ok(classify(age))
 end
 
-def main() -> Nil
+def main() -> Void
   puts(Result.unwrap!(classify_text("25")))
 end

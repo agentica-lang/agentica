@@ -1,4 +1,4 @@
-def main() -> Nil
+def main() -> Void
   arguments = System.args()
   if List.size(arguments) != 1
     IO.warn("usage: http_get.agc URL")

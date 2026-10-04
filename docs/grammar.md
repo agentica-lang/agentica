@@ -35,7 +35,7 @@ def is_adult(user: User) -> Bool
   return user.age >= 18
 end
 
-def main() -> Nil
+def main() -> Void
   users = [
     User(name: "Ana", age: 25),
     User(name: "Luis", age: 16)
@@ -93,7 +93,7 @@ Future extensions will introduce more reserved words; they are not available.
 
 A trailing `?` or `!` is part of a lowercase `NAME`, regardless of the next parenthesis or whitespace: `contains? (s, part)` is valid. `!` is not a suffix when followed by `=`, so `a!=b` still means `a != b`. By convention, `?` marks a predicate that returns `Bool`, and `!` marks the version that halts the run with an error instead of returning a `Result`. Variables, fields, and parameters cannot have the suffix.
 
-The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, and `System` are reserved and cannot be redefined. `ok` and `error` remain NAME tokens, but cannot be declared as user functions, variables, parameters, loop variables, or fields (`CHECK-REDEFINED-NAME`).
+The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, and `System` are reserved and cannot be redefined. `ok` and `error` remain NAME tokens, but cannot be declared as user functions, variables, parameters, loop variables, or fields (`CHECK-REDEFINED-NAME`).
 
 ### Literals
 
@@ -227,7 +227,8 @@ The grammar determines what can be written. The following rules determine which 
 | `Float` | IEEE 754 binary64 |
 | `Bool` | Only `true` and `false`; there is no truthiness |
 | `String` | Unicode text; concatenation with `+` |
-| `Nil` | A single value, `nil`; also marks a return without a result |
+| `Nil` | A single data value, `nil` |
+| `Void` | Completion without a usable value; no literal |
 | `List[T]` | Homogeneous, immutable list; `Int` indexes, from zero |
 | `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
@@ -277,15 +278,24 @@ while count < 3
 end
 ```
 
+
+### Void completion
+
+`Void` has no literal or usable payload. It is permitted as a function return, the final type of `Fn`, or the completion type of `Result`/`Task`. Bare Void variables, parameters, fields, List elements, and Map values are `CHECK-VOID-TYPE`. Wrappers such as `List[Result[Void]]` are valid data.
+
+A Void call may be a statement or be forwarded from a Void function with return another_void_call(). Assignment, argument passing, construction, operators, and inspection of bare completion fail with CHECK-VOID-VALUE. The same restriction applies to Result.unwrap!(Result[Void]), Task.await(Task[Void]), and successful try on Result[Void].
+
+ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(nil). Result[Void] functions explicitly return ok() or error(message); try still requires an enclosing Result-returning function. Result.unwrap_or needs a data fallback and cannot operate on Result[Void].
+
 ### Functions and entry point
 
 - Functions can be called before their declaration and can be recursive.
 - There is no overloading, default values, or named arguments in ordinary functions.
-- A function with a return type other than `Nil` must return on every reachable path. In the initial checker, a loop does not by itself guarantee a return.
+- A function with a return type other than `Void` must return on every reachable path. In the initial checker, a loop does not by itself guarantee a return.
 - The last expression does not return implicitly.
-- `return` without a value is the same as `return nil`.
-- Reaching the end of a `-> Nil` function returns `nil`.
-- An executable must declare exactly one `main() -> Nil` function with no parameters.
+- `return` without a value completes a `Void` function. Functions returning `Nil` explicitly use `return nil`.
+- Reaching the end of a `-> Void` function completes without a value.
+- An executable must declare exactly one `main() -> Void` function with no parameters.
 
 ### Structs and lists
 
@@ -317,7 +327,7 @@ more = Map.put(stock, "kiwi", 7)
 ### Minimal builtin functions
 
 ```text
-puts(value: String) -> Nil
+puts(value: String) -> Void
 ```
 
 `puts` writes the text and a newline. The name is reserved and cannot be redefined.
@@ -370,18 +380,18 @@ String.to_float!(s: String) -> Float
 The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns `ok(line)` without its terminator (LF, CR, or CRLF), or an error value at EOF. A blank line is `ok("")`, not EOF. `IO.gets!` returns the line directly and halts with `RUNTIME-END-OF-INPUT` at EOF; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 
 ```text
-IO.puts(value: String) -> Nil
-IO.print(value: String) -> Nil
-IO.warn(value: String) -> Nil
+IO.puts(value: String) -> Void
+IO.print(value: String) -> Void
+IO.warn(value: String) -> Void
 IO.inspect(value: T) -> T
 IO.gets() -> Result[String]
 IO.gets!() -> String
 IO.read() -> String
 IO.read_bytes(count: Int) -> Result[List[Int]]
-IO.flush() -> Nil
+IO.flush() -> Void
 IO.eof?() -> Bool
 System.args() -> List[String]
-System.exit(code: Int) -> Nil
+System.exit(code: Int) -> Void
 ```
 
 - `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both use Racket's buffered input port.
@@ -394,6 +404,7 @@ System.exit(code: Int) -> Nil
 
 ```text
 ok(value: T) -> Result[T]
+ok() -> Result[Void]
 error(message: String) -> Result[T]
 Result.ok?(r: Result[T]) -> Bool
 Result.unwrap!(r: Result[T]) -> T
@@ -447,7 +458,7 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 `Fn` and `BDD` are reserved builtin names. `f: Fn[Int, Int] = &double` refers to a declared function with exactly those parameter and return types; `f.call(21)` invokes it. References can travel through lists, maps, parameters, returns, and fields. A bare function name remains invalid as a value. Functions have no equality, field access, indexing, or JSON encoding; `IO.inspect` prints `<Fn>`.
 
-`BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications using local processes. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Nil]) -> Nil`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and process lifetime.
+`BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications using local processes. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Void]) -> Void`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and process lifetime.
 
 ### Lightweight tasks
 
@@ -456,7 +467,7 @@ JSON.list(j: Json) -> Result[List[Json]]
 ```text
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.await(task: Task[R]) -> R
-Task.sleep(milliseconds: Int) -> Nil
+Task.sleep(milliseconds: Int) -> Void
 ```
 
 Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Handles belong to one execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
@@ -481,12 +492,12 @@ Network access needs no CLI permission flag.
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.listen(host: String, port: Int) -> Result[Listener]
 TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
-TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Nil]
-TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
+TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
+TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Void]
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
-TCP.close(socket: Socket) -> Nil
-TCP.close_listener(listener: Listener) -> Nil
+TCP.close(socket: Socket) -> Void
+TCP.close_listener(listener: Listener) -> Void
 TCP.local_port(listener: Listener) -> Int
 TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket]
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
@@ -532,15 +543,15 @@ HTTP.client_options() -> HttpClientOptions
 HTTP.server_options() -> HttpServerOptions
 HTTP.client() -> Result[HttpClient]
 HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
-HTTP.close_client(client: HttpClient) -> Nil
+HTTP.close_client(client: HttpClient) -> Void
 HTTP.get(client: HttpClient, url: String) -> Result[Response]
 HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[Response]
 HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Nil]], argument: A) -> Result[Response]
+HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Void]], argument: A) -> Result[Response]
 HTTP.read(body: HttpBody, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 HTTP.text(body: HttpBody, timeout_ms: Int) -> Result[String]
 HTTP.trailers(body: HttpBody) -> Result[List[Header]]
-HTTP.close_body(body: HttpBody) -> Nil
+HTTP.close_body(body: HttpBody) -> Void
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
 ```
 
@@ -575,16 +586,16 @@ close_body abandons an unread body. Header lookup is case-insensitive.
 Content encoding remains raw: there is no automatic gzip decompression.
 
 ```text
-HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Nil], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Nil], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
 HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Nil]
-HTTP.close_server(server: HttpServer) -> Nil
-HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Nil]
-HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Nil]
-HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
-HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Nil]
-HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Nil]
+HTTP.wait(server: HttpServer) -> Result[Void]
+HTTP.close_server(server: HttpServer) -> Void
+HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Void]
+HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Void]
+HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Void]
+HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Void]
 ```
 
 Connections run concurrently with independent evaluator contexts and one
@@ -627,16 +638,16 @@ reject directories and special files.
 File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
 File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
-File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Nil]
-File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
-File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
-File.close(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
+File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
+File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
+File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
-File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
-File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
+File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
+File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
 Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
-Dir.mkdir(path: String, timeout_ms: Int) -> Result[Nil]
+Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
 Path.cwd() -> Result[String]
 Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
@@ -667,6 +678,32 @@ absolute path and does not resolve symlinks.
 `agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
+
+
+### Processes
+
+Process is an opaque handle with no constructor, fields, equality, or JSON encoding. IO.inspect prints <Process>.
+
+~~~text
+Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]
+Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
+Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
+Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
+Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
+Process.close(p: Process) -> Void
+~~~
+
+- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks, HTTP callbacks, BDD handlers, and programs started by BDD. The existing BDD runner can still launch its programs without granting them Process.spawn.
+- Commands resolve through PATH or an explicit path relative to the inherited working directory. Children inherit the environment. Arguments are passed directly without shell interpolation. Empty commands, NUL-containing arguments, unavailable executables, and Windows batch commands fail. OS execution failure after creation may appear as stderr and a nonzero child exit.
+- Timeouts are positive milliseconds, including lock wait. Read and write locks are independent. A timeout after starting stream I/O kills and closes the child; timing out while waiting for its lock preserves it. Waiting for exit times out without terminating the child.
+- Sends accept at most 1048576 UTF-8 bytes or integers 0..255 and flush before succeeding. Invalid data consumes nothing. read_bytes accepts 0..1048576 and waits for that count or EOF: short/empty EOF succeeds, and zero consumes nothing.
+- read_line consumes a line of at most 1 MiB, strips LF/CRLF, and strictly decodes UTF-8. An unterminated final line succeeds; empty EOF is an error. Invalid UTF-8 consumes the completed line. An oversized line closes the child.
+- close_stdin flushes and closes input idempotently; further sends fail. wait returns the host exit code, including nonzero codes, and can be repeated. It preserves unread stdout and waits for stderr forwarding to finish.
+- Stderr streams separately to the evaluation's error port with a fixed-size buffer. Output has no lifetime cap. A child can block when stdout's pipe fills: use Task to read concurrently with sending or waiting.
+- Handles belong to their evaluation. close force-kills a running child, reaps it, closes owned ports/workers, and is idempotent. Other operations on closed handles fail. Main return, System.exit, diagnostics, task failures, step exhaustion, and external interruption also clean up directly spawned children. Arbitrary descendant trees are outside the cleanup guarantee. Borrowed ports remain open.
+- Operational failures return String error Results. Cross-evaluation access is RUNTIME-PROCESS-CONTEXT; explicit cleanup failures are RUNTIME-PROCESS-CLOSE, at the call span.
 
 ## 7. Diagnostics for agents
 
@@ -712,7 +749,7 @@ def classify(age: Int) -> String
   end
 end
 
-def main() -> Nil
+def main() -> Void
   puts(classify(25))
 end
 ```
@@ -725,7 +762,7 @@ struct Todo
   done: Bool
 end
 
-def main() -> Nil
+def main() -> Void
   tasks: List[Todo] = [
     Todo(title: "Probar Agentica", done: false),
     Todo(title: "Revisar gramática", done: true)
@@ -742,7 +779,7 @@ end
 ### Maps
 
 ```ruby
-def main() -> Nil
+def main() -> Void
   stock: Map[String, Int] = {"apple": 3, "pear": 0}
   stock = Map.put(stock, "kiwi", 7)
   for name in Map.keys(stock)

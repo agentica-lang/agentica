@@ -40,7 +40,7 @@
     (define-values (output result)
       (run-program (file->string (build-path examples-dir "file-summary.agc"))
                    #:args (list (path->string input-path))))
-    (check-equal? result 'nil)
+    (check-equal? result (void))
     (check-equal? output (format "~a\n" (string-length (file->string input-path)))))
 
   (test-case "file streams, whole-text helpers, directories, metadata, and paths work together"
@@ -52,16 +52,16 @@
          (run-program
           (format
            (string-append
-            "def main() -> Nil\n"
-            "  made: Result[Nil] = Dir.mkdir(~a, 1000)\n"
-            "  made_again: Result[Nil] = Dir.mkdir(~a, 1000)\n"
+            "def main() -> Void\n"
+            "  made: Result[Void] = Dir.mkdir(~a, 1000)\n"
+            "  made_again: Result[Void] = Dir.mkdir(~a, 1000)\n"
             "  opened: Result[FileHandle] = File.open(~a, \"write\", 1000)\n"
             "  handle: FileHandle = Result.unwrap!(opened)\n"
-            "  wrote: Result[Nil] = File.write(handle, \"alpha\\n\", 1000)\n"
-            "  wrote_bytes: Result[Nil] = File.write_bytes(handle, [98, 101, 116, 97], 1000)\n"
-            "  closed: Result[Nil] = File.close(handle, 1000)\n"
-            "  closed_again: Result[Nil] = File.close(handle, 1000)\n"
-            "  appended: Result[Nil] = File.append_text(~a, \"\\nend\", 1000)\n"
+            "  wrote: Result[Void] = File.write(handle, \"alpha\\n\", 1000)\n"
+            "  wrote_bytes: Result[Void] = File.write_bytes(handle, [98, 101, 116, 97], 1000)\n"
+            "  closed: Result[Void] = File.close(handle, 1000)\n"
+            "  closed_again: Result[Void] = File.close(handle, 1000)\n"
+            "  appended: Result[Void] = File.append_text(~a, \"\\nend\", 1000)\n"
             "  text: Result[String] = File.read_text(~a, 1000)\n"
             "  info: Result[FileInfo] = File.stat(~a, 1000)\n"
             "  entries: Result[List[String]] = Dir.list(~a, 1000)\n"
@@ -83,7 +83,7 @@
            (literal (path->string (build-path root "nested" ".." "nested" "data")))
            (literal (path->string directory))
            (literal (path->string (build-path root "nested" ".." "nested" "data"))))))
-       (check-equal? result 'nil)
+       (check-equal? result (void))
        (check-true (string-contains? output "true\n"))
        (check-true (string-contains? output "ok(\"alpha\\nbeta\\nend\")"))
        (check-true (string-contains? output "FileInfo(kind: \"file\", size_bytes: 14"))
@@ -103,12 +103,12 @@
          (run-program
           (format
            (string-append
-            "def main() -> Nil\n"
+            "def main() -> Void\n"
             "  invalid_mode: Result[FileHandle] = File.open(~a, \"readwrite\", 1000)\n"
             "  opened: Result[FileHandle] = File.open(~a, \"write\", 1000)\n"
             "  handle: FileHandle = Result.unwrap!(opened)\n"
-            "  wrote: Result[Nil] = File.write_bytes(handle, [255], 1000)\n"
-            "  closed: Result[Nil] = File.close(handle, 1000)\n"
+            "  wrote: Result[Void] = File.write_bytes(handle, [255], 1000)\n"
+            "  closed: Result[Void] = File.close(handle, 1000)\n"
             "  closed_read: Result[List[Int]] = File.read_bytes(handle, 1, 1000)\n"
             "  invalid_utf8: Result[String] = File.read_text(~a, 1000)\n"
             "  oversized: Result[String] = File.read_text(~a, 1000)\n"
@@ -121,7 +121,7 @@
            (literal (path->string path))
            (literal (path->string path))
            (literal (path->string large-path)))))
-       (check-equal? result 'nil)
+       (check-equal? result (void))
        (check-true (string-contains? output "error("))
        (check-true (string-contains? output "file handle is closed"))
        (check-true (string-contains? output "UTF-8"))
@@ -137,21 +137,21 @@
          (run-program
           (format
            (string-append
-            "def main() -> Nil\n"
+            "def main() -> Void\n"
             "  opened: Result[FileHandle] = File.open(~a, \"read\", 1000)\n"
             "  handle: FileHandle = Result.unwrap!(opened)\n"
             "  first: Result[String] = File.read_line(handle, 1000)\n"
             "  second: Result[String] = File.read_line(handle, 1000)\n"
             "  rest: Result[List[Int]] = File.read_bytes(handle, 100, 1000)\n"
             "  eof: Result[List[Int]] = File.read_bytes(handle, 100, 1000)\n"
-            "  closed: Result[Nil] = File.close(handle, 1000)\n"
+            "  closed: Result[Void] = File.close(handle, 1000)\n"
             "  IO.inspect(first)\n"
             "  IO.inspect(second)\n"
             "  IO.inspect(rest)\n"
             "  IO.inspect(eof)\n"
             "end\n")
            (literal (path->string path)))))
-       (check-equal? result 'nil)
+       (check-equal? result (void))
        (check-true (string-contains? output "ok(\"one\")"))
        (check-true (string-contains? output "ok(\"two\")"))
        (check-true (string-contains? output "ok([108, 97, 115, 116])"))
@@ -168,7 +168,7 @@
          (run-program
           (format
            (string-append
-            "def main() -> Nil\n"
+            "def main() -> Void\n"
             "  contents: Result[String] = File.read_text(~a, 1000)\n"
             "  info: Result[FileInfo] = File.stat(~a, 1000)\n"
             "  IO.inspect(contents)\n"
@@ -176,7 +176,7 @@
             "end\n")
            (literal (path->string alias))
            (literal (path->string alias)))))
-       (check-equal? result 'nil)
+       (check-equal? result (void))
        (check-true (string-contains? output "ok(\"linked\")"))
        (check-true (string-contains? output "FileInfo(kind: \"file\", size_bytes: 6")))))
 
@@ -195,7 +195,7 @@
          (run-program
           (format
            (string-append
-            "def main() -> Nil\n"
+            "def main() -> Void\n"
             "  empty: Result[String] = File.read_text(~a, 1000)\n"
             "  linked: Result[String] = File.read_text(~a, 1000)\n"
             "  IO.inspect(empty)\n"
@@ -203,7 +203,7 @@
             "end\n")
            (literal (path->string empty-path))
            (literal (path->string alias)))))
-       (check-equal? result 'nil)
+       (check-equal? result (void))
        (check-true (string-contains? output "ok(\"\")"))
        (check-true (string-contains? output "ok(\"linked\")")))))
 
@@ -215,11 +215,11 @@
          (run-program
           (format
            (string-append
-            "def main() -> Nil\n"
+            "def main() -> Void\n"
             "  opened: Result[FileHandle] = File.open(~a, \"write\", 1000)\n"
             "  handle: FileHandle = Result.unwrap!(opened)\n"
-            "  wrote: Result[Nil] = File.write(handle, \"cleanup\", 1000)\n"
+            "  wrote: Result[Void] = File.write(handle, \"cleanup\", 1000)\n"
             "end\n")
            (literal (path->string path)))))
-       (check-equal? result 'nil)
+       (check-equal? result (void))
        (check-equal? (file->string path) "cleanup"))))))

@@ -5,26 +5,29 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 ## Current implementation order
 
 The core interpreter, Results, JSON primitives, function values, lightweight
-tasks, BDD, TCP/TLS/HTTP, and files/paths are implemented. The next priority is general
+tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, and processes are implemented. The next priority is general
 programming: useful standalone programs first, larger applications next, then
 MCP. Historical phase numbers below remain stable; this order governs pending
 work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
-| 1 | Processes (5l) | Run tools and communicate with child programs |
-| 2 | Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
-| 3 | Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
-| 4 | Modules and imports | Split larger programs across files |
-| 5 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 6 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 1 | Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
+| 2 | Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
+| 3 | Modules and imports | Split larger programs across files |
+| 4 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 5 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
-After steps 1–3, target everyday scripts and automation. After steps 4–6,
+After steps 1–2, target everyday scripts and automation. After steps 3–5,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
 grammar, and the self-contained programming reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
 grammar only when they land. Detailed pending work appears after the completed
 foundations below.
+
+Historical phase sections retain their original completion signatures. The
+current language uses Void for completion and Nil for data; grammar.md and
+the programming reference contain the current signatures.
 
 ## Phase 1: Source handling and lexer
 
@@ -840,6 +843,13 @@ Moved into Phase 5e: `try` ships together with `Result`. The decision is made: a
 
 ## Next work: General programming before MCP
 
+### Completed: Strict Void prerequisite
+
+- [x] Separate no-value completion from Nil data; require main() -> Void and explicit returns from Nil functions.
+- [x] Reject Void in data type/value positions; support completion in Fn return types, Result[Void], and Task[Void].
+- [x] Add ok() for successful Result[Void] completion; preserve ok(nil), JSON null, and Nil task results.
+- [x] Migrate side-effect APIs, HTTP/BDD callbacks, shipped programs, benchmarks, and evaluation prompts/fixtures; update both language references and development notes.
+
 ### Completed: Files and paths
 
 Make local data processing possible before adding more protocol-specific APIs.
@@ -849,28 +859,33 @@ Make local data processing possible before adding more protocol-specific APIs.
 - [x] List directories, create directories, inspect file metadata, and join/resolve paths.
 - [x] Cover failures and resource cleanup with temporary-directory integration tests; add a small file-processing example.
 
-### 1. Processes (phase 5l)
+### Completed: Processes (phase 5l)
 
 Run existing tools for automation, then reuse the same API for stdio MCP clients.
 
 ```text
-Process.spawn(command: String, args: List[String]) -> Result[Process]
-Process.send(p: Process, data: String) -> Result[Nil]
-Process.read_line(p: Process, timeout: Int) -> Result[String]
-Process.close(p: Process) -> Nil
+Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]
+Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void]
+Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
+Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[List[Int]]
+Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
+Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
+Process.close(p: Process) -> Void
 ```
 
-- Opaque `Process` type. Every blocking call has a timeout, as in 5g; finalize the signatures before implementation.
-- Processes are killed when the run ends.
-- Retain the planned capability flag `--allow-run`, off by default.
-- The child's standard error goes to the parent's standard error.
+- Opaque evaluation-owned Process handles; literal argv, inherited environment and working directory.
+- Positive full-operation deadlines and independent read/write locks. Active stream timeouts abort; lock and wait timeouts preserve children.
+- Per-call 1 MiB limits, strict UTF-8 lines, counted bytes with short/empty EOF, and fixed-buffer stderr forwarding. Output has no lifetime cap; use Task for concurrent consumption.
+- Direct children are killed and reaped on close, main return, System.exit, diagnostics, task failure, budget exhaustion, and external interruption. Arbitrary descendant trees remain outside the guarantee.
+- --allow-run defaults off and propagates to tasks, HTTP callbacks, BDD handlers and programs under test. Check and help need no flag.
 
-- [ ] Specify exit-code retrieval, stdin closure, output limits, and deadline/cleanup behavior alongside spawn/send/read/close.
-- [ ] Add the `Process` type and module over `racket/subprocess`, without shell interpolation of command arguments.
-- [ ] Test with a small local child program, including nonzero exits, blocked I/O, cancellation and cleanup.
-- [ ] Add an automation example that runs a tool and checks its result.
+- [x] Specify exit-code retrieval, stdin closure, output limits, and deadline/cleanup behavior alongside spawn/send/read/close.
+- [x] Add the Process type and module over racket/subprocess, without shell interpolation of command arguments.
+- [x] Test independent local Node children, including nonzero exits, full-duplex I/O, cancellation, PID cleanup, BDD allowance, and source/compiled CLI behavior; require Node in CI.
+- [x] Add examples/process-tool.agc, which runs racket --version and checks its Result and exit code; include it in CI with --allow-run.
 
-### 2. Everyday library (remaining phase 5n and supporting utilities)
+### 1. Everyday library (remaining phase 5n and supporting utilities)
 
 Function values are already available, so collection callbacks need no new
 closure or scheduler feature. Keep names and argument order consistent with
@@ -888,7 +903,7 @@ the existing builtin library.
 **Milestone:** useful everyday scripts and automation using files, processes
 and the basic library.
 
-### 3. Typed JSON, builders and schemas
+### 2. Typed JSON, builders and schemas
 
 #### Phase 5f2: Typed JSON decoding
 
@@ -928,7 +943,7 @@ JSON.schema(type: T) -> Json
 - [ ] Add the functions above and focused behavior tests.
 - [ ] Verify `JSON.schema` output against an independent expected schema for one struct.
 
-### 4. Modules and imports
+### 3. Modules and imports
 
 Split larger programs across files with explicit exports and predictable
 resolution. This is planned language syntax, not an extension to implement
@@ -939,7 +954,7 @@ without a specification.
 - [ ] Implement loading, checking and execution without resetting the execution's shared budget or resource ownership.
 - [ ] Test a program spanning multiple files and controlled diagnostics for missing imports, cycles and private names.
 
-### 5. Real applications
+### 4. Real applications
 
 Use complete programs to expose missing APIs before broadening the language.
 
@@ -951,7 +966,7 @@ Use complete programs to expose missing APIs before broadening the language.
 **Milestone:** practical larger general-purpose programs, demonstrated by
 these applications rather than a feature checklist alone.
 
-### 6. MCP examples (phase 5m), then Streamable HTTP
+### 5. MCP examples (phase 5m), then Streamable HTTP
 
 Build stdio examples first on the file/process/JSON/module foundations.
 

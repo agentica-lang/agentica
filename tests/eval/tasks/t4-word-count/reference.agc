@@ -1,4 +1,4 @@
-def main() -> Nil
+def main() -> Void
   counts: Map[String, Int] = {}
   while not IO.eof?()
     line = String.trim(IO.gets!())

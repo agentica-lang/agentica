@@ -140,7 +140,7 @@
     (set-http-body-closed! body #t)
     (network-close (http-body-socket body))
     ((http-body-release body) #f))
-  'nil)
+  (void))
 
 (define (body-read body count timeout)
   (check-owner (net-socket-owner (http-body-socket body)))
@@ -285,7 +285,7 @@
       (emit-headers output final-headers)
       (display "\r\n" output)
       (flush-output output)
-      'nil)))
+      (void))))
 
 (define (write-request-head writer method target host headers length timeout)
   (when (string=? method "CONNECT") (bad "CONNECT is unsupported" 501))
@@ -307,7 +307,7 @@
       (set-http-writer-started! writer #t)
       (set-http-writer-mode! writer (if (= length -1) 'chunked 'length))
       (set-http-writer-remaining! writer length)
-      'nil)))
+      (void))))
 
 (define (writer-write writer data timeout)
   (define bytes (if (string? data) (string->bytes/utf-8 data) (valid-bytes data)))
@@ -330,7 +330,7 @@
         (write-bytes bytes output)
         (when (eq? (http-writer-mode writer) 'chunked) (display "\r\n" output))
         (flush-output output))
-      'nil)))
+      (void))))
 
 (define (writer-finish writer trailers timeout)
   (validate-headers trailers #:trailers? #t)
@@ -350,7 +350,7 @@
            (display "\r\n" output)
            (flush-output output)]))
       (set-http-writer-finished! writer #t)
-      'nil)))
+      (void))))
 
 (define (writer-respond writer status headers text timeout)
   (define data (string->bytes/utf-8 text))

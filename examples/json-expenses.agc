@@ -18,7 +18,7 @@ def expense_totals(text: String) -> Result[Map[String, Int]]
   return ok(totals)
 end
 
-def main() -> Nil
+def main() -> Void
   report = expense_totals(IO.read())
   if Result.ok?(report)
     puts(JSON.encode(ExpenseReport(totals: Result.unwrap!(report))))

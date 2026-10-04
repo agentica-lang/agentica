@@ -3,7 +3,7 @@ struct Todo
   done: Bool
 end
 
-def main() -> Nil
+def main() -> Void
   tasks: List[Todo] = [
     Todo(title: "Probar Agentica", done: false),
     Todo(title: "Revisar gramática", done: true)

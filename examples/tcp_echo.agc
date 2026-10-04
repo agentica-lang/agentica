@@ -1,4 +1,4 @@
-def echo(socket: Socket) -> Nil
+def echo(socket: Socket) -> Void
   line = TCP.read_line(socket, 30000)
   if Result.ok?(line)
     TCP.send(socket, Result.unwrap!(line) + "\n", 30000)
@@ -6,7 +6,7 @@ def echo(socket: Socket) -> Nil
   TCP.close(socket)
 end
 
-def main() -> Nil
+def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   puts(String.from_int(TCP.local_port(listener)))
   IO.flush()
