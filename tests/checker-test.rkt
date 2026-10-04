@@ -30,6 +30,15 @@
   (format "def main() -> Void\n~a\nend\n" body))
 
 (module+ test
+  (test-case "JSON builders and schemas enforce their input contracts"
+    (check-ok (main-with "  object = JSON.object({})\n  array = JSON.array([])"))
+    (for ([body '("  x = JSON.object({\"a\": 1})" "  x = JSON.array([false])"
+                  "  x = JSON.null?(nil)" "  x = JSON.schema(1)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
+    (check-equal? (check-code (main-with "  x = JSON.from(ok(1))")) 'CHECK-NOT-ENCODABLE)
+    (check-equal? (check-code (string-append "struct Bad\n  value: Json\nend\n"
+                                           (main-with "  x = JSON.schema(Bad)"))) 'CHECK-NOT-DECODABLE))
+
   (test-case "JSON decoding accepts only decodable named structs"
     (check-ok (string-append "struct Node\n  children: List[Node]\nend\n"
                             (main-with "  r = JSON.decode(\"{}\", Node)")))

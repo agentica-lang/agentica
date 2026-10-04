@@ -1,6 +1,7 @@
 #lang racket
 
 (require (except-in rackunit check)
+         (only-in json string->jsexpr)
          "../src/checker.rkt"
          "../src/builtins.rkt"
          "../src/diagnostic.rkt"
@@ -319,6 +320,12 @@
         ("Map.get" "Map.get({\"k\": 1}, \"k\")" "ok(1)\n")
         ("Map.delete" "Map.delete({\"k\": 1}, \"k\")" "{}\n")
         ("Map.values" "Map.values({\"k\": 1})" "[1]\n")
+        ("JSON.object" "JSON.object({})" "<Json>\n")
+        ("JSON.array" "JSON.array([])" "<Json>\n")
+        ("JSON.from" "JSON.from(false)" "<Json>\n")
+        ("JSON.null" "JSON.null()" "<Json>\n")
+        ("JSON.null?" "JSON.null?(JSON.null())" "true\n")
+        ("JSON.schema" "JSON.schema(Empty)" "<Json>\n")
         ("JSON.decode" "JSON.decode(\"{}\", Empty)" "ok(Empty())\n")
         ("JSON.parse" "JSON.parse(\"null\")" "ok(<Json>)\n")
         ("JSON.encode" "JSON.encode(7)" "\"7\"\n")
@@ -615,6 +622,40 @@
     (define bad (diagnostic-of (main-with "  x = JSON.encode({\"bad\": String.to_float!(\"9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999\")})")))
     (check-equal? (diagnostic-code bad) 'RUNTIME-JSON-ENCODE)
     (check-equal? (position-of bad) '(2 7)))
+
+  (test-case "JSON builders distinguish null, false and empty containers"
+    (check-equal?
+     (output-of (main-with
+       "  puts(JSON.encode(JSON.object({})))\n  puts(JSON.encode(JSON.array([])))\n  puts(JSON.encode(JSON.array([JSON.from(false), JSON.null(), JSON.from([1, 2])])))\n  IO.inspect(JSON.null?(JSON.from(false)))\n  IO.inspect(JSON.null?(JSON.from(nil)))\n  obj = JSON.object({\"flag\": JSON.from(false)})\n  IO.inspect(Result.unwrap!(JSON.bool(Result.unwrap!(JSON.get(obj, \"flag\")))))"))
+     "{}\n[]\n[false,null,[1,2]]\nfalse\ntrue\nfalse\n")
+    (check-equal?
+     (output-of (main-with
+       "  header = Result.unwrap!(JSON.decode(\"{\\\"name\\\":\\\"x\\\",\\\"value\\\":\\\"y\\\"}\", Header))\n  IO.inspect(header.name)\n  IO.inspect(header.value)\n  fields = Result.unwrap!(JSON.get(JSON.schema(Header), \"required\"))\n  puts(JSON.encode(fields))"))
+     "\"x\"\n\"y\"\n[\"name\",\"value\"]\n")
+    (define problem
+      (diagnostic-of (main-with (format "  value = JSON.from([String.to_float!(~s)])" (make-string 400 #\9)))))
+    (check-equal? (diagnostic-code problem) 'RUNTIME-JSON-ENCODE))
+
+  (test-case "JSON schemas describe structs and recursive references independently"
+    (define prefix
+      "struct Args\n  count: Int\n  ratio: Float\n  active: Bool\n  names: List[String]\n  scores: Map[String, Int]\nend\n")
+    (check-equal?
+     (string->jsexpr (output-of (string-append prefix (main-with "  puts(JSON.encode(JSON.schema(Args)))"))))
+     (hasheq 'type "object"
+             'properties (hasheq 'count (hasheq 'type "integer" 'minimum (- (expt 2 63)) 'maximum (sub1 (expt 2 63)))
+                                 'ratio (hasheq 'type "number")
+                                 'active (hasheq 'type "boolean")
+                                 'names (hasheq 'type "array" 'items (hasheq 'type "string"))
+                                 'scores (hasheq 'type "object" 'additionalProperties
+                                                 (hasheq 'type "integer" 'minimum (- (expt 2 63)) 'maximum (sub1 (expt 2 63)))))
+             'required '("count" "ratio" "active" "names" "scores")))
+    (define recursive
+      (string->jsexpr (output-of (string-append "struct Node\n  children: List[Node]\nend\n"
+                                              (main-with "  puts(JSON.encode(JSON.schema(Node)))")))))
+    (define expected
+      (hasheq 'type "object" 'properties (hasheq 'children (hasheq 'type "array" 'items (hasheq '$ref "#/$defs/Node")))
+              'required '("children")))
+    (check-equal? recursive (hash-set expected '$defs (hasheq 'Node expected))))
 
   (test-case "typed JSON decoding validates nested fields and preserves data"
     (define prefix

@@ -4,16 +4,39 @@ Agentica is a small statically typed language with Ruby-like syntax. This file i
 
 ## Program shape
 
-- A file has only top-level `def` and `struct` declarations. No statements at the top level.
-- It needs exactly one `def main() -> Void` with no parameters. Running a program calls `main()`.
+- A file has top-level `def`, `struct`, and `import` declarations. Functions/structs may use `export`. No executable statements at the top level.
+- The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
 - Calls always use parentheses, even with no arguments: `main()`, `puts("hi")`.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
-- Reserved words: `def struct end if elsif else while for in return try true false nil and or not`.
+- Reserved words: `def struct import export end if elsif else while for in return try true false nil and or not`.
 - Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
 
 Full programs are at the end of this file.
+
+### File modules and imports
+
+Each file is a module. Use `import "models.agc" as Models` at the top level.
+Relative paths ending in .agc resolve from the importing file, not the working
+directory. Canonical paths identify files; each file is linked once. Cycles and
+missing/unreadable imports give located CHECK-IMPORT diagnostics.
+
+`export struct User ... end` and `export def greet(...) ... end` expose
+declarations; everything else is private. Use `Models.User` in annotations and
+JSON type arguments, `Models.User(name: "Ana")` for construction,
+`Models.greet(user)` for calls, and `&Models.greet` for callbacks.
+Local names remain unqualified inside their file. Import aliases are uppercase
+and cannot collide with declarations, other aliases, or builtin names.
+Imports cannot be re-exported. Exported signatures may mention private types,
+but importers cannot name or construct those private types.
+
+Only the root file supplies the executable `main() -> Void`. Imported main
+functions do not run automatically. Linking preserves source spans and distinct
+module identities; imported calls/tasks share the program's execution budget
+and resource ownership. CLI check/run/dump and BDD handlers use the same loader.
+There are no wildcard imports, package registry, module state, nested module
+blocks, or receiver attachment. `as` is contextual in imports, not reserved.
 
 ## Types
 
@@ -564,6 +587,12 @@ Only registration permits `BDD.step`; actions/state/assertions require a running
 ## JSON
 
 ```text
+JSON.object(fields: Map[String, Json]) -> Json
+JSON.array(items: List[Json]) -> Json
+JSON.from(value: T) -> Json
+JSON.null() -> Json
+JSON.null?(value: Json) -> Bool
+JSON.schema(type: T) -> Json
 JSON.decode(s: String, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
@@ -576,8 +605,20 @@ JSON.bool(j: Json) -> Result[Bool]
 JSON.list(j: Json) -> Result[List[Json]]
 ```
 
+
+JSON builders create Json values directly: object takes Map[String, Json],
+array takes List[Json], and from accepts the same recursively encodable data
+as JSON.encode. Non-finite Float conversion halts with RUNTIME-JSON-ENCODE.
+Null and false remain distinct, as do empty objects and arrays.
+
+JSON.schema(User) accepts the same named structs as JSON.decode and returns
+an object schema with properties and required fields. Int schemas specify
+signed 64-bit bounds; lists use items and String-keyed maps use
+additionalProperties. Nested/recursive structs use $defs/$ref. Extra struct
+keys remain allowed, matching decoding. Schema is a Json value, not text.
+
 `JSON.decode(text, User)` returns Result[User]. Its second argument is a named
-struct type, not a runtime value; bare type names are rejected elsewhere.
+struct type, not a runtime value; bare type names are valid only for decode/schema.
 Fields may contain Int, Float, Bool, String, lists, String-keyed maps, and nested
 or recursive structs. Unsupported nested types give CHECK-NOT-DECODABLE.
 Malformed JSON, missing fields, wrong types, Int overflow, or non-finite Float
@@ -645,7 +686,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-MAIN` | missing or wrong `main` |
 | `CHECK-NOT-A-STRUCT`, `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | field access on a non-struct, index on a non-list/map, `for` over a non-list |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
-| `CHECK-NOT-DECODABLE` | JSON.decode target is not a struct or contains unsupported field types |
+| `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path, cycle, or unknown/private imported name |
+| `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |
+| `CHECK-NOT-DECODABLE` | JSON.decode/schema target is not a struct or contains unsupported field types |
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |

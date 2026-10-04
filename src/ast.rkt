@@ -3,6 +3,8 @@
 (require "source.rkt")
 
 (provide (struct-out program)
+         (struct-out import-decl)
+         (struct-out export-decl)
          (struct-out function-decl)
          (struct-out param)
          (struct-out struct-decl)
@@ -34,6 +36,8 @@
          node-span)
 
 (struct program (declarations span) #:transparent)
+(struct import-decl (path alias span) #:transparent)
+(struct export-decl (declaration span) #:transparent)
 (struct function-decl (name params result body span) #:transparent)
 (struct param (name type span) #:transparent)
 (struct struct-decl (name fields span) #:transparent)
@@ -69,6 +73,8 @@
 (define (node-span node)
   (cond
     [(program? node) (program-span node)]
+    [(import-decl? node) (import-decl-span node)]
+    [(export-decl? node) (export-decl-span node)]
     [(function-decl? node) (function-decl-span node)]
     [(param? node) (param-span node)]
     [(struct-decl? node) (struct-decl-span node)]

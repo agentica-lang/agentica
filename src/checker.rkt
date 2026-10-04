@@ -5,7 +5,7 @@
          "diagnostic.rkt"
          "source.rkt")
 
-(provide check)
+(provide check reserved-type-names)
 
 (define int-max (sub1 (expt 2 63)))
 
@@ -579,22 +579,23 @@
                                            (and (list-type? expected) (cadr expected))))
          (check-expression (cadr arguments) 'Int)
          (list 'List element)]
-        [(json-decode)
-         (check-expression (car arguments) 'String)
-         (define target (cadr arguments))
+        [(json-decode json-schema)
+         (define decode? (eq? (builtin-rule selected) 'json-decode))
+         (when decode? (check-expression (car arguments) 'String))
+         (define target (if decode? (cadr arguments) (car arguments)))
          (unless (type-expression? target)
-           (bail 'CHECK-TYPE-MISMATCH "JSON.decode requires a struct name" (node-span target)))
+           (bail 'CHECK-TYPE-MISMATCH "JSON type argument requires a struct name" (node-span target)))
          (define type (resolve-type (type-ref (type-expression-name target) '() (node-span target))))
          (unless (and (struct-type? type) (decodable-type? type))
            (bail 'CHECK-NOT-DECODABLE "target contains types that cannot be decoded" (node-span target)))
-         (list 'Result type)]
-        [(json-encode)
+         (if decode? (list 'Result type) 'Json)]
+        [(json-encode json-from)
          (define type (check-expression (car arguments) #f))
          (unless (encodable-type? type)
            (bail 'CHECK-NOT-ENCODABLE
                  (format "cannot JSON.encode ~a or its nested types" (type->string type))
                  (node-span (car arguments))))
-         'String]
+         (if (eq? (builtin-rule selected) 'json-from) 'Json 'String)]
         [(identity) (check-expression (car arguments) expected)]
         [(ok)
          (list 'Result (check-expression (car arguments)
@@ -862,6 +863,9 @@
 
     ;; Program --------------------------------------------------------------
 
+    (for ([declaration (in-list (program-declarations program))])
+      (when (or (import-decl? declaration) (export-decl? declaration))
+        (bail 'CHECK-MODULE-CONTEXT "resolve modules before checking" (node-span declaration))))
     (register-structs!)
     (register-functions!)
     (check-main!)

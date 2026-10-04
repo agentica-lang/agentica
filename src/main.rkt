@@ -8,6 +8,7 @@
          "evaluator.rkt"
          "lexer.rkt"
          "parser.rkt"
+         "modules.rkt"
          "source.rkt")
 
 (module+ main
@@ -114,7 +115,9 @@
   (when (diagnostic? lexed) (fail! lexed))
   (define tree (parse lexed))
   (when (diagnostic? tree) (fail! tree))
-  (define checked (check tree))
+  (define linked (link-program tree source-file))
+  (when (diagnostic? linked) (fail! linked))
+  (define checked (check linked))
   (when (diagnostic? checked) (fail! checked))
   (cond
     [check-only? (displayln (if (eq? style 'json) "{\"ok\":true}" "check ok"))]
