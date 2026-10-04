@@ -12,9 +12,9 @@ work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
-| 1 | Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
-| 2 | Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
-| 3 | Modules and imports | Split larger programs across files |
+| 1 | **Next:** Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
+| 2 | **Complete:** Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
+| 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 5 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
@@ -977,8 +977,12 @@ these applications rather than a feature checklist alone.
 
 ### 5. MCP examples (phase 5m), then Streamable HTTP
 
-Build stdio examples first on the file/process/JSON/module foundations.
+Build stdio examples first on the file/process/JSON/module foundations. A
+minimal protocol scaffold lives at `examples/mcp/stdio.agc`; it handles
+`initialize`, `ping`, and an empty `tools/list`, but is not the planned tool
+server yet.
 
+- [x] Add the minimal `examples/mcp/stdio.agc` stdio scaffold with flushed JSON-RPC replies.
 - [ ] `examples/mcp_server.agc`: a stdio server that answers `initialize`, `tools/list`, and `tools/call` for one or two tools. Logs go to standard error with `IO.warn`, so standard output carries only protocol messages.
 - [ ] `examples/mcp_client.agc`: spawns the server above, initializes, lists tools, and calls one.
 - [ ] A test that runs the client against the server and checks the result.
