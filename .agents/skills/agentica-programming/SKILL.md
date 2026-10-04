@@ -27,6 +27,23 @@ Exit codes: `0` ok, `1` the program has a diagnostic (the stage that failed stop
 
 IO.gets returns Result[String]; use IO.gets! for a String that halts at EOF. In a Result-returning function, `try` propagates errors; main returns Void. See the reference for contextual Result inference and eager fallback evaluation.
 
+## Choose JSON shapes
+
+For fixed protocol messages and records, prefer structs with native typed fields
+and call `JSON.encode(record)` directly. Separate message shapes keep
+absent fields absent; do not add null placeholders. `ok` and `error` are reserved
+field names: a JSON-RPC error envelope needs a String-keyed map, though its
+nested error payload can still be a struct. Keep genuinely dynamic
+payloads as `Json` fields and convert those payloads once with `JSON.from`.
+
+Use `JSON.object`/`JSON.array` for dynamic shapes. Maps and lists are homogeneous:
+a `Map[String, Json]` needs `JSON.from("2.0")`, but a struct's `String` field
+accepts `"2.0"` directly. Avoid wrapping an already encodable map or struct in
+`JSON.object` just to encode it. See the JSON section of
+[references/language.md](references/language.md) for a response example.
+For stdio protocols, share a text-writing helper that prints one encoded message
+and calls `IO.flush`; keep logs on stderr with `IO.warn`.
+
 ## Read a diagnostic
 
 Diagnostics go to stderr:

@@ -634,7 +634,37 @@ as Int. Maps decoded from JSON use sorted key order.
 - List extraction returns array elements as Json values, including heterogeneous arrays. Null stays inside Json; there is no null extractor yet.
 - Encode accepts Int, Float, Bool, String, Nil (as null), Json, lists, String-keyed maps, and structs, recursively. Results and Int-keyed maps are `CHECK-NOT-ENCODABLE`, even if empty or nested. Empty literals still need a known type.
 - Encoding is compact; structs follow declaration order, maps follow insertion order. Parsed Json object order is unspecified. Non-finite Floats halt with `RUNTIME-JSON-ENCODE` at the encode call.
-- Typed decoding, builders, and schemas are not implemented.
+
+### Prefer structs for fixed JSON shapes
+
+Struct fields may have different types, while maps/lists are homogeneous.
+For protocol envelopes, declare the shape and encode the struct directly rather
+than building a `Map[String, Json]` and wrapping every scalar with `JSON.from`:
+
+```ruby
+struct RpcResponse
+  jsonrpc: String
+  id: Json
+  result: Json
+end
+
+def reply(id: Json, result: Json) -> Void
+  response = RpcResponse(jsonrpc: "2.0", id: id, result: result)
+  puts(JSON.encode(response))
+  IO.flush()
+end
+```
+
+Use separate message shapes so only the appropriate fields are emitted.
+`ok` and `error` are reserved field names, so a JSON-RPC error envelope cannot
+be a struct: use a String-keyed map for that envelope and a typed struct for
+its nested code/message payload. Give fixed nested records native typed fields too; retain
+`Json` for variable payloads or identifiers and use `JSON.from(payload)` once
+at that boundary. `JSON.encode` accepts structs and String-keyed maps directly;
+`JSON.object` is not required before encoding. Use builders for dynamic object
+shapes or heterogeneous JSON arrays, where the `Json` wrappers are useful.
+For a shared stdio transport helper, accept encoded `String`, print it and flush;
+there are no user generics or structural unions to accept arbitrary structs.
 
 ```ruby
 def greet_json(text: String) -> Result[String]
