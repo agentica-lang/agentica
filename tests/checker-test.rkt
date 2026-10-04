@@ -30,6 +30,18 @@
   (format "def main() -> Void\n~a\nend\n" body))
 
 (module+ test
+  (test-case "JSON decoding accepts only decodable named structs"
+    (check-ok (string-append "struct Node\n  children: List[Node]\nend\n"
+                            (main-with "  r = JSON.decode(\"{}\", Node)")))
+    (for ([type '("Nil" "Json" "Result[Int]" "Map[Int, String]" "Fn[Int, Int]")])
+      (check-equal?
+       (check-code (string-append (format "struct Bad\n  value: ~a\nend\n" type)
+                                 (main-with "  r = JSON.decode(\"{}\", Bad)")))
+       'CHECK-NOT-DECODABLE))
+    (check-equal? (check-code (main-with "  r = JSON.decode(\"{}\", Int)")) 'CHECK-NOT-DECODABLE)
+    (check-equal? (check-code (main-with "  r = JSON.decode(\"{}\", 1)")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  r = Int")) 'CHECK-TYPE-MISMATCH))
+
   (test-case "list callbacks enforce exact signatures and infer empty inputs"
     (define callbacks
       (string-append

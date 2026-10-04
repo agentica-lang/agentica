@@ -319,6 +319,7 @@
         ("Map.get" "Map.get({\"k\": 1}, \"k\")" "ok(1)\n")
         ("Map.delete" "Map.delete({\"k\": 1}, \"k\")" "{}\n")
         ("Map.values" "Map.values({\"k\": 1})" "[1]\n")
+        ("JSON.decode" "JSON.decode(\"{}\", Empty)" "ok(Empty())\n")
         ("JSON.parse" "JSON.parse(\"null\")" "ok(<Json>)\n")
         ("JSON.encode" "JSON.encode(7)" "\"7\"\n")
         ("JSON.get" "JSON.get(Result.unwrap!(JSON.parse(\"{\\\"k\\\": false}\")), \"k\")" "ok(<Json>)\n")
@@ -372,7 +373,7 @@
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)
-        (run-io (string-append "def positive(n: Int) -> Bool\n  return n > 0\nend\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\ndef identity(n: Int) -> Int\n  return n\nend\n"
+        (run-io (string-append "struct Empty\nend\ndef positive(n: Int) -> Bool\n  return n > 0\nend\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\ndef identity(n: Int) -> Int\n  return n\nend\n"
                               (main-with (format "  r: Result[Int] = error(\"bad\")\n  ~a"
                                   (if (eq? (builtin-result (hash-ref builtins name)) 'Void)
                                       (cadr sample) (format "IO.inspect(~a)" (cadr sample))))))
@@ -614,6 +615,26 @@
     (define bad (diagnostic-of (main-with "  x = JSON.encode({\"bad\": String.to_float!(\"9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999\")})")))
     (check-equal? (diagnostic-code bad) 'RUNTIME-JSON-ENCODE)
     (check-equal? (position-of bad) '(2 7)))
+
+  (test-case "typed JSON decoding validates nested fields and preserves data"
+    (define prefix
+      "struct Item\n  count: Int\n  active: Bool\nend\nstruct Payload\n  items: List[Item]\n  weights: Map[String, Float]\nend\n")
+    (check-equal?
+     (output-of (string-append prefix
+       (main-with "  p = Result.unwrap!(JSON.decode(\"{\\\"items\\\":[{\\\"count\\\":3,\\\"active\\\":false}],\\\"weights\\\":{\\\"a\\\":2},\\\"extra\\\":true}\", Payload))\n  IO.inspect(p.items[0].count)\n  IO.inspect(p.items[0].active)\n  IO.inspect(p.weights[\"a\"])\n  q = Result.unwrap!(JSON.decode(JSON.encode(p), Payload))\n  IO.inspect(q.items[0].count)")))
+     "3\nfalse\n2.0\n3\n")
+    (for ([text '("{\"items\":[{\"count\":1.0,\"active\":false}],\"weights\":{}}"
+                  "{\"items\":[{\"count\":9223372036854775808,\"active\":false}],\"weights\":{}}"
+                  "{\"items\":[{\"active\":false}],\"weights\":{}}")])
+      (check-equal?
+       (output-of (string-append prefix
+         (main-with (format "  r = JSON.decode(~s, Payload)\n  IO.inspect(Result.ok?(r))\n  IO.inspect(String.starts_with?(Result.message(r), \"items[0].count:\"))" text))))
+       "false\ntrue\n"))
+    (for ([text '("invalid" "{}" "{\"items\":false,\"weights\":{}}" "{\"items\":[],\"weights\":{\"a\":\"bad\"}}")])
+      (check-equal?
+       (output-of (string-append prefix
+         (main-with (format "  IO.inspect(Result.ok?(JSON.decode(~s, Payload)))" text))))
+       "false\n")))
 
   (test-case "JSON parse, encode, extraction and try compose in checked programs"
     (check-equal?

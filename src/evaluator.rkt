@@ -8,7 +8,8 @@
          "runtime-values.rkt"
          "task.rkt"
          "builtin-types.rkt" "network.rkt" "filesystem.rkt" "process.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
-         "json.rkt")
+         "json.rkt"
+         "json-typed.rkt")
 
 (provide evaluate
          (struct-out instance)
@@ -164,6 +165,7 @@
     (define (eval-expression expression)
       (step! (node-span expression))
       (cond
+        [(type-expression? expression) (type-expression-name expression)]
         [(literal? expression) (literal-value expression)]
         [(name-ref? expression) (unbox (lookup (name-ref-name expression)))]
         [(unary? expression) (eval-unary expression)]
@@ -435,6 +437,8 @@
          ;; Only parsing is recoverable; argument evaluation stays outside.
          (with-handlers ([exn:fail? (lambda (failure) (result-error (exn-message failure)))])
            (result-ok (read-json-value (car arguments))))]
+        [("JSON.decode")
+         (decode-json (car arguments) (cadr arguments) (program-declarations program))]
         [("JSON.encode") (encode-json (car arguments) span)]
         [("JSON.get")
          (define data (json-value-data (car arguments)))

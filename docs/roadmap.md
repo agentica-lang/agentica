@@ -918,10 +918,10 @@ The second argument is a struct name, not a value, as in `JSON.decode(text, User
 - A missing field or a wrong type is `error("age: expected Int, found String")`, with the path to the field. Extra keys are ignored.
 - A JSON integer decodes to `Float` when the field is `Float`, but a JSON float never decodes to `Int`.
 
-- [ ] Parse a bare type name as an expression (spec in `future.md`; today it is `PARSE-UNEXPECTED-TOKEN`, so update that parser test), and make the checker accept it only as an argument of `JSON.decode` and `JSON.schema`.
-- [ ] Check that the target type is decodable.
-- [ ] Decode nested structs, lists, and maps, with the path in error messages.
-- [ ] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
+- [x] Parse a bare type name as an expression and accept it only in JSON type argument positions (JSON.decode now; JSON.schema in 5i).
+- [x] Check that the target type is decodable.
+- [x] Decode nested structs, lists, and maps, with the path in error messages.
+- [x] Add a round-trip test: `JSON.encode` then `JSON.decode` gives back the same field values (compare fields, since structs have no `==`).
 
 #### Phase 5i: JSON builders and schemas
 

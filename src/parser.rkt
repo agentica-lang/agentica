@@ -398,10 +398,7 @@
          (call (string-append (token-lexeme name) "." (token-lexeme member))
                arguments
                (span-from name))]
-        [else
-         (bail 'PARSE-UNEXPECTED-TOKEN
-               "a type name is only a type or a constructor call; add \"(\""
-               name)]))
+        [else (type-expression (token-lexeme name) (token-span name))]))
 
     (define (parse-expression-list terminator)
       (if (kind? terminator)

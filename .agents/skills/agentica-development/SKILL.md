@@ -170,6 +170,8 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 
 ## JSON (phase 5f)
 
+- Typed decoding (5f2) uses a type-expression AST node accepted only in JSON type argument positions. json-typed.rkt walks checker-validated declarations into existing runtime instances/mappings; JSON.decode returns located-path Result errors for bad data, validates signed Int/finite Float bounds, and ignores extra fields. Recursive type validation visits each struct once. Decoded map keys are sorted. JSON.schema and builders remain pending.
+
 - `Json` is opaque, not primitive for equality. Reserve `Json` and `JSON`; all calls use existing parser/AST forms. The catalog has nine JSON functions; `json-encode` is the only new generic checker rule.
 - Recursively check encoding eligibility, including declared struct fields and empty containers. A seen-struct path prevents infinite recursion without skipping other fields. Results and Int-keyed maps are CHECK-NOT-ENCODABLE.
 - `src/json.rkt` delegates parsing to bundled `read-json`. Use direct character checks for raw controls and trailing JSON whitespace. Racket CS 9.3 accepts raw controls in strings and can raise a non-read exception for malformed exponents such as `0.0001e+`; the evaluator catches parsing failures locally as Results, never around argument evaluation.

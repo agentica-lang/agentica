@@ -8,6 +8,7 @@
          (struct-out struct-decl)
          (struct-out field-decl)
          (struct-out type-ref)
+         (struct-out type-expression)
          (struct-out binding)
          (struct-out return-stmt)
          (struct-out expr-stmt)
@@ -39,6 +40,7 @@
 (struct field-decl (name type span) #:transparent)
 
 (struct type-ref (name args span) #:transparent)
+(struct type-expression (name span) #:transparent)
 
 (struct binding (name type value span) #:transparent)
 (struct return-stmt (value span) #:transparent)
@@ -72,6 +74,7 @@
     [(struct-decl? node) (struct-decl-span node)]
     [(field-decl? node) (field-decl-span node)]
     [(type-ref? node) (type-ref-span node)]
+    [(type-expression? node) (type-expression-span node)]
     [(binding? node) (binding-span node)]
     [(return-stmt? node) (return-stmt-span node)]
     [(expr-stmt? node) (expr-stmt-span node)]

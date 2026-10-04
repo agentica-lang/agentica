@@ -113,6 +113,7 @@
                     ("Map.get" ((map (Map K V)) (key K)) (Result V) map-get "Map.get" () "Read a value as a Result, or supply an eagerly evaluated default as a third argument.")
                     ("Map.delete" ((map (Map K V)) (key K)) (Map K V) map-delete "Map.delete" () "Return a new map without this key; missing keys leave it unchanged.")
                     ("Map.values" ((map (Map K V))) (List V) map-values "Map.values" () "Return values in insertion order.")
+                    ("JSON.decode" ((s String) (type T)) (Result T) json-decode "JSON.decode" () "Decode JSON into a named struct; invalid data returns an error.")
                     ("JSON.parse" ((s String)) (Result Json) #f "JSON.parse" () "Parse exactly one JSON value; invalid input returns an error.")
                     ("JSON.encode" ((value T)) String json-encode "JSON.encode" () "Encode JSON-compatible values; halt on non-finite Float values.")
                     ("JSON.get" ((j Json) (key String)) (Result Json) #f "JSON.get" () "Read an object member; wrong kind or missing key returns an error.")

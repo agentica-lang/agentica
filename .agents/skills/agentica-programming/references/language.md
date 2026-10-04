@@ -564,6 +564,7 @@ Only registration permits `BDD.step`; actions/state/assertions require a running
 ## JSON
 
 ```text
+JSON.decode(s: String, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -574,6 +575,16 @@ JSON.float(j: Json) -> Result[Float]
 JSON.bool(j: Json) -> Result[Bool]
 JSON.list(j: Json) -> Result[List[Json]]
 ```
+
+`JSON.decode(text, User)` returns Result[User]. Its second argument is a named
+struct type, not a runtime value; bare type names are rejected elsewhere.
+Fields may contain Int, Float, Bool, String, lists, String-keyed maps, and nested
+or recursive structs. Unsupported nested types give CHECK-NOT-DECODABLE.
+Malformed JSON, missing fields, wrong types, Int overflow, or non-finite Float
+conversion return errors with field/index paths. Extra object keys are ignored.
+Integer JSON values may decode as Float; decimal/exponent values never decode
+as Int. Maps decoded from JSON use sorted key order.
+
 
 - Json is opaque: no constructor, equality, fields, or `j[key]` / `j[index]`. `IO.inspect` prints `<Json>`; `JSON.encode` prints its JSON contents.
 - Parse requires exactly one JSON value, with optional surrounding space/tab/CR/LF. Empty input, malformed JSON, trailing content, bad Unicode escapes, raw control characters in strings, and non-finite parsed numbers return errors. Repeated object keys keep the last value.
@@ -634,6 +645,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-MAIN` | missing or wrong `main` |
 | `CHECK-NOT-A-STRUCT`, `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | field access on a non-struct, index on a non-list/map, `for` over a non-list |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
+| `CHECK-NOT-DECODABLE` | JSON.decode target is not a struct or contains unsupported field types |
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |

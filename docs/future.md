@@ -70,7 +70,7 @@ The expression grammar must also be extended to build variants, for example `Ok(
 
 ## 4. Standard library and function values (phases 5f2–5m)
 
-Fixed here so each roadmap phase can take it as its specification. Named function values (5j) now ship in the core; their normative grammar is in `grammar.md`. The other extensions below remain planned unless explicitly marked complete.
+Fixed here so each roadmap phase can take it as its specification. Named function values (5j) now ship in the core; their normative grammar is in `grammar.md`. Typed JSON decoding (5f2) also ships in the core; builders/schema and file imports below remain planned.
 
 ```ebnf
 postfix_expr     = primary, { ".", NAME
@@ -79,13 +79,13 @@ postfix_expr     = primary, { ".", NAME
 
 primary          = (* …core forms, plus: *)
                  | "&", NAME
-                 | TYPE_NAME ;
+                 | TYPE_NAME ; (* core for JSON.decode; schema use remains planned *)
 ```
 
 - **`&name` and `.call(...)`:** `&name` turns a top-level function into a value of type `Fn[...]`, and `value.call(args)` calls it. `call` is not a reserved word: it has this meaning only right after a `.` and before `(`. There are no closures: `&name` does not capture variables. The checker requires `name` to be a declared function and compares parameters and return type with the expected type. Precedence 1, like the named call.
-- **Bare `TYPE_NAME`:** without `(` or `.`, it is a type used as an argument, as in `JSON.decode(text, User)`. The checker accepts it only as an argument of the builtin functions that ask for it (`JSON.decode`, `JSON.schema`); anywhere else it is an error.
+- **Bare `TYPE_NAME`:** now core for `JSON.decode(text, User)`; planned `JSON.schema` uses the same type argument syntax. Types are not runtime values.
 - Function values, `Void`, `Process`, and TCP/TLS/HTTP handles and records are core; their normative APIs live in grammar.md. Opaque handles have no constructor or fields; inspect prints a type marker.
-- `Void`, `Process`, `Fn`, `BDD`, `Json`, `JSON`, `Task`, `TCP`, `TLS`, `HTTP` and networking types are reserved in the core; typed decoding and schema functions remain planned.
+- `Void`, `Process`, `Fn`, `BDD`, `Json`, `JSON`, `Task`, `TCP`, `TLS`, `HTTP` and networking types are reserved in the core; typed decoding is core; schema functions remain planned.
 
 ```ruby
 def double(n: Int) -> Int
@@ -108,6 +108,64 @@ x = User               # A type is valid only as an argument of JSON.decode or J
 f = &missing           # &name requires a declared function.
 ready = done?          # A function name is not a value; use &done?.
 ```
+
+### Typed JSON and builders (5f2, 5i)
+
+```text
+JSON.object(fields: Map[String, Json]) -> Json
+JSON.array(items: List[Json]) -> Json
+JSON.from(value: T) -> Json
+JSON.null() -> Json
+JSON.null?(value: Json) -> Bool
+JSON.schema(type: T) -> Json
+```
+
+Typed decoding is core; its contract lives in grammar.md. Schema targets use
+the same decodable named-struct types and CHECK-NOT-DECODABLE validation.
+Schemas use $defs/$ref for recursive structs.
+
+JSON.from accepts exactly the types accepted by JSON.encode and preserves the
+same values. Builders preserve false/null and distinguish empty arrays from
+empty objects. JSON.null creates JSON null, not an absent field. Schema output
+uses object properties/required, array items, and additionalProperties for maps;
+extra struct keys remain allowed, matching decode. Int schemas include signed
+64-bit bounds. A type argument is not a runtime value.
+
+### File imports and explicit exports
+
+```ruby
+import "models.agc" as Models
+
+export struct User
+  name: String
+end
+
+export def greet(user: User) -> String
+  return user.name
+end
+```
+
+Each file is a module. Imports are top-level declarations, paths must end in
+.agc, and paths resolve relative to the importing source file, never the
+process working directory. Canonical file paths identify modules; each module
+is loaded once per program. Missing/unreadable files and import cycles produce
+located diagnostics at the import. The loader does not print or execute code.
+
+An uppercase alias provides qualified exported names: Models.User,
+Models.greet(user), Models.User(name: "Ana"), and &Models.greet. Local declarations
+remain unqualified within their defining file. Only declarations prefixed with
+export are visible to importers; imports themselves cannot be re-exported.
+Duplicate aliases, collisions with local declarations/builtin names, and private
+or unknown imported names are check errors. Exported signatures may use private
+types internally, but private types cannot be named or constructed by importers.
+Only the root file supplies the executable main entrypoint; imported main
+functions are ordinary declarations and never run automatically.
+
+There are no wildcard imports, package lookup, module state, nested module
+blocks, or receiver attachment. Linked declarations retain their source spans
+and module identity. Checking and evaluation share one linked program, task
+budget, and resource owner, including imported callbacks. Single-file programs
+continue to work unchanged. BDD handlers use the same loader/resolver.
 
 ## 5. Remaining `List` operations
 

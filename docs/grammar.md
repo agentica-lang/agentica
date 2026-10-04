@@ -183,6 +183,7 @@ primary          = literal
                  | NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", NAME, "(", [ arguments ], ")"
                  | TYPE_NAME, "(", [ named_arguments ], ")"
+                 | TYPE_NAME
                  | list_literal
                  | map_literal
                  | "(", expression, ")" ;
@@ -446,6 +447,7 @@ end
 `Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` without exposing its contents. Use the JSON functions to read it or `JSON.encode` to print JSON text.
 
 ```text
+JSON.decode(s: String, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -456,6 +458,16 @@ JSON.float(j: Json) -> Result[Float]
 JSON.bool(j: Json) -> Result[Bool]
 JSON.list(j: Json) -> Result[List[Json]]
 ```
+
+`JSON.decode(text, User)` returns Result[User]. Its second argument is a named
+struct type, not a runtime value; bare type names are rejected elsewhere.
+Fields may contain Int, Float, Bool, String, lists, String-keyed maps, and nested
+or recursive structs. Unsupported nested types give CHECK-NOT-DECODABLE.
+Malformed JSON, missing fields, wrong types, Int overflow, or non-finite Float
+conversion return errors with field/index paths. Extra object keys are ignored.
+Integer JSON values may decode as Float; decimal/exponent values never decode
+as Int. Maps decoded from JSON use sorted key order.
+
 
 - `JSON.parse` reads exactly one JSON value, with optional surrounding JSON whitespace (space, tab, CR, LF). Empty input, malformed JSON, trailing content, invalid Unicode escapes, raw control characters in strings, or non-finite parsed numbers return an error. A repeated object key keeps the last value.
 - `JSON.get` requires an object and a present key; `JSON.at` requires an array and an index in `0 .. length - 1`. Missing keys, bad indexes, and wrong kinds return errors, not runtime diagnostics. JSON `false` and `null` are valid present values.
