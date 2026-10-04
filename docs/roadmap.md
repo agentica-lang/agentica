@@ -891,7 +891,7 @@ Function values are already available, so collection callbacks need no new
 closure or scheduler feature. Keep names and argument order consistent with
 the existing builtin library.
 
-- [ ] `List.concat`, `take`, `drop`, `at`.
+- [x] `List.concat`, `take`, `drop`, `at`: immutable operations, clamped nonnegative counts, and zero-based checked indexes.
 - [ ] Settle `reduce` argument order before implementing callbacks.
 - [ ] `List.map`, `filter`, `reduce`.
 - [ ] `List.sort`, `sort_by`.

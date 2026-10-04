@@ -467,6 +467,22 @@
                        (lambda (data) (map json-value data)))]
         [("List.size") (length (car arguments))]
         [("List.append") (append (car arguments) (list (cadr arguments)))]
+        [("List.concat") (append (car arguments) (cadr arguments))]
+        [("List.take" "List.drop")
+         (define target (car arguments))
+         (define count (cadr arguments))
+         (when (< count 0)
+           (bail 'RUNTIME-INVALID-COUNT "count must be nonnegative"
+                 (node-span (cadr (call-args expression)))))
+         (define bounded (min count (length target)))
+         ((if (equal? name "List.take") take drop) target bounded)]
+        [("List.at")
+         (define target (car arguments))
+         (define index (cadr arguments))
+         (unless (< -1 index (length target))
+           (bail 'RUNTIME-INDEX-OUT-OF-RANGE "list index is out of range"
+                 (node-span (cadr (call-args expression)))))
+         (list-ref target index)]
         [("List.set")
          (define target (car arguments))
          (define index (cadr arguments))

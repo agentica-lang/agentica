@@ -503,6 +503,22 @@
          target]
         [(list-size) (list-argument) 'Int]
         [(list-reverse) (list-argument (and (list-type? expected) expected))]
+        [(list-concat)
+         (define target
+           (list-argument
+            (or (and (list-type? expected) expected)
+                (and (empty-list? (car arguments))
+                     (check-expression (cadr arguments) #f)))))
+         (check-expression (cadr arguments) target)
+         target]
+        [(list-count list-at)
+         (define at? (eq? (builtin-rule selected) 'list-at))
+         (define target
+           (list-argument (if at?
+                              (and expected (list 'List expected))
+                              (and (list-type? expected) expected))))
+         (check-expression (cadr arguments) 'Int)
+         (if at? (cadr target) target)]
         [(list-append list-set)
          (define value (last arguments))
          (define target
