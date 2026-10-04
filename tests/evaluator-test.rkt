@@ -792,4 +792,33 @@
                    (diagnostic-of (string-append
                                    "def loop(n: Int) -> Int\n  return loop(n + 1)\nend\n"
                                    "def main() -> Void\n  x = loop(0)\nend\n")))
-                  'RUNTIME-STACK-OVERFLOW)))
+                  'RUNTIME-STACK-OVERFLOW))
+
+  (test-case "enum constructors and case matching bind or discard payloads"
+    (check-equal?
+     (output-of
+      (string-append
+       "enum Option[T]\n  Some(T)\n  None\nend\n"
+       "def success() -> Result[Void]\n  return ok()\nend\n"
+       "def failure() -> Result[Int]\n  return error(\"bad\")\nend\n"
+       "def main() -> Void\n"
+       "  value = Option.Some(\"payload\")\n"
+       "  case value do\n"
+       "    Option.Some(item) ->\n      puts(item)\n"
+       "    Option.None ->\n      puts(\"none\")\n"
+       "  end\n"
+       "  empty: Option[Int] = Option.None()\n"
+       "  case empty do\n"
+       "    Option.Some(_) ->\n      puts(\"unused\")\n"
+       "    Option.None ->\n      puts(\"empty\")\n"
+       "  end\n"
+       "  case success() do\n"
+       "    Result.Ok(_) ->\n      puts(\"ok\")\n"
+       "    Result.Err(message) ->\n      puts(message)\n"
+       "  end\n"
+       "  case failure() do\n"
+       "    Result.Ok(_) ->\n      puts(\"unexpected\")\n"
+       "    Result.Err(message) ->\n      puts(message)\n"
+       "  end\n"
+       "end\n"))
+     "payload\nempty\nok\nbad\n")))

@@ -15,7 +15,8 @@
          (struct-out instance)
          (struct-out mapping)
          (struct-out exit-code)
-         (struct-out function-value))
+         (struct-out function-value)
+         (struct-out enum-value))
 
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
@@ -48,6 +49,10 @@
       (for/fold ([fields builtin-field-order]) ([declaration (in-list (program-declarations program))]
                  #:when (struct-decl? declaration))
         (hash-set fields (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration)))))
+    (define enum-names
+      (for/hash ([declaration (in-list (program-declarations program))]
+                 #:when (enum-decl? declaration))
+        (values (enum-decl-name declaration) #t)))
     (define file-handles (make-hasheq))
     (define file-registry-lock (make-semaphore 1))
     (define file-registry-closing? (box #f))
@@ -70,14 +75,14 @@
                       [current-process-custodian (current-custodian)]
                       [current-process-allowed? allow-run?])
          (evaluate-with-ports program program-args entrypoint arguments builtin-handler
-                              functions struct-fields run)))
+                              functions struct-fields enum-names run)))
      max-steps (program-span program) #:require-complete? require-complete?
      #:cleanup (lambda ()
                  (process-close-all! processes process-lock process-closing?)
                  (filesystem-close-all! file-handles file-registry-lock file-registry-closing?)))))
 
 (define (evaluate-with-ports program program-args entrypoint entry-arguments builtin-handler
-                             functions struct-fields run)
+                             functions struct-fields enum-names run)
   (define scopes '())
   (define return-to #f)
   (define depth 0)
@@ -183,6 +188,10 @@
         [(unary? expression) (eval-unary expression)]
         [(binary? expression) (eval-binary expression)]
         [(call? expression) (eval-call expression)]
+        [(enum-constructor? expression)
+         (enum-value (enum-constructor-enum-name expression)
+                     (enum-constructor-variant-name expression)
+                     (map eval-expression (enum-constructor-args expression)))]
         [(function-ref? expression) (function-value (function-ref-name expression))]
         [(invoke? expression)
          (define target (eval-expression (invoke-target expression)))
@@ -192,11 +201,19 @@
          (define result (eval-expression (try-expr-operand expression)))
          (if (result-ok? result) (result-ok-value result) (return-to result))]
         [(construct? expression)
-         (instance (construct-type-name expression)
-                   (for/fold ([fields (hash)])
-                             ([argument (in-list (construct-args expression))])
-                     (hash-set fields (named-arg-name argument)
-                               (eval-expression (named-arg-value argument)))))]
+         (define parts (string-split (construct-type-name expression) "."))
+         (if (and (= (length parts) 2) (hash-has-key? enum-names (car parts)))
+             (enum-value (car parts) (cadr parts)
+                         (map (lambda (argument)
+                                (if (named-arg? argument)
+                                    (eval-expression (named-arg-value argument))
+                                    (eval-expression argument)))
+                              (construct-args expression)))
+             (instance (construct-type-name expression)
+                       (for/fold ([fields (hash)])
+                                 ([argument (in-list (construct-args expression))])
+                         (hash-set fields (named-arg-name argument)
+                                   (eval-expression (named-arg-value argument))))))]
         [(list-lit? expression)
          (for/list ([element (in-list (list-lit-elements expression))])
            (eval-expression element))]
@@ -317,7 +334,7 @@
       (define span (call-span expression))
       (define (invoke-network callback args)
         (evaluate-with-ports program program-args (function-value-name callback) args
-                             builtin-handler functions struct-fields run))
+                             builtin-handler functions struct-fields enum-names run))
       (define (spawn-network thunk cust)
         (task-spawn run thunk span #:custodian cust))
       (define (request client method url headers text)
@@ -362,7 +379,7 @@
          (task-spawn run
            (lambda ()
              (evaluate-with-ports program program-args callback (list (cadr arguments))
-                                  builtin-handler functions struct-fields run)) span)]
+                                  builtin-handler functions struct-fields enum-names run)) span)]
         [("Task.await")
          (define value (task-await run (car arguments) span))
          (if (or (diagnostic? value) (exit-code? value)) (escape value) value)]
@@ -625,6 +642,44 @@
       (exec-block statements)
       (pop-scope!))
 
+    (define (pattern-payload pattern value)
+      (cond
+        [(enum-value? value)
+         (and (equal? (variant-pattern-enum-name pattern) (enum-value-type-name value))
+              (equal? (variant-pattern-variant-name pattern) (enum-value-variant-name value))
+              (enum-value-payload value))]
+        [(and (equal? (variant-pattern-enum-name pattern) "Result") (result-ok? value)
+              (equal? (variant-pattern-variant-name pattern) "Ok"))
+         (list (result-ok-value value))]
+        [(and (equal? (variant-pattern-enum-name pattern) "Result") (result-error? value)
+              (equal? (variant-pattern-variant-name pattern) "Err"))
+         (list (result-error-message value))]
+        [else #f]))
+
+    (define (pattern-matches? pattern value)
+      (cond
+        [(wildcard-pattern? pattern) #t]
+        [(literal-pattern? pattern) (equal? (literal-pattern-value pattern) value)]
+        [(variant-pattern? pattern) (and (pattern-payload pattern value) #t)]
+        [else #f]))
+
+    (define (exec-case statement)
+      (define value (eval-expression (case-stmt-value statement)))
+      (define arm
+        (for/first ([candidate (in-list (case-stmt-arms statement))]
+                    #:when (pattern-matches? (case-arm-pattern candidate) value))
+          candidate))
+      (unless arm (unreachable "case arm" (case-stmt-span statement)))
+      (define pattern (case-arm-pattern arm))
+      (define payload (and (variant-pattern? pattern) (pattern-payload pattern value)))
+      (push-scope!)
+      (when (variant-pattern? pattern)
+        (for ([name (in-list (variant-pattern-bindings pattern))]
+              [item (in-list payload)])
+          (when name (define! name item))))
+      (exec-block (case-arm-body arm))
+      (pop-scope!))
+
     (define (exec-statement statement)
       (step! (node-span statement))
       (cond
@@ -638,6 +693,7 @@
                         (eval-expression (return-stmt-value statement))
                         (void)))]
         [(expr-stmt? statement) (eval-expression (expr-stmt-value statement))]
+        [(case-stmt? statement) (exec-case statement)]
         [(if-stmt? statement)
          (define branch
            (for/first ([branch (in-list (if-stmt-branches statement))]

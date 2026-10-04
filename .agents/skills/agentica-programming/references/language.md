@@ -4,13 +4,13 @@ Agentica is a small statically typed language with Ruby-like syntax. This file i
 
 ## Program shape
 
-- A file has top-level `def`, `struct`, and `import` declarations. Functions/structs may use `export`. No executable statements at the top level.
+- A file has top-level `def`, `struct`, `enum`, and `import` declarations. Functions, structs, and enums may use `export`. No executable statements at the top level.
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
 - Calls always use parentheses, even with no arguments: `main()`, `puts("hi")`.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
-- Reserved words: `def struct import export end if elsif else while for in return try true false nil and or not`.
+- Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
 - Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
 
 Full programs are at the end of this file.
@@ -22,10 +22,12 @@ Relative paths ending in .agc resolve from the importing file, not the working
 directory. Canonical paths identify files; each file is linked once. Cycles and
 missing/unreadable imports give located CHECK-IMPORT diagnostics.
 
-`export struct User ... end` and `export def greet(...) ... end` expose
-declarations; everything else is private. Use `Models.User` in annotations and
-JSON type arguments, `Models.User(name: "Ana")` for construction,
-`Models.greet(user)` for calls, and `&Models.greet` for callbacks.
+`export struct User ... end`, `export enum Option[T] ... end`, and
+`export def greet(...) ... end` expose declarations; everything else is
+private. Use `Models.User` in annotations and JSON type arguments,
+`Models.User(name: "Ana")` for construction, `Models.greet(user)` for calls,
+and `&Models.greet` for callbacks. Imported enums use `Models.Option[T]`,
+`Models.Option.Some(value)`, and `Models.Option.Some(item)` in patterns.
 Local names remain unqualified inside their file. Import aliases are uppercase
 and cannot collide with declarations, other aliases, or builtin names.
 Imports cannot be re-exported. Exported signatures may mention private types,
@@ -110,6 +112,7 @@ performance is promised.
 | `List[T]` | homogeneous, immutable, indexed from 0 |
 | `Map[K, V]` | homogeneous, immutable; `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
+| `Option[T]` (example) | A user-defined generic enum; `Option` is not a builtin type |
 | `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Fn[A, ..., R]` | named function value; last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
 | `Task[R]` | opaque lightweight task; exactly one result type |
@@ -136,13 +139,18 @@ struct User
   age: Int
 end
 
+enum Option[T]
+  Some(T)
+  None
+end
+
 def greet(user: User, times: Int) -> String
   return user.name
 end
 ```
 
 - Every parameter and the return type need an annotation.
-- Struct and function declarations are top level only. There are no methods, closures, nested functions, default arguments, or overloading.
+- Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no methods, closures, nested functions, default arguments, or overloading.
 - Functions can be called before they are declared, and can be recursive.
 - A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
 - `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
@@ -170,6 +178,11 @@ for item in items      # items is a List[T]; item is a new, read-only variable
   puts(item)
 end
 
+case option do
+  Option.Some(value) -> IO.inspect(value)
+  Option.None -> puts("empty")
+end
+
 return count
 ```
 
@@ -178,6 +191,9 @@ return count
 - A name created in a block is not visible after that block's `end`.
 - A new variable cannot reuse a name that is already visible in an outer scope (no shadowing).
 - The `for` variable cannot be assigned to.
+- `case value do pattern -> block end` is a statement. Each arm has a normal block and its bindings are local to that arm.
+- Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
+- Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
 - `if` and `while` conditions must be `Bool`. There is no truthiness: `if 1` is an error.
 - Assignment is a statement, not an expression. There is no `x[i] = v`, `x.f = v`, `+=`, `break`, or `continue`.
 
@@ -187,6 +203,7 @@ return count
 - Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value and its first-insertion position; `Map.put` replacement also keeps that position).
 - An empty `[]` or `{}` needs a known type: an annotation, a parameter, a field, or the function result. A non-empty list needs elements of one type.
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
+- Enum variants are qualified by their type. Construct payload variants positionally (`Option.Some("hi")`) and nullary variants with empty parentheses (`Option.None()`). Generic arguments are inferred from payloads and expected types; every type parameter must be known. A nullary generic variant therefore needs expected type context.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
 - Function call `f(a, b)` with positional arguments. Builtin module call `String.upcase(s)`.
 - `&name` references a declared top-level function, without capturing locals. `f: Fn[Int, Int] = &double`; call it with `f.call(21)`. Function values can be stored in containers, fields, parameters, and returns. Signatures must match exactly. Bare function names remain invalid as values. No lambdas, closures, equality, or JSON encoding; inspect prints `<Fn>`.
@@ -325,6 +342,7 @@ Result.message(r: Result[T]) -> String
 - `ok(false)` and `ok(nil)` are successes. Results can nest and contain lists/maps/structs; they have no equality, direct fields, or indexing. `IO.inspect` prints recursive `ok(...)` / `error(...)` forms and returns its argument.
 - Lists/maps still infer from the first element. `[ok(1), error("bad")]` infers; the reverse order needs an annotation.
 - Non-bang conversions use the same signed-decimal syntax and 64-bit integer bounds as bang forms, but invalid text/overflow return errors. `IO.gets` returns a line without LF/CR/CRLF; a blank line is `ok("")`, not EOF. Unrelated runtime errors are not converted to Results.
+- Match builtin Results with `Result.Ok(value)` and `Result.Err(message)`; constructors remain `ok` and `error`. `Result.Ok(_)` discards the payload and supports `Result[Void]` without binding a Void value.
 - `try` evaluates its Result operand once: success produces the payload; an error returns from the current function. Only a function returning Result may use it, but operand and enclosing success types may differ. It binds like unary `not`; use parentheses for a larger operand. Expected output T supplies `Result[T]` to the operand; the function return type alone does not infer that payload. Success paths still need explicit returns.
 
 ```ruby

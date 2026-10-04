@@ -34,6 +34,9 @@
 (define (struct-type? type)
   (and (pair? type) (eq? (car type) 'Struct)))
 
+(define (enum-type? type)
+  (and (pair? type) (eq? (car type) 'Enum)))
+
 (define (literal-type value)
   (cond
     [(boolean? value) 'Bool]
@@ -61,6 +64,9 @@
            (and (if-stmt-else-body statement) (contains-return? (if-stmt-else-body statement))))]
       [(while-stmt? statement) (contains-return? (while-stmt-body statement))]
       [(for-stmt? statement) (contains-return? (for-stmt-body statement))]
+      [(case-stmt? statement)
+       (for/or ([arm (in-list (case-stmt-arms statement))])
+         (contains-return? (case-arm-body arm)))]
       [else #f])))
 
 (define (missing-return-help body type-name)
@@ -88,11 +94,16 @@
           (for/and ([branch (in-list (if-stmt-branches statement))])
             (block-returns? (if-branch-body branch)))
           (block-returns? (if-stmt-else-body statement)))]
+    [(case-stmt? statement)
+     (for/and ([arm (in-list (case-stmt-arms statement))])
+       (block-returns? (case-arm-body arm)))]
     [else #f]))
 
 (define (check program)
   (define structs (hash-copy builtin-records))
+  (define enums (make-hash))
   (define functions (make-hash))
+  (define current-type-parameters '())
   (define scopes '())
   (define current-result 'Void)
   (define current-signature #f)
@@ -119,10 +130,37 @@
         (mismatch! expected actual span))
       actual)
 
+    (define (type-variable? type)
+      (and (pair? type) (eq? (car type) 'TypeVar)))
+
+    (define (substitute-type type substitutions)
+      (cond
+        [(type-variable? type) (hash-ref substitutions (cadr type) type)]
+        [(pair? type) (cons (car type) (map (lambda (item) (substitute-type item substitutions)) (cdr type)))]
+        [else type]))
+
+    (define (unify-type! template actual substitutions span)
+      (cond
+        [(type-variable? template)
+         (define name (cadr template))
+         (define previous (hash-ref substitutions name #f))
+         (if previous
+             (ensure actual previous span)
+             (hash-set! substitutions name actual))]
+        [(and (pair? template) (pair? actual)
+              (eq? (car template) (car actual))
+              (= (length (cdr template)) (length (cdr actual)))
+              (not (memq (car template) '(Struct))))
+         (for ([left (in-list (cdr template))] [right (in-list (cdr actual))])
+           (unify-type! left right substitutions span))]
+        [else (ensure actual template span)]))
+
     (define (resolve-type reference [completion? #f])
       (define name (type-ref-name reference))
       (define arguments (type-ref-args reference))
       (cond
+        [(and (member name current-type-parameters) (null? arguments))
+         (list 'TypeVar name)]
         [(and (string=? name "Void") (null? arguments))
          (unless completion?
            (bail 'CHECK-VOID-TYPE "Void is only valid in a completion type position" (type-ref-span reference)))
@@ -147,15 +185,25 @@
                  (format "a Map key must be Int or String, found ~a" (type->string key))
                  (type-ref-span (car arguments))))
          (list 'Map key (resolve-type (cadr arguments)))]
+        [(hash-has-key? enums name)
+         (define parameters (car (hash-ref enums name)))
+         (unless (= (length parameters) (length arguments))
+           (bail 'CHECK-UNKNOWN-TYPE
+                 (format "enum ~a expects ~a type argument(s), found ~a"
+                         name (length parameters) (length arguments))
+                 (type-ref-span reference)))
+         (cons 'Enum (cons name (map resolve-type arguments)))]
         [(and (hash-has-key? structs name) (null? arguments))
          (list 'Struct name)]
         [else
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" name)
                (type-ref-span reference)
-               #:help (did-you-mean name (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
-                                                 (map symbol->string opaque-types)
-                                                 (hash-keys structs))))]))
+               #:help (did-you-mean name
+                                    (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
+                                            (map symbol->string opaque-types)
+                                            (hash-keys structs)
+                                            (hash-keys enums))))]))
 
     ;; Scopes ---------------------------------------------------------------
 
@@ -191,12 +239,51 @@
 
     ;; Registration ---------------------------------------------------------
 
+    (define (register-enum-names!)
+      (for ([declaration (in-list (program-declarations program))]
+            #:when (enum-decl? declaration))
+        (define name (enum-decl-name declaration))
+        (define parameters (enum-decl-type-parameters declaration))
+        (when (or (member name reserved-type-names)
+                  (hash-has-key? structs name)
+                  (hash-has-key? enums name)
+                  (hash-has-key? functions name))
+          (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is already defined" name)
+                (enum-decl-span declaration)))
+        (when (check-duplicates parameters)
+          (bail 'CHECK-REDEFINED-NAME "duplicate enum type parameter"
+                (enum-decl-span declaration)))
+        (for ([parameter (in-list parameters)])
+          (when (member parameter reserved-type-names)
+            (bail 'CHECK-REDEFINED-NAME
+                  (format "\"~a\" cannot be used as an enum type parameter" parameter)
+                  (enum-decl-span declaration))))
+        (hash-set! enums name (cons parameters (make-hash)))))
+
+    (define (register-enum-variants!)
+      (for ([declaration (in-list (program-declarations program))]
+            #:when (enum-decl? declaration))
+        (define name (enum-decl-name declaration))
+        (define parameters (enum-decl-type-parameters declaration))
+        (define variants (cdr (hash-ref enums name)))
+        (set! current-type-parameters parameters)
+        (for ([variant (in-list (enum-decl-variants declaration))])
+          (define variant-name (enum-variant-name variant))
+          (when (hash-has-key? variants variant-name)
+            (bail 'CHECK-REDEFINED-NAME
+                  (format "duplicate variant \"~a\" in enum \"~a\"" variant-name name)
+                  (enum-variant-span variant)))
+          (hash-set! variants variant-name
+                     (map resolve-type (enum-variant-payload-types variant))))
+        (set! current-type-parameters '())))
+
     (define (register-structs!)
       (for ([declaration (in-list (program-declarations program))])
         (when (struct-decl? declaration)
           (define name (struct-decl-name declaration))
           (when (or (member name reserved-type-names)
                     (hash-has-key? structs name)
+                    (hash-has-key? enums name)
                     (hash-has-key? functions name))
             (bail 'CHECK-REDEFINED-NAME
                   (format "\"~a\" is already defined" name)
@@ -222,7 +309,8 @@
           (define name (function-decl-name declaration))
           (when (or (builtin-ref name)
                     (hash-has-key? functions name)
-                    (hash-has-key? structs name))
+                    (hash-has-key? structs name)
+                    (hash-has-key? enums name))
             (bail 'CHECK-REDEFINED-NAME
                   (format "\"~a\" is already defined" name)
                   (function-decl-span declaration)))
@@ -284,6 +372,12 @@
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]
           [(call? expression) (check-call expression expected)]
+          [(enum-constructor? expression)
+           (check-enum-constructor (enum-constructor-enum-name expression)
+                                   (enum-constructor-variant-name expression)
+                                   (enum-constructor-args expression)
+                                   (enum-constructor-span expression)
+                                   expected)]
           [(function-ref? expression)
            (define signature (hash-ref functions (function-ref-name expression) #f))
            (unless signature
@@ -301,7 +395,7 @@
              (check-expression argument parameter))
            (last target)]
           [(try-expr? expression) (check-try expression expected)]
-          [(construct? expression) (check-construct expression)]
+          [(construct? expression) (check-construct expression expected)]
           [(list-lit? expression) (check-list expression expected)]
           [(map-lit? expression) (check-map expression expected)]
           [(field-access? expression) (check-field-access expression)]
@@ -652,7 +746,66 @@
         (check-expression argument parameter-type))
       result-type)
 
-    (define (check-construct expression)
+    (define (has-type-variables? type)
+      (or (type-variable? type)
+          (and (pair? type) (ormap has-type-variables? (cdr type)))))
+
+    (define (check-enum-constructor enum-name variant-name arguments span expected)
+      (define definition (hash-ref enums enum-name #f))
+      (unless definition
+        (bail 'CHECK-UNKNOWN-TYPE (format "unknown enum \"~a\"" enum-name) span))
+      (define parameters (car definition))
+      (define variants (cdr definition))
+      (define payload-types (hash-ref variants variant-name #f))
+      (unless payload-types
+        (bail 'CHECK-UNKNOWN-VARIANT
+              (format "enum \"~a\" has no variant \"~a\"" enum-name variant-name)
+              span))
+      (unless (= (length arguments) (length payload-types))
+        (bail 'CHECK-ARITY
+              (format "variant ~a.~a expects ~a argument(s), found ~a"
+                      enum-name variant-name (length payload-types) (length arguments))
+              span))
+      (when (ormap named-arg? arguments)
+        (bail 'CHECK-ENUM-POSITIONAL-ARGS "enum variants use positional arguments" span))
+      (define substitutions (make-hash))
+      (when (and (enum-type? expected)
+                 (equal? (cadr expected) enum-name)
+                 (= (length parameters) (length (cddr expected))))
+        (for ([parameter (in-list parameters)] [argument-type (in-list (cddr expected))])
+          (hash-set! substitutions parameter argument-type)))
+      (for ([template (in-list payload-types)] [argument (in-list arguments)])
+        (define context (substitute-type template substitutions))
+        (when (and (has-type-variables? context)
+                   (or (and (list-lit? argument) (null? (list-lit-elements argument)))
+                       (and (map-lit? argument) (null? (map-lit-entries argument)))))
+          (bail 'CHECK-ENUM-TYPE-INFERENCE
+                "cannot infer enum type arguments from an empty collection payload"
+                (node-span argument)))
+        (define argument-type
+          (check-expression argument (and (not (has-type-variables? context)) context)))
+        (unify-type! template argument-type substitutions (node-span argument)))
+      (define unresolved
+        (filter (lambda (parameter) (not (hash-has-key? substitutions parameter))) parameters))
+      (when (pair? unresolved)
+        (bail 'CHECK-ENUM-TYPE-INFERENCE
+              (format "cannot infer enum type parameter(s) ~a for ~a.~a"
+                      (string-join unresolved ", ") enum-name variant-name)
+              span))
+      (define result-type
+        (cons 'Enum (cons enum-name (map (lambda (parameter)
+                                           (hash-ref substitutions parameter))
+                                         parameters))))
+      (ensure result-type expected span))
+
+    (define (check-construct expression expected)
+      (define parts (string-split (construct-type-name expression) "."))
+      (if (and (= (length parts) 2) (hash-has-key? enums (car parts)))
+          (check-enum-constructor (car parts) (cadr parts) (construct-args expression)
+                                  (construct-span expression) expected)
+          (check-struct-construct expression)))
+
+    (define (check-struct-construct expression)
       (define name (construct-type-name expression))
       (unless (hash-has-key? structs name)
         (bail 'CHECK-UNKNOWN-TYPE
@@ -766,6 +919,95 @@
 
     ;; Statements -----------------------------------------------------------
 
+    (define (check-case statement)
+      (define value-type (check-expression (case-stmt-value statement) #f))
+      (define result? (result-type? value-type))
+      (define enum-definition
+        (and (enum-type? value-type) (hash-ref enums (cadr value-type) #f)))
+      (define variant-names
+        (cond
+          [result? '("Ok" "Err")]
+          [enum-definition (hash-keys (cdr enum-definition))]
+          [else #f]))
+      (define covered-variants '())
+      (define seen-literals '())
+      (define wildcard? #f)
+      (for ([arm (in-list (case-stmt-arms statement))])
+        (when (or wildcard?
+                  (and variant-names
+                       (andmap (lambda (name) (member name covered-variants)) variant-names)))
+          (bail 'CHECK-UNREACHABLE-CASE-ARM "case arm is unreachable" (node-span arm)))
+        (define pattern (case-arm-pattern arm))
+        (cond
+          [(wildcard-pattern? pattern) (set! wildcard? #t)]
+          [(literal-pattern? pattern)
+           (define value (literal-pattern-value pattern))
+           (define pattern-type (literal-type value))
+           (unless (and (primitive-type? value-type) (eq? value-type pattern-type))
+             (bail 'CHECK-PATTERN-TYPE
+                   (format "literal pattern has type ~a, but case value has type ~a"
+                           (type->string pattern-type) (type->string value-type))
+                   (node-span pattern)))
+           (when (member value seen-literals equal?)
+             (bail 'CHECK-UNREACHABLE-CASE-ARM "duplicate literal case arm" (node-span arm)))
+           (set! seen-literals (cons value seen-literals))]
+          [(variant-pattern? pattern)
+           (define enum-name (variant-pattern-enum-name pattern))
+           (define variant-name (variant-pattern-variant-name pattern))
+           (define payload-types
+             (cond
+               [(and result? (equal? enum-name "Result") (equal? variant-name "Ok"))
+                (list (cadr value-type))]
+               [(and result? (equal? enum-name "Result") (equal? variant-name "Err"))
+                (list 'String)]
+               [(and enum-definition (equal? enum-name (cadr value-type)))
+                (define substitutions (make-hash))
+                (for ([parameter (in-list (car enum-definition))]
+                      [argument-type (in-list (cddr value-type))])
+                  (hash-set! substitutions parameter argument-type))
+                (define templates (hash-ref (cdr enum-definition) variant-name #f))
+                (and templates
+                     (map (lambda (template) (substitute-type template substitutions)) templates))]
+               [else #f]))
+           (unless payload-types
+             (if (and enum-definition (equal? enum-name (cadr value-type)))
+                 (bail 'CHECK-UNKNOWN-VARIANT
+                       (format "enum \"~a\" has no variant \"~a\"" enum-name variant-name)
+                       (node-span pattern))
+                 (bail 'CHECK-PATTERN-TYPE
+                       (format "variant pattern \"~a.~a\" does not match ~a"
+                               enum-name variant-name (type->string value-type))
+                       (node-span pattern))))
+           (when (member variant-name covered-variants)
+             (bail 'CHECK-UNREACHABLE-CASE-ARM "duplicate enum variant arm" (node-span arm)))
+           (unless (= (length (variant-pattern-bindings pattern)) (length payload-types))
+             (bail 'CHECK-ARITY
+                   (format "variant pattern expects ~a binding(s), found ~a"
+                           (length payload-types) (length (variant-pattern-bindings pattern)))
+                   (node-span pattern)))
+           (set! covered-variants (cons variant-name covered-variants))
+           (push-scope!)
+           (for ([binding-name (in-list (variant-pattern-bindings pattern))]
+                 [binding-type (in-list payload-types)])
+             (when (and binding-name (eq? binding-type 'Void))
+               (bail 'CHECK-VOID-TYPE "a Void payload must be discarded with _" (node-span pattern)))
+             (when binding-name (introduce! binding-name binding-type (node-span pattern))))
+           (check-block (case-arm-body arm))
+           (pop-scope!)])
+        (unless (variant-pattern? pattern)
+          (push-scope!)
+          (check-block (case-arm-body arm))
+          (pop-scope!)))
+      (unless wildcard?
+        (if variant-names
+            (unless (andmap (lambda (name) (member name covered-variants)) variant-names)
+              (bail 'CHECK-NON-EXHAUSTIVE-CASE
+                    (format "case must cover every variant of ~a or include _" (type->string value-type))
+                    (case-stmt-span statement)))
+            (bail 'CHECK-NON-EXHAUSTIVE-CASE
+                  "case on a non-enum value requires a final _ arm"
+                  (case-stmt-span statement)))))
+
     (define (check-block statements)
       (for ([statement (in-list statements)])
         (check-statement statement)))
@@ -776,6 +1018,7 @@
         [(return-stmt? statement) (check-return statement)]
         [(expr-stmt? statement) (check-expression (expr-stmt-value statement) #f #:completion? #t)]
         [(if-stmt? statement) (check-if statement)]
+        [(case-stmt? statement) (check-case statement)]
         [(while-stmt? statement) (check-while statement)]
         [(for-stmt? statement) (check-for statement)]
         [else (bail 'CHECK-INTERNAL "unsupported statement" (node-span statement))]))
@@ -866,7 +1109,9 @@
     (for ([declaration (in-list (program-declarations program))])
       (when (or (import-decl? declaration) (export-decl? declaration))
         (bail 'CHECK-MODULE-CONTEXT "resolve modules before checking" (node-span declaration))))
+    (register-enum-names!)
     (register-structs!)
+    (register-enum-variants!)
     (register-functions!)
     (check-main!)
     (for ([declaration (in-list (program-declarations program))])

@@ -601,4 +601,81 @@
     (check-equal? (check-code (main-with "  x = Map.size()")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = Map.nope(1)")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = Mpa.put(1)")) 'CHECK-UNKNOWN-NAME)
-    (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m == m")) 'CHECK-TYPE-MISMATCH)))
+    (check-equal? (check-code (main-with "  m = {\"a\": 1}\n  x = m == m")) 'CHECK-TYPE-MISMATCH))
+
+  (test-case "generic enum construction infers and checks type arguments"
+    (define source
+      (string-append
+       "enum Option[T]\n  Some(T)\n  None\nend\n"
+       "def main() -> Void\n"
+       "  number: Option[Int] = Option.Some(1)\n"
+       "  text: Option[String] = Option.None()\n"
+       "end\n"))
+    (check-ok source)
+    (check-equal?
+     (check-code (string-append "enum Empty[T]\n  None\nend\n"
+                                (main-with "  x = Empty.None()")))
+     'CHECK-ENUM-TYPE-INFERENCE)
+    (check-equal?
+     (check-code (string-append "enum Same[T]\n  Pair(T, T)\nend\n"
+                                (main-with "  x = Same.Pair(1, \"text\")")))
+     'CHECK-TYPE-MISMATCH)
+    (check-equal?
+     (check-code (string-append "enum Box[T]\n  Items(List[T])\nend\n"
+                                (main-with "  x = Box.Items([])")))
+     'CHECK-ENUM-TYPE-INFERENCE))
+
+  (test-case "case checks enum and Result exhaustiveness and branch bindings"
+    (check-ok
+     (string-append
+      "enum Option[T]\n  Some(T)\n  None\nend\n"
+      "def extract(value: Option[Int]) -> Int\n"
+      "  case value do\n"
+      "    Option.Some(item) ->\n      return item\n"
+      "    Option.None ->\n      return 0\n"
+      "  end\nend\n"
+      "def result() -> Result[Void]\n  return ok()\nend\n"
+      "def main() -> Void\n"
+      "  case result() do\n"
+      "    Result.Ok(_) ->\n      puts(\"ok\")\n"
+      "    Result.Err(message) ->\n      puts(message)\n"
+      "  end\nend\n"))
+    (check-equal?
+     (check-code (string-append "enum Option[T]\n  Some(T)\n  None\nend\n"
+                                (main-with (string-append
+                                            "  case Option.Some(1) do\n"
+                                            "    Option.Some(value) ->\n      puts(String.from_int(value))\n"
+                                            "  end"))))
+     'CHECK-NON-EXHAUSTIVE-CASE)
+    (check-equal?
+     (check-code (main-with (string-append
+                             "  case true do\n    true ->\n      puts(\"yes\")\n"
+                             "    false ->\n      puts(\"no\")\n  end")))
+     'CHECK-NON-EXHAUSTIVE-CASE)
+    (check-equal?
+     (check-code (main-with (string-append
+                             "  case true do\n    _ ->\n      puts(\"yes\")\n"
+                             "    false ->\n      puts(\"no\")\n  end")))
+     'CHECK-UNREACHABLE-CASE-ARM)
+    (check-equal?
+     (check-code (main-with "  case nil do\n    nil ->\n      puts(\"nil\")\n  end"))
+     'CHECK-NON-EXHAUSTIVE-CASE)
+    (check-ok (main-with "  case nil do\n    nil ->\n      puts(\"nil\")\n    _ ->\n      puts(\"other\")\n  end"))
+    (check-equal?
+     (check-code (main-with "  case true do\n    1 ->\n      puts(\"one\")\n    _ ->\n      puts(\"other\")\n  end"))
+     'CHECK-PATTERN-TYPE)
+    (check-equal?
+     (check-code (string-append "enum State\n  Ready\n  Done\nend\n"
+                                (main-with (string-append
+                                            "  case State.Ready() do\n"
+                                            "    State.Missing ->\n      puts(\"missing\")\n"
+                                            "    _ ->\n      puts(\"other\")\n  end"))))
+     'CHECK-UNKNOWN-VARIANT)
+    (check-equal?
+     (check-code (string-append "enum State\n  Ready\n  Done\nend\n"
+                                (main-with (string-append
+                                            "  case State.Ready() do\n"
+                                            "    State.Ready ->\n      puts(\"ready\")\n"
+                                            "    State.Ready ->\n      puts(\"again\")\n"
+                                            "    State.Done ->\n      puts(\"done\")\n  end"))))
+     'CHECK-UNREACHABLE-CASE-ARM)))

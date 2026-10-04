@@ -218,4 +218,21 @@
     (check-equal? (string->jsexpr (car lines)) (hasheq 'result 42))
     (check-equal? (cadr lines) "[2, 4]")
     (define schema (string->jsexpr (caddr lines)))
-    (check-equal? (hash-ref schema 'required) '("left" "right"))))
+    (check-equal? (hash-ref schema 'required) '("left" "right")))
+
+  (test-case "imported generic enums resolve constructors and exhaustive patterns"
+    (with-files
+     '(("option.agc" . "export enum Option[T]\n  Some(T)\n  None\nend\n")
+       ("root.agc" . "import \"option.agc\" as Domain\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(7)\n  case value do\n    Domain.Option.Some(item) ->\n      puts(String.from_int(item))\n    Domain.Option.None ->\n      puts(\"empty\")\n  end\n  empty: Domain.Option[String] = Domain.Option.None()\n  case empty do\n    Domain.Option.Some(item) ->\n      puts(item)\n    Domain.Option.None ->\n      puts(\"none\")\n  end\nend\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "7\nnone\n")
+       (check-equal? result (void)))))
+
+  (test-case "private imported enums remain inaccessible"
+    (with-files
+     '(("option.agc" . "enum Option[T]\n  Some(T)\nend\n")
+       ("root.agc" . "import \"option.agc\" as Domain\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(1)\nend\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)))))

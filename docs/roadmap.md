@@ -1,6 +1,6 @@
 # Agentica implementation roadmap
 
-This roadmap turns the core specification in [`grammar.md`](grammar.md) into a usable interpreter. Planned syntax lives in [`future.md`](future.md) until its phase lands. Keep every phase focused on the core in sections 4–6 until the prototype can run and diagnose the examples in sections 7–8. Enums and other extensions stay out of the initial milestone.
+This roadmap turns the core specification in [`grammar.md`](grammar.md) into a usable interpreter. Planned syntax lives in [`future.md`](future.md) until its phase lands. Keep every phase focused on the core in sections 4–6 until the prototype can run and diagnose the examples in sections 7–8. Enums were kept out of the initial milestone and are now implemented as a later extension.
 
 ## Current implementation order
 
@@ -643,7 +643,7 @@ The skill `.agents/skills/agentica-programming/` is a variable: one arm gets `do
 
 ### Phase 5e: Result and error handling (with propagation)
 
-Phases 5f to 5h need a way to report failure without halting. Full enums and generics stay a later extension, so `Result[T]` is a builtin generic type, special-cased in the checker like `List` and `Map`. Error propagation (`try`, formerly Phase 5k) ships in the same delivery: without it, `Result` code is full of manual checks.
+Phases 5f to 5h needed a way to report failure without halting. At that point, user enums were still planned; `Result[T]` shipped as a builtin generic type, special-cased in the checker like `List` and `Map`. Generic user enums have since landed under Later extensions. Error propagation (`try`, formerly Phase 5k) shipped in the same delivery.
 
 ```text
 Result[T]                         # either ok(value) or error(message)
@@ -655,12 +655,12 @@ Result.unwrap_or(r: Result[T], default: T) -> T
 Result.message(r: Result[T]) -> String
 ```
 
-- The error is always a `String`. A richer error type waits for enums.
+- The builtin `Result[T]` error payload remains a `String`; user-defined enums are available for domain-specific error types.
 - Add the non-bang forms from 5c and 5d: `String.to_int`, `String.to_float`, `IO.gets` return `Result[...]`.
 - `Result.unwrap!` on an error is `RUNTIME-UNWRAP-ERROR`.
 - Use Result.ok? and module functions; matching stays deferred. Result.message is empty text for success. unwrap_or evaluates both arguments eagerly. error needs an expected Result type (CHECK-RESULT-TYPE); try outside a Result-returning function is CHECK-TRY-CONTEXT.
 
-Propagation rule: `try` unwraps an `ok` or returns the `error` from the current function, and is allowed only inside a function that returns `Result[...]` (otherwise a `CHECK-` error). The error stays a `String`; no enums or exceptions.
+Propagation rule: `try` unwraps an `ok` or returns the `error` from the current function, and is allowed only inside a function that returns `Result[...]` (otherwise a `CHECK-` error). `Result` errors stay Strings; there are no language exceptions.
 
 ```ruby
 def read_age(text: String) -> Result[Int]
@@ -702,7 +702,7 @@ JSON.list(j: Json) -> Result[List[Json]]
 ```
 
 - `JSON.encode` accepts `Int`, `Float`, `Bool`, `String`, `Nil` (as `null`), `List`, `Map[String, V]`, structs (as objects, fields in declared order), and `Json`. A map with `Int` keys is a `CHECK-` error.
-- No user generics are needed. Struct decoding needs a type as an argument, which the checker special-cases like the other builtins (see 5f2).
+- Generic user enums landed later; generic functions and structs remain unsupported. Struct decoding needs a type as an argument, which the checker special-cases like the other builtins (see 5f2).
 
 - [x] Add the `Json` type and the `JSON` module.
 - [x] Use Racket's `json` library, without new dependencies.
@@ -832,7 +832,7 @@ Moved into Phase 5e: `try` ships together with `Result`. The decision is made: a
 
 ### Phase 5n: Completed collection primitives
 
-6a exposed the lack of list construction and sorting. The design is in `future.md` section 5. Primitive operations are now implemented through the builtins catalog (5e); only operations taking callbacks depend on 5j (function values). `List` is the chosen module, keeping `List.size` and avoiding an `Enum` module beside the planned `enum` keyword.
+6a exposed the lack of list construction and sorting. The design is in `future.md` section 5. Primitive operations are now implemented through the builtins catalog (5e); only operations taking callbacks depend on 5j (function values). `List` is the chosen module, keeping `List.size` and avoiding an `Enum` module beside the implemented `enum` keyword.
 
 - [x] Choose `List` as the collection module.
 - [x] `List.append`, `List.set`, `List.repeat`, `List.reverse`: immutable operations with contextual generic typing and explicit index/count diagnostics. Keep the existing linked-list representation and document O(n) indexing/updates.
@@ -1016,11 +1016,15 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
   | 10,000 | 869.56 / 12.59 | 2,200.83 / 29.21 |
   | 50,000 | 23,240.65 / 61.62 | 54,904.19 / 146.60 |
 
-- [ ] Decide variant name resolution and generic inference before implementing enums and pattern matching.
-- [ ] Add enum construction, `case`/`in`, exhaustiveness checks, and unreachable-arm diagnostics as one extension across lexer, parser, checker, evaluator, and diagnostics.
+### Enums and pattern matching: implemented
+
+- [x] Specify generic enums, enum-qualified variants, and qualified imported names (`Domain.Option.Some`).
+- [x] Implement Elixir-inspired `case expression do ... -> ... end` as a statement, with literal and variant patterns, direct bindings, `_` payload discards, and arm-local scopes.
+- [x] Check generic constructor inference, enum and builtin Result exhaustiveness, wildcard requirements for non-enums, and unreachable arms.
+- [x] Add parser, checker, evaluator, and module-linker regression tests; move normative syntax to `grammar.md` and mirror it in the programming reference and development skill.
 - [ ] Define normative designs for interpolation, generics, methods, FFI, async, or actors before implementing them. Modules/imports have an explicit place in the current implementation order; error propagation is already implemented in 5e.
 - [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels and CPU parallelism remain unscheduled; [`future.md` section 8](future.md#8-concurrency-and-parallelism) records their remaining decisions.
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 
-These items are deliberately outside the initial core milestone.
+The remaining items above are outside the current implementation order.

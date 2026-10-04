@@ -1,60 +1,12 @@
 # Agentica: future grammar
 
-Status: proposal. Nothing in this document is implemented or normative. The language the interpreter runs is in [`grammar.md`](grammar.md).
+Status: proposals only. This document is not normative; implemented language behavior is specified in [`grammar.md`](grammar.md).
 
 Working rule: when a phase of the [`roadmap.md`](roadmap.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-## 2. Enums and pattern matching
+## 2. Landed: enums and pattern matching
 
-This section documents the direction already discussed. It is not part of the initial core and requires extending the lexer, parser, checker, and evaluator. The illustrative Outcome enum is separate from the already implemented builtin Result[T] with String errors.
-
-```ruby
-enum Outcome[T, E]
-  Ok(T)
-  Err(E)
-end
-
-enum Option[T]
-  Some(T)
-  None
-end
-
-def label(result: Outcome[String, String]) -> String
-  case result
-  in Ok(value)
-    return value
-  in Err(message)
-    return message
-  end
-end
-```
-
-Proposed EBNF extension, added to the alternatives for declarations and statements:
-
-```ebnf
-enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
-                   variant_decl, { variant_decl }, "end", NL ;
-type_parameters  = "[", TYPE_NAME, { ",", TYPE_NAME }, "]" ;
-variant_decl     = TYPE_NAME,
-                   [ "(", type, { ",", type }, ")" ], NL ;
-
-case_statement   = "case", expression, NL,
-                   match_arm, { match_arm }, "end", NL ;
-match_arm        = "in", pattern, NL, block ;
-pattern          = "_"
-                 | INTEGER | FLOAT | STRING | "true" | "false" | "nil"
-                 | "-", INTEGER | "-", FLOAT
-                 | TYPE_NAME, [ "(", pattern_bindings, ")" ] ;
-pattern_bindings = NAME, { ",", NAME } ;
-```
-
-`_` is a wildcard that does not introduce a variable. The first version of matching allows only literals and variants with direct bindings: no nested patterns, guards, regex, or list patterns. `case` remains a statement, not an expression.
-
-The checker verifies exhaustiveness for enums: all variants must be covered or a final wildcard must exist. For open domains such as integers and strings it requires a wildcard. Bindings are local to each arm; arms are tried in order and unreachable ones are diagnosed.
-
-The expression grammar must also be extended to build variants, for example `Ok(value)` and `None`. Before implementing this extension, name resolution must be decided: variant qualification, collisions with structs, and how to infer type parameters that do not appear in the payload. The core does not settle those decisions in advance.
-
-`Point(x: 0, y:)` was discussed as a possibility but is postponed: this first matching has no struct patterns or field shorthand.
+Generic enums and exhaustive Elixir-style `case` matching are implemented. Their normative syntax and semantics are now in sections 4–6 of [`grammar.md`](grammar.md), with the same self-contained rules in the programming reference. Further extensions remain proposals.
 
 ## 3. Extensions without a normative grammar
 
