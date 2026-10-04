@@ -216,6 +216,12 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - task-spawn accepts an internal custodian; task-shutdown! finalizes dead tasks and removes them from the pending registry. Awaiting cancelled work yields RUNTIME-TASK-CANCELLED. Intentional resource cancellation does not publish a global failure. Watchers still cover kill-thread bypassing dynamic-wind.
 - tests/tcp-test.rkt and tests/http-test.rkt use independent Node standard-library peers in tests/fixtures/network-peer.js. CI installs Node 24; absence fails CI and visibly skips locally. Checked-in localhost test certificates exercise trusted TLS, untrusted certificates and hostname rejection. CLI checks prove progressive uploads/responses and connection reuse; task-test owns budget/diagnostic/cleanup boundaries.
 
+## Files and paths
+
+- filesystem.rkt owns file handles, bounded text/byte operations, directory functions and lexical path functions. Handles carry the evaluation owner and a custodian; evaluator.rkt supplies both through parameters so run cancellation closes open ports. File reads/writes serialize on one per-handle lock, include lock wait in the deadline, and close the handle only when active I/O times out. Symlink targets resolve relative to the link's own directory, and link cycles stop at the first repeated path. Cleanup waits briefly for a contended handle lock before flushing and closing, so a finishing task's buffered output is not dropped.
+- File.open accepts read/write/append modes and only regular files or links to regular files. Whole-text calls and individual stream operations cap data at 1 MiB; strict UTF-8 errors become Result errors. Dir.mkdir is recursive and idempotent, Dir.list is sorted, and Path.resolve is lexical without symlink resolution. builtin-types.rkt owns FileHandle and FileInfo registration; grammar.md and the self-contained programming reference document matching semantics.
+- tests/filesystem-test.rkt exercises checked Agentica programs against temporary directories, including stream/whole-file round trips, error Results, metadata, paths and EOF. Keep filesystem tests local and clean temporary trees on every outcome.
+
 ## Reference
 
 Read `references/stages.md` for the full token-kind table, the diagnostic-code list, the AST node list, and each module's public API. Load it when adding or renaming tokens, AST nodes, or diagnostic codes.

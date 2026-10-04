@@ -122,7 +122,7 @@ Operators, from highest to lowest precedence:
 
 ## Builtin functions
 
-`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `TCP`, `TLS`, `HTTP`, and the networking types listed below are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value: String) -> Nil` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types listed below are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -271,6 +271,50 @@ end
 ```
 
 BDD registration and steps may spawn tasks. Finish them before returning, normally by awaiting them; pending work fails with RUNTIME-BDD-PENDING-TASKS. Child failures stop only their current handler; later scenarios continue. Completed child assertions count toward the current Then step; Doc Strings and tables remain those of that step. BDD registration/state/assertions are synchronized and stream lock wait counts against the operation timeout.
+
+## Files and paths
+
+`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. File handles
+are opaque, belong to one evaluation, and close when it ends. The interpreter
+uses the host user's filesystem permissions; there is no filesystem permission
+flag. File operations accept regular files and symlinks to regular files, and
+reject directories and special files.
+
+```text
+File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
+File.read_bytes(handle: FileHandle, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
+File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
+File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Nil]
+File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Nil]
+File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
+File.close(handle: FileHandle, timeout_ms: Int) -> Result[Nil]
+File.read_text(path: String, timeout_ms: Int) -> Result[String]
+File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
+File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Nil]
+File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
+Dir.list(path: String, timeout_ms: Int) -> Result[List[String]]
+Dir.mkdir(path: String, timeout_ms: Int) -> Result[Nil]
+Path.cwd() -> Result[String]
+Path.join(parts: List[String]) -> Result[String]
+Path.resolve(path: String) -> Result[String]
+```
+
+Modes are `read`, `write` and `append`: read requires an existing regular
+file; write creates or truncates; append creates or appends. Text is strict
+UTF-8. Whole-text helpers and each stream read/write are limited to 1 MiB;
+`read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF. `read_line`
+removes LF or CRLF, accepts a final unterminated line, and returns an error
+for EOF before any line or invalid UTF-8. Byte values are 0..255. Close
+flushes output and is idempotent. Explicit flush and close return Results.
+
+Timeouts are positive milliseconds and include the serialized handle lock
+wait. Timing out active I/O closes that handle; timing out while waiting for
+its lock leaves it open. Errors are Results. `File.stat` follows symlinks and
+returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`;
+directory sizes are zero. `Dir.list` returns immediate entry names sorted by
+name. `Dir.mkdir` creates parents and succeeds when the directory exists.
+`Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path
+without resolving symlinks.
 
 ## TCP, TLS and HTTP/1.1
 

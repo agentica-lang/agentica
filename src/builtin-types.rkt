@@ -4,7 +4,7 @@
 
 (require "runtime-values.rkt")
 
-(define opaque-types '(Socket Listener HttpClient HttpServer HttpBody HttpWriter))
+(define opaque-types '(Socket Listener HttpClient HttpServer HttpBody HttpWriter FileHandle))
 
 (define builtin-records
   (hash "Header" '(("name" . String) ("value" . String))
@@ -14,7 +14,8 @@
         "HttpClientOptions" '(("timeout_ms" . Int) ("idle_timeout_ms" . Int)
                               ("max_connections" . Int) ("max_body_bytes" . Int) ("ca_file" . String))
         "HttpServerOptions" '(("header_timeout_ms" . Int) ("idle_timeout_ms" . Int)
-                              ("max_connections" . Int) ("max_body_bytes" . Int))))
+                              ("max_connections" . Int) ("max_body_bytes" . Int))
+        "FileInfo" '(("kind" . String) ("size_bytes" . Int) ("modified_seconds" . Int))))
 
 (define builtin-field-order
   (for/hash ([(name fields) (in-hash builtin-records)])

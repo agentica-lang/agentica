@@ -5,20 +5,19 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 ## Current implementation order
 
 The core interpreter, Results, JSON primitives, function values, lightweight
-tasks, BDD, and TCP/TLS/HTTP are implemented. The next priority is general
+tasks, BDD, TCP/TLS/HTTP, and files/paths are implemented. The next priority is general
 programming: useful standalone programs first, larger applications next, then
 MCP. Historical phase numbers below remain stable; this order governs pending
 work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
-| 1 | Files and paths | Process local files and directories |
-| 2 | Processes (5l) | Run tools and communicate with child programs |
-| 3 | Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
-| 4 | Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
-| 5 | Modules and imports | Split larger programs across files |
-| 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 1 | Processes (5l) | Run tools and communicate with child programs |
+| 2 | Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
+| 3 | Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
+| 4 | Modules and imports | Split larger programs across files |
+| 5 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 6 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
 After steps 1–3, target everyday scripts and automation. After steps 4–6,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
@@ -745,7 +744,7 @@ the self-contained programming reference. HTTP/1.0 is not implemented.
 
 - Whether `?` and `!` become part of function names for all functions or only for builtin modules. Recommended: all functions, as in Ruby and Elixir.
 - ~~Whether `Map.has` and `Map.len` get renamed to `Map.has_key?` and `Map.size`.~~ Decided in 5c: renamed, together with `List.len` → `List.size`.
-- Network access follows the existing I/O model without a capability flag. A future filesystem capability policy remains separate.
+- Network and filesystem access use host permissions without a separate capability flag.
 
 ### Independent integration fixtures
 
@@ -841,16 +840,16 @@ Moved into Phase 5e: `try` ships together with `Result`. The decision is made: a
 
 ## Next work: General programming before MCP
 
-### 1. Files and paths
+### Completed: Files and paths
 
 Make local data processing possible before adding more protocol-specific APIs.
 
-- [ ] Specify file and path APIs, error behavior, byte limits, and the filesystem capability policy in `future.md`.
-- [ ] Read and write text and bytes, including explicit overwrite/append behavior and strict UTF-8 decoding.
-- [ ] List directories, create directories, inspect file metadata, and join/resolve paths.
-- [ ] Cover failures and resource cleanup with temporary-directory integration tests; add a small file-processing example.
+- [x] Specify file and path APIs, error behavior and byte limits in `future.md`; use host filesystem permissions without a new capability flag.
+- [x] Read and write text and bytes, including explicit overwrite/append behavior and strict UTF-8 decoding.
+- [x] List directories, create directories, inspect file metadata, and join/resolve paths.
+- [x] Cover failures and resource cleanup with temporary-directory integration tests; add a small file-processing example.
 
-### 2. Processes (phase 5l)
+### 1. Processes (phase 5l)
 
 Run existing tools for automation, then reuse the same API for stdio MCP clients.
 
@@ -871,7 +870,7 @@ Process.close(p: Process) -> Nil
 - [ ] Test with a small local child program, including nonzero exits, blocked I/O, cancellation and cleanup.
 - [ ] Add an automation example that runs a tool and checks its result.
 
-### 3. Everyday library (remaining phase 5n and supporting utilities)
+### 2. Everyday library (remaining phase 5n and supporting utilities)
 
 Function values are already available, so collection callbacks need no new
 closure or scheduler feature. Keep names and argument order consistent with
@@ -889,7 +888,7 @@ the existing builtin library.
 **Milestone:** useful everyday scripts and automation using files, processes
 and the basic library.
 
-### 4. Typed JSON, builders and schemas
+### 3. Typed JSON, builders and schemas
 
 #### Phase 5f2: Typed JSON decoding
 
@@ -929,7 +928,7 @@ JSON.schema(type: T) -> Json
 - [ ] Add the functions above and focused behavior tests.
 - [ ] Verify `JSON.schema` output against an independent expected schema for one struct.
 
-### 5. Modules and imports
+### 4. Modules and imports
 
 Split larger programs across files with explicit exports and predictable
 resolution. This is planned language syntax, not an extension to implement
@@ -940,7 +939,7 @@ without a specification.
 - [ ] Implement loading, checking and execution without resetting the execution's shared budget or resource ownership.
 - [ ] Test a program spanning multiple files and controlled diagnostics for missing imports, cycles and private names.
 
-### 6. Real applications
+### 5. Real applications
 
 Use complete programs to expose missing APIs before broadening the language.
 
@@ -952,7 +951,7 @@ Use complete programs to expose missing APIs before broadening the language.
 **Milestone:** practical larger general-purpose programs, demonstrated by
 these applications rather than a feature checklist alone.
 
-### 7. MCP examples (phase 5m), then Streamable HTTP
+### 6. MCP examples (phase 5m), then Streamable HTTP
 
 Build stdio examples first on the file/process/JSON/module foundations.
 

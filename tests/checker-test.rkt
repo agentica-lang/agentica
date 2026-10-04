@@ -30,6 +30,11 @@
   (format "def main() -> Nil\n~a\nend\n" body))
 
 (module+ test
+  (test-case "filesystem module and handle type names are reserved"
+    (for ([name '("File" "Dir" "Path" "FileHandle" "FileInfo")])
+      (check-equal? (check-code (format "struct ~a\nend\ndef main() -> Nil\nend\n" name))
+                    'CHECK-REDEFINED-NAME)))
+
   (test-case "network handles are opaque and HTTP records and callbacks are checked"
     (check-ok (string-append
                "def handler(request: Request, writer: HttpWriter) -> Nil\n  HTTP.respond(writer, 200, [], request.path, 1000)\nend\n"

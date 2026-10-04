@@ -291,3 +291,15 @@ The evaluator prepares immutable function/struct tables once per evaluation, the
 - Whether a concrete application needs channels or Process.poll_line.
 - Whether measured CPU workloads justify parallel thread pools or places; default no.
 - Whether to expose task timeouts or explicit cancellation. Current await has no timeout; returning from the entrypoint cancels pending work.
+
+## 9. Files and paths (implemented)
+
+The filesystem phase is implemented; its normative signatures and behavior now
+live in [`grammar.md`](grammar.md#files-and-paths). It adds `File`, `Dir` and
+`Path`, an opaque evaluation-owned `FileHandle`, and the `FileInfo` record.
+Host filesystem permissions apply without a separate capability flag. Reads
+and writes are limited to regular files and symlinks to regular files. Whole
+text helpers and each stream operation cap data at 1 MiB and use strict UTF-8.
+Timed stream operations serialize per handle and close the handle only when
+active I/O times out. `Dir.mkdir` is recursive and idempotent; path resolution
+is lexical and does not resolve symlinks.

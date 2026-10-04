@@ -17,7 +17,7 @@
                              (diagnostic 'RUNTIME-INTERNAL (exn-message failure) span))])
     (thunk)))
 
-(define (task-run thunk limit span #:require-complete? [strict? #f])
+(define (task-run thunk limit span #:require-complete? [strict? #f] #:cleanup [cleanup void])
   (cond
     [(not (or (not limit) (exact-positive-integer? limit)))
      (diagnostic 'RUNTIME-INTERNAL "max-steps must be a positive integer or #f" span)]
@@ -48,6 +48,7 @@
          (sync (semaphore-peek-evt (execution-finished run)))
          (unbox (unbox (execution-outcome run))))
        (lambda ()
+         (with-handlers ([exn:fail? void]) (cleanup))
          (custodian-shutdown-all (execution-custodian run))
          (semaphore-post cleaned)))]))
 
