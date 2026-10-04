@@ -954,6 +954,15 @@ without a specification.
 - [x] Implement loading, checking and execution without resetting the execution's shared budget or resource ownership.
 - [x] Test a program spanning multiple files and controlled diagnostics for missing imports, cycles and private names.
 
+### 3a. Embedded standard library and external resolution
+
+- [x] Reserve `std/` for embedded Agentica sources, retaining explicit import aliases.
+- [x] Ship a String FIFO in `stdlib/queue.agc` without native queue dispatch.
+- [x] Add `pkg/` search roots: entrypoint-local agc_libs, AGENTICA_PATH, user data, system data.
+- [x] Validate paths and symlink containment; preserve module identities, source spans and BDD loading.
+- [x] Verify queue behavior, precedence, compiled CLI and relocated release bundles.
+- [x] Document imports/API in the grammar and programming reference together.
+
 ### 4. Real applications
 
 Use complete programs to expose missing APIs before broadening the language.

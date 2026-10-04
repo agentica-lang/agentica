@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Embedded Agentica standard library with an immutable String FIFO at
+  `std/queue.agc`; executable releases need no separate stdlib installation.
+- `pkg/` imports with project-local, `AGENTICA_PATH`, user-data, and system
+  library roots, deterministic precedence and path-containment checks.
+
 ## [0.1.0] - 2026-10-04
 
 First tagged release of the Agentica interpreter: a small statically typed

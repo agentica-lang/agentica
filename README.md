@@ -67,6 +67,29 @@ racket src/main.rkt examples/hello.agc
 
 Use `--allow-run` before the command or source file to enable `Process.spawn`; spawning is disabled by default. `main()` now returns `Void`, and side-effect APIs return `Void` or `Result[Void]`. Use `ok()` for successful completion; `nil` remains data and JSON null. `racket src/main.rkt --allow-run examples/process-tool.agc` demonstrates tool execution and exit checks.
 
+### Libraries
+
+The standard library ships embedded in the executable—no separate download or
+`.venv` is needed. Its implementation is Agentica source, not native builtins:
+
+```ruby
+import "std/queue.agc" as Queue
+```
+
+See [examples/queue.agc](examples/queue.agc) for the immutable String FIFO.
+
+External `pkg/` imports search `agc_libs/` beside the root program, absolute
+roots in `AGENTICA_PATH` (colon-separated on Unix, semicolon-separated on
+Windows), the user data directory, then Unix system data directories.
+For example, `import "pkg/acme/tools.agc" as Tools` looks for `acme/tools.agc`
+inside each root. The Unix user root defaults to
+`~/.local/share/agentica/lib/` and respects `XDG_DATA_HOME`; system roots are
+`/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`.
+Windows uses `%LOCALAPPDATA%/agentica/lib/` and no default system roots.
+These roots never override `std/`; ordinary relative imports still resolve
+from the importing file. See [the language reference](docs/grammar.md#standard-library-and-external-libraries)
+for path validation and precedence rules.
+
 ### Exit codes
 
 | Code | Meaning                                                          |

@@ -1,7 +1,7 @@
 #lang racket
 
 (require racket/path "ast.rkt" "builtins.rkt" "checker.rkt"
-         "diagnostic.rkt" "lexer.rkt" "parser.rkt" "source.rkt")
+         "diagnostic.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "stdlib.rkt")
 
 (provide link-program load-program)
 
@@ -25,6 +25,66 @@
       (define (bail code message span) (failed (diagnostic code message span)))
       (define (canonical path) (normalize-path (path->complete-path path)))
       (define root-key (canonical root-path))
+      ;; pkg/ roots are anchored to the entrypoint, never the process cwd.
+      (define (library-roots span)
+        (define windows? (eq? (system-type 'os) 'windows))
+        (define configured
+          (filter (lambda (entry) (not (string=? entry "")))
+                  (string-split (or (getenv "AGENTICA_PATH") "")
+                                (if windows? ";" ":") #:trim? #f)))
+        (for ([entry (in-list configured)])
+          (unless (absolute-path? entry)
+            (bail 'CHECK-IMPORT-PATH "AGENTICA_PATH roots must be absolute" span)))
+        (define home (find-system-path 'home-dir))
+        (define data (getenv (if windows? "LOCALAPPDATA" "XDG_DATA_HOME")))
+        (define user-root
+          (cond
+            [(and data (absolute-path? data)) (build-path data "agentica" "lib")]
+            [windows? (build-path home "AppData" "Local" "agentica" "lib")]
+            [else (build-path home ".local" "share" "agentica" "lib")]))
+        (append (list (build-path (path-only root-key) "agc_libs")) configured
+                (list user-root)
+                (if windows? '()
+                    (list (string->path "/usr/local/share/agentica/lib")
+                          (string->path "/usr/share/agentica/lib")))))
+      (define (validate-library-path path span)
+        (define parts (string-split path "/" #:trim? #f))
+        (when (or (regexp-match? #rx"\\\\" path)
+                  (for/or ([part (in-list parts)])
+                    (or (member part '("" "." ".."))
+                        (regexp-match? #rx":" part))))
+          (bail 'CHECK-IMPORT-PATH "invalid library path" span)))
+      (define (resolve-import key path span)
+        (cond
+          [(string-prefix? path "std/")
+           (validate-library-path path span)
+           (unless (hash-has-key? stdlib-sources path)
+             (bail 'CHECK-IMPORT-IO "unknown standard library module" span))
+           path]
+          [(string-prefix? path "pkg/")
+           (validate-library-path path span)
+           (or (for/or ([root (in-list (library-roots span))])
+                 (define candidate (build-path root (substring path 4)))
+                 (and (file-exists? candidate)
+                      (let* ([base (canonical root)]
+                             [target (canonical candidate)]
+                             [base-parts (explode-path base)]
+                             [target-parts (explode-path target)])
+                        ;; Resolve links before checking containment.
+                        (unless (and (>= (length target-parts) (length base-parts))
+                                     (equal? base-parts (take target-parts (length base-parts))))
+                          (bail 'CHECK-IMPORT-PATH "library path escapes its root" span))
+                        target)))
+               (bail 'CHECK-IMPORT-IO "cannot find library module" span))]
+          [(string? key)
+           ;; Relative dependencies of an embedded module stay in std/.
+           (define parent (regexp-replace #rx"[^/]+$" key ""))
+           (resolve-import key (string-append parent path) span)]
+          [else (canonical (build-path (path-only key) path))]))
+      (define (module-source key)
+        (if (string? key) (hash-ref stdlib-sources key) (file->string key)))
+      (define (module-name key)
+        (if (string? key) key (path->string key)))
       (define trees (make-hash))
       (define prefixes (make-hash))
       (define imports (make-hash))
@@ -69,7 +129,7 @@
               (bail 'CHECK-IMPORT-PATH "import paths must end in .agc" span))
             (define target
               (with-handlers ([exn:fail? (lambda (_) (bail 'CHECK-IMPORT-IO "cannot resolve import" span))])
-                (canonical (build-path (path-only key) path))))
+                (resolve-import key path span)))
             (hash-set! aliases alias target)
             (cond
               [(member target active) (bail 'CHECK-IMPORT-CYCLE "import cycle" span)]
@@ -77,7 +137,7 @@
               [else
                (define tokens
                  (with-handlers ([exn:fail? (lambda (_) (bail 'CHECK-IMPORT-IO "cannot read import" span))])
-                   (lex (source (path->string target) (file->string target)))))
+                   (lex (source (module-name target) (module-source target)))))
                (when (diagnostic? tokens) (failed tokens))
                (define parsed (parse tokens))
                (when (diagnostic? parsed) (failed parsed))

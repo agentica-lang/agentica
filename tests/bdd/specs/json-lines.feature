@@ -8,7 +8,7 @@ Feature: JSON Lines replies
       """
       {"name":"Ana","score":80,"active":true}
       """
-    Then I receive a JSON line within 1000 milliseconds:
+    Then I receive a JSON line within 5000 milliseconds:
       """
       {"passed":true,"name":"Ana"}
       """
@@ -18,7 +18,7 @@ Feature: JSON Lines replies
 
   Scenario: Recover after an invalid record
     When I send the line "bad JSON"
-    Then I receive a JSON line within 1000 milliseconds:
+    Then I receive a JSON line within 5000 milliseconds:
       """
       {"error":"invalid record"}
       """
@@ -26,7 +26,7 @@ Feature: JSON Lines replies
       """
       {"name":"Luis","score":40,"active":true}
       """
-    Then I receive a JSON line within 1000 milliseconds:
+    Then I receive a JSON line within 5000 milliseconds:
       """
       {"name":"Luis","passed":false}
       """

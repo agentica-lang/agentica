@@ -34,3 +34,4 @@ jobs:
       - run: racket src/main.rkt examples/json.agc
       - run: dist/agentica examples/json-modules.agc
       - run: dist/agentica check examples/json-modules.agc
+      - run: dist/agentica examples/queue.agc
