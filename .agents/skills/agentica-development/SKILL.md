@@ -239,6 +239,12 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - --allow-run defaults off. evaluate inherits an explicit enclosing allowance for services, and the CLI supplies its flag. run-bdd propagates it to handlers and native children. task.rkt's watcher performs cleanup once on normal completion or supervisor death, then shuts down the run custodian; borrowed ports stay open. Context/cleanup failures have located diagnostics; expected operations return Results.
 - tests/process-test.rkt uses independent Node standard-library children, CLI capability checks, binary/full-duplex streams, nonzero exits, deadline policies and PID cleanup. Node is required in CI; local absence visibly skips. CI also exercises the compiled executable and examples/process-tool.agc with --allow-run.
 
+## Releases
+
+- `src/version.rkt` is the single source of the version: `make version` prints it and `agentica --version` reports it. Keep it in sync with `CHANGELOG.md` and the Git tag.
+- `CHANGELOG.md` follows Keep a Changelog and Semantic Versioning. Add user-visible entries under `## [Unreleased]` as work lands, and move them into a dated version section when tagging.
+- Tag releases with the bare version (`0.1.0`, no `v` prefix). `.github/workflows/release.yml` validates the tag against `src/version.rkt`, builds `dist/agentica`, packages a `raco distribute` bundle, and publishes a GitHub Release with generated notes.
+
 ## Reference
 
 Read `references/stages.md` for the full token-kind table, the diagnostic-code list, the AST node list, and each module's public API. Load it when adding or renaming tokens, AST nodes, or diagnostic codes.

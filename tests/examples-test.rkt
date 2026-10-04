@@ -323,6 +323,9 @@
           (check-equal? (car (cli "--max-steps" value path)) 2)))
       (lambda () (delete-file file))))
 
+  (test-case "CLI --version prints the version and exits 0"
+    (check-equal? (cli "--version") (list 0 "0.1.0\n" "")))
+
   (test-case "CLI exit codes"
     (define hello (path->string (build-path examples-dir "hello.agc")))
     (check-equal? (cli hello) '(0 "hello\n" ""))

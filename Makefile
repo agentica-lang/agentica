@@ -2,7 +2,10 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 
-.PHONY: build test exe clean test-bdd
+.PHONY: build test exe clean test-bdd version
+
+version:
+	@racket -e '(require "src/version.rkt") (display version)'
 
 build:
 	$(RACO) make src/main.rkt

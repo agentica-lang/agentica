@@ -9,7 +9,8 @@
          "lexer.rkt"
          "parser.rkt"
          "modules.rkt"
-         "source.rkt")
+         "source.rkt"
+         "version.rkt")
 
 (module+ main
   (define dump? #f)
@@ -21,6 +22,7 @@
     (command-line
      #:program "agentica"
      #:once-each
+     [("--version") "print the version and exit" (displayln version) (exit 0)]
      [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]
      [("--max-steps") count "limit execution to N expression/statement entries"
       (define parsed (string->number count))
@@ -90,7 +92,7 @@
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
   (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--dump] [--ai|--json] [--max-steps N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--ai|--json] [--max-steps N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
