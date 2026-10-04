@@ -348,11 +348,16 @@ List.append(list: List[T], value: T) -> List[T]
 List.set(list: List[T], index: Int, value: T) -> List[T]
 List.repeat(value: T, count: Int) -> List[T]
 List.reverse(list: List[T]) -> List[T]
+List.map(list: List[A], f: Fn[A, B]) -> List[B]
+List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
 List.concat(a: List[T], b: List[T]) -> List[T]
 List.take(list: List[T], count: Int) -> List[T]
 List.drop(list: List[T], count: Int) -> List[T]
 List.at(list: List[T], index: Int) -> T
 ```
+
+`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a named function reference (`&name`) or a function-valued variable; there are no closures.
 
 `List.concat` joins lists of the same element type and costs O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Counts must be nonnegative (otherwise RUNTIME-INVALID-COUNT at the count argument); counts greater than length return the whole list or an empty list, respectively. Both cost O(n) with the current list representation. `List.at` is zero-based, costs O(n), and reports RUNTIME-INDEX-OUT-OF-RANGE at the index argument for negative or out-of-range indexes, like indexing syntax.
 

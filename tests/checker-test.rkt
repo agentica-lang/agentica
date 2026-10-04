@@ -30,6 +30,39 @@
   (format "def main() -> Void\n~a\nend\n" body))
 
 (module+ test
+  (test-case "list callbacks enforce exact signatures and infer empty inputs"
+    (define callbacks
+      (string-append
+       "def text(n: Int) -> String\n  return String.from_int(n)\nend\n"
+       "def keep(n: Int) -> Bool\n  return n > 0\nend\n"
+       "def join(acc: String, n: Int) -> String\n  return acc + String.from_int(n)\nend\n"
+       "def collect(acc: List[Int], n: Int) -> List[Int]\n  return List.append(acc, n)\nend\n"
+       "def ignore(n: Int) -> Void\nend\n"
+       "def bad(acc: String, n: Int) -> Int\n  return n\nend\n"))
+    (check-ok (string-append callbacks
+               (main-with (string-append
+                "  a = List.map([], &text)\n"
+                "  b = List.filter([], &keep)\n"
+                "  c = List.reduce([], \"\", &join)\n"
+                "  d = List.reduce([1], \"\", &join)\n"
+                "  e = List.reduce([1], [], &collect)"))))
+    (for ([body '("  x = List.map([true], &text)"
+                  "  x = List.map([1], &join)"
+                  "  x = List.map([1], 1)"
+                  "  x: List[Int] = List.map([1], &text)"
+                  "  x = List.filter([1], &text)"
+                  "  x = List.reduce([1], 0, &join)"
+                  "  x = List.reduce([true], \"\", &join)"
+                  "  x = List.reduce([1], \"\", &bad)"
+                  "  x = List.reduce([1], \"\", &text)")])
+      (check-equal? (check-code (string-append callbacks (main-with body)))
+                    'CHECK-TYPE-MISMATCH))
+    (check-equal? (check-code (string-append callbacks
+                                 (main-with "  x = List.map([1], &ignore)")))
+                  'CHECK-VOID-VALUE)
+    (for ([body '("  x = List.map([1])" "  x = List.filter()"
+                  "  x = List.reduce([1], 0)")])
+      (check-equal? (check-code (main-with body)) 'CHECK-ARITY)))
   (test-case "Void completion cannot enter data positions and Nil requires explicit returns"
     (define prefix "def effect() -> Void\nend\n")
     (for ([body '("  value = effect()" "  IO.inspect(effect())" "  value = ok(effect())"

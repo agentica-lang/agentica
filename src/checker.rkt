@@ -503,6 +503,34 @@
          target]
         [(list-size) (list-argument) 'Int]
         [(list-reverse) (list-argument (and (list-type? expected) expected))]
+        [(list-map list-filter list-reduce)
+         (define rule (builtin-rule selected))
+         (define reduce? (eq? rule 'list-reduce))
+         (define callback-expression (last arguments))
+         (define callback (check-expression callback-expression #f))
+         (define arity (if reduce? 2 1))
+         (unless (and (list? callback) (= (length callback) (+ arity 2))
+                      (eq? (car callback) 'Fn))
+           (bail 'CHECK-TYPE-MISMATCH "wrong collection callback type"
+                 (node-span callback-expression)))
+         (define element (if reduce? (caddr callback) (cadr callback)))
+         (define result (last callback))
+         (list-argument (list 'List element))
+         (cond
+           [reduce?
+            (unless (equal? (cadr callback) result)
+              (mismatch! (cadr callback) result (node-span callback-expression)))
+            (check-expression (cadr arguments) result)
+            result]
+           [(eq? rule 'list-filter)
+            (unless (eq? result 'Bool)
+              (mismatch! 'Bool result (node-span callback-expression)))
+            (list 'List element)]
+           [else
+            (when (eq? result 'Void)
+              (bail 'CHECK-VOID-VALUE "map callbacks must return data"
+                    (node-span callback-expression)))
+            (list 'List result)])]
         [(list-concat)
          (define target
            (list-argument
