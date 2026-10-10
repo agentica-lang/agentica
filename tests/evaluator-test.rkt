@@ -258,6 +258,24 @@
     (define bad-number (diagnostic-of (main-with "  x = \"z\".to_i!")))
     (check-equal? (diagnostic-code bad-number) 'RUNTIME-INVALID-NUMBER))
 
+  (test-case "interpolation inserts strings as is and other values in inspect form"
+    (check-equal?
+     (output-of
+      (string-append
+       "struct Item\n  name: String\n  price: Float\nend\n"
+       (main-with (string-append
+        "  n = 3\n  item = Item(name: \"tea\", price: 2.5)\n  names = [\"a\", \"b\"]\n"
+        "  puts(\"n=#{n}, next=#{n + 1}\")\n"
+        "  puts(\"#{item.name} #{item.price} #{item}\")\n"
+        "  puts(\"#{names.join(\", \")} #{names} #{true} #{nil}\")\n"
+        "  puts(\"\\#{n} # #{\"in #{n}\"}#{n}\")"))))
+     (string-append "n=3, next=4\n"
+                    "tea 2.5 Item(name: \"tea\", price: 2.5)\n"
+                    "a, b [\"a\", \"b\"] true nil\n"
+                    "#{n} # in 33\n"))
+    (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = \"#{1 / 0}\"")))
+                  'RUNTIME-DIVISION-BY-ZERO))
+
   (test-case "Ruby operators and compound assignment"
     (check-equal?
      (output-of

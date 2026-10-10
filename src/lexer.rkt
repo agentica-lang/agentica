@@ -78,7 +78,55 @@
         (advance!)
         (loop))))
 
+  (define return-escape #f)
+
+  ;; Scan string text from the current index. Ends at the closing quote or at
+  ;; "#{", which opens an interpolation frame closed by the matching "}".
+  (define (scan-string-body! start piece-start first?)
+    (define decoded (open-output-string))
+    (let string-loop ()
+      (cond
+        [(= index source-length)
+         (return-escape (fail 'LEX-UNTERMINATED-STRING "unterminated string" start))]
+        [(or (char=? (current) #\newline) (char=? (current) #\return))
+         (return-escape (fail 'LEX-UNTERMINATED-STRING "unterminated string" start))]
+        [(char=? (current) #\")
+         (advance!)
+         (emit! (if first? 'string 'interp-end) piece-start (get-output-string decoded))]
+        [(and (char=? (current) #\#) (equal? (peek 1) #\{))
+         (emit! (if first? 'interp-start 'interp-middle) piece-start (get-output-string decoded))
+         (advance!)
+         (advance!)
+         (set! delimiters (cons (list #\# start) delimiters))]
+        [(char=? (current) #\\)
+         (define escape-start (position))
+         (advance!)
+         (when (= index source-length)
+           (return-escape (fail 'LEX-INVALID-ESCAPE "incomplete string escape" escape-start)))
+         (define escaped (current))
+         (define decoded-char
+           (case escaped
+             [(#\") #\"]
+             [(#\\) #\\]
+             [(#\#) #\#]
+             [(#\n) #\newline]
+             [(#\r) #\return]
+             [(#\t) #\tab]
+             [else #f]))
+         (unless decoded-char
+           (advance!)
+           (return-escape (fail 'LEX-INVALID-ESCAPE
+                                (format "unsupported escape \\~a" escaped)
+                                escape-start)))
+         (advance!)
+         (write-char decoded-char decoded)
+         (string-loop)]
+        [else
+         (write-char (advance!) decoded)
+         (string-loop)])))
+
   (let/ec return
+    (set! return-escape return)
     (let scan ()
       (cond
         [(= index source-length)
@@ -89,6 +137,8 @@
            (emit! 'NL start #f))
          (unless (null? delimiters)
            (define opening (car delimiters))
+           (when (interpolation-frame? opening)
+             (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr opening))))
            (return (fail 'LEX-UNCLOSED-DELIMITER
                          (format "unclosed ~a delimiter" (car opening))
                          (cdr opening))))
@@ -106,6 +156,9 @@
               (return (fail 'LEX-UNEXPECTED-CHAR
                             "unexpected carriage return"
                             (position))))
+            (define open-interpolation (findf interpolation-frame? delimiters))
+            (when open-interpolation
+              (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr open-interpolation))))
             (define start (advance-newline!))
             (when (null? delimiters)
               (emit! 'NL start #f))
@@ -150,42 +203,8 @@
            [(char=? char #\")
             (define start (position))
             (advance!)
-            (define decoded (open-output-string))
-            (let string-loop ()
-              (cond
-                [(= index source-length)
-                 (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" start))]
-                [(or (char=? (current) #\newline) (char=? (current) #\return))
-                 (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" start))]
-                [(char=? (current) #\")
-                 (advance!)
-                 (emit! 'string start (get-output-string decoded))
-                 (scan)]
-                [(char=? (current) #\\)
-                 (define escape-start (position))
-                 (advance!)
-                 (when (= index source-length)
-                   (return (fail 'LEX-INVALID-ESCAPE "incomplete string escape" escape-start)))
-                 (define escaped (current))
-                 (define decoded-char
-                   (case escaped
-                     [(#\") #\"]
-                     [(#\\) #\\]
-                     [(#\n) #\newline]
-                     [(#\r) #\return]
-                     [(#\t) #\tab]
-                     [else #f]))
-                 (unless decoded-char
-                   (advance!)
-                   (return (fail 'LEX-INVALID-ESCAPE
-                                 (format "unsupported escape \\~a" escaped)
-                                 escape-start)))
-                 (advance!)
-                 (write-char decoded-char decoded)
-                 (string-loop)]
-                [else
-                 (write-char (advance!) decoded)
-                 (string-loop)]))]
+            (scan-string-body! start start #t)
+            (scan)]
            [else
             (define start (position))
             (define two-char
@@ -216,15 +235,25 @@
                             (format "unexpected character ~s" char)
                             start)))
             (for ([unused (in-string lexeme)]) (advance!))
-            (when (memq kind '(left-paren left-bracket left-brace))
-              (set! delimiters (cons (cons char start) delimiters)))
-            (when (memq kind '(right-paren right-bracket right-brace))
-              (define expected (case char [(#\)) #\(] [(#\]) #\[] [else #\{]))
-              (unless (and (pair? delimiters)
-                           (char=? (caar delimiters) expected))
-                (return (fail 'LEX-UNMATCHED-DELIMITER
-                              (format "unmatched ~a delimiter" char)
-                              start)))
-              (set! delimiters (cdr delimiters)))
-            (emit! kind start lexeme)
-            (scan)])]))))
+            (cond
+              [(and (eq? kind 'right-brace) (pair? delimiters) (interpolation-frame? (car delimiters)))
+               (define frame (car delimiters))
+               (set! delimiters (cdr delimiters))
+               (scan-string-body! (cadr frame) start #f)
+               (scan)]
+              [else
+               (when (memq kind '(left-paren left-bracket left-brace))
+                 (set! delimiters (cons (cons char start) delimiters)))
+               (when (memq kind '(right-paren right-bracket right-brace))
+                 (define expected (case char [(#\)) #\(] [(#\]) #\[] [else #\{]))
+                 (unless (and (pair? delimiters)
+                              (char=? (caar delimiters) expected))
+                   (return (fail 'LEX-UNMATCHED-DELIMITER
+                                 (format "unmatched ~a delimiter" char)
+                                 start)))
+                 (set! delimiters (cdr delimiters)))
+               (emit! kind start lexeme)
+               (scan)])])]))))
+
+(define (interpolation-frame? frame)
+  (eqv? (car frame) #\#))

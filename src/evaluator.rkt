@@ -261,6 +261,14 @@
            (mapping-put result
                         (eval-expression (map-entry-key entry))
                         (eval-expression (map-entry-value entry))))]
+        [(interpolation? expression)
+         (apply string-append
+                (for/list ([part (in-list (interpolation-parts expression))])
+                  (cond
+                    [(string? part) part]
+                    [else
+                     (define value (eval-expression part))
+                     (if (string? value) value (value->debug-string value))])))]
         [(field-access? expression)
          (hash-ref (instance-fields (eval-expression (field-access-target expression)))
                    (field-access-name expression))]

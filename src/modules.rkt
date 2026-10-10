@@ -241,6 +241,8 @@
           [(map-entry key value span) (map-entry (walk key) (walk value) span)]
           [(field-access target name span _) (field-access (walk target) name span)]
           [(method-call target name args span _) (method-call (walk target) name (walks args) span)]
+          [(interpolation parts span)
+           (interpolation (for/list ([part (in-list parts)]) (if (string? part) part (walk part))) span)]
           [(index-access target index span) (index-access (walk target) (walk index) span)]
           [(try-expr operand span) (try-expr (walk operand) span)]
           [(unary op op-span operand span) (unary op op-span (walk operand) span)]

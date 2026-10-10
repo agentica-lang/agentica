@@ -544,6 +544,11 @@
                                                     "def inc(x: Int) -> Int\n  return x + 1\nend\n"
                                                     (main-with "  b = Box(handler: &inc)\n  x = b.handler(1)"))))))
 
+  (test-case "interpolation is a String and rejects Void parts"
+    (check-ok (main-with "  n = 1\n  s: String = \"#{n} #{[n]} #{n.to_f}\""))
+    (check-equal? (check-code (main-with "  x = \"#{puts(\"a\")}\"")) 'CHECK-VOID-VALUE)
+    (check-equal? (check-code (main-with "  x = \"#{missing}\"")) 'CHECK-UNKNOWN-NAME))
+
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  x += \"a\"")) 'CHECK-TYPE-MISMATCH)

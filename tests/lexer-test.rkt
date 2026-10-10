@@ -37,6 +37,25 @@
     (check-equal? (kinds (lex-text "a&&!b||c\nx+=1"))
                   '(name and not name or name NL name plus-assign integer NL EOF)))
 
+  (test-case "interpolated strings split into pieces around expression tokens"
+    (define result (lex-text "x = \"a#{n + {\"k\": 1}[\"k\"]}b#{\"q\"}c\\#{d}\""))
+    (check-equal? (kinds result)
+                  '(name assign interp-start name plus left-brace string colon integer right-brace
+                    left-bracket string right-bracket interp-middle string interp-end NL EOF))
+    (check-equal? (map token-value (filter (lambda (t) (memq (token-kind t) '(interp-start interp-middle interp-end)))
+                                           result))
+                  '("a" "b" "c#{d}"))
+    (check-equal? (map token-lexeme (filter (lambda (t) (memq (token-kind t) '(interp-middle interp-end)))
+                                            result))
+                  '("}b" "}c\\#{d}\""))
+    (check-equal? (source-position-column (source-span-start (token-span (list-ref result 2)))) 5)
+    (check-equal? (kinds (lex-text "\"plain # text\"")) '(string NL EOF))
+    (for ([text '("x = \"a#{n\n}\"" "x = \"a#{n" "x = \"#{n}")])
+      (define problem (lex-text text))
+      (check-true (diagnostic? problem) text)
+      (check-equal? (diagnostic-code problem) 'LEX-UNTERMINATED-STRING text)
+      (check-equal? (source-position-column (source-span-start (diagnostic-span problem))) 5 text)))
+
   (test-case "CRLF and comment newlines produce one NL each"
     (check-equal? (kinds (lex-text "x # comment\r\ny\r\n"))
                   '(name NL name NL EOF)))

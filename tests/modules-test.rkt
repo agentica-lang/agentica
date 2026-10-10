@@ -38,6 +38,14 @@
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "2\n"))))
 
+  (test-case "interpolation in an imported function reaches that file's private helpers"
+    (with-files
+     '(("lib.agc" . "def twice(n: Int) -> Int\n  return n * 2\nend\nexport def label(n: Int) -> String\n  return \"n=#{twice(n)}\"\nend\n")
+       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  puts(Lib.label(3))\nend\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "n=6\n"))))
+
   (test-case "embedded String queue preserves FIFO and old values without local std files"
     (with-files
      '(("std/queue.agc" . "this local file must not be loaded\n")

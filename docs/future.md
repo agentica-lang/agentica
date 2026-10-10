@@ -12,7 +12,6 @@ Generic enums and exhaustive Elixir-style `case` matching are implemented. Their
 
 | Extension | Direction | Pending decisions |
 |---|---|---|
-| Interpolation | Specified in [section 11](#11-ruby-style-ergonomics) | — |
 | Function generics | Reuse functions with different types | Syntax, inference, and constraints |
 | Closures and methods | Blocks and methods on builtin types are specified in [section 11](#11-ruby-style-ergonomics); user methods remain open ([module attachment](#7-possible-metatables-ruby-style-modules)) | Standalone lambdas; methods on user types |
 | Modules | Group behavior and split programs into files | Import, visibility, cycles, and module attachment (section 7) |
@@ -273,12 +272,9 @@ Agentica is presented as "Ruby with types". The evaluation logs (`docs/eval-diag
 
 Methods, the Ruby aliases and `CHECK-UNUSED-VALUE` are in `grammar.md`.
 
-### 11.3 String interpolation
+### 11.3 String interpolation (implemented)
 
-- `"text #{expression} text"` builds a `String`. A `String` value is inserted as is; any other data value uses its `IO.inspect` form (`7`, `2.5`, `true`, `nil`, `[1, 2]`, `Item(name: "a")`). A Void call is `CHECK-VOID-VALUE`.
-- `\#` writes a literal `#`. A string without `#{` is unchanged.
-- The expression must stay on the same line and cannot contain comments. Strings may appear inside it: `"#{names.join(", ")}"`.
-- Before this change, `#{` inside a string was plain text. Strings that need it literally must use `\#{`.
+Interpolation and the `\#` escape are in `grammar.md`.
 
 ### 11.4 Blocks and closures
 
