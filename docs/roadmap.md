@@ -1020,14 +1020,9 @@ Rules for every subphase:
 - No placeholder files, directories or opcodes for later subphases.
 - C naming: every exported function, type and global of the VM library uses the `agc_` prefix (`agc_value`, `agc_vm_run`); macros and enum constants use `AGC_` (`AGC_OP_ADD`). File-local helpers are `static`, so they need no prefix.
 
-### 7a: Baseline measurements
+### 7a: Baseline measurements (merged into 7g)
 
-- [ ] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
-- [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt` and `dist/agentica`.
-- [ ] Record the numbers, machine and Racket version in `docs/vm-benchmarks.md`.
-- [ ] Profile the evaluator once to see where time goes (scope lookup, dispatch, allocation).
-
-**Done when:** we have a baseline to compare every later subphase against.
+The Racket evaluator stays in the repository until 7i, so it can be measured at any time. Profiling a Racket tree walker does not inform the design of a C VM. All measurement work therefore happens in 7g, when both backends run the same programs.
 
 ### 7b: Design decisions (`docs/vm.md`)
 
@@ -1085,8 +1080,11 @@ Rules for every subphase:
 
 ### 7g: Speed check
 
-- [ ] Re-run the 7a benchmarks on the VM and record them in `docs/vm-benchmarks.md`.
-- [ ] Fix the largest hot spots (instruction dispatch, list/map representation, string indexing).
+- [ ] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
+- [ ] Compare three runners on the same inputs: the Racket evaluator, the VM, and the Python reference solutions in `tests/eval/tasks/` as an outside reference.
+- [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt`, `dist/agentica` and the VM.
+- [ ] Record the numbers, machine and tool versions in `docs/vm-benchmarks.md`.
+- [ ] Fix the largest VM hot spots (instruction dispatch, list/map representation, string indexing).
 
 **Done when:** the numbers show whether the VM is worth finishing; decide here before 7h.
 
