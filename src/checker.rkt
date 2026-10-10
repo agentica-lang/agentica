@@ -89,8 +89,42 @@
     [(eq? value 'nil) 'Nil]
     [else '?]))
 
+(define foreign-names
+  (hash "len" "use x.size for lists and maps, or s.length for strings"
+        "str" "use x.to_s, or interpolation: \"#{x}\""
+        "print" "use puts(x), or IO.print(x) to write without a newline"
+        "println" "use puts(x)"
+        "input" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "read_line" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "readline" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "gets" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "range" "there is no range; use a while loop with a counter, or for over a list"
+        "int" "use s.to_i (a Result) or s.to_i! for a String, f.to_i for a Float"
+        "float" "use n.to_f for an Int, s.to_f (a Result) or s.to_f! for a String"
+        "Int.to_float" "use n.to_f"
+        "Int.to_string" "use n.to_s"
+        "Int.parse" "use s.to_i (a Result) or s.to_i!"
+        "Float.to_string" "use x.to_s"
+        "null" "use nil"
+        "None" "use nil"
+        "nil?" "compare with nil: x == nil"))
+
+(define foreign-methods
+  (hash "to_string" "use .to_s"
+        "to_str" "use .to_s"
+        "len" "use .size for lists and maps, or .length for strings"
+        "lower" "use .downcase"
+        "upper" "use .upcase"
+        "startswith" "use .start_with?"
+        "endswith" "use .end_with?"
+        "to_int" "use .to_i"
+        "to_float" "use .to_f"))
+
 (define (conversion-help expected actual)
   (cond
+    [(and (result-type? actual) (equal? (cadr actual) expected))
+     (format "this is ~a; unwrap it with a ! form such as s.to_i!, with Result.unwrap!(...), or with try inside a function that returns Result"
+             (type->string actual))]
     [(and (eq? expected 'String) (eq? actual 'Int)) "convert it with String.from_int(...)"]
     [(and (eq? expected 'String) (eq? actual 'Float)) "convert it with String.from_float(...)"]
     [(and (eq? expected 'Int) (eq? actual 'String)) "convert it with String.to_int!(...)"]
@@ -404,7 +438,8 @@
         (cond
           [(type-expression? expression)
            (bail 'CHECK-TYPE-MISMATCH "a type name is only valid as a JSON type argument"
-                 (node-span expression))]
+                 (node-span expression)
+                 #:help (hash-ref foreign-names (type-expression-name expression) #f))]
           [(literal? expression)
            (when (and (exact-integer? (literal-value expression))
                       (> (literal-value expression) int-max))
@@ -422,7 +457,8 @@
                                (name-ref-name expression))
                        (format "unknown name \"~a\"" (name-ref-name expression)))
                    (name-ref-span expression)
-                   #:help (did-you-mean (name-ref-name expression) (visible-names))))
+                   #:help (or (hash-ref foreign-names (name-ref-name expression) #f)
+                              (did-you-mean (name-ref-name expression) (visible-names)))))
            (car binding)]
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]
@@ -835,7 +871,8 @@
         (bail 'CHECK-UNKNOWN-NAME
               (format "unknown function \"~a\"" name)
               (call-span expression)
-              #:help (did-you-mean name (append (hash-keys functions) (hash-keys builtins)))))
+              #:help (or (hash-ref foreign-names name #f)
+                         (did-you-mean name (append (hash-keys functions) (hash-keys builtins))))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))
@@ -1014,7 +1051,8 @@
                        [(struct-type? target)
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]
-                       [kind (or (did-you-mean name (method-names kind))
+                       [kind (or (hash-ref foreign-methods name #f)
+                                 (did-you-mean name (method-names kind))
                                  (format "~a methods: ~a" (type->string target)
                                          (string-join (sort (method-names kind) string<?) ", ")))]
                        [else #f])))

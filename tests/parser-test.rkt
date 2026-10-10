@@ -108,6 +108,15 @@
     (parse-ok "import \"a.agc\" as A\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend")
     (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE))
 
+  (test-case "elif and else if point to elsif"
+    (for ([text '("def main() -> Void\n  if true\n    x = 1\n  elif false\n    x = 2\n  end\nend\n"
+                  "def main() -> Void\n  if true\n    x = 1\n  elseif false\n    x = 2\n  end\nend\n"
+                  "def main() -> Void\n  if true\n    x = 1\n  else if false\n    x = 2\n  end\n  end\nend\n")])
+      (define problem (parse-text text))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN text)
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 4 text)
+      (check-regexp-match #rx"elsif" (diagnostic-help problem) text)))
+
   (test-case "hello program parses"
     (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n"))
     (check-equal? (length (program-declarations program)) 1)

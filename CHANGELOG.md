@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Hints for habits from other languages: `len`, `str`, `print`, `input`,
+  `range`, `int`/`float`, `None`/`null`, `elif`/`else if`, Python-style
+  string methods, and a `Result[T]` used where `T` is expected.
 - Blocks and closures: `xs.map do |x| x * 2 end` as the last argument of a
   call, capturing values when created; usable anywhere a `Fn` is, including
   `Task.spawn`, HTTP callbacks and `BDD.step`. New diagnostics

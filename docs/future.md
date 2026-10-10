@@ -284,16 +284,4 @@ Still open: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), methods o
 
 ### 11.5 Hints for foreign habits
 
-Names from other languages get a grounded `help` that names the Agentica form:
-
-| Written | Help |
-|---|---|
-| `len(x)` | `x.size` for lists and maps, `s.length` for strings |
-| `str(x)`, `x.to_string()` | `x.to_s` |
-| `print(x)` | `puts(x)` or `IO.print(x)` |
-| `input()`, `read_line()`, `gets` | `IO.gets()` |
-| `range(n)` | a `while` loop, or `for` over a list |
-| `Int.to_float(n)`, `float(n)`, `int(x)` | `n.to_f`, `x.to_i` |
-| `None`, `null` | `nil` |
-| `elif`, `elseif`, `else if` | `elsif` |
-| `x.to_i` used as an `Int` | `to_i` returns `Result[Int]`; use `x.to_i!` or `try x.to_i` |
+Implemented: the hints are listed in `grammar.md`, section 7.

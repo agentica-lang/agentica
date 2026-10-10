@@ -57,8 +57,8 @@
         (loop))))
 
   (let/ec return
-    (define (bail code message token)
-      (return (diagnostic code message (token-span token))))
+    (define (bail code message token #:help [help #f])
+      (return (diagnostic code message (token-span token) #:help help)))
 
     (define (expect expected description [suffix? #f])
       (if (and (kind? expected)
@@ -436,6 +436,11 @@
                      "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, Map.put(map, key, value))"
                      "the core only assigns to a plain name")
                  (current)))
+         (when (and (name-ref? value) (member (name-ref-name value) '("elif" "elseif")))
+           (bail 'PARSE-UNEXPECTED-TOKEN
+                 (format "\"~a\" is not a keyword" (name-ref-name value))
+                 start
+                 #:help "write elsif: if a ... elsif b ... else ... end"))
          (when (and (name-ref? value) (not (statement-end?)))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "expected a newline after the statement; calls need parentheses, as in ~a(...)"
@@ -477,6 +482,9 @@
         (if (kind? 'else)
             (begin
               (advance!)
+              (when (kind? 'if)
+                (bail 'PARSE-UNEXPECTED-TOKEN "expected a newline after else, found \"if\"" (current)
+                      #:help "write elsif instead of else if"))
               (expect 'NL "a newline after else")
               (parse-block))
             #f))

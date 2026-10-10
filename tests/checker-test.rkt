@@ -583,6 +583,25 @@
     (check-equal? (check-code (main-with "  ys = [1].map do |x: String| x end")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  [\"a\"].each do |s|\n    s.strip\n  end")) 'CHECK-UNUSED-VALUE))
 
+  (test-case "habits from other languages get a hint with the Agentica form"
+    (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")
+                   ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
+                   ("  print(\"a\")" CHECK-UNKNOWN-NAME "puts")
+                   ("  x = input()" CHECK-UNKNOWN-NAME "IO\\.gets")
+                   ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
+                   ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
+                   ("  x = null" CHECK-UNKNOWN-NAME "nil")
+                   ("  x = None" CHECK-TYPE-MISMATCH "nil")
+                   ("  n = 2\n  x = n.to_float" CHECK-UNKNOWN-METHOD "\\.to_f")
+                   ("  x = \"a\".lower" CHECK-UNKNOWN-METHOD "downcase")
+                   ("  x = \"a\".to_string()" CHECK-UNKNOWN-METHOD "to_s")
+                   ("  n: Int = \"4\".to_i" CHECK-TYPE-MISMATCH "to_i!"))])
+      (define problem (check-text (main-with (car entry))))
+      (check-equal? (diagnostic-code problem) (cadr entry) (car entry))
+      (check-regexp-match (pregexp (caddr entry)) (diagnostic-help problem) (car entry)))
+    (define unknown (check-text (main-with "  x = 1\n  y = len(x)")))
+    (check-equal? (source-position-line (source-span-start (diagnostic-span unknown))) 3))
+
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  x += \"a\"")) 'CHECK-TYPE-MISMATCH)
