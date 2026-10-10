@@ -138,7 +138,7 @@
              (case expected
                [(Int) "s.to_i!"]
                [(Float) "s.to_f!"]
-               [(String) "IO.gets!()"]
+               [(String) "gets!"]
                [else "such as s.to_i!"]))]
     [(and (eq? expected 'String) (eq? actual 'Int)) "convert it with String.from_int(...)"]
     [(and (eq? expected 'String) (eq? actual 'Float)) "convert it with String.from_float(...)"]

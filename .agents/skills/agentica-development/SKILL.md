@@ -12,7 +12,7 @@ Read the active phase in the roadmap before adding code. Implement only what tha
 ## Commands
 
 ```sh
-make test JOBS=4                          # every stage test, in parallel
+make test                                 # every stage test, in parallel
 make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
 racket src/main.rkt check examples/blocks.agc
@@ -57,6 +57,7 @@ tests/
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
+  bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 examples/               # small programs per feature; README.md lists them
 docs/

@@ -153,8 +153,9 @@ Struct, enum, and function declarations appear only at the top level. There are 
 
 Each file is a module. Use `import "models.agc" as Models` at the top level.
 Relative paths ending in .agc resolve from the importing file, not the working
-directory. Canonical paths identify files; each file is linked once. Cycles and
-missing/unreadable imports give located `CHECK-IMPORT-IO` or `CHECK-IMPORT-PATH` diagnostics.
+directory. Canonical paths identify files; each file is linked once. Cycles give
+`CHECK-IMPORT-CYCLE`; missing or unreadable imports give `CHECK-IMPORT-IO`, and
+invalid paths give `CHECK-IMPORT-PATH`. Each is located at the import.
 
 `export struct User ... end`, `export enum Option[T] ... end`, and `export def greet(...) ... end` expose
 declarations; everything else is private. Use `Models.User` in annotations and
