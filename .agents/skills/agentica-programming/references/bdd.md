@@ -45,3 +45,17 @@ BDD.then_stderr(expected: String) -> Void
 `BDD.run` accepts a file or directory. An infrastructure failure returns an error Result. A completed evaluation returns JSON containing `ok`, `passed`, `failed`, `not_executed`, `file_errors`, `exit_code`, and detailed `files`. A successful Result can contain failed tests: inspect `JSON.bool(Result.unwrap!(JSON.get(report, "ok")))` and choose `System.exit(1)` when false. The CLI enforces this automatically. `BDD.run` is unavailable recursively inside handlers.
 
 Only registration permits `BDD.step`; actions/state/assertions require a running scenario. Missing Doc Strings/tables halt; absent state returns an error Result. Every `Then` (including its And/But) must perform a BDD assertion. Premature System.exit, even zero, fails. Failure stops only that scenario's remaining steps, marked `not_executed`; other scenarios/files continue. Each scenario starts with empty state and a fresh local process, executing Background again. Programs run with host permissions and environment, with the feature directory as their working directory; BDD provides no filesystem or network isolation. Timeouts are positive; each scenario has 30 seconds, operations without explicit deadlines 5 seconds, each callback one million evaluator steps, each stream 1 MiB. Scenario cleanup terminates processes and closes their ports on all outcomes.
+
+## Diagnostics
+
+`agentica test` reports the first problem of each kind with a stable code:
+
+| Code | Meaning |
+|---|---|
+| `PARSE-GHERKIN-HEADER`, `PARSE-GHERKIN-STEP`, `PARSE-GHERKIN-ARGUMENT`, `PARSE-GHERKIN-TABLE`, `PARSE-GHERKIN-EXAMPLES`, `PARSE-GHERKIN-TAGS`, `PARSE-GHERKIN-EMPTY`, `PARSE-GHERKIN-PARAMETER`, `PARSE-GHERKIN-UNSUPPORTED` | the `.feature` file breaks the supported Gherkin subset (section order, a step outside a scenario, a Doc String or table in the wrong place, bad Examples, misplaced tags, a Feature without scenarios or a Background without steps, an Examples column missing for a `<parameter>`, a non-English keyword) |
+| `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY` | no step pattern matches, more than one matches, or no `.feature` files were found |
+| `RUNTIME-BDD-ASSERTION`, `RUNTIME-BDD-NO-ASSERTION` | an expectation failed, or a `Then` step or a whole scenario made no BDD assertion |
+| `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT` | an operation passed its deadline or got a bad timeout, or a step handler (or handler registration) called `System.exit` |
+| `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON` | a BDD call outside a scenario or step registration, a handler `main` that does more than register steps, or a step out of order (two programs, no program); a missing `.agc` program, a JSON expectation that is not valid JSON |
+| `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS` | a step pattern registered twice, an invalid pattern, a handler that left tasks running |
+| `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`, `RUNTIME-BDD-USAGE` | program output over 1 MiB, an I/O failure, a missing executable, a missing feature path or a step file that cannot be loaded, bad command-line usage |

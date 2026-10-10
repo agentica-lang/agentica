@@ -33,7 +33,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-TRY-CONTEXT` | try in a function not returning Result |
 | `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function |
 | `CHECK-MAIN` | missing or wrong `main` |
-| `CHECK-NOT-A-STRUCT`, `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | field access on a non-struct, index on a non-list/map, `for` over a non-list |
+| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map, `for` over a non-list |
+| `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE` | unknown enum variant, named arguments to a variant, generic enum type not known from payloads or context |
+| `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, `CHECK-UNREACHABLE-CASE-ARM` | a pattern that does not fit the value, a `case` missing variants or `_`, an arm already covered |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
 | `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path, cycle, or unknown/private imported name |
 | `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |
@@ -58,3 +60,6 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
+| `RUNTIME-INVALID-DURATION`, `RUNTIME-TASK-CONTEXT`, `RUNTIME-TASK-CANCELLED` | negative `Task.sleep` duration, awaiting a task from another execution, awaiting work cancelled by shutdown (see `tasks.md`) |
+
+BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and `RUNTIME-BDD-*` codes; see `bdd.md`.

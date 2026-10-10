@@ -153,8 +153,9 @@ Struct, enum, and function declarations appear only at the top level. There are 
 
 Each file is a module. Use `import "models.agc" as Models` at the top level.
 Relative paths ending in .agc resolve from the importing file, not the working
-directory. Canonical paths identify files; each file is linked once. Cycles and
-missing/unreadable imports give located CHECK-IMPORT diagnostics.
+directory. Canonical paths identify files; each file is linked once. Cycles give
+`CHECK-IMPORT-CYCLE`; missing or unreadable imports give `CHECK-IMPORT-IO`, and
+invalid paths give `CHECK-IMPORT-PATH`. Each is located at the import.
 
 `export struct User ... end`, `export enum Option[T] ... end`, and `export def greet(...) ... end` expose
 declarations; everything else is private. Use `Models.User` in annotations and
@@ -415,7 +416,7 @@ ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(n
 
 Enums are nominal sum types and may declare type parameters. Variant names are qualified by the enum; payloads are positional, and a nullary variant is constructed with or without empty parentheses (`Command.Show` or `Command.Show()`). Constructor type parameters are inferred from payloads and the expected enum type; unresolved or conflicting parameters are errors. Imported enum variants use the import alias plus enum and variant names.
 
-`case value do ... end` is a statement; the `do` is optional. An arm may put one simple statement on the arrow line (`1 -> puts("one")`); more lines of the same arm may follow. Patterns are primitive literals, `_`, `ok(...)`/`error(...)` for Results, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
+`case value ... end` is a statement; a `do` after the value is allowed but not needed. An arm may put one simple statement on the arrow line (`1 -> puts("one")`); more lines of the same arm may follow. Patterns are primitive literals, `_`, `ok(...)`/`error(...)` for Results, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
 
 ```ruby
 enum Option[T]
@@ -424,7 +425,7 @@ enum Option[T]
 end
 
 def display(option: Option[Int]) -> Void
-  case option do
+  case option
     Option.Some(item) -> puts(String.from_int(item))
     Option.None -> puts("empty")
   end
@@ -1018,7 +1019,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `None`, `null` | `nil` |
 | `elif`, `elseif`, `else if` | `elsif` |
 | `let x = 5`, `var x = 5`, `const x = 5` | `x = 5` or `x: Int = 5` |
-| `match x`, `when 1` in a `case` | `case x do`, arms as `1 -> ...` |
+| `match x`, `when 1` in a `case` | `case x`, arms as `1 -> ...` |
 | `if x then` | a newline after the condition |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |

@@ -71,7 +71,7 @@ def main() -> Void
   count = 0
   while !IO.eof?()
     line = IO.gets!()
-    case parse_numbers(line) do
+    case parse_numbers(line)
       Result.Ok(numbers) ->
         total += numbers.reduce(0) do |sum, n| sum + n end
         count += numbers.size

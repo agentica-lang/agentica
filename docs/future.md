@@ -260,7 +260,7 @@ polling and arbitrary descendant-tree supervision remain future designs.
 
 ## 11. Ruby-style ergonomics
 
-Status: specified, planned next (roadmap "Ruby-style ergonomics"). Each part moves to `grammar.md` and the programming reference when its pull request lands.
+Status: implemented (roadmap "Ruby-style ergonomics"); the specification moved to `grammar.md` and the programming skill. What is still open is listed in 11.4. The rule below still decides which new forms to accept.
 
 Agentica is presented as "Ruby with types". The evaluation logs (`docs/eval-diagnostics.md`) show that most agent errors are Ruby and Python habits: `s.length`, `x.to_i`, `!a`, `a && b`, `x += 1`. This section accepts the Ruby forms that keep static checking and immutable values, so the model's habits become valid code. The module forms stay valid; the Ruby forms become the style taught in the programming skill.
 

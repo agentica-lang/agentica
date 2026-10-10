@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Docs: `case x` without `do` is the taught form (the `do` stays optional);
+  BDD and enum diagnostic codes are documented; the README, roadmap,
+  development skill and AGENTS.md match the current code. The `input`/
+  `read_line` hints suggest `gets`.
 - `print`, `gets` and `gets!` are reserved builtin names; a user function
   with one of these names no longer checks.
 - The programming skill is split for token efficiency: the core language is in
