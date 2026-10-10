@@ -146,6 +146,8 @@ Every stage follows the same shape; keep new stages consistent with it.
 
 The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including every blank/comment line, so extra lines between statements can leave more than one `NL` token. The grammar's `program` and `block` rules do not model this. The parser therefore skips stray `NL` at the top level and between statements. Keep that skip when adding statement forms, or valid files with comments between statements will fail to parse.
 
+Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK-LINE`, checked in `parse-program` from the NL tokens). The rule only fires when the next token starts a declaration or import, so stray text after `end` stays `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end each top-level `end` with `end\n\n`, so fragments can be joined safely.
+
 ## Error handling
 
 - `raco test tests/` failure: read the failing `test-case` name and the message from the `parse-ok`/`parse-code` helper. A `parse-ok` failure prints the diagnostic the stage returned.

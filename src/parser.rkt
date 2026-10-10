@@ -102,6 +102,12 @@
       (define start (current))
       (define declarations
         (let loop ([acc '()])
+          (when (and (pair? acc)
+                     (not (import-decl? (car acc)))
+                     (ormap kind? '(def struct enum export import)))
+            (bail 'PARSE-MISSING-BLANK-LINE
+                  "expected a blank line after the end of a declaration"
+                  (current)))
           (skip-newlines!)
           (cond
             [(kind? 'EOF) (reverse acc)]

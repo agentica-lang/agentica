@@ -24,7 +24,7 @@
       (error 'parser-test "expected a diagnostic for ~s, got a program" text)))
 
 (define (parse-expr text)
-  (define program (parse-ok (format "def f() -> Int\n  x = ~a\nend\n" text)))
+  (define program (parse-ok (format "def f() -> Int\n  x = ~a\nend\n\n" text)))
   (define fn (car (program-declarations program)))
   (binding-value (car (function-decl-body fn))))
 
@@ -37,7 +37,7 @@
     (define reference (parse-expr "&done?"))
     (check-equal? (function-ref-name reference) "done?")
     (check-equal? (source-position-column (source-span-start (node-span reference))) 7)
-    (check-equal? (parse-code "def main() -> Void\n  f = &\nend\n") 'PARSE-UNEXPECTED-TOKEN))
+    (check-equal? (parse-code "def main() -> Void\n  f = &\nend\n\n") 'PARSE-UNEXPECTED-TOKEN))
   (test-case "try has unary precedence and a source span"
     (define expression (parse-expr "try ok(1) + 2"))
     (check-true (binary? expression))
@@ -46,7 +46,7 @@
     (check-equal? (source-position-column
                    (source-span-start (node-span (binary-left expression)))) 7)
     (check-true (try-expr? (parse-expr "try (ok(1))")))
-    (check-equal? (parse-code "def main() -> Void\n  ready? = true\nend\n")
+    (check-equal? (parse-code "def main() -> Void\n  ready? = true\nend\n\n")
                   'PARSE-UNEXPECTED-TOKEN))
 
   (test-case "Ruby operators share the not/and/or nodes and compound assignment desugars"
@@ -54,7 +54,7 @@
     (check-equal? (binary-op expression) 'or)
     (check-equal? (binary-op (binary-left expression)) 'and)
     (check-equal? (unary-op (binary-left (binary-left expression))) 'not)
-    (define program (parse-ok "def main() -> Void\n  total = 1\n  total -= 2 * 3\nend\n"))
+    (define program (parse-ok "def main() -> Void\n  total = 1\n  total -= 2 * 3\nend\n\n"))
     (define statement (cadr (function-decl-body (car (program-declarations program)))))
     (check-true (binding? statement))
     (check-false (binding-type statement))
@@ -64,7 +64,7 @@
     (check-equal? (binary-op (binary-right value)) 'multiply)
     (check-equal? (source-position-column (source-span-start (binary-op-span value))) 9)
     (for ([body '("  xs[0] += 1" "  f() *= 2" "  1 %= 2")])
-      (check-equal? (parse-code (format "def main() -> Void\n~a\nend\n" body))
+      (check-equal? (parse-code (format "def main() -> Void\n~a\nend\n\n" body))
                     'PARSE-INVALID-ASSIGNMENT-TARGET)))
 
   (test-case "interpolation keeps text and expression parts in order"
@@ -76,9 +76,9 @@
     (check-equal? (name-ref-name (caddr parts)) "m")
     (check-equal? (length parts) 3)
     (check-equal? (source-position-column (source-span-start (node-span expression))) 7)
-    (check-equal? (parse-code "def main() -> Void\n  x = \"#{1 2}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def main() -> Void\n  x = \"#{}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN)
-    (define empty-part (parse-text "def main() -> Void\n  x = \"a #{} b\"\nend\n"))
+    (check-equal? (parse-code "def main() -> Void\n  x = \"#{1 2}\"\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-equal? (parse-code "def main() -> Void\n  x = \"#{}\"\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
+    (define empty-part (parse-text "def main() -> Void\n  x = \"a #{} b\"\nend\n\n"))
     (check-equal? (source-position-column (source-span-start (diagnostic-span empty-part))) 12))
 
   (test-case "blocks attach to calls as the last argument"
@@ -95,7 +95,7 @@
     (check-true (expr-stmt? (car (block-lit-body (caddr (call-args one-line))))))
     (check-equal? (block-lit-params (car (call-args (parse-expr "f() do\n    return 1\n  end")))) '())
     (define scrutinee
-      (parse-ok "def main() -> Void\n  case f() do\n    _ ->\n      puts(\"a\")\n  end\n  case (xs.map do |x| x end) do\n    _ ->\n      puts(\"b\")\n  end\nend\n"))
+      (parse-ok "def main() -> Void\n  case f() do\n    _ ->\n      puts(\"a\")\n  end\n  case (xs.map do |x| x end) do\n    _ ->\n      puts(\"b\")\n  end\nend\n\n"))
     (check-true (call? (case-stmt-value (car (function-decl-body (car (program-declarations scrutinee)))))))
     (check-equal? (parse-code "def main() -> Void\n  xs.each do || puts(\"a\") end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
     (check-equal? (parse-code "def main() -> Void\n  x = 1 do\n  end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
@@ -108,8 +108,18 @@
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2 text))
     (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    puts(x)\n") 'PARSE-UNCLOSED-BLOCK))
 
+  (test-case "declarations need a blank line after their end"
+    (define problem (parse-text "struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n"))
+    (check-equal? (diagnostic-code problem) 'PARSE-MISSING-BLANK-LINE)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 4)
+    (parse-ok "import \"a.agc\" as A\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend")
+    (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE)
+    (check-equal? (parse-code "enum E\n  A\nend\nimport \"a.agc\" as A\n") 'PARSE-MISSING-BLANK-LINE)
+    (check-equal? (parse-code "def f() -> Void\nend\nend\n") 'PARSE-TOP-LEVEL-STATEMENT)
+    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT))
+
   (test-case "hello program parses"
-    (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
+    (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n"))
     (check-equal? (length (program-declarations program)) 1)
     (define fn (car (program-declarations program)))
     (check-true (function-decl? fn))
@@ -132,7 +142,7 @@
                  "  else\n"
                  "    return \"child\"\n"
                  "  end\n"
-                 "end\n")))
+                 "end\n\n")))
     (define fn (car (program-declarations program)))
     (check-equal? (length (function-decl-params fn)) 1)
     (define node (car (function-decl-body fn)))
@@ -146,7 +156,7 @@
                  "struct Todo\n"
                  "  title: String\n"
                  "  done: Bool\n"
-                 "end\n"
+                 "end\n\n"
                  "\n"
                  "def main() -> Void\n"
                  "  tasks: List[Todo] = [\n"
@@ -158,7 +168,7 @@
                  "      puts(task.title)\n"
                  "    end\n"
                  "  end\n"
-                 "end\n")))
+                 "end\n\n")))
     (check-equal? (length (program-declarations program)) 2)
     (define struct (car (program-declarations program)))
     (check-true (struct-decl? struct))
@@ -221,7 +231,7 @@
                  "def f(x: List[List[Int]]) -> List[Int]\n"
                  "  y: List[String] = []\n"
                  "  return x\n"
-                 "end\n")))
+                 "end\n\n")))
     (define fn (car (program-declarations program)))
     (define param-node (param-type (car (function-decl-params fn))))
     (check-equal? (type-ref-name param-node) "List")
@@ -233,7 +243,7 @@
     (check-true (list-lit? (binding-value binding-node))))
 
   (test-case "nodes carry source spans"
-    (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
+    (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n"))
     (define fn (car (program-declarations program)))
     (check-equal? (source-position-line (source-span-start (function-decl-span fn))) 1)
     (check-equal? (source-position-column (source-span-start (function-decl-span fn))) 1)
@@ -261,7 +271,7 @@
                  "    count = count + 1\n"
                  "  end\n"
                  "  return\n"
-                 "end\n")))
+                 "end\n\n")))
     (define fn (car (program-declarations program)))
     (define body (function-decl-body fn))
     (check-true (binding? (car body)))
@@ -270,26 +280,26 @@
     (check-false (return-stmt-value (caddr body))))
 
   (test-case "a comparison chain is a located diagnostic"
-    (define result (parse-text "def f() -> Int\n  return a < b < c\nend\n"))
+    (define result (parse-text "def f() -> Int\n  return a < b < c\nend\n\n"))
     (check-true (diagnostic? result))
     (check-equal? (diagnostic-code result) 'PARSE-CHAINED-COMPARISON)
     (check-equal? (source-position-line (source-span-start (diagnostic-span result))) 2)
     (check-equal? (source-position-column (source-span-start (diagnostic-span result))) 16))
 
   (test-case "invalid syntax is rejected"
-    (check-equal? (parse-code "def f() -> Bool\n  return a == b == c\nend\n")
+    (check-equal? (parse-code "def f() -> Bool\n  return a == b == c\nend\n\n")
                   'PARSE-CHAINED-COMPARISON)
     (check-equal? (parse-code "puts(\"hello\")\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "age: Int = \"25\"\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-equal? (parse-code "def f() -> Int\n  return 1\n") 'PARSE-UNCLOSED-BLOCK)
     (check-true (type-expression? (parse-expr "Foo")))
-    (check-equal? (parse-code "def f() -> Void\n  x[0] = 1\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  x[0] = 1\nend\n\n")
                   'PARSE-INVALID-ASSIGNMENT-TARGET)
-    (check-equal? (parse-code "def f() -> Void\n  x.y = 1\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  x.y = 1\nend\n\n")
                   'PARSE-INVALID-ASSIGNMENT-TARGET)
-    (check-equal? (parse-code "def f() -> Void\n  x = 1 y = 2\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  x = 1 y = 2\nend\n\n")
                   'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def f() -> Void\n  puts \"hello\"\nend\n")
+    (check-equal? (parse-code "def f() -> Void\n  puts \"hello\"\nend\n\n")
                   'PARSE-UNEXPECTED-TOKEN))
 
   (test-case "map literals and builtin module calls"
@@ -311,13 +321,13 @@
   (test-case "generic enum declarations, constructors, and case patterns parse"
     (define program
       (parse-ok (string-append
-                 "enum Option[T]\n  Some(T)\n  None\nend\n"
-                 "def main() -> Void\n"
+                 "enum Option[T]\n  Some(T)\n  None\nend\n\n"
+                 "\ndef main() -> Void\n"
                  "  value = Option.Some(3)\n"
                  "  case value do\n"
                  "    Option.Some(item) ->\n      puts(item)\n"
                  "    Option.None ->\n      puts(0)\n"
-                 "  end\nend\n")))
+                 "  end\nend\n\n")))
     (define enum (car (program-declarations program)))
     (check-true (enum-decl? enum))
     (check-equal? (enum-decl-type-parameters enum) '("T"))
@@ -337,7 +347,7 @@
       (parse-ok (string-append
                  "def main() -> Void\n  case value do\n"
                  "    Domain.Option.Some(_, other) ->\n      puts(other)\n"
-                 "    _ ->\n      puts(0)\n  end\nend\n")))
+                 "    _ ->\n      puts(0)\n  end\nend\n\n")))
     (define arms (case-stmt-arms (car (function-decl-body (car (program-declarations matched))))))
     (define pattern (case-arm-pattern (car arms)))
     (check-equal? (variant-pattern-enum-name pattern) "Domain.Option")

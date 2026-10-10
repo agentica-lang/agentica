@@ -27,7 +27,7 @@
       (error 'checker-test "expected a diagnostic for ~s, got a program" text)))
 
 (define (main-with body)
-  (format "def main() -> Void\n~a\nend\n" body))
+  (format "def main() -> Void\n~a\nend\n\n" body))
 
 (module+ test
   (test-case "JSON builders and schemas enforce their input contracts"
@@ -36,15 +36,15 @@
                   "  x = JSON.null?(nil)" "  x = JSON.schema(1)")])
       (check-equal? (check-code (main-with body)) 'CHECK-TYPE-MISMATCH))
     (check-equal? (check-code (main-with "  x = JSON.from(ok(1))")) 'CHECK-NOT-ENCODABLE)
-    (check-equal? (check-code (string-append "struct Bad\n  value: Json\nend\n"
+    (check-equal? (check-code (string-append "struct Bad\n  value: Json\nend\n\n"
                                            (main-with "  x = JSON.schema(Bad)"))) 'CHECK-NOT-DECODABLE))
 
   (test-case "JSON decoding accepts only decodable named structs"
-    (check-ok (string-append "struct Node\n  children: List[Node]\nend\n"
+    (check-ok (string-append "struct Node\n  children: List[Node]\nend\n\n"
                             (main-with "  r = JSON.decode(\"{}\", Node)")))
     (for ([type '("Nil" "Json" "Result[Int]" "Map[Int, String]" "Fn[Int, Int]")])
       (check-equal?
-       (check-code (string-append (format "struct Bad\n  value: ~a\nend\n" type)
+       (check-code (string-append (format "struct Bad\n  value: ~a\nend\n\n" type)
                                  (main-with "  r = JSON.decode(\"{}\", Bad)")))
        'CHECK-NOT-DECODABLE))
     (check-equal? (check-code (main-with "  r = JSON.decode(\"{}\", Int)")) 'CHECK-NOT-DECODABLE)
@@ -54,12 +54,12 @@
   (test-case "list callbacks enforce exact signatures and infer empty inputs"
     (define callbacks
       (string-append
-       "def text(n: Int) -> String\n  return String.from_int(n)\nend\n"
-       "def keep(n: Int) -> Bool\n  return n > 0\nend\n"
-       "def join(acc: String, n: Int) -> String\n  return acc + String.from_int(n)\nend\n"
-       "def collect(acc: List[Int], n: Int) -> List[Int]\n  return List.append(acc, n)\nend\n"
-       "def ignore(n: Int) -> Void\nend\n"
-       "def bad(acc: String, n: Int) -> Int\n  return n\nend\n"))
+       "def text(n: Int) -> String\n  return String.from_int(n)\nend\n\n"
+       "\ndef keep(n: Int) -> Bool\n  return n > 0\nend\n\n"
+       "\ndef join(acc: String, n: Int) -> String\n  return acc + String.from_int(n)\nend\n\n"
+       "\ndef collect(acc: List[Int], n: Int) -> List[Int]\n  return List.append(acc, n)\nend\n\n"
+       "\ndef ignore(n: Int) -> Void\nend\n\n"
+       "\ndef bad(acc: String, n: Int) -> Int\n  return n\nend\n\n"))
     (check-ok (string-append callbacks
                (main-with (string-append
                 "  a = List.map([], &text)\n"
@@ -92,33 +92,33 @@
                   "  x = List.reduce([1], 0)")])
       (check-equal? (check-code (main-with body)) 'CHECK-ARITY)))
   (test-case "Void completion cannot enter data positions and Nil requires explicit returns"
-    (define prefix "def effect() -> Void\nend\n")
+    (define prefix "def effect() -> Void\nend\n\n")
     (for ([body '("  value = effect()" "  IO.inspect(effect())" "  value = ok(effect())"
                   "  value = [effect()]" "  value = effect() == effect()"
                   "  value = Result.unwrap!(ok())")])
       (check-equal? (check-code (string-append prefix (main-with body))) 'CHECK-VOID-VALUE))
-    (for ([text '("struct Item\n  value: Void\nend\n"
-                  "def effect(value: Void) -> Void\nend\n"
-                  "def effect(value: List[Void]) -> Void\nend\n"
-                  "def effect(value: Map[String, Void]) -> Void\nend\n"
-                  "def effect(value: Fn[Void, Int]) -> Void\nend\n")])
+    (for ([text '("struct Item\n  value: Void\nend\n\n"
+                  "\ndef effect(value: Void) -> Void\nend\n\n"
+                  "\ndef effect(value: List[Void]) -> Void\nend\n\n"
+                  "\ndef effect(value: Map[String, Void]) -> Void\nend\n\n"
+                  "\ndef effect(value: Fn[Void, Int]) -> Void\nend\n\n")])
       (check-equal? (check-code (string-append text (main-with ""))) 'CHECK-VOID-TYPE))
-    (check-equal? (check-code "def main() -> Nil\n  return nil\nend\n") 'CHECK-MAIN)
-    (check-equal? (check-code (string-append "def data() -> Nil\nend\n" (main-with ""))) 'CHECK-MISSING-RETURN)
-    (check-equal? (check-code (string-append "def data() -> Nil\n  return\nend\n" (main-with ""))) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code "def main() -> Nil\n  return nil\nend\n\n") 'CHECK-MAIN)
+    (check-equal? (check-code (string-append "def data() -> Nil\nend\n\n" (main-with ""))) 'CHECK-MISSING-RETURN)
+    (check-equal? (check-code (string-append "def data() -> Nil\n  return\nend\n\n" (main-with ""))) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  return nil")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  value: Result[Nil] = ok()")) 'CHECK-TYPE-MISMATCH)
-    (check-ok (string-append prefix "def forward() -> Void\n  return effect()\nend\n"
-                            "def data() -> Nil\n  return nil\nend\n"
+    (check-ok (string-append prefix "def forward() -> Void\n  return effect()\nend\n\n"
+                            "\ndef data() -> Nil\n  return nil\nend\n\n"
                             (main-with "  result: Result[Void] = ok()\n  values: List[Result[Void]] = [result]\n  callback: Fn[Void] = &forward\n  callback.call()\n  Result.unwrap!(result)\n  value: Nil = data()"))))
   (test-case "filesystem module and handle type names are reserved"
     (for ([name '("File" "Dir" "Path" "FileHandle" "FileInfo")])
-      (check-equal? (check-code (format "struct ~a\nend\ndef main() -> Void\nend\n" name))
+      (check-equal? (check-code (format "struct ~a\nend\n\ndef main() -> Void\nend\n\n" name))
                     'CHECK-REDEFINED-NAME)))
 
   (test-case "network handles are opaque and HTTP records and callbacks are checked"
     (check-ok (string-append
-               "def handler(request: Request, writer: HttpWriter) -> Void\n  HTTP.respond(writer, 200, [], request.path, 1000)\nend\n"
+               "def handler(request: Request, writer: HttpWriter) -> Void\n  HTTP.respond(writer, 200, [], request.path, 1000)\nend\n\n"
                (main-with "  options: HttpServerOptions = HTTP.server_options()\n  server: Result[HttpServer] = HTTP.listen(\"127.0.0.1\", 0, &handler, options)")))
     (for ([entry '(("  socket = Socket()" CHECK-UNKNOWN-TYPE)
                    ("  response = Result.unwrap!(HTTP.get(Result.unwrap!(HTTP.client()), \"http://localhost\"))\n  text: String = response.body" CHECK-TYPE-MISMATCH)
@@ -126,7 +126,7 @@
                    ("  header = Header(name: \"x\", value: 1)" CHECK-TYPE-MISMATCH))])
       (check-equal? (check-code (main-with (car entry))) (cadr entry))))
   (test-case "function values check references, parameters, returns and BDD handlers"
-    (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n")
+    (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n\n")
     (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))
     (for ([entry '(("  f: Fn[String, Int] = &double" CHECK-TYPE-MISMATCH)
                    ("  f: Fn[Int, Void] = &double" CHECK-TYPE-MISMATCH)
@@ -137,9 +137,9 @@
                    ("  BDD.step(\"double\", &double)" CHECK-TYPE-MISMATCH)
                    ("  text = JSON.encode(&double)" CHECK-NOT-ENCODABLE))])
       (check-equal? (check-code (string-append prefix (main-with (car entry)))) (cadr entry)))
-    (check-ok "def handler(args: List[String]) -> Void\nend\ndef main() -> Void\n  BDD.step(\"hello\", &handler)\nend\n"))
+    (check-ok "def handler(args: List[String]) -> Void\nend\n\ndef main() -> Void\n  BDD.step(\"hello\", &handler)\nend\n\n"))
   (test-case "the section 8 programs pass"
-    (check-ok "def main() -> Void\n  puts(\"hello\")\nend\n")
+    (check-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n")
     (check-ok (string-append
                "def classify(age: Int) -> String\n"
                "  if age >= 18\n"
@@ -149,16 +149,16 @@
                "  else\n"
                "    return \"child\"\n"
                "  end\n"
-               "end\n"
+               "end\n\n"
                "\n"
                "def main() -> Void\n"
                "  puts(classify(25))\n"
-               "end\n"))
+               "end\n\n"))
     (check-ok (string-append
                "struct Todo\n"
                "  title: String\n"
                "  done: Bool\n"
-               "end\n"
+               "end\n\n"
                "\n"
                "def main() -> Void\n"
                "  tasks: List[Todo] = [\n"
@@ -170,7 +170,7 @@
                "      puts(task.title)\n"
                "    end\n"
                "  end\n"
-               "end\n")))
+               "end\n\n")))
 
   (test-case "forward calls and recursion pass"
     (check-ok (string-append
@@ -180,15 +180,15 @@
                "  else\n"
                "    return odd(n - 1)\n"
                "  end\n"
-               "end\n"
+               "end\n\n"
                "\n"
                "def odd(n: Int) -> Bool\n"
                "  return even(n)\n"
-               "end\n"
+               "end\n\n"
                "\n"
                "def main() -> Void\n"
                "  puts(\"ok\")\n"
-               "end\n")))
+               "end\n\n")))
 
   (test-case "the rejected section 8 examples fail"
     (check-equal? (check-code (main-with "  age: Int = \"25\"")) 'CHECK-TYPE-MISMATCH)
@@ -203,33 +203,33 @@
     (check-equal? (check-code (string-append
                                "def f() -> Void\nend\n\n"
                                "def f() -> Void\nend\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (string-append
                                "def puts(value: String) -> Void\nend\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (string-append
                                "struct A\n  x: Int\nend\n\n"
                                "struct A\n  y: Int\nend\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (string-append
                                "struct IO\n  value: Int\nend\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (string-append
                                "struct System\n  value: Int\nend\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-REDEFINED-NAME)
     (check-equal? (check-code (main-with "  x: List[Int, Int] = []")) 'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (string-append
                                "def f() -> Void\nend\n\n"
-                               "def main() -> Void\n  x = f\nend\n"))
+                               "def main() -> Void\n  x = f\nend\n\n"))
                   'CHECK-UNKNOWN-NAME)
     (check-ok (string-append
                "def f() -> Void\nend\n\n"
-               "def main() -> Void\n  f = 1\n  puts(\"ok\")\nend\n")))
+               "def main() -> Void\n  f = 1\n  puts(\"ok\")\nend\n\n")))
 
   (test-case "calls and constructors"
     (define task
@@ -237,31 +237,31 @@
        "struct Todo\n  title: String\n  done: Bool\nend\n\n"))
     (check-equal? (check-code (string-append
                                "def f(a: Int) -> Int\n  return a\nend\n\n"
-                               "def main() -> Void\n  x = f(1, 2)\nend\n"))
+                               "def main() -> Void\n  x = f(1, 2)\nend\n\n"))
                   'CHECK-ARITY)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Void\n"
                                   "  t = Todo(title: \"x\", done: false, extra: 1)\n"
-                                  "end\n"))
+                                  "end\n\n"))
                   'CHECK-UNKNOWN-FIELD)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Void\n"
                                   "  t = Todo(title: \"x\")\n"
-                                  "end\n"))
+                                  "end\n\n"))
                   'CHECK-MISSING-FIELD)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Void\n"
                                   "  t = Todo(title: \"x\", title: \"y\", done: false)\n"
-                                  "end\n"))
+                                  "end\n\n"))
                   'CHECK-DUPLICATE-FIELD)
     (check-equal? (check-code
                    (string-append task
                                   "def main() -> Void\n"
                                   "  t = Todo(title: 1, done: false)\n"
-                                  "end\n"))
+                                  "end\n\n"))
                   'CHECK-TYPE-MISMATCH))
 
   (test-case "statements"
@@ -285,15 +285,15 @@
                                "    return 1\n"
                                "  end\n"
                                "end\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-MISSING-RETURN)
-    (check-equal? (check-code "def f() -> Int\n  return 1\nend\n") 'CHECK-MAIN)
+    (check-equal? (check-code "def f() -> Int\n  return 1\nend\n\n") 'CHECK-MAIN)
     (check-equal? (check-code (string-append
                                "def main() -> Void\nend\n\n"
-                               "def main() -> Void\nend\n"))
+                               "def main() -> Void\nend\n\n"))
                   'CHECK-REDEFINED-NAME)
-    (check-equal? (check-code "def main(x: Int) -> Void\nend\n") 'CHECK-MAIN)
-    (check-equal? (check-code "def main() -> Int\n  return 1\nend\n") 'CHECK-MAIN))
+    (check-equal? (check-code "def main(x: Int) -> Void\nend\n\n") 'CHECK-MAIN)
+    (check-equal? (check-code "def main() -> Int\n  return 1\nend\n\n") 'CHECK-MAIN))
 
   (test-case "Int literals stay in 64 bits and Float literals are Float"
     (check-ok (main-with "  x: Int = 9223372036854775807\n  y: Int = -9223372036854775808"))
@@ -303,8 +303,8 @@
 
   (test-case "function suffixes allow whitespace before call and declaration parentheses"
     (check-ok (string-append
-               "def ready? () -> Bool\n  return true\nend\n"
-               "def main() -> Void\n  x = ready? ()\n  y = String.contains? (\"a\", \"a\")\nend\n")))
+               "def ready? () -> Bool\n  return true\nend\n\n"
+               "\ndef main() -> Void\n  x = ready? ()\n  y = String.contains? (\"a\", \"a\")\nend\n\n")))
 
   (test-case "the String module"
     (check-ok (main-with (string-append
@@ -386,14 +386,14 @@
     (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"[]\"))\n  x = j[0]"))
                   'CHECK-NOT-INDEXABLE)
     (for ([name '("Json" "JSON")])
-      (check-equal? (check-code (string-append (format "struct ~a\nend\n" name) (main-with "")))
+      (check-equal? (check-code (string-append (format "struct ~a\nend\n\n" name) (main-with "")))
                     'CHECK-REDEFINED-NAME)))
 
   (test-case "JSON encoding checks nested types, including recursive structs"
-    (define node "struct Node\n  children: List[Node]\n  value: Int\nend\n")
+    (define node "struct Node\n  children: List[Node]\n  value: Int\nend\n\n")
     (check-ok (string-append node (main-with "  x = JSON.encode(Node(value: 1, children: []))")))
     (check-ok (string-append
-               "struct A\n  bs: List[B]\nend\nstruct B\n  as: List[A]\nend\n"
+               "struct A\n  bs: List[B]\nend\n\nstruct B\n  as: List[A]\nend\n\n"
                (main-with "  x = JSON.encode(A(bs: []))")))
     (for ([body '("  x = JSON.encode(ok(1))"
                   "  x = JSON.encode([ok(1)])"
@@ -404,19 +404,19 @@
       (check-equal? (check-code (main-with body)) 'CHECK-NOT-ENCODABLE))
     (define rejected
       (check-text (string-append
-                   "struct Bad\n  children: List[Bad]\n  value: Result[Int]\nend\n"
+                   "struct Bad\n  children: List[Bad]\n  value: Result[Int]\nend\n\n"
                    (main-with "  x = JSON.encode(Bad(children: [], value: ok(1)))"))))
     (check-equal? (diagnostic-code rejected) 'CHECK-NOT-ENCODABLE)
-    (check-equal? (source-position-line (source-span-start (diagnostic-span rejected))) 6)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span rejected))) 7)
     (check-equal? (source-position-column (source-span-start (diagnostic-span rejected))) 19))
 
   (test-case "Result inference preserves context across the shared call path"
     (check-ok
      (string-append
-      "struct Box\n  value: Result[List[Int]]\nend\n"
-      "def consume(value: Result[Map[String, Int]]) -> Void\nend\n"
-      "def make() -> Result[List[Int]]\n  return ok([])\nend\n"
-      "def main() -> Void\n"
+      "struct Box\n  value: Result[List[Int]]\nend\n\n"
+      "\ndef consume(value: Result[Map[String, Int]]) -> Void\nend\n\n"
+      "\ndef make() -> Result[List[Int]]\n  return ok([])\nend\n\n"
+      "\ndef main() -> Void\n"
       "  inferred = ok(1)\n"
       "  r: Result[Int] = error(\"bad\")\n  r = ok(2)\n  r = error(\"again\")\n"
       "  nested: Result[Result[Bool]] = ok(ok(false))\n"
@@ -427,7 +427,7 @@
       "  inferred_list = [ok(1), error(\"bad\")]\n"
       "  a: Int = Result.unwrap!(error(\"bad\"))\n"
       "  b = Result.unwrap_or(error(\"bad\"), 7)\n"
-      "  c: List[Int] = Result.unwrap_or(ok([]), [])\nend\n")))
+      "  c: List[Int] = Result.unwrap_or(ok([]), [])\nend\n\n")))
 
   (test-case "Result and builtin failures retain structured diagnostics"
     (for ([body '("  r = error(\"bad\")"
@@ -459,11 +459,11 @@
     (for ([name '("ok" "error")])
       (for ([text (list (main-with (format "  ~a = 1" name))
                         (main-with (format "  for ~a in [1]\n  end" name))
-                        (format "def ~a() -> Void\nend\n~a" name (main-with ""))
-                        (format "def f(~a: Int) -> Void\nend\n~a" name (main-with ""))
-                        (format "struct Box\n  ~a: Int\nend\n~a" name (main-with "")))])
+                        (format "def ~a() -> Void\nend\n\n~a" name (main-with ""))
+                        (format "def f(~a: Int) -> Void\nend\n\n~a" name (main-with ""))
+                        (format "struct Box\n  ~a: Int\nend\n\n~a" name (main-with "")))])
         (check-equal? (check-code text) 'CHECK-REDEFINED-NAME)))
-    (check-equal? (check-code (string-append "struct Result\nend\n" (main-with "")))
+    (check-equal? (check-code (string-append "struct Result\nend\n\n" (main-with "")))
                   'CHECK-REDEFINED-NAME))
 
   (test-case "try checks context separately from operand and return types"
@@ -471,39 +471,39 @@
                "def f() -> Result[String]\n"
                "  xs: List[Int] = try ok([])\n"
                "  n = try String.to_int(\"7\")\n"
-               "  return ok(String.from_int(n))\nend\n" (main-with "")))
+               "  return ok(String.from_int(n))\nend\n\n" (main-with "")))
     (check-equal? (check-code (main-with "  x = try ok(1)")) 'CHECK-TRY-CONTEXT)
     (define bad (check-text (string-append
-                            "def f() -> Result[Int]\n  x = try 1\n  return ok(x)\nend\n"
+                            "def f() -> Result[Int]\n  x = try 1\n  return ok(x)\nend\n\n"
                             (main-with ""))))
     (check-equal? (diagnostic-code bad) 'CHECK-TYPE-MISMATCH)
     (check-equal? (diagnostic-expected bad) "Result[T]")
     (check-equal? (diagnostic-actual bad) "Int")
     (check-equal? (check-code (string-append
-                             "def f() -> Result[Int]\n  x = try ok(1)\nend\n" (main-with "")))
+                             "def f() -> Result[Int]\n  x = try ok(1)\nend\n\n" (main-with "")))
                   'CHECK-MISSING-RETURN))
 
   (test-case "check diagnostics carry spans"
-    (define mismatch (check-text "def main() -> Void\n  x: Int = \"s\"\nend\n"))
+    (define mismatch (check-text "def main() -> Void\n  x: Int = \"s\"\nend\n\n"))
     (check-true (diagnostic? mismatch))
     (check-equal? (diagnostic-code mismatch) 'CHECK-TYPE-MISMATCH)
     (check-equal? (source-position-line (source-span-start (diagnostic-span mismatch))) 2)
     (check-equal? (source-position-column (source-span-start (diagnostic-span mismatch))) 12)
 
-    (define unknown (check-text "def main() -> Void\n  x = missing\nend\n"))
+    (define unknown (check-text "def main() -> Void\n  x = missing\nend\n\n"))
     (check-true (diagnostic? unknown))
     (check-equal? (diagnostic-code unknown) 'CHECK-UNKNOWN-NAME)
     (check-equal? (source-position-line (source-span-start (diagnostic-span unknown))) 2)
     (check-equal? (source-position-column (source-span-start (diagnostic-span unknown))) 7)
 
-    (define operator (check-text "def main() -> Void\n  x = 1 + \"a\"\nend\n"))
+    (define operator (check-text "def main() -> Void\n  x = 1 + \"a\"\nend\n\n"))
     (check-true (diagnostic? operator))
     (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
     (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
 
   (test-case "methods resolve by receiver type and report unknown or unused calls"
     (check-ok (string-append
-               "struct Item\n  name: String\nend\n"
+               "struct Item\n  name: String\nend\n\n"
                (main-with (string-append
                 "  s = \" a b \"\n  n: Int = s.length\n  m: Int = s.size\n"
                 "  parts: List[String] = s.strip.split(\" \")\n  joined: String = parts.join(\",\")\n"
@@ -514,14 +514,14 @@
                 "  text: String = 7.to_s + 2.5.to_s\n  g: Float = 7.to_f\n  h: Result[Int] = 2.5.to_i\n"
                 "  map = {\"a\": 1}\n  has: Bool = map.has_key?(\"a\")\n  v: Int = map.get(\"b\", 0)\n"
                 "  r: Result[Int] = ok(1)\n  good: Bool = r.ok?\n  item = Item(name: \"x\")\n  up: String = item.name.upcase"))
-               "def identity(n: Int) -> Int\n  return n\nend\n"))
+               "def identity(n: Int) -> Int\n  return n\nend\n\n"))
     (for ([body '("  x = true.foo" "  x = 1.length" "  x = \"a\".from_int")])
       (check-equal? (check-code (main-with body)) 'CHECK-UNKNOWN-METHOD body))
     (check-equal? (check-code (main-with "  s = \"a\"\n  x = s.lenght")) 'CHECK-UNKNOWN-METHOD)
     (check-equal? (check-code (main-with "  x = [1].join(\",\")")) 'CHECK-TYPE-MISMATCH)
     (define struct-method
-      (check-text (string-append "struct Item\n  name: String\nend\n"
-                                 "def total(i: Item) -> Int\n  return 1\nend\n"
+      (check-text (string-append "struct Item\n  name: String\nend\n\n"
+                                 "\ndef total(i: Item) -> Int\n  return 1\nend\n\n"
                                  (main-with "  i = Item(name: \"a\")\n  x = i.total()"))))
     (check-equal? (diagnostic-code struct-method) 'CHECK-UNKNOWN-METHOD)
     (check-regexp-match #rx"total\\(" (diagnostic-help struct-method))
@@ -535,13 +535,13 @@
     (check-equal? (source-position-column (source-span-start (diagnostic-span unused))) 3)
     (check-regexp-match #rx"xs =" (diagnostic-help unused))
     (check-ok (main-with "  Result.unwrap!(ok(1))\n  \"4\".to_i!\n  IO.inspect(\"a\".upcase)"))
-    (check-ok (string-append "def show(x: Int) -> Int\n  puts(String.from_int(x))\n  return x\nend\n"
+    (check-ok (string-append "def show(x: Int) -> Int\n  puts(String.from_int(x))\n  return x\nend\n\n"
                              (main-with "  xs = [1]\n  xs.map(&show)\n  List.map(xs, &show)")))
     (check-false (regexp-match? #rx"s =" (diagnostic-help (check-text (main-with "  s = \"a\"\n  s.length")))))
     (check-regexp-match #rx"\\.handler\\.call"
                         (diagnostic-help
-                         (check-text (string-append "struct Box\n  handler: Fn[Int, Int]\nend\n"
-                                                    "def inc(x: Int) -> Int\n  return x + 1\nend\n"
+                         (check-text (string-append "struct Box\n  handler: Fn[Int, Int]\nend\n\n"
+                                                    "\ndef inc(x: Int) -> Int\n  return x + 1\nend\n\n"
                                                     (main-with "  b = Box(handler: &inc)\n  x = b.handler(1)"))))))
 
   (test-case "interpolation is a String and rejects Void parts"
@@ -551,8 +551,8 @@
 
   (test-case "blocks infer parameter and result types from their call"
     (check-ok (string-append
-               "def twice(x: Int, f: Fn[Int, Int]) -> Int\n  return f.call(f.call(x))\nend\n"
-               "def parse(f: Fn[String, Result[Int]]) -> Result[Int]\n  return f.call(\"4\")\nend\n"
+               "def twice(x: Int, f: Fn[Int, Int]) -> Int\n  return f.call(f.call(x))\nend\n\n"
+               "\ndef parse(f: Fn[String, Result[Int]]) -> Result[Int]\n  return f.call(\"4\")\nend\n\n"
                (main-with (string-append
                            "  xs = [3, 1]\n  ys: List[String] = xs.map do |x| x.to_s end\n"
                            "  zs: List[Int] = xs.filter do |x| x > 1 end\n"
@@ -572,7 +572,7 @@
     (check-equal? (diagnostic-code captured) 'CHECK-CAPTURED-ASSIGNMENT)
     (check-equal? (source-position-line (source-span-start (diagnostic-span captured))) 4)
     (check-ok (main-with "  [1].each do |x|\n    local = x\n    local = local + 1\n  end"))
-    (check-equal? (check-code (string-append "def f(a: Int, b: Int) -> Int\n  return a\nend\n"
+    (check-equal? (check-code (string-append "def f(a: Int, b: Int) -> Int\n  return a\nend\n\n"
                                              (main-with "  x = f(1) do |v| v end")))
                   'CHECK-BLOCK-TARGET)
     (check-equal? (check-code (main-with "  xs = [1].map do |x|\n    if x > 0\n      return 1\n    end\n  end"))
@@ -596,7 +596,7 @@
 
   (test-case "diagnostics carry types, operand labels, and the enclosing signature"
     (define problem
-      (check-text "def total(q: Int, p: Float) -> Float\n  return q * p\nend\ndef main() -> Void\nend\n"))
+      (check-text "def total(q: Int, p: Float) -> Float\n  return q * p\nend\n\ndef main() -> Void\nend\n\n"))
     (check-equal? (diagnostic-code problem) 'CHECK-TYPE-MISMATCH)
     (check-equal? (diagnostic-expected problem) "Int")
     (check-equal? (diagnostic-actual problem) "Float")
@@ -608,7 +608,7 @@
                         (diagnostic-help (check-text (main-with "  x: Int = 1.5"))))
     (check-equal? (diagnostic-signature problem) "total(q: Int, p: Float) -> Float")
     (define arity
-      (check-text "def f(a: Int) -> Int\n  return a\nend\ndef main() -> Void\n  x = f(1, 2)\nend\n"))
+      (check-text "def f(a: Int) -> Int\n  return a\nend\n\ndef main() -> Void\n  x = f(1, 2)\nend\n\n"))
     (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
     (check-equal? (diagnostic-callee arity) "f(Int) -> Int"))
 
@@ -617,22 +617,22 @@
       (define problem (check-text text))
       (check-true (diagnostic? problem))
       (diagnostic-help problem))
-    (define item "struct Item\n  name: String\n  price: Int\nend\n")
+    (define item "struct Item\n  name: String\n  price: Int\nend\n\n")
     (check-regexp-match #rx"total"
-                        (help-of "def total() -> Int\n  return 1\nend\ndef main() -> Void\n  x = totl()\nend\n"))
+                        (help-of "def total() -> Int\n  return 1\nend\n\ndef main() -> Void\n  x = totl()\nend\n\n"))
     (check-false (help-of (main-with "  x = qqqq")))
     (check-regexp-match #rx"price"
-                        (help-of (string-append item "def main() -> Void\n  i = Item(name: \"a\", price: 1)\n  x = i.prise\nend\n")))
+                        (help-of (string-append item "def main() -> Void\n  i = Item(name: \"a\", price: 1)\n  x = i.prise\nend\n\n")))
     (check-regexp-match #rx"price: \\.\\.\\.\" with a value of type Int"
-                        (help-of (string-append item "def main() -> Void\n  i = Item(name: \"a\")\nend\n")))
+                        (help-of (string-append item "def main() -> Void\n  i = Item(name: \"a\")\nend\n\n")))
     (check-regexp-match #rx"String"
                         (help-of (main-with "  x: Strng = \"a\"")))
     (check-regexp-match #rx"String.from_int"
                         (help-of (main-with "  puts(1)")))
     (check-regexp-match #rx"else"
-                        (help-of "def f(n: Int) -> Int\n  if n > 0\n    return 1\n  end\nend\ndef main() -> Void\nend\n"))
+                        (help-of "def f(n: Int) -> Int\n  if n > 0\n    return 1\n  end\nend\n\ndef main() -> Void\nend\n\n"))
     (check-regexp-match #rx"return <value>"
-                        (help-of "def f(n: Int) -> Int\n  x = n\nend\ndef main() -> Void\nend\n"))
+                        (help-of "def f(n: Int) -> Int\n  x = n\nend\n\ndef main() -> Void\nend\n\n"))
     (check-regexp-match #rx"x = value"
                         (help-of (main-with "  x = 1\n  for x in [1]\n    puts(\"a\")\n  end")))
     (check-regexp-match #rx"copy the value"
@@ -710,42 +710,42 @@
   (test-case "generic enum construction infers and checks type arguments"
     (define source
       (string-append
-       "enum Option[T]\n  Some(T)\n  None\nend\n"
-       "def main() -> Void\n"
+       "enum Option[T]\n  Some(T)\n  None\nend\n\n"
+       "\ndef main() -> Void\n"
        "  number: Option[Int] = Option.Some(1)\n"
        "  text: Option[String] = Option.None()\n"
-       "end\n"))
+       "end\n\n"))
     (check-ok source)
     (check-equal?
-     (check-code (string-append "enum Empty[T]\n  None\nend\n"
+     (check-code (string-append "enum Empty[T]\n  None\nend\n\n"
                                 (main-with "  x = Empty.None()")))
      'CHECK-ENUM-TYPE-INFERENCE)
     (check-equal?
-     (check-code (string-append "enum Same[T]\n  Pair(T, T)\nend\n"
+     (check-code (string-append "enum Same[T]\n  Pair(T, T)\nend\n\n"
                                 (main-with "  x = Same.Pair(1, \"text\")")))
      'CHECK-TYPE-MISMATCH)
     (check-equal?
-     (check-code (string-append "enum Box[T]\n  Items(List[T])\nend\n"
+     (check-code (string-append "enum Box[T]\n  Items(List[T])\nend\n\n"
                                 (main-with "  x = Box.Items([])")))
      'CHECK-ENUM-TYPE-INFERENCE))
 
   (test-case "case checks enum and Result exhaustiveness and branch bindings"
     (check-ok
      (string-append
-      "enum Option[T]\n  Some(T)\n  None\nend\n"
-      "def extract(value: Option[Int]) -> Int\n"
+      "enum Option[T]\n  Some(T)\n  None\nend\n\n"
+      "\ndef extract(value: Option[Int]) -> Int\n"
       "  case value do\n"
       "    Option.Some(item) ->\n      return item\n"
       "    Option.None ->\n      return 0\n"
-      "  end\nend\n"
-      "def result() -> Result[Void]\n  return ok()\nend\n"
-      "def main() -> Void\n"
+      "  end\nend\n\n"
+      "\ndef result() -> Result[Void]\n  return ok()\nend\n\n"
+      "\ndef main() -> Void\n"
       "  case result() do\n"
       "    Result.Ok(_) ->\n      puts(\"ok\")\n"
       "    Result.Err(message) ->\n      puts(message)\n"
-      "  end\nend\n"))
+      "  end\nend\n\n"))
     (check-equal?
-     (check-code (string-append "enum Option[T]\n  Some(T)\n  None\nend\n"
+     (check-code (string-append "enum Option[T]\n  Some(T)\n  None\nend\n\n"
                                 (main-with (string-append
                                             "  case Option.Some(1) do\n"
                                             "    Option.Some(value) ->\n      puts(String.from_int(value))\n"
@@ -769,14 +769,14 @@
      (check-code (main-with "  case true do\n    1 ->\n      puts(\"one\")\n    _ ->\n      puts(\"other\")\n  end"))
      'CHECK-PATTERN-TYPE)
     (check-equal?
-     (check-code (string-append "enum State\n  Ready\n  Done\nend\n"
+     (check-code (string-append "enum State\n  Ready\n  Done\nend\n\n"
                                 (main-with (string-append
                                             "  case State.Ready() do\n"
                                             "    State.Missing ->\n      puts(\"missing\")\n"
                                             "    _ ->\n      puts(\"other\")\n  end"))))
      'CHECK-UNKNOWN-VARIANT)
     (check-equal?
-     (check-code (string-append "enum State\n  Ready\n  Done\nend\n"
+     (check-code (string-append "enum State\n  Ready\n  Done\nend\n\n"
                                 (main-with (string-append
                                             "  case State.Ready() do\n"
                                             "    State.Ready ->\n      puts(\"ready\")\n"

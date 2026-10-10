@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A declaration's `end` must be followed by a blank line before the next
+  declaration (`PARSE-MISSING-BLANK-LINE`).
 - `#{` inside a string now starts an interpolation; write `\#{` for the
   old literal text.
 - Ignoring the result of a builtin without effects is `CHECK-UNUSED-VALUE`.

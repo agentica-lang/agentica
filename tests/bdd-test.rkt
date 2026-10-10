@@ -35,19 +35,19 @@
         (display-to-file
          (string-append
           "def worker(n: Int) -> Void\n  Task.sleep(0)\n  key = String.from_int(n)\n"
-          "  BDD.set(key, Result.unwrap!(JSON.parse(key)))\n  BDD.assert(n > 0, \"worker\")\nend\n"
-          "def parallel(args: List[String]) -> Void\n  tasks: List[Task[Void]] = []\n"
+          "  BDD.set(key, Result.unwrap!(JSON.parse(key)))\n  BDD.assert(n > 0, \"worker\")\nend\n\n"
+          "\ndef parallel(args: List[String]) -> Void\n  tasks: List[Task[Void]] = []\n"
           "  for n in [1, 2, 3, 4]\n    tasks = List.append(tasks, Task.spawn(&worker, n))\n  end\n"
           "  for task in tasks\n    Task.await(task)\n  end\n"
-          "  for n in [1, 2, 3, 4]\n    BDD.assert(Result.ok?(BDD.get(String.from_int(n))), \"state lost\")\n  end\nend\n"
-          "def wait(n: Int) -> Void\n  Task.sleep(60000)\nend\n"
-          "def pending(args: List[String]) -> Void\n  task = Task.spawn(&wait, 0)\nend\n"
-          "def crash(n: Int) -> Int\n  return 1 / 0\nend\n"
-          "def broken(args: List[String]) -> Void\n  task = Task.spawn(&crash, 0)\n  Task.sleep(60000)\nend\n"
-          "def good(args: List[String]) -> Void\n  BDD.assert(not Result.ok?(BDD.get(\"1\")), \"state leaked\")\nend\n"
-          "def register_a(n: Int) -> Void\n  BDD.step(\"state is concurrent\", &parallel)\n  BDD.step(\"tasks are pending\", &pending)\nend\n"
-          "def register_b(n: Int) -> Void\n  BDD.step(\"a task crashes\", &broken)\n  BDD.step(\"later works\", &good)\nend\n"
-          "def main() -> Void\n  a = Task.spawn(&register_a, 0)\n  b = Task.spawn(&register_b, 0)\n  Task.await(a)\n  Task.await(b)\nend\n") step-path)
+          "  for n in [1, 2, 3, 4]\n    BDD.assert(Result.ok?(BDD.get(String.from_int(n))), \"state lost\")\n  end\nend\n\n"
+          "\ndef wait(n: Int) -> Void\n  Task.sleep(60000)\nend\n\n"
+          "\ndef pending(args: List[String]) -> Void\n  task = Task.spawn(&wait, 0)\nend\n\n"
+          "\ndef crash(n: Int) -> Int\n  return 1 / 0\nend\n\n"
+          "\ndef broken(args: List[String]) -> Void\n  task = Task.spawn(&crash, 0)\n  Task.sleep(60000)\nend\n\n"
+          "\ndef good(args: List[String]) -> Void\n  BDD.assert(not Result.ok?(BDD.get(\"1\")), \"state leaked\")\nend\n\n"
+          "\ndef register_a(n: Int) -> Void\n  BDD.step(\"state is concurrent\", &parallel)\n  BDD.step(\"tasks are pending\", &pending)\nend\n\n"
+          "\ndef register_b(n: Int) -> Void\n  BDD.step(\"a task crashes\", &broken)\n  BDD.step(\"later works\", &good)\nend\n\n"
+          "\ndef main() -> Void\n  a = Task.spawn(&register_a, 0)\n  b = Task.spawn(&register_b, 0)\n  Task.await(a)\n  Task.await(b)\nend\n\n") step-path)
         (define report (run-bdd (list feature-path) #:steps (list step-path)))
         (check-equal? (hash-ref report 'passed) 2)
         (check-equal? (hash-ref report 'failed) 2)
@@ -55,10 +55,10 @@
         (check-equal? (hash-ref (hash-ref (cadr results) 'error) 'code) "RUNTIME-BDD-PENDING-TASKS")
         (check-equal? (hash-ref (hash-ref (caddr results) 'error) 'code) "RUNTIME-DIVISION-BY-ZERO")
         (display-to-file
-         (string-append "def good(args: List[String]) -> Void\n  BDD.assert(true, \"ok\")\nend\n"
-                        "def register(name: String) -> Void\n  BDD.step(name, &good)\nend\n"
-                        "def main() -> Void\n  a = Task.spawn(&register, \"duplicate\")\n"
-                        "  b = Task.spawn(&register, \"duplicate\")\n  Task.await(a)\n  Task.await(b)\nend\n")
+         (string-append "def good(args: List[String]) -> Void\n  BDD.assert(true, \"ok\")\nend\n\n"
+                        "\ndef register(name: String) -> Void\n  BDD.step(name, &good)\nend\n\n"
+                        "\ndef main() -> Void\n  a = Task.spawn(&register, \"duplicate\")\n"
+                        "  b = Task.spawn(&register, \"duplicate\")\n  Task.await(a)\n  Task.await(b)\nend\n\n")
          step-path #:exists 'truncate)
         (define duplicate (run-bdd (list feature-path) #:steps (list step-path)))
         (check-equal? (hash-ref (hash-ref (car (hash-ref duplicate 'files)) 'error) 'code) "RUNTIME-BDD-DUPLICATE"))
@@ -75,7 +75,7 @@
         (display-to-file
          (string-append "def main() -> Void\n  limit = 5\n"
                         "  BDD.step(\"{int} is small\") do |args|\n"
-                        "    BDD.assert(args[0].to_i! < limit, \"too big\")\n  end\nend\n")
+                        "    BDD.assert(args[0].to_i! < limit, \"too big\")\n  end\nend\n\n")
          step-path)
         (define report (run-bdd (list feature-path) #:steps (list step-path)))
         (check-equal? (hash-ref report 'passed) 1)
@@ -126,13 +126,13 @@
         (define step-path (build-path directory "steps.agc"))
         (display-to-file "Feature: Patterns\nScenario: ambiguous\nThen value is 1\n" feature-path)
         (display-to-file
-         "def assert(args: List[String]) -> Void\n  BDD.assert(true, \"valid\")\nend\ndef main() -> Void\n  BDD.step(\"value is {int}\", &assert)\n  BDD.step(\"value is 1\", &assert)\nend\n" step-path)
+         "def assert(args: List[String]) -> Void\n  BDD.assert(true, \"valid\")\nend\n\ndef main() -> Void\n  BDD.step(\"value is {int}\", &assert)\n  BDD.step(\"value is 1\", &assert)\nend\n\n" step-path)
         (define ambiguous (run-bdd (list feature-path) #:steps (list step-path)))
         (check-equal? (hash-ref (hash-ref (car (cases ambiguous)) 'error) 'code) "CHECK-BDD-AMBIGUOUS")
         (for ([entry '(("BDD.step(\"x\", &assert)\n  BDD.step(\"x\", &assert)" "RUNTIME-BDD-DUPLICATE")
                        ("BDD.step(\"x {float}\", &assert)" "RUNTIME-BDD-PATTERN")
                        ("BDD.step(\"x\", &main)" "CHECK-TYPE-MISMATCH"))])
-          (display-to-file (format "def assert(args: List[String]) -> Void\n  BDD.assert(true, \"valid\")\nend\ndef main() -> Void\n  ~a\nend\n" (car entry)) step-path #:exists 'truncate)
+          (display-to-file (format "def assert(args: List[String]) -> Void\n  BDD.assert(true, \"valid\")\nend\n\ndef main() -> Void\n  ~a\nend\n\n" (car entry)) step-path #:exists 'truncate)
           (define report (run-bdd (list custom) #:steps (list step-path handlers)))
           (check-equal? (hash-ref (hash-ref (car (hash-ref report 'files)) 'error) 'code) (cadr entry))
           (check-equal? (hash-ref report 'passed) 4)))
@@ -154,7 +154,7 @@
           (check-equal? (caddr invalid) "")
           (check-equal? (hash-ref (string->jsexpr (cadr invalid)) 'exit_code) 2))
         (define driver (build-path directory "run.agc"))
-        (display-to-file (format "def main() -> Void\n  report = Result.unwrap!(BDD.run(~s, [~s]))\n  puts(JSON.encode(report))\nend\n"
+        (display-to-file (format "def main() -> Void\n  report = Result.unwrap!(BDD.run(~s, [~s]))\n  puts(JSON.encode(report))\nend\n\n"
                                  (path->string custom) (path->string handlers)) driver)
         (define builtin (cli (path->string driver)))
         (check-equal? (car builtin) 0)
@@ -171,7 +171,7 @@
         (check-equal? (hash-ref (string->jsexpr (cadr empty)) 'file_errors) 1)
         (define failure-file (build-path directory "failure.feature"))
         (display-to-file "Feature: failure\nScenario: fail\nThen an assertion fails\n" failure-file)
-        (display-to-file (format "def main() -> Void\n  result = BDD.run(~s, [~s])\n  IO.inspect(Result.ok?(result))\n  report = Result.unwrap!(result)\n  IO.inspect(Result.unwrap!(JSON.bool(Result.unwrap!(JSON.get(report, \"ok\")))))\nend\n"
+        (display-to-file (format "def main() -> Void\n  result = BDD.run(~s, [~s])\n  IO.inspect(Result.ok?(result))\n  report = Result.unwrap!(result)\n  IO.inspect(Result.unwrap!(JSON.bool(Result.unwrap!(JSON.get(report, \"ok\")))))\nend\n\n"
                                  (path->string failure-file) (path->string handlers)) driver #:exists 'truncate)
         (check-equal? (cli (path->string driver)) '(0 "true\nfalse\n" "")))
       (lambda () (delete-directory/files directory)))))

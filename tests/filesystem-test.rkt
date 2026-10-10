@@ -73,7 +73,7 @@
             "  IO.inspect(entries)\n"
             "  IO.inspect(joined)\n"
             "  IO.inspect(resolved)\n"
-            "end\n")
+            "end\n\n")
            (literal (path->string directory))
            (literal (path->string directory))
            (literal (path->string path))
@@ -116,7 +116,7 @@
             "  IO.inspect(closed_read)\n"
             "  IO.inspect(invalid_utf8)\n"
             "  IO.inspect(oversized)\n"
-            "end\n")
+            "end\n\n")
            (literal (path->string path))
            (literal (path->string path))
            (literal (path->string path))
@@ -149,7 +149,7 @@
             "  IO.inspect(second)\n"
             "  IO.inspect(rest)\n"
             "  IO.inspect(eof)\n"
-            "end\n")
+            "end\n\n")
            (literal (path->string path)))))
        (check-equal? result (void))
        (check-true (string-contains? output "ok(\"one\")"))
@@ -173,7 +173,7 @@
             "  info: Result[FileInfo] = File.stat(~a, 1000)\n"
             "  IO.inspect(contents)\n"
             "  IO.inspect(info)\n"
-            "end\n")
+            "end\n\n")
            (literal (path->string alias))
            (literal (path->string alias)))))
        (check-equal? result (void))
@@ -200,7 +200,7 @@
             "  linked: Result[String] = File.read_text(~a, 1000)\n"
             "  IO.inspect(empty)\n"
             "  IO.inspect(linked)\n"
-            "end\n")
+            "end\n\n")
            (literal (path->string empty-path))
            (literal (path->string alias)))))
        (check-equal? result (void))
@@ -219,7 +219,7 @@
             "  opened: Result[FileHandle] = File.open(~a, \"write\", 1000)\n"
             "  handle: FileHandle = Result.unwrap!(opened)\n"
             "  wrote: Result[Void] = File.write(handle, \"cleanup\", 1000)\n"
-            "end\n")
+            "end\n\n")
            (literal (path->string path)))))
        (check-equal? result (void))
        (check-equal? (file->string path) "cleanup"))))))

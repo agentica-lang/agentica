@@ -29,7 +29,7 @@
         (rename-file-or-directory bundle relocated)
         (define program (build-path directory "program.agc"))
         (display-to-file
-         "import \"std/queue.agc\" as Queue\ndef main() -> Void\n  q = Queue.push(Queue.new(), \"embedded\")\n  puts(Result.unwrap!(Queue.peek(q)))\nend\n"
+         "import \"std/queue.agc\" as Queue\ndef main() -> Void\n  q = Queue.push(Queue.new(), \"embedded\")\n  puts(Result.unwrap!(Queue.peek(q)))\nend\n\n"
          program)
         (define out (open-output-string))
         (define err (open-output-string))

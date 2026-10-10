@@ -32,24 +32,24 @@
 (module+ test
   (test-case "methods work on values whose types come from another file"
     (with-files
-     '(("lib.agc" . "export struct Box\n  label: String\nend\nexport def make(text: String) -> Box\n  return Box(label: text)\nend\n")
-       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  b = Lib.make(\" hi \")\n  IO.inspect(b.label.strip.upcase.size)\nend\n"))
+     '(("lib.agc" . "export struct Box\n  label: String\nend\n\nexport def make(text: String) -> Box\n  return Box(label: text)\nend\n\n")
+       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  b = Lib.make(\" hi \")\n  IO.inspect(b.label.strip.upcase.size)\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "2\n"))))
 
   (test-case "blocks in an imported file call that file's private helpers and types"
     (with-files
-     '(("lib.agc" . "struct Pair\n  n: Int\nend\ndef twice(n: Int) -> Int\n  return n * 2\nend\nexport def doubled(xs: List[Int]) -> List[Int]\n  pairs = xs.map do |x| Pair(n: twice(x)) end\n  return pairs.map do |p: Pair| p.n end\nend\n")
-       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  IO.inspect(Lib.doubled([1, 2]))\nend\n"))
+     '(("lib.agc" . "struct Pair\n  n: Int\nend\n\ndef twice(n: Int) -> Int\n  return n * 2\nend\n\nexport def doubled(xs: List[Int]) -> List[Int]\n  pairs = xs.map do |x| Pair(n: twice(x)) end\n  return pairs.map do |p: Pair| p.n end\nend\n\n")
+       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  IO.inspect(Lib.doubled([1, 2]))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "[2, 4]\n"))))
 
   (test-case "interpolation in an imported function reaches that file's private helpers"
     (with-files
-     '(("lib.agc" . "def twice(n: Int) -> Int\n  return n * 2\nend\nexport def label(n: Int) -> String\n  return \"n=#{twice(n)}\"\nend\n")
-       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  puts(Lib.label(3))\nend\n"))
+     '(("lib.agc" . "def twice(n: Int) -> Int\n  return n * 2\nend\n\nexport def label(n: Int) -> String\n  return \"n=#{twice(n)}\"\nend\n\n")
+       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  puts(Lib.label(3))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "n=6\n"))))
@@ -57,7 +57,7 @@
   (test-case "embedded String queue preserves FIFO and old values without local std files"
     (with-files
      '(("std/queue.agc" . "this local file must not be loaded\n")
-       ("root.agc" . "import \"std/queue.agc\" as Queue\nimport \"std/queue.agc\" as Again\ndef main() -> Void\n  original = Queue.new()\n  q: Again.QueueState = Queue.push(original, \"\")\n  q = Queue.push(q, \"same\")\n  q = Queue.push(q, \"same\")\n  IO.inspect(Queue.size(q))\n  IO.inspect(Queue.empty?(original))\n  IO.inspect(not Result.ok?(Queue.pop(original)))\n  IO.inspect(not Result.ok?(Queue.peek(original)))\n  IO.inspect(Result.unwrap!(Queue.peek(q)))\n  while not Queue.empty?(q)\n    item = Result.unwrap!(Queue.pop(q))\n    puts(item.value)\n    q = item.remaining\n  end\n  IO.inspect(Queue.size(q))\nend\n"))
+       ("root.agc" . "import \"std/queue.agc\" as Queue\nimport \"std/queue.agc\" as Again\ndef main() -> Void\n  original = Queue.new()\n  q: Again.QueueState = Queue.push(original, \"\")\n  q = Queue.push(q, \"same\")\n  q = Queue.push(q, \"same\")\n  IO.inspect(Queue.size(q))\n  IO.inspect(Queue.empty?(original))\n  IO.inspect(not Result.ok?(Queue.pop(original)))\n  IO.inspect(not Result.ok?(Queue.peek(original)))\n  IO.inspect(Result.unwrap!(Queue.peek(q)))\n  while not Queue.empty?(q)\n    item = Result.unwrap!(Queue.pop(q))\n    puts(item.value)\n    q = item.remaining\n  end\n  IO.inspect(Queue.size(q))\nend\n\n"))
      (lambda (directory)
        (define path (build-path directory "root.agc"))
        (define-values (out result) (run path))
@@ -82,12 +82,12 @@
 
   (test-case "pkg roots search project, environment, then user data independent of cwd"
     (with-files
-     '(("root.agc" . "import \"pkg/value.agc\" as Value\ndef main() -> Void\n  puts(Value.read())\nend\n")
-       ("agc_libs/value.agc" . "export def read() -> String\n  return \"project\"\nend\n")
-       ("first/value.agc" . "import \"helper.agc\" as Helper\nexport def read() -> String\n  return Helper.read()\nend\n")
-       ("first/helper.agc" . "export def read() -> String\n  return \"first\"\nend\n")
-       ("second/value.agc" . "export def read() -> String\n  return \"second\"\nend\n")
-       ("data/agentica/lib/value.agc" . "export def read() -> String\n  return \"user\"\nend\n"))
+     '(("root.agc" . "import \"pkg/value.agc\" as Value\ndef main() -> Void\n  puts(Value.read())\nend\n\n")
+       ("agc_libs/value.agc" . "export def read() -> String\n  return \"project\"\nend\n\n")
+       ("first/value.agc" . "import \"helper.agc\" as Helper\nexport def read() -> String\n  return Helper.read()\nend\n\n")
+       ("first/helper.agc" . "export def read() -> String\n  return \"first\"\nend\n\n")
+       ("second/value.agc" . "export def read() -> String\n  return \"second\"\nend\n\n")
+       ("data/agentica/lib/value.agc" . "export def read() -> String\n  return \"user\"\nend\n\n"))
      (lambda (directory)
        (define env (environment-variables-copy (current-environment-variables)))
        (define windows? (eq? (system-type 'os) 'windows))
@@ -113,7 +113,7 @@
                    ("pkg/../outside.agc" CHECK-IMPORT-PATH)
                    ("pkg/agentica-test-nonexistent-stdlib-library.agc" CHECK-IMPORT-IO))])
       (with-files
-       (list (cons "root.agc" (format "import ~s as Q\ndef main() -> Void\nend\n" (car entry))))
+       (list (cons "root.agc" (format "import ~s as Q\ndef main() -> Void\nend\n\n" (car entry))))
        (lambda (directory)
          (define env (environment-variables-copy (current-environment-variables)))
          (environment-variables-set! env #"AGENTICA_PATH" #"")
@@ -125,8 +125,8 @@
 
   (test-case "pkg imports reject relative environment roots and escaping symlinks"
     (with-files
-     '(("root.agc" . "import \"pkg/value.agc\" as Value\ndef main() -> Void\nend\n")
-       ("outside.agc" . "export def read() -> Int\n  return 1\nend\n"))
+     '(("root.agc" . "import \"pkg/value.agc\" as Value\ndef main() -> Void\nend\n\n")
+       ("outside.agc" . "export def read() -> Int\n  return 1\nend\n\n"))
      (lambda (directory)
        (define env (environment-variables-copy (current-environment-variables)))
        (environment-variables-set! env #"AGENTICA_PATH" #"relative")
@@ -145,9 +145,9 @@
 
   (test-case "imports share canonical identities and resolve relative to each file"
     (with-files
-     '(("library/models.agc" . "export struct Value\n  n: Int\nend\nexport def read(value: Value) -> Int\n  return value.n\nend\ndef main() -> Void\n  puts(\"must not run\")\nend\n")
-       ("library/outer.agc" . "import \"models.agc\" as Models\nexport def make(n: Int) -> Models.Value\n  return Models.Value(n: n)\nend\n")
-       ("root.agc" . "import \"library/models.agc\" as First\nimport \"library/../library/models.agc\" as Second\nimport \"library/outer.agc\" as Outer\ndef main() -> Void\n  value: Second.Value = Outer.make(42)\n  IO.inspect(First.read(value))\n  IO.inspect(Second.read(First.Value(n: 7)))\nend\n"))
+     '(("library/models.agc" . "export struct Value\n  n: Int\nend\n\nexport def read(value: Value) -> Int\n  return value.n\nend\n\ndef main() -> Void\n  puts(\"must not run\")\nend\n\n")
+       ("library/outer.agc" . "import \"models.agc\" as Models\nexport def make(n: Int) -> Models.Value\n  return Models.Value(n: n)\nend\n\n")
+       ("root.agc" . "import \"library/models.agc\" as First\nimport \"library/../library/models.agc\" as Second\nimport \"library/outer.agc\" as Outer\ndef main() -> Void\n  value: Second.Value = Outer.make(42)\n  IO.inspect(First.read(value))\n  IO.inspect(Second.read(First.Value(n: 7)))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "42\n7\n")
@@ -155,9 +155,9 @@
 
   (test-case "private helpers and same names in different modules stay separate"
     (with-files
-     '(("a.agc" . "def helper(n: Int) -> Int\n  return n + 1\nend\nexport def apply(n: Int) -> Int\n  return helper(n)\nend\n")
-       ("b.agc" . "def helper(n: Int) -> Int\n  return n + 10\nend\nexport def apply(n: Int) -> Int\n  return helper(n)\nend\n")
-       ("root.agc" . "import \"a.agc\" as A\nimport \"b.agc\" as B\ndef main() -> Void\n  IO.inspect(List.map([1, 2], &A.apply))\n  IO.inspect(List.map([1, 2], &B.apply))\nend\n"))
+     '(("a.agc" . "def helper(n: Int) -> Int\n  return n + 1\nend\n\nexport def apply(n: Int) -> Int\n  return helper(n)\nend\n\n")
+       ("b.agc" . "def helper(n: Int) -> Int\n  return n + 10\nend\n\nexport def apply(n: Int) -> Int\n  return helper(n)\nend\n\n")
+       ("root.agc" . "import \"a.agc\" as A\nimport \"b.agc\" as B\ndef main() -> Void\n  IO.inspect(List.map([1, 2], &A.apply))\n  IO.inspect(List.map([1, 2], &B.apply))\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "[2, 3]\n[11, 12]\n")
@@ -176,8 +176,8 @@
              ("" "  x = IO.nope()\n" CHECK-UNKNOWN-NAME)
              ("" "  x: Missing.Value = 1\n" CHECK-IMPORT-NAME))])
       (with-files
-       (list (cons "module.agc" "struct Secret\n  value: Int\nend\ndef hidden() -> Void\nend\nexport struct Public\nend\n")
-             (cons "root.agc" (string-append (car entry) "def main() -> Void\n" (cadr entry) "end\n")))
+       (list (cons "module.agc" "struct Secret\n  value: Int\nend\n\ndef hidden() -> Void\nend\n\nexport struct Public\nend\n\n")
+             (cons "root.agc" (string-append (car entry) "def main() -> Void\n" (cadr entry) "end\n\n")))
        (lambda (directory)
          (define problem (checked (build-path directory "root.agc")))
          (check-true (diagnostic? problem))
@@ -187,7 +187,7 @@
 
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files
-     '(("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\nend\n")
+     '(("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\nend\n\n")
        ("a.agc" . "import \"root.agc\" as Root\n"))
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
@@ -195,8 +195,8 @@
        (check-equal? (source-name (source-span-source (diagnostic-span problem)))
                      (path->string (build-path directory "a.agc")))))
     (with-files
-     '(("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\n  IO.inspect(A.fail(0))\nend\n")
-       ("a.agc" . "export def fail(n: Int) -> Int\n  return 1 / n\nend\n"))
+     '(("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\n  IO.inspect(A.fail(0))\nend\n\n")
+       ("a.agc" . "export def fail(n: Int) -> Int\n  return 1 / n\nend\n\n"))
      (lambda (directory)
        (define-values (out problem) (run (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'RUNTIME-DIVISION-BY-ZERO)
@@ -206,8 +206,8 @@
 
   (test-case "imported task callbacks keep the execution budget"
     (with-files
-     '(("root.agc" . "import \"worker.agc\" as Worker\ndef main() -> Void\n  task = Task.spawn(&Worker.run, 0)\n  IO.inspect(Task.await(task))\nend\n")
-       ("worker.agc" . "export def run(n: Int) -> Int\n  while n < 100\n    n = n + 1\n  end\n  return n\nend\n"))
+     '(("root.agc" . "import \"worker.agc\" as Worker\ndef main() -> Void\n  task = Task.spawn(&Worker.run, 0)\n  IO.inspect(Task.await(task))\nend\n\n")
+       ("worker.agc" . "export def run(n: Int) -> Int\n  while n < 100\n    n = n + 1\n  end\n  return n\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "100\n")
@@ -217,8 +217,8 @@
 
   (test-case "BDD can register imported handlers"
     (with-files
-     '(("steps.agc" . "import \"assertions.agc\" as Assertions\ndef main() -> Void\n  BDD.step(\"it works\", &Assertions.verify)\nend\n")
-       ("assertions.agc" . "import \"std/queue.agc\" as Queue\nexport def verify(args: List[String]) -> Void\n  q = Queue.push(Queue.new(), \"imported handler\")\n  BDD.assert(Result.unwrap!(Queue.peek(q)) == \"imported handler\", \"imported handler\")\nend\n")
+     '(("steps.agc" . "import \"assertions.agc\" as Assertions\ndef main() -> Void\n  BDD.step(\"it works\", &Assertions.verify)\nend\n\n")
+       ("assertions.agc" . "import \"std/queue.agc\" as Queue\nexport def verify(args: List[String]) -> Void\n  q = Queue.push(Queue.new(), \"imported handler\")\n  BDD.assert(Result.unwrap!(Queue.peek(q)) == \"imported handler\", \"imported handler\")\nend\n\n")
        ("test.feature" . "Feature: Modules\nScenario: Imported handler\nThen it works\n"))
      (lambda (directory)
        (define report (run-bdd (list (build-path directory "test.feature"))
@@ -246,8 +246,8 @@
 
   (test-case "imported generic enums resolve constructors and exhaustive patterns"
     (with-files
-     '(("option.agc" . "export enum Option[T]\n  Some(T)\n  None\nend\n")
-       ("root.agc" . "import \"option.agc\" as Domain\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(7)\n  case value do\n    Domain.Option.Some(item) ->\n      puts(String.from_int(item))\n    Domain.Option.None ->\n      puts(\"empty\")\n  end\n  empty: Domain.Option[String] = Domain.Option.None()\n  case empty do\n    Domain.Option.Some(item) ->\n      puts(item)\n    Domain.Option.None ->\n      puts(\"none\")\n  end\nend\n"))
+     '(("option.agc" . "export enum Option[T]\n  Some(T)\n  None\nend\n\n")
+       ("root.agc" . "import \"option.agc\" as Domain\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(7)\n  case value do\n    Domain.Option.Some(item) ->\n      puts(String.from_int(item))\n    Domain.Option.None ->\n      puts(\"empty\")\n  end\n  empty: Domain.Option[String] = Domain.Option.None()\n  case empty do\n    Domain.Option.Some(item) ->\n      puts(item)\n    Domain.Option.None ->\n      puts(\"none\")\n  end\nend\n\n"))
      (lambda (directory)
        (define-values (out result) (run (build-path directory "root.agc")))
        (check-equal? out "7\nnone\n")
@@ -255,8 +255,8 @@
 
   (test-case "private imported enums remain inaccessible"
     (with-files
-     '(("option.agc" . "enum Option[T]\n  Some(T)\nend\n")
-       ("root.agc" . "import \"option.agc\" as Domain\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(1)\nend\n"))
+     '(("option.agc" . "enum Option[T]\n  Some(T)\nend\n\n")
+       ("root.agc" . "import \"option.agc\" as Domain\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(1)\nend\n\n"))
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)))))
