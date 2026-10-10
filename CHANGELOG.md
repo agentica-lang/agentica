@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Ruby forms seen in evaluations: an optional `do` after `case`, `while` and
+  `for` headers; a one-line case arm (`1 -> puts("one")`); module functions
+  without arguments may drop the parentheses (`IO.gets!`, `IO.eof?`).
+- Hints for `let`/`var`/`const`, `match`, `when`, `then`, `fn`/`lambda`, a
+  `do` block with no call, `Hash.new`/`Array.new`, `break`/`continue`/`next`,
+  `Result.Ok(x)` used as a value, and an enum variant without parentheses.
 - Hints for habits from other languages: `len`, `str`, `print`, `input`,
   `range`, `int`/`float`, `None`/`null`, `elif`/`else if`, Python-style
   string methods, and a `Result[T]` used where `T` is expected.

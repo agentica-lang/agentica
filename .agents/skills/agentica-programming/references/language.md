@@ -24,7 +24,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
-- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block: `s.length`, `xs.size`, `xs.each do |x| ... end`.
+- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block (`s.length`, `xs.size`, `xs.each do |x| ... end`), and so may a module function with no arguments (`IO.gets!`, `IO.eof?`).
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
 - Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
@@ -210,7 +210,7 @@ return count
 - A name created in a block is not visible after that block's `end`.
 - A new variable cannot reuse a name that is already visible in an outer scope (no shadowing).
 - The `for` variable cannot be assigned to.
-- `case value do pattern -> block end` is a statement. Each arm has a normal block and its bindings are local to that arm.
+- `case value do pattern -> block end` is a statement (`do` is optional). Each arm has a normal block and its bindings are local to that arm. A short arm may put one simple statement on the arrow line: `1 -> puts("one")`, `Command.Add(n) -> total += n`; more lines may follow it.
 - Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
 - `if` and `while` conditions must be `Bool`. There is no truthiness: `if 1` is an error.
@@ -398,7 +398,7 @@ result = run(5) do |n| n + 1 end
 - Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end`. The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
 - Parameter types come from the call; annotate when there is no context: `do |x: Int| ... end` (`CHECK-BLOCK-TYPE` otherwise).
 - The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]` known from the call (not in `map`/`sort_by`); end it with `ok(...)`.
-- In `case f() do`, `do` belongs to `case`; in `while` and `for` headers a `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
+- `case`, `while`, and `for` headers may end with an optional `do` (`while !done do`, `for x in xs do`); that `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
 - Blocks capture values when created; later changes outside do not affect them. A block cannot assign to an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): build the value with `map`/`reduce`, or use a `for` loop. Block parameters cannot reuse visible names.
 - A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn` through a function parameter, or register a BDD step with `BDD.step("pattern") do |args| ... end`.
 - `List.each` runs a block for each element; `List.any?` / `List.all?` stop at the first deciding element.
@@ -883,6 +883,8 @@ expected Int, found String
 ```
 
 The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (names and types, before running), `RUNTIME-` (while running).
+
+Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.
 
 | Code | Meaning |
 |---|---|

@@ -185,6 +185,15 @@
          (check-equal? (source-name (source-span-source (diagnostic-span problem)))
                        (path->string (build-path directory "root.agc")))))))
 
+  (test-case "an enum variant without parentheses gets a hint"
+    (with-files
+     '(("root.agc" . "enum Command\n  Show\nend\n\ndef main() -> Void\n  c = Command.Show\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 6)
+       (check-regexp-match #rx"Command\\.Show\\(\\)" (diagnostic-help problem)))))
+
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files
      '(("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\nend\n\n")

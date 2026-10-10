@@ -49,7 +49,7 @@ def main() -> Void
 end
 ```
 
-Blocks end with `end`. Indentation helps reading but does not determine structure. Calls use parentheses, even when they take no arguments. Structs are built with named fields; ordinary functions take positional arguments.
+Blocks end with `end`. Indentation helps reading but does not determine structure. Calls use parentheses, even when they take no arguments; only builtin methods and module functions without arguments may drop them (`s.length`, `IO.gets!`). Structs are built with named fields; ordinary functions take positional arguments.
 
 The executable starts by calling `main()`. The core has no executable statements at the top level, only declarations. This avoids having two different entry models.
 
@@ -248,12 +248,12 @@ return_statement = "return", [ expression ] ;
 if_statement     = "if", expression, NL, block,
                    { "elsif", expression, NL, block },
                    [ "else", NL, block ], "end", NL ;
-while_statement  = "while", expression, NL, block, "end", NL ;
-for_statement    = "for", NAME, "in", expression, NL,
+while_statement  = "while", expression, [ "do" ], NL, block, "end", NL ;
+for_statement    = "for", NAME, "in", expression, [ "do" ], NL,
                    block, "end", NL ;
-case_statement   = "case", expression, "do", NL,
+case_statement   = "case", expression, [ "do" ], NL,
                    match_arm, { match_arm }, "end", NL ;
-match_arm        = pattern, "->", NL, block ;
+match_arm        = pattern, "->", ( NL, block | simple_statement, NL, block ) ;
 pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
                  | qualified_variant, [ "(", pattern_bindings, ")" ] ;
 qualified_variant = TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ] ;
@@ -308,7 +308,7 @@ literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 
 Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables; a block (see "Blocks and closures") captures them. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
 
-`TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias.
+`TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias. Without arguments the parentheses may be dropped: `IO.gets!` is `IO.gets!()`, and `while !IO.eof? do` reads like Ruby.
 
 `and` and `or` short-circuit. Additions, subtractions, multiplications, divisions, and modulos group from left to right. Comparisons and equality checks do not chain: `a < b < c` is invalid; write `a < b and b < c`.
 
@@ -412,7 +412,7 @@ ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(n
 
 Enums are nominal sum types and may declare type parameters. Variant names are qualified by the enum; payloads are positional, and a nullary variant is constructed with empty parentheses. Constructor type parameters are inferred from payloads and the expected enum type; unresolved or conflicting parameters are errors. Imported enum variants use the import alias plus enum and variant names.
 
-`case value do ... end` is a statement. Patterns are primitive literals, `_`, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
+`case value do ... end` is a statement; the `do` is optional. An arm may put one simple statement on the arrow line (`1 -> puts("one")`); more lines of the same arm may follow. Patterns are primitive literals, `_`, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
 
 ```ruby
 enum Option[T]
@@ -715,7 +715,7 @@ end
 
 - **Where.** `do |a, b| ... end` (or `do ... end` without parameters) right after the `)` of a call, or after a method name without parentheses: `xs.each do ... end`. A user function always needs its parentheses: `run(1) do ... end`, `start() do ... end`. The block becomes the last argument, so the called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET` otherwise, for user functions and builtins alike). `do || ... end` is rejected; write `do ... end`.
 - **Lines.** The body may follow the parameters on the same line (`do |x| x * 2 end`) or start on the next one. Blocks may span lines inside parentheses: `puts(String.join(xs.map do |x| ... end, ","))`.
-- **`case`, `while`, `for`.** In `case <expression> do`, the `do` belongs to `case`. In `while` conditions and `for` iterables, a `do` is never a block (`while x.empty? do` is a parse error: write the condition, then a newline). A call with a block in these headers needs parentheses: `case (xs.map do |x| x end) do`.
+- **`case`, `while`, `for`.** These headers may end with an optional `do`: `case x do`, `while !done do`, `for x in xs do`. That `do` belongs to the header and is never a block. A call with a block in these headers needs parentheses: `case (xs.map do |x| x end) do`.
 - **Parameter types** come from the call: the parameter types of the expected `Fn`, or the builtin's rule (`xs.map` gives `x` the element type). They may be annotated: `do |x: Int| ... end`. With neither, `CHECK-BLOCK-TYPE`. A wrong number of parameters is `CHECK-ARITY`.
 - **Result.** `return value` leaves the block, not the enclosing function. Without `return`, the value of the last expression statement is the block's value. The result type comes from the expected `Fn` (user functions, `each`, `any?`, `all?`, `filter`, and `reduce`, whose result is the accumulator type); for `map` and `sort_by` it comes from the body, where every `return` and the last expression must agree (`CHECK-TYPE-MISMATCH`). A non-`Void` block must give a value on every path (`CHECK-MISSING-RETURN`). When the result is `Void`, the last statement gives no value.
 - **`try`** inside a block returns the error from the block, so the block's result must be `Result[...]` (`CHECK-TRY-CONTEXT` otherwise); write the success as `ok(...)`. The result must be known from the call (a user function's `Fn[..., Result[T]]`), so `try` is not available in `map` and `sort_by` blocks, whose result is inferred.
@@ -1010,6 +1010,14 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `x.nil?` | `x == nil` |
 | `None`, `null` | `nil` |
 | `elif`, `elseif`, `else if` | `elsif` |
+| `let x = 5`, `var x = 5`, `const x = 5` | `x = 5` or `x: Int = 5` |
+| `match x`, `when 1` in a `case` | `case x do`, arms as `1 -> ...` |
+| `if x then` | a newline after the condition |
+| `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
+| `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
+| `break`, `continue`, `next` | a `while` condition, `return`, or an `if` around the rest of the body |
+| `Result.Ok(x)`, `Result.Err(m)` as values | `ok(x)`, `error(m)` (the qualified forms are `case` patterns) |
+| `Command.Show` for a variant without payload | `Command.Show()` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.

@@ -109,7 +109,12 @@
         "Float.to_string" "use x.to_s"
         "null" "use nil"
         "None" "use nil"
-        "nil?" "compare with nil: x == nil"))
+        "nil?" "compare with nil: x == nil"
+        "break" "there is no break; put the stop test in the while condition, or return from a function"
+        "continue" "there is no continue; wrap the rest of the loop body in an if"
+        "next" "there is no next; wrap the rest of the loop body in an if"
+        "Hash.new" "use a map literal with a type: m: Map[String, Int] = {}"
+        "Array.new" "use a list literal with a type: xs: List[Int] = []"))
 
 (define foreign-methods
   (hash "to_string" '("to_s") "to_str" '("to_s") "len" '("size" "length")
@@ -930,7 +935,9 @@
     (define (check-enum-constructor enum-name variant-name arguments span expected)
       (define definition (hash-ref enums enum-name #f))
       (unless definition
-        (bail 'CHECK-UNKNOWN-TYPE (format "unknown enum \"~a\"" enum-name) span))
+        (bail 'CHECK-UNKNOWN-TYPE (format "unknown enum \"~a\"" enum-name) span
+              #:help (and (equal? enum-name "Result")
+                          "build a Result with ok(value) or error(\"message\"); Result.Ok and Result.Err are case patterns")))
       (define parameters (car definition))
       (define variants (cdr definition))
       (define payload-types (hash-ref variants variant-name #f))

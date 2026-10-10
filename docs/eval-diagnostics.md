@@ -57,7 +57,35 @@ A probe of the current checker with common Python habits shows the same gap. The
 
 The Int/Float help said "there is no Int to Float conversion" after `Float.from_int` was added; it now names `Float.from_int` and `Float.to_int!`.
 
-## Next steps
+## Round 5 (2026-10-10)
+
+Only the round-5 `binary` run (`tests/eval/results/20261010-102333-pi`), on the Ruby-style language: 24 runs, 473 invocations, 183 with a diagnostic. The earlier `binary` rounds had 58 runs, 393 invocations and 120 with a diagnostic.
+
+```sh
+python3 tests/eval/diagnostics.py tests/eval/results/20261010-102333-pi --arms binary
+```
+
+| code | hits | runs | repeated next call |
+|---|---|---|---|
+| `PARSE-UNEXPECTED-TOKEN` | 98 | 14 | 48 |
+| `CHECK-UNKNOWN-NAME` | 23 | 11 | 4 |
+| `CHECK-TYPE-MISMATCH` | 14 | 8 | 1 |
+| `CHECK-MISSING-RETURN` | 11 | 9 | 2 |
+| `CHECK-UNKNOWN-TYPE` | 7 | 3 | 1 |
+| `CHECK-IMPORT-NAME` | 5 | 4 | 1 |
+| others | 25 | — | 1 |
+
+Compared with the snapshot above:
+
+- **Gone:** `CHECK-NOT-A-STRUCT` (methods on builtins) and `LEX-UNEXPECTED-CHAR` (`!`, `&&`, `||`). No run was stuck on `Float.from_int` or `s.length` any more.
+- **Parse errors grew** (98 hits, 48 repeated). By task: t6 36, t8 26, t7 15, t1 14, t4 7. The forms: `when` in a case arm (12×), `case x` without `do` (8×), a case arm body on the arrow line (8×), `IO.gets!` without parentheses (7×), `var x = ...` (7×), `while cond do`, `puts "hello"`. They are Ruby, and the language now looks like Ruby, so agents expect more of it.
+- **Unknown names:** `break` (5×), `println`, `Float.to_string`, `gets`, `range`. Except `break`, these already had a hint, and they were rarely repeated.
+- **Enums:** `Result.Ok(5)` as a value (`CHECK-UNKNOWN-TYPE`, 5×) and `Command.Show` without parentheses (`CHECK-IMPORT-NAME`, 5×).
+- **New codes** were seen and fixed on the next call: `CHECK-CAPTURED-ASSIGNMENT` (2×, a `total = total + x` inside a block) and `PARSE-MISSING-BLANK-LINE` (2×).
+
+Changes made from this round: `case`, `while` and `for` accept an optional `do`; a case arm can hold one statement on the arrow line; `Module.fn` without arguments may drop its parentheses. Hints were added for `when`, `then`, `let`/`var`/`val`/`const`, `match`, `fn`/`lambda`/`proc`, a `do` with no call, `Hash.new`/`Array.new`, `break`/`continue`/`next`, `Result.Ok(x)` as a value and a variant without parentheses. A new `binary` round should show whether the parse errors drop.
+
+## Next steps (2026-10-10 snapshot)
 
 Tracked in the roadmap under Phase 5d3 ("Diagnostics from evaluation data"):
 

@@ -22,7 +22,7 @@
   (with-handlers ([exn:fail? (lambda (failure)
                              (diagnostic 'CHECK-IMPORT-IO (exn-message failure) (program-span root)))])
     (let/ec failed
-      (define (bail code message span) (failed (diagnostic code message span)))
+      (define (bail code message span #:help [help #f]) (failed (diagnostic code message span #:help help)))
       (define (canonical path) (normalize-path (path->complete-path path)))
       (define root-key (canonical root-path))
       ;; pkg/ roots are anchored to the entrypoint, never the process cwd.
@@ -169,7 +169,8 @@
              ;; Unknown calls belong to the checker, including misspelled
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]
-             [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span)])]
+             [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span
+                         #:help (format "import a module with import \"path\" as ~a; an enum variant without payload needs parentheses: ~a()" alias name))])]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
           [(and (eq? kind 'enum) (string=? name "Result")) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]

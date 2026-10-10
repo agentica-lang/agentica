@@ -86,7 +86,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 - Precedence ladder: or → and → equality → comparison → additive → multiplicative → unary → postfix → primary.
 - Arithmetic levels are left-associative; equality and comparison take a single optional operator, so `a < b < c` and `a == b == c` are `PARSE-CHAINED-COMPARISON`, while `a < b == c < d` is valid.
-- Top level accepts def/struct/enum/import and export def/struct/enum. `case` uses `do`, `->`, and `end`. as is contextual. Qualified names cover imported types, enum constructors/patterns, calls and function references. Module nodes must pass through modules.rkt before check.
+- Top level accepts def/struct/enum/import and export def/struct/enum. `case` uses an optional `do`, `->`, and `end`; `while` and `for` headers also take an optional `do`. A case arm body is either a NL and a block, or one simple statement on the arrow line followed by more statements. A qualified function name without `(` is a `call` with no arguments. as is contextual. Qualified names cover imported types, enum constructors/patterns, calls and function references. Module nodes must pass through modules.rkt before check.
 - A statement starting with `name` is a binding when the next token is `=` or `:`; otherwise it is an expression.
 - Stray `NL` tokens are skipped at the top level and between statements (see the gotcha in `SKILL.md`).
 

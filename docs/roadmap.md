@@ -1027,7 +1027,9 @@ Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agent
 - [x] Blocks and closures: `do |x| ... end` as the last argument, capture by value, `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET`, `CHECK-CAPTURED-ASSIGNMENT`; closures accepted everywhere a `Fn` is (tasks, HTTP, BDD); `List.each`, `List.any?`, `List.all?`; `examples/blocks.agc`.
 - [x] Hints for foreign habits (`len`, `str`, `print`, `input`, `range`, `None`, `elif`, `to_i` used as `Int`).
 - [x] Teach the Ruby forms in the programming skill and examples.
-- [ ] Re-run the `binary` evaluation arm and `tests/eval/diagnostics.py`, and compare with the 2026-10-10 snapshot.
+- [x] Re-run the `binary` evaluation arm and `tests/eval/diagnostics.py`, and compare with the 2026-10-10 snapshot (round 5 in `eval-results.md` and `eval-diagnostics.md`).
+- [x] Accept the Ruby forms round 5 showed (optional `do` on `case`/`while`/`for`, one-line case arms, module calls without arguments and parentheses) and hint the rest.
+- [ ] Re-run the `binary` arm after these changes and compare with round 5.
 
 **Done when:** the Ruby forms check and run with the same diagnostics quality as the module forms, and the evaluation shows the effect.
 
