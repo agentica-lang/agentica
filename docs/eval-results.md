@@ -134,7 +134,7 @@ An A/B of the `skill` arm on the same language and tasks, run in parallel. 7a us
 | t8-enum-ledger | 50,397 → 20,911 | 46 → 47 | 0.0 → 0.7 | $0.0139 → $0.0074 |
 
 - Tokens per run fell 45% (28.9k → 15.8k) and cost 39%, with every task lower. Accuracy stayed at 24/24. Failing runs moved from 3 to 5 in total, within noise.
-- The agents read only what the task needed: `builtins.md` in 21 of 24 runs, `examples.md` in 15, `json.md` only in the JSON tasks (t6, t7). The t3 runs read no reference at all. No run opened the network, process, task, file, BDD or diagnostics references.
+- The agents read only what the task needed: `builtins.md` in 21 of 24 runs, `examples.md` in 16, `json.md` only in the JSON tasks (t6, t7). The t3 runs read no reference at all. No run opened the network, process, task, file, BDD or diagnostics references.
 - Both arms beat the round-1 `skill` numbers on t1–t5 (13.7k tokens then, 23.0k in 7a, 13.0k in 7b), but the language and the skill have grown since round 1, so only 7a vs 7b is a fair comparison.
 
 ## What the results do not show
