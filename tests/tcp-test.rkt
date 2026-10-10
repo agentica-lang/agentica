@@ -40,6 +40,7 @@ def echo(listener: Listener) -> Void
   Result.unwrap!(TCP.send(socket, line + "\n", 1000))
   TCP.close(socket)
 end
+
 def main() -> Void
   listener = Result.unwrap!(~a)
   puts(String.from_int(TCP.local_port(listener)))
