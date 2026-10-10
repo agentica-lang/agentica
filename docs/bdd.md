@@ -106,6 +106,8 @@ BDD.then_stdout(expected: String) -> Void
 BDD.then_stderr(expected: String) -> Void
 ```
 
+A step can also be a block: `BDD.step("{int} is small") do |args| ... end`. The block runs in each scenario's own evaluation, so it should capture data only (strings, numbers, lists), not files, processes or connections opened during registration.
+
 Only registration allows `BDD.step`; actions, state, and assertions require a running scenario. Missing Doc Strings/tables fail; missing state returns an error Result. A second program start, an unknown pattern, or multiple matching definitions fail. Every `Then` step, including its following `And`/`But`, must perform at least one BDD assertion; every scenario must perform a check. Handler calls to `System.exit`, including code zero, fail. Calling `BDD.run` recursively from handlers is unavailable.
 
 ## Run from Agentica

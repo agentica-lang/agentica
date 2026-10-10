@@ -99,6 +99,13 @@
     (check-true (call? (case-stmt-value (car (function-decl-body (car (program-declarations scrutinee)))))))
     (check-equal? (parse-code "def main() -> Void\n  xs.each do || puts(\"a\") end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
     (check-equal? (parse-code "def main() -> Void\n  x = 1 do\n  end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    if x\n      puts(x) end\n  end\nend\n")
+                  'PARSE-UNEXPECTED-TOKEN)
+    (for ([text '("def main() -> Void\n  while xs.empty? do\n  end\nend\n"
+                  "def main() -> Void\n  for x in xs.reverse do\n  end\nend\n")])
+      (define problem (parse-text text))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN text)
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2 text))
     (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    puts(x)\n") 'PARSE-UNCLOSED-BLOCK))
 
   (test-case "hello program parses"
