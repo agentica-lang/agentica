@@ -9,7 +9,8 @@
          "task.rkt"
          "builtin-types.rkt" "network.rkt" "filesystem.rkt" "process.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
          "json.rkt"
-         "json-typed.rkt")
+         "json-typed.rkt"
+         (only-in racket/random crypto-random-bytes))
 
 (provide evaluate
          (struct-out instance)
@@ -24,6 +25,32 @@
 (define decimal-float-pattern #px"^[+-]?[0-9]+(\\.[0-9]+)?$")
 
 (define max-call-depth 10000)
+
+(define max-seed (sub1 (expt 2 31)))
+
+(define (random-seed-from-os)
+  (modulo (integer-bytes->integer (crypto-random-bytes 4) #f) (add1 max-seed)))
+
+(define (random-in-range low high)
+  (define size (add1 (- high low)))
+  (if (<= size 4294967087)
+      (+ low (random size))
+      (let* ([space (expt 2 64)]
+             [limit (* size (quotient space size))])
+        (let loop ()
+          (define bits
+            (for/fold ([n 0]) ([_ (in-range 4)])
+              (+ (* n 65536) (random 65536))))
+          (if (< bits limit)
+              (+ low (modulo bits size))
+              (loop))))))
+
+(define (order<? a b)
+  (cond
+    [(string? a) (string<? a b)]
+    [(nan? a) #f]
+    [(nan? b) #t]
+    [else (< a b)]))
 ;; ponytail: cap eager reads at 1 MiB per call; stream larger inputs in chunks.
 (define max-read-bytes (* 1024 1024))
 
@@ -37,10 +64,13 @@
                   #:arguments [arguments '()]
                   #:builtin-handler [builtin-handler #f]
                   #:require-complete-tasks? [require-complete? #f]
-                  #:allow-run [allow-run? (current-process-allowed?)])
+                  #:allow-run [allow-run? (current-process-allowed?)]
+                  #:seed [seed #f])
   (parameterize ([current-input-port input]
                  [current-output-port output]
-                 [current-error-port error-output])
+                 [current-error-port error-output]
+                 [current-pseudo-random-generator (make-pseudo-random-generator)])
+    (random-seed (or seed (random-seed-from-os)))
     (define functions
       (for/hash ([declaration (in-list (program-declarations program))]
                  #:when (function-decl? declaration))
@@ -551,6 +581,13 @@
                  (node-span (cadr (call-args expression)))))
          (make-list count (car arguments))]
         [("List.reverse") (reverse (car arguments))]
+        [("List.sort") (sort (car arguments) order<?)]
+        [("List.sort_by")
+         (define callback (hash-ref functions (function-value-name (cadr arguments))))
+         (define keyed
+           (for/list ([item (in-list (car arguments))])
+             (cons (call-function callback (list item) span) item)))
+         (map cdr (sort keyed order<? #:key car))]
         [("String.length") (string-length (car arguments))]
         [("String.upcase") (string-upcase (car arguments))]
         [("String.downcase") (string-downcase (car arguments))]
@@ -578,6 +615,48 @@
                          start length (string-length text))
                  (call-span expression)))
          (substring text start (+ start length))]
+        [("String.index_of")
+         (define found (regexp-match-positions (regexp-quote (cadr arguments)) (car arguments)))
+         (if found
+             (result-ok (caar found))
+             (result-error (format "~s not found" (cadr arguments))))]
+        [("String.at")
+         (define text (car arguments))
+         (define index (cadr arguments))
+         (unless (< -1 index (string-length text))
+           (bail 'RUNTIME-INDEX-OUT-OF-RANGE "string index is out of range"
+                 (node-span (cadr (call-args expression)))))
+         (string (string-ref text index))]
+        [("String.reverse") (list->string (reverse (string->list (car arguments))))]
+        [("String.code")
+         (define text (car arguments))
+         (unless (= (string-length text) 1)
+           (bail 'RUNTIME-INVALID-CHARACTER "String.code needs exactly one character"
+                 (node-span (car (call-args expression)))))
+         (char->integer (string-ref text 0))]
+        [("String.from_code")
+         (define code (car arguments))
+         (unless (or (<= 0 code #xD7FF) (<= #xE000 code #x10FFFF))
+           (bail 'RUNTIME-INVALID-CHARACTER "not a Unicode scalar value"
+                 (node-span (car (call-args expression)))))
+         (string (integer->char code))]
+        [("Time.now_ms") (exact-floor (current-inexact-milliseconds))]
+        [("Time.monotonic_ms") (exact-floor (current-inexact-monotonic-milliseconds))]
+        [("Random.int")
+         (define low (car arguments))
+         (define high (cadr arguments))
+         (when (> low high)
+           (bail 'RUNTIME-INVALID-RANGE "Random.int needs min <= max" span))
+         (random-in-range low high)]
+        [("Random.float") (random)]
+        [("Float.from_int") (exact->inexact (car arguments))]
+        [("Float.to_int" "Float.to_int!")
+         (fallible (string-suffix? name "!")
+                   (lambda (fail)
+                     (define x (car arguments))
+                     (unless (rational? x)
+                       (fail 'RUNTIME-INVALID-NUMBER (format "cannot convert ~a to Int" x) span))
+                     (in-int-range (inexact->exact (truncate x)) span fail)))]
         [("String.from_int") (number->string (car arguments))]
         [("String.from_float") (number->string (car arguments))]
         [("String.from_bytes")

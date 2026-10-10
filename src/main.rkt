@@ -17,6 +17,7 @@
   (define style 'plain)
   (define max-steps #f)
   (define allow-run? #f)
+  (define seed #f)
   (define step-files '())
   (define raw-arguments
     (command-line
@@ -30,6 +31,12 @@
         (eprintf "agentica: --max-steps needs a positive integer\n")
         (exit 2))
       (set! max-steps parsed)]
+     [("--seed") n "seed Random with N (0..2147483647) for repeatable runs"
+      (define parsed (string->number n))
+      (unless (and (regexp-match? #px"^[0-9]+$" n) (<= 0 parsed 2147483647))
+        (eprintf "agentica: --seed needs an integer from 0 to 2147483647\n")
+        (exit 2))
+      (set! seed parsed)]
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
      [("--ai") "print diagnostics as compact text for an agent" (set! style 'ai)]
      [("--json") "print diagnostics as one JSON object" (set! style 'json)]
@@ -68,7 +75,7 @@
         [(string-prefix? (car arguments) "--")
          (usage-error (format "unknown option ~a" (car arguments)))]
         [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
-    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files #:allow-run allow-run?))
+    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files #:allow-run allow-run? #:seed seed))
     (show-report report))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
@@ -92,7 +99,7 @@
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
   (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--version] [--dump] [--ai|--json] [--max-steps N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -126,7 +133,7 @@
     [dump? (pretty-print checked)]
     [else
      (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
-                              #:builtin-handler (make-bdd-service)))
+                              #:seed seed #:builtin-handler (make-bdd-service)))
      (cond
        [(diagnostic? result) (fail! result)]
        [(exit-code? result) (exit (exit-code-code result))])]))

@@ -39,10 +39,12 @@
           (when (> count 1048576) (error 'BDD "handler output exceeds 1 MiB"))
           (- end start)))) void))
 
+(define current-bdd-seed (make-parameter #f))
+
 (define (evaluate-handler program context handler #:entrypoint [entrypoint "main"] #:arguments [arguments '()])
   (evaluate program #:in (open-input-string "") #:out (quiet-output) #:err (quiet-output)
             #:entrypoint entrypoint #:arguments arguments #:max-steps 1000000 #:builtin-handler handler
-            #:require-complete-tasks? #t))
+            #:require-complete-tasks? #t #:seed (current-bdd-seed)))
 
 (define (built-in-definitions)
   (define (entry pattern name build-arguments)
@@ -164,9 +166,13 @@
           'steps (reverse records) 'error (if failure (diagnostic->jsexpr failure) 'null)))
 
 (define (run-bdd paths #:steps [step-files '()] #:command [base-command (default-bdd-command)]
-                 #:allow-run [allow-run? (current-process-allowed?)])
-  (parameterize ([current-process-allowed? allow-run?])
-  (define command (if allow-run? (append base-command '("--allow-run")) base-command))
+                 #:allow-run [allow-run? (current-process-allowed?)] #:seed [seed #f])
+  (parameterize ([current-process-allowed? allow-run?]
+                 [current-bdd-seed seed])
+  (define command
+    (append base-command
+            (if allow-run? '("--allow-run") '())
+            (if seed (list "--seed" (number->string seed)) '())))
   (define files '())
   (define registry (built-in-definitions))
   (define targets '())

@@ -35,6 +35,28 @@
           (check-equal? (hash-ref (hash-ref (cadr results) 'error) 'code) "RUNTIME-BDD-PENDING-TASKS"))
         (lambda () (delete-directory/files directory))))
 
+    (test-case "a seed reaches step handlers and programs under test"
+      (define directory (make-temporary-file "agentica-bdd-seed~a" 'directory))
+      (dynamic-wind void
+        (lambda ()
+          (define draw "String.from_int(Random.int(1, 1000000)) + \" \" + String.from_int(Random.int(1, 1000000))")
+          (display-to-file (format "def main() -> Void\n  puts(~a)\nend\n" draw)
+                           (build-path directory "draw.agc"))
+          (define steps (build-path directory "steps.agc"))
+          (display-to-file
+           (string-append
+            (format "def same(args: List[String]) -> Void\n  BDD.then_stdout(~a + \"\\n\")\nend\n" draw)
+            "def main() -> Void\n  BDD.step(\"stdout repeats the seeded draw\", &same)\nend\n")
+           steps)
+          (display-to-file
+           (string-append "Feature: Seeds\nScenario: seeded\nGiven the Agentica program \"draw.agc\"\n"
+                          "Then the program exits with code 0 within 5000 milliseconds\n"
+                          "And stdout repeats the seeded draw\n")
+           (build-path directory "seed.feature"))
+          (check-true (hash-ref (run-bdd (list directory) #:steps (list steps) #:seed 9) 'ok))
+          (check-false (hash-ref (run-bdd (list directory) #:steps (list steps)) 'ok)))
+        (lambda () (delete-directory/files directory))))
+
     (test-case "live JSON responses arrive before EOF and recover after errors"
       (define report (run-bdd (list stream-spec)))
       (check-true (hash-ref report 'ok) (format "~s" report))
