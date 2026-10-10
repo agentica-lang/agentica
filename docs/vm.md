@@ -29,10 +29,12 @@ details and reasons.
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
-**Status.** The first VM PR (the vertical slice, 12.2 item 1) is in. It covers
-Int and Bool values, locals, the Int and Bool operators, `if`/`elsif`/`else`,
-`while` with `break` and `next`, user functions, calls, `return`, and `puts`
-of a String literal or an Int. The lowerer rejects everything else with
+**Status.** The vertical slice and the Float PR (12.2 items 1 and 2) are in.
+The VM covers Int, Float, Bool and Nil values, locals, their operators
+(Float `+ - * /`, unary minus and comparisons with IEEE semantics),
+`if`/`elsif`/`else`, `while` with `break` and `next`, user functions, calls,
+`return`, and `puts`/`print` (also `IO.puts`/`IO.print`) of a String literal
+or any of those values, printed as the evaluator's text form. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
 marked "In the slice" say where the code is still narrower.
@@ -77,7 +79,18 @@ differential tests (section 12) check them.
   overflows. `%` is Racket `remainder`, so `INT64_MIN % -1` is `0`; C must
   special-case it.
 - Division and modulo by zero fail at the operator span. For Float, both
-  `0.0` and `-0.0` divisors fail (`zero?`). Float `+ - *` never fail.
+  `0.0` and `-0.0` divisors fail (`zero?`); a NaN divisor does not (the
+  result is NaN). Float `+ - *` never fail: overflow gives `+inf.0`/`-inf.0`,
+  `inf - inf` and `inf * 0.0` give NaN, underflow gives subnormals or `0.0`.
+  Unary minus negates the sign bit (`-0.0` from `0.0`, NaN stays NaN and
+  prints `+nan.0`). Float `%` does not exist (`CHECK-TYPE-MISMATCH`).
+- Ordering with NaN on either side is false for `< <= > >=`, which is why
+  `a > b` may lower to `lt b a`.
+- Float literals are `digits.digits` only (no exponent syntax; `1e21` is a
+  parse error). The lexer converts them with Racket `string->number`, and the
+  bytecode carries the resulting double bit for bit, so the VM never parses
+  decimal text. Infinity, NaN and subnormals reach programs only through
+  arithmetic.
 - `==` uses `=` for numbers (NaN differs from itself, `0.0 == -0.0`) and
   `equal?` otherwise. A `case` literal pattern uses `equal?` even for Float,
   so pattern `0.0` does not match `-0.0`.
@@ -96,10 +109,30 @@ differential tests (section 12) check them.
   else `e + 3` for `ddd.0`) and `sci` is `n + (n > 1 ? 1 : 0) + 2 + digits(e)`.
   Exponents print as `e+14` and `e-5`; one digit has no point (`1e+21`).
   Otherwise print positionally with at least one fractional digit (`100.0`,
-  `0.0001`). Specials: `+nan.0`, `+inf.0`, `-inf.0`, `-0.0`. This rule matched
-  Racket on 200,000 random values and a grid of patterns. Shortest digits come
-  from `snprintf("%.*e")` with precision 1 to 17, keeping the first that
-  round-trips through `strtod`.
+  `0.0001`). Specials: `+nan.0` (any NaN, whatever its sign), `+inf.0`,
+  `-inf.0`, `-0.0`, `0.0`.
+- Shortest digits are Racket's free-format digits (Burger and Dybvig), which
+  differ from "correctly round to the first precision that round-trips" in
+  two places: an exact tie at the last digit rounds up in magnitude
+  (`11789751951819.5625` prints `11789751951819.563`, where `%.13e` gives
+  `...562`), and at a power of two the rounding interval is asymmetric, so the
+  shortest string may be the farther neighbor (`2^-1017` prints
+  `7.120236347223045e-307`, not the nearer 17-digit form). `agc_float_text` in
+  `vm/value.c` therefore prints the exact decimal expansion once
+  (`snprintf("%.767e")`; exact on glibc, still to be confirmed on macOS and
+  the UCRT by the §12.2 item 4 CI, which `vm/tests/float_text_test.c` checks
+  against the full expansion of 2^-1074), and for each length tries the
+  nearest candidate (ties up) and then the other neighbor, keeping the first
+  that round-trips through `strtod`. Lengths start at 1 for subnormals and at
+  15 for normal values: there a 15-digit step is at least 4.5 ulp, so a
+  shorter form is the nearest 15-digit candidate with trailing zeros, which
+  are trimmed. One-off runs during PR #42 matched Racket 9.3 on about 1.9
+  million values (random bit patterns, subnormals, every power of two and its
+  neighbors, decimal grids from 1e-330 to 1e309, dyadic values with exact
+  ties, random arithmetic chains); the lasting checks are the 40 values in
+  `vm/tests/float_text_test.c` and the `float-text` differential fixture.
+  Printing costs about 5 to 10 µs per value (one 768-digit `snprintf` plus a
+  few `snprintf`/`strtod` pairs); 7g revisits it.
 
 ### 2.3 Strings and text
 
@@ -292,9 +325,10 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 | `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception inside `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
 
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
-exit 1. In the slice, a value outside Int and Bool is rejected, except a
-String literal passed straight to `puts` (or `IO.puts`) and a Void call used
-as a statement or returned.
+exit 1. Today a value outside Int, Float, Bool and Nil is rejected, except a
+String literal passed straight to `puts`, `print`, `IO.puts` or `IO.print`
+and a Void call used as a statement or returned. The text builtins are
+imported by their implementation keys, `puts` and `IO.print`.
 
 ## 4. Bytecode (7d)
 
@@ -364,7 +398,9 @@ Opcode numbers are positions in one list shared by `opcodes` in
 opcodes it implements, so there are no numbers for unimplemented ones. In the
 slice the list is `MOVE CONST STEP ADD_I SUB_I MUL_I DIV_I MOD_I NEG_I NOT
 LT_I LE_I EQ NE JUMP JUMP_IF_FALSE JUMP_IF_TRUE CALL CALL_BUILTIN RETURN`
-(20 opcodes), and `EQ`/`NE` accept Int or Bool pairs only.
+(20 opcodes); the Float PR appended `ADD_F SUB_F MUL_F DIV_F NEG_F LT_F
+LE_F` (27). `EQ`/`NE` accept Int, Float (C `==`, which is Racket `=`), Bool
+or Nil pairs; other pairs are `RUNTIME-INTERNAL`.
 
 ### 4.3 Calls, call windows and resumable builtins
 
@@ -429,9 +465,9 @@ entries must point to smaller indexes, so only Struct entries can make
 cycles (recursive structs). The full source texts are embedded so the VM
 prints diagnostics without reading files.
 
-In the slice the writer always emits empty Types, Structs and Enums sections
-and only the constant kinds Void, false, true, Int and String; the loader
-rejects anything else until the PR that needs it.
+Today the writer always emits empty Types, Structs and Enums sections, and
+the loader rejects anything else until the PR that needs it. All seven
+constant kinds are in use; Float constants are the literal's IEEE bits.
 
 The VM accepts only its own format version and Agentica version; anything
 else is rejected (8). Any change to the layout or to an opcode's meaning
@@ -457,7 +493,7 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. In the slice `vm/agc.h` has only Void, Bool, Int and String, and the union has no `f` yet. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has Void, Nil, Bool, Int, Float and String, in the order above. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
@@ -658,9 +694,8 @@ The loader validates the whole file before running anything. Failures print
   unbounded repetition charges a step, so `--max-steps` holds even for
   hostile files: the step budget bounds the work to about steps × code size.
 - **Entry**: exists, with no parameters or captures.
-- **In the slice**: captures must be 0, the Types, Structs and Enums sections
-  must be empty, and only the constant kinds the writer emits (4.6) are
-  accepted. `vm/tests/loader_test.c` checks each rejection by its reason:
+- **In the slice**: captures must be 0 and the Types, Structs and Enums
+  sections must be empty; constant kinds above 6 are rejected. `vm/tests/loader_test.c` checks each rejection by its reason:
   truncation at every byte, bad magic and versions, trailing bytes, entry out
   of range or with parameters, unknown builtins, invalid UTF-8 (overlong,
   surrogate, above U+10FFFF), span lines and columns out of range and spans
@@ -914,6 +949,10 @@ the platform's OpenSSL package) to each job.
   step test. Programs using `Random` run with several `--seed` values.
 - Generated corpora, checked by C tests against outputs from a Racket script:
   float text, split and trim, case mapping of every code point, write escapes.
+  Float text has a fixed table in `vm/tests/float_text_test.c` (values picked
+  from a 708k-value comparison with Racket, 2.2) and the
+  `tests/fixtures/vm/float-text.agc` differential fixture; `make vm-test`
+  builds every `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
   every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
   enum chain and nested JSON array, printed and encoded.
@@ -931,7 +970,8 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
    strings and Ints; the loader with full validation and the fuzz driver;
    `--dump-ir`, `agentica compile`; `make vm`, the Linux and sanitizer CI
    jobs, `tests/vm-diff-test.rkt`.
-2. **Float.** Float ops, comparisons and Float text (2.2), Nil.
+2. **Float** (done). Float ops, comparisons and Float text (2.2), Nil, and
+   `puts`/`print` of Float, Bool and Nil.
 3. **Strings and printing.** Strings, interpolation, debug forms, the Unicode
    and write-escape generator, the three diagnostic formats, exit codes.
 4. **macOS and Windows CI.**

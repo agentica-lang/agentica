@@ -72,11 +72,13 @@ dist/agentica-vm: $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
 
 vm: dist/agentica-vm
 
-$(VM_BUILD)/loader-test: $(VM_DEPS) vm/fuzz.c vm/tests/loader_test.c $(VM_GC) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c vm/tests/loader_test.c $(VM_GC) $(VM_LDFLAGS)
+VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test,$(wildcard vm/tests/*_test.c))
 
-vm-test: $(VM_BUILD)/loader-test
-	$(VM_BUILD)/loader-test
+$(VM_BUILD)/%-test: vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_LDFLAGS)
+
+vm-test: $(VM_TESTS)
+	for t in $(VM_TESTS); do $$t || exit 1; done
 
 $(VM_BUILD)/agentica-vm-fuzz: $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_STAMP)
 	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_LDFLAGS)

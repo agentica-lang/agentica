@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -90,6 +91,20 @@ agc_value agc_void(void) {
   return v;
 }
 
+agc_value agc_nil(void) {
+  agc_value v;
+  v.tag = AGC_T_NIL;
+  v.as.i = 0;
+  return v;
+}
+
+agc_value agc_float(double f) {
+  agc_value v;
+  v.tag = AGC_T_FLOAT;
+  v.as.f = f;
+  return v;
+}
+
 agc_value agc_bool(bool b) {
   agc_value v;
   v.tag = AGC_T_BOOL;
@@ -125,6 +140,11 @@ bool agc_as_bool(agc_vm *vm, agc_value v) {
 int64_t agc_as_int(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_INT) wrong_tag(vm);
   return v.as.i;
+}
+
+double agc_as_float(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_FLOAT) wrong_tag(vm);
+  return v.as.f;
 }
 
 agc_string *agc_as_string(agc_vm *vm, agc_value v) {
@@ -168,4 +188,81 @@ bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
   }
   *chars = count;
   return true;
+}
+
+static size_t put(char *out, size_t at, const char *text, size_t len) {
+  memcpy(out + at, text, len);
+  return at + len;
+}
+
+size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
+  if (isnan(x)) return put(out, 0, "+nan.0", 6);
+  if (isinf(x)) return put(out, 0, x > 0 ? "+inf.0" : "-inf.0", 6);
+  size_t at = 0;
+  if (signbit(x)) {
+    out[at++] = '-';
+    x = -x;
+  }
+  if (x == 0) return put(out, at, "0.0", 3);
+  char exact[800];
+  int written = snprintf(exact, sizeof exact, "%.767e", x);
+  char *mark = written > 0 && (size_t)written < sizeof exact ? strchr(exact, 'e') : NULL;
+  char all[768];
+  size_t total = 0;
+  for (const char *c = exact; mark && c < mark; c++)
+    if (*c >= '0' && *c <= '9' && total < sizeof all) all[total++] = *c;
+  if (total != sizeof all) abort();
+  int e = atoi(mark + 1);
+  char digits[20];
+  size_t n = 0;
+  int digits_e = e;
+  bool found = false;
+  for (size_t precision = isnormal(x) ? 15 : 1; precision <= 17 && !found; precision++) {
+    bool nearest_up = all[precision] >= '5';
+    for (int attempt = 0; attempt < 2 && !found; attempt++) {
+      memcpy(digits, all, precision);
+      n = precision;
+      digits_e = e;
+      if (nearest_up != (attempt == 1)) {
+        size_t k = n;
+        while (k > 0 && digits[k - 1] == '9') digits[--k] = '0';
+        if (k == 0) {
+          digits[0] = '1';
+          digits_e++;
+        } else {
+          digits[k - 1]++;
+        }
+      }
+      char text[AGC_FLOAT_TEXT];
+      snprintf(text, sizeof text, "%c.%.*se%d", digits[0], (int)n - 1, digits + 1, digits_e);
+      found = strtod(text, NULL) == x;
+    }
+  }
+  while (n > 1 && digits[n - 1] == '0') n--;
+  e = digits_e;
+  int exponent_digits = snprintf(NULL, 0, "%d", e < 0 ? -e : e);
+  int positional = (int)n > e + 1 ? (int)n + 1 : e + 3;
+  int scientific = (int)n + (n > 1) + 2 + exponent_digits;
+  if (e < -4 || (e >= 0 && positional > 16 && positional > scientific)) {
+    out[at++] = digits[0];
+    if (n > 1) {
+      out[at++] = '.';
+      at = put(out, at, digits + 1, n - 1);
+    }
+    return at + (size_t)snprintf(out + at, AGC_FLOAT_TEXT - at, "e%c%d", e < 0 ? '-' : '+', e < 0 ? -e : e);
+  }
+  if (e < 0) {
+    at = put(out, at, "0.", 2);
+    for (int k = -1; k > e; k--) out[at++] = '0';
+    return put(out, at, digits, n);
+  }
+  size_t whole = (size_t)e + 1;
+  if (n > whole) {
+    at = put(out, at, digits, whole);
+    out[at++] = '.';
+    return put(out, at, digits + whole, n - whole);
+  }
+  at = put(out, at, digits, n);
+  for (size_t k = n; k < whole; k++) out[at++] = '0';
+  return put(out, at, ".0", 2);
 }

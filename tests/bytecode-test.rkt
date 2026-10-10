@@ -57,7 +57,12 @@
     (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
     (define loop
       (lower-text "def main() -> Void\n  for x in [1, 2]\n    puts(x)\n  end\nend\n"))
-    (check-equal? (diagnostic-code loop) 'LOWER-UNSUPPORTED))
+    (check-equal? (diagnostic-code loop) 'LOWER-UNSUPPORTED)
+    (define text-param
+      (lower-text "def show(s: String) -> Void\n  print(s)\nend\n\ndef main() -> Void\n  show(\"a\")\nend\n"))
+    (check-equal? (diagnostic-code text-param) 'LOWER-UNSUPPORTED)
+    (define text-start (source-span-start (diagnostic-span text-param)))
+    (check-equal? (list (source-position-line text-start) (source-position-column text-start)) '(2 9)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
     (define work (make-temporary-directory "agentica-compile~a"))

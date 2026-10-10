@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs Float and Nil code: Float literals, `+ - * /`, unary
+  minus and comparisons with the evaluator's IEEE behavior (NaN, infinities,
+  `-0.0`, division by `0.0` and `-0.0`), `nil` and `==`/`!=` on Nil, and
+  `puts`/`print` of Float, Bool and Nil with the evaluator's Float text.
 - First slice of the bytecode VM (`docs/vm.md`): `agentica compile file.agc
   -o file.agcb` and `--dump-ir`, and `dist/agentica-vm` (`make vm`), a C11
   VM with the Boehm GC (vendored as a pinned submodule) that runs Int and

@@ -11,12 +11,13 @@
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
+#define AGC_FLOAT_TEXT 40
 
-typedef enum { AGC_T_VOID = 0, AGC_T_BOOL, AGC_T_INT, AGC_T_STRING } agc_tag;
+typedef enum { AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING } agc_tag;
 
 typedef struct {
   uint32_t tag;
-  union { bool b; int64_t i; void *p; } as;
+  union { bool b; int64_t i; double f; void *p; } as;
 } agc_value;
 
 typedef struct {
@@ -30,6 +31,7 @@ typedef enum {
   AGC_OP_NOT, AGC_OP_LT_I, AGC_OP_LE_I, AGC_OP_EQ, AGC_OP_NE,
   AGC_OP_JUMP, AGC_OP_JUMP_IF_FALSE, AGC_OP_JUMP_IF_TRUE,
   AGC_OP_CALL, AGC_OP_CALL_BUILTIN, AGC_OP_RETURN,
+  AGC_OP_ADD_F, AGC_OP_SUB_F, AGC_OP_MUL_F, AGC_OP_DIV_F, AGC_OP_NEG_F, AGC_OP_LT_F, AGC_OP_LE_F,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -103,14 +105,18 @@ void agc_out_of_memory(void);
 unsigned agc_gc_version(void);
 
 agc_value agc_void(void);
+agc_value agc_nil(void);
 agc_value agc_bool(bool b);
 agc_value agc_int(int64_t i);
+agc_value agc_float(double f);
 agc_value agc_string_value(agc_string *s);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
+double agc_as_float(agc_vm *vm, agc_value v);
 agc_string *agc_as_string(agc_vm *vm, agc_value v);
 bool agc_is(agc_value v, agc_tag tag);
 
+size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);

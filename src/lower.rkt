@@ -16,9 +16,17 @@
 
 (define int-min (- (expt 2 63)))
 
+(define value-types '(Int Float Bool Nil))
+
 (define int-ops
   (hasheq 'plus 'add-i 'minus 'sub-i 'multiply 'mul-i 'divide 'div-i 'modulo 'mod-i
           'less 'lt-i 'less-equal 'le-i 'greater 'lt-i 'greater-equal 'le-i))
+
+(define float-ops
+  (hasheq 'plus 'add-f 'minus 'sub-f 'multiply 'mul-f 'divide 'div-f
+          'less 'lt-f 'less-equal 'le-f 'greater 'lt-f 'greater-equal 'le-f))
+
+(define text-builtins '("puts" "IO.print"))
 
 (define (lower program types)
   (let/ec return
@@ -100,7 +108,7 @@
        dst]
       [(call? expression) (lower-call expression want void?)]
       [else
-       (require-type! expression '(Int Bool))
+       (require-type! expression value-types)
        (lower-value expression want)]))
 
   (define (lower-value expression want)
@@ -122,7 +130,10 @@
        (define saved next)
        (define dst (target want))
        (define operand (lower-expression (unary-operand expression) #f))
-       (emit! (if (eq? (unary-op expression) 'not) 'not 'neg-i) (list dst operand)
+       (emit! (cond [(eq? (unary-op expression) 'not) 'not]
+                    [(eq? (type-of (unary-operand expression)) 'Float) 'neg-f]
+                    [else 'neg-i])
+              (list dst operand)
               (unary-op-span expression))
        (set! next (if want saved (add1 dst)))
        dst]
@@ -143,14 +154,15 @@
        (lower-expression (binary-right expression) dst)
        (place! end)]
       [else
+       (define ops (if (eq? (type-of (binary-left expression)) 'Float) float-ops int-ops))
        (define left (lower-expression (binary-left expression) #f))
        (define right (lower-expression (binary-right expression) #f))
        (case op
          [(equal not-equal)
           (emit! (if (eq? op 'equal) 'eq 'ne) (list dst left right) op-span)]
          [(greater greater-equal)
-          (emit! (hash-ref int-ops op) (list dst right left) op-span)]
-         [else (emit! (hash-ref int-ops op) (list dst left right) op-span)])])
+          (emit! (hash-ref ops op) (list dst right left) op-span)]
+         [else (emit! (hash-ref ops op) (list dst left right) op-span)])])
     (set! next (if want saved (add1 dst)))
     dst)
 
@@ -159,12 +171,13 @@
     (define arguments (call-args expression))
     (define span (call-span expression))
     (define entry (builtin-ref name (length arguments)))
-    (define puts? (and entry (equal? (builtin-implementation entry) "puts")))
-    (when (and entry (not puts?))
+    (define key (and entry (builtin-implementation entry)))
+    (define text? (and key (member key text-builtins) #t))
+    (when (and entry (not text?))
       (unsupported (format "the builtin ~a" name) span))
-    (unless (or puts? (hash-has-key? function-index name))
+    (unless (or text? (hash-has-key? function-index name))
       (unsupported (format "the call to ~a" name) span))
-    (require-type! expression (if void? '(Int Bool Void) '(Int Bool)))
+    (require-type! expression (if void? (cons 'Void value-types) value-types))
     (emit! 'step '() span)
     (define saved next)
     (define base (alloc!))
@@ -172,15 +185,12 @@
       (set! next (+ base index))
       (define slot (alloc!))
       (cond
-        [(and puts? (literal? argument) (string? (literal-value argument)))
+        [(and text? (literal? argument) (string? (literal-value argument)))
          (emit! 'step '() (literal-span argument))
          (emit! 'const (list slot (literal-value argument)) (literal-span argument))]
-        [puts?
-         (require-type! argument '(Int))
-         (lower-expression argument slot)]
         [else (lower-expression argument slot)]))
-    (if puts?
-        (apply emit! 'call-builtin (list base "puts" 1) span (map node-span arguments))
+    (if text?
+        (apply emit! 'call-builtin (list base key 1) span (map node-span arguments))
         (emit! 'call (list base (hash-ref function-index name)) span))
     (cond
       [want (emit! 'move (list want base) span)

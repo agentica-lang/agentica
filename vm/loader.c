@@ -142,6 +142,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
     switch (in.op) {
       case AGC_OP_MOVE:
       case AGC_OP_NEG_I:
+      case AGC_OP_NEG_F:
       case AGC_OP_NOT:
         check_register(r, in.a, f);
         check_register(r, in.b, f);
@@ -163,6 +164,12 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
       case AGC_OP_LE_I:
       case AGC_OP_EQ:
       case AGC_OP_NE:
+      case AGC_OP_ADD_F:
+      case AGC_OP_SUB_F:
+      case AGC_OP_MUL_F:
+      case AGC_OP_DIV_F:
+      case AGC_OP_LT_F:
+      case AGC_OP_LE_F:
         check_register(r, in.a, f);
         check_register(r, in.b, f);
         check_register(r, in.c, f);
@@ -231,9 +238,17 @@ static void load(reader *r, agc_program *p) {
     uint8_t kind = read_u8(r);
     switch (kind) {
       case 0: p->constants[i] = agc_void(); break;
+      case 1: p->constants[i] = agc_nil(); break;
       case 2: p->constants[i] = agc_bool(false); break;
       case 3: p->constants[i] = agc_bool(true); break;
       case 4: p->constants[i] = agc_int((int64_t)read_u64(r)); break;
+      case 5: {
+        uint64_t bits = read_u64(r);
+        double f;
+        memcpy(&f, &bits, sizeof f);
+        p->constants[i] = agc_float(f);
+        break;
+      }
       case 6: p->constants[i] = agc_string_value(read_string(r)); break;
       default: reject(r, "unsupported constant kind %u", (unsigned)kind);
     }
