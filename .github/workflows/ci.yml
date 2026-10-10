@@ -85,7 +85,6 @@ jobs:
           key: racket-zo-${{ github.job }}-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
           restore-keys: racket-zo-${{ github.job }}-9.3-
       - run: git ls-files -z | xargs -0 touch
-      - run: command -v clang >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang; }
       - run: clang --version
       - run: make vm vm-test
       - run: make build && raco make -j 4 tests/vm-diff-test.rkt tests/bytecode-test.rkt

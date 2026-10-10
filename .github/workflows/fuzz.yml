@@ -26,7 +26,6 @@ jobs:
         with:
           variant: CS
           version: '9.3'
-      - run: command -v clang >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang; }
       - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"
       - run: echo "commit $GITHUB_SHA, FUZZ_SEED=$FUZZ_SEED, FUZZ_RUNS=$RUNS"
       - run: make vm-fuzz FUZZ_RUNS="$RUNS"
