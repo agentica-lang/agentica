@@ -328,8 +328,14 @@
       (when (member name '("ok" "error"))
         (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is a builtin constructor" name) span)))
 
-    (define (introduce! name type span [immutable? #f])
+    (define (reserve-local! name span)
       (reserve-constructor! name span)
+      (when (member name '("puts" "print" "gets" "gets!"))
+        (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is a builtin function" name) span
+              #:help "choose another name, such as line or text")))
+
+    (define (introduce! name type span [immutable? #f])
+      (reserve-local! name span)
       (define existing (lookup name))
       (when existing
         (bail 'CHECK-SHADOWED-NAME
@@ -1353,7 +1359,7 @@
 
     (define (check-binding statement)
       (define name (binding-name statement))
-      (reserve-constructor! name (binding-span statement))
+      (reserve-local! name (binding-span statement))
       (define annotation (binding-type statement))
       (define declared (and annotation (resolve-type annotation)))
       (define existing (lookup name))

@@ -618,6 +618,14 @@
     (define unknown (check-text (main-with "  x = 1\n  y = len(x)")))
     (check-equal? (source-position-line (source-span-start (diagnostic-span unknown))) 3))
 
+  (test-case "builtin function names cannot name locals"
+    (for ([entry '(("def main() -> Void\n  gets = \"hi\"\nend\n" 2)
+                   ("def f(print: String) -> Void\nend\n\ndef main() -> Void\nend\n" 1)
+                   ("def main() -> Void\n  for gets in [\"a\"]\n    puts(\"x\")\n  end\nend\n" 2))])
+      (define problem (check-text (car entry)))
+      (check-equal? (diagnostic-code problem) 'CHECK-REDEFINED-NAME (car entry))
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) (cadr entry) (car entry))))
+
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  x += \"a\"")) 'CHECK-TYPE-MISMATCH)

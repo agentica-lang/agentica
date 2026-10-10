@@ -170,9 +170,12 @@
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span
-                         #:help (if variant-hint?
-                                    (format "\"~a\" is neither an import alias nor an enum of this file; import a module with import \"path\" as ~a, or declare enum ~a" alias alias alias)
-                                    (format "import a module with import \"path\" as ~a" alias)))])]
+                         #:help (cond
+                                  [(equal? alias "Result")
+                                   "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"]
+                                  [variant-hint?
+                                   (format "\"~a\" is neither an import alias nor an enum of this file; import a module with import \"path\" as ~a, or declare enum ~a" alias alias alias)]
+                                  [else (format "import a module with import \"path\" as ~a" alias)]))])]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
           [(and (eq? kind 'enum) (string=? name "Result")) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]

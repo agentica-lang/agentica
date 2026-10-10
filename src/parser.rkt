@@ -320,10 +320,11 @@
       (and pattern-end
            (eq? (kind-at pattern-end) 'arrow)))
 
-    (define (parse-pattern-bindings)
+    (define (parse-pattern-bindings empty-help)
       (advance!)
       (when (kind? 'right-paren)
-        (bail 'PARSE-UNEXPECTED-TOKEN "use a nullary variant pattern without parentheses" (current)))
+        (bail 'PARSE-UNEXPECTED-TOKEN "a pattern with parentheses needs a binding or _" (current)
+              #:help empty-help))
       (define (binding-name)
         (define token (expect 'name "a pattern binding or _"))
         (and (not (equal? (token-lexeme token) "_")) (token-lexeme token)))
@@ -346,7 +347,7 @@
             (wildcard-pattern (token-span start))]
            [(and (member (token-lexeme start) '("ok" "error")) (eq? (token-kind (peek-token 1)) 'left-paren))
             (advance!)
-            (define bindings (parse-pattern-bindings))
+            (define bindings (parse-pattern-bindings (format "write ~a(_) to match without binding the value" (token-lexeme start))))
             (variant-pattern "Result" (if (equal? (token-lexeme start) "ok") "Ok" "Err") bindings (span-from start))]
            [(equal? (token-lexeme start) "when")
             (bail 'PARSE-UNEXPECTED-TOKEN "expected a pattern, found \"when\"" start
@@ -377,7 +378,12 @@
            (advance!)
            (set! enum-name (string-append enum-name "." variant-name))
            (set! variant-name (token-lexeme (expect 'type-name "a variant name"))))
-         (define bindings (if (kind? 'left-paren) (parse-pattern-bindings) '()))
+         (define bindings
+           (if (kind? 'left-paren)
+               (parse-pattern-bindings (if (equal? enum-name "Result")
+                                           (format "write Result.~a(_) to match without binding the value" variant-name)
+                                           (format "a variant without payload has no parentheses: ~a.~a" enum-name variant-name)))
+               '()))
          (variant-pattern enum-name variant-name bindings (span-from start))]
         [else (bail 'PARSE-UNEXPECTED-TOKEN "expected a pattern" start)]))
 

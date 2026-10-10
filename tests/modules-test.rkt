@@ -204,7 +204,13 @@
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
-       (check-false (regexp-match? #rx"enum" (diagnostic-help problem))))))
+       (check-false (regexp-match? #rx"enum" (diagnostic-help problem)))))
+    (with-files
+     '(("root.agc" . "def main() -> Void\n  r = Result.Ok\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-regexp-match #rx"ok\\(value\\)" (diagnostic-help problem)))))
 
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files

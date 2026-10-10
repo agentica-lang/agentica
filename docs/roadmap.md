@@ -1031,7 +1031,6 @@ Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agent
 - [x] Accept the Ruby forms round 5 showed (optional `do` on `case`/`while`/`for`, one-line case arms, module calls without arguments and parentheses) and hint the rest.
 - [x] Re-run the `binary` arm after these changes and compare with round 5 (round 6).
 - [x] Accept the forms round 6 still showed: `Result.Ok`/`Result.Err` as values, `ok`/`error` as patterns, nullary variants without parentheses, top-level `print`/`gets`/`gets!`.
-- [ ] `break` and `next` in `while` and `for`.
 
 **Done when:** the Ruby forms check and run with the same diagnostics quality as the module forms, and the evaluation shows the effect.
 

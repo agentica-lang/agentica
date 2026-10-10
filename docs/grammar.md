@@ -255,7 +255,8 @@ case_statement   = "case", expression, [ "do" ], NL,
                    match_arm, { match_arm }, "end", NL ;
 match_arm        = pattern, "->", ( NL, block | simple_statement, NL, block ) ;
 pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
-                 | qualified_variant, [ "(", pattern_bindings, ")" ] ;
+                 | qualified_variant, [ "(", pattern_bindings, ")" ]
+                 | ( "ok" | "error" ), "(", pattern_bindings, ")" ;
 qualified_variant = TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ] ;
 pattern_bindings = pattern_binding, { ",", pattern_binding } ;
 pattern_binding  = NAME | "_" ;
@@ -290,7 +291,8 @@ block_body       = NL, { statement } | simple_statement ;
 primary          = literal
                  | "&", ( NAME | TYPE_NAME, ".", NAME )
                  | NAME, [ "(", [ arguments ], ")" ]
-                 | TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ], "(", [ arguments ], ")"
+                 | TYPE_NAME, ".", TYPE_NAME, ".", TYPE_NAME, [ "(", [ arguments ], ")" ]
+                 | TYPE_NAME, ".", TYPE_NAME, "(", [ arguments ], ")"
                  | qualified_type, "(", [ named_arguments ], ")"
                  | qualified_type
                  | list_literal
@@ -306,7 +308,7 @@ map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
-Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables; a block (see "Blocks and closures") captures them. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
+Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables; a block (see "Blocks and closures") captures them. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar. A bare `gets` or `gets!` is a call with no arguments. A bare `qualified_type` of the form `Enum.Variant`, where `Enum` is an enum of the same file, is that nullary variant; `M.Enum.Variant` without parentheses is one through an import alias. `Result.Ok(...)` and `Result.Err(...)` are the `ok`/`error` calls. `puts`, `print`, `gets` and `gets!` cannot name variables, parameters, loop variables or pattern bindings (`CHECK-REDEFINED-NAME`).
 
 `TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias. Without arguments the parentheses may be dropped: `IO.gets!` is `IO.gets!()`, and `while !IO.eof? do` reads like Ruby. This holds for imported functions too: `f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
 
@@ -412,7 +414,7 @@ ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(n
 
 Enums are nominal sum types and may declare type parameters. Variant names are qualified by the enum; payloads are positional, and a nullary variant is constructed with or without empty parentheses (`Command.Show` or `Command.Show()`). Constructor type parameters are inferred from payloads and the expected enum type; unresolved or conflicting parameters are errors. Imported enum variants use the import alias plus enum and variant names.
 
-`case value do ... end` is a statement; the `do` is optional. An arm may put one simple statement on the arrow line (`1 -> puts("one")`); more lines of the same arm may follow. Patterns are primitive literals, `_`, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
+`case value do ... end` is a statement; the `do` is optional. An arm may put one simple statement on the arrow line (`1 -> puts("one")`); more lines of the same arm may follow. Patterns are primitive literals, `_`, `ok(...)`/`error(...)` for Results, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
 
 ```ruby
 enum Option[T]
