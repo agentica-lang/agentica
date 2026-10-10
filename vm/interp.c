@@ -1,0 +1,150 @@
+#include "agc.h"
+
+#include <string.h>
+
+void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
+  vm->outcome.kind = AGC_FAILED;
+  vm->outcome.code = code;
+  vm->outcome.message = message;
+  vm->outcome.span = span;
+  longjmp(vm->fail, 1);
+}
+
+void agc_write(agc_vm *vm, const void *data, size_t len) {
+  if (len && fwrite(data, 1, len, vm->out) != len)
+    agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to standard output", 0);
+}
+
+void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, int64_t max_steps) {
+  memset(vm, 0, sizeof *vm);
+  vm->program = program;
+  vm->out = out;
+  vm->steps_left = max_steps;
+}
+
+static void ensure_registers(agc_vm *vm, size_t needed, uint32_t span) {
+  if (needed <= vm->reg_capacity) return;
+  if (needed > AGC_MAX_REGISTERS) agc_fail(vm, "RUNTIME-STACK-OVERFLOW", "call depth limit exceeded", span);
+  size_t capacity = vm->reg_capacity ? vm->reg_capacity : 256;
+  while (capacity < needed) capacity *= 2;
+  agc_value *regs = agc_alloc(agc_size_mul(capacity, sizeof(agc_value)));
+  if (vm->reg_capacity) memcpy(regs, vm->regs, vm->reg_capacity * sizeof(agc_value));
+  vm->regs = regs;
+  vm->reg_capacity = capacity;
+}
+
+static void push_frame(agc_vm *vm, uint32_t function, uint32_t base, uint32_t span) {
+  if (vm->depth >= AGC_MAX_DEPTH) agc_fail(vm, "RUNTIME-STACK-OVERFLOW", "call depth limit exceeded", span);
+  ensure_registers(vm, (size_t)base + vm->program->functions[function].registers, span);
+  if (vm->depth == vm->frame_capacity) {
+    uint32_t capacity = vm->frame_capacity ? vm->frame_capacity * 2 : 64;
+    agc_frame *frames = agc_alloc(agc_size_mul(capacity, sizeof(agc_frame)));
+    if (vm->depth) memcpy(frames, vm->frames, vm->depth * sizeof(agc_frame));
+    vm->frames = frames;
+    vm->frame_capacity = capacity;
+  }
+  vm->frames[vm->depth].function = function;
+  vm->frames[vm->depth].pc = 0;
+  vm->frames[vm->depth].base = base;
+  vm->depth++;
+}
+
+static int64_t int_operand(agc_vm *vm, const agc_value *R, uint16_t reg, uint32_t span) {
+  return agc_as_int(vm, R[reg], span);
+}
+
+static bool equal_values(agc_vm *vm, agc_value x, agc_value y, uint32_t span) {
+  if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x, span) == agc_as_int(vm, y, span);
+  return agc_as_bool(vm, x, span) == agc_as_bool(vm, y, span);
+}
+
+static void run(agc_vm *vm) {
+  const agc_program *p = vm->program;
+  push_frame(vm, p->entry, 0, 0);
+  for (;;) {
+    agc_frame *frame = &vm->frames[vm->depth - 1];
+    const agc_function *fn = &p->functions[frame->function];
+    agc_value *R = vm->regs + frame->base;
+    uint32_t pc = frame->pc;
+    agc_instr in = fn->code[pc];
+    uint32_t s = fn->spans[pc];
+    uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+    frame->pc = pc + 1;
+    int64_t x, y, z;
+    switch (in.op) {
+      case AGC_OP_MOVE: R[in.a] = R[in.b]; break;
+      case AGC_OP_CONST: R[in.a] = p->constants[bx]; break;
+      case AGC_OP_STEP:
+        if (vm->steps_left < in.a)
+          agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", s + (uint32_t)vm->steps_left);
+        vm->steps_left -= in.a;
+        break;
+      case AGC_OP_ADD_I:
+      case AGC_OP_SUB_I:
+      case AGC_OP_MUL_I: {
+        x = int_operand(vm, R, in.b, s);
+        y = int_operand(vm, R, in.c, s);
+        bool overflow = in.op == AGC_OP_ADD_I   ? __builtin_add_overflow(x, y, &z)
+                        : in.op == AGC_OP_SUB_I ? __builtin_sub_overflow(x, y, &z)
+                                                : __builtin_mul_overflow(x, y, &z);
+        if (overflow) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
+        R[in.a] = agc_int(z);
+        break;
+      }
+      case AGC_OP_DIV_I:
+      case AGC_OP_MOD_I:
+        x = int_operand(vm, R, in.b, s);
+        y = int_operand(vm, R, in.c, s);
+        if (y == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", s);
+        if (in.op == AGC_OP_MOD_I) {
+          R[in.a] = agc_int(y == -1 ? 0 : x % y);
+        } else {
+          if (x == INT64_MIN && y == -1)
+            agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
+          R[in.a] = agc_int(x / y);
+        }
+        break;
+      case AGC_OP_NEG_I:
+        x = int_operand(vm, R, in.b, s);
+        if (x == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
+        R[in.a] = agc_int(-x);
+        break;
+      case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b], s)); break;
+      case AGC_OP_LT_I: R[in.a] = agc_bool(int_operand(vm, R, in.b, s) < int_operand(vm, R, in.c, s)); break;
+      case AGC_OP_LE_I: R[in.a] = agc_bool(int_operand(vm, R, in.b, s) <= int_operand(vm, R, in.c, s)); break;
+      case AGC_OP_EQ: R[in.a] = agc_bool(equal_values(vm, R[in.b], R[in.c], s)); break;
+      case AGC_OP_NE: R[in.a] = agc_bool(!equal_values(vm, R[in.b], R[in.c], s)); break;
+      case AGC_OP_JUMP: frame->pc = bx; break;
+      case AGC_OP_JUMP_IF_FALSE:
+        if (!agc_as_bool(vm, R[in.a], s)) frame->pc = bx;
+        break;
+      case AGC_OP_JUMP_IF_TRUE:
+        if (agc_as_bool(vm, R[in.a], s)) frame->pc = bx;
+        break;
+      case AGC_OP_CALL: push_frame(vm, bx, frame->base + in.a, s); break;
+      case AGC_OP_CALL_BUILTIN: {
+        uint32_t base = frame->base + in.a;
+        agc_value result = p->builtins[bx]->fn(vm, vm->regs + base, s);
+        vm->regs[base] = result;
+        break;
+      }
+      case AGC_OP_RETURN: {
+        agc_value result = R[in.a];
+        uint32_t base = frame->base;
+        vm->depth--;
+        if (vm->depth == 0) return;
+        vm->regs[base] = result;
+        break;
+      }
+      default: agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown opcode", 0);
+    }
+  }
+}
+
+agc_outcome agc_vm_run(agc_vm *vm) {
+  if (setjmp(vm->fail) == 0) {
+    run(vm);
+    vm->outcome.kind = AGC_DONE;
+  }
+  return vm->outcome;
+}

@@ -29,6 +29,14 @@ details and reasons.
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
+**Status.** The first VM PR (the vertical slice, 12.2 item 1) is in. It covers
+Int and Bool values, locals, the Int and Bool operators, `if`/`elsif`/`else`,
+`while` with `break` and `next`, user functions, calls, `return`, and `puts`
+of a String literal or an Int. The lowerer rejects everything else with
+`LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
+PR widens the subset; this document describes the full design, and the notes
+marked "In the slice" say where the code is still narrower.
+
 **Trust model.** A `.agcb` file is untrusted input. Whatever it contains, the
 VM must not have memory errors, must not run child processes unless the VM
 itself got `--allow-run`, and must stop within `--max-steps` when a limit is
@@ -243,6 +251,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `&name` | `closure` with no captures. |
 | `f.call(...)` | `call-value` at the invoke span. |
 | `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. |
+| Assignment to an existing local | Value into a temporary, then `move`. `and`/`or` write their target before the right side runs, so lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
 
 ### 3.4 Closure conversion
 
@@ -259,6 +268,23 @@ and a receiver wrapped in `typed-target` carries its type already.
 - A block returns the value of its final expression statement, or Void.
 - `break` and `next` never cross a function or block (`CHECK-LOOP-CONTROL`),
   so they are plain jumps.
+
+### 3.5 Lowering diagnostics
+
+The lowerer and the emitter are stages: they return data or one diagnostic
+and never raise. Their codes use their own prefixes, so they cannot clash
+with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
+
+| Code | Raised by | Meaning |
+|---|---|---|
+| `LOWER-UNSUPPORTED` | `src/lower.rkt` | The program uses a form or a type the VM does not support yet; the span is the first such node. |
+| `LOWER-INTERNAL` | `src/lower.rkt` | A Racket exception inside the lowerer (a bug), at the program span. |
+| `BYTECODE-LIMIT` | `src/bytecode.rkt` | A function needs more than 65535 registers (later also structs or variants, 4.4). |
+
+`agentica compile` and `--dump-ir` print them like any other diagnostic and
+exit 1. In the slice, a value outside Int and Bool is rejected, except a
+String literal passed straight to `puts` (or `IO.puts`) and a Void call used
+as a statement or returned.
 
 ## 4. Bytecode (7d)
 
@@ -323,6 +349,13 @@ through the checked accessors (5.2); a wrong tag is `RUNTIME-INTERNAL`
 That is 46 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin; later subphases add builtins, not opcodes.
 
+Opcode numbers are positions in one list shared by `opcodes` in
+`src/bytecode.rkt` and `agc_opcode` in `vm/agc.h`. Each PR appends the
+opcodes it implements, so there are no numbers for unimplemented ones. In the
+slice the list is `MOVE CONST STEP ADD_I SUB_I MUL_I DIV_I MOD_I NEG_I NOT
+LT_I LE_I EQ NE JUMP JUMP_IF_FALSE JUMP_IF_TRUE CALL CALL_BUILTIN RETURN`
+(20 opcodes), and `EQ`/`NE` accept Int or Bool pairs only.
+
 ### 4.3 Calls, call windows and resumable builtins
 
 `CALL a bx` starts the callee's frame at the caller's register `a`, so the
@@ -385,6 +418,10 @@ entries must point to smaller indexes, so only Struct entries can make
 cycles (recursive structs). The full source texts are embedded so the VM
 prints diagnostics without reading files.
 
+In the slice the writer always emits empty Types, Structs and Enums sections
+and only the constant kinds Void, false, true, Int and String; the loader
+rejects anything else until the PR that needs it.
+
 The VM accepts only its own format version and Agentica version; anything
 else is rejected (8). Any change to the layout or to an opcode's meaning
 bumps the format version. There are no compatibility shims: the Racket side
@@ -399,7 +436,7 @@ typedef enum {
   AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT,
   AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM,
   AGC_T_RESULT, AGC_T_FN, AGC_T_JSON, AGC_T_HANDLE
-} agc_tag;
+} agc_tag;                            /* the full set; vm/agc.h grows toward it */
 
 typedef struct {
   uint32_t tag;
@@ -409,7 +446,7 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. In the slice `vm/agc.h` has only Void, Bool, Int and String, and the union has no `f` yet. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
@@ -465,7 +502,10 @@ typedef struct {
   `GC_MALLOC` (native frames point to their state) and grown by doubling. A
   call grows the registers to fit the callee's declared count; new registers
   are zeroed. Frames hold base offsets, never raw pointers:
-  `{ uint32_t function, pc, base, ret; }`, or a native frame (4.3).
+  `{ uint32_t function, pc, base, ret; }`, or a native frame (4.3). In the
+  slice a frame is `{ function, pc, base }`: `RETURN` writes the callee's
+  base register, which is the caller's `R[a]`; `ret` joins with
+  `CALL_VALUE`, whose result register differs from its window.
 - The interpreter is one `switch` loop. Agentica calls push frames and never
   recurse on the C stack, so a 7h task switch only changes the current task.
 - Before `CALL`, `CALL_VALUE` or a callback push, `depth >= 10000` fails with
@@ -603,6 +643,12 @@ The loader validates the whole file before running anything. Failures print
   always meets both rules. Together they mean every unbounded repetition
   charges a step, so `--max-steps` holds even for hostile files.
 - **Entry**: exists, with no parameters or captures.
+- **In the slice**: captures must be 0, the Types, Structs and Enums sections
+  must be empty, and only the constant kinds the writer emits (4.6) are
+  accepted. `vm/tests/loader_test.c` covers truncation at every byte, bad
+  magic and versions, out-of-range registers, jumps and spans, a backward jump
+  that misses a `STEP`, a calling function that does not start with one, an
+  unknown opcode and a missing final `RETURN`/`JUMP`.
 - **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
   string bounds, and the register cap (6.1).
 
@@ -622,6 +668,11 @@ and cost one predictable branch each.
   (`-municode`) and are converted to UTF-8.
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv and OpenSSL from 7h).
+- In the slice the VM accepts `--version`, `--max-steps N` and `--`. `--seed`
+  joins with `Random` (PR 6), `--ai` and `--json` with the other diagnostic
+  formats (PR 3); until then they are unknown options (exit 2), and runtime
+  diagnostics are printed in the plain format only. Arguments after the file
+  are accepted and unused until `System.args` lands.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
 - `agentica --vm file.agc` lands in 7i. It writes the bytecode to a temporary
   file with a random name, created exclusively with mode 0600
@@ -648,9 +699,9 @@ specifics: binary-mode stdio, UTF-8 arguments from `wmain`,
 |---|---|---|
 | C compiler | 7e | C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile. |
 | libc | 7e | Dynamic (static glibc breaks NSS; macOS forbids static libc). |
-| Boehm GC | 7e | Static `libgc.a`: Debian `libgc-dev`, Homebrew `bdw-gc`, MSYS2 `mingw-w64-ucrt-x86_64-gc`. |
-| libuv | 7h | Static: `libuv1-dev`, `libuv`, `mingw-w64-ucrt-x86_64-libuv`. |
-| OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the same managers. |
+| Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically with `-lpthread`. No system package. |
+| libuv | 7h | Vendored the same way: a git submodule from `https://github.com/libuv/libuv` pinned to a recent release tag, added in 7h when it is first needed, built from source and linked statically. No system package. |
+| OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
 
 ### 10.1 Event loop: libuv, not libevent
 
@@ -755,40 +806,59 @@ written `size > limit - total`. A hermetic test sends over-long values.
 
 - `make vm`: `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`, hardening flags
   `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, PIE and full RELRO
-  (MinGW: `--dynamicbase --nxcompat --high-entropy-va`). Libraries via
-  `pkg-config --atleast-version` minimums and the static archive path
-  (`$(pkg-config --variable=libdir bdw-gc)/libgc.a`, which works on all three
-  platforms). Output `dist/agentica-vm`.
+  (MinGW: `--dynamicbase --nxcompat --high-entropy-va`). The warning flags
+  apply to our own `vm/*.c` only. libgc is compiled once from the submodule
+  (`$(CC) -std=c11 -O2 -fPIE -I vm/third_party/bdwgc/include -c
+  vm/third_party/bdwgc/extra/gc.c`, about 3 s) into `build/vm/gc.o` and
+  linked with `-lpthread`; libuv follows the same pattern in 7h. OpenSSL (7h)
+  comes through `pkg-config --atleast-version` and its static archive path.
+  The Agentica version is read from `src/version.rkt` with `sed`, so the VM
+  build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
+  recorded in `build/vm/flags`, so switching between a normal and a sanitizer
+  build always relinks.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and
-  never frees, so ASan guards every object; libgc is not used for VM objects.
+  never frees, so ASan guards every object; libgc is not compiled or linked
+  at all (`-DAGC_NO_GC`), and leak detection is off because nothing is freed.
+  `make vm-test SANITIZE=1` and `make vm-fuzz SANITIZE=1` use the same flags.
 - GC stress: a `-DGC_DEBUG` build that calls `GC_gcollect()` every 64
   allocations (`AGC_GC_STRESS=1`). No Valgrind: conservative scanning makes
-  it report many false errors.
-- Fuzzing: `agc_fuzz_one(data, len)` loads one file and, if accepted, runs it
-  with `--max-steps 10000`. A plain C driver mutates (truncation, bit flips)
-  a corpus seeded with every compiled example; a clang job also builds it
-  with `-fsanitize=fuzzer`.
+  it report many false errors. Not in the slice: it allocates only at load
+  time and when registers or frames grow, so the stress run joins with
+  strings (PR 3).
+- Fuzzing: `agc_fuzz_one(data, len)` (`vm/fuzz.c`) loads one file and, if
+  accepted, runs it with `--max-steps 10000`, output to `/dev/null`. The plain
+  C driver (`vm/fuzz_main.c`, `make vm-fuzz`) mutates (truncation, bit flips,
+  random bytes, small or maximal 16-bit operands) a corpus seeded with every
+  compiled program in `tests/fixtures/vm/`; examples join the corpus as they
+  enter the VM subset. A clang job also builds it with `-fsanitize=fuzzer`
+  (later PR).
 - `make test` includes the VM tests. They first run `make -s vm`, so a stale
   `dist/agentica-vm` is rebuilt from its sources. They skip visibly when the
-  VM cannot be built locally (no C compiler or libgc) and fail in CI
-  (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
-- Supply chain: pinned runner images; `agentica-vm --version` and the release
-  notes list the libgc, libuv and OpenSSL versions; the release checklist
-  says to rebuild and release after any High or Critical OpenSSL advisory.
+  VM cannot be built locally (no C compiler, or the submodule is not checked
+  out) and fail in CI (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
+  `make vm` reads `SANITIZE` from the environment, so the sanitizer job sets
+  `SANITIZE=1` once and the tests rebuild the sanitized VM.
+- Supply chain: pinned runner images; libgc (and libuv from 7h) are git
+  submodules pinned to a release tag, upgraded only by bumping the submodule
+  in a reviewed PR; CI checks out with `submodules: true`. `agentica-vm
+  --version` and the release notes list the libgc, libuv and OpenSSL
+  versions; the release checklist says to rebuild and release after any High
+  or Critical advisory for libgc, libuv or OpenSSL.
 
 CI matrix:
 
 | Job | Runner | Runs | Added in |
 |---|---|---|---|
-| Linux | pinned Ubuntu, `libgc-dev` | `make vm vm-test`, `make test`, smoke tests | first VM PR |
-| Linux sanitizers | same, clang | sanitizer build, VM tests, corpus, fuzz run, GC stress | first VM PR |
-| macOS | pinned macOS, `brew install bdw-gc pkgconf` | `make vm vm-test`, differential tests | follow-up PR |
-| Windows | pinned Windows, `msys2/setup-msys2` UCRT64 (gcc, make, pkgconf, gc) | `make vm vm-test`, differential tests | follow-up PR |
+| Linux | `ubuntu-24.04`, submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests | first VM PR |
+| Linux sanitizers | same, clang | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run (GC stress from PR 3) | first VM PR |
+| macOS | pinned macOS, submodules | `make vm vm-test`, differential tests | follow-up PR |
+| Windows | pinned Windows, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential tests | follow-up PR |
 
 Racket comes from `Bogdanp/setup-racket` everywhere, since the tests compile
-with the front end. 7h adds libuv and OpenSSL to each job.
+with the front end. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
+the platform's OpenSSL package) to each job.
 
 ## 12. Testing and first PRs
 
@@ -796,7 +866,10 @@ with the front end. 7h adds libuv and OpenSSL to each job.
 
 - 7c `tests/lower-test.rkt`: one test per form (ops, slots, captures, spans).
   7d `tests/bytecode-test.rkt`: write, read back, compare; every example
-  compiles.
+  compiles. In the slice, `tests/bytecode-test.rkt` round-trips every
+  fixture, checks step merging, and checks that an out-of-subset program
+  gets `LOWER-UNSUPPORTED`; `tests/lower-test.rkt` comes with the wider
+  lowering.
 - `tests/vm-diff-test.rkt` (from the first VM PR, completed in 7f) runs each
   program on the evaluator in-process (as `tests/examples-test.rkt` does,
   formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm`, and
@@ -805,7 +878,12 @@ with the front end. 7h adds libuv and OpenSSL to each job.
   solutions and hidden cases, and `tests/fixtures/vm/` with one program per
   runtime code and error span.
 - Every program also runs with `--max-steps` 1 to 200 and some larger values;
-  the failing span must match. This covers 2.1 and 4.4, so the IR needs no
+  the failing span must match. In the slice the test finds each program's
+  total step count with the evaluator and sweeps every limit from 1 to it
+  when the total is at most 2000; above that (the call-depth program, about
+  50,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
+  and the total minus one. It compares only the plain format; the inputs are
+  `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. Programs using `Random` run with several `--seed` values.
 - Generated corpora, checked by C tests against outputs from a Racket script:
   float text, split and trim, case mapping of every code point, write escapes.
@@ -819,13 +897,14 @@ with the front end. 7h adds libuv and OpenSSL to each job.
 
 Each PR keeps its own tests and docs and ticks its roadmap items.
 
-1. **Vertical slice.** `#:types` in the checker; `src/lower.rkt`,
-   `src/bytecode.rkt` and `vm/` for Int, Bool, `if`, `while`, functions,
-   calls, returns, steps and `puts` of plain strings and Ints; the loader with
-   full validation and the fuzz driver; `--dump-ir`, `agentica compile`;
-   `make vm`, the Linux and sanitizer CI jobs, `tests/vm-diff-test.rkt`.
-2. **Float and operators.** Float ops and Float text (2.2), `and`/`or`,
-   comparisons, the remaining Int rules.
+1. **Vertical slice** (done). `#:types` in the checker; `src/lower.rkt`,
+   `src/bytecode.rkt` and `vm/` for Int, Bool, their operators (including
+   `and`/`or`, comparisons and every Int rule of 2.2), `if`, `while`,
+   `break`/`next`, functions, calls, returns, steps and `puts` of plain
+   strings and Ints; the loader with full validation and the fuzz driver;
+   `--dump-ir`, `agentica compile`; `make vm`, the Linux and sanitizer CI
+   jobs, `tests/vm-diff-test.rkt`.
+2. **Float.** Float ops, comparisons and Float text (2.2), Nil.
 3. **Strings and printing.** Strings, interpolation, debug forms, the Unicode
    and write-escape generator, the three diagnostic formats, exit codes.
 4. **macOS and Windows CI.**

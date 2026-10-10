@@ -69,6 +69,8 @@ racket src/main.rkt examples/hello.agc
 | `help NAME --json` | Describe a builtin from the shared catalog, without a program file. Unknown targets exit 2. |
 | `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
 | `--seed N` | Seed `Random` with N (0..2147483647) so runs repeat; `agentica test` passes it to handlers and programs under test. Without it, each run is seeded from OS randomness. |
+| `--dump-ir` | Print the lowered VM IR instead of running it (VM subset only; see `docs/vm.md`). |
+| `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). The VM runs a growing subset of the language; programs outside it fail with `LOWER-UNSUPPORTED`. |
 
 Use `--allow-run` before the command or source file to enable `Process.spawn`; spawning is disabled by default. `main()` now returns `Void`, and side-effect APIs return `Void` or `Result[Void]`. Use `ok()` for successful completion; `nil` remains data and JSON null. `racket src/main.rkt --allow-run examples/process-tool.agc` demonstrates tool execution and exit checks.
 

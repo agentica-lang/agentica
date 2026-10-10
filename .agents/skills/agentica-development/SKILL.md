@@ -50,11 +50,20 @@ src/
   http-client.rkt # HTTP client with connection pool
   http-server.rkt # HTTP server
   version.rkt     # the version string
-  main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
+  lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
+  bytecode.rkt    # ir->bytecode (BYTECODE-LIMIT), write-bytecode/read-bytecode: the .agcb format of docs/vm.md 4.6
+  main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, or `compile -o`); exit 1 on a diagnostic, 2 on usage or a missing file
+vm/               # the C11 bytecode VM (dist/agentica-vm); see "Bytecode VM" below
+  agc.h           # shared types and agc_ API: values, instructions, program, VM
+  value.c loader.c interp.c builtins.c diag.c main.c  # values+memory, loader validation, loop, builtin table, plain diagnostics, CLI
+  fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests
+  third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
 tests/
   <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
+  bytecode-test.rkt     # bytecode round trip, step merging, LOWER-UNSUPPORTED
+  vm-diff-test.rkt      # tests/fixtures/vm/*.agc on the evaluator and dist/agentica-vm, with a --max-steps sweep
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
   bdd/                  # feature specs and step handlers run by make test-bdd
@@ -286,6 +295,15 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 - process.rkt owns children, literal argv launching, fixed-buffer stderr forwarding, independent timed read/write locks, and an evaluation registry. Register pending spawns before launching; kill and reap children on explicit close and all evaluation outcomes. Remove closed and failed-spawn handles from the registry after cleanup, using the registry and lock stored on the handle because supervisor cleanup does not inherit evaluation parameters. Active stream timeouts abort; lock and exit-wait timeouts preserve children. Per-call limits are 1 MiB; stdout needs concurrent reads when waiting could fill its pipe.
 - --allow-run defaults off. evaluate inherits an explicit enclosing allowance for services, and the CLI supplies its flag. run-bdd propagates it to handlers and native children. task.rkt's watcher performs cleanup once on normal completion or supervisor death, then shuts down the run custodian; borrowed ports stay open. Context/cleanup failures have located diagnostics; expected operations return Results.
 - tests/process-test.rkt uses independent Node standard-library children, CLI capability checks, binary/full-duplex streams, nonzero exits, deadline policies and PID cleanup. Node is required in CI; local absence visibly skips. CI also exercises the compiled executable and examples/process-tool.agc with --allow-run.
+
+## Bytecode VM (phase 7)
+
+- Design and contract: `docs/vm.md`; the subset the VM runs today is its "Status" note. Pipeline: `check #:types` fills an `eq?` hash of expression types, `lower` turns the checked program into IR, `ir->bytecode` + `write-bytecode` give the `.agcb` file, and `dist/agentica-vm -- file.agcb` runs it.
+- Out-of-subset programs must fail with `LOWER-UNSUPPORTED` at the first unsupported node, never miscompile. When widening the subset, add the form to `lower.rkt`, the opcode to `opcodes` in `bytecode.rkt` and to `agc_opcode` in `vm/agc.h` in the same position, its validation in `vm/loader.c`, and a fixture in `tests/fixtures/vm/`.
+- Steps: emit one IR `step` exactly where the evaluator calls `step!`, before the node's children; the emitter merges adjacent steps only. Every backward jump must land on a `STEP`, and a function that calls anything must start with one, or the loader rejects the file.
+- Commands: `make vm`, `make vm-test`, `make vm SANITIZE=1` (clang ASan+UBSan, no libgc), `make vm-fuzz`. `SANITIZE` may come from the environment, and the build stamp `build/vm/flags` relinks when it changes. `git submodule update --init` fetches libgc.
+- `tests/vm-diff-test.rkt` runs `make -s vm` first; it skips with a `SKIP` line when the VM cannot build and fails when `AGENTICA_REQUIRE_VM=1` (set in CI). Compare stdout, stderr and exit code; the VM prints the plain diagnostic format only, so far.
+- C rules: `agc_` names, `AGC_` macros, file-local helpers `static`; only `value.c` reads the value union; runtime failures go through `agc_fail` (longjmp to `agc_vm_run`), and only `vm/main.c` prints and exits. `-Wall -Wextra -Werror` applies to our files, not to `gc.c`.
 
 ## Releases
 

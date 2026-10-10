@@ -9,9 +9,13 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      AGENTICA_REQUIRE_VM: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -19,6 +23,7 @@ jobs:
         with:
           variant: CS
           version: '9.3'
+      - run: make vm vm-test
       - run: make test
       - run: make test-bdd
       - run: AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/tcp-test.rkt tests/http-test.rkt tests/process-test.rkt tests/modules-test.rkt
@@ -36,3 +41,21 @@ jobs:
       - run: dist/agentica examples/json-modules.agc
       - run: dist/agentica check examples/json-modules.agc
       - run: dist/agentica examples/queue.agc
+
+  vm-sanitizers:
+    runs-on: ubuntu-24.04
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      SANITIZE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          variant: CS
+          version: '9.3'
+      - run: clang --version
+      - run: make vm vm-test
+      - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
+      - run: make vm-fuzz

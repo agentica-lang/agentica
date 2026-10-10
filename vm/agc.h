@@ -1,0 +1,129 @@
+#ifndef AGC_H
+#define AGC_H
+
+#include <setjmp.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#define AGC_FORMAT_VERSION 1
+#define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
+#define AGC_MAX_DEPTH 10000
+#define AGC_MAX_REGISTERS ((size_t)1 << 24)
+
+typedef enum { AGC_T_VOID = 0, AGC_T_BOOL, AGC_T_INT, AGC_T_STRING } agc_tag;
+
+typedef struct {
+  uint32_t tag;
+  union { bool b; int64_t i; void *p; } as;
+} agc_value;
+
+typedef struct {
+  size_t bytes, chars;
+  char data[];
+} agc_string;
+
+typedef enum {
+  AGC_OP_MOVE, AGC_OP_CONST, AGC_OP_STEP,
+  AGC_OP_ADD_I, AGC_OP_SUB_I, AGC_OP_MUL_I, AGC_OP_DIV_I, AGC_OP_MOD_I, AGC_OP_NEG_I,
+  AGC_OP_NOT, AGC_OP_LT_I, AGC_OP_LE_I, AGC_OP_EQ, AGC_OP_NE,
+  AGC_OP_JUMP, AGC_OP_JUMP_IF_FALSE, AGC_OP_JUMP_IF_TRUE,
+  AGC_OP_CALL, AGC_OP_CALL_BUILTIN, AGC_OP_RETURN,
+  AGC_OP_COUNT
+} agc_opcode;
+
+typedef struct { uint16_t op, a, b, c; } agc_instr;
+
+typedef struct { uint32_t source, start_line, start_column, end_line, end_column; } agc_span;
+
+typedef struct {
+  agc_string *name;
+  agc_string *text;
+  uint32_t lines;
+  uint32_t *line_start;
+  uint32_t *line_chars;
+} agc_source;
+
+typedef struct agc_vm agc_vm;
+
+typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
+
+typedef struct {
+  const char *name;
+  uint32_t arity;
+  agc_builtin_fn fn;
+} agc_builtin;
+
+typedef struct {
+  agc_string *name;
+  uint32_t params, captures, registers, span, count;
+  agc_instr *code;
+  uint32_t *spans;
+} agc_function;
+
+typedef struct {
+  uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
+  agc_source *sources;
+  agc_span *spans;
+  agc_value *constants;
+  const agc_builtin **builtins;
+  agc_function *functions;
+} agc_program;
+
+typedef struct { uint32_t function, pc, base; } agc_frame;
+
+typedef enum { AGC_DONE, AGC_FAILED } agc_outcome_kind;
+
+typedef struct {
+  agc_outcome_kind kind;
+  const char *code;
+  const char *message;
+  uint32_t span;
+} agc_outcome;
+
+struct agc_vm {
+  const agc_program *program;
+  FILE *out;
+  int64_t steps_left;
+  agc_value *regs;
+  size_t reg_capacity;
+  agc_frame *frames;
+  uint32_t frame_capacity, depth;
+  agc_outcome outcome;
+  jmp_buf fail;
+};
+
+void agc_init(void);
+void *agc_alloc(size_t size);
+void *agc_alloc_atomic(size_t size);
+size_t agc_size_add(size_t a, size_t b);
+size_t agc_size_mul(size_t a, size_t b);
+void agc_out_of_memory(void);
+unsigned agc_gc_version(void);
+
+agc_value agc_void(void);
+agc_value agc_bool(bool b);
+agc_value agc_int(int64_t i);
+agc_value agc_string_value(agc_string *s);
+bool agc_as_bool(agc_vm *vm, agc_value v, uint32_t span);
+int64_t agc_as_int(agc_vm *vm, agc_value v, uint32_t span);
+agc_string *agc_as_string(agc_vm *vm, agc_value v, uint32_t span);
+bool agc_is(agc_value v, agc_tag tag);
+
+bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
+
+const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
+
+bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
+
+void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, int64_t max_steps);
+agc_outcome agc_vm_run(agc_vm *vm);
+_Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
+void agc_write(agc_vm *vm, const void *data, size_t len);
+
+void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome);
+
+int agc_fuzz_one(const uint8_t *data, size_t len);
+
+#endif

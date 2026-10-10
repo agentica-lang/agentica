@@ -3,10 +3,12 @@
 (require json
          "bdd-runner.rkt"
          "builtins.rkt"
+         "bytecode.rkt"
          "checker.rkt"
          "diagnostic.rkt"
          "evaluator.rkt"
          "lexer.rkt"
+         "lower.rkt"
          "parser.rkt"
          "modules.rkt"
          "source.rkt"
@@ -14,6 +16,7 @@
 
 (module+ main
   (define dump? #f)
+  (define dump-ir? #f)
   (define style 'plain)
   (define max-steps #f)
   (define allow-run? #f)
@@ -38,6 +41,7 @@
         (exit 2))
       (set! seed parsed)]
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
+     [("--dump-ir") "print the lowered VM IR instead of running it" (set! dump-ir? #t)]
      [("--ai") "print diagnostics as compact text for an agent" (set! style 'ai)]
      [("--json") "print diagnostics as one JSON object" (set! style 'json)]
      #:multi
@@ -97,9 +101,12 @@
                    (format "~a\n~a" (builtin-signature entry) (builtin-description entry))))
     (exit 0))
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
-  (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
-  (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--version] [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
+  (define compile? (and (pair? raw-arguments) (equal? (car raw-arguments) "compile")))
+  (define arguments (if (or check-only? compile?) (cdr raw-arguments) raw-arguments))
+  (unless (if compile?
+              (and (= (length arguments) 3) (equal? (cadr arguments) "-o"))
+              (>= (length arguments) 1))
+    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -126,11 +133,27 @@
   (when (diagnostic? tree) (fail! tree))
   (define linked (link-program tree source-file))
   (when (diagnostic? linked) (fail! linked))
-  (define checked (check linked))
+  (define types (make-hasheq))
+  (define checked (check linked #:types types))
   (when (diagnostic? checked) (fail! checked))
+  (define (lowered)
+    (define ir (lower checked types))
+    (when (diagnostic? ir) (fail! ir))
+    ir)
   (cond
     [check-only? (displayln (if (eq? style 'json) "{\"ok\":true}" "check ok"))]
     [dump? (pretty-print checked)]
+    [dump-ir? (displayln (format-ir (lowered)))]
+    [compile?
+     (define code (ir->bytecode (lowered)))
+     (when (diagnostic? code) (fail! code))
+     (define output-file (caddr arguments))
+     (with-handlers ([exn:fail:filesystem?
+                      (lambda (_)
+                        (eprintf "agentica: cannot write ~a\n" output-file)
+                        (exit 2))])
+       (call-with-output-file output-file #:exists 'truncate/replace
+         (lambda (out) (void (write-bytes (write-bytecode code) out)))))]
     [else
      (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
                               #:seed seed #:builtin-handler (make-bdd-service)))
