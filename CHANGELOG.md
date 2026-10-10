@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IO.warn`, interpolation, `to_s` and `inspect`, with the same names as the
   evaluator, and deep values print without C recursion. The `.agcb` format
   is now version 2: it carries the type, struct and enum tables.
+- A weekly CI workflow fuzzes the VM loader and interpreter with 5 million
+  mutants and a random `FUZZ_SEED`, and uploads the crashing input on failure.
 - The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String
   and nested lists in locals, parameters and returns, list literals (long
   ones are built in chunks of 255), `for x in xs` with `break` and `next`,

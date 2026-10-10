@@ -1,0 +1,39 @@
+name: Weekly fuzz
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Number of mutants
+        type: number
+        default: 5000000
+
+permissions:
+  contents: read
+
+jobs:
+  vm-fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SANITIZE: '1'
+      RUNS: ${{ inputs.runs || 5000000 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          variant: CS
+          version: '9.3'
+      - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"
+      - run: echo "commit $GITHUB_SHA, FUZZ_SEED=$FUZZ_SEED, FUZZ_RUNS=$RUNS"
+      - run: make vm-fuzz FUZZ_RUNS="$RUNS"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash
+          path: fuzz-crash.agcb
+          if-no-files-found: ignore
