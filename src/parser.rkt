@@ -104,8 +104,7 @@
         (let loop ([acc '()])
           (when (and (pair? acc)
                      (not (import-decl? (car acc)))
-                     (not (kind? 'NL))
-                     (not (kind? 'EOF)))
+                     (ormap kind? '(def struct enum export import)))
             (bail 'PARSE-MISSING-BLANK-LINE
                   "expected a blank line after the end of a declaration"
                   (current)))

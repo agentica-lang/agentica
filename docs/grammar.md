@@ -143,7 +143,7 @@ qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
 
-A function, struct or enum declaration (exported or not) must be followed by a blank line before the next declaration; a line with only a comment counts as blank. Otherwise the parser reports `PARSE-MISSING-BLANK-LINE` at the next declaration. Imports may follow each other directly.
+A function, struct or enum declaration (exported or not) must be followed by a blank line before the next declaration; a line with only a comment counts as blank. Otherwise the parser reports `PARSE-MISSING-BLANK-LINE` at the next declaration. Imports may follow each other directly; an import after a declaration also needs the blank line. Other text after a declaration's `end` (a stray `end` or statement) stays `PARSE-TOP-LEVEL-STATEMENT`.
 
 The parser allows type applications such as `List[Int]` and `Option[String]`. The checker restricts applications to supported builtins and declared enums; only enum declarations may declare type parameters. Generic functions and generic structs are not supported.
 
