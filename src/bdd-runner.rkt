@@ -94,7 +94,7 @@
                         [else
                          (with-handlers ([exn:fail? (lambda (failure) (diagnostic 'RUNTIME-BDD-PATTERN (exn-message failure) span))])
                            (define pattern (car arguments))
-                           (define callback (function-value-name (cadr arguments)))
+                           (define callback (cadr arguments))
                            (set! additions
                              (cons (definition pattern (compile-step-pattern pattern)
                                      (lambda (scenario-context captures step-span)

@@ -23,6 +23,7 @@ racket src/main.rkt examples/tasks.agc
 racket src/main.rkt examples/inventory.agc
 racket src/main.rkt examples/strings.agc
 racket src/main.rkt examples/result.agc
+racket src/main.rkt examples/blocks.agc
 racket src/main.rkt examples/json.agc
 ```
 
@@ -55,7 +56,7 @@ tests/
   evaluator-test.rkt
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc, result.agc, json.agc
+examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc, result.agc, json.agc, blocks.agc
 docs/
   grammar.md   # language grammar, the source of truth
   future.md    # planned syntax, not implemented
@@ -210,6 +211,13 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 
 - The lexer scans string text in `scan-string-body!`. `#{` emits `interp-start`/`interp-middle` with the text so far and pushes a `(#\# string-start)` frame on `delimiters`; the `}` that meets that frame resumes string scanning, and the resumed `interp-middle`/`interp-end` token starts at that `}` so parse errors point at it, and the closing quote emits `string` (no interpolation) or `interp-end`. Newlines and EOF inside an open frame are `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
 - The parser builds `interpolation` with text and expression parts (empty text pieces dropped). The checker checks each expression with no context (Void is rejected) and types the node as String; the evaluator inserts strings raw and other values with `value->debug-string`.
+
+## Blocks and closures
+
+- Lexer: `def struct enum if while for do` push a `(kw . position)` frame on `delimiters` and `end` pops it, so NL is emitted when the stack is empty or its top is a keyword frame. That keeps statement newlines inside a block written within `(...)`. Keyword frames left open at EOF are not a lexer error (the parser reports `PARSE-UNCLOSED-BLOCK`); a `)` that meets a keyword frame is `LEX-UNMATCHED-DELIMITER`. `|` is the `pipe` token; `||` stays `or`.
+- Parser: `parse-postfix` turns `do` after a `call`, `method-call` or bare `field-access` into a `block-lit` appended as the last argument. `allow-blocks` is off while parsing a `case` scrutinee and back on inside `(...)`, `[...]` and argument lists. Inside a block (`block-depth` > 0) a simple statement may end at `end` instead of NL, which allows `do |x| x * 2 end`.
+- Checker: `check-block-body` takes known parameter types and result (or #f). With no known result, `current-result` is `'infer`: the first `return` or the last expression fixes it. `capture-boundary` holds the scope depth at the block; assigning to a name found below it is `CHECK-CAPTURED-ASSIGNMENT`. List callback rules check the list first when the callback is a block, then the block with the element type; the `&f` path is unchanged.
+- Evaluator: a `block-lit` evaluates to `closure-value` (block, flattened copy of the visible scopes). `apply-callable` dispatches `function-value` and `closure-value`; `call-closure` uses its own `return-to`, the shared depth and step budget, and returns the last expression statement's value. `evaluate #:entrypoint` and `evaluate-with-ports` accept a name or a callable, which is how Task.spawn, HTTP callbacks and BDD steps run closures.
 
 ## Enums and pattern matching
 

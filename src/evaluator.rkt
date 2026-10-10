@@ -231,10 +231,11 @@
                      (enum-constructor-variant-name expression)
                      (map eval-expression (enum-constructor-args expression)))]
         [(function-ref? expression) (function-value (function-ref-name expression))]
+        [(block-lit? expression) (closure-value expression (capture-scopes))]
         [(invoke? expression)
          (define target (eval-expression (invoke-target expression)))
          (define arguments (map eval-expression (invoke-args expression)))
-         (call-function (hash-ref functions (function-value-name target)) arguments (invoke-span expression))]
+         (apply-callable target arguments (invoke-span expression))]
         [(try-expr? expression)
          (define result (eval-expression (try-expr-operand expression)))
          (if (result-ok? result) (result-ok-value result) (return-to result))]
@@ -336,7 +337,7 @@
         [(string? value) (format "~s" value)]
         [(number? value) (number->string value)]
         [(json-value? value) "<Json>"]
-        [(function-value? value) "<Fn>"]
+        [(or (function-value? value) (closure-value? value)) "<Fn>"]
         [(task-value? value) "<Task>"]
         [(net-socket? value) "<Socket>"]
         [(net-listener? value) "<Listener>"]
@@ -379,7 +380,7 @@
       (define name (if entry (builtin-implementation entry) (call-name expression)))
       (define span (call-span expression))
       (define (invoke-network callback args)
-        (evaluate-with-ports program program-args (function-value-name callback) args
+        (evaluate-with-ports program program-args callback args
                              builtin-handler functions struct-fields enum-names run))
       (define (spawn-network thunk cust)
         (task-spawn run thunk span #:custodian cust))
@@ -421,7 +422,7 @@
            [else (http-call-wire name arguments)])]
         [else (case name
         [("Task.spawn")
-         (define callback (function-value-name (car arguments)))
+         (define callback (car arguments))
          (task-spawn run
            (lambda ()
              (evaluate-with-ports program program-args callback (list (cadr arguments))
@@ -551,12 +552,22 @@
                        (lambda (data) (map json-value data)))]
         [("List.size") (length (car arguments))]
         [("List.append") (append (car arguments) (list (cadr arguments)))]
-        [("List.map" "List.filter" "List.reduce")
+        [("List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?")
          (define target (car arguments))
-         (define callback (hash-ref functions (function-value-name (last arguments))))
+         (define callback (last arguments))
          (define (invoke-callback args)
-           (call-function callback args span))
+           (apply-callable callback args span))
          (cond
+           [(equal? name "List.each")
+            (for ([item (in-list target)])
+              (invoke-callback (list item)))
+            (void)]
+           [(equal? name "List.any?")
+            (for/or ([item (in-list target)])
+              (and (invoke-callback (list item)) #t))]
+           [(equal? name "List.all?")
+            (for/and ([item (in-list target)])
+              (and (invoke-callback (list item)) #t))]
            [(equal? name "List.map")
             (for/list ([item (in-list target)])
               (invoke-callback (list item)))]
@@ -599,10 +610,10 @@
         [("List.reverse") (reverse (car arguments))]
         [("List.sort") (sort (car arguments) order<?)]
         [("List.sort_by")
-         (define callback (hash-ref functions (function-value-name (cadr arguments))))
+         (define callback (cadr arguments))
          (define keyed
            (for/list ([item (in-list (car arguments))])
-             (cons (call-function callback (list item) span) item)))
+             (cons (apply-callable callback (list item) span) item)))
          (map cdr (sort keyed order<? #:key car))]
         [("String.length") (string-length (car arguments))]
         [("String.upcase") (string-upcase (car arguments))]
@@ -704,6 +715,48 @@
          (define declaration (hash-ref functions name #f))
          (unless declaration (unreachable "call" (call-span expression)))
          (call-function declaration arguments (call-span expression))])]))
+
+    (define (capture-scopes)
+      (for*/fold ([captured (hash)])
+                 ([frame (in-list (reverse scopes))]
+                  [(name value) (in-hash frame)])
+        (hash-set captured name (unbox value))))
+
+    (define (apply-callable callable arguments span)
+      (if (function-value? callable)
+          (call-function (hash-ref functions (function-value-name callable)) arguments span)
+          (call-closure callable arguments span)))
+
+    (define (call-closure closure arguments span)
+      (when (>= depth max-call-depth)
+        (bail 'RUNTIME-STACK-OVERFLOW "call depth limit exceeded" span))
+      (define block (closure-value-block closure))
+      (define saved-scopes scopes)
+      (define saved-return return-to)
+      (set! depth (add1 depth))
+      (define result
+        (let/ec done
+          (set! return-to done)
+          (set! scopes (list (make-hash)
+                             (for/hash ([(name value) (in-hash (closure-value-captured closure))])
+                               (values name (box value)))))
+          (for ([parameter (in-list (block-lit-params block))]
+                [argument (in-list arguments)])
+            (define! (block-param-name parameter) argument))
+          (define statements (block-lit-body block))
+          (cond
+            [(and (pair? statements) (expr-stmt? (last statements)))
+             (exec-block (drop-right statements 1))
+             (define final (last statements))
+             (step! (node-span final))
+             (eval-expression (expr-stmt-value final))]
+            [else
+             (exec-block statements)
+             (void)])))
+      (set! depth (sub1 depth))
+      (set! scopes saved-scopes)
+      (set! return-to saved-return)
+      result)
 
     (define (call-function declaration arguments span)
       (when (>= depth max-call-depth)
@@ -812,4 +865,6 @@
 
     ;; Program --------------------------------------------------------------
 
-    (call-function (hash-ref functions entrypoint) entry-arguments (program-span program)))))
+    (if (string? entrypoint)
+        (call-function (hash-ref functions entrypoint) entry-arguments (program-span program))
+        (apply-callable entrypoint entry-arguments (program-span program))))))

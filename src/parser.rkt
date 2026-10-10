@@ -70,6 +70,24 @@
                 (format "expected ~a, found ~a" description (describe (current)))
                 (current))))
 
+    (define allow-blocks #t)
+    (define block-depth 0)
+
+    (define (statement-end?)
+      (or (kind? 'NL) (and (> block-depth 0) (kind? 'end))))
+
+    (define (expect-statement-end description)
+      (if (and (> block-depth 0) (kind? 'end))
+          (current)
+          (expect 'NL description)))
+
+    (define (with-blocks allowed thunk)
+      (define saved allow-blocks)
+      (set! allow-blocks allowed)
+      (define result (thunk))
+      (set! allow-blocks saved)
+      result)
+
     (define (expect-end)
       (cond
         [(kind? 'end) (advance!)]
@@ -125,7 +143,7 @@
       (expect 'NL "a newline after the function signature")
       (define body (parse-block))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (function-decl (token-lexeme name) params result body (span-from start)))
 
     (define (parse-parameters)
@@ -184,7 +202,7 @@
                                 (describe (current)))
                         (current))])))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (struct-decl (token-lexeme name) fields (span-from start)))
 
     (define (parse-field-decl)
@@ -246,7 +264,7 @@
       (when (null? variants)
         (bail 'PARSE-UNEXPECTED-TOKEN "an enum must declare at least one variant" (current)))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (enum-decl (token-lexeme name) type-parameters variants (span-from start)))
 
     ;; Statements ----------------------------------------------------------
@@ -352,7 +370,7 @@
 
     (define (parse-case)
       (define start (expect 'case "case"))
-      (define value (parse-expression))
+      (define value (with-blocks #f parse-expression))
       (expect 'do "do")
       (expect 'NL "a newline after do")
       (define arms
@@ -373,7 +391,7 @@
              (define body (parse-case-body))
              (loop (cons (case-arm pattern body (span-from arm-start)) acc))])))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (case-stmt value arms (span-from start)))
 
     (define (parse-block)
@@ -395,8 +413,8 @@
       (cond
         [(kind? 'return)
          (define start (advance!))
-         (define value (if (kind? 'NL) #f (parse-expression)))
-         (expect 'NL "a newline after the statement")
+         (define value (if (statement-end?) #f (parse-expression)))
+         (expect-statement-end "a newline after the statement")
          (return-stmt value (span-from start))]
         [(and (kind? 'name) (memq (token-kind (peek-token 1)) '(assign colon)))
          (parse-binding)]
@@ -411,12 +429,12 @@
                      "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, Map.put(map, key, value))"
                      "the core only assigns to a plain name")
                  (current)))
-         (when (and (name-ref? value) (not (kind? 'NL)))
+         (when (and (name-ref? value) (not (statement-end?)))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "expected a newline after the statement; calls need parentheses, as in ~a(...)"
                          (name-ref-name value))
                  (current)))
-         (expect 'NL "a newline after the statement")
+         (expect-statement-end "a newline after the statement")
          (expr-stmt value (span-from start))]))
 
     (define (parse-binding)
@@ -427,14 +445,14 @@
             #f))
       (expect 'assign "\"=\"")
       (define value (parse-expression))
-      (expect 'NL "a newline after the statement")
+      (expect-statement-end "a newline after the statement")
       (binding (token-lexeme start) type value (span-from start)))
 
     (define (parse-compound-assignment)
       (define start (expect 'name "a name"))
       (define operator (advance!))
       (define value (parse-expression))
-      (expect 'NL "a newline after the statement")
+      (expect-statement-end "a newline after the statement")
       (binding (token-lexeme start) #f
                (binary (hash-ref compound-operators (token-kind operator)) (token-span operator)
                        (name-ref (token-lexeme start) (token-span start)) value (span-from start))
@@ -456,7 +474,7 @@
               (parse-block))
             #f))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (if-stmt branches else-body (span-from start)))
 
     (define (parse-if-branch)
@@ -472,7 +490,7 @@
       (expect 'NL "a newline after the condition")
       (define body (parse-block))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (while-stmt condition body (span-from start)))
 
     (define (parse-for)
@@ -483,7 +501,7 @@
       (expect 'NL "a newline after the loop header")
       (define body (parse-block))
       (expect-end)
-      (expect 'NL "a newline after end")
+      (expect-statement-end "a newline after end")
       (for-stmt (token-lexeme variable) iterable body (span-from start)))
 
     ;; Expressions ---------------------------------------------------------
@@ -564,10 +582,49 @@
              [else (loop (field-access target (token-lexeme name) (span-from start)))])]
           [(kind? 'left-bracket)
            (advance!)
-           (define index (parse-expression))
+           (define index (with-blocks #t parse-expression))
            (expect 'right-bracket "\"]\"")
            (loop (index-access target index (span-from start)))]
+          [(and allow-blocks (kind? 'do) (or (call? target) (method-call? target) (field-access? target)))
+           (define block (parse-block-lit))
+           (loop
+            (cond
+              [(call? target)
+               (call (call-name target) (append (call-args target) (list block)) (span-from start))]
+              [(method-call? target)
+               (method-call (method-call-target target) (method-call-name target)
+                            (append (method-call-args target) (list block)) (span-from start))]
+              [else
+               (method-call (field-access-target target) (field-access-name target)
+                            (list block) (span-from start))]))]
           [else target])))
+
+    (define (parse-block-lit)
+      (define start (expect 'do "do"))
+      (when (kind? 'or)
+        (bail 'PARSE-UNEXPECTED-TOKEN "a block without parameters has no bars; write do ... end" (current)))
+      (define params
+        (cond
+          [(kind? 'pipe)
+           (advance!)
+           (let loop ([acc '()])
+             (define name (expect 'name "a block parameter name"))
+             (define type
+               (and (kind? 'colon)
+                    (begin (advance!) (parse-type))))
+             (define parameter (block-param (token-lexeme name) type (span-from name)))
+             (cond
+               [(kind? 'comma) (advance!) (loop (cons parameter acc))]
+               [else
+                (expect 'pipe "\"|\" after the block parameters")
+                (reverse (cons parameter acc))]))]
+          [else '()]))
+      (define saved-depth block-depth)
+      (set! block-depth (add1 block-depth))
+      (define body (with-blocks #t parse-block))
+      (set! block-depth saved-depth)
+      (expect-end)
+      (block-lit params body (span-from start)))
 
     (define (parse-primary)
       (define token (current))
@@ -591,7 +648,7 @@
         [(type-name) (parse-construct)]
         [(left-paren)
          (advance!)
-         (define inner (parse-expression))
+         (define inner (with-blocks #t parse-expression))
          (expect 'right-paren "\")\"")
          inner]
         [(left-bracket) (parse-list-literal)]
@@ -682,14 +739,16 @@
     (define (parse-expression-list terminator)
       (if (kind? terminator)
           '()
-          (let loop ([acc (list (parse-expression))])
-            (cond
-              [(kind? 'comma)
-               (advance!)
-               (if (kind? terminator)
-                   (reverse acc)
-                   (loop (cons (parse-expression) acc)))]
-              [else (reverse acc)]))))
+          (with-blocks #t
+            (lambda ()
+              (let loop ([acc (list (parse-expression))])
+                (cond
+                  [(kind? 'comma)
+                   (advance!)
+                   (if (kind? terminator)
+                       (reverse acc)
+                       (loop (cons (parse-expression) acc)))]
+                  [else (reverse acc)]))))))
 
     (define (parse-named-arguments)
       (if (kind? 'right-paren)

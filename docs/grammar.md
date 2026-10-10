@@ -278,7 +278,12 @@ multiplicative_expr = unary_expr,
 unary_expr       = ( "-" | "not" | "!" | "try" ), unary_expr | postfix_expr ;
 postfix_expr     = primary, { ".", NAME
                             | ".", NAME, "(", [ arguments ], ")"
-                            | "[", expression, "]" } ;
+                            | "[", expression, "]"
+                            | block } ;
+block            = "do", [ "|", block_param, { ",", block_param }, "|" ],
+                   block_body, "end" ;
+block_param      = NAME, [ ":", type ] ;
+block_body       = NL, { statement } | simple_statement ;
 
 primary          = literal
                  | "&", ( NAME | TYPE_NAME, ".", NAME )
@@ -299,7 +304,7 @@ map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
 
-Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
+Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables; a block (see "Blocks and closures") captures them. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
 
 `TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias.
 
@@ -336,7 +341,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
 | `Json` | Opaque JSON value, accessed through the `JSON` module |
-| `Fn[A, ..., R]` | Named function value; final type is its return, preceding types are parameters; no closures |
+| `Fn[A, ..., R]` | Function value (`&name` or a block); final type is its return, preceding types are parameters |
 | `Task[R]` | Opaque lightweight task with exactly one result type |
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
 | Network handles | Opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
@@ -525,9 +530,12 @@ List.drop(list: List[T], count: Int) -> List[T]
 List.at(list: List[T], index: Int) -> T
 List.sort(list: List[T]) -> List[T]
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
+List.each(list: List[A], f: Fn[A, Void]) -> Void
+List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
+List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
 ```
 
-`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a named function reference (`&name`) or a function-valued variable; there are no closures.
+`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a block, a named function reference (`&name`) or a function-valued variable.
 
 `List.concat` joins lists of the same element type and costs O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Counts must be nonnegative (otherwise RUNTIME-INVALID-COUNT at the count argument); counts greater than length return the whole list or an empty list, respectively. Both cost O(n) with the current list representation. `List.at` is zero-based, costs O(n), and reports RUNTIME-INDEX-OUT-OF-RANGE at the index argument for negative or out-of-range indexes, like indexing syntax.
 
@@ -687,6 +695,32 @@ as Int. Maps decoded from JSON use sorted key order.
 `Fn` and `BDD` are reserved builtin names. `f: Fn[Int, Int] = &double` refers to a declared function with exactly those parameter and return types; `f.call(21)` invokes it. References can travel through lists, maps, parameters, returns, and fields. A bare function name remains invalid as a value. Functions have no equality, field access, indexing, or JSON encoding; `IO.inspect` prints `<Fn>`.
 
 `BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications using local processes. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Void]) -> Void`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and process lifetime.
+
+### Blocks and closures
+
+A block is a function written at the call site, as the last argument of a call or method call:
+
+```ruby
+doubled = xs.map do |x|
+  x * 2
+end
+evens = xs.filter do |x| x % 2 == 0 end
+total = xs.reduce(0) do |sum, x| sum + x end
+xs.each do |x|
+  puts("item #{x}")
+end
+```
+
+- **Where.** `do |a, b| ... end` (or `do ... end` without parameters) right after the `)` of a call, or after a method name without parentheses: `xs.each do ... end`. A user function always needs its parentheses: `run(1) do ... end`, `start() do ... end`. The block becomes the last argument, so the called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET` otherwise). `do || ... end` is rejected; write `do ... end`.
+- **Lines.** The body may follow the parameters on the same line (`do |x| x * 2 end`) or start on the next one. Blocks may span lines inside parentheses: `puts(String.join(xs.map do |x| ... end, ","))`.
+- **`case`.** In `case <expression> do`, the `do` belongs to `case`. A call with a block there needs parentheses: `case (xs.map do |x| x end) do`.
+- **Parameter types** come from the call: the parameter types of the expected `Fn`, or the builtin's rule (`xs.map` gives `x` the element type). They may be annotated: `do |x: Int| ... end`. With neither, `CHECK-BLOCK-TYPE`. A wrong number of parameters is `CHECK-ARITY`.
+- **Result.** `return value` leaves the block, not the enclosing function. Without `return`, the value of the last expression statement is the block's value. The result type comes from the expected `Fn` (user functions, `each`, `any?`, `all?`, `filter`, and `reduce`, whose result is the accumulator type); for `map` and `sort_by` it comes from the body, where every `return` and the last expression must agree (`CHECK-TYPE-MISMATCH`). A non-`Void` block must give a value on every path (`CHECK-MISSING-RETURN`). When the result is `Void`, the last statement gives no value.
+- **`try`** inside a block returns the error from the block, so the block's result must be `Result[...]` (`CHECK-TRY-CONTEXT` otherwise); write the success as `ok(...)`.
+- **Capture by value.** A block sees every variable visible where it is written and keeps their values from the moment it is created; later assignments outside do not change it. Assigning to an outer variable inside a block is `CHECK-CAPTURED-ASSIGNMENT`: use `reduce` or a `for` loop. Block parameters and new variables cannot reuse a visible name (`CHECK-SHADOWED-NAME`).
+- **Values.** A block has type `Fn[A, ..., R]` and works wherever a function value does: stored, returned, passed to `Task.spawn` or HTTP callbacks through a variable, or registered with `BDD.step(pattern) do |args| ... end`. It shares the caller's step budget and call-depth limit. Blocks have no equality or JSON form; `IO.inspect` prints `<Fn>`.
+
+`List.each` calls `f` on each element in order. `List.any?` and `List.all?` stop at the first element that decides the answer.
 
 ### Lightweight tasks
 

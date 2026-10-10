@@ -31,6 +31,7 @@ jobs:
       - run: racket src/main.rkt examples/inventory.agc
       - run: racket src/main.rkt examples/strings.agc
       - run: racket src/main.rkt examples/result.agc
+      - run: racket src/main.rkt examples/blocks.agc
       - run: racket src/main.rkt examples/json.agc
       - run: dist/agentica examples/json-modules.agc
       - run: dist/agentica check examples/json-modules.agc

@@ -64,6 +64,24 @@
         (check-equal? (hash-ref (hash-ref (car (hash-ref duplicate 'files)) 'error) 'code) "RUNTIME-BDD-DUPLICATE"))
       (lambda () (delete-directory/files directory))))
 
+  (test-case "steps registered with blocks run with captured values"
+    (define directory (make-temporary-file "agentica-bdd-block~a" 'directory))
+    (dynamic-wind void
+      (lambda ()
+        (define feature-path (build-path directory "blocks.feature"))
+        (define step-path (build-path directory "steps.agc"))
+        (display-to-file "Feature: Blocks\nScenario: good\nThen 3 is small\nScenario: bad\nThen 9 is small\n"
+                         feature-path)
+        (display-to-file
+         (string-append "def main() -> Void\n  limit = 5\n"
+                        "  BDD.step(\"{int} is small\") do |args|\n"
+                        "    BDD.assert(args[0].to_i! < limit, \"too big\")\n  end\nend\n")
+         step-path)
+        (define report (run-bdd (list feature-path) #:steps (list step-path)))
+        (check-equal? (hash-ref report 'passed) 1)
+        (check-equal? (hash-ref report 'failed) 1))
+      (lambda () (delete-directory/files directory))))
+
   (test-case "custom handlers receive arguments and share only scenario-local state"
     (define report (run-bdd (list custom (build-path (path-only custom) "." "custom.feature")) #:steps (list handlers)))
     (check-true (hash-ref report 'ok))

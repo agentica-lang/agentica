@@ -130,13 +130,13 @@
     (let scan ()
       (cond
         [(= index source-length)
-         (when (and (null? delimiters)
+         (when (and (statement-level? delimiters)
                     (or (null? reversed-tokens)
                         (not (eq? (token-kind (car reversed-tokens)) 'NL))))
            (define start (position))
            (emit! 'NL start #f))
-         (unless (null? delimiters)
-           (define opening (car delimiters))
+         (define opening (findf (lambda (frame) (not (keyword-frame? frame))) delimiters))
+         (when opening
            (when (interpolation-frame? opening)
              (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr opening))))
            (return (fail 'LEX-UNCLOSED-DELIMITER
@@ -160,7 +160,7 @@
             (when open-interpolation
               (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr open-interpolation))))
             (define start (advance-newline!))
-            (when (null? delimiters)
+            (when (statement-level? delimiters)
               (emit! 'NL start #f))
             (scan)]
            [(char=? char #\#)
@@ -185,6 +185,11 @@
                         (lambda () (if (char<=? #\A char #\Z)
                                        'type-name
                                        'name))))
+            (cond
+              [(memq kind '(def struct enum if while for do))
+               (set! delimiters (cons (cons 'kw start) delimiters))]
+              [(and (eq? kind 'end) (pair? delimiters) (keyword-frame? (car delimiters)))
+               (set! delimiters (cdr delimiters))])
             (emit! kind start lexeme)
             (scan)]
            [(ascii-digit? char)
@@ -226,7 +231,7 @@
                      "," 'comma ":" 'colon "." 'dot
                      "=" 'assign "+" 'plus "-" 'minus
                      "*" 'multiply "/" 'divide "%" 'modulo
-                     "<" 'less ">" 'greater "&" 'ampersand)
+                     "<" 'less ">" 'greater "&" 'ampersand "|" 'pipe)
                lexeme
                #f))
             (unless kind
@@ -247,7 +252,7 @@
                (when (memq kind '(right-paren right-bracket right-brace))
                  (define expected (case char [(#\)) #\(] [(#\]) #\[] [else #\{]))
                  (unless (and (pair? delimiters)
-                              (char=? (caar delimiters) expected))
+                              (eqv? (caar delimiters) expected))
                    (return (fail 'LEX-UNMATCHED-DELIMITER
                                  (format "unmatched ~a delimiter" char)
                                  start)))
@@ -257,3 +262,9 @@
 
 (define (interpolation-frame? frame)
   (eqv? (car frame) #\#))
+
+(define (keyword-frame? frame)
+  (eq? (car frame) 'kw))
+
+(define (statement-level? delimiters)
+  (or (null? delimiters) (keyword-frame? (car delimiters))))
