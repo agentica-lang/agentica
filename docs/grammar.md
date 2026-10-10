@@ -996,7 +996,7 @@ unknown function "totl"
 
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
-Names and forms from other languages get a `help` that names the Agentica form:
+Names and forms from other languages get a `help` that names the Agentica form. A method hint is given only when the suggested method exists for the receiver's type:
 
 | Written | Help |
 |---|---|
@@ -1007,6 +1007,7 @@ Names and forms from other languages get a `help` that names the Agentica form:
 | `range(n)` | a `while` loop, or `for` over a list |
 | `int(x)`, `float(n)`, `Int.to_float(n)` | `x.to_i`, `n.to_f` |
 | `x.lower`, `x.upper`, `x.startswith(...)` | `downcase`, `upcase`, `start_with?` |
+| `x.nil?` | `x == nil` |
 | `None`, `null` | `nil` |
 | `elif`, `elseif`, `else if` | `elsif` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
