@@ -22,7 +22,7 @@ order governs pending work rather than their numeric order.
 | 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
-After steps 1–2, target everyday scripts and automation. After steps 3–7,
+After steps 1–2, target everyday scripts and automation. After steps 6–7,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
 grammar, and the self-contained programming reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
@@ -854,7 +854,7 @@ Moved into Phase 5e: `try` ships together with `Result`. The decision is made: a
 - [x] Map-based BFS maze example: distance and predecessor maps, numeric-keyed queue with deletion, and path reconstruction. Functional tests validate legal shortest paths, cycles, row boundaries, unreachable goals, start equal to goal, malformed inputs, and 32×32 grids. Map.delete remains O(n) for insertion-order maintenance.
 - [x] Update grammar, programming reference, and development skill for these operations.
 
-## Next work: General programming before MCP
+## Pending work: General programming and MCP (after the VM)
 
 ### Completed: Strict Void prerequisite
 
@@ -976,7 +976,7 @@ without a specification.
 - [x] Verify queue behavior, precedence, compiled CLI and relocated release bundles.
 - [x] Document imports/API in the grammar and programming reference together.
 
-### 4. Real applications
+### 6. Real applications
 
 Use complete programs to expose missing APIs before broadening the language.
 
@@ -988,7 +988,7 @@ Use complete programs to expose missing APIs before broadening the language.
 **Milestone:** practical larger general-purpose programs, demonstrated by
 these applications rather than a feature checklist alone.
 
-### 5. MCP examples (phase 5m), then Streamable HTTP
+### 7. MCP examples (phase 5m), then Streamable HTTP
 
 Build stdio examples first on the file/process/JSON/module foundations. A
 minimal protocol scaffold lives at `examples/mcp/stdio.agc`; it handles
