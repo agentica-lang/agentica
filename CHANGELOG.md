@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The programming skill and the `inventory`, `strings` and `result` examples
+  teach the Ruby forms (methods, `!`/`&&`, `+=`, interpolation, blocks).
 - A declaration's `end` must be followed by a blank line before the next
   declaration (`PARSE-MISSING-BLANK-LINE`).
 - `#{` inside a string now starts an interpolation; write `\#{` for the

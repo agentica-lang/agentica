@@ -2,16 +2,16 @@ def read_count(text: String) -> Result[Int]
   if text == ""
     return error("empty count")
   end
-  count = try String.to_int(text)
+  count = try text.to_i
   return ok(count)
 end
 
 def main() -> Void
   count = read_count("42")
-  puts(String.from_int(Result.unwrap!(count)))
+  puts(count.unwrap!.to_s)
   missing = read_count("")
-  if not Result.ok?(missing)
-    puts(Result.message(missing))
+  if !missing.ok?
+    puts(missing.message)
   end
-  puts(String.from_int(Result.unwrap_or(missing, 0)))
+  puts(missing.unwrap_or(0).to_s)
 end
