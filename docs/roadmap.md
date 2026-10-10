@@ -12,11 +12,12 @@ work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
-| 1 | **Next:** Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
+| 1 | **Complete:** Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
 | 2 | **Complete:** Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 5 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 6 | **Next:** Bytecode VM in C with the Boehm GC (phase 7) | Run checked programs much faster, with the same output and diagnostics |
 
 After steps 1–2, target everyday scripts and automation. After steps 3–5,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
@@ -1004,6 +1005,113 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 - [ ] Use the results to revise the grammar and examples explicitly before adding exceptions to the implementation.
 
 **Complete when:** the prototype provides evidence about whether Agentica's syntax and diagnostics help agents write and repair programs.
+
+## Phase 7: Bytecode VM
+
+Replace the tree-walking evaluator with a bytecode VM written in C with the Boehm GC, step by step, without changing the language. The Racket front end (lexer, parser, module linker, checker) stays. It lowers the checked program to a typed intermediate form (IR), then to bytecode that the VM runs.
+
+Why a VM and not a transpiler or LLVM IR: agents write, run and repair in a loop, so start-up time matters more than peak speed, and users should not need a compiler toolchain. A VM keeps `--max-steps`, the call-depth limit and located runtime diagnostics almost for free. Transpiling to C can come later from the same IR if native binaries are needed. Why C with Boehm: C is small, fast to build and available everywhere, and the VM can ship as one static binary. The Boehm GC removes manual memory management from the VM and runtime, so values can be shared freely without reference counting. The cost is that the runtime (tasks, files, processes, TLS, HTTP, JSON) must be written in C, so memory safety depends on discipline and tooling (sanitizers, fuzzing of the loader).
+
+Rules for every subphase:
+
+- The language does not change. `grammar.md` stays the contract; the Racket evaluator stays the reference until 7i.
+- Same observable behavior: stdout, stderr, exit code, diagnostic code and span. Differential tests prove it.
+- Diagnostic codes stay stable. The VM reports `RUNTIME-` diagnostics with the original source span.
+- No placeholder files, directories or opcodes for later subphases.
+- C naming: every exported function, type and global of the VM library uses the `agc_` prefix (`agc_value`, `agc_vm_run`); macros and enum constants use `AGC_` (`AGC_OP_ADD`). File-local helpers are `static`, so they need no prefix.
+
+### 7a: Baseline measurements
+
+- [ ] Add a benchmark script (`bench/`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
+- [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt` and `dist/agentica`.
+- [ ] Record the numbers, machine and Racket version in `docs/vm-benchmarks.md`.
+- [ ] Profile the evaluator once to see where time goes (scope lookup, dispatch, allocation).
+
+**Done when:** we have a baseline to compare every later subphase against.
+
+### 7b: Design decisions (`docs/vm.md`)
+
+- [ ] IR: shape of the lowered program (functions, locals as slots, typed operations, explicit control flow, span per instruction).
+- [ ] Bytecode: instruction set, constant pool, function table, struct/enum layouts, span table, format version.
+- [ ] Serialization between Racket and the VM: binary or JSON, versioned, rejected on version mismatch.
+- [ ] Value representation in C: tagged values allocated with the Boehm GC (`GC_MALLOC`, `GC_MALLOC_ATOMIC` for strings and numbers); Int (int64_t, checked with `__builtin_*_overflow`), Float (f64), Bool, Nil, Void, String (UTF-8 plus character indexing rules), List, Map (insertion order, structural sharing), struct, enum, Result, function value, Json, opaque handles.
+- [ ] Execution limits: one step per instruction or per former AST entry; the reported step counts must match the evaluator or the difference must be documented.
+- [ ] Call-depth limit (10000) and stack layout.
+- [ ] How the CLI runs the VM: flag (`--vm`), a separate binary, or both; how `dist/` packages it.
+- [ ] Dependency policy: C11, libc and the Boehm GC (`libgc`) for the core; static or dynamic linking of libgc; decide the TLS library (OpenSSL or another) and the event loop for tasks and I/O (poll/epoll by hand or libevent) before 7h. HTTP framing and JSON are written in C, following `http-wire.rkt` and `json.rkt`.
+- [ ] Seeded `Random`: implement Racket's generator algorithm (MRG32k3a) in C so `--seed` gives the same sequence, or document that sequences are backend-specific.
+- [ ] Build and CI: a `make vm` target with a C compiler and `libgc`; build with warnings as errors; run the VM tests next to `make test`; a sanitizer job (UBSan, and ASan where it works with Boehm) and a Valgrind or GC-debug run.
+
+**Done when:** `docs/vm.md` answers each item above and the open decisions are closed.
+
+### 7c: Lowering to IR (Racket)
+
+- [ ] `src/lower.rkt`: checked program → IR. Resolve names to slots and indexes, make types explicit, keep spans.
+- [ ] Lower every core form: literals, operators, `if`/`while`/`for`, functions, returns, structs, field access, lists, maps, indexing, enums and `case`, `Result`, `try`, `&name` and `.call`.
+- [ ] `--dump-ir` in the CLI for debugging.
+- [ ] `tests/lower-test.rkt`: one test per form, plus span checks.
+
+**Done when:** every program in `examples/` lowers without error.
+
+### 7d: Bytecode emitter
+
+- [ ] `src/bytecode.rkt`: IR → bytecode plus constant pool and span table.
+- [ ] Serialize to the format from 7b; `agentica compile file.agc -o file.agcb` writes it.
+- [ ] Round-trip test: write, read back, compare.
+
+**Done when:** every program in `examples/` compiles to a bytecode file.
+
+### 7e: VM core (C + Boehm)
+
+- [ ] Source layout under `vm/` (one module per area: loader, values, interpreter loop, builtins, diagnostics; public names prefixed `agc_`); `make vm` builds `dist/agentica-vm`; small C tests use plain `assert`, no framework.
+- [ ] Loader with format-version check; it rejects truncated or malformed bytecode without crashing, and a fuzz run proves it.
+- [ ] Values and checked Int arithmetic (`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-DIVISION-BY-ZERO`), IEEE Float comparisons as in the evaluator.
+- [ ] Control flow, locals, function calls, returns, call-depth limit (`RUNTIME-STACK-OVERFLOW`), `--max-steps` (`RUNTIME-STEP-LIMIT`).
+- [ ] Structs, lists, maps (insertion order), indexing errors with their spans.
+- [ ] Enums, `case`, `Result`, `try`, function values.
+- [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.
+- [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins.
+- [ ] Runtime diagnostics printed in the plain, `--ai` and `--json` formats, identical to the evaluator.
+
+**Done when:** every non-network, non-process, non-task example runs on the VM.
+
+### 7f: Differential tests
+
+- [ ] A harness that runs each program on the evaluator and on the VM and compares stdout, stderr, exit code and diagnostic code/span.
+- [ ] Inputs: `examples/`, `tests/eval/tasks/*` (reference solutions and hidden cases), and a set of rejected-at-runtime programs.
+- [ ] Run it in `make test` and CI; a missing VM build fails CI and visibly skips locally.
+
+**Done when:** all core programs match on both backends.
+
+### 7g: Speed check
+
+- [ ] Re-run the 7a benchmarks on the VM and record them in `docs/vm-benchmarks.md`.
+- [ ] Fix the largest hot spots (instruction dispatch, list/map representation, string indexing).
+
+**Done when:** the numbers show whether the VM is worth finishing; decide here before 7h.
+
+### 7h: Runtime services on the VM
+
+- [ ] JSON: parse, extract, encode, builders, typed decode and schema.
+- [ ] Files and paths.
+- [ ] Lightweight tasks: scheduler, `Task.spawn/await/sleep`, shared step budget, cancellation on return.
+- [ ] Processes, behind `--allow-run`.
+- [ ] TCP and TLS.
+- [ ] HTTP/1.1 clients and servers.
+- [ ] Modules: `std/` and `pkg/` resolution stay in the front end; check that linked programs run.
+- [ ] BDD: decide whether handlers keep using the Racket evaluator or move to the VM.
+- [ ] Extend the differential tests and the independent network/process fixtures to the VM.
+
+**Done when:** every example and every CI smoke test runs on the VM with the same results.
+
+### 7i: Switch the default backend
+
+- [ ] Make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
+- [ ] Package the VM in `dist/` and the release workflow.
+- [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
+- [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.
+
+**Done when:** a release ships with the VM as the default backend.
 
 ## Later extensions
 
