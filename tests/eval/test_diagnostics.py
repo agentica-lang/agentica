@@ -38,7 +38,7 @@ class DiagnosticsTests(unittest.TestCase):
             + bash_call("3", "agentica --ai a.agc", AI)
             + bash_call("4", "agentica --json a.agc", JSON)
             + bash_call("5", "agentica a.agc", "ok\n")
-            + bash_call("6", "cat skills/agentica-programming/references/language.md", DOCS)
+            + bash_call("6", "cat skills/agentica-programming/references/diagnostics.md", DOCS)
             + bash_call("7", "strings bin/agentica | grep CHECK", DOCS)
             + bash_call("8", "cd /workspace && ./bin/agentica --json a.agc", ESCAPED)
         )
