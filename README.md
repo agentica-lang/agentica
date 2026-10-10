@@ -45,7 +45,7 @@ bundle the runtime. `compiled/` and `dist/` are in `.gitignore`.
 ## Usage
 
 ```sh
-racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [--allow-run] [check] <file.agc>
+racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <file.agc>
 racket src/main.rkt help String.to_int --json
 ```
 
@@ -64,6 +64,7 @@ racket src/main.rkt examples/hello.agc
 | `--json` | Print a diagnostic as one JSON object (stderr).            |
 | `help NAME --json` | Describe a builtin from the shared catalog, without a program file. Unknown targets exit 2. |
 | `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
+| `--seed N` | Seed `Random` with N (0..2147483647) so runs repeat. Without it, each run is seeded from OS randomness. |
 
 Use `--allow-run` before the command or source file to enable `Process.spawn`; spawning is disabled by default. `main()` now returns `Void`, and side-effect APIs return `Void` or `Result[Void]`. Use `ok()` for successful completion; `nil` remains data and JSON null. `racket src/main.rkt --allow-run examples/process-tool.agc` demonstrates tool execution and exit checks.
 

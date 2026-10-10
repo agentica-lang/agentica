@@ -9,7 +9,8 @@
          "task.rkt"
          "builtin-types.rkt" "network.rkt" "filesystem.rkt" "process.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
          "json.rkt"
-         "json-typed.rkt")
+         "json-typed.rkt"
+         (only-in racket/random crypto-random-bytes))
 
 (provide evaluate
          (struct-out instance)
@@ -24,6 +25,25 @@
 (define decimal-float-pattern #px"^[+-]?[0-9]+(\\.[0-9]+)?$")
 
 (define max-call-depth 10000)
+
+(define max-seed (sub1 (expt 2 31)))
+
+(define (random-seed-from-os)
+  (modulo (integer-bytes->integer (crypto-random-bytes 4) #f) max-seed))
+
+(define (random-in-range low high)
+  (define size (add1 (- high low)))
+  (if (<= size 4294967087)
+      (+ low (random size))
+      (let* ([space (expt 2 64)]
+             [limit (* size (quotient space size))])
+        (let loop ()
+          (define bits
+            (for/fold ([n 0]) ([_ (in-range 4)])
+              (+ (* n 65536) (random 65536))))
+          (if (< bits limit)
+              (+ low (modulo bits size))
+              (loop))))))
 
 (define (order<? a b)
   (cond
@@ -44,10 +64,13 @@
                   #:arguments [arguments '()]
                   #:builtin-handler [builtin-handler #f]
                   #:require-complete-tasks? [require-complete? #f]
-                  #:allow-run [allow-run? (current-process-allowed?)])
+                  #:allow-run [allow-run? (current-process-allowed?)]
+                  #:seed [seed #f])
   (parameterize ([current-input-port input]
                  [current-output-port output]
-                 [current-error-port error-output])
+                 [current-error-port error-output]
+                 [current-pseudo-random-generator (make-pseudo-random-generator)])
+    (random-seed (or seed (random-seed-from-os)))
     (define functions
       (for/hash ([declaration (in-list (program-declarations program))]
                  #:when (function-decl? declaration))
@@ -617,6 +640,15 @@
            (bail 'RUNTIME-INVALID-CHARACTER "not a Unicode scalar value"
                  (node-span (car (call-args expression)))))
          (string (integer->char code))]
+        [("Time.now_ms") (exact-floor (current-inexact-milliseconds))]
+        [("Time.monotonic_ms") (exact-floor (current-inexact-monotonic-milliseconds))]
+        [("Random.int")
+         (define low (car arguments))
+         (define high (cadr arguments))
+         (when (> low high)
+           (bail 'RUNTIME-INVALID-RANGE "Random.int needs min <= max" span))
+         (random-in-range low high)]
+        [("Random.float") (random)]
         [("Float.from_int") (exact->inexact (car arguments))]
         [("Float.to_int" "Float.to_int!")
          (fallible (string-suffix? name "!")

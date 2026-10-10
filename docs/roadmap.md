@@ -896,7 +896,7 @@ the existing builtin library.
 - [x] `List.map`, `filter`, `reduce`: exact callback signatures, ordered immutable traversal, contextual empty inputs, and shared execution limits.
 - [x] `List.sort`, `sort_by`: stable ascending order over Int, Float or String (keys), NaN last, one key call per element.
 - [x] Add string search/replacement and missing numeric conversions: `String.index_of/at/reverse/code/from_code` (`String.replace` already existed) and `Float.from_int`, `Float.to_int`, `Float.to_int!`.
-- [ ] Specify and add basic time and randomness APIs; define clock, seed and bounds behavior before implementation.
+- [x] Specify and add basic time and randomness APIs: `Time.now_ms` (wall clock), `Time.monotonic_ms`, inclusive `Random.int`, `Random.float` in [0, 1), a per-run generator seeded from the OS or `--seed N`.
 - [ ] Decide which other gaps in `future.md` ("Other gaps for code-challenge programs": math, conversions, strings, sets, input, performance) belong here after a real task needs them.
 - [ ] Add harder 6b model-evaluation tasks that need sorting.
 

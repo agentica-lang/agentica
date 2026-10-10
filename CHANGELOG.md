@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `String` values or keys.
 - `String.index_of`, `String.at`, `String.reverse`, `String.code`,
   `String.from_code`, `Float.from_int`, `Float.to_int` and `Float.to_int!`.
+- `Time.now_ms`, `Time.monotonic_ms`, `Random.int` and `Random.float`, with
+  `--seed N` for repeatable runs.
 
 ## [0.1.0] - 2026-10-04
 

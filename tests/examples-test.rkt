@@ -326,6 +326,19 @@
   (test-case "CLI --version prints the version and exits 0"
     (check-equal? (cli "--version") (list 0 "0.1.0\n" "")))
 
+  (test-case "CLI --seed repeats Random and rejects bad seeds"
+    (define program (make-temporary-file "agentica~a.agc"))
+    (display-to-file "def main() -> Void\n  IO.inspect([Random.int(1, 1000000), Random.int(1, 1000000)])\nend\n"
+                     program #:exists 'truncate)
+    (define path (path->string program))
+    (define first (cli "--seed" "5" path))
+    (define again (cli "--seed" "5" path))
+    (define bad (cli "--seed" "2147483648" path))
+    (delete-file program)
+    (check-equal? (car first) 0)
+    (check-equal? first again)
+    (check-equal? (car bad) 2))
+
   (test-case "CLI exit codes"
     (define hello (path->string (build-path examples-dir "hello.agc")))
     (check-equal? (cli hello) '(0 "hello\n" ""))

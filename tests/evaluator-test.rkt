@@ -209,6 +209,28 @@
       (check-equal? (diagnostic-code found) (cadr case))
       (when (caddr case) (check-equal? (position-of found) (caddr case)))))
 
+  (test-case "Random repeats with a seed, stays in bounds, and rejects empty ranges"
+    (define program
+      (main-with (string-append
+       "  i = 0\n  good = true\n"
+       "  while i < 2000\n"
+       "    n = Random.int(0 - 2, 3)\n"
+       "    x = Random.float()\n"
+       "    good = good and n >= 0 - 2 and n <= 3 and x >= 0.0 and x < 1.0\n"
+       "    i = i + 1\n  end\n"
+       "  IO.inspect(good)\n"
+       "  IO.inspect([Random.int(1, 1000000), Random.int(0 - 9223372036854775807 - 1, 9223372036854775807)])\n"
+       "  t = Time.monotonic_ms()\n  IO.inspect(Time.monotonic_ms() >= t)")))
+    (define checked (check (parse (lex (source "test.agc" program)))))
+    (define (seeded seed)
+      (with-output-to-string (lambda () (evaluate checked #:seed seed))))
+    (check-regexp-match #rx"^true\n\\[[0-9]+, -?[0-9]+\\]\ntrue\n$" (seeded 7))
+    (check-equal? (seeded 7) (seeded 7))
+    (check-not-equal? (seeded 7) (seeded 8))
+    (define empty (diagnostic-of (main-with "  x = Random.int(2, 1)")))
+    (check-equal? (diagnostic-code empty) 'RUNTIME-INVALID-RANGE)
+    (check-equal? (position-of empty) '(2 7)))
+
   (test-case "user functions may use ? and ! suffixes"
     (check-equal? (output-of
                    (string-append
@@ -399,6 +421,10 @@
         ("String.to_float" "String.to_float(\"1.5\")" "ok(1.5)\n")
         ("String.to_int!" "String.to_int!(\"7\")" "7\n")
         ("String.to_float!" "String.to_float!(\"1.5\")" "1.5\n")
+        ("Time.now_ms" "Time.now_ms() > 1700000000000" "true\n")
+        ("Time.monotonic_ms" "Time.monotonic_ms() >= 0" "true\n")
+        ("Random.int" "Random.int(3, 3)" "3\n")
+        ("Random.float" "Random.float() < 1.0" "true\n")
         ("ok" "ok(7)" "ok(7)\n")
         ("error" "r" "error(\"bad\")\n")
         ("Result.ok?" "Result.ok?(ok(7))" "true\n")

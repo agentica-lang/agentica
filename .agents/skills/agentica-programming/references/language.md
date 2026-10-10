@@ -296,7 +296,13 @@ IO.flush() -> Void                            # flushes stdout only
 IO.eof?() -> Bool                            # blocking byte peek, not readiness
 System.args() -> List[String]
 System.exit(code: Int) -> Void
+Time.now_ms() -> Int                          # wall clock, ms since Unix epoch; may jump
+Time.monotonic_ms() -> Int                    # never goes backward; use for durations
+Random.int(min: Int, max: Int) -> Int         # uniform, both ends inclusive
+Random.float() -> Float                       # uniform in 0.0 up to, not including, 1.0
 ```
+
+`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. Tasks share the run's generator, so the sequence each task sees depends on scheduling. The generator is not suitable for secrets.
 
 - A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
 - Build lists with literals or `List.append`/`List.repeat`; update them with `List.set`. Concatenate lists with `List.concat`. To change a map, use `Map.put`/`Map.delete`; these operations leave the original unchanged.
@@ -815,6 +821,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count |
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text, `Float.to_int!` on NaN or infinity |
+| `RUNTIME-INVALID-RANGE` | `Random.int` with `min > max` |
 | `RUNTIME-INVALID-CHARACTER` | `String.code` without exactly one character, or `String.from_code` outside Unicode scalar values |
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |

@@ -16,6 +16,6 @@ Read [references/language.md](references/language.md). It is the self-contained 
 3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`).
 4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
-Use `agentica help NAME --json` to inspect a builtin. If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`; execution can be bounded with `--max-steps N`.
+Use `agentica help NAME --json` to inspect a builtin. If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`; execution can be bounded with `--max-steps N`, and `--seed N` makes `Random` repeatable.
 
 For fixed JSON records, prefer structs with typed fields. Use `Json`/`JSON.object` for genuinely dynamic data; maps and lists are homogeneous. For stdio protocols, write one message per line, flush stdout with `IO.flush()`, and send logs to stderr with `IO.warn()`.
