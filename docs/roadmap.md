@@ -1021,7 +1021,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each stacked on the previous one and moving its part of section 11 into `grammar.md` and the programming reference.
 
 - [x] Specify operators, methods on builtins, interpolation, blocks and closures, and hints in `future.md` section 11.
-- [ ] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).
+- [x] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).
 - [ ] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE` for unused results of builtins without effects.
 - [ ] String interpolation with `#{...}` and the `\#` escape.
 - [ ] Blocks and closures: `do |x| ... end` as the last argument, capture by value, `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET`, `CHECK-CAPTURED-ASSIGNMENT`; closures accepted everywhere a `Fn` is (tasks, HTTP, BDD); `List.each`, `List.any?`, `List.all?`; `examples/blocks.agc`.

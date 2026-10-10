@@ -235,8 +235,9 @@ statement        = simple_statement, NL
                  | while_statement
                  | for_statement ;
 
-simple_statement = binding | return_statement | expression ;
+simple_statement = binding | compound_binding | return_statement | expression ;
 binding          = NAME, [ ":", type ], "=", expression ;
+compound_binding = NAME, ( "+=" | "-=" | "*=" | "/=" | "%=" ), expression ;
 return_statement = "return", [ expression ] ;
 
 if_statement     = "if", expression, NL, block,
@@ -255,14 +256,14 @@ pattern_bindings = pattern_binding, { ",", pattern_binding } ;
 pattern_binding  = NAME | "_" ;
 ```
 
-Assignments are statements: they do not produce a value. `if`, `while`, and `for` are not expressions either. The core has no `break`, `continue`, compound assignments, or assignment to fields or indexes.
+Assignments are statements: they do not produce a value. `if`, `while`, and `for` are not expressions either. `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`: the target is a plain name that is already visible and assignable, and the checker applies the same rules as the long form. The core has no `break`, `continue`, or assignment to fields or indexes.
 
 ### Expressions and precedence
 
 ```ebnf
 expression       = or_expr ;
-or_expr          = and_expr, { "or", and_expr } ;
-and_expr         = equality_expr, { "and", equality_expr } ;
+or_expr          = and_expr, { ( "or" | "||" ), and_expr } ;
+and_expr         = equality_expr, { ( "and" | "&&" ), equality_expr } ;
 equality_expr    = comparison_expr,
                    [ ( "==" | "!=" ), comparison_expr ] ;
 comparison_expr  = additive_expr,
@@ -271,7 +272,7 @@ additive_expr    = multiplicative_expr,
                    { ( "+" | "-" ), multiplicative_expr } ;
 multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
-unary_expr       = ( "-" | "not" | "try" ), unary_expr | postfix_expr ;
+unary_expr       = ( "-" | "not" | "!" | "try" ), unary_expr | postfix_expr ;
 postfix_expr     = primary, { ".", NAME
                             | ".", "call", "(", [ arguments ], ")"
                             | "[", expression, "]" } ;
@@ -304,13 +305,13 @@ Calls are to named functions or function values via `.call(...)`; arbitrary user
 | Precedence, high to low | Operations |
 |---|---|
 | 1 | Named call, field `.`, index `[]`, grouping |
-| 2 | Unary `-`, `not`, `try` |
+| 2 | Unary `-`, `not` / `!`, `try` |
 | 3 | `*`, `/`, `%` |
 | 4 | `+`, `-` |
 | 5 | `<`, `<=`, `>`, `>=` |
 | 6 | `==`, `!=` |
-| 7 | `and` |
-| 8 | `or` |
+| 7 | `and` / `&&` |
+| 8 | `or` / `\|\|` |
 
 `not` has high precedence: to negate a comparison, write `not (age >= 18)`.
 
@@ -357,7 +358,7 @@ An empty list needs an expected type, which can come from an annotation, a param
 - Dividing by zero is a runtime error, also for `Float`. Integer operations that do not fit in `Int` produce an error.
 - The ordering operators accept only two numbers of the same type.
 - `==` and `!=` accept values of the same primitive type. The core has no list or struct equality.
-- `and`, `or`, and `not` accept only `Bool`.
+- `and`, `or`, and `not` accept only `Bool`. `&&`, `||`, and `!` are the same operators with the same precedence. A `!` directly after a name belongs to the name (`read!`), and `!=` is inequality; a standalone `!` is `not`.
 - There is no user-defined operator overloading.
 
 Expressions, arguments, and constructor fields are evaluated from left to right. A float comparison follows IEEE 754; in particular, a NaN is not equal to itself.

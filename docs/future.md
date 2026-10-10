@@ -265,18 +265,9 @@ Status: specified, planned next (roadmap "Ruby-style ergonomics"). Each part mov
 
 Agentica is presented as "Ruby with types". The evaluation logs (`docs/eval-diagnostics.md`) show that most agent errors are Ruby and Python habits: `s.length`, `x.to_i`, `!a`, `a && b`, `x += 1`. This section accepts the Ruby forms that keep static checking and immutable values, so the model's habits become valid code. The module forms stay valid; the Ruby forms become the style taught in the programming skill.
 
-### 11.1 Operators
+### 11.1 Operators (implemented)
 
-- `!e` is `not e`; `a && b` is `a and b`; `a || b` is `a or b`. Same types, same precedence, same short-circuit rules.
-- A `!` that directly follows a name is still part of the name (`read!`, `to_int!(`), and `!=` is still inequality. `!` starts an expression only where an operand is expected.
-- `x += e`, `x -= e`, `x *= e`, `x /= e`, `x %= e` mean `x = x op e`. The target is a plain name that is already visible and assignable; the checker reports the same diagnostics as the long form.
-
-```ruby
-count = 0
-if !done && (count < 3 || retry)
-  count += 1
-end
-```
+`!`, `&&`, `||` and compound assignment are in `grammar.md`.
 
 ### 11.2 Methods on builtin types
 

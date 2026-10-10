@@ -191,13 +191,16 @@
             (define two-char
               (and (peek 1)
                    (member (string (current) (peek 1))
-                           '("->" "==" "!=" "<=" ">="))
+                           '("->" "==" "!=" "<=" ">=" "&&" "||" "+=" "-=" "*=" "/=" "%="))
                    (string (current) (peek 1))))
             (define lexeme (or two-char (string char)))
             (define kind
               (hash-ref
                (hash "->" 'arrow "==" 'equal "!=" 'not-equal
                      "<=" 'less-equal ">=" 'greater-equal
+                     "&&" 'and "||" 'or "!" 'not
+                     "+=" 'plus-assign "-=" 'minus-assign "*=" 'multiply-assign
+                     "/=" 'divide-assign "%=" 'modulo-assign
                      "(" 'left-paren ")" 'right-paren
                      "[" 'left-bracket "]" 'right-bracket
                      "{" 'left-brace "}" 'right-brace

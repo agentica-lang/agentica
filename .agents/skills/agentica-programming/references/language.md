@@ -187,6 +187,7 @@ return count
 ```
 
 - The first assignment to a name creates it in the current block; later assignments change its value and cannot change its type.
+- `x += e`, `-=`, `*=`, `/=`, `%=` mean `x = x op e`; `x` must already exist. Fields and indexes cannot be assigned.
 - An annotation is only allowed when the variable is created.
 - A name created in a block is not visible after that block's `end`.
 - A new variable cannot reuse a name that is already visible in an outer scope (no shadowing).
@@ -195,7 +196,7 @@ return count
 - Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
 - `if` and `while` conditions must be `Bool`. There is no truthiness: `if 1` is an error.
-- Assignment is a statement, not an expression. There is no `x[i] = v`, `x.f = v`, `+=`, `break`, or `continue`.
+- Assignment is a statement, not an expression. There is no `x[i] = v`, `x.f = v`, `break`, or `continue`.
 
 ## Expressions
 
@@ -213,20 +214,20 @@ Operators, from highest to lowest precedence:
 | Level | Operators |
 |---|---|
 | 1 | call, `.field`, `[index]`, `( )` |
-| 2 | unary `-`, `not`, `try` |
+| 2 | unary `-`, `not` / `!`, `try` |
 | 3 | `*` `/` `%` |
 | 4 | `+` `-` |
 | 5 | `<` `<=` `>` `>=` |
 | 6 | `==` `!=` |
-| 7 | `and` |
-| 8 | `or` |
+| 7 | `and` / `&&` |
+| 8 | `or` / `\|\|` |
 
 - `+ - * /` take two numbers of the same type. There is no implicit conversion between `Int` and `Float`. `+` also joins two `String` values.
 - `/` on `Int` truncates toward zero. `%` takes two `Int` values. A zero divisor is a runtime error, also for `Float`.
 - `< <= > >=` take two numbers of the same type.
 - `==` and `!=` take two values of the same primitive type (`Int`, `Float`, `Bool`, `String`, `Nil`). Lists, maps, structs, Results, Json and Fn values cannot be compared.
 - Comparisons do not chain: write `a < b and b < c`, not `a < b < c`.
-- `and`, `or`, `not` take `Bool`, and `and` / `or` short-circuit. `not` binds tightly: write `not (a >= b)`.
+- `and`, `or`, `not` take `Bool`, and `and` / `or` short-circuit. `&&`, `||`, `!` are the same operators. `not` / `!` bind tightly: write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Arguments and operands are evaluated left to right.
 
 ## Builtin functions

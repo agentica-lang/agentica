@@ -7,6 +7,10 @@
 
 (provide parse)
 
+(define compound-operators
+  (hasheq 'plus-assign 'plus 'minus-assign 'minus 'multiply-assign 'multiply
+          'divide-assign 'divide 'modulo-assign 'modulo))
+
 (define (parse tokens)
   (define toks (list->vector tokens))
   (define count (vector-length toks))
@@ -395,10 +399,12 @@
          (return-stmt value (span-from start))]
         [(and (kind? 'name) (memq (token-kind (peek-token 1)) '(assign colon)))
          (parse-binding)]
+        [(and (kind? 'name) (hash-ref compound-operators (token-kind (peek-token 1)) #f))
+         (parse-compound-assignment)]
         [else
          (define start (current))
          (define value (parse-expression))
-         (when (kind? 'assign)
+         (when (or (kind? 'assign) (hash-ref compound-operators (token-kind (current)) #f))
            (bail 'PARSE-INVALID-ASSIGNMENT-TARGET
                  (if (index-access? value)
                      "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, Map.put(map, key, value))"
@@ -422,6 +428,16 @@
       (define value (parse-expression))
       (expect 'NL "a newline after the statement")
       (binding (token-lexeme start) type value (span-from start)))
+
+    (define (parse-compound-assignment)
+      (define start (expect 'name "a name"))
+      (define operator (advance!))
+      (define value (parse-expression))
+      (expect 'NL "a newline after the statement")
+      (binding (token-lexeme start) #f
+               (binary (hash-ref compound-operators (token-kind operator)) (token-span operator)
+                       (name-ref (token-lexeme start) (token-span start)) value (span-from start))
+               (span-from start)))
 
     (define (parse-if)
       (define start (current))

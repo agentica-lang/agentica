@@ -235,6 +235,23 @@
     (check-equal? (diagnostic-code empty) 'RUNTIME-INVALID-RANGE)
     (check-equal? (position-of empty) '(2 7)))
 
+  (test-case "Ruby operators and compound assignment"
+    (check-equal?
+     (output-of
+      (string-append
+       "def done!() -> Bool\n  IO.inspect(\"called\")\n  return true\nend\n"
+       (main-with (string-append
+        "  n = 0\n  b = false\n"
+        "  if !b && (n < 3 || done!())\n    n += 5\n  end\n"
+        "  n -= 1\n  n *= 3\n  n /= 2\n  n %= 4\n  IO.inspect(n)\n"
+        "  IO.inspect(b && done!())\n"
+        "  x = 1.5\n  x += 0.5\n  IO.inspect(x)\n"
+        "  s = \"a\"\n  s += \"b\"\n  IO.inspect(s)"))))
+     "2\nfalse\n2.0\n\"ab\"\n")
+    (define overflow (diagnostic-of (main-with "  n = 9223372036854775807\n  n += 1")))
+    (check-equal? (diagnostic-code overflow) 'RUNTIME-INTEGER-OVERFLOW)
+    (check-equal? (position-of overflow) '(3 5)))
+
   (test-case "user functions may use ? and ! suffixes"
     (check-equal? (output-of
                    (string-append
