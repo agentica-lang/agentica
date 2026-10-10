@@ -51,6 +51,8 @@ static void push_frame(agc_vm *vm, uint32_t function, uint32_t base, uint32_t sp
 
 static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
   if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
+  if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
+  if (agc_is(x, AGC_T_NIL) && agc_is(y, AGC_T_NIL)) return true;
   return agc_as_bool(vm, x) == agc_as_bool(vm, y);
 }
 
@@ -105,6 +107,19 @@ static void run(agc_vm *vm) {
         if (x == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
         R[in.a] = agc_int(-x);
         break;
+      case AGC_OP_ADD_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) + agc_as_float(vm, R[in.c])); break;
+      case AGC_OP_SUB_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) - agc_as_float(vm, R[in.c])); break;
+      case AGC_OP_MUL_F: R[in.a] = agc_float(agc_as_float(vm, R[in.b]) * agc_as_float(vm, R[in.c])); break;
+      case AGC_OP_DIV_F: {
+        double divisor = agc_as_float(vm, R[in.c]);
+        double dividend = agc_as_float(vm, R[in.b]);
+        if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", s);
+        R[in.a] = agc_float(dividend / divisor);
+        break;
+      }
+      case AGC_OP_NEG_F: R[in.a] = agc_float(-agc_as_float(vm, R[in.b])); break;
+      case AGC_OP_LT_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) < agc_as_float(vm, R[in.c])); break;
+      case AGC_OP_LE_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) <= agc_as_float(vm, R[in.c])); break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
       case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
       case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;

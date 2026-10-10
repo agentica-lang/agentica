@@ -16,7 +16,8 @@
 
 (define opcodes
   '(move const step add-i sub-i mul-i div-i mod-i neg-i not lt-i le-i eq ne
-    jump jump-if-false jump-if-true call call-builtin return))
+    jump jump-if-false jump-if-true call call-builtin return
+    add-f sub-f mul-f div-f neg-f lt-f le-f))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -58,8 +59,9 @@
     (define constant-count 0)
     (define constant-index (make-hash))
     (define (constant! value)
-      (define key (cond [(void? value) '(void)] [(boolean? value) (list 'bool value)]
-                        [(string? value) (list 'string value)] [else (list 'int value)]))
+      (define key (cond [(void? value) '(void)] [(eq? value 'nil) '(nil)]
+                        [(boolean? value) (list 'bool value)] [(string? value) (list 'string value)]
+                        [(flonum? value) (list 'float value)] [else (list 'int value)]))
       (hash-ref! constant-index key
                  (lambda ()
                    (set! constants (cons value constants))
@@ -107,7 +109,7 @@
           (define (wide a x) (list a (bitwise-and x max-u16) (arithmetic-shift x -16)))
           (cons (hash-ref opcode-number op)
                 (case op
-                  [(move neg-i not) (list (first args) (second args) 0)]
+                  [(move neg-i neg-f not) (list (first args) (second args) 0)]
                   [(const) (wide (first args) (constant! (second args)))]
                   [(step) (list (first args) 0 0)]
                   [(jump) (wide 0 (hash-ref labels (first args)))]
@@ -158,6 +160,8 @@
   (for ([value (in-vector (bc-program-constants program))])
     (cond
       [(void? value) (u8 out 0)]
+      [(eq? value 'nil) (u8 out 1)]
+      [(flonum? value) (u8 out 5) (write-bytes (real->floating-point-bytes value 8 #f) out)]
       [(eq? value #f) (u8 out 2)]
       [(eq? value #t) (u8 out 3)]
       [(exact-integer? value) (u8 out 4) (write-bytes (integer->integer-bytes value 8 #t #f) out)]

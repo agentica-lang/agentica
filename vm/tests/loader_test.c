@@ -16,6 +16,7 @@ typedef struct {
   const char *name;
   uint32_t spans[3][5];
   uint32_t extra_voids;
+  int extra_kind;
   const char *builtin;
   uint32_t params, registers;
   const agc_instr *code;
@@ -71,7 +72,7 @@ static const uint32_t two_spans[] = {0, 0};
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false};
+            0, -1, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false};
   return s;
 }
 
@@ -90,12 +91,17 @@ static buffer build(spec s) {
   u32(&b, 3);
   for (int i = 0; i < 3; i++)
     for (int k = 0; k < 5; k++) u32(&b, s.spans[i][k]);
-  u32(&b, 2 + s.extra_voids);
+  u32(&b, 2 + s.extra_voids + (s.extra_kind >= 0));
   u8(&b, 4);
   u32(&b, 1);
   u32(&b, 0);
   u8(&b, 0);
   for (uint32_t i = 0; i < s.extra_voids; i++) u8(&b, 0);
+  if (s.extra_kind >= 0) u8(&b, (uint8_t)s.extra_kind);
+  if (s.extra_kind == 5) {
+    u32(&b, 0);
+    u32(&b, 0x3FF80000);
+  }
   u32(&b, 0);
   u32(&b, 0);
   u32(&b, 0);
@@ -276,6 +282,35 @@ int main(void) {
   assert(!loads_code(unknown_op, two_spans, 2, "unknown opcode"));
   static const agc_instr no_return[] = {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}};
   assert(!loads_code(no_return, two_spans, 2, "does not end with RETURN"));
+
+  static const agc_instr puts_extra[] = {
+    {AGC_OP_STEP, 2, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+    {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const char *printed[] = {"nil\n", "1.5\n"};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.extra_kind = k == 0 ? 1 : 5;
+    s.code = puts_extra;
+    buffer extra = build(s);
+    assert(agc_load(extra.data, extra.len, &p, error, sizeof error));
+    free(extra.data);
+    out = tmpfile();
+    assert(out);
+    agc_vm_init(&vm, p, out, INT64_MAX);
+    assert(agc_vm_run(&vm).kind == AGC_DONE);
+    memset(text, 0, sizeof text);
+    rewind(out);
+    assert(fread(text, 1, sizeof text, out) == strlen(printed[k]) && strcmp(text, printed[k]) == 0);
+    fclose(out);
+  }
+  s = base();
+  s.extra_kind = 7;
+  assert(!loads(s, "unsupported constant kind"));
+
+  static const agc_instr bad_float_op[] = {{AGC_OP_ADD_F, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_float_op, two_spans, 2, "register out of range"));
+  static const agc_instr bad_float_neg[] = {{AGC_OP_NEG_F, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_float_neg, two_spans, 2, "register out of range"));
 
   puts("loader tests passed");
   return 0;

@@ -27,6 +27,7 @@ vm/main.c     dist/agentica-vm [--max-steps N] -- file.agcb [args...]
 | `vm/diag.c` | the plain diagnostic format, byte-for-byte like `format-diagnostic` |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
 | `vm/tests/loader_test.c` | one assert per loader rule |
+| `vm/tests/float_text_test.c` | Float text against values printed by Racket (`docs/vm.md` §2.2) |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
 | `tests/vm-diff-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator |
 | `tests/bytecode-test.rkt` | step merging, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
@@ -36,7 +37,7 @@ vm/main.c     dist/agentica-vm [--max-steps N] -- file.agcb [args...]
 ```sh
 git submodule update --init          # fetch bdwgc after a clone or a bump
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static)
-make vm-test                         # C loader tests
+make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 AGENTICA_REQUIRE_VM=1 raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
@@ -79,7 +80,7 @@ racket src/main.rkt --dump-ir prog.agc
 ## Add a C builtin
 
 1. `src/lower.rkt`: let the call through the builtin check (today only the
-   `puts` implementation is accepted; everything else is
+   `text-builtins` keys `puts` and `IO.print` are accepted; everything else is
    `LOWER-UNSUPPORTED`) and emit `call-builtin` with the catalog's
    implementation key and arity. The import table carries the
    implementation key, not the written name: `puts` and `IO.puts` both
@@ -174,6 +175,12 @@ is checked.
   sources.
 
 ## Gotchas
+
+- Float text is not `printf("%.17g")` or "first `%.*e` that round-trips":
+  Racket breaks exact ties upward and uses the asymmetric interval at powers
+  of two. Keep `agc_float_text` as `docs/vm.md` §2.2 describes it, and add
+  any new tricky value to `vm/tests/float_text_test.c` with the text Racket
+  prints.
 
 - Checking out a branch without the submodule warns `unable to rmdir
   vm/third_party/bdwgc`; run `git submodule update --init` after switching

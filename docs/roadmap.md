@@ -1079,7 +1079,8 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 - [x] `src/checker.rkt`: optional `#:types` table from expression node to type, for the lowerer.
 - [x] `src/lower.rkt`: checked program → IR. Resolve names to slots and indexes, make types explicit, keep spans. Forms outside the supported subset fail with `LOWER-UNSUPPORTED` (`docs/vm.md` section 3.5).
 - [x] Lower the slice forms: Int and Bool literals and operators (with short-circuit `and`/`or`), locals, `if`/`elsif`/`else`, `while`, `break`/`next`, functions, calls, returns, `puts` of String literals and Ints.
-- [ ] Lower every other core form: Float, strings, `for`, structs, field access, lists, maps, indexing, enums and `case`, `Result`, `try`, `&name` and `.call`.
+- [x] Lower Float and Nil literals and operators, and `puts`/`print` of Float, Bool and Nil.
+- [ ] Lower every other core form: strings, `for`, structs, field access, lists, maps, indexing, enums and `case`, `Result`, `try`, `&name` and `.call`.
 - [x] `--dump-ir` in the CLI for debugging.
 - [ ] `tests/lower-test.rkt`: one test per form, plus span checks. Step counts are covered by the VM's `--max-steps` sweep in the differential tests.
 
@@ -1102,7 +1103,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Loader with format and Agentica version checks and the full validation of `docs/vm.md` section 8 for the sections and opcodes of the slice; it rejects truncated or malformed bytecode without crashing, and a fuzz run (`make vm-fuzz`) proves it.
 - [ ] Loader validation for the type, struct and enum tables and the remaining opcodes, as they land.
 - [x] Values and checked Int arithmetic (`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-DIVISION-BY-ZERO`).
-- [ ] IEEE Float comparisons and Float text as in the evaluator.
+- [x] IEEE Float arithmetic and comparisons, and Float text as in the evaluator (`docs/vm.md` §2.2).
 - [x] Control flow, locals, function calls, returns, call-depth limit (`RUNTIME-STACK-OVERFLOW`), `--max-steps` (`RUNTIME-STEP-LIMIT`).
 - [ ] Structs, lists, maps (insertion order), indexing errors with their spans.
 - [ ] Enums, `case`, `Result`, `try`, function values, closures, resumable `List` builtins.
