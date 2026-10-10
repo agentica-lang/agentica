@@ -206,7 +206,7 @@ return count
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
 - Enum variants are qualified by their type. Construct payload variants positionally (`Option.Some("hi")`) and nullary variants with empty parentheses (`Option.None()`). Generic arguments are inferred from payloads and expected types; every type parameter must be known. A nullary generic variant therefore needs expected type context.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
-- Function call `f(a, b)` with positional arguments. Builtin module call `String.upcase(s)`.
+- Function call `f(a, b)` with positional arguments. Builtin module call `String.upcase(s)`. Method call on a builtin value `s.upcase`, `xs.map(&f)`: see "Methods on builtin types".
 - `&name` references a declared top-level function, without capturing locals. `f: Fn[Int, Int] = &double`; call it with `f.call(21)`. Function values can be stored in containers, fields, parameters, and returns. Signatures must match exactly. Bare function names remain invalid as values. No lambdas, closures, equality, or JSON encoding; inspect prints `<Fn>`.
 
 Operators, from highest to lowest precedence:
@@ -310,6 +310,50 @@ Random.float() -> Float                       # uniform in 0.0 up to, not includ
 - Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
 - `String.index_of` and `String.at` count Unicode characters, like `String.length`. Use `String.code`/`String.from_code` for character arithmetic, and `Float.from_int`/`Float.to_int` to mix Int and Float; arithmetic never converts implicitly.
+
+### Methods on builtin types
+
+`receiver.name(args)` calls a builtin function with the receiver as its first argument. The checker picks the module from the receiver's static type, so there is no dynamic dispatch:
+
+| Receiver type | Module |
+|---|---|
+| `String` | `String` |
+| `List[T]` | `List` |
+| `Map[K, V]` | `Map` |
+| `Float` | `Float` |
+| `Result[T]` | `Result` |
+| `Json` | `JSON` |
+| `Int` | aliases only |
+
+Only functions whose first parameter has the receiver's type are methods: `s.trim` is `String.trim(s)`, `xs.map(&f)` is `List.map(xs, &f)`, but `"a".from_int` is not a method. Without parentheses, `receiver.name` on a non-struct value is a method with no arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` is field access; structs and enums have no methods, and user functions cannot be called as methods. `.call(...)` invokes a function value.
+
+Ruby aliases:
+
+| Receiver | Alias | Same as |
+|---|---|---|
+| `String` | `size` | `String.length` |
+| `String` | `to_i`, `to_i!` | `String.to_int` (Result), `String.to_int!` |
+| `String` | `to_f`, `to_f!` | `String.to_float` (Result), `String.to_float!` |
+| `String` | `strip` | `String.trim` |
+| `String` | `include?`, `start_with?`, `end_with?` | `String.contains?`, `String.starts_with?`, `String.ends_with?` |
+| `String` | `to_s` | the same string |
+| `List` | `length` | `List.size` |
+| `List` | `push` | `List.append` |
+| `List[String]` | `join` | `String.join` |
+| `Int` | `to_s`, `to_f` | `String.from_int`, `Float.from_int` |
+| `Float` | `to_s` | `String.from_float` |
+| `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
+
+Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
+
+Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
+
+```ruby
+words = line.strip.split(" ")
+puts(words.join(","))
+first = words[0].to_i!
+xs = xs.push(first)
+```
 
 ### Collections
 
@@ -818,6 +862,8 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
+| `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct |
+| `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count |

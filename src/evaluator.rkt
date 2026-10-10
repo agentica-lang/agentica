@@ -210,6 +210,14 @@
     ;; Expressions ----------------------------------------------------------
 
     (define (eval-expression expression)
+      (cond
+        [(typed-target? expression) (eval-expression (typed-target-expression expression))]
+        [(method-call? expression) (eval-expression (method-call-resolved expression))]
+        [(and (field-access? expression) (field-access-resolved expression))
+         (eval-expression (field-access-resolved expression))]
+        [else (eval-step-expression expression)]))
+
+    (define (eval-step-expression expression)
       (step! (node-span expression))
       (cond
         [(type-expression? expression) (type-expression-name expression)]

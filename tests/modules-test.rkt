@@ -30,6 +30,14 @@
   (values (get-output-string out) result))
 
 (module+ test
+  (test-case "methods work on values whose types come from another file"
+    (with-files
+     '(("lib.agc" . "export struct Box\n  label: String\nend\nexport def make(text: String) -> Box\n  return Box(label: text)\nend\n")
+       ("root.agc" . "import \"lib.agc\" as Lib\ndef main() -> Void\n  b = Lib.make(\" hi \")\n  IO.inspect(b.label.strip.upcase.size)\nend\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "2\n"))))
+
   (test-case "embedded String queue preserves FIFO and old values without local std files"
     (with-files
      '(("std/queue.agc" . "this local file must not be loaded\n")

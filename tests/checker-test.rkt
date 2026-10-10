@@ -269,7 +269,7 @@
     (check-equal? (check-code (main-with "  x = 0\n  x: Int = 1")) 'CHECK-ANNOTATION-ON-EXISTING)
     (check-equal? (check-code (main-with "  x = 0\n  for x in [1, 2]\n    puts(\"hi\")\n  end"))
                   'CHECK-SHADOWED-NAME)
-    (check-equal? (check-code (main-with "  x = 1\n  y = x.name")) 'CHECK-NOT-A-STRUCT)
+    (check-equal? (check-code (main-with "  x = 1\n  y = x.name")) 'CHECK-UNKNOWN-METHOD)
     (check-equal? (check-code (main-with "  x = 1\n  y = x[0]")) 'CHECK-NOT-INDEXABLE)
     (check-equal? (check-code (main-with "  for i in 1\n    puts(\"hi\")\n  end"))
                   'CHECK-NOT-A-LIST)
@@ -382,7 +382,7 @@
                   'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (main-with "  x = Json()")) 'CHECK-UNKNOWN-TYPE)
     (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"{}\"))\n  x = j.key"))
-                  'CHECK-NOT-A-STRUCT)
+                  'CHECK-UNKNOWN-METHOD)
     (check-equal? (check-code (main-with "  j = Result.unwrap!(JSON.parse(\"[]\"))\n  x = j[0]"))
                   'CHECK-NOT-INDEXABLE)
     (for ([name '("Json" "JSON")])
@@ -500,6 +500,49 @@
     (check-true (diagnostic? operator))
     (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
     (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
+
+  (test-case "methods resolve by receiver type and report unknown or unused calls"
+    (check-ok (string-append
+               "struct Item\n  name: String\nend\n"
+               (main-with (string-append
+                "  s = \" a b \"\n  n: Int = s.length\n  m: Int = s.size\n"
+                "  parts: List[String] = s.strip.split(\" \")\n  joined: String = parts.join(\",\")\n"
+                "  i: Result[Int] = s.to_i\n  j: Int = \"4\".to_i!\n  f: Result[Float] = s.to_f\n"
+                "  b: Bool = s.include?(\"a\") && s.start_with?(\" \") && s.end_with?(\" \")\n"
+                "  t: String = s.to_s\n  xs = [1]\n  xs = xs.push(2)\n  k: Int = xs.length + xs.size\n"
+                "  ys: List[Int] = xs.map(&identity)\n"
+                "  text: String = 7.to_s + 2.5.to_s\n  g: Float = 7.to_f\n  h: Result[Int] = 2.5.to_i\n"
+                "  map = {\"a\": 1}\n  has: Bool = map.has_key?(\"a\")\n  v: Int = map.get(\"b\", 0)\n"
+                "  r: Result[Int] = ok(1)\n  good: Bool = r.ok?\n  item = Item(name: \"x\")\n  up: String = item.name.upcase"))
+               "def identity(n: Int) -> Int\n  return n\nend\n"))
+    (for ([body '("  x = true.foo" "  x = 1.length" "  x = \"a\".from_int")])
+      (check-equal? (check-code (main-with body)) 'CHECK-UNKNOWN-METHOD body))
+    (check-equal? (check-code (main-with "  s = \"a\"\n  x = s.lenght")) 'CHECK-UNKNOWN-METHOD)
+    (check-equal? (check-code (main-with "  x = [1].join(\",\")")) 'CHECK-TYPE-MISMATCH)
+    (define struct-method
+      (check-text (string-append "struct Item\n  name: String\nend\n"
+                                 "def total(i: Item) -> Int\n  return 1\nend\n"
+                                 (main-with "  i = Item(name: \"a\")\n  x = i.total()"))))
+    (check-equal? (diagnostic-code struct-method) 'CHECK-UNKNOWN-METHOD)
+    (check-regexp-match #rx"total\\(" (diagnostic-help struct-method))
+    (check-regexp-match #rx"length" (diagnostic-help (check-text (main-with "  s = \"a\"\n  x = s.lenght"))))
+    (check-equal? (check-code (main-with "  x = \"a\".to_s(1)")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  x = \"a\".split")) 'CHECK-ARITY)
+    (for ([body '("  xs = [1]\n  xs.push(2)" "  s = \"a\"\n  s.upcase" "  String.trim(\" a \")"
+                  "  s = \"a\"\n  s.to_s")])
+      (check-equal? (check-code (main-with body)) 'CHECK-UNUSED-VALUE body))
+    (define unused (check-text (main-with "  xs = [1]\n  xs.push(2)")))
+    (check-equal? (source-position-column (source-span-start (diagnostic-span unused))) 3)
+    (check-regexp-match #rx"xs =" (diagnostic-help unused))
+    (check-ok (main-with "  Result.unwrap!(ok(1))\n  \"4\".to_i!\n  IO.inspect(\"a\".upcase)"))
+    (check-ok (string-append "def show(x: Int) -> Int\n  puts(String.from_int(x))\n  return x\nend\n"
+                             (main-with "  xs = [1]\n  xs.map(&show)\n  List.map(xs, &show)")))
+    (check-false (regexp-match? #rx"s =" (diagnostic-help (check-text (main-with "  s = \"a\"\n  s.length")))))
+    (check-regexp-match #rx"\\.handler\\.call"
+                        (diagnostic-help
+                         (check-text (string-append "struct Box\n  handler: Fn[Int, Int]\nend\n"
+                                                    "def inc(x: Int) -> Int\n  return x + 1\nend\n"
+                                                    (main-with "  b = Box(handler: &inc)\n  x = b.handler(1)"))))))
 
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)

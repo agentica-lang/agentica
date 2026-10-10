@@ -189,7 +189,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-TYPE-MISMATCH` — operand, condition, argument, assignment, return, or field value of the wrong type.
 - `CHECK-EMPTY-LIST-TYPE` — an empty list with no expected type.
 - `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD` — constructor field rules.
-- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
+- `CHECK-UNKNOWN-METHOD` — a method that the receiver's type does not have (this replaced `CHECK-NOT-A-STRUCT`); `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
 - `CHECK-SHADOWED-NAME` — a new local reusing a name visible in an outer scope.
 - `CHECK-ANNOTATION-ON-EXISTING` — an annotation on a name that is already bound.
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
@@ -1022,7 +1022,7 @@ Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agent
 
 - [x] Specify operators, methods on builtins, interpolation, blocks and closures, and hints in `future.md` section 11.
 - [x] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).
-- [ ] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE` for unused results of builtins without effects.
+- [x] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE` for unused results of builtins without effects.
 - [ ] String interpolation with `#{...}` and the `\#` escape.
 - [ ] Blocks and closures: `do |x| ... end` as the last argument, capture by value, `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET`, `CHECK-CAPTURED-ASSIGNMENT`; closures accepted everywhere a `Fn` is (tasks, HTTP, BDD); `List.each`, `List.any?`, `List.all?`; `examples/blocks.agc`.
 - [ ] Hints for foreign habits (`len`, `str`, `print`, `input`, `range`, `None`, `elif`, `to_i` used as `Int`).

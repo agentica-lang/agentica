@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Methods on builtin values (`s.strip.size`, `xs.push(1)`, `r.ok?`), resolved
+  by type to module functions, with Ruby aliases (`to_i`, `to_s`, `size`,
+  `strip`, `include?`, `push`, `join`).
 - `tests/eval/diagnostics.py` summarizes the diagnostics agents saw in
   evaluation runs.
 - `!`, `&&` and `||` as spellings of `not`, `and` and `or`, and compound
@@ -26,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Ignoring the result of a builtin without effects is `CHECK-UNUSED-VALUE`.
+- Field access on a non-struct value is a method call; unknown names are
+  `CHECK-UNKNOWN-METHOD` (replaces `CHECK-NOT-A-STRUCT`).
 - The Int/Float type-mismatch help now suggests `Float.from_int` and
   `Float.to_int!`.
 - `Time` and `Random` are reserved builtin module names; declarations or

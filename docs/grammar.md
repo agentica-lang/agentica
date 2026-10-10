@@ -274,7 +274,7 @@ multiplicative_expr = unary_expr,
                    { ( "*" | "/" | "%" ), unary_expr } ;
 unary_expr       = ( "-" | "not" | "!" | "try" ), unary_expr | postfix_expr ;
 postfix_expr     = primary, { ".", NAME
-                            | ".", "call", "(", [ arguments ], ")"
+                            | ".", NAME, "(", [ arguments ], ")"
                             | "[", expression, "]" } ;
 
 primary          = literal
@@ -444,6 +444,50 @@ more = Map.put(stock, "kiwi", 7)
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
 - There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
 - This interpreter uses Racket immutable hashes: lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
+
+### Methods on builtin types
+
+`receiver.name(args)` calls a builtin function with the receiver as its first argument. The checker picks the module from the receiver's static type, so there is no dynamic dispatch:
+
+| Receiver type | Module |
+|---|---|
+| `String` | `String` |
+| `List[T]` | `List` |
+| `Map[K, V]` | `Map` |
+| `Float` | `Float` |
+| `Result[T]` | `Result` |
+| `Json` | `JSON` |
+| `Int` | aliases only |
+
+Only functions whose first parameter has the receiver's type are methods: `s.trim` is `String.trim(s)`, `xs.map(&f)` is `List.map(xs, &f)`, but `"a".from_int` is not a method. Without parentheses, `receiver.name` on a non-struct value is a method with no arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` is field access; structs and enums have no methods, and user functions cannot be called as methods. `.call(...)` invokes a function value.
+
+Ruby aliases:
+
+| Receiver | Alias | Same as |
+|---|---|---|
+| `String` | `size` | `String.length` |
+| `String` | `to_i`, `to_i!` | `String.to_int` (Result), `String.to_int!` |
+| `String` | `to_f`, `to_f!` | `String.to_float` (Result), `String.to_float!` |
+| `String` | `strip` | `String.trim` |
+| `String` | `include?`, `start_with?`, `end_with?` | `String.contains?`, `String.starts_with?`, `String.ends_with?` |
+| `String` | `to_s` | the same string |
+| `List` | `length` | `List.size` |
+| `List` | `push` | `List.append` |
+| `List[String]` | `join` | `String.join` |
+| `Int` | `to_s`, `to_f` | `String.from_int`, `Float.from_int` |
+| `Float` | `to_s` | `String.from_float` |
+| `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
+
+Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
+
+Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
+
+```ruby
+words = line.strip.split(" ")
+puts(words.join(","))
+first = words[0].to_i!
+xs = xs.push(first)
+```
 
 ### Minimal builtin functions
 
