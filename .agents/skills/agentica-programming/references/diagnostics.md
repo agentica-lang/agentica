@@ -45,6 +45,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
 | `CHECK-BLOCK-TYPE` | a block parameter has no type from the call; annotate it (`do |x: Int|`) |
 | `CHECK-BLOCK-TARGET` | a block is passed to a function whose last parameter is not a `Fn` |
+| `CHECK-LOOP-CONTROL` | `break` or `next` outside a `while`/`for` body, or inside a block |
 | `CHECK-CAPTURED-ASSIGNMENT` | a block assigns to an outer variable; use `reduce` or a `for` loop |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |

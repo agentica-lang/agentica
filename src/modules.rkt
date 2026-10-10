@@ -260,7 +260,7 @@
           [(try-expr operand span) (try-expr (walk operand) span)]
           [(unary op op-span operand span) (unary op op-span (walk operand) span)]
           [(binary op op-span left right span) (binary op op-span (walk left) (walk right) span)]
-          [(or (literal _ _) (name-ref _ _)) node]
+          [(or (literal _ _) (name-ref _ _) (loop-control _ _)) node]
           [_ (bail 'CHECK-INTERNAL "unsupported module node" (node-span node))]))
       (program
        (append-map

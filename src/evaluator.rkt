@@ -132,6 +132,32 @@
 
     (define (push-scope!) (set! scopes (cons (make-hash) scopes)))
     (define (pop-scope!) (set! scopes (cdr scopes)))
+    (define loop-break (make-parameter #f))
+    (define loop-next (make-parameter #f))
+    (define next-uses (make-weak-hasheq))
+    (define (has-next? statements)
+      (for/or ([statement (in-list statements)])
+        (cond
+          [(loop-control? statement) (eq? (loop-control-kind statement) 'next)]
+          [(if-stmt? statement)
+           (or (for/or ([branch (in-list (if-stmt-branches statement))])
+                 (has-next? (if-branch-body branch)))
+               (and (if-stmt-else-body statement) (has-next? (if-stmt-else-body statement))))]
+          [(case-stmt? statement)
+           (for/or ([arm (in-list (case-stmt-arms statement))])
+             (has-next? (case-arm-body arm)))]
+          [else #f])))
+    (define (run-loop loop-body body)
+      (define saved scopes)
+      (define uses-next? (hash-ref! next-uses loop-body (lambda () (has-next? loop-body))))
+      (let/ec break-k
+        (parameterize ([loop-break (lambda () (set! scopes saved) (break-k (void)))])
+          (body (if uses-next?
+                    (lambda (step)
+                      (let/ec next-k
+                        (parameterize ([loop-next (lambda () (set! scopes saved) (next-k (void)))])
+                          (step))))
+                    (lambda (step) (step)))))))
 
     (define (lookup name)
       (for/or ([frame (in-list scopes)])
@@ -851,16 +877,27 @@
            [branch (exec-scoped (if-branch-body branch))]
            [(if-stmt-else-body statement) (exec-scoped (if-stmt-else-body statement))])]
         [(while-stmt? statement)
-         (let loop ()
-           (when (eval-expression (while-stmt-condition statement))
-             (exec-scoped (while-stmt-body statement))
-             (loop)))]
+         (run-loop
+          (while-stmt-body statement)
+          (lambda (iterate)
+            (let loop ()
+              (when (eval-expression (while-stmt-condition statement))
+                (iterate (lambda () (exec-scoped (while-stmt-body statement))))
+                (loop)))))]
         [(for-stmt? statement)
-         (for ([element (in-list (eval-expression (for-stmt-iterable statement)))])
-           (push-scope!)
-           (define! (for-stmt-var statement) element)
-           (exec-block (for-stmt-body statement))
-           (pop-scope!))]
+         (define elements (eval-expression (for-stmt-iterable statement)))
+         (run-loop
+          (for-stmt-body statement)
+          (lambda (iterate)
+            (for ([element (in-list elements)])
+              (iterate
+               (lambda ()
+                 (push-scope!)
+                 (define! (for-stmt-var statement) element)
+                 (exec-block (for-stmt-body statement))
+                 (pop-scope!))))))]
+        [(loop-control? statement)
+         ((if (eq? (loop-control-kind statement) 'break) (loop-break) (loop-next)))]
         [else (unreachable "statement" (node-span statement))]))
 
     ;; Program --------------------------------------------------------------

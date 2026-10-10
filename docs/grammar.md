@@ -240,10 +240,11 @@ statement        = simple_statement, NL
                  | while_statement
                  | for_statement ;
 
-simple_statement = binding | compound_binding | return_statement | expression ;
+simple_statement = binding | compound_binding | return_statement | loop_control | expression ;
 binding          = NAME, [ ":", type ], "=", expression ;
 compound_binding = NAME, ( "+=" | "-=" | "*=" | "/=" | "%=" ), expression ;
 return_statement = "return", [ expression ] ;
+loop_control     = "break" | "next" ;
 
 if_statement     = "if", expression, NL, block,
                    { "elsif", expression, NL, block },
@@ -262,7 +263,7 @@ pattern_bindings = pattern_binding, { ",", pattern_binding } ;
 pattern_binding  = NAME | "_" ;
 ```
 
-Assignments are statements: they do not produce a value. `if`, `while`, and `for` are not expressions either. `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`: the target is a plain name that is already visible and assignable, and the checker applies the same rules as the long form. The core has no `break`, `continue`, or assignment to fields or indexes.
+Assignments are statements: they do not produce a value. `if`, `while`, and `for` are not expressions either. `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`: the target is a plain name that is already visible and assignable, and the checker applies the same rules as the long form. `break` leaves the innermost `while` or `for`; `next` skips to its next iteration. Each stands alone as a statement; `break` and `next` are not reserved words, so a statement that is only one of them is loop control and they can still name variables. They are valid only inside a loop body of the same function or block: a block cannot break or skip its caller's loop, and a function cannot either (`CHECK-LOOP-CONTROL`). Inside a block, `return` leaves the block, like Ruby's `next`. There are no statement modifiers (`break if x`), no `continue`, and no assignment to fields or indexes.
 
 ### Expressions and precedence
 
@@ -1021,7 +1022,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `if x then` | a newline after the condition |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
-| `break`, `continue`, `next`, `break if x` | a `while` condition, `return`, or an `if` around the rest of the body |
+| `continue` | `next` |
+| `break if x`, `next if x` | `if x`, then `break` on its own line, then `end` |
 | `loop do ... end` | `while true ... end`, or a `while` condition |
 | `puts(x) if ok`, `if x do` | `if ok ... end`; an `if` condition ends with a newline |
 | `Result.Some(x)` and other unknown Result variants | `Result.Ok(x)` / `ok(x)`, `Result.Err(m)` / `error(m)` |

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `break` and `next` in `while` and `for` loops, each alone on its line;
+  outside a loop or across a block they are `CHECK-LOOP-CONTROL`.
 - `Result.Ok(x)` / `Result.Err(m)` as values and `ok(v)` / `error(m)` as
   `case` patterns, so both spellings work in both places.
 - A nullary enum variant without parentheses: `Command.Show`, `M.Shape.Dot`.
