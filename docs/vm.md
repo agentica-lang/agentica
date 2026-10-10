@@ -398,9 +398,10 @@ instructions is left to 7g if profiling asks for it.
 
 ### 4.5 Builtin imports
 
-The file lists the builtins it uses as `(name, arity)`, using the names and
-arities of `src/builtins.rkt` (overloads such as `Map.get` and `ok` are
-separate entries). The loader resolves each against the C table, comparing
+The file lists the builtins it uses as `(key, arity)`, where the key is the
+catalog's implementation key in `src/builtins.rkt`, not the written name
+(`puts` and `IO.puts` both import `"puts"`); overloads such as `Map.get` and
+`ok` are separate entries by arity. The loader resolves each against the C table, comparing
 length and bytes, and rejects unknown pairs. There are no internal helper
 builtins.
 
