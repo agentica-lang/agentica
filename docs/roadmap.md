@@ -5,22 +5,24 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 ## Current implementation order
 
 The core interpreter, Results, JSON primitives, function values, lightweight
-tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, and processes are implemented. The next priority is general
-programming: useful standalone programs first, larger applications next, then
-MCP. Historical phase numbers below remain stable; this order governs pending
-work rather than their numeric order.
+tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
+Ruby-style ergonomics are implemented. The next priority is the bytecode VM
+(phase 7), starting with its design (7b). Real applications and MCP follow;
+they keep running on the Racket evaluator meanwhile, and their findings feed
+the VM's differential tests. Historical phase numbers below remain stable; this
+order governs pending work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
 | 1 | **Complete:** Everyday library (remaining 5n plus strings, conversions, time and randomness) | Write useful scripts without rebuilding basic helpers |
 | 2 | **Complete:** Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
-| 4 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 5 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 6 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
-| 7 | Bytecode VM in C with the Boehm GC (phase 7) | Run checked programs much faster, with the same output and diagnostics |
+| 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
+| 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7), starting with the design in 7b | Run checked programs much faster, with the same output and diagnostics |
+| 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
-After steps 1–2, target everyday scripts and automation. After steps 3–5,
+After steps 1–2, target everyday scripts and automation. After steps 3–7,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
 grammar, and the self-contained programming reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
@@ -622,10 +624,10 @@ Diagnostics from evaluation data (`docs/eval-diagnostics.md`, `tests/eval/diagno
 
 - [x] Count the diagnostics agents saw in past runs, with messages, source lines and repeats.
 - [x] Fix the stale Int/Float help: it now names `Float.from_int` and `Float.to_int!`.
-- [ ] Map common Python, Ruby and JavaScript habits (`len`, `str`, `print`, `range`, `input`, `Int.to_float`, `!`, `&&`, `||`, `+=`, `None`) to the Agentica form in `help`.
-- [ ] Suggest the module function for method-call style on builtin types (`s.length`, `x.to_i()`, `xs.append(v)`).
-- [ ] Fix the misleading `elif` and `None` messages.
-- [ ] Re-run the `binary` arm and the script to measure the change.
+- [x] Map common Python, Ruby and JavaScript habits (`len`, `str`, `print`, `range`, `input`, `Int.to_float`, `!`, `&&`, `||`, `+=`, `None`) to the Agentica form in `help`. (`!`, `&&`, `||`, `+=` and `print` became real syntax in the Ruby-style ergonomics phase.)
+- [x] Suggest the module function for method-call style on builtin types (`s.length`, `x.to_i()`, `xs.append(v)`). Superseded: methods on builtin types are real syntax now, and unknown methods get a suggestion.
+- [x] Fix the misleading `elif` and `None` messages.
+- [x] Re-run the `binary` arm and the script to measure the change (rounds 5–8 in `eval-results.md` and `eval-diagnostics.md`).
 
 ### Phase 6a: First agent evaluation
 
@@ -1010,9 +1012,9 @@ establishes an earlier need.
 
 Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result` + `try` and JSON) are described under Phase 5d3 and use the same task set, so the results compare.
 
-- [ ] Ask agents to write and repair small programs using only the grammar and examples.
-- [ ] Record correct programs, repair attempts, and whether diagnostics helped identify the fix.
-- [ ] Use the results to revise the grammar and examples explicitly before adding exceptions to the implementation.
+- [x] Ask agents to write and repair small programs using only the grammar and examples (evaluation rounds 1–8, `tests/eval/`).
+- [x] Record correct programs, repair attempts, and whether diagnostics helped identify the fix (`eval-results.md`, `eval-diagnostics.md`).
+- [x] Use the results to revise the grammar and examples explicitly before adding exceptions to the implementation (the acceptance rule in `future.md` §11).
 
 **Complete when:** the prototype provides evidence about whether Agentica's syntax and diagnostics help agents write and repair programs.
 
@@ -1032,6 +1034,7 @@ Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agent
 - [x] Re-run the `binary` arm after these changes and compare with round 5 (round 6).
 - [x] Accept the forms round 6 still showed: `Result.Ok`/`Result.Err` as values, `ok`/`error` as patterns, nullary variants without parentheses, top-level `print`/`gets`/`gets!`.
 - [x] `break` and `next` in `while` and `for` (`CHECK-LOOP-CONTROL`).
+- [x] `puts`/`print`/`IO.warn` take any value with `to_s`, and `to_s` works on every data value (round 8 showed `puts(n)` and `Bool#to_s` with both models).
 
 **Done when:** the Ruby forms check and run with the same diagnostics quality as the module forms, and the evaluation shows the effect.
 
