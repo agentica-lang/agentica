@@ -657,6 +657,19 @@
                       (length arguments))
               span #:callee (builtin-signature entry)))
       (define parameters (builtin-parameters selected))
+      (when (and (pair? arguments) (block-lit? (last arguments)))
+        (define last-type (cadr (last parameters)))
+        (unless (and (pair? last-type) (eq? (car last-type) 'Fn))
+          (bail 'CHECK-BLOCK-TARGET
+                (format "\"~a\" does not take a block: its last parameter is not a function"
+                        (builtin-name selected))
+                (block-lit-span (last arguments))
+                #:help "a block is only allowed when the last parameter is a function (Fn[...])")))
+      (define (annotated-parameter block index)
+        (define block-parameters (block-lit-params block))
+        (and (> (length block-parameters) index)
+             (block-param-type (list-ref block-parameters index))
+             (resolve-type (block-param-type (list-ref block-parameters index)))))
       (define (map-argument [context #f])
         (define type (check-expression (car arguments) context))
         (unless (map-type? type) (mismatch! '(Map K V) type (node-span (car arguments))))
@@ -738,7 +751,10 @@
          target]
         [(list-sort-by)
          (define callback-expression (cadr arguments))
-         (define block-target (and (block-lit? callback-expression) (list-argument)))
+         (define block-target
+           (and (block-lit? callback-expression)
+                (list-argument (let ([element (annotated-parameter callback-expression 0)])
+                                 (and element (list 'List element))))))
          (define callback
            (if block-target
                (check-block-body callback-expression (list (cadr block-target)) #f)
@@ -757,10 +773,14 @@
          (define callback
            (cond
              [(block-lit? callback-expression)
-              (define element (cadr (list-argument)))
+              (define annotated-element (annotated-parameter callback-expression (if reduce? 1 0)))
+              (define element
+                (cadr (list-argument (and annotated-element (list 'List annotated-element)))))
               (cond
                 [reduce?
-                 (define accumulator (check-expression (cadr arguments) expected))
+                 (define accumulator
+                   (check-expression (cadr arguments)
+                                     (or expected (annotated-parameter callback-expression 0))))
                  (check-block-body callback-expression (list accumulator element) accumulator)]
                 [(memq rule '(list-filter list-any list-all))
                  (check-block-body callback-expression (list element) 'Bool)]

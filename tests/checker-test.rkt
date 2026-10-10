@@ -564,7 +564,10 @@
                            "  labels: List[String] = xs.map do |x: Int|\n    if x > 1\n      return \"big\"\n    end\n    \"small\"\n  end\n"
                            "  r = parse() do |s|\n    v = try s.to_i\n    ok(v * 2)\n  end\n"
                            "  nested = [[1]].map do |row|\n    row.map do |v| v + n end\n  end"))))
-    (check-equal? (check-code (main-with "  x = Result.unwrap_or(ok(1)) do |y| y end")) 'CHECK-BLOCK-TYPE)
+    (check-equal? (check-code (main-with "  x = Result.unwrap_or(ok(1)) do |y| y end")) 'CHECK-BLOCK-TARGET)
+    (check-equal? (check-code (main-with "  t = Task.spawn(5) do |n: Int| n end")) 'CHECK-BLOCK-TARGET)
+    (check-equal? (check-code (main-with "  ys = List.map([]) do |x| x end")) 'CHECK-EMPTY-LIST-TYPE)
+    (check-ok (main-with "  ys = List.map([]) do |x: Int| x end\n  zs = [1].reduce([]) do |acc: List[Int], x| acc.push(x) end"))
     (define captured (check-text (main-with "  total = 0\n  [1].each do |x|\n    total += x\n  end")))
     (check-equal? (diagnostic-code captured) 'CHECK-CAPTURED-ASSIGNMENT)
     (check-equal? (source-position-line (source-span-start (diagnostic-span captured))) 4)
