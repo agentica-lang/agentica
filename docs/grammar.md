@@ -147,7 +147,7 @@ A function, struct or enum declaration (exported or not) must be followed by a b
 
 The parser allows type applications such as `List[Int]` and `Option[String]`. The checker restricts applications to supported builtins and declared enums; only enum declarations may declare type parameters. Generic functions and generic structs are not supported.
 
-Struct, enum, and function declarations appear only at the top level. There are no methods, classes, inheritance, closures, or nested functions.
+Struct, enum, and function declarations appear only at the top level. There are no user methods, classes, inheritance, or nested functions; closures are written as blocks.
 
 ### File modules and imports
 
@@ -726,7 +726,7 @@ end
 
 ### Lightweight tasks
 
-`Task` is reserved. Tasks use Racket coroutine threads for I/O concurrency, without closures, new keywords or CPU parallelism.
+`Task` is reserved. Tasks use Racket coroutine threads for I/O concurrency, without new keywords or CPU parallelism. A block can be the task function when it is passed through a `Fn` variable or parameter.
 
 ```text
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
