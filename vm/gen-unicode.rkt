@@ -103,6 +103,7 @@
   (define arguments (current-command-line-arguments))
   (cond
     [(= (vector-length arguments) 1)
+     (define text (unicode-data-text))
      (call-with-output-file (vector-ref arguments 0) #:exists 'truncate
-       (lambda (out) (void (write-string (unicode-data-text) out))))]
+       (lambda (out) (void (write-string text out))))]
     [else (void (write-string (unicode-data-text)))]))

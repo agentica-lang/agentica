@@ -3,8 +3,13 @@
 #include <string.h>
 
 static void write_text(agc_vm *vm, FILE *stream, agc_value v, bool newline) {
-  agc_string *s = agc_text(vm, v);
-  agc_write(vm, stream, s->data, s->bytes);
+  if (agc_is(v, AGC_T_STRING)) {
+    agc_string *s = agc_as_string(vm, v);
+    agc_write(vm, stream, s->data, s->bytes);
+  } else {
+    char text[AGC_FLOAT_TEXT];
+    agc_write(vm, stream, text, agc_scalar_text(vm, v, text));
+  }
   if (newline) agc_write(vm, stream, "\n", 1);
 }
 

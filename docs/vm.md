@@ -179,7 +179,8 @@ differential tests (section 12) check them.
 The case mapping, final-sigma and write-escape data are generated from
 Racket itself by `vm/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
 so they agree with the reference by construction (Racket 9.3).
-`make vm-unicode` regenerates the file (about 40 s), and the Linux CI job
+`make vm-unicode` regenerates the file (about 40 s; run it with Racket CS 9.3,
+the CI version, since the tables follow Racket's Unicode data), and the Linux CI job
 fails when the committed file differs from what the generator prints.
 
 - In the slice: only the write-escape data exists, as three range tables

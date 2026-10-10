@@ -134,6 +134,7 @@ extern const size_t agc_write_blank_count;
 bool agc_write_raw(uint32_t cp);
 size_t agc_write_form(const agc_string *s, char *out, size_t *chars);
 agc_string *agc_concat(const agc_string *a, const agc_string *b);
+size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_FLOAT_TEXT]);
 agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
 

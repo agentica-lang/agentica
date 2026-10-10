@@ -84,16 +84,17 @@ agc_string *agc_concat(const agc_string *a, const agc_string *b) {
   return s;
 }
 
+size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_FLOAT_TEXT]) {
+  if (agc_is(v, AGC_T_NIL)) return (size_t)snprintf(text, AGC_FLOAT_TEXT, "nil");
+  if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_FLOAT_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
+  if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);
+  return (size_t)snprintf(text, AGC_FLOAT_TEXT, "%" PRId64, agc_as_int(vm, v));
+}
+
 agc_string *agc_text(agc_vm *vm, agc_value v) {
-  char text[AGC_FLOAT_TEXT];
-  size_t n;
   if (agc_is(v, AGC_T_STRING)) return agc_as_string(vm, v);
-  if (agc_is(v, AGC_T_NIL)) return agc_make_string("nil", 3, 3);
-  if (agc_is(v, AGC_T_BOOL)) return agc_as_bool(vm, v) ? agc_make_string("true", 4, 4) : agc_make_string("false", 5, 5);
-  if (agc_is(v, AGC_T_FLOAT))
-    n = agc_float_text(agc_as_float(vm, v), text);
-  else
-    n = (size_t)snprintf(text, sizeof text, "%" PRId64, agc_as_int(vm, v));
+  char text[AGC_FLOAT_TEXT];
+  size_t n = agc_scalar_text(vm, v, text);
   return agc_make_string(text, n, n);
 }
 
