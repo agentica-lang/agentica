@@ -24,6 +24,7 @@ jobs:
           variant: CS
           version: '9.3'
       - run: make vm vm-test
+      - run: make vm-unicode && git diff --exit-code vm/unicode_data.c
       - run: make test
       - run: make test-bdd
       - run: AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/tcp-test.rkt tests/http-test.rkt tests/process-test.rkt tests/modules-test.rkt
@@ -60,3 +61,4 @@ jobs:
       - run: make build
       - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
       - run: make vm-fuzz
+      - run: make vm-gc-stress

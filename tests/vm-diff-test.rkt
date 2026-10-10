@@ -1,6 +1,7 @@
 #lang racket
 
 (require (except-in rackunit check)
+         json
          racket/runtime-path
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
@@ -13,15 +14,18 @@
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
-(define vm-file (build-path root "dist" "agentica-vm"))
+(define vm-binary (getenv "AGENTICA_VM_BINARY"))
+(define vm-file (if vm-binary (path->complete-path vm-binary root) (build-path root "dist" "agentica-vm")))
 (define full-sweep-limit 2000)
 
 (define (vm-built?)
   (define make (find-executable-path "make"))
   (define built?
-    (and make
-         (parameterize ([current-directory root])
-           (system* make "-s" "vm"))))
+    (if vm-binary
+        (file-exists? vm-file)
+        (and make
+             (parameterize ([current-directory root])
+               (system* make "-s" "vm")))))
   (cond
     [built? #t]
     [(getenv "AGENTICA_REQUIRE_VM") (error 'vm-diff-test "the VM must build when AGENTICA_REQUIRE_VM is set")]
@@ -36,12 +40,19 @@
   (when (diagnostic? checked) (error 'vm-diff-test "~a" (format-diagnostic checked)))
   checked)
 
-(define (run-racket checked limit)
+(define (run-racket checked limit [style 'plain])
   (define out (open-output-string))
-  (define result (evaluate checked #:out out #:in (open-input-string "") #:max-steps limit))
+  (define err (open-output-string))
+  (define result (evaluate checked #:out out #:err err #:in (open-input-string "") #:max-steps limit))
+  (define text
+    (cond
+      [(not (diagnostic? result)) ""]
+      [(eq? style 'ai) (format-diagnostic-ai result)]
+      [(eq? style 'json) (jsexpr->string (diagnostic->jsexpr result))]
+      [else (format-diagnostic result)]))
   (list (if (diagnostic? result) 1 0)
         (get-output-string out)
-        (if (diagnostic? result) (string-append (format-diagnostic result) "\n") "")))
+        (string-append (get-output-string err) (if (diagnostic? result) (string-append text "\n") ""))))
 
 (define (run-process program . arguments)
   (define-values (process out in err) (apply subprocess #f #f #f program arguments))
@@ -55,9 +66,10 @@
   (subprocess-wait process)
   (list (subprocess-status process) stdout stderr))
 
-(define (run-vm bytecode limit . extra)
+(define (run-vm bytecode limit #:style [style 'plain] . extra)
   (apply run-process vm-file
          (append (if limit (list "--max-steps" (number->string limit)) '())
+                 (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])
                  (list "--" (path->string bytecode))
                  extra)))
 
@@ -106,8 +118,10 @@
           (define bytecode (build-path work (path-replace-extension (file-name-from-path program) #".agcb")))
           (compile-file program bytecode)
           (define checked (front-end program))
-          (test-case (format "~a matches the evaluator" name)
-            (check-equal? (run-vm bytecode #f) (run-racket checked #f) name))
+          (test-case (format "~a matches the evaluator in every diagnostic format" name)
+            (for ([style (in-list '(plain ai json))])
+              (check-equal? (run-vm bytecode #f #:style style) (run-racket checked #f style)
+                            (format "~a ~a" name style))))
           (test-case (format "~a matches under every --max-steps" name)
             (define total (total-steps checked))
             (for ([limit (in-list (sweep-limits total))])
@@ -119,6 +133,12 @@
           (check-equal? (first (run-vm bytecode #f "--max-steps" "1")) 0)
           (check-equal? (first (run-process vm-file "--max-steps" "0" "--" (path->string bytecode))) 2)
           (check-equal? (first (run-process vm-file "--bogus" "--" (path->string bytecode))) 2)
+          (check-equal? (first (run-process vm-file "--ai" "--ai" "--" (path->string bytecode))) 2)
+          (check-equal? (first (run-process vm-file "--max-steps" "5" "--max-steps" "5" "--" (path->string bytecode))) 2)
+          (define limited (run-process vm-file "--max-steps" "1" "--ai" "--json" "--" (path->string bytecode)))
+          (check-equal? (first limited) 1)
+          (check-equal? (hash-ref (string->jsexpr (third limited)) 'code) "RUNTIME-STEP-LIMIT")
+          (check-equal? (third (run-process vm-file "--json" "--" (path->string bytecode) "--ai")) "")
           (define bad (build-path work "bad.agcb"))
           (call-with-output-file bad (lambda (out) (write-bytes #"AGCB" out)))
           (define rejected (run-process vm-file "--" (path->string bad)))

@@ -27,9 +27,13 @@ static void *on_gc_oom(size_t size) {
   return NULL;
 }
 
+static const char gc_error_line[] = "agentica-vm: internal GC error\n";
+
 static void on_gc_abort(const char *message) {
   (void)message;
-  agc_out_of_memory();
+  ssize_t ignored = write(2, gc_error_line, sizeof gc_error_line - 1);
+  (void)ignored;
+  _exit(70);
 }
 #endif
 
@@ -52,7 +56,17 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+#ifdef AGC_GC_STRESS
+static void stress(void) {
+  static unsigned count;
+  if (++count % 64 == 0) GC_gcollect();
+}
+#else
+static void stress(void) {}
+#endif
+
 void *agc_alloc(size_t size) {
+  stress();
 #ifdef AGC_NO_GC
   void *p = calloc(1, size ? size : 1);
 #else
@@ -63,6 +77,7 @@ void *agc_alloc(size_t size) {
 }
 
 void *agc_alloc_atomic(size_t size) {
+  stress();
 #ifdef AGC_NO_GC
   void *p = calloc(1, size ? size : 1);
 #else
@@ -126,6 +141,19 @@ agc_value agc_string_value(agc_string *s) {
   return v;
 }
 
+agc_string *agc_new_string(size_t bytes, size_t chars) {
+  agc_string *s = agc_alloc_atomic(agc_size_add(sizeof(agc_string), bytes));
+  s->bytes = bytes;
+  s->chars = chars;
+  return s;
+}
+
+agc_string *agc_make_string(const char *data, size_t bytes, size_t chars) {
+  agc_string *s = agc_new_string(bytes, chars);
+  if (bytes) memcpy(s->data, data, bytes);
+  return s;
+}
+
 bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
 
 static _Noreturn void wrong_tag(agc_vm *vm) {
@@ -151,6 +179,8 @@ agc_string *agc_as_string(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_STRING) wrong_tag(vm);
   return v.as.p;
 }
+
+size_t agc_utf8_width(uint8_t lead) { return lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4; }
 
 bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
   size_t count = 0, i = 0;
@@ -195,6 +225,17 @@ static size_t put(char *out, size_t at, const char *text, size_t len) {
   return at + len;
 }
 
+static int decimal_digits(double x, int precision, char *all) {
+  char text[800];
+  int written = snprintf(text, sizeof text, "%.*e", precision, x);
+  char *mark = written > 0 && (size_t)written < sizeof text ? strchr(text, 'e') : NULL;
+  int total = 0;
+  for (const char *c = text; mark && c < mark; c++)
+    if (*c >= '0' && *c <= '9' && total <= precision) all[total++] = *c;
+  if (!mark || total != precision + 1) abort();
+  return atoi(mark + 1);
+}
+
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
   if (isnan(x)) return put(out, 0, "+nan.0", 6);
   if (isinf(x)) return put(out, 0, x > 0 ? "+inf.0" : "-inf.0", 6);
@@ -204,15 +245,13 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
     x = -x;
   }
   if (x == 0) return put(out, at, "0.0", 3);
-  char exact[800];
-  int written = snprintf(exact, sizeof exact, "%.767e", x);
-  char *mark = written > 0 && (size_t)written < sizeof exact ? strchr(exact, 'e') : NULL;
   char all[768];
-  size_t total = 0;
-  for (const char *c = exact; mark && c < mark; c++)
-    if (*c >= '0' && *c <= '9' && total < sizeof all) all[total++] = *c;
-  if (total != sizeof all) abort();
-  int e = atoi(mark + 1);
+  int e = decimal_digits(x, 40, all);
+  double scaled = ldexp(x, 34);
+  bool carried = !(x < 1e40 && scaled == floor(scaled));
+  for (int k = 18; k <= 40 && carried; k++)
+    if (all[k] != '0') carried = false;
+  if (carried) e = decimal_digits(x, 767, all);
   char digits[20];
   size_t n = 0;
   int digits_e = e;

@@ -8,11 +8,20 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] -- <file.agcb> [args...]\n";
+static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
 
 static int usage_error(void) {
   fputs(usage, stderr);
   return 2;
+}
+
+static bool once(bool *seen, const char *option) {
+  if (*seen) {
+    fprintf(stderr, "agentica-vm: the %s option can only be specified once\n", option);
+    return false;
+  }
+  *seen = true;
+  return true;
 }
 
 static bool parse_steps(const char *text, int64_t *steps) {
@@ -57,6 +66,8 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
   agc_init();
   int64_t max_steps = INT64_MAX;
+  agc_style style = AGC_STYLE_PLAIN;
+  bool seen_steps = false, seen_ai = false, seen_json = false;
   int i = 1;
   while (i < argc) {
     const char *arg = argv[i];
@@ -72,7 +83,15 @@ int main(int argc, char **argv) {
         printf("agentica-vm %s (sanitizer build, no libgc)\n", AGC_VERSION);
       return fflush(stdout) == 0 ? 0 : 1;
     }
+    if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
+      bool json = arg[2] == 'j';
+      if (!once(json ? &seen_json : &seen_ai, arg)) return 2;
+      style = json ? AGC_STYLE_JSON : AGC_STYLE_AI;
+      i++;
+      continue;
+    }
     if (strcmp(arg, "--max-steps") == 0) {
+      if (!once(&seen_steps, arg)) return 2;
       if (i + 1 >= argc || !parse_steps(argv[i + 1], &max_steps)) {
         fputs("agentica-vm: --max-steps needs a positive integer\n", stderr);
         return 2;
@@ -103,7 +122,7 @@ int main(int argc, char **argv) {
   }
 
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
-  agc_vm_init(vm, program, stdout, max_steps);
+  agc_vm_init(vm, program, stdout, stderr, max_steps);
   agc_outcome outcome = agc_vm_run(vm);
   if (outcome.kind == AGC_DONE && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
@@ -112,7 +131,7 @@ int main(int argc, char **argv) {
     outcome.span = 0;
   }
   if (outcome.kind == AGC_FAILED) {
-    agc_print_diagnostic(stderr, program, &outcome);
+    agc_print_diagnostic(stderr, program, &outcome, style);
     return 1;
   }
   return 0;

@@ -17,6 +17,7 @@ typedef struct {
   uint32_t spans[3][5];
   uint32_t extra_voids;
   int extra_kind;
+  const char *extra_string;
   const char *builtin;
   uint32_t params, registers;
   const agc_instr *code;
@@ -72,7 +73,7 @@ static const uint32_t two_spans[] = {0, 0};
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false};
   return s;
 }
 
@@ -102,6 +103,7 @@ static buffer build(spec s) {
     u32(&b, 0);
     u32(&b, 0x3FF80000);
   }
+  if (s.extra_kind == 6) str(&b, s.extra_string);
   u32(&b, 0);
   u32(&b, 0);
   u32(&b, 0);
@@ -147,14 +149,14 @@ int main(void) {
   FILE *out = tmpfile();
   assert(out);
   agc_vm vm;
-  agc_vm_init(&vm, p, out, INT64_MAX);
+  agc_vm_init(&vm, p, out, out, INT64_MAX);
   assert(agc_vm_run(&vm).kind == AGC_DONE);
   char text[8] = {0};
   rewind(out);
   assert(fread(text, 1, sizeof text, out) == 2 && strcmp(text, "1\n") == 0);
   fclose(out);
 
-  agc_vm_init(&vm, p, stdout, 1);
+  agc_vm_init(&vm, p, stdout, stdout, 1);
   agc_outcome limited = agc_vm_run(&vm);
   assert(limited.kind == AGC_FAILED && strcmp(limited.code, "RUNTIME-STEP-LIMIT") == 0 && limited.span == 2);
 
@@ -300,7 +302,7 @@ int main(void) {
     free(extra.data);
     out = tmpfile();
     assert(out);
-    agc_vm_init(&vm, p, out, INT64_MAX);
+    agc_vm_init(&vm, p, out, out, INT64_MAX);
     assert(agc_vm_run(&vm).kind == AGC_DONE);
     memset(text, 0, sizeof text);
     rewind(out);
@@ -317,7 +319,7 @@ int main(void) {
   buffer confused = build(s);
   assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
   free(confused.data);
-  agc_vm_init(&vm, p, stdout, INT64_MAX);
+  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
   agc_outcome wrong = agc_vm_run(&vm);
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
   s = base();
@@ -328,6 +330,44 @@ int main(void) {
   assert(!loads_code(bad_float_op, two_spans, 2, "register out of range"));
   static const agc_instr bad_float_neg[] = {{AGC_OP_NEG_F, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_code(bad_float_neg, two_spans, 2, "register out of range"));
+
+  static const agc_instr bad_concat[] = {{AGC_OP_CONCAT, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_concat, two_spans, 2, "register out of range"));
+  static const agc_instr bad_to_text[] = {{AGC_OP_TO_TEXT, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_to_text, two_spans, 2, "register out of range"));
+  static const agc_instr bad_inspect[] = {{AGC_OP_INSPECT, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_inspect, two_spans, 2, "register out of range"));
+  static const agc_instr int_concat[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONCAT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s = base();
+  s.code = int_concat;
+  s.code_spans = confused_spans;
+  s.count = 4;
+  confused = build(s);
+  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+  free(confused.data);
+  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+  wrong = agc_vm_run(&vm);
+  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  static const agc_instr void_text[] = {{AGC_OP_TO_TEXT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr void_inspect[] = {{AGC_OP_INSPECT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const agc_instr *void_codes[] = {void_text, void_inspect};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.code = void_codes[k];
+    s.code_spans = two_spans;
+    s.count = 2;
+    confused = build(s);
+    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+    free(confused.data);
+    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+    wrong = agc_vm_run(&vm);
+    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  }
+  s = base();
+  s.extra_kind = 6;
+  s.extra_string = "\xE2\x82";
+  assert(!loads(s, "invalid UTF-8"));
 
   puts("loader tests passed");
   return 0;

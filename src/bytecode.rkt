@@ -17,7 +17,8 @@
 (define opcodes
   '(move const step add-i sub-i mul-i div-i mod-i neg-i not lt-i le-i eq ne
     jump jump-if-false jump-if-true call call-builtin return
-    add-f sub-f mul-f div-f neg-f lt-f le-f))
+    add-f sub-f mul-f div-f neg-f lt-f le-f
+    concat to-text inspect))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -109,7 +110,7 @@
           (define (wide a x) (list a (bitwise-and x max-u16) (arithmetic-shift x -16)))
           (cons (hash-ref opcode-number op)
                 (case op
-                  [(move neg-i neg-f not) (list (first args) (second args) 0)]
+                  [(move neg-i neg-f not to-text inspect) (list (first args) (second args) 0)]
                   [(const) (wide (first args) (constant! (second args)))]
                   [(step) (list (first args) 0 0)]
                   [(jump) (wide 0 (hash-ref labels (first args)))]

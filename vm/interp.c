@@ -10,15 +10,17 @@ void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) 
   longjmp(vm->fail, 1);
 }
 
-void agc_write(agc_vm *vm, const void *data, size_t len) {
-  if (len && fwrite(data, 1, len, vm->out) != len)
-    agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to standard output", 0);
+void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
+  if (len && fwrite(data, 1, len, stream) != len)
+    agc_fail(vm, "RUNTIME-INTERNAL",
+             stream == vm->err ? "cannot write to standard error" : "cannot write to standard output", 0);
 }
 
-void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, int64_t max_steps) {
+void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps) {
   memset(vm, 0, sizeof *vm);
   vm->program = program;
   vm->out = out;
+  vm->err = err;
   vm->steps_left = max_steps;
 }
 
@@ -53,6 +55,10 @@ static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
   if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
   if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
   if (agc_is(x, AGC_T_NIL) && agc_is(y, AGC_T_NIL)) return true;
+  if (agc_is(x, AGC_T_STRING) && agc_is(y, AGC_T_STRING)) {
+    const agc_string *a = agc_as_string(vm, x), *b = agc_as_string(vm, y);
+    return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
+  }
   return agc_as_bool(vm, x) == agc_as_bool(vm, y);
 }
 
@@ -120,6 +126,11 @@ static void run(agc_vm *vm) {
       case AGC_OP_NEG_F: R[in.a] = agc_float(-agc_as_float(vm, R[in.b])); break;
       case AGC_OP_LT_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) < agc_as_float(vm, R[in.c])); break;
       case AGC_OP_LE_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) <= agc_as_float(vm, R[in.c])); break;
+      case AGC_OP_CONCAT:
+        R[in.a] = agc_string_value(agc_concat(agc_as_string(vm, R[in.b]), agc_as_string(vm, R[in.c])));
+        break;
+      case AGC_OP_TO_TEXT: R[in.a] = agc_string_value(agc_text(vm, R[in.b])); break;
+      case AGC_OP_INSPECT: R[in.a] = agc_string_value(agc_debug(vm, R[in.b])); break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
       case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
       case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;

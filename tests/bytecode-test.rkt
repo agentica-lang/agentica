@@ -50,27 +50,29 @@
                     (string-replace (string-upcase (symbol->string op)) "-" "_"))))
 
   (test-case "lowering rejects programs outside the VM subset"
-    (define problem
-      (lower-text "def main() -> Void\n  name = \"Ana\"\n  puts(name)\nend\n"))
-    (check-true (diagnostic? problem))
-    (check-equal? (diagnostic-code problem) 'LOWER-UNSUPPORTED)
-    (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
-    (define loop
-      (lower-text "def main() -> Void\n  for x in [1, 2]\n    puts(x)\n  end\nend\n"))
-    (check-equal? (diagnostic-code loop) 'LOWER-UNSUPPORTED)
-    (define text-param
-      (lower-text "def show(s: String) -> Void\n  print(s)\nend\n\ndef main() -> Void\n  show(\"a\")\nend\n"))
-    (check-equal? (diagnostic-code text-param) 'LOWER-UNSUPPORTED)
-    (define text-start (source-span-start (diagnostic-span text-param)))
-    (check-equal? (list (source-position-line text-start) (source-position-column text-start)) '(2 9)))
+    (define (unsupported-at text)
+      (define problem (lower-text text))
+      (check-true (diagnostic? problem))
+      (check-equal? (diagnostic-code problem) 'LOWER-UNSUPPORTED)
+      (define start (source-span-start (diagnostic-span problem)))
+      (list (source-position-line start) (source-position-column start)))
+    (check-equal? (unsupported-at "def main() -> Void\n  names = [\"Ana\"]\n  puts(names)\nend\n") '(2 11))
+    (check-equal? (unsupported-at "def main() -> Void\n  for x in [1, 2]\n    puts(x)\n  end\nend\n") '(2 3))
+    (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  print(xs)\nend\n\ndef main() -> Void\n  show([1])\nend\n")
+                  '(2 9))
+    (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  puts(\"#{xs}\")\n  puts(xs.inspect)\nend\n\ndef main() -> Void\nend\n")
+                  '(2 11))
+    (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  puts(xs.inspect)\nend\n\ndef main() -> Void\nend\n")
+                  '(2 8))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
     (define work (make-temporary-directory "agentica-compile~a"))
     (dynamic-wind
       void
       (lambda ()
-        (define unsupported (path->string (build-path work "strings.agc")))
-        (display-to-file "def main() -> Void\n  name = \"Ana\"\n  puts(name)\nend\n" unsupported)
+        (define unsupported (path->string (build-path work "lists.agc")))
+        (display-to-file "def main() -> Void\n  names = [\"Ana\"]\n  puts(names)\nend\n" unsupported)
         (define rejected (cli "compile" unsupported "-o" (path->string (build-path work "out.agcb"))))
         (check-equal? (first rejected) 1)
         (check-true (string-contains? (third rejected) "error[LOWER-UNSUPPORTED]"))

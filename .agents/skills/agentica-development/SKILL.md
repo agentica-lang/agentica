@@ -56,7 +56,8 @@ src/
   main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, or `compile -o`); exit 1 on a diagnostic, 2 on usage or a missing file
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
-  value.c loader.c interp.c builtins.c diag.c main.c  # values+memory, loader validation, loop, builtin table, plain diagnostics, CLI
+  value.c text.c loader.c interp.c builtins.c diag.c main.c  # values+memory, text/debug forms, loader validation, loop, builtin table, diagnostics (plain, --ai, --json), CLI
+  gen-unicode.rkt unicode_data.c  # Racket generator and its committed output (write-escape ranges)
   fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
 tests/
@@ -64,7 +65,7 @@ tests/
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
   bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, LOWER-UNSUPPORTED, compile exit codes
-  vm-diff-test.rkt      # tests/fixtures/vm/*.agc on the evaluator and dist/agentica-vm, with a --max-steps sweep
+  vm-diff-test.rkt      # tests/fixtures/vm/*.agc on the evaluator and dist/agentica-vm in three formats, with a --max-steps sweep
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
   bdd/                  # feature specs and step handlers run by make test-bdd

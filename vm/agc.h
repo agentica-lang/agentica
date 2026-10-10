@@ -32,6 +32,7 @@ typedef enum {
   AGC_OP_JUMP, AGC_OP_JUMP_IF_FALSE, AGC_OP_JUMP_IF_TRUE,
   AGC_OP_CALL, AGC_OP_CALL_BUILTIN, AGC_OP_RETURN,
   AGC_OP_ADD_F, AGC_OP_SUB_F, AGC_OP_MUL_F, AGC_OP_DIV_F, AGC_OP_NEG_F, AGC_OP_LT_F, AGC_OP_LE_F,
+  AGC_OP_CONCAT, AGC_OP_TO_TEXT, AGC_OP_INSPECT,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -77,6 +78,8 @@ typedef struct { uint32_t function, pc, base; } agc_frame;
 
 typedef enum { AGC_DONE, AGC_FAILED } agc_outcome_kind;
 
+typedef enum { AGC_STYLE_PLAIN, AGC_STYLE_AI, AGC_STYLE_JSON } agc_style;
+
 typedef struct {
   agc_outcome_kind kind;
   const char *code;
@@ -86,7 +89,7 @@ typedef struct {
 
 struct agc_vm {
   const agc_program *program;
-  FILE *out;
+  FILE *out, *err;
   int64_t steps_left;
   agc_value *regs;
   size_t reg_capacity;
@@ -117,18 +120,34 @@ agc_string *agc_as_string(agc_vm *vm, agc_value v);
 bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
+size_t agc_utf8_width(uint8_t lead);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
+agc_string *agc_new_string(size_t bytes, size_t chars);
+agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
+
+extern const uint32_t agc_write_raw_ranges[][2];
+extern const size_t agc_write_raw_count;
+extern const uint32_t agc_write_joiner_ranges[][2];
+extern const size_t agc_write_joiner_count;
+extern const uint32_t agc_write_blank_ranges[][2];
+extern const size_t agc_write_blank_count;
+bool agc_write_raw(uint32_t cp);
+size_t agc_write_form(const agc_string *s, char *out, size_t *chars);
+agc_string *agc_concat(const agc_string *a, const agc_string *b);
+size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_FLOAT_TEXT]);
+agc_string *agc_text(agc_vm *vm, agc_value v);
+agc_string *agc_debug(agc_vm *vm, agc_value v);
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 
-void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, int64_t max_steps);
+void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 agc_outcome agc_vm_run(agc_vm *vm);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
-void agc_write(agc_vm *vm, const void *data, size_t len);
+void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
 
-void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome);
+void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style);
 
 int agc_fuzz_one(const uint8_t *data, size_t len);
 
