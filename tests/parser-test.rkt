@@ -106,7 +106,10 @@
     (check-equal? (diagnostic-code problem) 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 4)
     (parse-ok "import \"a.agc\" as A\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend")
-    (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE))
+    (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE)
+    (check-equal? (parse-code "enum E\n  A\nend\nimport \"a.agc\" as A\n") 'PARSE-MISSING-BLANK-LINE)
+    (check-equal? (parse-code "def f() -> Void\nend\nend\n") 'PARSE-TOP-LEVEL-STATEMENT)
+    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT))
 
   (test-case "elif and else if point to elsif"
     (for ([text '("def main() -> Void\n  if true\n    x = 1\n  elif false\n    x = 2\n  end\nend\n"
