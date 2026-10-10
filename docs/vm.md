@@ -1022,8 +1022,13 @@ written `size > limit - total`. A hermetic test sends over-long values.
   insertion, bit flips, random bytes, small or maximal 16-bit operands) to a
   corpus seeded with every
   compiled program in `tests/fixtures/vm/`; examples join the corpus as they
-  enter the VM subset. A clang job also builds it with `-fsanitize=fuzzer`
-  (later PR).
+  enter the VM subset. The driver's random sequence is fixed, so every PR's
+  short run (30,000 mutants in the sanitizer job, about 12 s) is
+  reproducible; `FUZZ_SEED=N` picks another sequence and is printed. The
+  weekly workflow (`.github/workflows/fuzz.yml`, also run by hand) builds
+  the sanitizer VM and runs 5 million mutants with a random `FUZZ_SEED`; a
+  crash is reproduced with the same commit, seed and `FUZZ_RUNS`. A clang
+  job also builds it with `-fsanitize=fuzzer` (later PR).
 - `make test` includes the VM tests. They first run `make -s vm`, so a stale
   `dist/agentica-vm` is rebuilt from its sources. They skip visibly when the
   VM cannot be built locally (no C compiler, or the submodule is not checked
@@ -1045,6 +1050,7 @@ CI matrix:
 | Linux sanitizers | same, clang | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run | first VM PR (GC stress in PR 3) |
 | macOS | `macos-15` (Apple clang, arm64), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
 | Windows | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
+| Weekly fuzz | `ubuntu-24.04`, clang, every Monday and by hand | sanitizer build, 5 million mutants, random `FUZZ_SEED` | after PR 5a |
 
 Racket comes from `Bogdanp/setup-racket` everywhere, since the tests compile
 with the front end. The macOS and Windows jobs do not run the whole `make

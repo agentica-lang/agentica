@@ -43,6 +43,7 @@ make vm                              # dist/agentica-vm (libgc from extra/gc.c, 
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
+FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the weekly CI run picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
 make vm-unicode                      # regenerate vm/unicode_data.c from Racket (~40 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt

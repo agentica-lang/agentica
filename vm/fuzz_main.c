@@ -77,6 +77,13 @@ int main(int argc, char **argv) {
     return 2;
   }
   long iterations = strtol(argv[1], NULL, 10);
+  const char *seed = getenv("FUZZ_SEED");
+  if (seed && *seed) {
+    uint64_t value = strtoull(seed, NULL, 10);
+    state ^= value * 0xBF58476D1CE4E5B9u;
+    if (!state) state = 0x9E3779B97F4A7C15u;
+    printf("fuzz: seed %llu\n", (unsigned long long)value);
+  }
   int files = argc - 2;
   uint8_t **corpus = calloc((size_t)files, sizeof *corpus);
   size_t *sizes = calloc((size_t)files, sizeof *sizes);
