@@ -23,6 +23,8 @@ Tokens are input plus output per run. Failing runs are interpreter runs in the a
 | 5 | 2026-10-10 | Same run, tasks t6–t8 (JSON and enums) | 9 | 9/9 | 76,363 | 261 | 12.7 | $0.035 |
 | 6 | 2026-10-10 | `binary`, round 5 plus the Ruby forms and hints it showed, tasks t1–t5 | 15 | 14/15 | 31,691 | 99 | 3.07 | $0.011 |
 | 6 | 2026-10-10 | Same run, tasks t6–t8 | 9 | 9/9 | 78,694 | 253 | 7.89 | $0.033 |
+| 7a | 2026-10-10 | `skill`, one `language.md` read up front (old layout), all 8 tasks | 24 | 24/24 | 28,857 | 31 | 0.13 | $0.008 |
+| 7b | 2026-10-10 | `skill`, core in `SKILL.md` and references read on demand (new layout), all 8 tasks | 24 | 24/24 | 15,800 | 26 | 0.21 | $0.005 |
 
 The round-0 count joins two partial runs. A `binary` round run before the sandbox was fixed (15 runs, 15/15) is discarded: the agents found leftover work directories in `/tmp` that contained the skill (`tests/eval/results/20261001-230301-pi-INVALID`). A smoke run of 2 runs (`binary` and `skill`, `t1-stats`) is not counted.
 
@@ -115,6 +117,25 @@ Same arm, tasks and setup as round 5, after the parser accepted the optional `do
 - Tokens did not go down (24.5k → 31.7k on t1–t5, 76k → 79k on t6–t8). With 3 reps the per-task token means move a lot between rounds (t2 and t3 doubled with no relevant change), so this is mostly noise.
 - One run failed: `t1-stats` rep 3 hit the 10 minute limit without writing a file. It spent the run searching the `agentica` binary for builtin descriptions with `grep -a` instead of writing code. Its 600 s explain most of the t1 time.
 - Network: one `curl` in t1–t5 and five in t6–t8, as in round 5. No reads outside the work directory.
+
+## Round 7: splitting the programming skill
+
+An A/B of the `skill` arm on the same language and tasks, run in parallel. 7a used `master` with the old layout, where `SKILL.md` sends the agent to read `references/language.md` (about 17k tokens) first. 7b used PR #32, where the core language is in `SKILL.md` (about 5k tokens) and ten references are read when a table says so. 7b ran before the PR's small review fixes. Run directories: `tests/eval/results/20261010-120553-pi-7a-old-layout` and `tests/eval/results/20261010-120546-pi`.
+
+| Task | Tokens (7a → 7b) | Seconds (7a → 7b) | Failing runs (7a → 7b) | Cost (7a → 7b) |
+|---|---|---|---|---|
+| t1-stats | 22,433 → 13,878 | 20 → 18 | 0.0 → 0.0 | $0.0059 → $0.0039 |
+| t2-fix-types | 21,473 → 13,473 | 23 → 17 | 0.0 → 0.7 | $0.0057 → $0.0038 |
+| t3-struct-change | 19,265 → 9,934 | 14 → 11 | 0.0 → 0.0 | $0.0050 → $0.0027 |
+| t4-word-count | 28,329 → 13,182 | 18 → 16 | 0.0 → 0.0 | $0.0072 → $0.0037 |
+| t5-scope-return | 23,653 → 14,355 | 20 → 19 | 0.7 → 0.3 | $0.0064 → $0.0041 |
+| t6-json-catalog | 28,729 → 19,829 | 52 → 45 | 0.0 → 0.0 | $0.0088 → $0.0063 |
+| t7-json-stream | 36,577 → 20,835 | 57 → 39 | 0.3 → 0.0 | $0.0114 → $0.0070 |
+| t8-enum-ledger | 50,397 → 20,911 | 46 → 47 | 0.0 → 0.7 | $0.0139 → $0.0074 |
+
+- Tokens per run fell 45% (28.9k → 15.8k) and cost 39%, with every task lower. Accuracy stayed at 24/24. Failing runs moved from 3 to 5 in total, within noise.
+- The agents read only what the task needed: `builtins.md` in 21 of 24 runs, `examples.md` in 15, `json.md` only in the JSON tasks (t6, t7). The t3 runs read no reference at all. No run opened the network, process, task, file, BDD or diagnostics references.
+- Both arms beat the round-1 `skill` numbers on t1–t5 (13.7k tokens then, 23.0k in 7a, 13.0k in 7b), but the language and the skill have grown since round 1, so only 7a vs 7b is a fair comparison.
 
 ## What the results do not show
 

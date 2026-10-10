@@ -1,6 +1,6 @@
 # Builtin functions
 
-`puts(value: String) -> Void` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types listed below are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value: String) -> Void` writes the text and a newline. The names `puts`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool

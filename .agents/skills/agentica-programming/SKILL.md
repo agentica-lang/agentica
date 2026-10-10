@@ -14,7 +14,7 @@ Agentica is Ruby with static types: Ruby-like syntax, checked before running, wi
 3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) and often a `help` line with the fix.
 4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
-Use `agentica help NAME --json` to inspect a builtin. If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`; execution can be bounded with `--max-steps N`, and `--seed N` makes `Random` repeatable.
+Use `agentica help NAME --json` to inspect a builtin without a program file (unknown names exit 2). If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`. `--max-steps N` bounds execution to N expression/statement entries across all tasks (`RUNTIME-STEP-LIMIT`; not an I/O timeout), and `--seed N` makes `Random` repeatable.
 
 ## When to read a reference
 
@@ -30,10 +30,10 @@ Read only the files the task needs:
 | [references/processes.md](references/processes.md) | starts other programs (`Process`) |
 | [references/tasks.md](references/tasks.md) | runs work concurrently (`Task`) |
 | [references/network.md](references/network.md) | uses TCP, TLS, or HTTP (client or server) |
-| [references/bdd.md](references/bdd.md) | writes `.feature` specifications or BDD step handlers |
+| [references/bdd.md](references/bdd.md) | writes `.feature` specifications or BDD step handlers (its report is `Json`: also read `json.md`) |
 | [references/diagnostics.md](references/diagnostics.md) | hits a diagnostic code whose meaning or fix is unclear |
 
-For fixed JSON records, prefer structs with typed fields. For stdio protocols, write one message per line, flush stdout with `IO.flush()`, and send logs to stderr with `IO.warn()`.
+For fixed JSON records, prefer structs with typed fields. Use `Json`/`JSON.object` for genuinely dynamic data; maps and lists are homogeneous. For stdio protocols, write one message per line, flush stdout with `IO.flush()`, and send logs to stderr with `IO.warn()`.
 
 ## Style
 
@@ -60,8 +60,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 - Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block (`s.length`, `xs.size`, `xs.each do |x| ... end`), and so may a module function with no arguments, builtin or through an import alias (`IO.gets!`, `IO.eof?`, `Util.reset`). `f = Util.helper` is a call; `&Util.helper` is the function value.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
-- Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
-
+- Extra blank or comment lines between statements are ignored.
 
 ## Types
 
@@ -86,7 +85,6 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
-
 
 ## Void completion
 
@@ -304,10 +302,6 @@ def main() -> Void
   puts(age.unwrap_or(0).to_s)
 end
 ```
-
-`agentica help NAME --json` describes a builtin's signature, parameters, arity, effects, and behavior without a program file. Unknown names exit 2. Effects are informational, not permissions.
-
-`agentica --max-steps N program.agc` limits execution to N expression/statement entries, counting repeated loop conditions across all tasks and nested tasks. N must be positive; runs are unlimited by default. Exhaustion is `RUNTIME-STEP-LIMIT`, the synchronized counter resets each evaluation, and checking never spends steps. This is not a blocking-I/O timeout.
 
 ## Diagnostics
 
