@@ -433,7 +433,7 @@
         [(not)
          (unless (eq? operand 'Bool)
            (bail 'CHECK-TYPE-MISMATCH
-                 (format "\"not\" expects Bool, found ~a" (type->string operand))
+                 (format "\"not\" (or \"!\") expects Bool, found ~a" (type->string operand))
                  (unary-op-span expression)))
          'Bool]
         [else (bail 'CHECK-INTERNAL "unsupported unary operator" (unary-op-span expression))]))
