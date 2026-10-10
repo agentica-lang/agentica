@@ -7,7 +7,8 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
-(phase 7), starting with its design (7b). Real applications and MCP follow;
+(phase 7): the design in `docs/vm.md` (7b) is done, and the work starts with
+the 7e vertical slice (`docs/vm.md` §12.2). Real applications and MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
 order governs pending work rather than their numeric order.
@@ -18,7 +19,7 @@ order governs pending work rather than their numeric order.
 | 2 | **Complete:** Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
-| 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7), starting with the design in 7b | Run checked programs much faster, with the same output and diagnostics |
+| 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7), starting with the 7e vertical slice (design in `docs/vm.md`) | Run checked programs much faster, with the same output and diagnostics |
 | 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
@@ -1059,32 +1060,33 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 ### 7b: Design decisions (`docs/vm.md`)
 
-- [ ] IR: closures (block bodies with their captured values) from the Ruby-style ergonomics phase.
-- [ ] IR: shape of the lowered program (functions, locals as slots, typed operations, explicit control flow, span per instruction).
-- [ ] Bytecode: instruction set, constant pool, function table, struct/enum layouts, span table, format version.
-- [ ] Serialization between Racket and the VM: binary or JSON, versioned, rejected on version mismatch.
-- [ ] Value representation in C: tagged values allocated with the Boehm GC (`GC_MALLOC`, `GC_MALLOC_ATOMIC` for strings and numbers); Int (int64_t, checked with `__builtin_*_overflow`), Float (f64), Bool, Nil, Void, String (UTF-8 plus character indexing rules), List, Map (insertion order, structural sharing), struct, enum, Result, function value, Json, opaque handles.
-- [ ] Execution limits: one step per instruction or per former AST entry; the reported step counts must match the evaluator or the difference must be documented.
-- [ ] Call-depth limit (10000) and stack layout.
-- [ ] How the CLI runs the VM: flag (`--vm`), a separate binary, or both; how `dist/` packages it.
-- [ ] Dependency policy: C11, libc and the Boehm GC (`libgc`) for the core; static or dynamic linking of libgc; decide the TLS library (OpenSSL or another) and the event loop for tasks and I/O (poll/epoll by hand or libevent) before 7h. HTTP framing and JSON are written in C, following `http-wire.rkt` and `json.rkt`.
-- [ ] Seeded `Random`: implement Racket's generator algorithm (MRG32k3a) in C so `--seed` gives the same sequence, or document that sequences are backend-specific.
-- [ ] Build and CI: a `make vm` target with a C compiler and `libgc`; build with warnings as errors; run the VM tests next to `make test`; a sanitizer job (UBSan, and ASan where it works with Boehm) and a Valgrind or GC-debug run.
+- [x] IR: closures (block bodies with their captured values): each block is its own IR function; free variables are captured by value; `&name` is a closure with no captures.
+- [x] IR: shape of the lowered program: flat instruction lists over numbered slots, labels, typed operations, spans; the checker records expression types for the lowerer.
+- [x] Bytecode: register machine, 46 opcodes, generic `CALL_BUILTIN`, constant pool, type/struct/enum/function tables, span table, format version.
+- [x] Serialization between Racket and the VM: little-endian binary with magic `AGCB`, format version and Agentica version, rejected on mismatch.
+- [x] Value representation in C: 16-byte tagged values with the Boehm GC; HAMT maps with insertion order; checked accessors for every value read.
+- [x] Execution limits: one step per former AST entry through `STEP` instructions; counts and spans match the evaluator.
+- [x] Call-depth limit (10000) and stack layout: growing register and frame arrays per task; resumable native frames for the higher-order `List` builtins.
+- [x] How the CLI runs the VM: `dist/agentica-vm` from 7e; `agentica --vm` in 7i; the release ships both binaries.
+- [x] Dependency policy: C11, dynamic libc, static libgc; libuv for the event loop and OpenSSL 3 for TLS (both in 7h); HTTP framing and JSON written in C. Linux, macOS and Windows (MSYS2 UCRT64).
+- [x] Seeded `Random`: reproduce Racket's MRG32k3a in C; the seeding port lands in 7e, with a documented fallback.
+- [x] Build and CI: `make vm` with `-Werror` and hardening flags, `make vm-test`, a sanitizer job (ASan, UBSan), a GC stress run, a loader fuzz run, and Linux, macOS and Windows jobs.
 
 **Done when:** `docs/vm.md` answers each item above and the open decisions are closed.
 
 ### 7c: Lowering to IR (Racket)
 
+- [ ] `src/checker.rkt`: optional `#:types` table from expression node to type, for the lowerer.
 - [ ] `src/lower.rkt`: checked program → IR. Resolve names to slots and indexes, make types explicit, keep spans.
 - [ ] Lower every core form: literals, operators, `if`/`while`/`for`, functions, returns, structs, field access, lists, maps, indexing, enums and `case`, `Result`, `try`, `&name` and `.call`.
 - [ ] `--dump-ir` in the CLI for debugging.
-- [ ] `tests/lower-test.rkt`: one test per form, plus span checks.
+- [ ] `tests/lower-test.rkt`: one test per form, plus span checks. Step counts are covered by the VM's `--max-steps` sweep in the differential tests.
 
 **Done when:** every program in `examples/` lowers without error.
 
 ### 7d: Bytecode emitter
 
-- [ ] `src/bytecode.rkt`: IR → bytecode plus constant pool and span table.
+- [ ] `src/bytecode.rkt`: IR → bytecode plus constant pool, builtin imports, type table and span table; merge adjacent steps only.
 - [ ] Serialize to the format from 7b; `agentica compile file.agc -o file.agcb` writes it.
 - [ ] Round-trip test: write, read back, compare.
 
@@ -1092,21 +1094,26 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 ### 7e: VM core (C + Boehm)
 
-- [ ] Source layout under `vm/` (one module per area: loader, values, interpreter loop, builtins, diagnostics; public names prefixed `agc_`); `make vm` builds `dist/agentica-vm`; small C tests use plain `assert`, no framework.
-- [ ] Loader with format-version check; it rejects truncated or malformed bytecode without crashing, and a fuzz run proves it.
-- [ ] Values and checked Int arithmetic (`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-DIVISION-BY-ZERO`), IEEE Float comparisons as in the evaluator.
+The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `while`, calls and `puts` end to end on Linux CI), then widening PRs; `docs/vm.md` section 12.2 lists them.
+
+- [ ] Source layout under `vm/` (one module per area: loader, values, interpreter loop, builtins, JSON, diagnostics; public names prefixed `agc_`); `make vm` builds `dist/agentica-vm`; small C tests use plain `assert`, no framework.
+- [ ] Loader with format and Agentica version checks and the full validation of `docs/vm.md` section 8; it rejects truncated or malformed bytecode without crashing, and a fuzz run proves it.
+- [ ] Values and checked Int arithmetic (`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-DIVISION-BY-ZERO`), IEEE Float comparisons and Float text as in the evaluator.
 - [ ] Control flow, locals, function calls, returns, call-depth limit (`RUNTIME-STACK-OVERFLOW`), `--max-steps` (`RUNTIME-STEP-LIMIT`).
 - [ ] Structs, lists, maps (insertion order), indexing errors with their spans.
-- [ ] Enums, `case`, `Result`, `try`, function values.
+- [ ] Enums, `case`, `Result`, `try`, function values, closures, resumable `List` builtins.
 - [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.
-- [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins.
+- [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
+- [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
+- [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [ ] Runtime diagnostics printed in the plain, `--ai` and `--json` formats, identical to the evaluator.
+- [ ] CI: Linux and sanitizer jobs first, then macOS and Windows.
 
-**Done when:** every non-network, non-process, non-task example runs on the VM.
+**Done when:** every example runs on the VM with the same results, except those that need files, processes, tasks or the network: `file-summary`, `process-tool`, `concurrency`, `tcp_echo`, `http_get` and `http_server`.
 
 ### 7f: Differential tests
 
-- [ ] A harness that runs each program on the evaluator and on the VM and compares stdout, stderr, exit code and diagnostic code/span.
+- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, seeded `Random` runs, an extreme-Int corpus and a deep-value corpus.
 - [ ] Inputs: `examples/`, `tests/eval/tasks/*` (reference solutions and hidden cases), and a set of rejected-at-runtime programs.
 - [ ] Run it in `make test` and CI; a missing VM build fails CI and visibly skips locally.
 
@@ -1118,19 +1125,18 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 - [ ] Compare three runners on the same inputs: the Racket evaluator, the VM, and the Python reference solutions in `tests/eval/tasks/` as an outside reference.
 - [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt`, `dist/agentica` and the VM.
 - [ ] Record the numbers, machine and tool versions in `docs/vm-benchmarks.md`.
-- [ ] Fix the largest VM hot spots (instruction dispatch, list/map representation, string indexing).
+- [ ] Fix the largest VM hot spots (instruction dispatch, list/map representation, string indexing); merge steps across pure instructions only if profiling asks for it.
 
 **Done when:** the numbers show whether the VM is worth finishing; decide here before 7h.
 
 ### 7h: Runtime services on the VM
 
-- [ ] JSON: parse, extract, encode, builders, typed decode and schema.
+- [ ] Event loop on libuv and the resource registry, following the rules in `docs/vm.md` section 10.2.
 - [ ] Files and paths.
 - [ ] Lightweight tasks: scheduler, `Task.spawn/await/sleep`, shared step budget, cancellation on return.
-- [ ] Processes, behind `--allow-run`.
-- [ ] TCP and TLS.
+- [ ] Processes, behind the VM's own `--allow-run` flag; before this, fix the case-sensitive Windows batch check in `process.rkt` and decide in `grammar.md` whether the current directory is searched.
+- [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
 - [ ] HTTP/1.1 clients and servers.
-- [ ] Modules: `std/` and `pkg/` resolution stay in the front end; check that linked programs run.
 - [ ] BDD: decide whether handlers keep using the Racket evaluator or move to the VM.
 - [ ] Extend the differential tests and the independent network/process fixtures to the VM.
 
@@ -1138,7 +1144,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 ### 7i: Switch the default backend
 
-- [ ] Make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
+- [ ] `agentica --vm file.agc`: temporary bytecode file with the rules in `docs/vm.md` section 9; then make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
 - [ ] Package the VM in `dist/` and the release workflow.
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
 - [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.

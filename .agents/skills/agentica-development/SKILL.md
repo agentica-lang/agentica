@@ -64,6 +64,7 @@ docs/
   grammar.md   # language grammar, the source of truth
   future.md    # planned syntax, not implemented
   roadmap.md   # phases and the active checklist
+  vm.md        # bytecode VM design (phase 7): IR, bytecode, C values, safety rules, PR plan
 ```
 
 ## Where new code goes
