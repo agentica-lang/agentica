@@ -119,7 +119,6 @@ A second model on the head of PR #33 (`tests/eval/results/20261010-125259-pi`): 
 - **`to_s` on `Bool`:** 10 hits (`r.ok?.to_s`), plus `to_s` on `Json` and `Result`. Ruby has `to_s` on every value.
 - **`break`:** 8 hits, handled by PR #34.
 - **Hinted forms GLM also tried:** `when` (5), `loop do` (3), `Ok(name)` as a pattern (Rust, 2), `Map.new`, `String.of_float`, `Json.parse`, `Result.ok`.
-- **No hits** for the forms #31 and #33 accepted, so none of them regressed.
 
 ## Next steps (2026-10-10 snapshot)
 
