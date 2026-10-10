@@ -85,6 +85,23 @@ Compared with the snapshot above:
 
 Changes made from this round: `case`, `while` and `for` accept an optional `do`; a case arm can hold one statement on the arrow line; `Module.fn` without arguments may drop its parentheses. Hints were added for `when`, `then`, `let`/`var`/`val`/`const`, `match`, `fn`/`lambda`/`proc`, a `do` with no call, `Hash.new`/`Array.new`, `break`/`continue`/`next`, `Result.Ok(x)` as a value and a variant without parentheses. A new `binary` round should show whether the parse errors drop.
 
+## Round 6 (2026-10-10)
+
+The `binary` run after the round-5 changes (`tests/eval/results/20261010-113647-pi`): 24 runs, 377 invocations, 117 with a diagnostic (round 5: 473 and 183).
+
+| code | hits (5 → 6) | repeated next call (5 → 6) |
+|---|---|---|
+| `PARSE-UNEXPECTED-TOKEN` | 98 → 47 | 48 → 13 |
+| `CHECK-UNKNOWN-NAME` | 23 → 22 | 4 → 4 |
+| `CHECK-TYPE-MISMATCH` | 14 → 16 | 1 → 3 |
+| `CHECK-MISSING-RETURN` | 11 → 9 | 2 → 0 |
+| `CHECK-IMPORT-NAME` | 5 → 4 | 1 → 1 |
+| `CHECK-UNKNOWN-TYPE` | 7 → 4 | 1 → 1 |
+
+- The accepted forms (`while ... do`, `case x`, one-line arms, `IO.gets!`) no longer show up as errors.
+- The parse errors left are hinted forms that agents try once and then fix: `puts "hello"` (6×), `let`/`var` (9×), `fn(...)` lambdas (4×), `when` (4×).
+- Still repeated: `Result.Ok(x)` / `Result.Err(m)` as values (3×), `Command.Show` without parentheses (4×), `break` (3×), `gets()`, `Float.to_string`, `println`. A new confusion goes the other way: `ok(v) ->` used as a case pattern, where the pattern is `Result.Ok(v)`.
+
 ## Next steps (2026-10-10 snapshot)
 
 Tracked in the roadmap under Phase 5d3 ("Diagnostics from evaluation data"):
