@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `break` and `next` in `while` and `for` loops, each alone on its line;
   outside a loop or across a block they are `CHECK-LOOP-CONTROL`.
+- `Result.Ok(x)` / `Result.Err(m)` as values and `ok(v)` / `error(m)` as
+  `case` patterns, so both spellings work in both places.
+- A nullary enum variant without parentheses: `Command.Show`, `M.Shape.Dot`.
+- Top-level `print`, `gets` and `gets!` (`gets`/`gets!` may drop their
+  parentheses), like Ruby's.
 - Ruby forms seen in evaluations: an optional `do` after `case`, `while` and
   `for` headers; a one-line case arm (`1 -> puts("one")`); module functions
   without arguments, builtin or through an import alias, may drop the
@@ -49,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `print`, `gets` and `gets!` are reserved builtin names; a user function
+  with one of these names no longer checks.
 - The programming skill is split for token efficiency: the core language is in
   `SKILL.md`, and builtins, modules, JSON, files, processes, tasks, network,
   BDD, diagnostics and examples are separate references read on demand

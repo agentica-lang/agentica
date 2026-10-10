@@ -286,6 +286,13 @@
 
     (define (case-arm-start?)
       (define (kind-at index) (token-kind (token-at index)))
+      (define (binders-end at)
+        (let binder-loop ([cursor (add1 at)])
+          (and (eq? (kind-at cursor) 'name)
+               (if (eq? (kind-at (add1 cursor)) 'comma)
+                   (binder-loop (+ cursor 2))
+                   (and (eq? (kind-at (add1 cursor)) 'right-paren)
+                        (+ cursor 2))))))
       (define (variant-end index)
         (let loop ([at (add1 index)] [segments 1])
           (if (eq? (kind-at at) 'dot)
@@ -294,23 +301,41 @@
                    (loop (+ at 2) (add1 segments)))
               (and (>= segments 2)
                    (if (eq? (kind-at at) 'left-paren)
-                       (let binder-loop ([cursor (add1 at)])
-                         (and (eq? (kind-at cursor) 'name)
-                              (if (eq? (kind-at (add1 cursor)) 'comma)
-                                  (binder-loop (+ cursor 2))
-                                  (and (eq? (kind-at (add1 cursor)) 'right-paren)
-                                       (+ cursor 2)))))
+                       (binders-end at)
                        at)))))
       (define start pos)
       (define pattern-end
         (case (kind-at start)
-          [(name) (and (equal? (token-lexeme (token-at start)) "_") (add1 start))]
+          [(name)
+           (cond
+             [(equal? (token-lexeme (token-at start)) "_") (add1 start)]
+             [(and (member (token-lexeme (token-at start)) '("ok" "error"))
+                   (eq? (kind-at (add1 start)) 'left-paren))
+              (binders-end (add1 start))]
+             [else #f])]
           [(integer float string true false nil) (add1 start)]
           [(minus) (and (memq (kind-at (add1 start)) '(integer float)) (+ start 2))]
           [(type-name) (variant-end start)]
           [else #f]))
       (and pattern-end
            (eq? (kind-at pattern-end) 'arrow)))
+
+    (define (parse-pattern-bindings empty-help)
+      (advance!)
+      (when (kind? 'right-paren)
+        (bail 'PARSE-UNEXPECTED-TOKEN "a pattern with parentheses needs a binding or _" (current)
+              #:help empty-help))
+      (define (binding-name)
+        (define token (expect 'name "a pattern binding or _"))
+        (and (not (equal? (token-lexeme token) "_")) (token-lexeme token)))
+      (define first-binding (binding-name))
+      (define rest
+        (let loop ([acc '()])
+          (if (kind? 'comma)
+              (begin (advance!) (loop (cons (binding-name) acc)))
+              (reverse acc))))
+      (expect 'right-paren ")")
+      (cons first-binding rest))
 
     (define (parse-case-pattern)
       (define start (current))
@@ -320,6 +345,10 @@
            [(equal? (token-lexeme start) "_")
             (advance!)
             (wildcard-pattern (token-span start))]
+           [(and (member (token-lexeme start) '("ok" "error")) (eq? (token-kind (peek-token 1)) 'left-paren))
+            (advance!)
+            (define bindings (parse-pattern-bindings (format "write ~a(_) to match without binding the value" (token-lexeme start))))
+            (variant-pattern "Result" (if (equal? (token-lexeme start) "ok") "Ok" "Err") bindings (span-from start))]
            [(equal? (token-lexeme start) "when")
             (bail 'PARSE-UNEXPECTED-TOKEN "expected a pattern, found \"when\"" start
                   #:help "case arms have no when: write the pattern and ->, as in 1 -> puts(\"one\")")]
@@ -351,26 +380,9 @@
            (set! variant-name (token-lexeme (expect 'type-name "a variant name"))))
          (define bindings
            (if (kind? 'left-paren)
-               (let ()
-                 (advance!)
-                 (when (kind? 'right-paren)
-                   (bail 'PARSE-UNEXPECTED-TOKEN "use a nullary variant pattern without parentheses" (current)))
-                 (define first-binding-token (expect 'name "a pattern binding or _"))
-                 (define first-binding
-                   (and (not (equal? (token-lexeme first-binding-token) "_"))
-                        (token-lexeme first-binding-token)))
-                 (define rest
-                   (let loop ([acc '()])
-                     (if (kind? 'comma)
-                         (let ()
-                           (advance!)
-                           (define binding-token (expect 'name "a pattern binding or _"))
-                           (loop (cons (and (not (equal? (token-lexeme binding-token) "_"))
-                                            (token-lexeme binding-token))
-                                       acc)))
-                         (reverse acc))))
-                 (expect 'right-paren ")")
-                 (cons first-binding rest))
+               (parse-pattern-bindings (if (equal? enum-name "Result")
+                                           (format "write Result.~a(_) to match without binding the value" variant-name)
+                                           (format "a variant without payload has no parentheses: ~a.~a" enum-name variant-name)))
                '()))
          (variant-pattern enum-name variant-name bindings (span-from start))]
         [else (bail 'PARSE-UNEXPECTED-TOKEN "expected a pattern" start)]))
@@ -767,7 +779,9 @@
             (define arguments (parse-expression-list 'right-paren))
             (expect 'right-paren "\")\"")
             (call (token-lexeme name) arguments (span-from name)))
-          (name-ref (token-lexeme name) (token-span name))))
+          (if (member (token-lexeme name) '("gets" "gets!"))
+              (call (token-lexeme name) '() (token-span name))
+              (name-ref (token-lexeme name) (token-span name)))))
 
     (define (parse-construct)
       (define name (current))
@@ -788,10 +802,20 @@
               [(kind? 'dot)
                (advance!)
                (define variant (expect 'type-name "an enum variant"))
-               (expect 'left-paren "\"(\"")
+               (define arguments
+                 (cond
+                   [(kind? 'left-paren)
+                    (advance!)
+                    (begin0 (parse-expression-list 'right-paren)
+                            (expect 'right-paren "\")\""))]
+                   [else '()]))
+               (enum-constructor qualified (token-lexeme variant) arguments (span-from name))]
+              [(and (kind? 'left-paren) (equal? (token-lexeme name) "Result")
+                    (memf (lambda (variant) (equal? variant (token-lexeme member))) '("Ok" "Err")))
+               (advance!)
                (define arguments (parse-expression-list 'right-paren))
                (expect 'right-paren "\")\"")
-               (enum-constructor qualified (token-lexeme variant) arguments (span-from name))]
+               (call (if (equal? (token-lexeme member) "Ok") "ok" "error") arguments (span-from name))]
               [(kind? 'left-paren)
                (advance!)
                (cond

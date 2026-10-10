@@ -589,7 +589,6 @@
   (test-case "habits from other languages get a hint with the Agentica form"
     (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")
                    ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
-                   ("  print(\"a\")" CHECK-UNKNOWN-NAME "puts")
                    ("  x = input()" CHECK-UNKNOWN-NAME "IO\\.gets")
                    ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
                    ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
@@ -607,7 +606,7 @@
                    ("  x = elif(true)" CHECK-UNKNOWN-NAME "elsif")
                    ("  h = Hash.new" CHECK-UNKNOWN-NAME "Map\\[")
                    ("  x: String = IO.gets" CHECK-TYPE-MISMATCH "IO\\.gets!")
-                   ("  r: Result[Int] = Result.Ok(5)" CHECK-UNKNOWN-TYPE "ok\\(value\\)")
+                   ("  r: Result[Int] = Result.Some(5)" CHECK-UNKNOWN-TYPE "Result\\.Ok\\(value\\)")
                    ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts"))])
       (define problem (check-text (main-with (car entry))))
       (check-equal? (diagnostic-code problem) (cadr entry) (car entry))
@@ -629,6 +628,14 @@
       (check-equal? (diagnostic-code problem) 'CHECK-LOOP-CONTROL (car entry))
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) (cadr entry) (car entry))
       (check-regexp-match (pregexp (caddr entry)) (diagnostic-help problem) (car entry))))
+
+  (test-case "builtin function names cannot name locals"
+    (for ([entry '(("def main() -> Void\n  gets = \"hi\"\nend\n" 2)
+                   ("def f(print: String) -> Void\nend\n\ndef main() -> Void\nend\n" 1)
+                   ("def main() -> Void\n  for gets in [\"a\"]\n    puts(\"x\")\n  end\nend\n" 2))])
+      (define problem (check-text (car entry)))
+      (check-equal? (diagnostic-code problem) 'CHECK-REDEFINED-NAME (car entry))
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) (cadr entry) (car entry))))
 
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)

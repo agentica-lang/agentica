@@ -20,6 +20,9 @@
 (define builtins
   (for/hash ([row (in-list
                   '(("puts" ((value String)) Void #f "puts" (stdout) "Write text and a newline.")
+                    ("print" ((value String)) Void #f "IO.print" (stdout) "Write text without a newline.")
+                    ("gets" () (Result String) #f "IO.gets" (stdin) "Read a line as a Result; EOF is an error value.")
+                    ("gets!" () String #f "IO.gets!" (stdin) "Read a line; halt at EOF.")
                     ("Process.spawn" ((command String) (args (List String)) (timeout_ms Int)) (Result Process) #f "Process.spawn" (subprocess) "Start an executable with literal arguments; requires --allow-run.")
                     ("Process.send" ((p Process) (text String) (timeout_ms Int)) (Result Void) #f "Process.send" (subprocess) "Send at most 1 MiB of UTF-8 text and flush.")
                     ("Process.send_bytes" ((p Process) (bytes (List Int)) (timeout_ms Int)) (Result Void) #f "Process.send_bytes" (subprocess) "Send at most 1 MiB of bytes 0..255 and flush.")

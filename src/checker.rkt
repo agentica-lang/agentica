@@ -92,12 +92,10 @@
 (define foreign-names
   (hash "len" "use x.size for lists and maps, or s.length for strings"
         "str" "use x.to_s, or interpolation: \"#{x}\""
-        "print" "use puts(x), or IO.print(x) to write without a newline"
         "println" "use puts(x)"
         "input" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
         "read_line" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
         "readline" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
-        "gets" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
         "range" "there is no range; use a while loop with a counter, or for over a list"
         "int" "use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure"
         "elif" "write elsif: if a ... elsif b ... else ... end"
@@ -331,8 +329,14 @@
       (when (member name '("ok" "error"))
         (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is a builtin constructor" name) span)))
 
-    (define (introduce! name type span [immutable? #f])
+    (define (reserve-local! name span)
       (reserve-constructor! name span)
+      (when (member name '("puts" "print" "gets" "gets!"))
+        (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is a builtin function" name) span
+              #:help "choose another name, such as line or text")))
+
+    (define (introduce! name type span [immutable? #f])
+      (reserve-local! name span)
       (define existing (lookup name))
       (when existing
         (bail 'CHECK-SHADOWED-NAME
@@ -938,7 +942,7 @@
       (unless definition
         (bail 'CHECK-UNKNOWN-TYPE (format "unknown enum \"~a\"" enum-name) span
               #:help (and (equal? enum-name "Result")
-                          "build a Result with ok(value) or error(\"message\"); Result.Ok and Result.Err are case patterns")))
+                          "Result has only Ok and Err: Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")")))
       (define parameters (car definition))
       (define variants (cdr definition))
       (define payload-types (hash-ref variants variant-name #f))
@@ -1367,7 +1371,7 @@
 
     (define (check-binding statement)
       (define name (binding-name statement))
-      (reserve-constructor! name (binding-span statement))
+      (reserve-local! name (binding-span statement))
       (define annotation (binding-type statement))
       (define declared (and annotation (resolve-type annotation)))
       (define existing (lookup name))

@@ -171,7 +171,7 @@ return count
 - Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value and its first-insertion position; `Map.put` replacement also keeps that position).
 - An empty `[]` or `{}` needs a known type: an annotation, a parameter, a field, or the function result. A non-empty list needs elements of one type.
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
-- Enum variants are qualified by their type. Construct payload variants positionally (`Option.Some("hi")`) and nullary variants with empty parentheses (`Option.None()`). Generic arguments are inferred from payloads and expected types; every type parameter must be known. A nullary generic variant therefore needs expected type context.
+- Enum variants are qualified by their type. Construct payload variants positionally (`Option.Some("hi")`) and nullary variants with or without empty parentheses (`Option.None` or `Option.None()`). Generic arguments are inferred from payloads and expected types; every type parameter must be known. A nullary generic variant therefore needs expected type context.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
 - Function call `f(a, b)` with positional arguments. Method call on a builtin value `s.upcase`, `xs.map do |x| ... end`: see "Methods on builtin types". Builtin module call `String.upcase(s)` is the same as `s.upcase`.
 - `&name` references a declared top-level function, without capturing locals. `f: Fn[Int, Int] = &double`; call it with `f.call(21)`. A block (`do |x| ... end`, below) is also a function value and captures locals. Function values can be stored in containers, fields, parameters, and returns. Signatures must match exactly. Bare function names remain invalid as values. No standalone lambdas, equality, or JSON encoding; inspect prints `<Fn>`.
@@ -286,7 +286,7 @@ Result.message(r: Result[T]) -> String
 - `ok(false)` and `ok(nil)` are successes. Results can nest and contain lists/maps/structs; they have no equality, direct fields, or indexing. `IO.inspect` prints recursive `ok(...)` / `error(...)` forms and returns its argument.
 - Lists/maps still infer from the first element. `[ok(1), error("bad")]` infers; the reverse order needs an annotation.
 - Non-bang conversions use the same signed-decimal syntax and 64-bit integer bounds as bang forms, but invalid text/overflow return errors. `IO.gets` returns a line without LF/CR/CRLF; a blank line is `ok("")`, not EOF. Unrelated runtime errors are not converted to Results.
-- Match builtin Results with `Result.Ok(value)` and `Result.Err(message)`; constructors remain `ok` and `error`. `Result.Ok(_)` discards the payload and supports `Result[Void]` without binding a Void value.
+- `Result.Ok(x)` / `Result.Err(m)` and `ok(x)` / `error(m)` are the same, as values and as `case` patterns. `Result.Ok(_)` discards the payload and supports `Result[Void]` without binding a Void value.
 - `try` evaluates its Result operand once: success produces the payload; an error returns from the current function. Only a function returning Result may use it, but operand and enclosing success types may differ. It binds like unary `not`; use parentheses for a larger operand. Expected output T supplies `Result[T]` to the operand; the function return type alone does not infer that payload. Success paths still need explicit returns.
 
 ```ruby
@@ -306,4 +306,4 @@ end
 
 ## Diagnostics
 
-Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break if x`, `loop do`, `puts(x) if ok`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.
+Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break if x`, `loop do`, `puts(x) if ok`) are rejected with a `help` line that names the Agentica form.

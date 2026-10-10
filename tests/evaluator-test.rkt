@@ -417,6 +417,22 @@
                           "  inner = 30\n  puts(inner.to_s)"))))
     (check-equal? scoped-output "30\n"))
 
+  (test-case "Result.Ok/Result.Err values, ok/error patterns, gets and print"
+    (define-values (output err result)
+      (run-io (string-append
+               "def parse(line: String) -> Result[Int]\n"
+               "  if line == \"\"\n    return Result.Err(\"empty\")\n  end\n"
+               "  return Result.Ok(line.to_i!)\nend\n\n"
+               "def main() -> Void\n"
+               "  while !IO.eof?\n    line = gets!.strip\n"
+               "    case parse(line)\n      ok(n) -> print(\"#{n * 2} \")\n"
+               "      error(m) -> print(\"(#{m}) \")\n    end\n  end\n"
+               "  r: Result[Void] = Result.Ok()\n"
+               "  case r\n    ok(_) -> puts(\"done\")\n    error(_) -> puts(\"failed\")\n  end\n"
+               "  case gets\n    ok(_) -> puts(\"more\")\n    error(_) -> puts(\"eof\")\n  end\nend\n")
+              "2\n\n5\n"))
+    (check-equal? output "4 (empty) 10 done\neof\n"))
+
   (test-case "IO.gets! at end of input is a located diagnostic"
     (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))
     (check-true (diagnostic? result))
@@ -445,6 +461,9 @@
         ("IO.inspect" "IO.inspect(7)" "7\n7\n")
         ("IO.gets" "IO.gets()" "ok(\"line\")\n")
         ("IO.gets!" "IO.gets!()" "\"line\"\n")
+        ("gets" "gets" "ok(\"line\")\n")
+        ("gets!" "gets!()" "\"line\"\n")
+        ("print" "print(\"x\")" "x")
         ("IO.read" "IO.read()" "\"line\\n\"\n")
         ("IO.read_bytes" "IO.read_bytes(1)" "ok([108])\n")
         ("IO.flush" "IO.flush()" "")
