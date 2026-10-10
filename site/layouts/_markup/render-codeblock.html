@@ -1,0 +1,3 @@
+{{- $lang := .Type -}}
+{{- if in (slice "agentica" "agc") $lang }}{{ $lang = "ruby" }}{{ end -}}
+{{- transform.Highlight .Inner $lang .Options -}}

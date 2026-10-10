@@ -1,0 +1,6 @@
+<footer class="site-footer">
+  {{- with partial "source-path.html" . }}
+  <a href="{{ site.Params.repo }}/blob/master/{{ . }}">Page source</a> ·
+  {{- end }}
+  <a href="{{ site.Params.repo }}">Agentica on GitHub</a>
+</footer>

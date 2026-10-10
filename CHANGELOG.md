@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A documentation website in `site/`, built with Hugo and a small custom
+  theme. It shows the language reference (`docs/grammar.md`), the guide and
+  the library pages from the programming skill without copying them.
+  `make site` builds it, `make site-serve` serves it, CI builds it on every
+  pull request, and `.github/workflows/pages.yml` deploys it to GitHub Pages
+  from `master`.
 - A weekly CI workflow fuzzes the VM loader and interpreter with 5 million
   mutants and a random `FUZZ_SEED`, and uploads the crashing input on failure.
 - The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String
