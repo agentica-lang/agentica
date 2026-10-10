@@ -6,7 +6,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+
+typedef struct _stat64 file_info;
+#define file_stat _fstat64
+
+static wchar_t **wide_args;
+
+static int open_input(int index, const char *path) {
+  (void)path;
+  return _wopen(wide_args[index], _O_RDONLY | _O_BINARY | _O_NOINHERIT);
+}
+#else
 #include <unistd.h>
+
+typedef struct stat file_info;
+#define file_stat fstat
+
+static int open_input(int index, const char *path) {
+  (void)index;
+  return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+}
+#endif
 
 static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
 
@@ -38,11 +62,11 @@ static bool parse_steps(const char *text, int64_t *steps) {
   return value > 0;
 }
 
-static uint8_t *read_file(const char *path, size_t *len) {
-  int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+static uint8_t *read_file(int index, const char *path, size_t *len) {
+  int fd = open_input(index, path);
   if (fd < 0) return NULL;
-  struct stat info;
-  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+  file_info info;
+  if (file_stat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
       (uint64_t)info.st_size > AGC_MAX_FILE_BYTES) {
     close(fd);
     return NULL;
@@ -62,8 +86,10 @@ static uint8_t *read_file(const char *path, size_t *len) {
   return data;
 }
 
-int main(int argc, char **argv) {
+static int run(int argc, char **argv) {
+#ifdef SIGPIPE
   signal(SIGPIPE, SIG_IGN);
+#endif
   agc_init();
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
@@ -109,7 +135,7 @@ int main(int argc, char **argv) {
   const char *path = argv[i];
 
   size_t len = 0;
-  uint8_t *data = read_file(path, &len);
+  uint8_t *data = read_file(i, path, &len);
   if (!data) {
     fprintf(stderr, "agentica-vm: cannot read %s\n", path);
     return 2;
@@ -136,3 +162,25 @@ int main(int argc, char **argv) {
   }
   return 0;
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t **wide_argv) {
+  agc_init();
+  _setmode(_fileno(stdin), _O_BINARY);
+  _setmode(_fileno(stdout), _O_BINARY);
+  _setmode(_fileno(stderr), _O_BINARY);
+  wide_args = wide_argv;
+  char **argv = agc_alloc(agc_size_mul((size_t)argc + 1, sizeof *argv));
+  for (int i = 0; i < argc; i++) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, NULL, 0, NULL, NULL);
+    if (n > 0) argv[i] = agc_alloc_atomic((size_t)n);
+    if (n <= 0 || WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, argv[i], n, NULL, NULL) != n) {
+      fputs("agentica-vm: cannot convert arguments\n", stderr);
+      return 2;
+    }
+  }
+  return run(argc, argv);
+}
+#else
+int main(int argc, char **argv) { return run(argc, argv); }
+#endif

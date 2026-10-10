@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM builds and passes its tests on macOS and on Windows
+  (MSYS2 UCRT64 gcc, `dist/agentica-vm.exe`); CI runs both. On Windows the
+  VM takes its arguments as UTF-16 (`wmain`) and opens the input file with
+  `_wopen`, so non-ASCII file paths load, and writes all three streams in binary mode. Git checks out text files with LF
+  on every platform (`.gitattributes`).
 - The bytecode VM runs String code: String values in locals, parameters and
   returns, `+`, `==` and `!=`, interpolation, `x.to_s` and `x.inspect` of
   Int, Float, Bool, Nil and String (the debug form is Racket's `write`,
@@ -76,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- libgc is built with `NO_EXECUTE_PERMISSION` and `ALL_INTERIOR_POINTERS`,
+  as its own build systems do: the heap is no longer writable and
+  executable (macOS on arm64 refuses such pages), and interior pointers
+  stored in GC objects and static data also count.
 - `puts`, `print`, `IO.puts`, `IO.print` and `IO.warn` take any value with `to_s`, as
   in Ruby. Functions, tasks and resource handles have no `to_s`; printing or
   interpolating one is `CHECK-TYPE-MISMATCH`.

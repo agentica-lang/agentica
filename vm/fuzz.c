@@ -1,10 +1,16 @@
 #include "agc.h"
 
+#ifdef _WIN32
+#define NULL_DEVICE "NUL"
+#else
+#define NULL_DEVICE "/dev/null"
+#endif
+
 static FILE *sink;
 
 int agc_fuzz_one(const uint8_t *data, size_t len) {
   agc_init();
-  if (!sink) sink = fopen("/dev/null", "w");
+  if (!sink) sink = fopen(NULL_DEVICE, "w");
   if (!sink) return -1;
   agc_program *program = NULL;
   char error[160];

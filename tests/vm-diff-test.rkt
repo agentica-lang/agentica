@@ -15,7 +15,10 @@
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
-(define vm-file (if vm-binary (path->complete-path vm-binary root) (build-path root "dist" "agentica-vm")))
+(define vm-file
+  (if vm-binary
+      (path->complete-path vm-binary root)
+      (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
 (define full-sweep-limit 2000)
 
 (define (vm-built?)
@@ -139,9 +142,28 @@
           (check-equal? (first limited) 1)
           (check-equal? (hash-ref (string->jsexpr (third limited)) 'code) "RUNTIME-STEP-LIMIT")
           (check-equal? (third (run-process vm-file "--json" "--" (path->string bytecode) "--ai")) "")
+          (define unicode-name (build-path work "cálculo-λ-日本-𝔸.agcb"))
+          (copy-file bytecode unicode-name)
+          (check-equal? (run-vm unicode-name #f) (run-vm bytecode #f))
+          (check-equal? (first (run-process vm-file "--" (path->string work))) 2)
           (define bad (build-path work "bad.agcb"))
           (call-with-output-file bad (lambda (out) (write-bytes #"AGCB" out)))
           (define rejected (run-process vm-file "--" (path->string bad)))
           (check-equal? (first rejected) 2)
-          (check-true (string-prefix? (third rejected) "agentica-vm: invalid bytecode: "))))
+          (check-true (string-prefix? (third rejected) "agentica-vm: invalid bytecode: ")))
+
+        (test-case "a CRLF program under a non-ASCII path matches the evaluator"
+          (define folder (build-path work "dír-λ-𝔸"))
+          (make-directory folder)
+          (define program (build-path folder "división-日本.agc"))
+          (define text (file->string (build-path fixtures "division-by-zero.agc")))
+          (call-with-output-file program
+            (lambda (out) (write-string (string-replace text "\n" "\r\n") out)))
+          (define bytecode (build-path folder "división-日本.agcb"))
+          (compile-file program bytecode)
+          (define checked (front-end program))
+          (for ([style (in-list '(plain ai json))])
+            (check-equal? (run-vm bytecode #f #:style style) (run-racket checked #f style)))
+          (for ([limit (in-list (list 1 (sub1 (total-steps checked)) (total-steps checked)))])
+            (check-equal? (run-vm bytecode limit) (run-racket checked limit)))))
       (lambda () (delete-directory/files work)))))

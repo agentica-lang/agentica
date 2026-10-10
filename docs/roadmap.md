@@ -7,9 +7,9 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
-(phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice and the
-Float and Strings PRs (`docs/vm.md` §12.2 items 1 to 3) are done; the other
-widening PRs of §12.2 come next. Real applications and MCP follow;
+(phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice, the
+Float and Strings PRs and the macOS and Windows CI (`docs/vm.md` §12.2 items
+1 to 4) are done; the widening PRs of §12.2 come next. Real applications and MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
 order governs pending work rather than their numeric order.
@@ -1115,7 +1115,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
 - [x] Runtime diagnostics in the `--ai` and `--json` formats.
 - [x] CI: Linux and sanitizer jobs.
-- [ ] CI: macOS and Windows jobs.
+- [x] CI: macOS (`macos-15`) and Windows (`windows-2025`, MSYS2 UCRT64) jobs: VM build, C tests, differential and bytecode tests.
 
 **Done when:** every example runs on the VM with the same results, except those that need files, processes, tasks or the network: `file-summary`, `process-tool`, `concurrency`, `tcp_echo`, `http_get` and `http_server`.
 
