@@ -1,6 +1,6 @@
 # Builtin functions
 
-`puts(value: String) -> Void` writes the text and a newline; `print` writes it without one. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -56,13 +56,13 @@ Float.from_int(n: Int) -> Float
 Float.to_int(x: Float) -> Result[Int]          # truncates; NaN, infinity, overflow are errors
 Float.to_int!(x: Float) -> Int                 # truncates; halts on those
 
-puts(value: String) -> Void
-print(value: String) -> Void                   # no newline
+puts(value: T) -> Void                         # T has to_s
+print(value: T) -> Void                        # no newline
 gets() -> Result[String]                       # same as IO.gets
 gets!() -> String                              # same as IO.gets!
-IO.puts(value: String) -> Void
-IO.print(value: String) -> Void                 # no newline
-IO.warn(value: String) -> Void                  # standard error
+IO.puts(value: T) -> Void                      # T has to_s
+IO.print(value: T) -> Void                     # no newline
+IO.warn(value: T) -> Void                      # standard error
 IO.inspect(value: T) -> T                      # prints a debug form, returns the value
 IO.gets() -> Result[String]                   # ok(line) or error at EOF
 IO.gets!() -> String                          # next line; halts at end of input

@@ -111,7 +111,7 @@ INTERPOLATION = "#{", expression, "}" ;
 
 The minus sign is an operator, not part of the literal. The core has no exponents, alternative bases, numeric separators, or multiline strings.
 
-`"text #{expression} text"` interpolates: the result is a `String`. A `String` value is inserted as is; any other data value uses its `IO.inspect` form (`7`, `2.5`, `true`, `nil`, `[1, 2]`, `Item(name: "a")`). A Void call is `CHECK-VOID-VALUE`. The expression must end on the same line and cannot contain comments; strings, maps and nested interpolation may appear inside it. `\#` writes a literal `#`, so `"\#{x}"` is the text `#{x}`. A `#` not followed by `{` is plain text. `case` patterns and `import` paths take plain string literals only.
+`"text #{expression} text"` interpolates: the result is a `String`. A `String` value is inserted as is, a `Json` as its JSON text, and any other data value in its `IO.inspect` form (`7`, `2.5`, `true`, `nil`, `[1, 2]`, `Item(name: "a")`); this is the value's `to_s`. A Void call is `CHECK-VOID-VALUE`; a function, task or resource handle has no `to_s` and is `CHECK-TYPE-MISMATCH`. The expression must end on the same line and cannot contain comments; strings, maps and nested interpolation may appear inside it. `\#` writes a literal `#`, so `"\#{x}"` is the text `#{x}`. A `#` not followed by `{` is plain text. `case` patterns and `import` paths take plain string literals only.
 
 ## 5. Core EBNF grammar
 
@@ -491,8 +491,11 @@ Ruby aliases:
 | `Int` | `to_s`, `to_f` | `String.from_int`, `Float.from_int` |
 | `Float` | `to_s` | `String.from_float` |
 | `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
+| any data value | `to_s` | the text `"#{x}"` gives |
 
 Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
+
+Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, Results, structs and enums made of those. `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON text, and anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). `puts(x)`, `print(x)` and `IO.warn(x)` take any value with `to_s` and write that text. Only a top-level `Json` becomes JSON text; inside a list or Result it shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`. Functions, tasks and resource handles (sockets, files, processes, HTTP values) have no `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`. A struct field named `to_s` is read as the field. Unlike Ruby, `nil.to_s` is `"nil"`, and `puts([1, 2])` writes `[1, 2]` on one line.
 
 Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
 
@@ -506,8 +509,8 @@ xs = xs.push(first)
 ### Minimal builtin functions
 
 ```text
-puts(value: String) -> Void
-print(value: String) -> Void
+puts(value: T) -> Void        # T has to_s
+print(value: T) -> Void       # no newline
 gets() -> Result[String]
 gets!() -> String
 ```
@@ -590,9 +593,9 @@ Float.to_int!(x: Float) -> Int
 The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns `ok(line)` without its terminator (LF, CR, or CRLF), or an error value at EOF. A blank line is `ok("")`, not EOF. `IO.gets!` returns the line directly and halts with `RUNTIME-END-OF-INPUT` at EOF; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 
 ```text
-IO.puts(value: String) -> Void
-IO.print(value: String) -> Void
-IO.warn(value: String) -> Void
+IO.puts(value: T) -> Void
+IO.print(value: T) -> Void
+IO.warn(value: T) -> Void
 IO.inspect(value: T) -> T
 IO.gets() -> Result[String]
 IO.gets!() -> String
@@ -649,7 +652,7 @@ end
 
 ### JSON
 
-`Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` without exposing its contents. Use the JSON functions to read it or `JSON.encode` to print JSON text.
+`Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` without exposing its contents. `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give its JSON text.
 
 ```text
 JSON.object(fields: Map[String, Json]) -> Json

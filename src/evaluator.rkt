@@ -293,9 +293,7 @@
                 (for/list ([part (in-list (interpolation-parts expression))])
                   (cond
                     [(string? part) part]
-                    [else
-                     (define value (eval-expression part))
-                     (if (string? value) value (value->debug-string value))])))]
+                    [else (value->text (eval-expression part))])))]
         [(field-access? expression)
          (hash-ref (instance-fields (eval-expression (field-access-target expression)))
                    (field-access-name expression))]
@@ -356,6 +354,12 @@
            [(not-equal) (not (if (number? left) (= left right) (equal? left right)))]
            [else (unreachable "operator" span)])]))
 
+    (define (value->text value)
+      (cond
+        [(string? value) value]
+        [(json-value? value) (jsexpr->string (json-value-data value) #:null 'nil)]
+        [else (value->debug-string value)]))
+
     (define (value->debug-string value)
       (cond
         [(eq? value 'nil) "nil"]
@@ -376,6 +380,11 @@
         [(result-ok? value) (if (void? (result-ok-value value)) "ok()"
                                (format "ok(~a)" (value->debug-string (result-ok-value value))))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
+        [(enum-value? value)
+         (define payload (enum-value-payload value))
+         (format "~a.~a~a" (enum-value-type-name value) (enum-value-variant-name value)
+                 (if (null? payload) ""
+                     (format "(~a)" (string-join (map value->debug-string payload) ", "))))]
         [(instance? value)
          (define field-order (hash-ref struct-fields (instance-type-name value) '()))
          (format "~a(~a)"
@@ -476,7 +485,7 @@
                 (result-ok (bdd-result-value value))
                 (result-error (bdd-result-value value)))]
            [else value])]
-        [("puts") (displayln (car arguments)) (void)]
+        [("puts") (displayln (value->text (car arguments))) (void)]
         [("ok") (result-ok (if (null? arguments) (void) (car arguments)))]
         [("error") (result-error (car arguments))]
         [("Result.ok?") (result-ok? (car arguments))]
@@ -489,9 +498,9 @@
              (bail 'RUNTIME-UNWRAP-ERROR (result-error-message result) span))]
         [("Result.unwrap_or")
          (if (result-ok? (car arguments)) (result-ok-value (car arguments)) (cadr arguments))]
-        [("IO.print") (display (car arguments)) (void)]
+        [("IO.print") (display (value->text (car arguments))) (void)]
         [("IO.flush") (flush-output (current-output-port)) (void)]
-        [("IO.warn") (displayln (car arguments) (current-error-port)) (void)]
+        [("IO.warn") (displayln (value->text (car arguments)) (current-error-port)) (void)]
         [("IO.inspect")
          (displayln (value->debug-string (car arguments)))
          (car arguments)]

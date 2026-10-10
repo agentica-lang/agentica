@@ -235,6 +235,17 @@
     (check-equal? (diagnostic-code empty) 'RUNTIME-INVALID-RANGE)
     (check-equal? (position-of empty) '(2 7)))
 
+  (test-case "puts, print and to_s show any value as interpolation does"
+    (check-equal?
+     (output-of
+      (string-append
+       "struct P\n  x: Int\nend\n\nstruct Named\n  to_s: String\nend\n\nenum Shape\n  Dot\n  Box(Int, Int)\nend\n\n"
+       "def main() -> Void\n  puts(1)\n  print(true)\n  IO.print(2.5)\n  IO.puts([1, 2])\n  puts(nil)\n"
+       "  puts(P(x: 1))\n  r: Result[Int] = error(\"bad\")\n  puts(r.to_s + \" \" + false.to_s + \" \" + {\"a\": [1]}.to_s)\n"
+       "  j = Result.unwrap!(JSON.parse(\"{\\\"k\\\": null}\"))\n  puts(j)\n  puts(j.to_s == \"#{j}\")\n"
+       "  puts(Named(to_s: \"field\").to_s)\n  puts(Shape.Box(1, 2))\n  d = Shape.Dot()\n  puts(d.to_s)\nend\n\n"))
+     "1\ntrue2.5[1, 2]\nnil\nP(x: 1)\nerror(\"bad\") false {\"a\": [1]}\n{\"k\":null}\ntrue\nfield\nShape.Box(1, 2)\nShape.Dot\n"))
+
   (test-case "methods on builtin types match their module functions"
     (check-equal?
      (output-of

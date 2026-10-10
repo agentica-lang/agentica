@@ -340,7 +340,7 @@
                           "  e: Bool = IO.eof?()\n"
                           "  a: List[String] = System.args()\n"
                           "  System.exit(0)")))
-    (check-equal? (check-code (main-with "  IO.puts(1)")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  IO.puts(IO.flush())")) 'CHECK-VOID-VALUE)
     (check-equal? (check-code (main-with "  x = IO.gets(1)")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = IO.nope()")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  System.exit(\"x\")")) 'CHECK-TYPE-MISMATCH)
@@ -529,7 +529,7 @@
     (check-equal? (check-code (main-with "  x = \"a\".to_s(1)")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  x = \"a\".split")) 'CHECK-ARITY)
     (for ([body '("  xs = [1]\n  xs.push(2)" "  s = \"a\"\n  s.upcase" "  String.trim(\" a \")"
-                  "  s = \"a\"\n  s.to_s")])
+                  "  s = \"a\"\n  s.to_s" "  b = true\n  b.to_s")])
       (check-equal? (check-code (main-with body)) 'CHECK-UNUSED-VALUE body))
     (define unused (check-text (main-with "  xs = [1]\n  xs.push(2)")))
     (check-equal? (source-position-column (source-span-start (diagnostic-span unused))) 3)
@@ -585,6 +585,23 @@
     (check-equal? (check-code (main-with "  ys = [1].map do |x, y| x end")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  ys = [1].map do |x: String| x end")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  [\"a\"].each do |s|\n    s.strip\n  end")) 'CHECK-UNUSED-VALUE))
+
+  (test-case "only values with to_s can be printed, interpolated or converted"
+    (define declarations
+      (string-append "struct Box\n  f: Fn[Void]\nend\n\nstruct Named\n  to_s: Int\nend\n\n"
+                     "enum Option[T]\n  Some(T)\n  None\nend\n\n"))
+    (for ([entry '(("  f = &main\n  puts(f)" CHECK-TYPE-MISMATCH)
+                   ("  xs = [&main]\n  print(xs)" CHECK-TYPE-MISMATCH)
+                   ("  f = &main\n  x = \"#{f}\"" CHECK-TYPE-MISMATCH)
+                   ("  f = &main\n  x = f.to_s" CHECK-UNKNOWN-METHOD)
+                   ("  b = Box(f: &main)\n  puts(b)" CHECK-TYPE-MISMATCH)
+                   ("  b = Box(f: &main)\n  x = b.to_s" CHECK-UNKNOWN-METHOD)
+                   ("  o: Option[Option[Fn[Void]]] = Option.None()\n  puts(o)" CHECK-TYPE-MISMATCH))])
+      (check-equal? (check-code (string-append declarations (main-with (car entry)))) (cadr entry) (car entry)))
+    (check-false (diagnostic? (check-text (string-append declarations
+                                                         (main-with (string-append
+                                                                     "  n: Int = Named(to_s: 1).to_s\n  IO.warn(n)\n"
+                                                                     "  x = 1\n  \"a#{x}\"\n  puts(Option.Some([2]))")))))))
 
   (test-case "habits from other languages get a hint with the Agentica form"
     (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")
@@ -679,7 +696,7 @@
     (check-regexp-match #rx"String"
                         (help-of (main-with "  x: Strng = \"a\"")))
     (check-regexp-match #rx"String.from_int"
-                        (help-of (main-with "  puts(1)")))
+                        (help-of (main-with "  x: String = 1")))
     (check-regexp-match #rx"else"
                         (help-of "def f(n: Int) -> Int\n  if n > 0\n    return 1\n  end\nend\n\ndef main() -> Void\nend\n\n"))
     (check-regexp-match #rx"return <value>"
