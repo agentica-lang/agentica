@@ -9,7 +9,7 @@ Write the Ruby forms. Each has a longer module form that means the same thing.
 | Write | Same as |
 |---|---|
 | `s.length`, `xs.size`, `s.strip.split(" ")` | `String.length(s)`, `List.size(xs)`, `String.split(String.trim(s), " ")` |
-| `n.to_s`, `s.to_i!`, `x.to_f` | `String.from_int(n)`, `String.to_int!(s)`, `Float.from_int(x)` |
+| `n.to_s`, `s.to_i!`, `n.to_f` | `String.from_int(n)`, `String.to_int!(s)`, `Float.from_int(n)` |
 | `"total: #{n}"` | `"total: " + String.from_int(n)` |
 | `!done && (a \|\| b)` | `not done and (a or b)` |
 | `count += 1` | `count = count + 1` |
@@ -24,7 +24,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
-- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value with no arguments may drop them: `s.length`, `xs.size`.
+- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block: `s.length`, `xs.size`, `xs.each do |x| ... end`.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
 - Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
@@ -427,9 +427,9 @@ All collection updates preserve their inputs. `List.append`, `List.set`, and `Li
 ```ruby
 def main() -> Void
   data = IO.read_bytes(4)
-  if Result.ok?(data)
-    text = String.from_bytes(Result.unwrap!(data))
-    IO.print(Result.unwrap_or(text, "invalid UTF-8"))
+  if data.ok?
+    text = String.from_bytes(data.unwrap!)
+    IO.print(text.unwrap_or("invalid UTF-8"))
     IO.flush()
   end
 end
@@ -459,16 +459,16 @@ Result.message(r: Result[T]) -> String
 
 ```ruby
 def read_age(text: String) -> Result[Int]
-  age = try String.to_int(text)
+  age = try text.to_i
   return ok(age)
 end
 
 def main() -> Void
   age = read_age("bad")
-  if not Result.ok?(age)
-    puts(Result.message(age))
+  if !age.ok?
+    puts(age.message)
   end
-  puts(String.from_int(Result.unwrap_or(age, 0)))
+  puts(age.unwrap_or(0).to_s)
 end
 ```
 
@@ -499,8 +499,8 @@ end
 def main() -> Void
   first = Task.spawn(&double, 21)
   second = Task.spawn(&double, 7)
-  puts(String.from_int(Task.await(first)))
-  puts(String.from_int(Task.await(second)))
+  puts(Task.await(first).to_s)
+  puts(Task.await(second).to_s)
 end
 ```
 
@@ -988,7 +988,8 @@ Reading input, Result and `try`:
 ```ruby
 def parse_numbers(line: String) -> Result[List[Int]]
   numbers: List[Int] = []
-  for word in line.strip.split(" ")
+  words = line.strip.split(" ").filter do |w| w != "" end
+  for word in words
     n = try word.to_i
     numbers = numbers.push(n)
   end
