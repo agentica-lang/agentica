@@ -30,7 +30,7 @@ Interpreter for the Agentica language, written in Racket. The language is define
 - Network and process tests must stay hermetic: localhost, dynamically assigned ports (port 0), no external services, and cleanup of processes and resources. TCP/HTTP interoperability tests must use an independent protocol implementation as the counterpart, rather than relying only on the Agentica client and server testing each other. Put fixtures in `tests/fixtures/`. These tests are required in CI: install their chosen tools and fail if they are missing. Local runs may explicitly report a skip when a required tool is unavailable. Racket-only tests may complement this coverage; they are not required as the base layer.
 - Tests assert the diagnostic code (and the span when it matters), not message text.
 - When a phase item is finished, tick it in the roadmap and update the development skill.
-- When the language changes, update `docs/grammar.md` and `.agents/skills/agentica-programming/references/language.md` together; the programming skill is self-contained and does not read the grammar.
+- When the language changes, update `docs/grammar.md` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md`, and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 5,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.
 
 ## Working style
 
