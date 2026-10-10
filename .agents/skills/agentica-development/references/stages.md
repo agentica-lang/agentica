@@ -31,6 +31,7 @@ Accessors: `source-name`, `source-text`, `source-position-offset`/`-line`/`-colu
 | `def` `struct` `enum` `case` `do` `import` `export` `end` `if` `elsif` `else` `while` `for` `in` `return` `try` `true` `false` `nil` `and` `or` `not` | the reserved words |
 | `integer` `float` | decimal number literal |
 | `string` | decoded string contents |
+| `interp-start` `interp-middle` `interp-end` | decoded text before, between and after `#{...}` pieces; the expression tokens come between them |
 | `arrow` `equal` `not-equal` `less-equal` `greater-equal` | `->` `==` `!=` `<=` `>=` |
 | `left-paren` `right-paren` `left-bracket` `right-bracket` `left-brace` `right-brace` | `(` `)` `[` `]` `{` `}` |
 | `comma` `colon` `dot` | `,` `:` `.` |
@@ -75,7 +76,7 @@ Every node is `#:transparent` with `span` as the last field.
 | --- | --- |
 | declarations | `program`, `import-decl`, `export-decl`, `function-decl`, `param`, `struct-decl`, `enum-decl`, `enum-variant`, `field-decl`, `type-ref` |
 | statements | `binding`, `return-stmt`, `expr-stmt`, `if-branch`, `if-stmt`, `case-stmt`, `case-arm`, `wildcard-pattern`, `literal-pattern`, `variant-pattern`, `while-stmt`, `for-stmt` |
-| expressions | `literal`, `type-expression` (name, span; JSON type arguments only), `name-ref`, `call`, `enum-constructor`, `function-ref` (name, span), `invoke` (target, args, span), `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access` (target, name, span, mutable `resolved`), `method-call` (target, name, args, span, mutable `resolved`), `typed-target` (expression, type; checker-made receiver), `index-access`, `try-expr` (operand, span), `unary`, `binary` |
+| expressions | `literal`, `type-expression` (name, span; JSON type arguments only), `name-ref`, `call`, `enum-constructor`, `function-ref` (name, span), `invoke` (target, args, span), `named-arg`, `construct`, `list-lit`, `map-lit` (with `map-entry`), `field-access` (target, name, span, mutable `resolved`), `method-call` (target, name, args, span, mutable `resolved`), `typed-target` (expression, type; checker-made receiver), `interpolation` (parts: strings and expressions, span), `index-access`, `try-expr` (operand, span), `unary`, `binary` |
 
 Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; one `literal` covers integers, floats, strings, booleans, and `nil`; grouping `( expr )` produces no node; `call`/`construct` store the name as a string; `unary`/`binary` store the operator as the token-kind symbol (`'plus`, `'and`, `'equal`).
 

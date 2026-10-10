@@ -40,6 +40,7 @@
       [(not lexeme) (format "~a" (token-kind token))]
       [(equal? lexeme "") (format "~a" (token-kind token))]
       [(eq? (token-kind token) 'NL) "a newline"]
+      [(memq (token-kind token) '(interp-middle interp-end)) "\"}\""]
       [else (format "~s" lexeme)]))
 
   (define (span-from start-token)
@@ -572,6 +573,7 @@
       (define token (current))
       (case (token-kind token)
         [(integer float string) (advance!) (literal (token-value token) (token-span token))]
+        [(interp-start) (parse-interpolation)]
         [(true) (advance!) (literal #t (token-span token))]
         [(false) (advance!) (literal #f (token-span token))]
         [(nil) (advance!) (literal 'nil (token-span token))]
@@ -598,6 +600,25 @@
          (bail 'PARSE-UNEXPECTED-TOKEN
                (format "expected an expression, found ~a" (describe token))
                token)]))
+
+    (define (parse-interpolation)
+      (define start (advance!))
+      (let loop ([parts (list (token-value start))])
+        (define expression (parse-expression))
+        (define piece (current))
+        (case (token-kind piece)
+          [(interp-middle)
+           (advance!)
+           (loop (list* (token-value piece) expression parts))]
+          [(interp-end)
+           (advance!)
+           (interpolation (filter (lambda (part) (not (equal? part "")))
+                                  (reverse (list* (token-value piece) expression parts)))
+                          (span-from start))]
+          [else
+           (bail 'PARSE-UNEXPECTED-TOKEN
+                 (format "expected \"}\" to close the interpolation, found ~a" (describe piece))
+                 piece)])))
 
     (define (parse-name-primary)
       (define name (advance!))

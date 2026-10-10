@@ -259,6 +259,14 @@
                         (eval-expression (map-entry-key entry))
                         (eval-expression (map-entry-value entry))))]
         [(method-call? expression) (eval-expression (method-call-resolved expression))]
+        [(interpolation? expression)
+         (apply string-append
+                (for/list ([part (in-list (interpolation-parts expression))])
+                  (cond
+                    [(string? part) part]
+                    [else
+                     (define value (eval-expression part))
+                     (if (string? value) value (value->debug-string value))])))]
         [(and (field-access? expression) (field-access-resolved expression))
          (eval-expression (field-access-resolved expression))]
         [(field-access? expression)

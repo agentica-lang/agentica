@@ -39,6 +39,7 @@
          (struct-out field-access)
          (struct-out method-call)
          (struct-out typed-target)
+         (struct-out interpolation)
          (struct-out index-access)
          (struct-out try-expr)
          (struct-out unary)
@@ -85,6 +86,7 @@
 (struct field-access (target name span [resolved #:auto #:mutable]) #:auto-value #f #:transparent)
 (struct method-call (target name args span [resolved #:auto #:mutable]) #:auto-value #f #:transparent)
 (struct typed-target (expression type) #:transparent)
+(struct interpolation (parts span) #:transparent)
 (struct index-access (target index span) #:transparent)
 (struct try-expr (operand span) #:transparent)
 (struct unary (op op-span operand span) #:transparent)
@@ -129,6 +131,7 @@
     [(field-access? node) (field-access-span node)]
     [(method-call? node) (method-call-span node)]
     [(typed-target? node) (node-span (typed-target-expression node))]
+    [(interpolation? node) (interpolation-span node)]
     [(index-access? node) (index-access-span node)]
     [(try-expr? node) (try-expr-span node)]
     [(unary? node) (unary-span node)]

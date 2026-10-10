@@ -205,6 +205,11 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - Field access on a struct is unchanged; on anything else it is a zero-argument method. `CHECK-NOT-A-STRUCT` no longer exists; unknown methods are `CHECK-UNKNOWN-METHOD` with did-you-mean or the method list.
 - `CHECK-UNUSED-VALUE`: an expression statement whose (resolved) call is a builtin with no effects, a non-`!` name and a non-Void result. `match` patterns on `field-access`/`method-call` need a `_` for the auto `resolved` field (modules.rkt).
 
+## String interpolation
+
+- The lexer scans string text in `scan-string-body!`. `#{` emits `interp-start`/`interp-middle` with the text so far and pushes a `(#\# open-position string-start)` frame on `delimiters`; the `}` that meets that frame resumes string scanning, and the closing quote emits `string` (no interpolation) or `interp-end`. Newlines and EOF inside an open frame are `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
+- The parser builds `interpolation` with text and expression parts (empty text pieces dropped). The checker checks each expression with no context (Void is rejected) and types the node as String; the evaluator inserts strings raw and other values with `value->debug-string`.
+
 ## Enums and pattern matching
 
 - `enum-decl` and `enum-variant` live in `ast.rkt`; `case-stmt`, `case-arm`, `wildcard-pattern`, `literal-pattern`, `variant-pattern`, and `enum-constructor` are the matching nodes. The parser maps `true`/`false`/`nil` patterns to `#t`/`#f`/`'nil`, just like expression literals. `_` in a payload slot is represented by `#f` in the bindings list; it never introduces a variable.

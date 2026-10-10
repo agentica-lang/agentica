@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- String interpolation: `"total: #{n + 1}"`, with `\#` for a literal `#`.
 - Methods on builtin values (`s.strip.size`, `xs.push(1)`, `r.ok?`), resolved
   by type to module functions, with Ruby aliases (`to_i`, `to_s`, `size`,
   `strip`, `include?`, `push`, `join`).
@@ -27,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `#{` inside a string now starts an interpolation; write `\#{` for the
+  old literal text.
 - Ignoring the result of a builtin without effects is `CHECK-UNUSED-VALUE`.
 - Field access on a non-struct value is a method call; unknown names are
   `CHECK-UNKNOWN-METHOD` (replaces `CHECK-NOT-A-STRUCT`).

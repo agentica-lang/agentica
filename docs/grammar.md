@@ -102,13 +102,16 @@ NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
 TYPE_NAME  = UPPER, { LETTER | DIGIT | "_" } ;
 INTEGER    = DIGIT, { DIGIT } ;
 FLOAT      = DIGIT, { DIGIT }, ".", DIGIT, { DIGIT } ;
-STRING     = '"', { STRING_CHAR | ESCAPE }, '"' ;
-ESCAPE     = "\\", ( '"' | "\\" | "n" | "r" | "t" ) ;
+STRING     = '"', { STRING_CHAR | ESCAPE | INTERPOLATION }, '"' ;
+ESCAPE     = "\\", ( '"' | "\\" | "#" | "n" | "r" | "t" ) ;
+INTERPOLATION = "#{", expression, "}" ;
 ```
 
 `LETTER` is `A`–`Z` or `a`–`z`; `DIGIT`, `0`–`9`; `LOWER_OR_UNDERSCORE`, `a`–`z` or `_`; `UPPER`, `A`–`Z`. `STRING_CHAR` is any Unicode character except double quotes, backslash, and newlines. `NL` and `EOF` are tokens produced by the lexer.
 
-The minus sign is an operator, not part of the literal. The core has no exponents, alternative bases, numeric separators, multiline strings, or interpolation. `"#{name}"` is literal text in this version.
+The minus sign is an operator, not part of the literal. The core has no exponents, alternative bases, numeric separators, or multiline strings.
+
+`"text #{expression} text"` interpolates: the result is a `String`. A `String` value is inserted as is; any other data value uses its `IO.inspect` form (`7`, `2.5`, `true`, `nil`, `[1, 2]`, `Item(name: "a")`). A Void call is `CHECK-VOID-VALUE`. The expression must end on the same line and cannot contain comments; strings, maps and nested interpolation may appear inside it. `\#` writes a literal `#`, so `"\#{x}"` is the text `#{x}`. A `#` not followed by `{` is plain text.
 
 ## 5. Core EBNF grammar
 

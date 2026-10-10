@@ -447,6 +447,10 @@
                          (method-call-args expression) (method-call-span expression) expected
                          (lambda (resolved) (set-method-call-resolved! expression resolved)))]
           [(typed-target? expression) (typed-target-type expression)]
+          [(interpolation? expression)
+           (for ([part (in-list (interpolation-parts expression))] #:unless (string? part))
+             (check-expression part #f))
+           'String]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
       (when (and (eq? actual 'Void) (not completion?))

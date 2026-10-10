@@ -67,6 +67,18 @@
       (check-equal? (parse-code (format "def main() -> Void\n~a\nend\n" body))
                     'PARSE-INVALID-ASSIGNMENT-TARGET)))
 
+  (test-case "interpolation keeps text and expression parts in order"
+    (define expression (parse-expr "\"a#{n + 1}#{m}\""))
+    (check-true (interpolation? expression))
+    (define parts (interpolation-parts expression))
+    (check-equal? (car parts) "a")
+    (check-true (binary? (cadr parts)))
+    (check-equal? (name-ref-name (caddr parts)) "m")
+    (check-equal? (length parts) 3)
+    (check-equal? (source-position-column (source-span-start (node-span expression))) 7)
+    (check-equal? (parse-code "def main() -> Void\n  x = \"#{1 2}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-equal? (parse-code "def main() -> Void\n  x = \"#{}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN))
+
   (test-case "hello program parses"
     (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
     (check-equal? (length (program-declarations program)) 1)

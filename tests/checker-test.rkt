@@ -536,6 +536,11 @@
     (check-regexp-match #rx"xs =" (diagnostic-help unused))
     (check-ok (main-with "  Result.unwrap!(ok(1))\n  \"4\".to_i!\n  IO.inspect(\"a\".upcase)")))
 
+  (test-case "interpolation is a String and rejects Void parts"
+    (check-ok (main-with "  n = 1\n  s: String = \"#{n} #{[n]} #{n.to_f}\""))
+    (check-equal? (check-code (main-with "  x = \"#{puts(\"a\")}\"")) 'CHECK-VOID-VALUE)
+    (check-equal? (check-code (main-with "  x = \"#{missing}\"")) 'CHECK-UNKNOWN-NAME))
+
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  x += \"a\"")) 'CHECK-TYPE-MISMATCH)
