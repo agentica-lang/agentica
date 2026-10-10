@@ -1,6 +1,6 @@
 # Agentica
 
-Interpreter for the Agentica language, written in Racket. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future.md`; the phased plan and the checklist of what is done live in `docs/roadmap.md`.
+Interpreter for the Agentica language, written in Racket. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future.md`; the phased plan and the checklist of what is done live in `docs/roadmap.md`; the bytecode VM design (phase 7) is `docs/vm.md`.
 
 ## Commands
 

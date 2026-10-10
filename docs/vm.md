@@ -161,6 +161,19 @@ so they agree with the reference by construction (Racket 9.3).
 - `RUNTIME-INTERNAL` is at the program span. Its message text is not part of
   the contract and not compared.
 
+### 2.6 JSON parsing (`read-json-value` in `src/json.rkt`)
+
+- A first pass over the text rejects a raw character below U+0020 inside a
+  string with `unescaped control character in a JSON string`. DEL (U+007F)
+  passes.
+- Any other syntax error, including a lone `\u` surrogate (high or low), is
+  `invalid JSON`. A surrogate pair decodes to one character.
+- Empty input is `expected a JSON value`; anything after the value other than
+  space, tab, CR or LF is `unexpected content after the JSON value`; a number
+  that is not finite is `JSON number is not finite`.
+- Every message has the `JSON.parse: ` prefix. Numbers with a fraction or an
+  exponent are Float (`1e2` is `100.0`); others are integers of any size.
+
 ## 3. IR (7c)
 
 ### 3.1 Types from the checker
@@ -333,7 +346,10 @@ evaluator. `sort_by` collects all keys first, then sorts (7.3).
 ### 4.4 Steps
 
 The IR has one `step` per charged node. The 7d emitter merges only adjacent
-`step`s with no label between them into one `STEP n`. The charge points do
+`step`s with no label between them into one `STEP n`, splitting runs above
+65535 because the count is 16 bits. Struct and variant ids are 16-bit
+operands too, so the emitter rejects a program with more than 65535 structs
+or variants. The charge points do
 not move, so counts and failing spans stay exact. Wider merging across pure
 instructions is left to 7g if profiling asks for it.
 
@@ -387,7 +403,7 @@ typedef enum {
 
 typedef struct {
   uint32_t tag;
-  union { bool b; int64_t i; double f; void *p; } as;
+  union { bool b; int64_t i; double f; void *p; } as;   /* immediates write the full word: as.i = b */
 } agc_value;                          /* 16 bytes, passed by value */
 ```
 
@@ -434,7 +450,9 @@ typedef struct {
   `GC_MALLOC_ATOMIC`, which is not zeroed, so no code ever exposes an
   unfilled tail.
 - Never store a GC pointer in `malloc` memory, in an atomic object, or in a
-  `_Thread_local`: Boehm does not scan them. Pointers are never tagged.
+  `_Thread_local`: Boehm does not scan them. Pointers are never tagged. The
+  one exception is `handle->data` and `SSL_set_app_data` in 7h, which may
+  point to a GC object only while the resource registry also roots it (10.2).
 - No GC finalizers for OS resources; closing is explicit (10.2).
 - Roots (VM state, program, tasks) live in static storage or GC objects
   reachable from it.
@@ -454,8 +472,9 @@ typedef struct {
   `RUNTIME-STACK-OVERFLOW` ("call depth limit exceeded") at that
   instruction's span, like `call-function` and `call-closure`. `main` runs at
   depth 1; native frames do not count; each task starts at 0. The register
-  array is capped at 2^24 per task; passing the cap fails the same way, which
-  only a hostile file can reach.
+  array is capped at 2^24 per task; passing the cap fails the same way. A
+  valid program reaches it only with more than about 1,600 registers per
+  frame at full depth, so this is a documented difference, not a hole.
 - `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. `STEP`
   is one compare and one subtraction. All tasks share it.
 
@@ -481,8 +500,9 @@ kill-on-close job object, which covers crashes.
 ### 6.3 Out of memory and GC aborts
 
 At startup the VM sets `GC_set_oom_fn` and `GC_set_abort_func`. Their
-handlers allocate nothing, kill child processes, write the fixed line
-`agentica-vm: out of memory` to stderr and exit with 70. Racket has no
+handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
+line `agentica-vm: out of memory` and call `_exit(70)` (no atexit handlers,
+no stdio flush, so buffered stdout is lost). Racket has no
 matching diagnostic, so this is a documented difference.
 
 ## 7. Builtins in C
@@ -495,7 +515,10 @@ typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
 
 `span` is the call's span index; argument `i` is at `span + 1 + i`. A
 failing builtin calls `agc_fail` with the span the evaluator uses (`List.at`
-uses its index argument, `Random.int` the call).
+uses its index argument, `Random.int` the call). `args` points into the
+task's register array, which can move when it grows: a builtin never keeps
+`args` across anything that pushes a frame or grows registers, and resumable
+builtins copy what they need into their GC state.
 
 ### 7.2 Scope
 
@@ -559,9 +582,9 @@ The loader validates the whole file before running anything. Failures print
 - **Header**: magic, format version and Agentica version must match exactly;
   the file must end right after the entry.
 - **Strings**: valid UTF-8 with no surrogates; character counts are computed.
-- **Spans**: an existing source; `1 <= line`, `start <= end`, line at most
-  the source's line count, column at most the line's length in characters
-  plus 1.
+- **Spans**: an existing source; `start <= end`; for both start and end,
+  `1 <= line <= ` the source's line count and `1 <= column <=` the line's
+  length in characters plus 1.
 - **Tables**: known constant and type kinds; type operands in range, List and
   Map pointing to smaller indexes; field counts and arities fit 16 bits;
   builtin record names only with their exact C layout; builtin `(name,
@@ -570,8 +593,8 @@ The loader validates the whole file before running anything. Failures print
   instruction; the last is `RETURN` or `JUMP`; known opcodes; every register
   operand below `registers`, including ranges: `LIST` `b..b+c-1`, `MAP`
   `b..b+2c-1`, `STRUCT` `b..b+fields-1`, `ENUM` `b..b+arity-1`, call windows
-  (`CALL` with the callee's parameter count, `CALL_BUILTIN` with its arity,
-  `CLOSURE` with the captures); constant, function, builtin, type, struct,
+  (`CALL` with the callee's parameter count, `CALL_VALUE` `a..a+b`,
+  `CALL_BUILTIN` with its arity, `CLOSURE` with the captures); constant, function, builtin, type, struct,
   field, variant and span indexes in range, including the extra spans of
   `STEP` and `CALL_BUILTIN`; jump targets inside the function; `STEP` count at
   least 1.
@@ -603,8 +626,11 @@ and cost one predictable branch each.
 - `agentica --vm file.agc` lands in 7i. It writes the bytecode to a temporary
   file with a random name, created exclusively with mode 0600
   (`#:exists 'error #:permissions #o600`); passes a hidden VM flag that
-  deletes the input right after loading; sets `PR_SET_PDEATHSIG` on Linux and
-  a kill-on-close job object on Windows; and finds the VM relative to the
+  deletes the input right after loading; under that flag the VM itself calls
+  `prctl(PR_SET_PDEATHSIG, SIGKILL)` on Linux and then checks `getppid()` to
+  close the race (Racket's `subprocess` cannot run code between fork and
+  exec), and uses a kill-on-close job object on Windows; when the driver's
+  ports are not file streams it copies them through pipes; and finds the VM relative to the
   installation (`define-runtime-path`, next to the executable), never in the
   current directory. `AGENTICA_VM` overrides it and is documented.
 - `check`, `help` and `test` stay on Racket; 7h decides where BDD handlers
@@ -653,15 +679,16 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   ready.
 - Racket threads are preemptive, so the scheduler also switches after a fixed
   number of instructions. Cross-task output order is not compared.
-- Builtins that call back (`HTTP.request_stream`'s producer, `BDD.step`)
-  start the callback as a new VM task and await it.
+- Builtins that take a function (`Task.spawn`, `HTTP.listen` and
+  `HTTP.listen_tls` handlers, `HTTP.request_stream`'s producer, `BDD.step`)
+  run it as a new VM task; the ones that need its result await it.
 - Stdin may be a TTY, pipe or file: `uv_guess_handle` picks the reader, and a
   file (`UV_FILE`) uses a `uv_fs_read` path. Stdout and stderr stay on
   blocking stdio.
 - Files open with `O_NONBLOCK`, then `fstat` checks the kind. The libuv thread
   pool keeps its default size (4, `UV_THREADPOOL_SIZE`); this is documented.
 - Thread-pool threads never touch GC memory. Requests and handles are
-  `malloc`'d. The GC object that owns a handle sits in the run's resource
+  `malloc`'d, and `uv_fs` buffers are `malloc`'d copies. The GC object that owns a handle sits in the run's resource
   registry (a GC object, like the registries in `src/process.rkt` and
   `src/filesystem.rkt`) until its `uv_close` callback; only then does it leave.
   `uv_write` and `uv_fs` buffers stay reachable from the registry until their
@@ -743,8 +770,9 @@ written `size > limit - total`. A hermetic test sends over-long values.
   with `--max-steps 10000`. A plain C driver mutates (truncation, bit flips)
   a corpus seeded with every compiled example; a clang job also builds it
   with `-fsanitize=fuzzer`.
-- `make test` includes the VM tests. They skip visibly when
-  `dist/agentica-vm` is missing locally and fail in CI
+- `make test` includes the VM tests. They first run `make -s vm`, so a stale
+  `dist/agentica-vm` is rebuilt from its sources. They skip visibly when the
+  VM cannot be built locally (no C compiler or libgc) and fail in CI
   (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
 - Supply chain: pinned runner images; `agentica-vm --version` and the release
   notes list the libgc, libuv and OpenSSL versions; the release checklist

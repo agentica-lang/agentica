@@ -7,7 +7,8 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
-(phase 7), starting with its design (7b). Real applications and MCP follow;
+(phase 7): the design in `docs/vm.md` (7b) is done, and the work starts with
+the 7e vertical slice (`docs/vm.md` §12.2). Real applications and MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
 order governs pending work rather than their numeric order.
@@ -18,7 +19,7 @@ order governs pending work rather than their numeric order.
 | 2 | **Complete:** Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
-| 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7), starting with the design in 7b | Run checked programs much faster, with the same output and diagnostics |
+| 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7), starting with the 7e vertical slice (design in `docs/vm.md`) | Run checked programs much faster, with the same output and diagnostics |
 | 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
@@ -1104,6 +1105,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.
 - [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
+- [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [ ] Runtime diagnostics printed in the plain, `--ai` and `--json` formats, identical to the evaluator.
 - [ ] CI: Linux and sanitizer jobs first, then macOS and Windows.
 
@@ -1135,7 +1137,6 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Processes, behind the VM's own `--allow-run` flag; before this, fix the case-sensitive Windows batch check in `process.rkt` and decide in `grammar.md` whether the current directory is searched.
 - [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
 - [ ] HTTP/1.1 clients and servers.
-- [ ] Modules: `std/` and `pkg/` resolution stay in the front end; check that linked programs run.
 - [ ] BDD: decide whether handlers keep using the Racket evaluator or move to the VM.
 - [ ] Extend the differential tests and the independent network/process fixtures to the VM.
 
