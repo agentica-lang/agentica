@@ -589,7 +589,6 @@
   (test-case "habits from other languages get a hint with the Agentica form"
     (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")
                    ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
-                   ("  print(\"a\")" CHECK-UNKNOWN-NAME "puts")
                    ("  x = input()" CHECK-UNKNOWN-NAME "IO\\.gets")
                    ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
                    ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
@@ -608,7 +607,7 @@
                    ("  h = Hash.new" CHECK-UNKNOWN-NAME "Map\\[")
                    ("  x: String = IO.gets" CHECK-TYPE-MISMATCH "IO\\.gets!")
                    ("  while true\n    break\n  end" CHECK-UNKNOWN-NAME "while condition")
-                   ("  r: Result[Int] = Result.Ok(5)" CHECK-UNKNOWN-TYPE "ok\\(value\\)")
+                   ("  r: Result[Int] = Result.Some(5)" CHECK-UNKNOWN-TYPE "Result\\.Ok\\(value\\)")
                    ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts"))])
       (define problem (check-text (main-with (car entry))))
       (check-equal? (diagnostic-code problem) (cadr entry) (car entry))

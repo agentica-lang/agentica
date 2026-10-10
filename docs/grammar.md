@@ -410,7 +410,7 @@ ok() infers Result[Void] and prints ok(); ok(nil) is Result[Nil] and prints ok(n
 
 ### Enums and pattern matching
 
-Enums are nominal sum types and may declare type parameters. Variant names are qualified by the enum; payloads are positional, and a nullary variant is constructed with empty parentheses. Constructor type parameters are inferred from payloads and the expected enum type; unresolved or conflicting parameters are errors. Imported enum variants use the import alias plus enum and variant names.
+Enums are nominal sum types and may declare type parameters. Variant names are qualified by the enum; payloads are positional, and a nullary variant is constructed with or without empty parentheses (`Command.Show` or `Command.Show()`). Constructor type parameters are inferred from payloads and the expected enum type; unresolved or conflicting parameters are errors. Imported enum variants use the import alias plus enum and variant names.
 
 `case value do ... end` is a statement; the `do` is optional. An arm may put one simple statement on the arrow line (`1 -> puts("one")`); more lines of the same arm may follow. Patterns are primitive literals, `_`, or a qualified enum variant with one direct binding or `_` discard per payload position. Bindings are local to the arm; nested patterns and guards are not supported. Enum values require every declared variant unless there is a catch-all `_`. `Result[T]` can be matched as `Result.Ok(value)` / `Result.Err(message)`; use `Result.Ok(_)` to discard a payload, including the `Void` success payload. Every non-enum case, including `Bool` and `Nil`, requires `_`. A catch-all is last; duplicate and unreachable arms are rejected. The checker reports enum inference failures as `CHECK-ENUM-TYPE-INFERENCE`, invalid patterns as `CHECK-PATTERN-TYPE`, missing coverage as `CHECK-NON-EXHAUSTIVE-CASE`, and covered arms as `CHECK-UNREACHABLE-CASE-ARM`.
 
@@ -503,9 +503,12 @@ xs = xs.push(first)
 
 ```text
 puts(value: String) -> Void
+print(value: String) -> Void
+gets() -> Result[String]
+gets!() -> String
 ```
 
-`puts` writes the text and a newline. The name is reserved and cannot be redefined.
+`puts` writes the text and a newline; `print` writes it without one. `gets` and `gets!` are `IO.gets` and `IO.gets!`, and like them they may drop their parentheses (`line = gets!.strip`). These names are reserved and cannot be redefined.
 
 To work with maps and lists there are two builtin modules, `Map` and `List`, called as `Module.function(...)`. Their functions are generic, so the checker treats them specially. The names `Map` and `List` are reserved and cannot be redefined.
 
@@ -621,6 +624,7 @@ Result.unwrap_or(r: Result[T], default: T) -> T
 Result.message(r: Result[T]) -> String
 ```
 
+- `Result.Ok(x)`, `Result.Ok()` and `Result.Err(m)` are the same as `ok(x)`, `ok()` and `error(m)`. In `case`, the patterns `ok(v)` and `error(m)` are the same as `Result.Ok(v)` and `Result.Err(m)`.
 - `Result[T]` is builtin, not a user enum. It can nest and contain any valid payload type. Results have no equality, fields, or indexing.
 - `ok(1)` infers `Result[Int]`. An expected `Result[T]` checks the payload against `T`, including empty lists/maps.
 - `error("bad")` needs an expected Result type from an annotation, existing binding, parameter, field, return, or typed container element. Otherwise it is `CHECK-RESULT-TYPE`; no success type is guessed.
@@ -1002,8 +1006,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 |---|---|
 | `len(x)`, `x.len` | `x.size` for lists and maps, `s.length` for strings |
 | `str(x)`, `x.to_string()` | `x.to_s` or `"#{x}"` |
-| `print(x)`, `println(x)` | `puts(x)` or `IO.print(x)` |
-| `input()`, `read_line()`, `gets()` | `IO.gets()` |
+| `println(x)` | `puts(x)` |
+| `input()`, `read_line()` | `gets` (a Result) or `gets!` |
 | `range(n)` | a `while` loop, or `for` over a list |
 | `int(x)`, `float(n)`, `Int.to_float(n)` | `x.to_i`, `n.to_f` |
 | `x.lower`, `x.upper`, `x.startswith(...)` | `downcase`, `upcase`, `start_with?` |
@@ -1018,8 +1022,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `break`, `continue`, `next`, `break if x` | a `while` condition, `return`, or an `if` around the rest of the body |
 | `loop do ... end` | `while true ... end`, or a `while` condition |
 | `puts(x) if ok`, `if x do` | `if ok ... end`; an `if` condition ends with a newline |
-| `Result.Ok(x)`, `Result.Err(m)` as values | `ok(x)`, `error(m)` (the qualified forms are `case` patterns) |
-| `Command.Show` for a variant without payload | `Command.Show()` |
+| `Result.Some(x)` and other unknown Result variants | `Result.Ok(x)` / `ok(x)`, `Result.Err(m)` / `error(m)` |
+| `Color.Red` with no `Color` enum or import | `enum Color`, or `import "path" as Color` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.

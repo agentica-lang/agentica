@@ -92,12 +92,10 @@
 (define foreign-names
   (hash "len" "use x.size for lists and maps, or s.length for strings"
         "str" "use x.to_s, or interpolation: \"#{x}\""
-        "print" "use puts(x), or IO.print(x) to write without a newline"
         "println" "use puts(x)"
         "input" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
         "read_line" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
         "readline" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
-        "gets" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
         "range" "there is no range; use a while loop with a counter, or for over a list"
         "int" "use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure"
         "elif" "write elsif: if a ... elsif b ... else ... end"
@@ -937,7 +935,7 @@
       (unless definition
         (bail 'CHECK-UNKNOWN-TYPE (format "unknown enum \"~a\"" enum-name) span
               #:help (and (equal? enum-name "Result")
-                          "build a Result with ok(value) or error(\"message\"); Result.Ok and Result.Err are case patterns")))
+                          "Result has only Ok and Err: Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")")))
       (define parameters (car definition))
       (define variants (cdr definition))
       (define payload-types (hash-ref variants variant-name #f))

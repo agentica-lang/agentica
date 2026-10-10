@@ -185,20 +185,26 @@
          (check-equal? (source-name (source-span-source (diagnostic-span problem)))
                        (path->string (build-path directory "root.agc")))))))
 
-  (test-case "an enum variant without parentheses gets a hint"
+  (test-case "nullary variants need no parentheses, locally and through an alias"
     (with-files
-     '(("root.agc" . "enum Command\n  Show\nend\n\ndef main() -> Void\n  c = Command.Show\nend\n\n"))
+     '(("shapes.agc" . "export enum Shape\n  Dot\n  Box(Int)\nend\n\n")
+       ("root.agc" . "import \"shapes.agc\" as S\n\nenum Command\n  Show\n  Add(Int)\nend\n\ndef main() -> Void\n  c = Command.Show\n  case c\n    Command.Show -> puts(\"show\")\n    Command.Add(n) -> puts(n.to_s)\n  end\n  s = S.Shape.Dot\n  case s\n    S.Shape.Dot -> puts(\"dot\")\n    _ -> puts(\"other\")\n  end\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "show\ndot\n")))
+    (with-files
+     '(("root.agc" . "def main() -> Void\n  c = Color.Red\nend\n\n"))
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
-       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 6)
-       (check-regexp-match #rx"Command\\.Show\\(\\)" (diagnostic-help problem))))
+       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
+       (check-regexp-match #rx"enum Color" (diagnostic-help problem))))
     (with-files
      '(("root.agc" . "def main() -> Void\n  p: Geo.Point = nil\nend\n\n"))
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
-       (check-false (regexp-match? #rx"parentheses" (diagnostic-help problem))))))
+       (check-false (regexp-match? #rx"enum" (diagnostic-help problem))))))
 
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files
