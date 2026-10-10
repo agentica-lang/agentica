@@ -72,7 +72,7 @@ dist/agentica-vm: $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
 
 vm: dist/agentica-vm
 
-VM_TESTS := $(VM_BUILD)/loader-test $(VM_BUILD)/float_text-test
+VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test,$(wildcard vm/tests/*_test.c))
 
 $(VM_BUILD)/%-test: vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_STAMP)
 	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_LDFLAGS)

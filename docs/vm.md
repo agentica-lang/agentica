@@ -119,12 +119,20 @@ differential tests (section 12) check them.
   shortest string may be the farther neighbor (`2^-1017` prints
   `7.120236347223045e-307`, not the nearer 17-digit form). `agc_float_text` in
   `vm/value.c` therefore prints the exact decimal expansion once
-  (`snprintf("%.767e")`, which is exact on glibc, macOS and the UCRT), and for
-  each length 1 to 17 tries the nearest candidate (ties up) and then the other
-  neighbor, keeping the first that round-trips through `strtod`. It matched
-  Racket 9.3 on 708,036 values (random bit patterns, subnormals, every power
-  of two and its successor, decimal grids from 1e-330 to 1e309, and dyadic
-  values with exact ties); `vm/tests/float_text_test.c` keeps 40 of them.
+  (`snprintf("%.767e")`; exact on glibc, still to be confirmed on macOS and
+  the UCRT by the §12.2 item 4 CI, which `vm/tests/float_text_test.c` checks
+  against the full expansion of 2^-1074), and for each length tries the
+  nearest candidate (ties up) and then the other neighbor, keeping the first
+  that round-trips through `strtod`. Lengths start at 1 for subnormals and at
+  15 for normal values: there a 15-digit step is at least 4.5 ulp, so a
+  shorter form is the nearest 15-digit candidate with trailing zeros, which
+  are trimmed. One-off runs during PR #42 matched Racket 9.3 on about 1.9
+  million values (random bit patterns, subnormals, every power of two and its
+  neighbors, decimal grids from 1e-330 to 1e309, dyadic values with exact
+  ties, random arithmetic chains); the lasting checks are the 40 values in
+  `vm/tests/float_text_test.c` and the `float-text` differential fixture.
+  Printing costs about 5 to 10 µs per value (one 768-digit `snprintf` plus a
+  few `snprintf`/`strtod` pairs); 7g revisits it.
 
 ### 2.3 Strings and text
 

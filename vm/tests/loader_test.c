@@ -292,6 +292,10 @@ int main(void) {
     s.extra_kind = k == 0 ? 1 : 5;
     s.code = puts_extra;
     buffer extra = build(s);
+    for (size_t n = 0; n < extra.len; n++) {
+      agc_program *q;
+      assert(!agc_load(extra.data, n, &q, error, sizeof error));
+    }
     assert(agc_load(extra.data, extra.len, &p, error, sizeof error));
     free(extra.data);
     out = tmpfile();
@@ -303,6 +307,19 @@ int main(void) {
     assert(fread(text, 1, sizeof text, out) == strlen(printed[k]) && strcmp(text, printed[k]) == 0);
     fclose(out);
   }
+  static const agc_instr int_as_float[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_ADD_F, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t confused_spans[] = {1, 2, 2, 0};
+  s = base();
+  s.code = int_as_float;
+  s.code_spans = confused_spans;
+  s.count = 4;
+  buffer confused = build(s);
+  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+  free(confused.data);
+  agc_vm_init(&vm, p, stdout, INT64_MAX);
+  agc_outcome wrong = agc_vm_run(&vm);
+  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
   s = base();
   s.extra_kind = 7;
   assert(!loads(s, "unsupported constant kind"));

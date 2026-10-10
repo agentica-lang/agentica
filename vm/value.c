@@ -205,18 +205,19 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
   }
   if (x == 0) return put(out, at, "0.0", 3);
   char exact[800];
-  snprintf(exact, sizeof exact, "%.767e", x);
-  char *mark = strchr(exact, 'e');
-  int e = atoi(mark + 1);
+  int written = snprintf(exact, sizeof exact, "%.767e", x);
+  char *mark = written > 0 && (size_t)written < sizeof exact ? strchr(exact, 'e') : NULL;
   char all[768];
   size_t total = 0;
-  for (const char *c = exact; c < mark; c++)
-    if (*c != '.') all[total++] = *c;
+  for (const char *c = exact; mark && c < mark; c++)
+    if (*c >= '0' && *c <= '9' && total < sizeof all) all[total++] = *c;
+  if (total != sizeof all) abort();
+  int e = atoi(mark + 1);
   char digits[20];
   size_t n = 0;
   int digits_e = e;
   bool found = false;
-  for (size_t precision = 1; precision <= 17 && !found; precision++) {
+  for (size_t precision = isnormal(x) ? 15 : 1; precision <= 17 && !found; precision++) {
     bool nearest_up = all[precision] >= '5';
     for (int attempt = 0; attempt < 2 && !found; attempt++) {
       memcpy(digits, all, precision);
