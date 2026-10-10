@@ -56,14 +56,15 @@
       (check-equal? (diagnostic-code problem) 'LOWER-UNSUPPORTED)
       (define start (source-span-start (diagnostic-span problem)))
       (list (source-position-line start) (source-position-column start)))
-    (check-equal? (unsupported-at "def main() -> Void\n  names = [\"Ana\"]\n  puts(names)\nend\n") '(2 11))
-    (check-equal? (unsupported-at "def main() -> Void\n  for x in [1, 2]\n    puts(x)\n  end\nend\n") '(2 3))
-    (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  print(xs)\nend\n\ndef main() -> Void\n  show([1])\nend\n")
+    (check-equal? (unsupported-at "def main() -> Void\n  ages = {\"Ana\": 3}\n  puts(ages)\nend\n") '(2 10))
+    (check-equal? (unsupported-at "def main() -> Void\n  for m in [{\"a\": 1}]\n    puts(m)\n  end\nend\n") '(2 12))
+    (check-equal? (unsupported-at "def show(xs: Map[String, Int]) -> Void\n  print(xs)\nend\n\ndef main() -> Void\nend\n")
                   '(2 9))
-    (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  puts(\"#{xs}\")\n  puts(xs.inspect)\nend\n\ndef main() -> Void\nend\n")
+    (check-equal? (unsupported-at "def show(xs: List[Map[String, Int]]) -> Void\n  puts(\"#{xs}\")\nend\n\ndef main() -> Void\nend\n")
                   '(2 11))
-    (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  puts(xs.inspect)\nend\n\ndef main() -> Void\nend\n")
-                  '(2 8))
+    (check-equal? (unsupported-at "def get(m: Map[String, Int]) -> Int\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
+                  '(2 10))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts([1, 2].size)\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
@@ -71,8 +72,8 @@
     (dynamic-wind
       void
       (lambda ()
-        (define unsupported (path->string (build-path work "lists.agc")))
-        (display-to-file "def main() -> Void\n  names = [\"Ana\"]\n  puts(names)\nend\n" unsupported)
+        (define unsupported (path->string (build-path work "maps.agc")))
+        (display-to-file "def main() -> Void\n  ages = {\"Ana\": 3}\n  puts(ages)\nend\n" unsupported)
         (define rejected (cli "compile" unsupported "-o" (path->string (build-path work "out.agcb"))))
         (check-equal? (first rejected) 1)
         (check-true (string-contains? (third rejected) "error[LOWER-UNSUPPORTED]"))

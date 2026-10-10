@@ -141,6 +141,19 @@ agc_value agc_string_value(agc_string *s) {
   return v;
 }
 
+agc_value agc_list_value(agc_list *l) {
+  agc_value v;
+  v.tag = AGC_T_LIST;
+  v.as.p = l;
+  return v;
+}
+
+agc_list *agc_new_list(size_t len) {
+  agc_list *l = agc_alloc(agc_size_add(sizeof(agc_list), agc_size_mul(len, sizeof(agc_value))));
+  l->len = len;
+  return l;
+}
+
 agc_string *agc_new_string(size_t bytes, size_t chars) {
   agc_string *s = agc_alloc_atomic(agc_size_add(sizeof(agc_string), bytes));
   s->bytes = bytes;
@@ -177,6 +190,11 @@ double agc_as_float(agc_vm *vm, agc_value v) {
 
 agc_string *agc_as_string(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_STRING) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_list *agc_as_list(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_LIST) wrong_tag(vm);
   return v.as.p;
 }
 

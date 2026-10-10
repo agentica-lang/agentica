@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
@@ -60,6 +61,14 @@ static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
     return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
   }
   return agc_as_bool(vm, x) == agc_as_bool(vm, y);
+}
+
+static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, uint32_t span) {
+  char text[96];
+  int n = snprintf(text, sizeof text, "index %" PRId64 " is outside a list of length %zu", index, len);
+  char *message = agc_alloc_atomic((size_t)n + 1);
+  memcpy(message, text, (size_t)n + 1);
+  agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", message, span);
 }
 
 static void run(agc_vm *vm) {
@@ -131,6 +140,20 @@ static void run(agc_vm *vm) {
         break;
       case AGC_OP_TO_TEXT: R[in.a] = agc_string_value(agc_text(vm, R[in.b])); break;
       case AGC_OP_INSPECT: R[in.a] = agc_string_value(agc_debug(vm, R[in.b])); break;
+      case AGC_OP_LIST: {
+        agc_list *l = agc_new_list(in.c);
+        for (uint32_t k = 0; k < in.c; k++) l->items[k] = R[(uint32_t)in.b + k];
+        R[in.a] = agc_list_value(l);
+        break;
+      }
+      case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)agc_as_list(vm, R[in.b])->len); break;
+      case AGC_OP_LIST_GET: {
+        const agc_list *l = agc_as_list(vm, R[in.b]);
+        x = agc_as_int(vm, R[in.c]);
+        if (x < 0 || (uint64_t)x >= l->len) index_out_of_range(vm, x, l->len, s);
+        R[in.a] = l->items[x];
+        break;
+      }
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
       case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
       case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;

@@ -53,6 +53,32 @@ int main(void) {
   debug_is("e\xcc\x81 \xc2\xa0\xe3\x80\x80", "\"e\xcc\x81 \xc2\xa0\xe3\x80\x80\"");
   debug_is("\xe2\x80\xa8\xee\x80\x80\xef\xbb\xbf", "\"\\u2028\\uE000\\uFEFF\"");
   debug_is("\xf0\x9f\x98\x80\xf4\x8f\xbf\xbf\xf3\xa0\x80\x81", "\"\xf0\x9f\x98\x80\\U0010FFFF\\U000E0001\"");
+  agc_list *inner = agc_new_list(4);
+  inner->items[0] = agc_int(-7);
+  inner->items[1] = agc_float(0.5);
+  inner->items[2] = agc_string_value(agc_make_string("a\"\xce\xbb", 4, 3));
+  inner->items[3] = agc_list_value(agc_new_list(0));
+  agc_list *outer = agc_new_list(3);
+  outer->items[0] = agc_nil();
+  outer->items[1] = agc_list_value(inner);
+  outer->items[2] = agc_bool(true);
+  agc_string *mixed = agc_text(&vm, agc_list_value(outer));
+  const char *expected = "[nil, [-7, 0.5, \"a\\\"\xce\xbb\", []], true]";
+  assert(mixed->bytes == strlen(expected) && memcmp(mixed->data, expected, mixed->bytes) == 0);
+  assert(mixed->chars == strlen(expected) - 1);
+
+  size_t depth = 1000000;
+  agc_value deep = agc_int(1);
+  for (size_t k = 0; k < depth; k++) {
+    agc_list *wrap = agc_new_list(1);
+    wrap->items[0] = deep;
+    deep = agc_list_value(wrap);
+  }
+  agc_string *text = agc_debug(&vm, deep);
+  assert(text->bytes == 2 * depth + 1 && text->chars == text->bytes);
+  for (size_t k = 0; k < depth; k++) assert(text->data[k] == '[' && text->data[depth + 1 + k] == ']');
+  assert(text->data[depth] == '1');
+
   puts("text tests passed");
   return 0;
 }

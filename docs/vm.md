@@ -29,13 +29,16 @@ details and reasons.
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
-**Status.** The vertical slice, the Float PR, the Strings PR and the macOS
-and Windows CI (12.2 items 1 to 4) are in. The VM covers Int, Float, Bool, Nil and String values,
+**Status.** The vertical slice, the Float PR, the Strings PR, the macOS
+and Windows CI and the Lists PR (12.2 items 1 to 4 and 5a) are in. The VM covers Int, Float, Bool, Nil and String values
+and `List[T]` of any of them (lists of lists too),
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
-`break` and `next`, user functions, calls, `return`, interpolation,
+`break` and `next`, `for x in xs` with `break` and `next`, list literals,
+indexing `xs[i]`, user functions, calls, `return`, interpolation,
 `x.to_s` and `x.inspect` of those values, and `puts`/`print`/`IO.puts`/
-`IO.print`/`IO.warn` of any of them. Runtime diagnostics come in the plain,
+`IO.print`/`IO.warn` of any of them. List library functions (`xs.size`,
+`List.append`, ...) join with the `List` library (12.2 item 6). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -49,8 +52,13 @@ with `RUNTIME-INTERNAL`; that is the whole guarantee. `--max-steps` bounds
 instructions, not memory: one `CONCAT` or `INSPECT` costs time and memory in
 proportion to its strings, so a file can double a string per instruction
 and reach the out-of-memory exit (70, 6.3) in a few dozen steps. A program
-on the evaluator grows strings the same way. A heap cap is an open question
-(13).
+on the evaluator grows strings the same way. Printing a list costs time and
+memory in proportion to its text, and lists can share items. A program with
+chained bindings `a1 = [a0, a0]`, `a2 = [a1, a1]`, ... (each a new type one
+level deeper, since a variable's type is fixed) has text exponential in the
+number of bindings, and a file can run `LIST r0 r0 2` in a loop; printing
+such a list ends in the same out-of-memory exit (the evaluator also runs out
+of memory). A heap cap is an open question (13).
 
 ## 2. Reference behavior the VM must copy
 
@@ -193,6 +201,9 @@ fails when the committed file differs from what the generator prints.
   U+200D and U+E0020 to U+E007F), and blanks (`agc_write_blank_ranges`: the
   17 `Zs` characters U+0020, U+00A0, U+1680, U+2000 to U+200A, U+202F,
   U+205F, U+3000).
+- `agc_write_form` takes printable ASCII other than `"` and `\` (0x20 to
+  0x7E) raw without a table search; that is what the tables give for them,
+  and the exhaustive pair test in `vm/tests/text_test.c` covers it.
 - The C rule in `agc_write_form`, with `join` false at the start: the ten
   short escapes above; else raw when the code point is in the raw table,
   or `join` is true and it is a joiner; else `\uXXXX` below U+10000 and
@@ -218,6 +229,8 @@ fails when the committed file differs from what the generator prints.
   `error("msg")`, `<Json>`, `<Fn>`, `<Task>`, `<Socket>`, `<Listener>`,
   `<HttpClient>`, `<HttpServer>`, `<HttpBody>`, `<HttpWriter>`,
   `<FileHandle>`, `<Process>`.
+- A list prints its items in debug form even in the text form:
+  `puts(["a"])` prints `["a"]`. Only a String at the top is printed raw.
 - Struct and enum names are the display names the lowerer copies verbatim
   from the linked program, so the VM prints what the evaluator prints.
 - JSON text (`write-json`): object keys sorted; strings escape `"`, `\`,
@@ -328,13 +341,13 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Arithmetic, ordering | Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (operands already evaluated; NaN stays false). |
 | `if` / `elsif` / `else` | Conditional jumps over each branch. |
 | `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
-| `for x in xs` | Iterable once, hidden index slot, `list-len`; `jump` to the test; body (starts with a statement `step`); increment; test `lt`, `jump-if-true` back to the body. `next` jumps to the increment. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
+| `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index, length and one slots (`const 0`, `list-len`, `const 1`, set once); `jump` to the test; body; increment (`add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
 | Functions | One IR function each; falling off the end returns Void. |
 | Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`. |
 | Structs | Arguments evaluated in written order directly into the slot of their declared position, then `struct`. A `construct` named `Enum.Variant` is an enum constructor (`eval-step-expression`). |
 | Enums | Payload slots in order, then `enum` with a global variant id. |
-| Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). |
-| Indexing | `list-get` or `map-get` from the type table. |
+| Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. An empty literal is `list dst dst 0`. |
+| Indexing | `list-get` or `map-get` from the type table. `step` (index node), target, index, then `list-get` at the index expression's span, which is where `RUNTIME-INDEX-OUT-OF-RANGE` ("index -1 is outside a list of length 3") points. |
 | `case` | Scrutinee once; per arm a test (`same` for literals, `is-variant`, `is-ok`), jump to the next arm, payload into arm slots (`_` skipped), body, jump to the end. |
 | `try` | `try dst src`: on error, return it from the current function or block. |
 | `ok`, `error`, `Result.*` | Builtin calls. |
@@ -376,12 +389,25 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 | `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception inside `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
 
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
-exit 1. Today a value outside Int, Float, Bool, Nil and String is
-rejected, except a Void call used as a statement or returned. The only
-builtins are `puts`, `IO.print`, `IO.warn`, `String.from_int` and
-`String.from_float` (their implementation keys; `print` and `IO.puts` map to
-the first two). The last two exist because the checker resolves `x.to_s` on
-Int and Float to them.
+exit 1. Today a value outside Int, Float, Bool, Nil, String and `List` of
+those (nested to any depth) is rejected, except a Void call used as a
+statement or returned. The only builtins a program may call are `puts`,
+`IO.print`, `IO.warn`, `String.from_int` and `String.from_float` (their
+implementation keys; `print` and `IO.puts` map to the first two). The last
+two exist because the checker resolves `x.to_s` on Int and Float to them.
+`List.concat` is in the C table too, but only the lowerer emits it, for
+long literals (3.3); a written call to it stays `LOWER-UNSUPPORTED` until
+the `List` library PR. No core form turns into a `List` library call: `for`,
+literals and indexing have their own opcodes, `x.to_s` of a list is a
+one-part interpolation, and `xs.size`/`xs.length` are written method calls
+of `List.size`.
+
+A list literal nested `d` levels deep needs about `d` registers in its
+function, so nesting beyond about 65,000 levels in one literal is
+`BYTECODE-LIMIT`; the evaluator has no such limit. Lowering stays linear in
+the depth: the literal's own type is checked once, and its elements are not
+checked again. This is a documented
+difference, like the register cap (6.1).
 
 ## 4. Bytecode (7d)
 
@@ -452,10 +478,16 @@ opcodes it implements, so there are no numbers for unimplemented ones. In the
 slice the list is `MOVE CONST STEP ADD_I SUB_I MUL_I DIV_I MOD_I NEG_I NOT
 LT_I LE_I EQ NE JUMP JUMP_IF_FALSE JUMP_IF_TRUE CALL CALL_BUILTIN RETURN`
 (20 opcodes); the Float PR appended `ADD_F SUB_F MUL_F DIV_F NEG_F LT_F
-LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30). `EQ`/`NE`
+LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30); the Lists
+PR appended `LIST LIST_LEN LIST_GET` (33). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
-are `RUNTIME-INTERNAL`. There is no String ordering: the checker allows
+are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
+String and Nil (`CHECK-TYPE-MISMATCH` otherwise), so lists never reach
+`EQ`; equality on nested data joins with `case` and maps if the checker ever
+allows it there. `LIST` copies the window into a new immutable list (the
+window may include `a`); `LIST_GET` checks `0 <= i < len` on the int64
+before using it, and its message is built at run time. There is no String ordering: the checker allows
 `< <= > >=` only on numbers. `TO_TEXT` returns a String operand itself and
 `INSPECT` of a non-String gives the same text as `TO_TEXT`.
 
@@ -496,7 +528,8 @@ catalog's implementation key in `src/builtins.rkt`, not the written name
 (`puts` and `IO.puts` both import `"puts"`); overloads such as `Map.get` and
 `ok` are separate entries by arity. The loader resolves each against the C table, comparing
 length and bytes, and rejects unknown pairs. There are no internal helper
-builtins.
+builtins: `List.concat`, which the lowerer emits for long list literals, is
+the catalog builtin of that name.
 
 ### 4.6 File format
 
@@ -550,7 +583,7 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has Void, Nil, Bool, Int, Float and String, in the order above. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has Void, Nil, Bool, Int, Float, String and List, in the order above. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
@@ -756,7 +789,9 @@ The loader validates the whole file before running anything. Failures print
 - **Entry**: exists, with no parameters or captures.
 - **In the slice**: captures must be 0 and the Types, Structs and Enums
   sections must be empty; constant kinds above 6 are rejected. `CONCAT`
-  checks three registers, `TO_TEXT` and `INSPECT` two. `vm/tests/loader_test.c` checks each rejection by its reason:
+  checks three registers, `TO_TEXT` and `INSPECT` two. `LIST` checks `a`
+  and the window `b..b+c-1` (and `b` itself when `c` is 0), `LIST_LEN` two
+  registers and `LIST_GET` three. `vm/tests/loader_test.c` checks each rejection by its reason:
   truncation at every byte, bad magic and versions, trailing bytes, entry out
   of range or with parameters, unknown builtins, invalid UTF-8 (overlong,
   surrogate, above U+10FFFF, and a truncated sequence in a String
@@ -764,7 +799,7 @@ The loader validates the whole file before running anything. Failures print
   that start after they end, bad register counts (0, above 65535, fewer than
   the parameters), out-of-range registers, constants, jumps and spans
   (including the extra spans of `STEP` and `CALL_BUILTIN`, and the
-  registers of the Float and String opcodes), `CALL` and
+  registers of the Float, String and List opcodes, and the `LIST` window), `CALL` and
   `CALL_BUILTIN` windows, `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one, an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
@@ -1060,7 +1095,12 @@ the platform's OpenSSL package) to each job.
   `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
   every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
-  enum chain and nested JSON array, printed and encoded.
+  enum chain and nested JSON array, printed and encoded. A program's lists
+  are only as deep as their types, which are written in the source (there
+  are no user generics), whether built by one literal (capped near 65,000
+  levels by registers, 3.5) or by chained bindings, so
+  `vm/tests/text_test.c` builds a depth-1,000,000 list in C and prints it; the printer walks lists with an
+  explicit `agc_alloc`'d stack (7.3).
 - Tasks, processes and network programs join in 7h, with the independent
   counterparts the current tests use.
 
@@ -1084,8 +1124,19 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
    and bytecode tests on `macos-15` and `windows-2025` (MSYS2 UCRT64 gcc),
    `wmain` with UTF-8 arguments, binary stdio, LF checkouts, and libgc built
    with upstream's defines (no executable heap pages).
-5. **Data.** Lists, `for`, HAMT maps, structs, enums, `case`, Result, `try`,
-   indexing errors, closures, `&name`, `.call`, resumable `List` builtins.
+5. **Data.** Too big for one review, so it lands as five PRs:
+   - **5a Lists** (done). `List[T]` values, list literals (chunked above
+     255 elements, 3.3), `for x in xs`, indexing `xs[i]` with
+     `RUNTIME-INDEX-OUT-OF-RANGE` at the index span, and the text and debug
+     forms `[a, b]` for every value type the VM has, through `puts`,
+     interpolation, `to_s` and `inspect`. The checker rejects `==` on lists,
+     so there is no list equality. List library functions stay in item 6.
+   - **5b** Structs, enums, `case`.
+   - **5c** Result, `ok`/`error`/`Result.*`, `try`.
+   - **5d** Maps (HAMT, 5.1), map literals and indexing.
+   - **5e** Closures (`block-lit`), `&name`, `.call`, the resumable `List`
+     builtins (`map`, `filter`, `reduce`, `sort_by`, `each`, `any?`,
+     `all?`).
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
    `Random` (with the seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
