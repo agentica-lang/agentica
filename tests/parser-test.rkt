@@ -118,6 +118,15 @@
     (define arms (case-stmt-arms (caddr body)))
     (check-equal? (map (lambda (arm) (length (case-arm-body arm))) arms) '(1 2)))
 
+  (test-case "break and next are statements on their own line"
+    (define body
+      (function-decl-body
+       (car (program-declarations
+             (parse-ok "def main() -> Void\n  while true\n    next\n    break\n  end\n  next = 1\nend\n")))))
+    (check-equal? (map loop-control-kind (while-stmt-body (car body))) '(next break))
+    (check-equal? (source-position-line (source-span-start (loop-control-span (cadr (while-stmt-body (car body)))))) 4)
+    (check-true (binding? (cadr body))))
+
   (test-case "habits from other languages get a parse hint"
     (for ([entry '(("  case x\n    when 1\n      puts(\"a\")\n  end" "->")
                    ("  let x = 5" "x = 5")
@@ -130,7 +139,7 @@
                    ("  ys = run do |x| x end" "run\\(\\)")
                    ("  if x > 0 do\n    puts(\"a\")\n  end" "newline, not do")
                    ("  loop do\n    puts(\"a\")\n  end" "while true")
-                   ("  break if x > 3" "while condition")
+                   ("  break if x > 3" "no if modifiers")
                    ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
                    ("  n = String.length \"abc\"" "String\\.length\\("))])
       (define problem (parse-text (format "def main() -> Void\n~a\nend\n" (car entry))))

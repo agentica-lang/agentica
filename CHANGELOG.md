@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `break` and `next` in `while` and `for` loops, each alone on its line;
+  outside a loop or across a block they are `CHECK-LOOP-CONTROL`.
 - Ruby forms seen in evaluations: an optional `do` after `case`, `while` and
   `for` headers; a one-line case arm (`1 -> puts("one")`); module functions
   without arguments, builtin or through an import alias, may drop the

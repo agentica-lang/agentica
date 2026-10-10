@@ -399,6 +399,18 @@
               "2\n3\nshow\n4\nshow\n"))
     (check-equal? output "total 5\ntotal 9\n"))
 
+  (test-case "break and next leave or skip the innermost loop"
+    (define-values (output err result)
+      (run-io (string-append
+               "def first_negative(xs: List[Int]) -> Int\n  found = 0\n  for x in xs\n"
+               "    if x >= 0\n      next\n    end\n    found = x\n    break\n  end\n  return found\nend\n\n"
+               "def main() -> Void\n  i = 0\n  total = 0\n  while true\n    i += 1\n"
+               "    if i > 10\n      break\n    end\n    if i % 2 == 0\n      next\n    end\n"
+               "    odd = i\n    total += odd\n  end\n"
+               "  for x in [1, 2, 3]\n    while true\n      break\n    end\n    if x == 2\n      next\n    end\n"
+               "    puts(\"#{x} #{first_negative([x, -x])}\")\n  end\n  puts(total.to_s)\nend\n")))
+    (check-equal? output "1 -1\n3 -3\n25\n"))
+
   (test-case "IO.gets! at end of input is a located diagnostic"
     (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))
     (check-true (diagnostic? result))

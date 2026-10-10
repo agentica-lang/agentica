@@ -161,7 +161,8 @@ return count
 - Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
 - `if` and `while` conditions must be `Bool`. There is no truthiness: `if 1` is an error.
-- Assignment is a statement, not an expression. There is no `x[i] = v`, `x.f = v`, `break`, or `continue`.
+- `break` leaves the innermost `while`/`for`; `next` skips to its next iteration. Each stands alone on its line (no `break if x`; write an `if`). They cannot cross a block or function: inside a block, `return` leaves the block (Ruby's `next`). Using them outside a loop is `CHECK-LOOP-CONTROL`.
+- Assignment is a statement, not an expression. There is no `x[i] = v`, `x.f = v`, or `continue`.
 
 ## Expressions
 
@@ -305,4 +306,4 @@ end
 
 ## Diagnostics
 
-Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break`, `loop do`, `puts(x) if ok`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.
+Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break if x`, `loop do`, `puts(x) if ok`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.

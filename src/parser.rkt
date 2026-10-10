@@ -446,6 +446,11 @@
          (define value (if (statement-end?) #f (parse-expression)))
          (expect-statement-end "a newline after the statement")
          (return-stmt value (span-from start))]
+        [(and (kind? 'name) (member (token-lexeme (current)) '("break" "next"))
+              (memq (token-kind (peek-token 1)) '(NL end EOF)))
+         (define start (advance!))
+         (expect-statement-end "a newline after the statement")
+         (loop-control (string->symbol (token-lexeme start)) (token-span start))]
         [(and (kind? 'name) (memq (token-kind (peek-token 1)) '(assign colon)))
          (parse-binding)]
         [(and (kind? 'name) (hash-ref compound-operators (token-kind (peek-token 1)) #f))
@@ -471,8 +476,10 @@
                  start
                  #:help (case (name-ref-name value)
                           [("match") "use case value do ... end"]
-                          [("break") "there is no break; put the stop test in the while condition, or return from a function"]
-                          [("continue" "next") "there is no continue or next; wrap the rest of the loop body in an if"]
+                          [("break" "next")
+                           (format "~a stands alone on its line; there are no if modifiers: write if cond, then ~a, then end"
+                                   (name-ref-name value) (name-ref-name value))]
+                          [("continue") "write next to skip to the next iteration"]
                           [else "write x = 5, or x: Int = 5 to give a type"])))
          (when (and (name-ref? value) (not (statement-end?)))
            (bail 'PARSE-UNEXPECTED-TOKEN

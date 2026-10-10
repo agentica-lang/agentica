@@ -607,7 +607,6 @@
                    ("  x = elif(true)" CHECK-UNKNOWN-NAME "elsif")
                    ("  h = Hash.new" CHECK-UNKNOWN-NAME "Map\\[")
                    ("  x: String = IO.gets" CHECK-TYPE-MISMATCH "IO\\.gets!")
-                   ("  while true\n    break\n  end" CHECK-UNKNOWN-NAME "while condition")
                    ("  r: Result[Int] = Result.Ok(5)" CHECK-UNKNOWN-TYPE "ok\\(value\\)")
                    ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts"))])
       (define problem (check-text (main-with (car entry))))
@@ -618,6 +617,16 @@
                                                              (main-with "  f = len")))))
     (define unknown (check-text (main-with "  x = 1\n  y = len(x)")))
     (check-equal? (source-position-line (source-span-start (diagnostic-span unknown))) 3))
+
+  (test-case "break and next only inside while or for, never across a block"
+    (check-false (diagnostic? (check-text (main-with "  while true\n    if true\n      break\n    end\n    next\n  end\n  for x in [1]\n    next\n  end"))))
+    (for ([entry '(("  break" 2 "inside while or for")
+                   ("  [1].each do |x|\n    next\n  end" 3 "return leaves the block")
+                   ("  while true\n    [1].each do |x|\n      break\n    end\n  end" 4 "cannot break"))])
+      (define problem (check-text (main-with (car entry))))
+      (check-equal? (diagnostic-code problem) 'CHECK-LOOP-CONTROL (car entry))
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) (cadr entry) (car entry))
+      (check-regexp-match (pregexp (caddr entry)) (diagnostic-help problem) (car entry))))
 
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)

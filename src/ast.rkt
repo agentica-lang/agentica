@@ -20,6 +20,7 @@
          (struct-out if-stmt)
          (struct-out while-stmt)
          (struct-out for-stmt)
+         (struct-out loop-control)
          (struct-out case-stmt)
          (struct-out case-arm)
          (struct-out wildcard-pattern)
@@ -68,6 +69,7 @@
 (struct if-stmt (branches else-body span) #:transparent)
 (struct while-stmt (condition body span) #:transparent)
 (struct for-stmt (var iterable body span) #:transparent)
+(struct loop-control (kind span) #:transparent)
 (struct case-stmt (value arms span) #:transparent)
 (struct case-arm (pattern body span) #:transparent)
 (struct wildcard-pattern (span) #:transparent)
@@ -116,6 +118,7 @@
     [(if-stmt? node) (if-stmt-span node)]
     [(while-stmt? node) (while-stmt-span node)]
     [(for-stmt? node) (for-stmt-span node)]
+    [(loop-control? node) (loop-control-span node)]
     [(case-stmt? node) (case-stmt-span node)]
     [(case-arm? node) (case-arm-span node)]
     [(wildcard-pattern? node) (wildcard-pattern-span node)]

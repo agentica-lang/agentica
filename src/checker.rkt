@@ -110,9 +110,9 @@
         "null" "use nil"
         "None" "use nil"
         "nil?" "compare with nil: x == nil"
-        "break" "there is no break; put the stop test in the while condition, or return from a function"
-        "continue" "there is no continue; wrap the rest of the loop body in an if"
-        "next" "there is no next; wrap the rest of the loop body in an if"
+        "break" "break is a statement on its own line inside while or for"
+        "continue" "write next, on its own line, to skip to the next iteration"
+        "next" "next is a statement on its own line inside while or for"
         "Hash.new" "use a map literal with a type: m: Map[String, Int] = {}"
         "Array.new" "use a list literal with a type: xs: List[Int] = []"))
 
@@ -213,6 +213,7 @@
   (define current-result 'Void)
   (define current-signature #f)
   (define capture-boundary #f)
+  (define loop-depth 0)
 
   (let/ec return
     (define (bail code message span
@@ -1144,6 +1145,8 @@
                    #:help (format "annotate it, as in do |~a: Int| ... end" (block-param-name parameter)))])))
       (define saved-result current-result)
       (define saved-boundary capture-boundary)
+      (define saved-loop-depth loop-depth)
+      (set! loop-depth 0)
       (set! current-result (or known-result 'infer))
       (set! capture-boundary (length scopes))
       (push-scope!)
@@ -1175,6 +1178,7 @@
           [else 'Void]))
       (set! current-result saved-result)
       (set! capture-boundary saved-boundary)
+      (set! loop-depth saved-loop-depth)
       (when (and (not (eq? result 'Void))
                  (not last-type)
                  (not (block-returns? statements)))
@@ -1324,6 +1328,14 @@
         [(case-stmt? statement) (check-case statement)]
         [(while-stmt? statement) (check-while statement)]
         [(for-stmt? statement) (check-for statement)]
+        [(loop-control? statement)
+         (when (zero? loop-depth)
+           (bail 'CHECK-LOOP-CONTROL
+                 (format "~a is only valid inside while or for" (loop-control-kind statement))
+                 (loop-control-span statement)
+                 #:help (if capture-boundary
+                            "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
+                            "use it inside while or for; a function cannot break its caller's loop, so return a value and test it there")))]
         [else (bail 'CHECK-INTERNAL "unsupported statement" (node-span statement))]))
 
     (define (check-unused-value! value type)
@@ -1408,8 +1420,13 @@
     (define (check-while statement)
       (check-expression (while-stmt-condition statement) 'Bool)
       (push-scope!)
-      (check-block (while-stmt-body statement))
+      (in-loop (lambda () (check-block (while-stmt-body statement))))
       (pop-scope!))
+
+    (define (in-loop thunk)
+      (set! loop-depth (add1 loop-depth))
+      (thunk)
+      (set! loop-depth (sub1 loop-depth)))
 
     (define (check-for statement)
       (define iterable (check-expression (for-stmt-iterable statement) #f))
@@ -1419,11 +1436,12 @@
               (for-stmt-span statement)))
       (push-scope!)
       (introduce! (for-stmt-var statement) (cadr iterable) (for-stmt-span statement) #t)
-      (check-block (for-stmt-body statement))
+      (in-loop (lambda () (check-block (for-stmt-body statement))))
       (pop-scope!))
 
     (define (check-function declaration)
       (define result-type (resolve-type (function-decl-result declaration) #t))
+      (set! loop-depth 0)
       (set! current-result result-type)
       (set! current-signature
             (format "~a(~a) -> ~a"
