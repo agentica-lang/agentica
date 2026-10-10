@@ -25,7 +25,7 @@ details and reasons.
 |---|---|
 | `src/checker.rkt` | One addition in 7c: it can fill a caller-supplied `eq?` hash from expression node to its checked type. |
 | `src/lower.rkt` (7c) | Checked program to IR. Resolves names to slots and indexes, makes types explicit, keeps spans, converts closures. |
-| `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, type and span tables, step merging, binary writer and reader. |
+| `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, struct, enum and span tables (type tables join with JSON), step merging, binary writer and reader. |
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
@@ -316,8 +316,8 @@ and a receiver wrapped in `typed-target` carries its type already.
 ### 3.2 Structures
 
 ```racket
-(struct ir-program (sources types structs enums functions entry span))
-(struct ir-struct (name fields))          ; display name; (field-name . type-index) in declaration order
+(struct ir-program (sources structs enums functions entry span))
+(struct ir-struct (name fields))          ; display name; field names in declaration order
 (struct ir-enum (name variants))          ; list of (variant-name . arity)
 (struct ir-function (name params captures slots body span))
 (struct ir-label (id))
@@ -328,10 +328,10 @@ and a receiver wrapped in `typed-target` carries its type already.
 - In the slice, `ir-function` is `(name params slots body span)`; the
   capture field joins with closures (5e). `ir-program` has every field.
   The tables hold every struct and enum declaration of the linked program in
-  declaration order, and a type entry `(kind x y)` (4.6) for each field
-  type; Nil, enums, Result, functions, Json and builtin records are kind 7.
-  Enums are generic only in their checked types, so the table needs only
-  each variant's arity.
+  declaration order. Enums are generic only in their checked types, so the
+  table needs only each variant's arity. Field types are not in the IR yet:
+  only `JSON.decode` and `JSON.schema` need them, and the JSON PR (12.2
+  item 7) adds them.
 - Slots are the VM registers, numbered per function: parameters `0..p-1`,
   captures `p..p+c-1`, then locals and temporaries. Temporaries follow a
   stack discipline, so a call's arguments are always the highest live slots
@@ -362,7 +362,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Enums | `step` (constructor span), payload slots in order, then `enum` with a global variant id; a nullary variant is `enum dst dst v`. |
 | Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. An empty literal is `list dst dst 0`. |
 | Indexing | `list-get` or `map-get` from the type table. `step` (index node), target, index, then `list-get` at the index expression's span, which is where `RUNTIME-INDEX-OUT-OF-RANGE` ("index -1 is outside a list of length 3") points. |
-| `case` | Scrutinee once (a local is read in place: tests and payload reads all come before any body runs); per arm a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), body in its own scope through `lower-statement`, jump to the end. Patterns charge no steps. `_` has no test. An Int literal pattern outside 64 bits (the checker accepts `9223372036854775808 ->`) can never match, so its test is a plain `jump` to the next arm. Result patterns join with 5c; until then a Result scrutinee is `LOWER-UNSUPPORTED`. |
+| `case` | Scrutinee once (a local is read in place: tests and payload reads all come before any body runs); per arm a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), body in its own scope through `lower-statement`, jump to the end. Patterns charge no steps. `_` has no test. An Int literal pattern outside 64 bits (the checker accepts `9223372036854775808 ->`) can never match, so its test is a plain `jump` to the next arm. Result patterns join with 5c. Until then nothing in `case` checks for them: the scrutinee goes through the type check of every expression, which rejects a Result value with `LOWER-UNSUPPORTED` at the scrutinee, so no Result pattern is ever reached. |
 | `try` | `try dst src`: on error, return it from the current function or block. |
 | `ok`, `error`, `Result.*` | Builtin calls. |
 | Interpolation | `step`, then the first part straight into the target; each later part into the next free slot, then `concat target target slot`. A string part is a `const`; an expression part is lowered as usual and followed by `to-text slot slot` unless it is a String. String parts charge no step. |
@@ -570,22 +570,23 @@ bytes. Sections come in this fixed order; each starts with a `u32` count
 | Sources | `str` name, `str` full text |
 | Spans | `u32` source, start line, start column, end line, end column; span 0 is the program span |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
-| Types | `u8` kind (0 Int, 1 Float, 2 Bool, 3 String, 4 List, 5 Map, 6 Struct, 7 other), `u32` x, `u32` y (element, key/value, or struct index) |
-| Structs | `str` display name, `u32` field count, each `str` name and `u32` type index |
+| Structs | `str` display name, `u32` field count, each field's `str` name |
 | Enums | `str` display name, `u32` variant count, each `str` name and `u32` arity; variants numbered globally in file order |
 | Builtins | `str` name, `u32` arity |
 | Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
 | Entry | `u32` index of `main` |
 
-The type table exists for `JSON.decode` and `JSON.schema`; List and Map
-entries must point to smaller indexes, so only Struct entries can make
-cycles (recursive structs). The full source texts are embedded so the VM
-prints diagnostics without reading files.
+The full source texts are embedded so the VM prints diagnostics without
+reading files.
 
-Format version 2 (the structs, enums and `case` PR) fills the Types,
-Structs and Enums sections; version 1 always had them empty. Kinds 0 to 3
-and 7 have `x = y = 0`, List has `y = 0`, Struct has `y = 0`. All seven
-constant kinds are in use; Float constants are the literal's IEEE bits.
+Format version 2 (the structs, enums and `case` PR) fills the Structs and
+Enums sections; version 1 had three empty sections there (Types, Structs,
+Enums). Version 2 has no Types section: the type data that `JSON.decode`
+and `JSON.schema` need (a type table with List and Map entries pointing to
+smaller indexes, so only struct entries make cycles, and a type index per
+struct field) joins with the JSON PR (12.2 item 7) and its own format bump.
+All seven constant kinds are in use; Float constants are the literal's IEEE
+bits.
 
 The VM accepts only its own format version and Agentica version; anything
 else is rejected (8). Any change to the layout or to an opcode's meaning
@@ -634,7 +635,7 @@ typedef struct {
   Builtins check list and map elements when they touch them
   (`agc_expect`).
 - `FIELD` and `PAYLOAD` check the index against the value's own `n`, not
-  only against the type table.
+  only against the struct and enum tables.
 - Builtins that read builtin records (`Header`, `Request`, `Response`,
   `HttpClientOptions`, `HttpServerOptions`, `FileInfo`) check the struct type
   id; the loader accepts those names only with the exact field names and
@@ -793,8 +794,8 @@ The loader validates the whole file before running anything. Failures print
 - **Spans**: an existing source; `start <= end`; for both start and end,
   `1 <= line <= ` the source's line count and `1 <= column <=` the line's
   length in characters plus 1.
-- **Tables**: known constant and type kinds; type operands in range, List and
-  Map pointing to smaller indexes; field counts and arities fit 16 bits;
+- **Tables**: known constant kinds (and, with JSON, type kinds and type
+  operands in range); field counts and arities fit 16 bits;
   builtin record names only with their exact C layout; builtin `(name,
   arity)` pairs exist.
 - **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`; at least one
@@ -815,12 +816,12 @@ The loader validates the whole file before running anything. Failures print
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
   time and memory in proportion to their strings (trust model, 1).
 - **Entry**: exists, with no parameters or captures.
-- **In the slice**: captures must be 0; constant kinds above 6 and type
-  kinds above 7 are rejected. Type entries: kinds 0 to 3 and 7 with zero
-  operands, List `x` below its own index and `y = 0`, Map both below its own
-  index, Struct `x` below the struct count (checked after the Structs
-  section) and `y = 0`. Struct field counts and variant arities are at most
-  65535, and field type indexes are in range. `STRUCT` checks `a`, `c`
+- **In the slice**: captures must be 0; constant kinds above 6 are
+  rejected. Struct field counts and variant arities are at most 65535. All
+  variants go into one array sized by a first pass over the Enums section,
+  and nullary variants share one array of empty enum values, so a file with
+  65535 variants or a struct with 65535 fields stays within the load budget.
+  `STRUCT` checks `a`, `c`
   below the struct count and the window of that struct's field count;
   `ENUM` checks `a`, `c` below the variant count and the window of its
   arity (`b` itself when it is 0); `IS_VARIANT` checks two registers and the
@@ -840,8 +841,8 @@ The loader validates the whole file before running anything. Failures print
   the parameters), out-of-range registers, constants, jumps and spans
   (including the extra spans of `STEP` and `CALL_BUILTIN`, and the
   registers of the Float, String, List, struct and enum opcodes, and the
-  `LIST`, `STRUCT` and `ENUM` windows), every type, struct and enum table
-  rule above, `CALL` and
+  `LIST`, `STRUCT` and `ENUM` windows), every struct and enum table rule
+  above (and that 65535 nullary variants and 65535 fields load), `CALL` and
   `CALL_BUILTIN` windows, `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one, an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
@@ -1192,7 +1193,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      and recursive too, imported ones with their linked display names),
      construction, field access, `case` with literal, `_` and variant
      patterns, their text and debug forms, and format version 2 with the
-     type, struct and enum tables. The checker rejects `==` on them, so
+     struct and enum tables. The checker rejects `==` on them, so
      there is no struct or enum equality. Result patterns stay in 5c.
    - **5c** Result, `ok`/`error`/`Result.*`, `try`.
    - **5d** Maps (HAMT, 5.1), map literals and indexing.

@@ -1092,7 +1092,8 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 ### 7d: Bytecode emitter
 
 - [x] `src/bytecode.rkt`: IR → bytecode plus constant pool, builtin imports and span table; merge adjacent steps only.
-- [ ] Type, struct and enum tables in `src/bytecode.rkt` (the sections are written empty until structs land).
+- [x] Struct and enum tables in `src/bytecode.rkt` (format version 2).
+- [ ] Type table and field types for `JSON.decode`/`JSON.schema`, with the JSON PR.
 - [x] Serialize to the format from 7b; `agentica compile file.agc -o file.agcb` writes it.
 - [x] Writer checks: no Racket reader; every differential test sends writer output through the C loader, and `tests/bytecode-test.rkt` checks step merging and that the opcode list matches `vm/agc.h`.
 
@@ -1104,7 +1105,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 - [x] Source layout under `vm/` (one module per area: loader, values, interpreter loop, builtins, diagnostics; JSON joins in its PR; public names prefixed `agc_`); `make vm` builds `dist/agentica-vm` with libgc from the submodule; small C tests use plain `assert`, no framework (`make vm-test`).
 - [x] Loader with format and Agentica version checks and the full validation of `docs/vm.md` section 8 for the sections and opcodes of the slice; it rejects truncated or malformed bytecode without crashing, and a fuzz run (`make vm-fuzz`) proves it.
-- [x] Loader validation for the type, struct and enum tables (format version 2).
+- [x] Loader validation for the struct and enum tables (format version 2).
 - [ ] Loader validation for the remaining opcodes, as they land.
 - [x] Values and checked Int arithmetic (`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-DIVISION-BY-ZERO`).
 - [x] IEEE Float arithmetic and comparisons, and Float text as in the evaluator (`docs/vm.md` §2.2).

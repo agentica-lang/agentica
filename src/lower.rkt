@@ -11,7 +11,7 @@
          (struct-out ir-label)
          (struct-out ir-instr))
 
-(struct ir-program (sources types structs enums functions entry span) #:transparent)
+(struct ir-program (sources structs enums functions entry span) #:transparent)
 (struct ir-struct (name fields) #:transparent)
 (struct ir-enum (name variants) #:transparent)
 (struct ir-function (name params slots body span) #:transparent)
@@ -32,46 +32,14 @@
      (eq? (hash-ref user-types (cadr type) #f) (car type))]
     [else (and (memq type value-types) #t)]))
 
-(define scalar-type-kinds (hash "Int" 0 "Float" 1 "Bool" 2 "String" 3))
-
-(define (type-tables declarations)
-  (define struct-decls (filter struct-decl? declarations))
-  (define enum-decls (filter enum-decl? declarations))
-  (define struct-index
-    (for/hash ([declaration (in-list struct-decls)] [index (in-naturals)])
-      (values (struct-decl-name declaration) index)))
-  (define types '())
-  (define type-index (make-hash))
-  (define (intern! entry)
-    (hash-ref! type-index entry
-               (lambda ()
-                 (set! types (cons entry types))
-                 (sub1 (length types)))))
-  (define (type-entry! reference)
-    (define name (type-ref-name reference))
-    (define arguments (type-ref-args reference))
-    (cond
-      [(and (hash-has-key? scalar-type-kinds name) (null? arguments))
-       (intern! (list (hash-ref scalar-type-kinds name) 0 0))]
-      [(and (equal? name "List") (= (length arguments) 1))
-       (intern! (list 4 (type-entry! (car arguments)) 0))]
-      [(and (equal? name "Map") (= (length arguments) 2))
-       (define key (type-entry! (car arguments)))
-       (intern! (list 5 key (type-entry! (cadr arguments))))]
-      [(and (hash-has-key? struct-index name) (null? arguments))
-       (intern! (list 6 (hash-ref struct-index name) 0))]
-      [else (intern! (list 7 0 0))]))
-  (define structs
-    (for/list ([declaration (in-list struct-decls)])
-      (ir-struct (struct-decl-name declaration)
-                 (for/list ([field (in-list (struct-decl-fields declaration))])
-                   (cons (field-decl-name field) (type-entry! (field-decl-type field)))))))
-  (define enums
-    (for/list ([declaration (in-list enum-decls)])
-      (ir-enum (enum-decl-name declaration)
-               (for/list ([variant (in-list (enum-decl-variants declaration))])
-                 (cons (enum-variant-name variant) (length (enum-variant-payload-types variant)))))))
-  (values (reverse types) structs enums))
+(define (user-tables declarations)
+  (values
+   (for/list ([declaration (in-list declarations)] #:when (struct-decl? declaration))
+     (ir-struct (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration))))
+   (for/list ([declaration (in-list declarations)] #:when (enum-decl? declaration))
+     (ir-enum (enum-decl-name declaration)
+              (for/list ([variant (in-list (enum-decl-variants declaration))])
+                (cons (enum-variant-name variant) (length (enum-variant-payload-types variant))))))))
 
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
@@ -101,12 +69,12 @@
         (for/list ([declaration (in-list (program-declarations program))]
                    #:when (function-decl? declaration))
           declaration))
-      (define-values (type-table structs enums) (type-tables (program-declarations program)))
+      (define-values (structs enums) (user-tables (program-declarations program)))
       (define user-types (make-hash))
       (define struct-info (make-hash))
       (for ([entry (in-list structs)] [index (in-naturals)])
         (hash-set! user-types (ir-struct-name entry) 'Struct)
-        (hash-set! struct-info (ir-struct-name entry) (cons index (map car (ir-struct-fields entry)))))
+        (hash-set! struct-info (ir-struct-name entry) (cons index (ir-struct-fields entry))))
       (define variant-ids (make-hash))
       (for/fold ([id 0]) ([entry (in-list enums)])
         (hash-set! user-types (ir-enum-name entry) 'Enum)
@@ -126,7 +94,7 @@
       (define functions
         (for/list ([declaration (in-list declarations)])
           (lower-function declaration types program-types function-index unsupported note-source!)))
-      (ir-program sources type-table structs enums functions (hash-ref function-index "main")
+      (ir-program sources structs enums functions (hash-ref function-index "main")
                   (program-span program)))))
 
 (define (lower-function declaration types program-types function-index unsupported note-source!)
@@ -550,9 +518,7 @@
                (emit! 'jump-if-false (list slot skip) pattern-span)])]
            [else
             (define id (hash-ref variant-ids (cons (variant-pattern-enum-name pattern)
-                                                   (variant-pattern-variant-name pattern))
-                                 #f))
-            (unless id (unsupported "Result patterns" pattern-span))
+                                                   (variant-pattern-variant-name pattern))))
             (define slot (alloc!))
             (emit! 'is-variant (list slot value id) pattern-span)
             (emit! 'jump-if-false (list slot skip) pattern-span)])
@@ -601,23 +567,13 @@
     [(and (eq? op 'call-builtin) (>= index 1)) (format "~a" value)]
     [else (format "r~a" value)]))
 
-(define type-kind-names #("Int" "Float" "Bool" "String" "List" "Map" "Struct" "other"))
-
 (define (format-tables ir)
-  (define types
-    (for/list ([entry (in-list (ir-program-types ir))] [index (in-naturals)])
-      (format "type~a ~a~a" index (vector-ref type-kind-names (first entry))
-              (case (first entry)
-                [(4) (format " t~a" (second entry))]
-                [(5) (format " t~a t~a" (second entry) (third entry))]
-                [(6) (format " s~a" (second entry))]
-                [else ""]))))
   (define structs
     (for/list ([entry (in-list (ir-program-structs ir))] [index (in-naturals)])
       (format "struct s~a ~a~a" index (ir-struct-name entry)
               (string-append*
                (for/list ([field (in-list (ir-struct-fields entry))])
-                 (format " ~a:t~a" (car field) (cdr field)))))))
+                 (format " ~a" field))))))
   (define enums
     (let loop ([entries (ir-program-enums ir)] [id 0] [out '()])
       (cond
@@ -630,7 +586,7 @@
                               (for/list ([variant (in-list variants)] [k (in-naturals id)])
                                 (format " v~a=~a/~a" k (car variant) (cdr variant)))))
                      out))])))
-  (append types structs enums))
+  (append structs enums))
 
 (define (format-ir ir)
   (define tables (format-tables ir))

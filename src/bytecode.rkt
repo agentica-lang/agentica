@@ -8,7 +8,7 @@
          (struct-out bc-program)
          (struct-out bc-function))
 
-(struct bc-program (span sources spans constants types structs enums builtins functions entry) #:transparent)
+(struct bc-program (span sources spans constants structs enums builtins functions entry) #:transparent)
 (struct bc-function (name params registers span code spans) #:transparent)
 
 (define format-version 2)
@@ -141,7 +141,6 @@
                   (cons (source-name text-source) (source-text text-source)))
                 (list->vector (reverse spans))
                 (list->vector (reverse constants))
-                (ir-program-types ir)
                 structs
                 enums
                 builtins
@@ -182,18 +181,12 @@
       [(eq? value #t) (u8 out 3)]
       [(exact-integer? value) (u8 out 4) (write-bytes (integer->integer-bytes value 8 #t #f) out)]
       [(string? value) (u8 out 6) (str out value)]))
-  (u32 out (length (bc-program-types program)))
-  (for ([entry (in-list (bc-program-types program))])
-    (u8 out (first entry))
-    (u32 out (second entry))
-    (u32 out (third entry)))
   (u32 out (length (bc-program-structs program)))
   (for ([entry (in-list (bc-program-structs program))])
     (str out (ir-struct-name entry))
     (u32 out (length (ir-struct-fields entry)))
     (for ([field (in-list (ir-struct-fields entry))])
-      (str out (car field))
-      (u32 out (cdr field))))
+      (str out field)))
   (u32 out (length (bc-program-enums program)))
   (for ([entry (in-list (bc-program-enums program))])
     (str out (ir-enum-name entry))

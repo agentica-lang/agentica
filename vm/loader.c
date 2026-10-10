@@ -34,6 +34,7 @@ static const uint8_t *take(reader *r, size_t n) {
 }
 
 static void *load_alloc(reader *r, size_t size, bool atomic) {
+  if (size == 0) return NULL;
   if (size > r->budget) reject(r, "file needs too much memory");
   r->budget -= size;
   return atomic ? agc_alloc_atomic(size) : agc_alloc(size);
@@ -235,85 +236,65 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
   }
 }
 
-static void load_types(reader *r, agc_program *p) {
-  p->type_count = read_count(r, 9, "type");
-  p->types = load_alloc(r, agc_size_mul(p->type_count, sizeof(agc_type)), true);
-  for (uint32_t i = 0; i < p->type_count; i++) {
-    agc_type *t = &p->types[i];
-    t->kind = read_u8(r);
-    t->x = read_u32(r);
-    t->y = read_u32(r);
-    switch (t->kind) {
-      case 0:
-      case 1:
-      case 2:
-      case 3:
-      case 7:
-        if (t->x || t->y) reject(r, "bad type operand");
-        break;
-      case 4:
-        if (t->x >= i || t->y) reject(r, "bad type operand");
-        break;
-      case 5:
-        if (t->x >= i || t->y >= i) reject(r, "bad type operand");
-        break;
-      case 6:
-        if (t->y) reject(r, "bad type operand");
-        break;
-      default: reject(r, "unsupported type kind %u", (unsigned)t->kind);
-    }
-  }
+static void skip_string(reader *r) { take(r, read_u32(r)); }
 
+static uint64_t count_variants(reader *r, uint32_t enums) {
+  size_t start = r->pos;
+  uint64_t total = 0;
+  for (uint32_t i = 0; i < enums; i++) {
+    skip_string(r);
+    uint32_t count = read_count(r, 8, "variant");
+    for (uint32_t k = 0; k < count; k++) {
+      skip_string(r);
+      read_u32(r);
+    }
+    total += count;
+  }
+  r->pos = start;
+  return total;
+}
+
+static void load_tables(reader *r, agc_program *p) {
   p->struct_count = read_count(r, 8, "struct");
   p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
   for (uint32_t i = 0; i < p->struct_count; i++) {
     agc_struct_def *d = &p->structs[i];
     d->name = read_string(r);
-    d->count = read_count(r, 8, "field");
+    d->count = read_count(r, 4, "field");
     if (d->count > 65535) reject(r, "too many fields");
     d->fields = load_alloc(r, agc_size_mul(d->count, sizeof(agc_string *)), false);
-    d->types = load_alloc(r, agc_size_mul(d->count, sizeof(uint32_t)), true);
-    for (uint32_t k = 0; k < d->count; k++) {
-      d->fields[k] = read_string(r);
-      d->types[k] = read_u32(r);
-      if (d->types[k] >= p->type_count) reject(r, "field type out of range");
-    }
+    for (uint32_t k = 0; k < d->count; k++) d->fields[k] = read_string(r);
     if (d->count > p->max_fields) p->max_fields = d->count;
   }
-  for (uint32_t i = 0; i < p->type_count; i++)
-    if (p->types[i].kind == 6 && p->types[i].x >= p->struct_count) reject(r, "type struct index out of range");
 
   p->enum_count = read_count(r, 8, "enum");
   p->enums = load_alloc(r, agc_size_mul(p->enum_count, sizeof(agc_enum_def)), false);
-  agc_variant_def **variants = load_alloc(r, agc_size_mul(p->enum_count, sizeof(agc_variant_def *)), false);
-  uint64_t total = 0;
-  for (uint32_t i = 0; i < p->enum_count; i++) {
+  uint64_t total = count_variants(r, p->enum_count);
+  p->variant_count = (uint32_t)total;
+  p->variants = load_alloc(r, agc_size_mul(p->variant_count, sizeof(agc_variant_def)), false);
+  uint32_t nullary = 0;
+  for (uint32_t i = 0, next = 0; i < p->enum_count; i++) {
     agc_enum_def *d = &p->enums[i];
     d->name = read_string(r);
-    d->first = (uint32_t)total;
+    d->first = next;
     d->count = read_count(r, 8, "variant");
-    variants[i] = load_alloc(r, agc_size_mul(d->count, sizeof(agc_variant_def)), false);
-    for (uint32_t k = 0; k < d->count; k++) {
-      agc_variant_def *v = &variants[i][k];
+    for (uint32_t k = 0; k < d->count; k++, next++) {
+      agc_variant_def *v = &p->variants[next];
       v->name = read_string(r);
       v->owner = i;
       v->arity = read_u32(r);
       if (v->arity > 65535) reject(r, "variant arity too large");
       if (v->arity > p->max_arity) p->max_arity = v->arity;
-      if (v->arity == 0) {
-        agc_enum *shared = load_alloc(r, sizeof(agc_enum), false);
-        shared->variant = (uint32_t)(total + k);
-        shared->n = 0;
-        v->shared = agc_enum_value(shared);
-      }
+      if (v->arity == 0) nullary++;
     }
-    total += d->count;
   }
-  p->variant_count = (uint32_t)total;
-  p->variants = load_alloc(r, agc_size_mul(p->variant_count, sizeof(agc_variant_def)), false);
-  for (uint32_t i = 0; i < p->enum_count; i++)
-    if (p->enums[i].count)
-      memcpy(&p->variants[p->enums[i].first], variants[i], p->enums[i].count * sizeof(agc_variant_def));
+  p->nullary = load_alloc(r, agc_size_mul(nullary, sizeof(agc_enum)), false);
+  for (uint32_t i = 0, k = 0; i < p->variant_count; i++) {
+    if (p->variants[i].arity) continue;
+    p->nullary[k].variant = i;
+    p->nullary[k].n = 0;
+    p->variants[i].shared = &p->nullary[k++];
+  }
 }
 
 static void load(reader *r, agc_program *p) {
@@ -370,7 +351,7 @@ static void load(reader *r, agc_program *p) {
     }
   }
 
-  load_types(r, p);
+  load_tables(r, p);
 
   p->builtin_count = read_count(r, 8, "builtin");
   p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);

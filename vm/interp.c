@@ -180,7 +180,7 @@ static void run(agc_vm *vm) {
       case AGC_OP_ENUM: {
         const agc_variant_def *v = &p->variants[in.c];
         if (v->arity == 0) {
-          R[in.a] = v->shared;
+          R[in.a] = agc_enum_value(v->shared);
           break;
         }
         agc_enum *e = agc_new_enum(in.c, v->arity);

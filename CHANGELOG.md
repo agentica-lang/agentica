@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   They print as `Name(f: v)` and `Enum.Variant(a)` through `puts`, `print`,
   `IO.warn`, interpolation, `to_s` and `inspect`, with the same names as the
   evaluator, and deep values print without C recursion. The `.agcb` format
-  is now version 2: it carries the type, struct and enum tables.
+  is now version 2: it carries the struct and enum tables.
 - A weekly CI workflow fuzzes the VM loader and interpreter with 5 million
   mutants and a random `FUZZ_SEED`, and uploads the crashing input on failure.
 - The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String

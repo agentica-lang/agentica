@@ -84,13 +84,10 @@ typedef struct {
   uint32_t *spans;
 } agc_function;
 
-typedef struct { uint32_t kind, x, y; } agc_type;
-
 typedef struct {
   agc_string *name;
   uint32_t count;
   agc_string **fields;
-  uint32_t *types;
 } agc_struct_def;
 
 typedef struct {
@@ -101,19 +98,19 @@ typedef struct {
 typedef struct {
   agc_string *name;
   uint32_t owner, arity;
-  agc_value shared;
+  agc_enum *shared;
 } agc_variant_def;
 
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
-  uint32_t type_count, struct_count, enum_count, variant_count, max_fields, max_arity;
+  uint32_t struct_count, enum_count, variant_count, max_fields, max_arity;
   agc_source *sources;
   agc_span *spans;
   agc_value *constants;
-  agc_type *types;
   agc_struct_def *structs;
   agc_enum_def *enums;
   agc_variant_def *variants;
+  agc_enum *nullary;
   const agc_builtin **builtins;
   agc_function *functions;
 } agc_program;
