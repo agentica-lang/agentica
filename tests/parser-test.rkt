@@ -118,6 +118,23 @@
     (define arms (case-stmt-arms (caddr body)))
     (check-equal? (map (lambda (arm) (length (case-arm-body arm))) arms) '(1 2)))
 
+  (test-case "Result spellings, bare gets and nullary variants through an alias"
+    (define body
+      (function-decl-body
+       (car (program-declarations
+             (parse-ok (string-append
+                        "def main() -> Void\n  a = Result.Ok(1)\n  b = Result.Err(\"x\")\n  c = gets!\n"
+                        "  d = M.Shape.Dot\n  case a\n    ok(v) -> puts(v)\n    error(_) -> puts(\"e\")\n  end\nend\n"))))))
+    (check-equal? (call-name (binding-value (car body))) "ok")
+    (check-equal? (call-name (binding-value (cadr body))) "error")
+    (check-equal? (call-name (binding-value (caddr body))) "gets!")
+    (check-equal? (call-args (binding-value (caddr body))) '())
+    (check-true (enum-constructor? (binding-value (cadddr body))))
+    (check-equal? (enum-constructor-args (binding-value (cadddr body))) '())
+    (define arms (case-stmt-arms (list-ref body 4)))
+    (check-equal? (map (lambda (arm) (variant-pattern-variant-name (case-arm-pattern arm))) arms) '("Ok" "Err"))
+    (check-equal? (map (lambda (arm) (variant-pattern-bindings (case-arm-pattern arm))) arms) '(("v") (#f))))
+
   (test-case "habits from other languages get a parse hint"
     (for ([entry '(("  case x\n    when 1\n      puts(\"a\")\n  end" "->")
                    ("  let x = 5" "x = 5")
@@ -132,7 +149,8 @@
                    ("  loop do\n    puts(\"a\")\n  end" "while true")
                    ("  break if x > 3" "while condition")
                    ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
-                   ("  n = String.length \"abc\"" "String\\.length\\("))])
+                   ("  n = String.length \"abc\"" "String\\.length\\(")
+                   ("  case r\n    ok() -> puts(\"a\")\n  end" "ok\\(_\\)"))])
       (define problem (parse-text (format "def main() -> Void\n~a\nend\n" (car entry))))
       (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN (car entry))
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem)))
