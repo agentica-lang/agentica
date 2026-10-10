@@ -215,7 +215,8 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 ## String interpolation
 
 - The lexer scans string text in `scan-string-body!`. `#{` emits `interp-start`/`interp-middle` with the text so far and pushes a `(#\# string-start)` frame on `delimiters`; the `}` that meets that frame resumes string scanning, and the resumed `interp-middle`/`interp-end` token starts at that `}` so parse errors point at it, and the closing quote emits `string` (no interpolation) or `interp-end`. Newlines and EOF inside an open frame are `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
-- The parser builds `interpolation` with text and expression parts (empty text pieces dropped). The checker checks each expression with no context (Void is rejected) and types the node as String; the evaluator inserts strings raw and other values with `value->debug-string`.
+- The parser builds `interpolation` with text and expression parts (empty text pieces dropped). The checker checks each expression with no context (Void is rejected, and `ensure-printable!` rejects types without `to_s`: functions, tasks, handles) and types the node as String; the evaluator inserts each value with `value->text` (strings raw, `Json` as JSON text, others through `value->debug-string`).
+- `puts`/`print`/`IO.puts`/`IO.print` take `T` with the `show` rule tag, which only calls `ensure-printable!`; the evaluator writes `value->text`. `x.to_s` resolves through `method-aliases` for String/Int/Float; for any other printable type `check-method` records a one-part `interpolation` node, so `x.to_s`, `"#{x}"` and `puts(x)` share one text form. `printable-type?` follows struct fields and substituted enum payloads with a seen list, like `encodable-type?`. A struct field named `to_s` stays a field.
 
 ## Blocks and closures
 

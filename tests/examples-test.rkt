@@ -346,7 +346,7 @@
     (check-equal? (car (cli "no-such-file.agc")) 2)
     (check-equal? (cli "check" hello) '(0 "check ok\n" ""))
     (define type-error (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Void\n  puts(1)\nend\n\n" type-error #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  x: String = 1\nend\n\n" type-error #:exists 'truncate)
     (define checked (cli "check" (path->string type-error)))
     (define ai (cli "--ai" "check" (path->string type-error)))
     (define json (cli "--json" "check" (path->string type-error)))

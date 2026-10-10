@@ -167,7 +167,7 @@ return count
 ## Expressions
 
 - Literals: `42`, `3.14`, `"text"` (escapes `\" \\ \# \n \r \t`), `true`, `false`, `nil`. A minus sign is an operator, not part of the literal.
-- Interpolation: `"total: #{n + 1} for #{name}"` is a `String`. Strings go in as is; other values use their `IO.inspect` form (`2.5`, `[1, 2]`, `Item(name: "a")`). Keep the expression on one line; `\#{` is literal text. `case` patterns and `import` paths take plain strings only.
+- Interpolation: `"total: #{n + 1} for #{name}"` is a `String`. Strings go in as is, `Json` as JSON text, and other data values in their `IO.inspect` form (`2.5`, `[1, 2]`, `Item(name: "a")`); this is the value's `to_s`. Keep the expression on one line; `\#{` is literal text. `case` patterns and `import` paths take plain strings only.
 - Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value and its first-insertion position; `Map.put` replacement also keeps that position).
 - An empty `[]` or `{}` needs a known type: an annotation, a parameter, a field, or the function result. A non-empty list needs elements of one type.
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
@@ -229,8 +229,11 @@ Ruby aliases:
 | `Int` | `to_s`, `to_f` | `String.from_int`, `Float.from_int` |
 | `Float` | `to_s` | `String.from_float` |
 | `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
+| any data value | `to_s` | the text `"#{x}"` gives |
 
 Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
+
+Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, Results, structs and enums made of those. `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON text, and anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). `puts(x)` and `print(x)` take any value with `to_s` and write that text. Functions, tasks and resource handles (sockets, files, processes, HTTP values) have no `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`. A struct field named `to_s` is read as the field. Unlike Ruby, `nil.to_s` is `"nil"`, and `puts([1, 2])` writes `[1, 2]` on one line.
 
 Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
 

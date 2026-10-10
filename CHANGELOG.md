@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `to_s` on every data value (Bool, nil, lists, maps, Results, structs,
+  enums, Json), giving the same text as interpolation; `Json` gives its JSON
+  text.
 - `break` and `next` in `while` and `for` loops, each alone on its line;
   outside a loop or across a block they are `CHECK-LOOP-CONTROL`.
 - `Result.Ok(x)` / `Result.Err(m)` as values and `ok(v)` / `error(m)` as
@@ -54,6 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `puts`, `print`, `IO.puts` and `IO.print` take any value with `to_s`, as
+  in Ruby. Functions, tasks and resource handles have no `to_s`; printing or
+  interpolating one is `CHECK-TYPE-MISMATCH`.
+- Interpolating a `Json` value inserts its JSON text instead of `<Json>`.
+- `IO.inspect` and interpolation show enum values as `Shape.Box(1, 2)`
+  instead of a host struct.
 - Docs: `case x` without `do` is the taught form (the `do` stays optional);
   BDD and enum diagnostic codes are documented; the README, roadmap,
   development skill and AGENTS.md match the current code. The `input`/

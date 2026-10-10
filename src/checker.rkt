@@ -522,7 +522,7 @@
           [(block-lit? expression) (check-block-lit expression expected)]
           [(interpolation? expression)
            (for ([part (in-list (interpolation-parts expression))] #:unless (string? part))
-             (check-expression part #f))
+             (ensure-printable! (check-expression part #f) (node-span part)))
            'String]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
@@ -639,6 +639,35 @@
              (for/and ([field (in-list (hash-ref structs name))])
                (encodable-type? (cdr field) (cons name seen))))]
         [else #f]))
+
+    (define (printable-type? type [seen '()])
+      (cond
+        [(or (primitive-type? type) (eq? type 'Json)) #t]
+        [(list-type? type) (printable-type? (cadr type) seen)]
+        [(map-type? type) (and (printable-type? (cadr type) seen) (printable-type? (caddr type) seen))]
+        [(result-type? type) (or (eq? (cadr type) 'Void) (printable-type? (cadr type) seen))]
+        [(or (struct-type? type) (enum-type? type))
+         (define key (cons (car type) (cadr type)))
+         (or (and (member key seen) #t)
+             (let ([seen (cons key seen)])
+               (if (struct-type? type)
+                   (for/and ([field (in-list (hash-ref structs (cadr type)))])
+                     (printable-type? (cdr field) seen))
+                   (let* ([definition (hash-ref enums (cadr type))]
+                          [substitutions (for/hash ([parameter (in-list (car definition))]
+                                                    [argument (in-list (cddr type))])
+                                           (values parameter argument))])
+                     (for*/and ([payload (in-hash-values (cdr definition))]
+                                [field (in-list payload)])
+                       (printable-type? (substitute-type field substitutions) seen))))))]
+        [else #f]))
+
+    (define (ensure-printable! type span)
+      (unless (printable-type? type)
+        (bail 'CHECK-TYPE-MISMATCH
+              (format "~a has no to_s, so it cannot be printed or interpolated" (type->string type))
+              span
+              #:help "only data values have to_s: numbers, Bool, String, nil, Json, and lists, maps, Results, structs and enums of those")))
 
     (define (decodable-type? type [seen '()])
       (cond
@@ -877,6 +906,7 @@
                  (node-span (car arguments))))
          (if (eq? (builtin-rule selected) 'json-from) 'Json 'String)]
         [(identity) (check-expression (car arguments) expected)]
+        [(show) (ensure-printable! (check-expression (car arguments) #f) (node-span (car arguments))) 'Void]
         [(ok)
          (list 'Result (check-expression (car arguments)
                                         (and (result-type? expected) (cadr expected))))]
@@ -1082,12 +1112,15 @@
                           #:target-type [known #f])
       (define target (or known (check-expression target-node #f)))
       (define kind (receiver-kind target))
-      (define resolved-name (and kind (resolve-method kind name)))
+      (define resolved-name (or (and kind (resolve-method kind name))
+                                (and (equal? name "to_s") (printable-type? target) 'text)))
       (unless resolved-name
         (bail 'CHECK-UNKNOWN-METHOD
               (format "~a has no method \"~a\"" (type->string target) name)
               span
               #:help (cond
+                       [(equal? name "to_s")
+                        "only data values have to_s: numbers, Bool, String, nil, Json, and lists, maps, Results, structs and enums of those"]
                        [(and (struct-type? target) (hash-ref functions name #f))
                         (format "structs have no methods; call ~a(...) with the struct as an argument" name)]
                        [(and (struct-type? target)
@@ -1109,6 +1142,11 @@
            (bail 'CHECK-ARITY (format "\"~a\" takes no arguments" name) span))
          (record! receiver)
          (ensure target expected span)]
+        [(eq? resolved-name 'text)
+         (unless (null? arguments)
+           (bail 'CHECK-ARITY (format "\"~a\" takes no arguments" name) span))
+         (record! (interpolation (list receiver) span))
+         (ensure 'String expected span)]
         [else
          (define synthetic (call resolved-name (cons receiver arguments) span))
          (record! synthetic)
@@ -1195,7 +1233,10 @@
     (define (check-field-access expression expected)
       (define target (check-expression (field-access-target expression) #f))
       (cond
-        [(struct-type? target) (check-struct-field expression target)]
+        [(and (struct-type? target)
+              (not (and (equal? (field-access-name expression) "to_s")
+                        (not (assoc "to_s" (hash-ref structs (cadr target)))))))
+         (check-struct-field expression target)]
         [else
          (check-method expression (field-access-target expression) (field-access-name expression)
                        '() (field-access-span expression) expected
@@ -1351,6 +1392,7 @@
       (define entry (and (call? resolved) (builtin-ref (call-name resolved))))
       (when (and (not (eq? type 'Void))
                  (or (typed-target? resolved)
+                     (interpolation? resolved)
                      (and entry
                           (null? (builtin-effects entry))
                           (not (takes-function? entry))
