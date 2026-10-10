@@ -28,7 +28,7 @@
       (diagnostic 'CHECK-TYPE-MISMATCH "operator expects two values of the same type"
                   (at 2 12 13)
                   #:labels (list (cons (at 2 10 11) "this is Int") (cons (at 2 14 15) "this is Float"))
-                  #:help "there is no Int to Float conversion"))
+                  #:help "use Float.from_int(...) to convert"))
     (check-equal? (format-diagnostic problem)
                   (string-append "t.agc:2:12 error[CHECK-TYPE-MISMATCH]\n"
                                  "operator expects two values of the same type\n\n"
@@ -36,7 +36,7 @@
                                  "  |          - ^ -\n"
                                  "  |              this is Float\n"
                                  "  |          this is Int\n"
-                                 "  = help: there is no Int to Float conversion")))
+                                 "  = help: use Float.from_int(...) to convert")))
 
   (test-case "CRLF, multi-line, and end-of-line spans stay on the line"
     (check-equal? (format-diagnostic (problem "ab\r\ncd\r\n" 1 2 1 3))

@@ -160,6 +160,7 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 - Function suffixes allow whitespace before `(`; `!=` remains an operator. Empty map inference uses `CHECK-EMPTY-MAP-TYPE`.
 - `evaluate` accepts optional `#:max-steps` (positive integer or #f). Count every expression/statement entry, including loop conditions; reset per run. CLI --max-steps validates the input; check never executes. This is not a blocking-I/O timeout.
 - A rebase changing AST/diagnostic layouts may leave stale ignored Racket bytecode. For an instantiate-linklet struct mismatch, use `make clean && make build && make test`; rebuild the binary with make exe before evaluation.
+- `tests/eval/diagnostics.py` counts the diagnostics agents saw in `tests/eval/results` (see `docs/eval-diagnostics.md`). It counts only bash commands that run `agentica` or `racket ... main.rkt`. Its tests run with `cd tests/eval && python3 -m unittest`; they are not part of `make test` or CI.
 
 ## Stdio bytes and flushing
 
