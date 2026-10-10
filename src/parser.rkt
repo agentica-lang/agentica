@@ -365,14 +365,23 @@
          (variant-pattern enum-name variant-name bindings (span-from start))]
         [else (bail 'PARSE-UNEXPECTED-TOKEN "expected a pattern" start)]))
 
+    (define (with-block-depth depth thunk)
+      (define saved block-depth)
+      (set! block-depth depth)
+      (define result (thunk))
+      (set! block-depth saved)
+      result)
+
     (define (parse-case-body)
-      (let loop ([acc '()])
-        (skip-newlines!)
-        (cond
-          [(or (kind? 'end) (case-arm-start?)) (reverse acc)]
-          [(kind? 'EOF)
-           (bail 'PARSE-UNCLOSED-BLOCK "unclosed case block, expected end" (current))]
-          [else (loop (cons (parse-statement) acc))])))
+      (with-block-depth 0
+        (lambda ()
+          (let loop ([acc '()])
+            (skip-newlines!)
+            (cond
+              [(or (kind? 'end) (case-arm-start?)) (reverse acc)]
+              [(kind? 'EOF)
+               (bail 'PARSE-UNCLOSED-BLOCK "unclosed case block, expected end" (current))]
+              [else (loop (cons (parse-statement) acc))])))))
 
     (define (parse-case)
       (define start (expect 'case "case"))
@@ -400,12 +409,14 @@
       (expect-statement-end "a newline after end")
       (case-stmt value arms (span-from start)))
 
-    (define (parse-block)
-      (let loop ([acc '()])
-        (skip-newlines!)
-        (cond
-          [(or (kind? 'end) (kind? 'elsif) (kind? 'else) (kind? 'EOF)) (reverse acc)]
-          [else (loop (cons (parse-statement) acc))])))
+    (define (parse-block [depth 0])
+      (with-block-depth depth
+        (lambda ()
+          (let loop ([acc '()])
+            (skip-newlines!)
+            (cond
+              [(or (kind? 'end) (kind? 'elsif) (kind? 'else) (kind? 'EOF)) (reverse acc)]
+              [else (loop (cons (parse-statement) acc))])))))
 
     (define (parse-statement)
       (case (token-kind (current))
@@ -500,7 +511,7 @@
 
     (define (parse-while)
       (define start (expect 'while "while"))
-      (define condition (parse-expression))
+      (define condition (with-blocks #f parse-expression))
       (expect 'NL "a newline after the condition")
       (define body (parse-block))
       (expect-end)
@@ -511,7 +522,7 @@
       (define start (expect 'for "for"))
       (define variable (expect 'name "a loop variable"))
       (expect 'in "\"in\"")
-      (define iterable (parse-expression))
+      (define iterable (with-blocks #f parse-expression))
       (expect 'NL "a newline after the loop header")
       (define body (parse-block))
       (expect-end)
@@ -633,10 +644,7 @@
                 (expect 'pipe "\"|\" after the block parameters")
                 (reverse (cons parameter acc))]))]
           [else '()]))
-      (define saved-depth block-depth)
-      (set! block-depth (add1 block-depth))
-      (define body (with-blocks #t parse-block))
-      (set! block-depth saved-depth)
+      (define body (with-blocks #t (lambda () (parse-block 1))))
       (expect-end)
       (block-lit params body (span-from start)))
 

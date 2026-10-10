@@ -397,15 +397,15 @@ result = run(5) do |n| n + 1 end
 
 - Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end`. The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
 - Parameter types come from the call; annotate when there is no context: `do |x: Int| ... end` (`CHECK-BLOCK-TYPE` otherwise).
-- The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]`; end it with `ok(...)`.
-- In `case f() do`, `do` belongs to `case`; wrap a call with a block in parentheses: `case (xs.map do |x| x end) do`.
+- The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]` known from the call (not in `map`/`sort_by`); end it with `ok(...)`.
+- In `case f() do`, `do` belongs to `case`; in `while` and `for` headers a `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
 - Blocks capture values when created; later changes outside do not affect them. A block cannot assign to an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): build the value with `map`/`reduce`, or use a `for` loop. Block parameters cannot reuse visible names.
 - A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn` through a function parameter, or register a BDD step with `BDD.step("pattern") do |args| ... end`.
 - `List.each` runs a block for each element; `List.any?` / `List.all?` stop at the first deciding element.
 
 ### Collections
 
-`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a block, a named function reference (`&name`), or a function-valued variable.
+`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures (`&name`, a `Fn` variable, or a block with annotated parameters such as `do |x: Int|`) infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a block, a named function reference (`&name`), or a function-valued variable.
 
 `List.concat` joins lists of the same element type in O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Nonnegative counts above length return the whole list or empty list, respectively; negative counts halt with `RUNTIME-INVALID-COUNT` at the count argument. Both cost O(n). `List.at` reads a zero-based index in O(n); negative or out-of-range indexes halt with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
 

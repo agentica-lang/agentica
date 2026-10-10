@@ -78,6 +78,10 @@ def handler(request: Request, writer: HttpWriter) -> Void
   end
 end
 
+def keep(f: Fn[Request, HttpWriter, Void]) -> Fn[Request, HttpWriter, Void]
+  return f
+end
+
 def main() -> Void
   server = Result.unwrap!(~a)
   puts(String.from_int(HTTP.local_port(server)))
@@ -91,7 +95,7 @@ AGC
    (if secure?
        (format "HTTP.listen_tls(\"127.0.0.1\", 0, ~s, ~s, &handler, HTTP.server_options())"
                (path->string cert-path) (path->string key-path))
-       "HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options())")))
+       "HTTP.listen(\"127.0.0.1\", 0, keep() do |request, writer| handler(request, writer) end, HTTP.server_options())")))
 
 (module+ test
   (when (node-available?)
