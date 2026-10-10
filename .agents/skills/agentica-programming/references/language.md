@@ -254,6 +254,8 @@ List.concat(a: List[T], b: List[T]) -> List[T]
 List.take(list: List[T], count: Int) -> List[T]
 List.drop(list: List[T], count: Int) -> List[T]
 List.at(list: List[T], index: Int) -> T
+List.sort(list: List[T]) -> List[T]
+List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 
 String.length(s: String) -> Int                # counts Unicode characters
 String.upcase(s: String) -> String
@@ -266,6 +268,11 @@ String.starts_with?(s: String, prefix: String) -> Bool
 String.ends_with?(s: String, suffix: String) -> Bool
 String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String
+String.index_of(s: String, part: String) -> Result[Int]  # first match; error if absent
+String.at(s: String, index: Int) -> String     # one character; halts outside
+String.reverse(s: String) -> String
+String.code(c: String) -> Int                  # code point; c must be one character
+String.from_code(n: Int) -> String             # Unicode scalar value; halts otherwise
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
 String.from_bytes(data: List[Int]) -> Result[String]  # strict UTF-8
@@ -273,6 +280,9 @@ String.to_int(s: String) -> Result[Int]
 String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int               # halts on bad text
 String.to_float!(s: String) -> Float           # halts on bad text
+Float.from_int(n: Int) -> Float
+Float.to_int(x: Float) -> Result[Int]          # truncates; NaN, infinity, overflow are errors
+Float.to_int!(x: Float) -> Int                 # truncates; halts on those
 
 IO.puts(value: String) -> Void
 IO.print(value: String) -> Void                 # no newline
@@ -292,12 +302,15 @@ System.exit(code: Int) -> Void
 - Build lists with literals or `List.append`/`List.repeat`; update them with `List.set`. Concatenate lists with `List.concat`. To change a map, use `Map.put`/`Map.delete`; these operations leave the original unchanged.
 - Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
+- `String.index_of` and `String.at` count Unicode characters, like `String.length`. Use `String.code`/`String.from_code` for character arithmetic, and `Float.from_int`/`Float.to_int` to mix Int and Float; arithmetic never converts implicitly.
 
 ### Collections
 
 `List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a named function reference (`&name`) or a function-valued variable; there are no closures.
 
 `List.concat` joins lists of the same element type in O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Nonnegative counts above length return the whole list or empty list, respectively; negative counts halt with `RUNTIME-INVALID-COUNT` at the count argument. Both cost O(n). `List.at` reads a zero-based index in O(n); negative or out-of-range indexes halt with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
+
+`List.sort` sorts in ascending order; its elements must be `Int`, `Float`, or `String`. `List.sort_by` sorts by the key its function returns, and the key must be `Int`, `Float`, or `String`. The key function runs once per element, left to right. Both sorts are stable: equal elements keep their order. Strings compare by Unicode code point, so `"B"` comes before `"a"`. Float NaN goes last. Other element or key types are `CHECK-TYPE-MISMATCH`. Both cost O(n log n), plus the key calls, and preserve the input.
 
 All collection updates preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends cost O(n²). Indexing is still O(n). `List.repeat` costs O(count) and accepts 0..1048576; zero returns an empty list of the inferred element type, and invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` requires an index in 0..length-1; otherwise it halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument. Expected types support empty collections and Result elements; annotate when there is insufficient context.
 
@@ -801,7 +814,8 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count |
-| `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text |
+| `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text, `Float.to_int!` on NaN or infinity |
+| `RUNTIME-INVALID-CHARACTER` | `String.code` without exactly one character, or `String.from_code` outside Unicode scalar values |
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |

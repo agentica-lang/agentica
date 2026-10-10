@@ -774,7 +774,7 @@ Where it applies: 5g (TCP counterpart), 5h (HTTP/HTTPS counterparts, including a
 - [x] Faster maps (before JSON).
 - [x] Phase 5f: JSON.
 - [x] Stdio transport primitives: counted bytes, strict UTF-8 decoding, flush, and byte-oriented EOF.
-- [ ] Phase 5f2: typed JSON decoding.
+- [x] Phase 5f2: typed JSON decoding.
 - [x] Phase 5g: TCP and TLS.
 - [x] Phase 5h: HTTP/1.1 and HTTPS clients and servers.
 
@@ -894,8 +894,8 @@ the existing builtin library.
 - [x] `List.concat`, `take`, `drop`, `at`: immutable operations, clamped nonnegative counts, and zero-based checked indexes.
 - [x] Settle `reduce` argument order before implementing callbacks: accumulator first, `f(accumulator, item)`.
 - [x] `List.map`, `filter`, `reduce`: exact callback signatures, ordered immutable traversal, contextual empty inputs, and shared execution limits.
-- [ ] `List.sort`, `sort_by`.
-- [ ] Add string search/replacement and missing numeric conversions needed by representative scripts.
+- [x] `List.sort`, `sort_by`: stable ascending order over Int, Float or String (keys), NaN last, one key call per element.
+- [x] Add string search/replacement and missing numeric conversions: `String.index_of/at/reverse/code/from_code` (`String.replace` already existed) and `Float.from_int`, `Float.to_int`, `Float.to_int!`.
 - [ ] Specify and add basic time and randomness APIs; define clock, seed and bounds behavior before implementation.
 - [ ] Decide which other gaps in `future.md` ("Other gaps for code-challenge programs": math, conversions, strings, sets, input, performance) belong here after a real task needs them.
 - [ ] Add harder 6b model-evaluation tasks that need sorting.

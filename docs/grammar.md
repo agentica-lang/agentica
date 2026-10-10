@@ -475,11 +475,15 @@ List.concat(a: List[T], b: List[T]) -> List[T]
 List.take(list: List[T], count: Int) -> List[T]
 List.drop(list: List[T], count: Int) -> List[T]
 List.at(list: List[T], index: Int) -> T
+List.sort(list: List[T]) -> List[T]
+List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 ```
 
 `List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a named function reference (`&name`) or a function-valued variable; there are no closures.
 
 `List.concat` joins lists of the same element type and costs O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Counts must be nonnegative (otherwise RUNTIME-INVALID-COUNT at the count argument); counts greater than length return the whole list or an empty list, respectively. Both cost O(n) with the current list representation. `List.at` is zero-based, costs O(n), and reports RUNTIME-INDEX-OUT-OF-RANGE at the index argument for negative or out-of-range indexes, like indexing syntax.
+
+`List.sort` sorts in ascending order; its elements must be `Int`, `Float`, or `String`. `List.sort_by` sorts by the key its function returns, and the key must be `Int`, `Float`, or `String`. The key function runs once per element, left to right. Both sorts are stable: equal elements keep their order. Strings compare by Unicode code point, so `"B"` comes before `"a"`. Float NaN goes last. Other element or key types are `CHECK-TYPE-MISMATCH`. Both cost O(n log n), plus the key calls, and preserve the input.
 
 Collection operations preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends can cost O(n²). `List.repeat` costs O(count), accepts 0..1048576, and returns an empty typed list for zero. Invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` uses zero-based indexes and halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument if it is negative or outside the list.
 
@@ -499,6 +503,11 @@ String.starts_with?(s: String, prefix: String) -> Bool
 String.ends_with?(s: String, suffix: String) -> Bool
 String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String
+String.index_of(s: String, part: String) -> Result[Int]
+String.at(s: String, index: Int) -> String
+String.reverse(s: String) -> String
+String.code(c: String) -> Int
+String.from_code(n: Int) -> String
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
 String.from_bytes(data: List[Int]) -> Result[String]
@@ -506,7 +515,12 @@ String.to_int(s: String) -> Result[Int]
 String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
+Float.from_int(n: Int) -> Float
+Float.to_int(x: Float) -> Result[Int]
+Float.to_int!(x: Float) -> Int
 ```
+
+`String.index_of` returns the character index of the first match, `ok(0)` for an empty part, and an error when the part is absent. `String.at` reads one character at a zero-based index and halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument outside the string. `String.reverse` reverses Unicode characters. `String.code` returns the code point of a one-character string; `String.from_code` builds one from a Unicode scalar value (0..0x10FFFF, without surrogates). Both halt with `RUNTIME-INVALID-CHARACTER` at their argument on other input. `Float.from_int` converts to the nearest Float. `Float.to_int` truncates toward zero; NaN and infinity are errors, and results outside `Int` are errors. `Float.to_int!` halts instead, with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
 
 The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns `ok(line)` without its terminator (LF, CR, or CRLF), or an error value at EOF. A blank line is `ok("")`, not EOF. `IO.gets!` returns the line directly and halts with `RUNTIME-END-OF-INPUT` at EOF; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 

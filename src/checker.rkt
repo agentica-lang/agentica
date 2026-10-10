@@ -613,6 +613,24 @@
          target]
         [(list-size) (list-argument) 'Int]
         [(list-reverse) (list-argument (and (list-type? expected) expected))]
+        [(list-sort)
+         (define target (list-argument (and (list-type? expected) expected)))
+         (unless (memq (cadr target) '(Int Float String))
+           (bail 'CHECK-TYPE-MISMATCH
+                 (format "List.sort needs List[Int], List[Float] or List[String], found ~a"
+                         (type->string target))
+                 (node-span (car arguments))))
+         target]
+        [(list-sort-by)
+         (define callback-expression (cadr arguments))
+         (define callback (check-expression callback-expression #f))
+         (unless (and (list? callback) (= (length callback) 3) (eq? (car callback) 'Fn))
+           (bail 'CHECK-TYPE-MISMATCH "sort_by requires a key function with one parameter"
+                 (node-span callback-expression)))
+         (unless (memq (caddr callback) '(Int Float String))
+           (bail 'CHECK-TYPE-MISMATCH "sort_by keys must be Int, Float or String"
+                 (node-span callback-expression)))
+         (list-argument (list 'List (cadr callback)))]
         [(list-map list-filter list-reduce)
          (define rule (builtin-rule selected))
          (define reduce? (eq? rule 'list-reduce))

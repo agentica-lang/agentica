@@ -78,6 +78,13 @@
                   "  x = List.reduce([1], \"\", &text)")])
       (check-equal? (check-code (string-append callbacks (main-with body)))
                     'CHECK-TYPE-MISMATCH))
+    (check-ok (string-append callbacks
+               (main-with "  a: List[Float] = List.sort([])\n  b = List.sort_by([], &text)")))
+    (for ([body '("  x = List.sort([true])" "  x = List.sort([[1]])"
+                  "  x = List.sort_by([1], &keep)" "  x = List.sort_by([\"a\"], &text)"
+                  "  x = List.sort_by([1], &join)" "  x: List[String] = List.sort([1])")])
+      (check-equal? (check-code (string-append callbacks (main-with body)))
+                    'CHECK-TYPE-MISMATCH))
     (check-equal? (check-code (string-append callbacks
                                  (main-with "  x = List.map([1], &ignore)")))
                   'CHECK-VOID-VALUE)

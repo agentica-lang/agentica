@@ -186,6 +186,29 @@
     (check-equal? (diagnostic-code (diagnostic-of (main-with "  x = String.to_float!(\"1/2\")")))
                   'RUNTIME-INVALID-NUMBER))
 
+  (test-case "string search, characters and Float to Int conversion"
+    (check-equal?
+     (output-of (main-with (string-append
+      "  IO.inspect(String.index_of(\"abab\", \"ba\"))\n"
+      "  IO.inspect(String.index_of(\"abc\", \"\"))\n"
+      "  IO.inspect(Result.ok?(String.index_of(\"abc\", \"x\")))\n"
+      "  IO.inspect(String.code(String.from_code(1114111)))\n"
+      "  big = Float.from_int(9223372036854775807) * 4.0\n"
+      "  IO.inspect(Result.ok?(Float.to_int(big)))\n"
+      "  while big < big * 10.0\n    big = big * 10.0\n  end\n"
+      "  IO.inspect(Result.ok?(Float.to_int(big * 10.0)))\n"
+      "  IO.inspect(Result.ok?(Float.to_int(big * 10.0 - big * 10.0)))")))
+     "ok(1)\nok(0)\nfalse\n1114111\nfalse\nfalse\nfalse\n")
+    (for ([case '(("  x = String.at(\"ab\", 2)" RUNTIME-INDEX-OUT-OF-RANGE (2 23))
+                  ("  x = String.code(\"ab\")" RUNTIME-INVALID-CHARACTER (2 19))
+                  ("  x = String.code(\"\")" RUNTIME-INVALID-CHARACTER (2 19))
+                  ("  x = String.from_code(55296)" RUNTIME-INVALID-CHARACTER (2 24))
+                  ("  x = String.from_code(1114112)" RUNTIME-INVALID-CHARACTER (2 24))
+                  ("  x = Float.to_int!(Float.from_int(9223372036854775807))" RUNTIME-INTEGER-OVERFLOW #f))])
+      (define found (diagnostic-of (main-with (car case))))
+      (check-equal? (diagnostic-code found) (cadr case))
+      (when (caddr case) (check-equal? (position-of found) (caddr case)))))
+
   (test-case "user functions may use ? and ! suffixes"
     (check-equal? (output-of
                    (string-append
@@ -341,6 +364,8 @@
         ("List.set" "List.set([1, 2], 1, 3)" "[1, 3]\n")
         ("List.repeat" "List.repeat(false, 2)" "[false, false]\n")
         ("List.reverse" "List.reverse([1, 2])" "[2, 1]\n")
+        ("List.sort" "List.sort([\"b\", \"B\", \"a\"])" "[\"B\", \"a\", \"b\"]\n")
+        ("List.sort_by" "List.sort_by([2, 1], &identity)" "[1, 2]\n")
         ("List.map" "List.map([1, 2], &identity)" "[1, 2]\n")
         ("List.filter" "List.filter([1, 2], &positive)" "[1, 2]\n")
         ("List.reduce" "List.reduce([1, 2], 0, &add)" "3\n")
@@ -359,6 +384,14 @@
         ("String.ends_with?" "String.ends_with?(\"abc\", \"c\")" "true\n")
         ("String.replace" "String.replace(\"aXb\", \"X\", \"-\")" "\"a-b\"\n")
         ("String.slice" "String.slice(\"ñ😀x\", 1, 2)" "\"😀x\"\n")
+        ("String.index_of" "String.index_of(\"ñ😀.b\", \".\")" "ok(2)\n")
+        ("String.at" "String.at(\"ñ😀x\", 1)" "\"😀\"\n")
+        ("String.reverse" "String.reverse(\"ñ😀x\")" "\"x😀ñ\"\n")
+        ("String.code" "String.code(\"😀\")" "128512\n")
+        ("String.from_code" "String.from_code(241)" "\"ñ\"\n")
+        ("Float.from_int" "Float.from_int(0 - 3)" "-3.0\n")
+        ("Float.to_int" "Float.to_int(0.0 - 2.9)" "ok(-2)\n")
+        ("Float.to_int!" "Float.to_int!(7.5)" "7\n")
         ("String.from_int" "String.from_int(7)" "\"7\"\n")
         ("String.from_float" "String.from_float(1.5)" "\"1.5\"\n")
         ("String.from_bytes" "String.from_bytes([195, 177])" "ok(\"ñ\")\n")
@@ -447,6 +480,22 @@
         "  IO.inspect(List.reduce([1, 2], nil, &nothing))\n"
         "  IO.inspect(xs)"))))
      "1\n2\n3\n[\"1\", \"2\", \"3\"]\n1\n2\n3\n[2, 3]\n123\n[]\n[]\n7\n[ok(1)]\n[false, true]\n[false]\nnil\n[1, 2, 3]\n"))
+
+  (test-case "sorting is stable, keeps the input, and puts NaN last"
+    (check-equal?
+     (output-of
+      (string-append
+       "def tens(n: Int) -> Int\n  IO.inspect(n)\n  return n / 10\nend\n"
+       (main-with (string-append
+        "  xs = [21, 12, 25, 11]\n"
+        "  IO.inspect(List.sort_by(xs, &tens))\n"
+        "  IO.inspect(List.sort(xs))\n"
+        "  IO.inspect(xs)\n"
+        "  big = 1.0\n  while big < big * 10.0\n    big = big * 10.0\n  end\n"
+        "  inf = big * 10.0\n"
+        "  IO.inspect(List.sort([2.0, inf - inf, -1.5, inf]))\n"
+        "  ys: List[String] = List.sort([])\n  IO.inspect(ys)"))))
+     "21\n12\n25\n11\n[12, 11, 21, 25]\n[11, 12, 21, 25]\n[21, 12, 25, 11]\n[-1.5, 2.0, +inf.0, +nan.0]\n[]\n"))
 
   (test-case "collection callbacks restore caller scopes and return targets"
     (define callbacks

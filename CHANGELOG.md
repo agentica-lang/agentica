@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `std/queue.agc`; executable releases need no separate stdlib installation.
 - `pkg/` imports with project-local, `AGENTICA_PATH`, user-data, and system
   library roots, deterministic precedence and path-containment checks.
+- `List.sort` and `List.sort_by`: stable ascending sorts over `Int`, `Float`
+  and `String` values or keys.
+- `String.index_of`, `String.at`, `String.reverse`, `String.code`,
+  `String.from_code`, `Float.from_int`, `Float.to_int` and `Float.to_int!`.
 
 ## [0.1.0] - 2026-10-04
 
