@@ -92,9 +92,9 @@ $(VM_STAMP): FORCE
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
 
-build/vm/gc.o: $(GC_DIR)/extra/gc.c $(GC_SRC)
+build/vm/gc.o: $(GC_DIR)/extra/gc.c $(GC_SRC) Makefile
 	@mkdir -p build/vm
-	$(CC) -std=c11 -O2 $(VM_PIC) -I $(GC_DIR)/include -c $< -o $@
+	$(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -I $(GC_DIR)/include -c $< -o $@
 
 dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
 	@mkdir -p dist
