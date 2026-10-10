@@ -75,7 +75,7 @@
         [(string-prefix? (car arguments) "--")
          (usage-error (format "unknown option ~a" (car arguments)))]
         [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
-    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files #:allow-run allow-run?))
+    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files #:allow-run allow-run? #:seed seed))
     (show-report report))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
@@ -99,7 +99,7 @@
   (define check-only? (and (pair? raw-arguments) (equal? (car raw-arguments) "check")))
   (define arguments (if check-only? (cdr raw-arguments) raw-arguments))
   (unless (>= (length arguments) 1)
-    (eprintf "usage: agentica [--version] [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))

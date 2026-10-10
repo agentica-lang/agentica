@@ -204,7 +204,11 @@
                   ("  x = String.code(\"\")" RUNTIME-INVALID-CHARACTER (2 19))
                   ("  x = String.from_code(55296)" RUNTIME-INVALID-CHARACTER (2 24))
                   ("  x = String.from_code(1114112)" RUNTIME-INVALID-CHARACTER (2 24))
-                  ("  x = Float.to_int!(Float.from_int(9223372036854775807))" RUNTIME-INTEGER-OVERFLOW #f))])
+                  ("  x = Float.to_int!(Float.from_int(9223372036854775807))" RUNTIME-INTEGER-OVERFLOW #f)
+                  ("  big = 1.0\n  while big < big * 10.0\n    big = big * 10.0\n  end\n  x = Float.to_int!(big * 10.0)"
+                   RUNTIME-INVALID-NUMBER #f)
+                  ("  big = 1.0\n  while big < big * 10.0\n    big = big * 10.0\n  end\n  x = Float.to_int!(big * 10.0 - big * 10.0)"
+                   RUNTIME-INVALID-NUMBER #f))])
       (define found (diagnostic-of (main-with (car case))))
       (check-equal? (diagnostic-code found) (cadr case))
       (when (caddr case) (check-equal? (position-of found) (caddr case)))))
@@ -512,6 +516,7 @@
      (output-of
       (string-append
        "def tens(n: Int) -> Int\n  IO.inspect(n)\n  return n / 10\nend\n"
+       "def half(x: Float) -> Float\n  return x / 2.0\nend\n"
        (main-with (string-append
         "  xs = [21, 12, 25, 11]\n"
         "  IO.inspect(List.sort_by(xs, &tens))\n"
@@ -520,8 +525,9 @@
         "  big = 1.0\n  while big < big * 10.0\n    big = big * 10.0\n  end\n"
         "  inf = big * 10.0\n"
         "  IO.inspect(List.sort([2.0, inf - inf, -1.5, inf]))\n"
+        "  IO.inspect(List.sort_by([inf - inf, 1.0, inf - inf, 0.5], &half))\n"
         "  ys: List[String] = List.sort([])\n  IO.inspect(ys)"))))
-     "21\n12\n25\n11\n[12, 11, 21, 25]\n[11, 12, 21, 25]\n[21, 12, 25, 11]\n[-1.5, 2.0, +inf.0, +nan.0]\n[]\n"))
+     "21\n12\n25\n11\n[12, 11, 21, 25]\n[11, 12, 21, 25]\n[21, 12, 25, 11]\n[-1.5, 2.0, +inf.0, +nan.0]\n[0.5, 1.0, +nan.0, +nan.0]\n[]\n"))
 
   (test-case "collection callbacks restore caller scopes and return targets"
     (define callbacks

@@ -29,7 +29,7 @@
 (define max-seed (sub1 (expt 2 31)))
 
 (define (random-seed-from-os)
-  (modulo (integer-bytes->integer (crypto-random-bytes 4) #f) max-seed))
+  (modulo (integer-bytes->integer (crypto-random-bytes 4) #f) (add1 max-seed)))
 
 (define (random-in-range low high)
   (define size (add1 (- high low)))

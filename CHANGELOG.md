@@ -18,7 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `String.index_of`, `String.at`, `String.reverse`, `String.code`,
   `String.from_code`, `Float.from_int`, `Float.to_int` and `Float.to_int!`.
 - `Time.now_ms`, `Time.monotonic_ms`, `Random.int` and `Random.float`, with
-  `--seed N` for repeatable runs.
+  `--seed N` for repeatable runs, also passed through `agentica test`.
+
+### Changed
+
+- `Time` and `Random` are reserved builtin module names; declarations or
+  import aliases with those names no longer check.
 
 ## [0.1.0] - 2026-10-04
 
