@@ -61,7 +61,15 @@ racket src/main.rkt --dump-ir prog.agc
   for `build/vm/gcstress/agentica-vm`).
   `tests/bytecode-test.rkt` needs no VM binary.
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
-  `gc.c` gets only `-O2 -fPIE`.
+  `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
+  -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when the Makefile
+  changes).
+- Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
+  Windows (`OS=Windows_NT`, MSYS2 UCRT64 with `CC=gcc`) in one block that
+  sets `EXE`, the PIE/RELRO flags, `-lpthread` and `-municode`. Every binary
+  target ends in `$(EXE)`; the diff test runs `dist/agentica-vm.exe` on
+  Windows. CI runs `make vm vm-test` and the diff and bytecode tests on
+  `macos-15` and `windows-2025`, not the whole `make test`.
 
 ## Widen the subset (new form or opcode)
 
@@ -162,7 +170,7 @@ is checked.
   `_Thread_local`; never tag pointers. Frames hold register offsets, not
   pointers, because the register array moves when it grows.
 - No GC finalizers for OS resources. OOM and abort handlers only `write(2)`
-  and `_exit(70)`.
+  and `_Exit(70)`.
 - The submodule is pinned to a release tag. To bump it: check out the new
   tag inside `vm/third_party/bdwgc`, then `git add vm/third_party/bdwgc` (the
   index keeps the old commit otherwise), rebuild, and run the sanitizer and
@@ -208,5 +216,23 @@ is checked.
   see `docs/vm.md` §2.3 before touching `agc_write_form`.
 - `--max-steps` bounds instructions, not bytes: string ops cost in
   proportion to their size.
+- Portability: keep platform code in `vm/main.c` (`open_input`, `wmain`)
+  and the Makefile platform block. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
+  guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
+  `open`, `read`, `fstat` and `ssize_t` with `-std=c11`. Windows paths go
+  through `_wopen` after UTF-8 to UTF-16, never through `open`, which uses
+  the ANSI code page. `-municode` goes only on binaries that link
+  `vm/main.c`; the C tests have a plain `main`.
+- libgc without `NO_EXECUTE_PERMISSION` maps writable and executable pages,
+  and macOS on arm64 aborts with `Cannot allocate executable pages` as soon
+  as the heap grows (the loader test does). Without
+  `ALL_INTERIOR_POINTERS` an object referenced only by an interior pointer
+  (for example `s->data` kept in a register) can be collected.
+- `-D_POSIX_C_SOURCE` makes mingw-w64 use its own printf
+  (`__USE_MINGW_ANSI_STDIO=1`), not the UCRT's; both print `%.767e`
+  exactly, as does the macOS libc.
+- `.gitattributes` keeps LF on checkout (GitHub's Windows runners set
+  `core.autocrlf`); a new binary fixture needs a `binary` line there.
+- MSYS2 in CI has no `grep`; use `sed` or install the package.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`,
   not Unicode whitespace; the VM matches that.

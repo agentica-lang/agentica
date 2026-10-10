@@ -29,8 +29,8 @@ details and reasons.
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
-**Status.** The vertical slice, the Float PR and the Strings PR (12.2 items
-1 to 3) are in. The VM covers Int, Float, Bool, Nil and String values,
+**Status.** The vertical slice, the Float PR, the Strings PR and the macOS
+and Windows CI (12.2 items 1 to 4) are in. The VM covers Int, Float, Bool, Nil and String values,
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
 `break` and `next`, user functions, calls, `return`, interpolation,
@@ -126,9 +126,12 @@ differential tests (section 12) check them.
   shortest string may be the farther neighbor (`2^-1017` prints
   `7.120236347223045e-307`, not the nearer 17-digit form). `agc_float_text` in
   `vm/value.c` therefore prints the exact decimal expansion once
-  (`snprintf("%.767e")`; exact on glibc, still to be confirmed on macOS and
-  the UCRT by the §12.2 item 4 CI, which `vm/tests/float_text_test.c` checks
-  against the full expansion of 2^-1074), and for each length tries the
+  (`snprintf("%.767e")`; `vm/tests/float_text_test.c` checks it against the
+  full expansion of 2^-1074 on every CI job: exact on glibc, on the macOS
+  libc (`macos-15`, arm64) and on Windows, where the build uses mingw-w64's
+  own printf because `_POSIX_C_SOURCE` turns on `__USE_MINGW_ANSI_STDIO`;
+  a one-off CI run of the same test with the UCRT's printf and `strtod`
+  passed too), and for each length tries the
   nearest candidate (ties up) and then the other neighbor, keeping the first
   that round-trips through `strtod`. Lengths start at 1 for subnormals and at
   15 for normal values: there a 15-digit step is at least 4.5 ulp, so a
@@ -243,7 +246,7 @@ fails when the committed file differs from what the generator prints.
   interleave at buffer boundaries is outside the contract.
 - Before each blocking stdin read, `if (isatty(1)) fflush(stdout)`, so
   prompts show up as they do with Racket.
-- SIGPIPE is ignored at startup. Every `fwrite`/`fflush` result is checked; a
+- SIGPIPE is ignored at startup (Windows has none). Every `fwrite`/`fflush` result is checked; a
   failed write ends the run with `RUNTIME-INTERNAL`, exit 1. Documented
   difference: when stdout cannot be written (a full disk, `/dev/full`), the
   evaluator prints a Racket error and still exits 0.
@@ -643,7 +646,7 @@ kill-on-close job object, which covers crashes.
 At startup the VM sets `GC_set_oom_fn` and `GC_set_abort_func`. Their
 handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
 line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
-GC error`) and call `_exit(70)` (no atexit handlers, no stdio flush, so
+GC error`) and call `_Exit(70)` (no atexit handlers, no stdio flush, so
 buffered stdout is lost). Racket has no matching diagnostic, so this is a
 documented difference.
 
@@ -781,7 +784,9 @@ and cost one predictable branch each.
   checked with the same messages and exit code 2 as `src/main.rkt`. Callers
   always pass `--` before the file. A test checks that `--allow-run` after the
   file is a program argument. On Windows, arguments come from `wmain`
-  (`-municode`) and are converted to UTF-8.
+  (`-municode`) and are converted to UTF-8; the file path goes back to
+  UTF-16 for `_wopen`, so non-ASCII paths load (a differential test runs a
+  copy named `cálculo-λ-日本.agcb`).
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv and OpenSSL from 7h).
 - In the slice the VM accepts `--version`, `--max-steps N`, `--ai`, `--json`
@@ -928,12 +933,19 @@ written `size > limit - total`. A hermetic test sends over-long values.
 ## 11. Build, CI and supply chain
 
 - `make vm`: `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`, hardening flags
-  `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, PIE and full RELRO
-  (MinGW: `--dynamicbase --nxcompat --high-entropy-va`). The warning flags
+  `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, PIE and full RELRO on
+  Linux; macOS links PIE by default and has no RELRO; MinGW uses
+  `--dynamicbase --nxcompat --high-entropy-va` instead, links `vm/main.c`
+  with `-municode`, and every binary gets the `.exe` suffix. The Makefile
+  picks the platform from `OS=Windows_NT` or `uname -s`. The warning flags
   apply to our own `vm/*.c` only. libgc is compiled once from the submodule
-  (`$(CC) -std=c11 -O2 -fPIE -I vm/third_party/bdwgc/include -c
-  vm/third_party/bdwgc/extra/gc.c`, about 3 s) into `build/vm/gc.o` and
-  linked with `-lpthread`; libuv follows the same pattern in 7h. OpenSSL (7h)
+  (`$(CC) -std=c11 -O2 -fPIE -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION
+  -I vm/third_party/bdwgc/include -c vm/third_party/bdwgc/extra/gc.c`, about
+  3 s) into `build/vm/gc.o` and linked with `-lpthread` (not on Windows).
+  The two defines are what bdwgc's configure and CMake builds set: interior
+  pointers keep an object alive even when the compiler keeps only a pointer
+  into it, and macOS on arm64 refuses the writable and executable heap pages
+  libgc maps otherwise. libuv follows the same pattern in 7h. OpenSSL (7h)
   comes through `pkg-config --atleast-version` and its static archive path.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
   build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
@@ -985,11 +997,15 @@ CI matrix:
 |---|---|---|---|
 | Linux | `ubuntu-24.04`, submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests | first VM PR |
 | Linux sanitizers | same, clang | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run | first VM PR (GC stress in PR 3) |
-| macOS | pinned macOS, submodules | `make vm vm-test`, differential tests | follow-up PR |
-| Windows | pinned Windows, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential tests | follow-up PR |
+| macOS | `macos-15` (Apple clang, arm64), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
+| Windows | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
 
 Racket comes from `Bogdanp/setup-racket` everywhere, since the tests compile
-with the front end. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
+with the front end. The macOS and Windows jobs do not run the whole `make
+test`: the process and network tests are not portable yet. `.gitattributes`
+checks every text file out with LF (`.agcb` files and the
+`string-inspect.agc` fixture are binary), so Windows sees the same sources,
+spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
 the platform's OpenSSL package) to each job.
 
 ## 12. Testing and first PRs
@@ -1053,7 +1069,10 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
 3. **Strings and printing** (done). Strings, interpolation, debug forms, the
    write-escape generator, the three diagnostic formats, exit codes, the GC
    stress run.
-4. **macOS and Windows CI.**
+4. **macOS and Windows CI** (done). `make vm vm-test` and the differential
+   and bytecode tests on `macos-15` and `windows-2025` (MSYS2 UCRT64 gcc),
+   `wmain` with UTF-8 arguments, binary stdio, LF checkouts, and libgc built
+   with interior pointers and without executable pages.
 5. **Data.** Lists, `for`, HAMT maps, structs, enums, `case`, Result, `try`,
    indexing errors, closures, `&name`, `.call`, resumable `List` builtins.
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
