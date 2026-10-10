@@ -33,7 +33,9 @@
                     name multiply-assign integer NL name divide-assign integer NL
                     name modulo-assign integer NL EOF))
     (check-equal? (kinds (lex-text "a!=b"))
-                  '(name not-equal name NL EOF)))
+                  '(name not-equal name NL EOF))
+    (check-equal? (kinds (lex-text "a&&!b||c\nx+=1"))
+                  '(name and not name or name NL name plus-assign integer NL EOF)))
 
   (test-case "CRLF and comment newlines produce one NL each"
     (check-equal? (kinds (lex-text "x # comment\r\ny\r\n"))
