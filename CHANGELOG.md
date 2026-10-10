@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The bytecode VM builds and passes its tests on macOS and on Windows
   (MSYS2 UCRT64 gcc, `dist/agentica-vm.exe`); CI runs both. On Windows the
-  VM reads UTF-8 arguments from `wmain`, so non-ASCII file paths load, and
-  writes all three streams in binary mode. Git checks out text files with LF
+  VM takes its arguments as UTF-16 (`wmain`) and opens the input file with
+  `_wopen`, so non-ASCII file paths load, and writes all three streams in binary mode. Git checks out text files with LF
   on every platform (`.gitattributes`).
 - The bytecode VM runs String code: String values in locals, parameters and
   returns, `+`, `==` and `!=`, interpolation, `x.to_s` and `x.inspect` of

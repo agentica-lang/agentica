@@ -784,8 +784,7 @@ and cost one predictable branch each.
   checked with the same messages and exit code 2 as `src/main.rkt`. Callers
   always pass `--` before the file. A test checks that `--allow-run` after the
   file is a program argument. On Windows, arguments come from `wmain`
-  (`-municode`) and are converted to UTF-8; the file path goes back to
-  the file is opened with `_wopen` on the original UTF-16 argument, so
+  (`-municode`) and are converted to UTF-8; the input file is opened with `_wopen` on the original UTF-16 argument, so
   non-ASCII paths load and a lone surrogate never maps to another file. The
   size comes from `_fstat64`, so a file over 2 GiB is rejected, not read
   as a prefix. Paths over 260 characters fail with `_wopen` unless they use

@@ -173,9 +173,11 @@ int wmain(int argc, wchar_t **wide_argv) {
   char **argv = agc_alloc(agc_size_mul((size_t)argc + 1, sizeof *argv));
   for (int i = 0; i < argc; i++) {
     int n = WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, NULL, 0, NULL, NULL);
-    if (n <= 0) return usage_error();
-    argv[i] = agc_alloc_atomic((size_t)n);
-    if (WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, argv[i], n, NULL, NULL) != n) return usage_error();
+    if (n > 0) argv[i] = agc_alloc_atomic((size_t)n);
+    if (n <= 0 || WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, argv[i], n, NULL, NULL) != n) {
+      fputs("agentica-vm: cannot convert arguments\n", stderr);
+      return 2;
+    }
   }
   return run(argc, argv);
 }
