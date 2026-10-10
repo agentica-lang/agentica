@@ -102,6 +102,25 @@ The `binary` run after the round-5 changes (`tests/eval/results/20261010-113647-
 - The parse errors left are hinted forms that agents try once and then fix: `puts "hello"` (6×), `let`/`var` (9×), `fn(...)` lambdas (4×), `when` (4×).
 - Still repeated: `Result.Ok(x)` / `Result.Err(m)` as values (3×), `Command.Show` without parentheses (4×), `break` (3×), `gets()`, `Float.to_string`, `println`. A new confusion goes the other way: `ok(v) ->` used as a case pattern, where the pattern is `Result.Ok(v)`.
 
+## Round 8, GLM 5.3 flash (2026-10-10)
+
+A second model on the head of PR #33 (`tests/eval/results/20261010-125259-pi`): 24 runs, 476 invocations, 283 with a diagnostic.
+
+| code | hits | runs | repeated next call |
+|---|---|---|---|
+| `CHECK-TYPE-MISMATCH` | 72 | 16 | 19 |
+| `CHECK-UNKNOWN-NAME` | 49 | 16 | 14 |
+| `PARSE-UNEXPECTED-TOKEN` | 49 | 12 | 21 |
+| `CHECK-UNKNOWN-METHOD` | 42 | 11 | 6 |
+| `CHECK-MISSING-RETURN` | 11 | 6 | 3 |
+| others | 60 | — | 4 |
+
+- **`puts` with a non-String value:** 18 of the type mismatches are "expected String, found Int", mostly `puts(n)` and `print(x)`. In Ruby, `puts` takes any value. DeepSeek did the same in rounds 5 and 6.
+- **`to_s` on `Bool`:** 10 hits (`r.ok?.to_s`), plus `to_s` on `Json` and `Result`. Ruby has `to_s` on every value.
+- **`break`:** 8 hits, handled by PR #34.
+- **Hinted forms GLM also tried:** `when` (5), `loop do` (3), `Ok(name)` as a pattern (Rust, 2), `Map.new`, `String.of_float`, `Json.parse`, `Result.ok`.
+- **No hits** for the forms #31 and #33 accepted, so none of them regressed.
+
 ## Next steps (2026-10-10 snapshot)
 
 Tracked in the roadmap under Phase 5d3 ("Diagnostics from evaluation data"):

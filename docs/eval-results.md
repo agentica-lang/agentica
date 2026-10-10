@@ -25,6 +25,8 @@ Tokens are input plus output per run. Failing runs are interpreter runs in the a
 | 6 | 2026-10-10 | Same run, tasks t6–t8 | 9 | 9/9 | 78,694 | 253 | 7.89 | $0.033 |
 | 7a | 2026-10-10 | `skill`, one `language.md` read up front (old layout), all 8 tasks | 24 | 24/24 | 28,857 | 31 | 0.13 | $0.008 |
 | 7b | 2026-10-10 | `skill`, core in `SKILL.md` and references read on demand (new layout), all 8 tasks | 24 | 24/24 | 15,800 | 26 | 0.21 | $0.005 |
+| 8 | 2026-10-10 | `binary`, **GLM 5.3 flash**, PR #33 head, tasks t1–t5 | 15 | 15/15 | 11,821 | 33 | 4.80 | $0.004 |
+| 8 | 2026-10-10 | Same run, tasks t6–t8 | 9 | 8/9 | 79,286 | 189 | 22.8 | $0.040 |
 
 The round-0 count joins two partial runs. A `binary` round run before the sandbox was fixed (15 runs, 15/15) is discarded: the agents found leftover work directories in `/tmp` that contained the skill (`tests/eval/results/20261001-230301-pi-INVALID`). A smoke run of 2 runs (`binary` and `skill`, `t1-stats`) is not counted.
 
@@ -136,6 +138,25 @@ An A/B of the `skill` arm on the same language and tasks, run in parallel. 7a us
 - Tokens per run fell 45% (28.9k → 15.8k) and cost 39%, with every task lower. Accuracy stayed at 24/24. Failing runs moved from 3 to 5 in total, within noise.
 - The agents read only what the task needed: `builtins.md` in 21 of 24 runs, `examples.md` in 16, `json.md` only in the JSON tasks (t6, t7). The t3 runs read no reference at all. No run opened the network, process, task, file, BDD or diagnostics references.
 - Both arms beat the round-1 `skill` numbers on t1–t5 (13.7k tokens then, 23.0k in 7a, 13.0k in 7b), but the language and the skill have grown since round 1, so only 7a vs 7b is a fair comparison.
+
+## Round 8: a second model (GLM 5.3 flash)
+
+The `binary` arm with `fireworks/accounts/fireworks/models/glm-5p3-flash` on the head of PR #33, to check that the forms accepted from DeepSeek's logs are not habits of one model. Run directory `tests/eval/results/20261010-125259-pi`.
+
+| Task | Tokens | Seconds | Failing runs | Pass |
+|---|---|---|---|---|
+| t1-stats | 13,167 | 64 | 7.3 | 3/3 |
+| t2-fix-types | 13,338 | 19 | 2.7 | 3/3 |
+| t3-struct-change | 4,639 | 10 | 0.0 | 3/3 |
+| t4-word-count | 22,532 | 59 | 13.7 | 3/3 |
+| t5-scope-return | 5,429 | 13 | 0.3 | 3/3 |
+| t6-json-catalog | 91,152 | 215 | 29.3 | 2/3 |
+| t7-json-stream | 69,464 | 187 | 23.0 | 3/3 |
+| t8-enum-ledger | 77,244 | 165 | 16.0 | 3/3 |
+
+- GLM used fewer tokens than DeepSeek on t1–t5 (11.8k vs 31.7k in round 6) but ran into more errors (4.8 vs 3.1 failing runs per run, 22.8 vs 7.9 on t6–t8). One t6 run failed one hidden case (a logic error).
+- The forms accepted from DeepSeek's logs also appear in GLM's code: `Result.Ok(...)` as a value, top-level `print`, `case x` without `do`, `for ... do`, `Enum.Variant` without parentheses, and `break` (6 runs). `ok(v)` as a pattern did not appear; it is accepted for consistency, not because of GLM.
+- What GLM adds, see [eval-diagnostics.md](eval-diagnostics.md#round-8-glm-53-flash-2026-10-10): `puts` with a non-String value (16 of 24 runs) and `to_s` on `Bool` (10 hits). Both are real Ruby and DeepSeek also hit the first one.
 
 ## What the results do not show
 
