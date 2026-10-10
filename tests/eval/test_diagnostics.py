@@ -26,7 +26,8 @@ def bash_call(call: str, command: str, output: str) -> list[dict]:
 PLAIN = 'a.agc:2:7 error[CHECK-UNKNOWN-NAME]\nunknown function "len"\n\n2 |   x = len(s)\n'
 AI = "check failed: 1 error\n\n[CHECK-UNKNOWN-NAME]\n  message: unknown function \"str\"\n  source: y = str(n)\n"
 JSON = '{"code":"PARSE-UNEXPECTED-TOKEN","message":"expected an expression"}'
-DOCS = "grep output mentioning CHECK-TYPE-MISMATCH in the grammar"
+DOCS = "file.agc:2:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n"
+ESCAPED = '{"code":"CHECK-UNKNOWN-NAME","message":"unknown function \\"len\\""}'
 
 
 class DiagnosticsTests(unittest.TestCase):
@@ -37,7 +38,9 @@ class DiagnosticsTests(unittest.TestCase):
             + bash_call("3", "agentica --ai a.agc", AI)
             + bash_call("4", "agentica --json a.agc", JSON)
             + bash_call("5", "agentica a.agc", "ok\n")
-            + bash_call("6", "rg CHECK- docs/ && agentica a.agc", DOCS)
+            + bash_call("6", "cat skills/agentica-programming/references/language.md", DOCS)
+            + bash_call("7", "strings bin/agentica | grep CHECK", DOCS)
+            + bash_call("8", "cd /workspace && ./bin/agentica --json a.agc", ESCAPED)
         )
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "t1-stats-binary-1"
@@ -49,10 +52,10 @@ class DiagnosticsTests(unittest.TestCase):
 
         self.assertEqual((runs, calls), (1, 5))
         unknown = stats["CHECK-UNKNOWN-NAME"]
-        self.assertEqual(unknown.hits, 2)
+        self.assertEqual(unknown.hits, 3)
         self.assertEqual(unknown.repeats, 1)
         self.assertEqual(
-            set(unknown.messages), {'unknown function "len"', 'unknown function "str"'}
+            unknown.messages, {'unknown function "len"': 2, 'unknown function "str"': 1}
         )
         self.assertEqual(set(unknown.sources), {"x = len(s)", "y = str(n)"})
         self.assertEqual(stats["PARSE-UNEXPECTED-TOKEN"].messages["expected an expression"], 1)

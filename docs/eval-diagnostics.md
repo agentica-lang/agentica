@@ -1,6 +1,6 @@
 # Diagnostics seen in agent evaluations
 
-`tests/eval/diagnostics.py` reads the agent logs in `tests/eval/results/` and counts which diagnostics the agents saw when they ran `agentica`. For each code it reports how many times it appeared, in how many runs, how often the very next run showed the same code again (the fix did not work), the most common messages and the source lines that caused it.
+`tests/eval/diagnostics.py` reads the agent logs in `tests/eval/results/` and counts which diagnostics the agents saw when they ran `agentica` (or `racket src/main.rkt`). Commands that only mention Agentica, such as `cat`, `strings` or `find`, are not counted. For each code it reports how many times it appeared, in how many runs, how often the next Agentica call in the same run showed the same code again (the fix did not work; only the code is compared), the most common messages and the source lines that caused it.
 
 ```sh
 python3 tests/eval/diagnostics.py                 # every valid round, skill/grammar/binary arms
@@ -12,12 +12,12 @@ The logs are not versioned, so the numbers below are a snapshot.
 
 ## Snapshot (2026-10-10)
 
-108 runs, 944 Agentica invocations, 129 with a diagnostic. Almost all of them come from the `binary` arm, where the agent has no documentation and learns the language from the diagnostics. The `skill` and `grammar` arms only hit the starter bugs of their tasks.
+108 runs, 497 Agentica invocations, 129 with a diagnostic. Almost all of them come from the `binary` arm, where the agent has no documentation and learns the language from the diagnostics. The `skill` and `grammar` arms only hit the starter bugs of their tasks.
 
-| code | hits | runs | same code on the next run |
+| code | hits | runs | repeated next call |
 |---|---|---|---|
-| `CHECK-TYPE-MISMATCH` | 36 | 24 | 5 |
-| `CHECK-UNKNOWN-NAME` | 32 | 15 | 5 |
+| `CHECK-TYPE-MISMATCH` | 36 | 24 | 7 |
+| `CHECK-UNKNOWN-NAME` | 32 | 15 | 7 |
 | `PARSE-UNEXPECTED-TOKEN` | 20 | 12 | 2 |
 | `CHECK-MISSING-RETURN` | 17 | 12 | 1 |
 | `CHECK-NOT-A-STRUCT` | 6 | 5 | 0 |

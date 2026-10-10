@@ -21,6 +21,11 @@ MESSAGES = (
     re.compile(r"^\s*message: (?P<message>[^\n]+)", re.MULTILINE),
     re.compile(r'"message"\s*:\s*"(?P<message>(?:[^"\\]|\\.)*)"'),
 )
+RUNS_AGENTICA = re.compile(
+    r"(?:^|[;&|(]|\b(?:then|do|time|timeout\s+\S+|env)\b)\s*(?:[A-Z_][A-Z0-9_]*=\S*\s+)*"
+    r"(?:\S*/)?agentica(?=\s|$)|racket\s+\S*main\.rkt",
+    re.MULTILINE,
+)
 SOURCES = (
     re.compile(r"^\s*\d+\s*\|\s?(?P<line>.*\S.*)$", re.MULTILINE),
     re.compile(r"^\s*source: (?P<line>[^\n]+)", re.MULTILINE),
@@ -50,8 +55,8 @@ class CodeStats:
 
 
 def is_agentica_call(command: str) -> bool:
-    """Tell whether a shell command ran the Agentica binary or a program."""
-    return "agentica" in command or ".agc" in command or "main.rkt" in command
+    """Tell whether a shell command runs the Agentica binary or main.rkt."""
+    return RUNS_AGENTICA.search(command) is not None
 
 
 def first_diagnostic(output: str) -> tuple[str, str, str] | None:
@@ -60,9 +65,21 @@ def first_diagnostic(output: str) -> tuple[str, str, str] | None:
     if not found:
         return None
     rest = output[found.start("code") :]
-    message = next((m["message"] for m in (p.search(rest) for p in MESSAGES) if m), "")
+    message = next((m for m in (p.search(rest) for p in MESSAGES) if m), None)
     source = next((m["line"] for m in (p.search(rest) for p in SOURCES) if m), "")
-    return found["code"], message.strip(), source.strip()
+    return found["code"], message_text(message), source.strip()
+
+
+def message_text(found: re.Match[str] | None) -> str:
+    """Return a matched message, decoding JSON escapes when it came from --json output."""
+    if found is None:
+        return ""
+    if found.re is MESSAGES[2]:
+        try:
+            return json.loads(f'"{found["message"]}"').strip()
+        except json.JSONDecodeError:
+            pass
+    return found["message"].strip()
 
 
 def agentica_outputs(log: Path) -> Iterator[str]:
