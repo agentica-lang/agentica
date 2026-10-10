@@ -15,7 +15,10 @@
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
-(define vm-file (if vm-binary (path->complete-path vm-binary root) (build-path root "dist" "agentica-vm")))
+(define vm-file
+  (if vm-binary
+      (path->complete-path vm-binary root)
+      (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
 (define full-sweep-limit 2000)
 
 (define (vm-built?)
@@ -139,6 +142,9 @@
           (check-equal? (first limited) 1)
           (check-equal? (hash-ref (string->jsexpr (third limited)) 'code) "RUNTIME-STEP-LIMIT")
           (check-equal? (third (run-process vm-file "--json" "--" (path->string bytecode) "--ai")) "")
+          (define unicode-name (build-path work "cálculo-λ-日本.agcb"))
+          (copy-file bytecode unicode-name)
+          (check-equal? (run-vm unicode-name #f) (run-vm bytecode #f))
           (define bad (build-path work "bad.agcb"))
           (call-with-output-file bad (lambda (out) (write-bytes #"AGCB" out)))
           (define rejected (run-process vm-file "--" (path->string bad)))

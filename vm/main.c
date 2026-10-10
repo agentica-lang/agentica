@@ -6,7 +6,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+
+static int open_input(const char *path) {
+  int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
+  if (n <= 0) return -1;
+  wchar_t *wide = agc_alloc_atomic(agc_size_mul((size_t)n, sizeof(wchar_t)));
+  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, n) != n) return -1;
+  return _wopen(wide, _O_RDONLY | _O_BINARY | _O_NOINHERIT);
+}
+#else
 #include <unistd.h>
+
+static int open_input(const char *path) { return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK); }
+#endif
 
 static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
 
@@ -39,7 +55,7 @@ static bool parse_steps(const char *text, int64_t *steps) {
 }
 
 static uint8_t *read_file(const char *path, size_t *len) {
-  int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+  int fd = open_input(path);
   if (fd < 0) return NULL;
   struct stat info;
   if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
@@ -62,8 +78,10 @@ static uint8_t *read_file(const char *path, size_t *len) {
   return data;
 }
 
-int main(int argc, char **argv) {
+static int run(int argc, char **argv) {
+#ifdef SIGPIPE
   signal(SIGPIPE, SIG_IGN);
+#endif
   agc_init();
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
@@ -136,3 +154,22 @@ int main(int argc, char **argv) {
   }
   return 0;
 }
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t **wide_argv) {
+  agc_init();
+  _setmode(_fileno(stdin), _O_BINARY);
+  _setmode(_fileno(stdout), _O_BINARY);
+  _setmode(_fileno(stderr), _O_BINARY);
+  char **argv = agc_alloc(agc_size_mul((size_t)argc + 1, sizeof *argv));
+  for (int i = 0; i < argc; i++) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, NULL, 0, NULL, NULL);
+    if (n <= 0) return usage_error();
+    argv[i] = agc_alloc_atomic((size_t)n);
+    if (WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, argv[i], n, NULL, NULL) != n) return usage_error();
+  }
+  return run(argc, argv);
+}
+#else
+int main(int argc, char **argv) { return run(argc, argv); }
+#endif

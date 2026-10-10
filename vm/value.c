@@ -17,7 +17,7 @@ static const char oom_line[] = "agentica-vm: out of memory\n";
 void agc_out_of_memory(void) {
   ssize_t ignored = write(2, oom_line, sizeof oom_line - 1);
   (void)ignored;
-  _exit(70);
+  _Exit(70);
 }
 
 #ifndef AGC_NO_GC
@@ -33,7 +33,7 @@ static void on_gc_abort(const char *message) {
   (void)message;
   ssize_t ignored = write(2, gc_error_line, sizeof gc_error_line - 1);
   (void)ignored;
-  _exit(70);
+  _Exit(70);
 }
 #endif
 
