@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A weekly CI workflow fuzzes the VM loader and interpreter with 5 million
+  mutants and a random `FUZZ_SEED`, and uploads the crashing input on failure.
 - The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String
   and nested lists in locals, parameters and returns, list literals (long
   ones are built in chunks of 255), `for x in xs` with `break` and `next`,

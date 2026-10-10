@@ -7,7 +7,8 @@ on:
     inputs:
       runs:
         description: Number of mutants
-        default: '5000000'
+        type: number
+        default: 5000000
 
 permissions:
   contents: read
@@ -18,6 +19,7 @@ jobs:
     timeout-minutes: 120
     env:
       SANITIZE: '1'
+      RUNS: ${{ inputs.runs || 5000000 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,4 +29,11 @@ jobs:
           variant: CS
           version: '9.3'
       - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"
-      - run: make vm-fuzz FUZZ_RUNS=${{ inputs.runs || '5000000' }}
+      - run: echo "commit $GITHUB_SHA, FUZZ_SEED=$FUZZ_SEED, FUZZ_RUNS=$RUNS"
+      - run: make vm-fuzz FUZZ_RUNS="$RUNS"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash
+          path: fuzz-crash.agcb
+          if-no-files-found: ignore

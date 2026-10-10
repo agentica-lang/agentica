@@ -1024,10 +1024,13 @@ written `size > limit - total`. A hermetic test sends over-long values.
   compiled program in `tests/fixtures/vm/`; examples join the corpus as they
   enter the VM subset. The driver's random sequence is fixed, so every PR's
   short run (30,000 mutants in the sanitizer job, about 12 s) is
-  reproducible; `FUZZ_SEED=N` picks another sequence and is printed. The
-  weekly workflow (`.github/workflows/fuzz.yml`, also run by hand) builds
-  the sanitizer VM and runs 5 million mutants with a random `FUZZ_SEED`; a
-  crash is reproduced with the same commit, seed and `FUZZ_RUNS`. A clang
+  reproducible; `FUZZ_SEED=N` picks another sequence and is printed on
+  stderr. In a sanitizer build a crash prints the mutant's index and saves
+  it to `fuzz-crash.agcb`. The weekly workflow (`.github/workflows/fuzz.yml`,
+  also run by hand) builds the sanitizer VM, runs 5 million mutants with a
+  random `FUZZ_SEED`, prints the commit and seed first, and uploads
+  `fuzz-crash.agcb` as an artifact on failure; `agentica-vm --` on that
+  file, or the same commit, seed and at least as many runs, reproduces it. A clang
   job also builds it with `-fsanitize=fuzzer` (later PR).
 - `make test` includes the VM tests. They first run `make -s vm`, so a stale
   `dist/agentica-vm` is rebuilt from its sources. They skip visibly when the

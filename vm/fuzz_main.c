@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -65,6 +66,40 @@ static size_t mutate_once(uint8_t *data, size_t len) {
   }
 }
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define AGC_FUZZ_DEATH 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#define AGC_FUZZ_DEATH 1
+#endif
+
+static const uint8_t *current;
+static size_t current_len;
+static long current_index = -1;
+
+#ifdef AGC_FUZZ_DEATH
+void __sanitizer_set_death_callback(void (*callback)(void));
+
+static void save_crash(void) {
+  if (!current) return;
+  fprintf(stderr, "fuzz: crashed at mutant %ld, saved to fuzz-crash.agcb\n", current_index);
+  FILE *f = fopen("fuzz-crash.agcb", "wb");
+  if (f) {
+    fwrite(current, 1, current_len, f);
+    fclose(f);
+  }
+}
+#endif
+
+static bool parse_count(const char *text, unsigned long long *out) {
+  char *end;
+  if (!*text || *text == '-') return false;
+  *out = strtoull(text, &end, 10);
+  return *end == '\0';
+}
+
 static size_t mutate(uint8_t *out, const uint8_t *in, size_t len) {
   memcpy(out, in, len);
   for (int k = 0, rounds = 1 + (int)(next_random() % 4); k < rounds; k++) len = mutate_once(out, len);
@@ -76,14 +111,26 @@ int main(int argc, char **argv) {
     fputs("usage: agentica-vm-fuzz ITERATIONS file.agcb...\n", stderr);
     return 2;
   }
-  long iterations = strtol(argv[1], NULL, 10);
+  unsigned long long runs;
+  if (!parse_count(argv[1], &runs) || runs == 0 || runs > LONG_MAX) {
+    fprintf(stderr, "agentica-vm-fuzz: ITERATIONS must be a positive integer, got %s\n", argv[1]);
+    return 2;
+  }
+  long iterations = (long)runs;
   const char *seed = getenv("FUZZ_SEED");
   if (seed && *seed) {
-    uint64_t value = strtoull(seed, NULL, 10);
-    state ^= value * 0xBF58476D1CE4E5B9u;
+    unsigned long long value;
+    if (!parse_count(seed, &value)) {
+      fprintf(stderr, "agentica-vm-fuzz: FUZZ_SEED must be a non-negative integer, got %s\n", seed);
+      return 2;
+    }
+    state ^= (value + 1) * 0xBF58476D1CE4E5B9u;
     if (!state) state = 0x9E3779B97F4A7C15u;
-    printf("fuzz: seed %llu\n", (unsigned long long)value);
+    fprintf(stderr, "fuzz: seed %llu\n", value);
   }
+#ifdef AGC_FUZZ_DEATH
+  __sanitizer_set_death_callback(save_crash);
+#endif
   int files = argc - 2;
   uint8_t **corpus = calloc((size_t)files, sizeof *corpus);
   size_t *sizes = calloc((size_t)files, sizeof *sizes);
@@ -105,6 +152,9 @@ int main(int argc, char **argv) {
   for (long n = 0; n < iterations; n++) {
     int pick = (int)(next_random() % (uint64_t)files);
     size_t len = mutate(buffer, corpus[pick], sizes[pick]);
+    current = buffer;
+    current_len = len;
+    current_index = n;
     if (agc_fuzz_one(buffer, len) == 1) accepted++;
   }
   printf("fuzz: %ld mutants, %ld accepted and run\n", iterations, accepted);
