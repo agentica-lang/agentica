@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tests/eval/diagnostics.py` summarizes the diagnostics agents saw in
+  evaluation runs.
 - Embedded Agentica standard library with an immutable String FIFO at
   `std/queue.agc`; executable releases need no separate stdlib installation.
 - `pkg/` imports with project-local, `AGENTICA_PATH`, user-data, and system
@@ -22,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Int/Float type-mismatch help now suggests `Float.from_int` and
+  `Float.to_int!`.
 - `Time` and `Random` are reserved builtin module names; declarations or
   import aliases with those names no longer check.
 

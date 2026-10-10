@@ -617,6 +617,15 @@ On success it prints `check ok`.
 - [ ] `symbols`, `show`, `refs` (P1).
 - [ ] One test per command over `examples/`.
 
+Diagnostics from evaluation data (`docs/eval-diagnostics.md`, `tests/eval/diagnostics.py`):
+
+- [x] Count the diagnostics agents saw in past runs, with messages, source lines and repeats.
+- [x] Fix the stale Int/Float help: it now names `Float.from_int` and `Float.to_int!`.
+- [ ] Map common Python, Ruby and JavaScript habits (`len`, `str`, `print`, `range`, `input`, `Int.to_float`, `!`, `&&`, `||`, `+=`, `None`) to the Agentica form in `help`.
+- [ ] Suggest the module function for method-call style on builtin types (`s.length`, `x.to_i()`, `xs.append(v)`).
+- [ ] Fix the misleading `elif` and `None` messages.
+- [ ] Re-run the `binary` arm and the script to measure the change.
+
 ### Phase 6a: First agent evaluation
 
 Run a small evaluation now, with the language as it is, and again after 5e and 5f (6b). The agent should implement Agentica, and also be the subject of the experiment.
