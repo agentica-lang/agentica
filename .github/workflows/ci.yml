@@ -57,5 +57,6 @@ jobs:
           version: '9.3'
       - run: clang --version
       - run: make vm vm-test
+      - run: make build
       - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
       - run: make vm-fuzz

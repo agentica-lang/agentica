@@ -7,6 +7,13 @@ static size_t char_width(uint8_t c) {
   return 4;
 }
 
+static void put_text(FILE *err, const char *text, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    uint8_t c = (uint8_t)text[i];
+    fputc((c < 0x20 && c != '\t') || c == 0x7F ? '?' : c, err);
+  }
+}
+
 void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *outcome) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_source *source = &p->sources[span->source];
@@ -26,10 +33,10 @@ void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *ou
   if (width < 1) width = 1;
   int gutter = snprintf(NULL, 0, "%u", (unsigned)line);
 
-  fwrite(source->name->data, 1, source->name->bytes, err);
+  put_text(err, source->name->data, source->name->bytes);
   fprintf(err, ":%u:%u error[%s]\n%s\n\n%u | ", (unsigned)line, (unsigned)column, outcome->code,
           outcome->message, (unsigned)line);
-  fwrite(text + start, 1, end - start, err);
+  put_text(err, text + start, end - start);
   fprintf(err, "\n%*s | ", gutter, "");
   size_t at = start;
   for (size_t i = 0; i < column - 1; i++) {

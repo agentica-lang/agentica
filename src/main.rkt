@@ -104,7 +104,7 @@
   (define compile? (and (pair? raw-arguments) (equal? (car raw-arguments) "compile")))
   (define arguments (if (or check-only? compile?) (cdr raw-arguments) raw-arguments))
   (unless (if compile?
-              (and (= (length arguments) 3) (equal? (cadr arguments) "-o"))
+              (and (= (length arguments) 3) (equal? (cadr arguments) "-o") (not dump?) (not dump-ir?))
               (>= (length arguments) 1))
     (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
@@ -133,7 +133,7 @@
   (when (diagnostic? tree) (fail! tree))
   (define linked (link-program tree source-file))
   (when (diagnostic? linked) (fail! linked))
-  (define types (make-hasheq))
+  (define types (and (or compile? dump-ir?) (make-hasheq)))
   (define checked (check linked #:types types))
   (when (diagnostic? checked) (fail! checked))
   (define (lowered)
@@ -147,13 +147,15 @@
     [compile?
      (define code (ir->bytecode (lowered)))
      (when (diagnostic? code) (fail! code))
+     (define data (write-bytecode code))
+     (when (diagnostic? data) (fail! data))
      (define output-file (caddr arguments))
      (with-handlers ([exn:fail:filesystem?
                       (lambda (_)
                         (eprintf "agentica: cannot write ~a\n" output-file)
                         (exit 2))])
        (call-with-output-file output-file #:exists 'truncate/replace
-         (lambda (out) (void (write-bytes (write-bytecode code) out)))))]
+         (lambda (out) (void (write-bytes data out)))))]
     [else
      (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
                               #:seed seed #:builtin-handler (make-bdd-service)))

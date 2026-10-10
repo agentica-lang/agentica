@@ -49,13 +49,9 @@ static void push_frame(agc_vm *vm, uint32_t function, uint32_t base, uint32_t sp
   vm->depth++;
 }
 
-static int64_t int_operand(agc_vm *vm, const agc_value *R, uint16_t reg, uint32_t span) {
-  return agc_as_int(vm, R[reg], span);
-}
-
-static bool equal_values(agc_vm *vm, agc_value x, agc_value y, uint32_t span) {
-  if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x, span) == agc_as_int(vm, y, span);
-  return agc_as_bool(vm, x, span) == agc_as_bool(vm, y, span);
+static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
+  if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
+  return agc_as_bool(vm, x) == agc_as_bool(vm, y);
 }
 
 static void run(agc_vm *vm) {
@@ -82,8 +78,8 @@ static void run(agc_vm *vm) {
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
       case AGC_OP_MUL_I: {
-        x = int_operand(vm, R, in.b, s);
-        y = int_operand(vm, R, in.c, s);
+        x = agc_as_int(vm, R[in.b]);
+        y = agc_as_int(vm, R[in.c]);
         bool overflow = in.op == AGC_OP_ADD_I   ? __builtin_add_overflow(x, y, &z)
                         : in.op == AGC_OP_SUB_I ? __builtin_sub_overflow(x, y, &z)
                                                 : __builtin_mul_overflow(x, y, &z);
@@ -93,8 +89,8 @@ static void run(agc_vm *vm) {
       }
       case AGC_OP_DIV_I:
       case AGC_OP_MOD_I:
-        x = int_operand(vm, R, in.b, s);
-        y = int_operand(vm, R, in.c, s);
+        x = agc_as_int(vm, R[in.b]);
+        y = agc_as_int(vm, R[in.c]);
         if (y == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", s);
         if (in.op == AGC_OP_MOD_I) {
           R[in.a] = agc_int(y == -1 ? 0 : x % y);
@@ -105,21 +101,21 @@ static void run(agc_vm *vm) {
         }
         break;
       case AGC_OP_NEG_I:
-        x = int_operand(vm, R, in.b, s);
+        x = agc_as_int(vm, R[in.b]);
         if (x == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", s);
         R[in.a] = agc_int(-x);
         break;
-      case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b], s)); break;
-      case AGC_OP_LT_I: R[in.a] = agc_bool(int_operand(vm, R, in.b, s) < int_operand(vm, R, in.c, s)); break;
-      case AGC_OP_LE_I: R[in.a] = agc_bool(int_operand(vm, R, in.b, s) <= int_operand(vm, R, in.c, s)); break;
-      case AGC_OP_EQ: R[in.a] = agc_bool(equal_values(vm, R[in.b], R[in.c], s)); break;
-      case AGC_OP_NE: R[in.a] = agc_bool(!equal_values(vm, R[in.b], R[in.c], s)); break;
+      case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
+      case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
+      case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;
+      case AGC_OP_EQ: R[in.a] = agc_bool(equal_values(vm, R[in.b], R[in.c])); break;
+      case AGC_OP_NE: R[in.a] = agc_bool(!equal_values(vm, R[in.b], R[in.c])); break;
       case AGC_OP_JUMP: frame->pc = bx; break;
       case AGC_OP_JUMP_IF_FALSE:
-        if (!agc_as_bool(vm, R[in.a], s)) frame->pc = bx;
+        if (!agc_as_bool(vm, R[in.a])) frame->pc = bx;
         break;
       case AGC_OP_JUMP_IF_TRUE:
-        if (agc_as_bool(vm, R[in.a], s)) frame->pc = bx;
+        if (agc_as_bool(vm, R[in.a])) frame->pc = bx;
         break;
       case AGC_OP_CALL: push_frame(vm, bx, frame->base + in.a, s); break;
       case AGC_OP_CALL_BUILTIN: {

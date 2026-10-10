@@ -1090,7 +1090,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 - [x] `src/bytecode.rkt`: IR → bytecode plus constant pool, builtin imports and span table; merge adjacent steps only.
 - [ ] Type, struct and enum tables in `src/bytecode.rkt` (the sections are written empty until structs land).
 - [x] Serialize to the format from 7b; `agentica compile file.agc -o file.agcb` writes it.
-- [x] Round-trip test: write, read back, compare (`tests/bytecode-test.rkt`).
+- [x] Writer checks: no Racket reader; every differential test sends writer output through the C loader, and `tests/bytecode-test.rkt` checks step merging and that the opcode list matches `vm/agc.h`.
 
 **Done when:** every program in `examples/` compiles to a bytecode file.
 

@@ -6,7 +6,7 @@
 
 #ifdef AGC_NO_GC
 const char *__asan_default_options(void);
-const char *__asan_default_options(void) { return "detect_leaks=0"; }
+const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_return_null=1"; }
 #else
 #include <gc.h>
 #endif
@@ -113,23 +113,22 @@ agc_value agc_string_value(agc_string *s) {
 
 bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
 
-static _Noreturn void wrong_tag(agc_vm *vm, uint32_t span) {
-  (void)span;
+static _Noreturn void wrong_tag(agc_vm *vm) {
   agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong value type", 0);
 }
 
-bool agc_as_bool(agc_vm *vm, agc_value v, uint32_t span) {
-  if (v.tag != AGC_T_BOOL) wrong_tag(vm, span);
+bool agc_as_bool(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_BOOL) wrong_tag(vm);
   return v.as.i != 0;
 }
 
-int64_t agc_as_int(agc_vm *vm, agc_value v, uint32_t span) {
-  if (v.tag != AGC_T_INT) wrong_tag(vm, span);
+int64_t agc_as_int(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_INT) wrong_tag(vm);
   return v.as.i;
 }
 
-agc_string *agc_as_string(agc_vm *vm, agc_value v, uint32_t span) {
-  if (v.tag != AGC_T_STRING) wrong_tag(vm, span);
+agc_string *agc_as_string(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_STRING) wrong_tag(vm);
   return v.as.p;
 }
 

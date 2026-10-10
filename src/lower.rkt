@@ -9,8 +9,8 @@
          (struct-out ir-label)
          (struct-out ir-instr))
 
-(struct ir-program (sources types structs enums functions entry span) #:transparent)
-(struct ir-function (name params captures slots body span) #:transparent)
+(struct ir-program (sources functions entry span) #:transparent)
+(struct ir-function (name params slots body span) #:transparent)
 (struct ir-label (id) #:transparent)
 (struct ir-instr (op args spans) #:transparent)
 
@@ -45,7 +45,7 @@
       (define functions
         (for/list ([declaration (in-list declarations)])
           (lower-function declaration types function-index unsupported note-source!)))
-      (ir-program sources '() '() '() functions (hash-ref function-index "main")
+      (ir-program sources functions (hash-ref function-index "main")
                   (program-span program)))))
 
 (define (lower-function declaration types function-index unsupported note-source!)
@@ -162,8 +162,8 @@
     (define puts? (and entry (equal? (builtin-implementation entry) "puts")))
     (when (and entry (not puts?))
       (unsupported (format "the builtin ~a" name) span))
-    (unless (hash-has-key? function-index name)
-      (unless puts? (unsupported (format "the call to ~a" name) span)))
+    (unless (or puts? (hash-has-key? function-index name))
+      (unsupported (format "the call to ~a" name) span))
     (require-type! expression (if void? '(Int Bool Void) '(Int Bool)))
     (emit! 'step '() span)
     (define saved next)
@@ -266,7 +266,7 @@
   (define void-slot (alloc!))
   (emit! 'const (list void-slot (void)) (function-decl-span declaration))
   (emit! 'return (list void-slot) (function-decl-span declaration))
-  (ir-function (function-decl-name declaration) params 0 high (reverse code)
+  (ir-function (function-decl-name declaration) params high (reverse code)
                (function-decl-span declaration)))
 
 (define (span-text span)
@@ -282,7 +282,6 @@
      (format "L~a" value)]
     [(and (eq? op 'call) (= index 1)) (format "fn~a" value)]
     [(and (eq? op 'call-builtin) (>= index 1)) (format "~a" value)]
-    [(eq? op 'step) (format "~a" value)]
     [else (format "r~a" value)]))
 
 (define (format-ir ir)

@@ -106,9 +106,9 @@ agc_value agc_void(void);
 agc_value agc_bool(bool b);
 agc_value agc_int(int64_t i);
 agc_value agc_string_value(agc_string *s);
-bool agc_as_bool(agc_vm *vm, agc_value v, uint32_t span);
-int64_t agc_as_int(agc_vm *vm, agc_value v, uint32_t span);
-agc_string *agc_as_string(agc_vm *vm, agc_value v, uint32_t span);
+bool agc_as_bool(agc_vm *vm, agc_value v);
+int64_t agc_as_int(agc_vm *vm, agc_value v);
+agc_string *agc_as_string(agc_vm *vm, agc_value v);
 bool agc_is(agc_value v, agc_tag tag);
 
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);

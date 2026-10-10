@@ -163,7 +163,13 @@ so they agree with the reference by construction (Racket 9.3).
 - Before each blocking stdin read, `if (isatty(1)) fflush(stdout)`, so
   prompts show up as they do with Racket.
 - SIGPIPE is ignored at startup. Every `fwrite`/`fflush` result is checked; a
-  failed write ends the run with `RUNTIME-INTERNAL`, exit 1.
+  failed write ends the run with `RUNTIME-INTERNAL`, exit 1. Documented
+  difference: when stdout cannot be written (a full disk, `/dev/full`), the
+  evaluator prints a Racket error and still exits 0.
+- Documented difference: when the VM prints a source name or a source line
+  in a diagnostic, it replaces each byte below 0x20 (except tab) and 0x7F
+  with `?`, so a hostile file cannot send terminal escapes. Racket prints
+  those bytes raw. Lexed programs rarely contain them.
 - A diagnostic exits with 1. `System.exit(n)` exits with `n` only when
   `1 <= n <= 255`, else with 0 (Racket's exit handler). Normal end exits 0.
 - `RUNTIME-INTERNAL` is at the program span. Its message text is not part of
@@ -212,6 +218,9 @@ and a receiver wrapped in `typed-target` carries its type already.
 ```
 
 - `body` is a flat list of `ir-instr` and `ir-label`; `--dump-ir` prints it.
+- In the slice, `ir-program` is `(sources functions entry span)` and
+  `ir-function` is `(name params slots body span)`; the type, struct, enum and
+  capture fields join with the PRs that fill them.
 - Slots are the VM registers, numbered per function: parameters `0..p-1`,
   captures `p..p+c-1`, then locals and temporaries. Temporaries follow a
   stack discipline, so a call's arguments are always the highest live slots
@@ -280,6 +289,7 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 | `LOWER-UNSUPPORTED` | `src/lower.rkt` | The program uses a form or a type the VM does not support yet; the span is the first such node. |
 | `LOWER-INTERNAL` | `src/lower.rkt` | A Racket exception inside the lowerer (a bug), at the program span. |
 | `BYTECODE-LIMIT` | `src/bytecode.rkt` | A function needs more than 65535 registers (later also structs or variants, 4.4). |
+| `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception inside `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
 
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
 exit 1. In the slice, a value outside Int and Bool is rejected, except a
@@ -461,9 +471,9 @@ typedef struct {
 ### 5.2 Safety rules for values
 
 - `value.c` is the only code that reads a union member. Everything else uses
-  checked accessors that take the VM and a span, such as
-  `agc_as_string(vm, v, span)` and `agc_as_list(vm, v, span)`; a wrong tag is
-  `RUNTIME-INTERNAL`.
+  checked accessors that take the VM, such as `agc_as_string(vm, v)` and
+  `agc_as_list(vm, v)`; a wrong tag is `RUNTIME-INTERNAL`, always at the
+  program span (2.5), so the accessors need no span.
 - `CALL_BUILTIN` checks each argument's tag against the parameter tags in the
   C builtin table before the call (generic parameters accept any tag).
   Builtins check list and map elements when they touch them
@@ -618,7 +628,9 @@ The loader validates the whole file before running anything. Failures print
 
 - **Input**: a regular file of at most 256 MiB. Every read is bounds-checked;
   every count is checked against the bytes left before allocating. All index
-  and size sums use `uint64_t`.
+  and size sums use `uint64_t`. Loading has a memory budget of 4 times the
+  file length plus 1 MiB; every allocation is charged to it first, and a file
+  that needs more is rejected.
 - **Header**: magic, format version and Agentica version must match exactly;
   the file must end right after the entry.
 - **Strings**: valid UTF-8 with no surrogates; character counts are computed.
@@ -629,7 +641,7 @@ The loader validates the whole file before running anything. Failures print
   Map pointing to smaller indexes; field counts and arities fit 16 bits;
   builtin record names only with their exact C layout; builtin `(name,
   arity)` pairs exist.
-- **Functions**: `params + captures <= registers <= 65535`; at least one
+- **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`; at least one
   instruction; the last is `RETURN` or `JUMP`; known opcodes; every register
   operand below `registers`, including ranges: `LIST` `b..b+c-1`, `MAP`
   `b..b+2c-1`, `STRUCT` `b..b+fields-1`, `ENUM` `b..b+arity-1`, call windows
@@ -639,16 +651,24 @@ The loader validates the whole file before running anything. Failures print
   `STEP` and `CALL_BUILTIN`; jump targets inside the function; `STEP` count at
   least 1.
 - **Termination**: every backward jump targets a `STEP`, and every function
-  that contains `CALL`, `CALL_VALUE` or `CALL_BUILTIN` starts with a `STEP`. The lowering in 3.3
-  always meets both rules. Together they mean every unbounded repetition
-  charges a step, so `--max-steps` holds even for hostile files.
+  starts with a `STEP` unless it has at most 2 instructions and no `CALL`,
+  `CALL_VALUE` or `CALL_BUILTIN` (the `const`/`return` of an empty body). The
+  lowering in 3.3 always meets these rules. Together they mean every
+  unbounded repetition charges a step, so `--max-steps` holds even for
+  hostile files: the step budget bounds the work to about steps × code size.
 - **Entry**: exists, with no parameters or captures.
 - **In the slice**: captures must be 0, the Types, Structs and Enums sections
   must be empty, and only the constant kinds the writer emits (4.6) are
-  accepted. `vm/tests/loader_test.c` covers truncation at every byte, bad
-  magic and versions, out-of-range registers, jumps and spans, a backward jump
-  that misses a `STEP`, a calling function that does not start with one, an
-  unknown opcode and a missing final `RETURN`/`JUMP`.
+  accepted. `vm/tests/loader_test.c` checks each rejection by its reason:
+  truncation at every byte, bad magic and versions, trailing bytes, entry out
+  of range or with parameters, unknown builtins, invalid UTF-8 (overlong,
+  surrogate, above U+10FFFF), span lines and columns out of range and spans
+  that start after they end, bad register counts (0, above 65535, fewer than
+  the parameters), out-of-range registers, constants, jumps and spans
+  (including the extra spans of `STEP` and `CALL_BUILTIN`), `CALL` and
+  `CALL_BUILTIN` windows, `STEP 0`, a backward jump that misses a `STEP`,
+  functions that should start with one, an unknown opcode, a missing final
+  `RETURN`/`JUMP`, and a file over the memory budget.
 - **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
   string bounds, and the register cap (6.1).
 
@@ -820,7 +840,9 @@ written `size > limit - total`. A hermetic test sends over-long values.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and
   never frees, so ASan guards every object; libgc is not compiled or linked
-  at all (`-DAGC_NO_GC`), and leak detection is off because nothing is freed.
+  at all (`-DAGC_NO_GC`). Leak detection is off because nothing is freed, and
+  `allocator_may_return_null=1` lets a huge request reach the out-of-memory
+  path (6.3) instead of aborting.
   `make vm-test SANITIZE=1` and `make vm-fuzz SANITIZE=1` use the same flags.
 - GC stress: a `-DGC_DEBUG` build that calls `GC_gcollect()` every 64
   allocations (`AGC_GC_STRESS=1`). No Valgrind: conservative scanning makes
@@ -828,9 +850,12 @@ written `size > limit - total`. A hermetic test sends over-long values.
   time and when registers or frames grow, so the stress run joins with
   strings (PR 3).
 - Fuzzing: `agc_fuzz_one(data, len)` (`vm/fuzz.c`) loads one file and, if
-  accepted, runs it with `--max-steps 10000`, output to `/dev/null`. The plain
-  C driver (`vm/fuzz_main.c`, `make vm-fuzz`) mutates (truncation, bit flips,
-  random bytes, small or maximal 16-bit operands) a corpus seeded with every
+  accepted, runs it with `--max-steps 10000` and prints any diagnostic, all
+  to `/dev/null`, so the diagnostic printer is fuzzed too. It is linked only
+  into the fuzz and test binaries. The plain C driver (`vm/fuzz_main.c`,
+  `make vm-fuzz`) applies 1 to 4 mutations per run (byte deletion and
+  insertion, bit flips, random bytes, small or maximal 16-bit operands) to a
+  corpus seeded with every
   compiled program in `tests/fixtures/vm/`; examples join the corpus as they
   enter the VM subset. A clang job also builds it with `-fsanitize=fuzzer`
   (later PR).
@@ -866,10 +891,11 @@ the platform's OpenSSL package) to each job.
 
 - 7c `tests/lower-test.rkt`: one test per form (ops, slots, captures, spans).
   7d `tests/bytecode-test.rkt`: write, read back, compare; every example
-  compiles. In the slice, `tests/bytecode-test.rkt` round-trips every
-  fixture, checks step merging, and checks that an out-of-subset program
-  gets `LOWER-UNSUPPORTED`; `tests/lower-test.rkt` comes with the wider
-  lowering.
+  compiles. In the slice there is no Racket reader: the C loader is the
+  only reader, and every differential test sends writer output through it.
+  `tests/bytecode-test.rkt` checks step merging, that the opcode list matches
+  `vm/agc.h`, that an out-of-subset program gets `LOWER-UNSUPPORTED`, and the
+  `compile` exit codes; `tests/lower-test.rkt` comes with the wider lowering.
 - `tests/vm-diff-test.rkt` (from the first VM PR, completed in 7f) runs each
   program on the evaluator in-process (as `tests/examples-test.rkt` does,
   formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm`, and

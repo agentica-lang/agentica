@@ -11,6 +11,7 @@ int agc_fuzz_one(const uint8_t *data, size_t len) {
   if (!agc_load(data, len, &program, error, sizeof error)) return 0;
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, sink, 10000);
-  agc_vm_run(vm);
+  agc_outcome outcome = agc_vm_run(vm);
+  if (outcome.kind == AGC_FAILED) agc_print_diagnostic(sink, program, &outcome);
   return 1;
 }

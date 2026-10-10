@@ -4,14 +4,12 @@
 
 (provide ir->bytecode
          write-bytecode
-         read-bytecode
-         format-version
          opcodes
          (struct-out bc-program)
          (struct-out bc-function))
 
-(struct bc-program (sources spans constants builtins functions entry) #:transparent)
-(struct bc-function (name params captures registers span code spans) #:transparent)
+(struct bc-program (span sources spans constants builtins functions entry) #:transparent)
+(struct bc-function (name params registers span code spans) #:transparent)
 
 (define format-version 1)
 (define max-u16 65535)
@@ -23,7 +21,14 @@
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
 
+(define (internal-error span)
+  (lambda (failure) (diagnostic 'BYTECODE-INTERNAL (exn-message failure) span)))
+
 (define (ir->bytecode ir)
+  (with-handlers ([exn:fail? (internal-error (ir-program-span ir))])
+    (emit-program ir)))
+
+(define (emit-program ir)
   (let/ec return
     (define (too-big what span)
       (return (diagnostic 'BYTECODE-LIMIT (format "the program has too many ~a for the VM" what) span)))
@@ -113,11 +118,11 @@
                   [else args]))))
       (define instr-spans
         (for/vector ([instr (in-list instrs)]) (intern-spans! (ir-instr-spans instr))))
-      (bc-function (ir-function-name function) (ir-function-params function)
-                   (ir-function-captures function) slots
+      (bc-function (ir-function-name function) (ir-function-params function) slots
                    (intern-spans! (list (ir-function-span function))) code instr-spans))
     (define functions (map encode-function (ir-program-functions ir)))
-    (bc-program (for/list ([text-source (in-list sources)])
+    (bc-program (ir-program-span ir)
+                (for/list ([text-source (in-list sources)])
                   (cons (source-name text-source) (source-text text-source)))
                 (list->vector (reverse spans))
                 (list->vector (reverse constants))
@@ -134,6 +139,10 @@
   (write-bytes data out))
 
 (define (write-bytecode program)
+  (with-handlers ([exn:fail? (internal-error (bc-program-span program))])
+    (write-program program)))
+
+(define (write-program program)
   (define out (open-output-bytes))
   (write-bytes #"AGCB" out)
   (u32 out format-version)
@@ -164,7 +173,7 @@
   (for ([function (in-list (bc-program-functions program))])
     (str out (bc-function-name function))
     (u32 out (bc-function-params function))
-    (u32 out (bc-function-captures function))
+    (u32 out 0)
     (u32 out (bc-function-registers function))
     (u32 out (bc-function-span function))
     (u32 out (vector-length (bc-function-code function)))
@@ -173,48 +182,3 @@
     (for ([span (in-vector (bc-function-spans function))]) (u32 out span)))
   (u32 out (bc-program-entry program))
   (get-output-bytes out))
-
-(define (read-bytecode data)
-  (let/ec escape
-    (define in (open-input-bytes data))
-    (define (bad) (escape #f))
-    (define (take-bytes n)
-      (define chunk (read-bytes n in))
-      (if (and (bytes? chunk) (= (bytes-length chunk) n)) chunk (bad)))
-    (define (r8) (bytes-ref (take-bytes 1) 0))
-    (define (r16) (integer-bytes->integer (take-bytes 2) #f #f))
-    (define (r32) (integer-bytes->integer (take-bytes 4) #f #f))
-    (define (rstr)
-      (define chunk (take-bytes (r32)))
-      (with-handlers ([exn:fail? (lambda (_) (bad))])
-        (bytes->string/utf-8 chunk)))
-    (unless (equal? (take-bytes 4) #"AGCB") (bad))
-    (unless (= (r32) format-version) (bad))
-    (unless (equal? (rstr) version) (bad))
-    (define sources (for/list ([_ (in-range (r32))]) (let ([name (rstr)]) (cons name (rstr)))))
-    (define spans (for/vector ([_ (in-range (r32))]) (for/vector ([_ (in-range 5)]) (r32))))
-    (define constants
-      (for/vector ([_ (in-range (r32))])
-        (case (r8)
-          [(0) (void)]
-          [(2) #f]
-          [(3) #t]
-          [(4) (integer-bytes->integer (take-bytes 8) #t #f)]
-          [(6) (rstr)]
-          [else (bad)])))
-    (for ([_ (in-range 3)]) (unless (zero? (r32)) (bad)))
-    (define builtins (for/list ([_ (in-range (r32))]) (let ([name (rstr)]) (cons name (r32)))))
-    (define functions
-      (for/list ([_ (in-range (r32))])
-        (define name (rstr))
-        (define params (r32))
-        (define captures (r32))
-        (define registers (r32))
-        (define span (r32))
-        (define count (r32))
-        (define code (for/vector ([_ (in-range count)]) (for/list ([_ (in-range 4)]) (r16))))
-        (define instr-spans (for/vector ([_ (in-range count)]) (r32)))
-        (bc-function name params captures registers span code instr-spans)))
-    (define entry (r32))
-    (unless (eof-object? (read-byte in)) (bad))
-    (bc-program sources spans constants builtins functions entry)))

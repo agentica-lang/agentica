@@ -51,7 +51,7 @@ src/
   http-server.rkt # HTTP server
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
-  bytecode.rkt    # ir->bytecode (BYTECODE-LIMIT), write-bytecode/read-bytecode: the .agcb format of docs/vm.md 4.6
+  bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm.md 4.6; the C loader is the only reader
   main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, or `compile -o`); exit 1 on a diagnostic, 2 on usage or a missing file
 vm/               # the C11 bytecode VM (dist/agentica-vm); see "Bytecode VM" below
   agc.h           # shared types and agc_ API: values, instructions, program, VM
@@ -62,7 +62,7 @@ tests/
   <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-  bytecode-test.rkt     # bytecode round trip, step merging, LOWER-UNSUPPORTED
+  bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, LOWER-UNSUPPORTED, compile exit codes
   vm-diff-test.rkt      # tests/fixtures/vm/*.agc on the evaluator and dist/agentica-vm, with a --max-steps sweep
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
@@ -299,7 +299,7 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 ## Bytecode VM (phase 7)
 
 - Design and contract: `docs/vm.md`; the subset the VM runs today is its "Status" note. Pipeline: `check #:types` fills an `eq?` hash of expression types, `lower` turns the checked program into IR, `ir->bytecode` + `write-bytecode` give the `.agcb` file, and `dist/agentica-vm -- file.agcb` runs it.
-- Out-of-subset programs must fail with `LOWER-UNSUPPORTED` at the first unsupported node, never miscompile. When widening the subset, add the form to `lower.rkt`, the opcode to `opcodes` in `bytecode.rkt` and to `agc_opcode` in `vm/agc.h` in the same position, its validation in `vm/loader.c`, and a fixture in `tests/fixtures/vm/`.
+- Out-of-subset programs must fail with `LOWER-UNSUPPORTED` at the first unsupported node, never miscompile. When widening the subset, add the form to `lower.rkt`, the opcode to `opcodes` in `bytecode.rkt` and to `agc_opcode` in `vm/agc.h` in the same position (a test compares them), its validation in `vm/loader.c`, and a fixture in `tests/fixtures/vm/`.
 - Steps: emit one IR `step` exactly where the evaluator calls `step!`, before the node's children; the emitter merges adjacent steps only. Every backward jump must land on a `STEP`, and a function that calls anything must start with one, or the loader rejects the file.
 - Commands: `make vm`, `make vm-test`, `make vm SANITIZE=1` (clang ASan+UBSan, no libgc), `make vm-fuzz`. `SANITIZE` may come from the environment, and the build stamp `build/vm/flags` relinks when it changes. `git submodule update --init` fetches libgc.
 - `tests/vm-diff-test.rkt` runs `make -s vm` first; it skips with a `SKIP` line when the VM cannot build and fails when `AGENTICA_REQUIRE_VM=1` (set in CI). Compare stdout, stderr and exit code; the VM prints the plain diagnostic format only, so far.

@@ -10,6 +10,7 @@
 typedef struct {
   const uint8_t *data;
   size_t len, pos;
+  uint64_t budget;
   char *error;
   size_t error_size;
   jmp_buf fail;
@@ -30,6 +31,12 @@ static const uint8_t *take(reader *r, size_t n) {
   const uint8_t *p = r->data + r->pos;
   r->pos += n;
   return p;
+}
+
+static void *load_alloc(reader *r, size_t size, bool atomic) {
+  if (size > r->budget) reject(r, "file needs too much memory");
+  r->budget -= size;
+  return atomic ? agc_alloc_atomic(size) : agc_alloc(size);
 }
 
 static uint8_t read_u8(reader *r) { return *take(r, 1); }
@@ -61,7 +68,7 @@ static agc_string *read_string(reader *r) {
   const uint8_t *bytes = take(r, len);
   size_t chars;
   if (!agc_utf8_chars(bytes, len, &chars)) reject(r, "invalid UTF-8 text");
-  agc_string *s = agc_alloc_atomic(agc_size_add(sizeof(agc_string), len));
+  agc_string *s = load_alloc(r, agc_size_add(sizeof(agc_string), len), true);
   s->bytes = len;
   s->chars = chars;
   if (len) memcpy(s->data, bytes, len);
@@ -73,14 +80,14 @@ static bool same_text(const agc_string *s, const char *text) {
   return s->bytes == n && memcmp(s->data, text, n) == 0;
 }
 
-static void index_lines(agc_source *source) {
+static void index_lines(reader *r, agc_source *source) {
   const agc_string *text = source->text;
   size_t lines = 1;
   for (size_t i = 0; i < text->bytes; i++)
     if (text->data[i] == '\n') lines++;
   source->lines = (uint32_t)lines;
-  source->line_start = agc_alloc_atomic(agc_size_mul(lines, sizeof(uint32_t)));
-  source->line_chars = agc_alloc_atomic(agc_size_mul(lines, sizeof(uint32_t)));
+  source->line_start = load_alloc(r, agc_size_mul(lines, sizeof(uint32_t)), true);
+  source->line_chars = load_alloc(r, agc_size_mul(lines, sizeof(uint32_t)), true);
   size_t line = 0, chars = 0;
   source->line_start[0] = 0;
   for (size_t i = 0; i < text->bytes; i++) {
@@ -125,7 +132,8 @@ static bool calls_anything(const agc_function *f) {
 static void check_function(reader *r, const agc_program *p, const agc_function *f) {
   uint16_t last = f->code[f->count - 1].op;
   if (last != AGC_OP_RETURN && last != AGC_OP_JUMP) reject(r, "function does not end with RETURN or JUMP");
-  if (calls_anything(f) && f->code[0].op != AGC_OP_STEP) reject(r, "function with calls does not start with STEP");
+  if (f->code[0].op != AGC_OP_STEP && (f->count > 2 || calls_anything(f)))
+    reject(r, "function does not start with STEP");
   for (uint32_t pc = 0; pc < f->count; pc++) {
     agc_instr in = f->code[pc];
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
@@ -191,16 +199,16 @@ static void load(reader *r, agc_program *p) {
   if (!same_text(read_string(r), AGC_VERSION)) reject(r, "built for another Agentica version");
 
   p->source_count = read_count(r, 8, "source");
-  p->sources = agc_alloc(agc_size_mul(p->source_count, sizeof(agc_source)));
+  p->sources = load_alloc(r, agc_size_mul(p->source_count, sizeof(agc_source)), false);
   for (uint32_t i = 0; i < p->source_count; i++) {
     p->sources[i].name = read_string(r);
     p->sources[i].text = read_string(r);
-    index_lines(&p->sources[i]);
+    index_lines(r, &p->sources[i]);
   }
 
   p->span_count = read_count(r, 20, "span");
   if (p->span_count == 0) reject(r, "missing program span");
-  p->spans = agc_alloc_atomic(agc_size_mul(p->span_count, sizeof(agc_span)));
+  p->spans = load_alloc(r, agc_size_mul(p->span_count, sizeof(agc_span)), true);
   for (uint32_t i = 0; i < p->span_count; i++) {
     agc_span s;
     s.source = read_u32(r);
@@ -218,7 +226,7 @@ static void load(reader *r, agc_program *p) {
   }
 
   p->constant_count = read_count(r, 1, "constant");
-  p->constants = agc_alloc(agc_size_mul(p->constant_count, sizeof(agc_value)));
+  p->constants = load_alloc(r, agc_size_mul(p->constant_count, sizeof(agc_value)), false);
   for (uint32_t i = 0; i < p->constant_count; i++) {
     uint8_t kind = read_u8(r);
     switch (kind) {
@@ -236,7 +244,7 @@ static void load(reader *r, agc_program *p) {
   if (read_u32(r) != 0) reject(r, "enums are not supported yet");
 
   p->builtin_count = read_count(r, 8, "builtin");
-  p->builtins = agc_alloc(agc_size_mul(p->builtin_count, sizeof(agc_builtin *)));
+  p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);
   for (uint32_t i = 0; i < p->builtin_count; i++) {
     agc_string *name = read_string(r);
     uint32_t arity = read_u32(r);
@@ -246,7 +254,7 @@ static void load(reader *r, agc_program *p) {
 
   p->function_count = read_count(r, 36, "function");
   if (p->function_count == 0) reject(r, "no functions");
-  p->functions = agc_alloc(agc_size_mul(p->function_count, sizeof(agc_function)));
+  p->functions = load_alloc(r, agc_size_mul(p->function_count, sizeof(agc_function)), false);
   for (uint32_t i = 0; i < p->function_count; i++) {
     agc_function *f = &p->functions[i];
     f->name = read_string(r);
@@ -255,18 +263,18 @@ static void load(reader *r, agc_program *p) {
     f->registers = read_u32(r);
     f->span = read_u32(r);
     if (f->captures != 0) reject(r, "captures are not supported yet");
-    if (f->registers > 65535 || f->params > f->registers) reject(r, "bad register count");
+    if (f->registers == 0 || f->registers > 65535 || f->params > f->registers) reject(r, "bad register count");
     if (f->span >= p->span_count) reject(r, "span index out of range");
     f->count = read_count(r, 12, "instruction");
     if (f->count == 0) reject(r, "empty function");
-    f->code = agc_alloc_atomic(agc_size_mul(f->count, sizeof(agc_instr)));
+    f->code = load_alloc(r, agc_size_mul(f->count, sizeof(agc_instr)), true);
     for (uint32_t k = 0; k < f->count; k++) {
       f->code[k].op = read_u16(r);
       f->code[k].a = read_u16(r);
       f->code[k].b = read_u16(r);
       f->code[k].c = read_u16(r);
     }
-    f->spans = agc_alloc_atomic(agc_size_mul(f->count, sizeof(uint32_t)));
+    f->spans = load_alloc(r, agc_size_mul(f->count, sizeof(uint32_t)), true);
     for (uint32_t k = 0; k < f->count; k++) f->spans[k] = read_u32(r);
   }
 
@@ -285,6 +293,7 @@ bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *erro
   r.pos = 0;
   r.error = error;
   r.error_size = error_size;
+  r.budget = (uint64_t)len * 4 + ((uint64_t)1 << 20);
   agc_program *p = agc_alloc(sizeof(agc_program));
   if (len > AGC_MAX_FILE_BYTES) {
     snprintf(error, error_size, "file is larger than 256 MiB");

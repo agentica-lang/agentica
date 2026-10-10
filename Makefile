@@ -34,7 +34,8 @@ clean:
 # make vm-fuzz            mutate compiled fixtures and run them
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
-VM_SRC := vm/value.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c vm/fuzz.c
+VM_SRC := vm/value.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c
+GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"'
 ifeq ($(SANITIZE),1)
@@ -58,8 +59,10 @@ $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
 	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS)' > $@
 
-build/vm/gc.o: $(GC_DIR)/extra/gc.c
-	@test -f $< || { echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1; }
+$(GC_DIR)/extra/gc.c:
+	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
+
+build/vm/gc.o: $(GC_DIR)/extra/gc.c $(GC_SRC)
 	@mkdir -p build/vm
 	$(CC) -std=c11 -O2 -fPIE -I $(GC_DIR)/include -c $< -o $@
 
@@ -69,16 +72,16 @@ dist/agentica-vm: $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
 
 vm: dist/agentica-vm
 
-$(VM_BUILD)/loader-test: $(VM_DEPS) vm/tests/loader_test.c $(VM_GC) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/tests/loader_test.c $(VM_GC) $(VM_LDFLAGS)
+$(VM_BUILD)/loader-test: $(VM_DEPS) vm/fuzz.c vm/tests/loader_test.c $(VM_GC) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c vm/tests/loader_test.c $(VM_GC) $(VM_LDFLAGS)
 
 vm-test: $(VM_BUILD)/loader-test
 	$(VM_BUILD)/loader-test
 
-$(VM_BUILD)/agentica-vm-fuzz: $(VM_DEPS) vm/fuzz_main.c $(VM_GC) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz_main.c $(VM_GC) $(VM_LDFLAGS)
+$(VM_BUILD)/agentica-vm-fuzz: $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_LDFLAGS)
 
-vm-fuzz: $(VM_BUILD)/agentica-vm-fuzz
+vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz
 	@mkdir -p $(VM_BUILD)/corpus
 	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb

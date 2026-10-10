@@ -32,27 +32,43 @@ static uint8_t *read_all(const char *path, size_t *len) {
   return data;
 }
 
-static size_t mutate(uint8_t *out, const uint8_t *in, size_t len) {
-  memcpy(out, in, len);
-  switch (next_random() % 4) {
-    case 0:
-      return len ? (size_t)(next_random() % len) : 0;
-    case 1:
-      for (int k = 0, flips = 1 + (int)(next_random() % 4); k < flips && len; k++)
-        out[next_random() % len] ^= (uint8_t)(1u << (next_random() % 8));
-      return len;
+#define MAX_INSERT 16
+
+static size_t mutate_once(uint8_t *data, size_t len) {
+  size_t at = len ? (size_t)(next_random() % len) : 0;
+  switch (next_random() % 5) {
+    case 0: {
+      size_t n = 1 + (size_t)(next_random() % MAX_INSERT);
+      if (n > len - at) n = len - at;
+      memmove(data + at, data + at + n, len - at - n);
+      return len - n;
+    }
+    case 1: {
+      size_t n = 1 + (size_t)(next_random() % MAX_INSERT);
+      memmove(data + at + n, data + at, len - at);
+      for (size_t k = 0; k < n; k++) data[at + k] = (uint8_t)next_random();
+      return len + n;
+    }
     case 2:
-      if (len) out[next_random() % len] = (uint8_t)next_random();
+      if (len) data[at] ^= (uint8_t)(1u << (next_random() % 8));
+      return len;
+    case 3:
+      if (len) data[at] = (uint8_t)next_random();
       return len;
     default:
-      if (len >= 2) {
-        size_t at = next_random() % (len - 1);
+      if (at + 1 < len) {
         uint16_t value = (uint16_t)(next_random() % 4 == 0 ? 0xFFFF : next_random() % 64);
-        out[at] = (uint8_t)value;
-        out[at + 1] = (uint8_t)(value >> 8);
+        data[at] = (uint8_t)value;
+        data[at + 1] = (uint8_t)(value >> 8);
       }
       return len;
   }
+}
+
+static size_t mutate(uint8_t *out, const uint8_t *in, size_t len) {
+  memcpy(out, in, len);
+  for (int k = 0, rounds = 1 + (int)(next_random() % 4); k < rounds; k++) len = mutate_once(out, len);
+  return len;
 }
 
 int main(int argc, char **argv) {
@@ -77,7 +93,7 @@ int main(int argc, char **argv) {
     }
     if (sizes[i] > largest) largest = sizes[i];
   }
-  uint8_t *buffer = malloc(largest ? largest : 1);
+  uint8_t *buffer = malloc(largest + 4 * MAX_INSERT);
   long accepted = 0;
   for (long n = 0; n < iterations; n++) {
     int pick = (int)(next_random() % (uint64_t)files);

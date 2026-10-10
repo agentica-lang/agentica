@@ -4,12 +4,13 @@
 #include <string.h>
 
 static agc_value builtin_puts(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
   if (agc_is(args[0], AGC_T_STRING)) {
-    agc_string *s = agc_as_string(vm, args[0], span + 1);
+    agc_string *s = agc_as_string(vm, args[0]);
     agc_write(vm, s->data, s->bytes);
   } else {
     char text[32];
-    int n = snprintf(text, sizeof text, "%" PRId64, agc_as_int(vm, args[0], span + 1));
+    int n = snprintf(text, sizeof text, "%" PRId64, agc_as_int(vm, args[0]));
     agc_write(vm, text, (size_t)n);
   }
   agc_write(vm, "\n", 1);
