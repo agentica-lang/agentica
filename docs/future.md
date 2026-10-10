@@ -12,9 +12,9 @@ Generic enums and exhaustive Elixir-style `case` matching are implemented. Their
 
 | Extension | Direction | Pending decisions |
 |---|---|---|
-| Interpolation | `"Hello #{user.name}"` | Escapes, allowed expressions, and conversion to text |
+| Interpolation | Specified in [section 11](#11-ruby-style-ergonomics) | — |
 | Function generics | Reuse functions with different types | Syntax, inference, and constraints |
-| Closures and methods | Better ergonomics; possible [module attachment](#7-possible-metatables-ruby-style-modules) | Capture, receiver types, representation, and resolution |
+| Closures and methods | Blocks and methods on builtin types are specified in [section 11](#11-ruby-style-ergonomics); user methods remain open ([module attachment](#7-possible-metatables-ruby-style-modules)) | Standalone lambdas; methods on user types |
 | Modules | Group behavior and split programs into files | Import, visibility, cycles, and module attachment (section 7) |
 | C FFI | Safe wrappers over native calls | Pointers, ownership, ABI, and calls from the interpreter |
 | Async and fibers | Suspend execution on I/O; initially one thread. See [section 8](#8-concurrency-and-parallelism) | API, cancellation, and error propagation |
@@ -258,3 +258,122 @@ Process spawning requires `--allow-run`, off by default. Operations use literal
 arguments, inherited environment/working directory, and per-call 1 MiB stream
 limits. Direct children are killed and reaped when evaluation ends. Process
 polling and arbitrary descendant-tree supervision remain future designs.
+
+## 11. Ruby-style ergonomics
+
+Status: specified, planned next (roadmap "Ruby-style ergonomics"). Each part moves to `grammar.md` and the programming reference when its pull request lands.
+
+Agentica is presented as "Ruby with types". The evaluation logs (`docs/eval-diagnostics.md`) show that most agent errors are Ruby and Python habits: `s.length`, `x.to_i`, `!a`, `a && b`, `x += 1`. This section accepts the Ruby forms that keep static checking and immutable values, so the model's habits become valid code. The module forms stay valid; the Ruby forms become the style taught in the programming skill.
+
+### 11.1 Operators
+
+- `!e` is `not e`; `a && b` is `a and b`; `a || b` is `a or b`. Same types, same precedence, same short-circuit rules.
+- A `!` that directly follows a name is still part of the name (`read!`, `to_int!(`), and `!=` is still inequality. `!` starts an expression only where an operand is expected.
+- `x += e`, `x -= e`, `x *= e`, `x /= e`, `x %= e` mean `x = x op e`. The target is a plain name that is already visible and assignable; the checker reports the same diagnostics as the long form.
+
+```ruby
+count = 0
+if !done && (count < 3 || retry)
+  count += 1
+end
+```
+
+### 11.2 Methods on builtin types
+
+`receiver.name(args)` calls a builtin function of the receiver's module with the receiver as the first argument. The checker chooses the module from the receiver's static type:
+
+| Receiver type | Module |
+|---|---|
+| `String` | `String` |
+| `List[T]` | `List` |
+| `Map[K, V]` | `Map` |
+| `Float` | `Float` |
+| `Result[T]` | `Result` |
+| `Json` | `JSON` |
+| `Int` | aliases only (below) |
+
+- `receiver.name` without parentheses on a non-struct receiver is a method call with no arguments: `s.length`, `xs.size`, `r.ok?`.
+- On a struct, `.name` is still field access. Structs and enums have no methods; user functions cannot be called as methods.
+- `.call(...)` still invokes a `Fn` value.
+- Unknown methods are `CHECK-UNKNOWN-METHOD`, with a suggestion from the methods of that type.
+- Methods are resolved before running; there is no dynamic dispatch.
+
+Ruby aliases, all resolved to existing functions:
+
+| Receiver | Alias | Same as |
+|---|---|---|
+| `String` | `size` | `String.length` |
+| `String` | `to_i`, `to_i!` | `String.to_int` (Result), `String.to_int!` |
+| `String` | `to_f`, `to_f!` | `String.to_float` (Result), `String.to_float!` |
+| `String` | `strip` | `String.trim` |
+| `String` | `include?`, `start_with?`, `end_with?` | `contains?`, `starts_with?`, `ends_with?` |
+| `String` | `to_s` | the same string |
+| `List` | `length` | `List.size` |
+| `List` | `push` | `List.append` |
+| `List[String]` | `join` | `String.join` |
+| `Int` | `to_s`, `to_f` | `String.from_int`, `Float.from_int` |
+| `Float` | `to_s` | `String.from_float` |
+| `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
+
+Unlike Ruby, `"abc".to_i` does not return `0`: it returns `Result[Int]`, as `String.to_int` does. Use `to_i!` to halt on bad text, or `try`.
+
+Values are immutable, so methods never change their receiver. `xs.push(2)` returns a new list. A call used as a statement is `CHECK-UNUSED-VALUE` when it calls a builtin that has no effects, takes no function argument, has a name without `!` and returns a non-Void value. This covers the module form too (`List.append(xs, 2)`). Write `xs = xs.push(2)`. Halting checks such as `Result.unwrap!(...)` and `String.to_int!(s)` stay valid as statements.
+
+```ruby
+words = line.strip.split(" ")
+puts(words.join(","))
+first = words[0].to_i!
+```
+
+### 11.3 String interpolation
+
+- `"text #{expression} text"` builds a `String`. A `String` value is inserted as is; any other data value uses its `IO.inspect` form (`7`, `2.5`, `true`, `nil`, `[1, 2]`, `Item(name: "a")`). A Void call is `CHECK-VOID-VALUE`.
+- `\#` writes a literal `#`. A string without `#{` is unchanged.
+- The expression must stay on the same line and cannot contain comments. Strings may appear inside it: `"#{names.join(", ")}"`.
+- Before this change, `#{` inside a string was plain text. Strings that need it literally must use `\#{`.
+
+### 11.4 Blocks and closures
+
+A block is a function written at the call site, as the last argument:
+
+```ruby
+doubled = xs.map do |x|
+  x * 2
+end
+evens = xs.filter do |x| x % 2 == 0 end
+total = xs.reduce(0) do |sum, x|
+  sum + x
+end
+xs.each do |x|
+  puts("item #{x}")
+end
+```
+
+- **Syntax.** `do |p1, p2| ... end` or `do ... end` (no parameters) right after the closing `)` of a call or method call, or after a method name without parentheses (`xs.each do ... end`). Only `do`, not `{ |x| }`, because `{` is the map literal. The block body may start on the same line: `do |x| x * 2 end`. A block may span lines inside parentheses: `puts(xs.map do |x| ... end)`. Ruby's `do || ... end` is not accepted; write `do ... end`.
+- **`case` scrutinee.** Inside `case <expression> do`, the `do` always belongs to `case`, so `case f() do` and `case s.to_i do` keep their meaning. A call with a block there must be wrapped in parentheses: `case (xs.map do |x| x end) do`.
+- **Where.** The block is the last argument. It is allowed only when the called function's last parameter is a `Fn` (`CHECK-BLOCK-TARGET` otherwise). This covers user functions with a final `Fn` parameter, `List.map/filter/reduce/sort_by/each/any?/all?` and `BDD.step`.
+- **Parameter types.** Known from the context: the parameter types of a user function's `Fn`, or the builtin's rule (`xs.map` gives `x` the element type). Parameters may be annotated: `do |x: Int| ... end`. With neither, `CHECK-BLOCK-TYPE`.
+- **Result.** The block's body is a list of statements. `return value` returns from the block, not from the enclosing function, like a lambda. Without `return`, the value of the last expression statement is the block's value. A block whose result is not `Void` must produce a value on every path, like a function (`CHECK-MISSING-RETURN`).
+- **Result type.** It comes from the expected `Fn` type when the context gives it (a user function's parameter, `each`, `any?`, `all?`, and `reduce`, whose result is the accumulator type). For `map` and `sort_by` it comes from the body: every `return` value and the last expression must have one type (`CHECK-TYPE-MISMATCH` otherwise). When the result is `Void`, the last statement is only a statement and gives no value.
+- **`try` in a block** returns the error from the block, so it needs the block's result to be `Result[...]` (`CHECK-TRY-CONTEXT` otherwise); the success value is then written `ok(...)`, as in functions.
+- **Capture by value.** A block can read every variable visible where it is written. It captures their values when the block is created; later assignments outside do not change it. Assigning to an outer variable inside a block is `CHECK-CAPTURED-ASSIGNMENT`: use `reduce`, or a `for` loop. Block parameters and new variables inside a block cannot reuse a visible name (`CHECK-SHADOWED-NAME`).
+- **Values.** A block has the type `Fn[A, ..., R]` and works everywhere a function value works: stored, returned, passed to `Task.spawn` or HTTP callbacks through a variable. Function values have no equality and no JSON form; `IO.inspect` prints `<Fn>`.
+- **New builtins** for blocks: `List.each(list: List[A], f: Fn[A, Void]) -> Void`, `List.any?(list: List[A], f: Fn[A, Bool]) -> Bool`, `List.all?(list: List[A], f: Fn[A, Bool]) -> Bool`. Each callback runs in order; `any?` and `all?` stop at the first decisive element.
+
+Standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), methods on user types and `{ |x| }` blocks are out of scope for now.
+
+### 11.5 Hints for foreign habits
+
+Names from other languages get a grounded `help` that names the Agentica form:
+
+| Written | Help |
+|---|---|
+| `len(x)` | `x.size` for lists and maps, `s.length` for strings |
+| `str(x)`, `x.to_string()` | `x.to_s` |
+| `print(x)` | `puts(x)` or `IO.print(x)` |
+| `input()`, `read_line()`, `gets` | `IO.gets()` |
+| `range(n)` | a `while` loop, or `for` over a list |
+| `Int.to_float(n)`, `float(n)`, `int(x)` | `n.to_f`, `x.to_i` |
+| `None`, `null` | `nil` |
+| `elif`, `elseif`, `else if` | `elsif` |
+| `x.to_i` used as an `Int` | `to_i` returns `Result[Int]`; use `x.to_i!` or `try x.to_i` |

@@ -17,7 +17,8 @@ work rather than their numeric order.
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 5 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 6 | **Next:** Bytecode VM in C with the Boehm GC (phase 7) | Run checked programs much faster, with the same output and diagnostics |
+| 6 | **Next:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures | Accept the Ruby habits agents already have, with static types |
+| 7 | Bytecode VM in C with the Boehm GC (phase 7) | Run checked programs much faster, with the same output and diagnostics |
 
 After steps 1–2, target everyday scripts and automation. After steps 3–5,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
@@ -1015,6 +1016,20 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 **Complete when:** the prototype provides evidence about whether Agentica's syntax and diagnostics help agents write and repair programs.
 
+## Ruby-style ergonomics
+
+Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each stacked on the previous one and moving its part of section 11 into `grammar.md` and the programming reference.
+
+- [x] Specify operators, methods on builtins, interpolation, blocks and closures, and hints in `future.md` section 11.
+- [ ] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).
+- [ ] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE` for unused results of builtins without effects.
+- [ ] String interpolation with `#{...}` and the `\#` escape.
+- [ ] Blocks and closures: `do |x| ... end` as the last argument, capture by value, `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET`, `CHECK-CAPTURED-ASSIGNMENT`; closures accepted everywhere a `Fn` is (tasks, HTTP, BDD); `List.each`, `List.any?`, `List.all?`; `examples/blocks.agc`.
+- [ ] Hints for foreign habits (`len`, `str`, `print`, `input`, `range`, `None`, `elif`, `to_i` used as `Int`).
+- [ ] Teach the Ruby forms in the programming skill and examples; re-run the `binary` evaluation arm and `tests/eval/diagnostics.py`, and compare with the 2026-10-10 snapshot.
+
+**Done when:** the Ruby forms check and run with the same diagnostics quality as the module forms, and the evaluation shows the effect.
+
 ## Phase 7: Bytecode VM
 
 Replace the tree-walking evaluator with a bytecode VM written in C with the Boehm GC, step by step, without changing the language. The Racket front end (lexer, parser, module linker, checker) stays. It lowers the checked program to a typed intermediate form (IR), then to bytecode that the VM runs.
@@ -1035,6 +1050,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 ### 7b: Design decisions (`docs/vm.md`)
 
+- [ ] IR: closures (block bodies with their captured values) from the Ruby-style ergonomics phase.
 - [ ] IR: shape of the lowered program (functions, locals as slots, typed operations, explicit control flow, span per instruction).
 - [ ] Bytecode: instruction set, constant pool, function table, struct/enum layouts, span table, format version.
 - [ ] Serialization between Racket and the VM: binary or JSON, versioned, rejected on version mismatch.
