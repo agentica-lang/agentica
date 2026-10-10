@@ -124,4 +124,4 @@ vm-gc-stress: build
 	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 $(RACO) test tests/vm-diff-test.rkt
 
 vm-unicode:
-	racket vm/gen-unicode.rkt vm/unicode_data.c
+	racket vm/tools/gen-unicode.rkt vm/unicode_data.c

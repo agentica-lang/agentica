@@ -3,7 +3,7 @@
 #include <string.h>
 
 static void write_text(agc_vm *vm, FILE *stream, agc_value v, bool newline) {
-  if (agc_is(v, AGC_T_STRING) || agc_is(v, AGC_T_LIST)) {
+  if (!agc_is(v, AGC_T_NIL) && !agc_is(v, AGC_T_BOOL) && !agc_is(v, AGC_T_INT) && !agc_is(v, AGC_T_FLOAT)) {
     agc_string *s = agc_text(vm, v);
     agc_write(vm, stream, s->data, s->bytes);
   } else {

@@ -150,6 +150,31 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         check_register(r, in.a, f);
         check_register(r, in.b, f);
         break;
+      case AGC_OP_FIELD:
+        check_register(r, in.a, f);
+        check_register(r, in.b, f);
+        if (in.c >= p->max_fields) reject(r, "field index out of range");
+        break;
+      case AGC_OP_PAYLOAD:
+        check_register(r, in.a, f);
+        check_register(r, in.b, f);
+        if (in.c >= p->max_arity) reject(r, "payload index out of range");
+        break;
+      case AGC_OP_IS_VARIANT:
+        check_register(r, in.a, f);
+        check_register(r, in.b, f);
+        if (in.c >= p->variant_count) reject(r, "variant index out of range");
+        break;
+      case AGC_OP_STRUCT:
+        check_register(r, in.a, f);
+        if (in.c >= p->struct_count) reject(r, "struct index out of range");
+        check_window(r, in.b, p->structs[in.c].count, f);
+        break;
+      case AGC_OP_ENUM:
+        check_register(r, in.a, f);
+        if (in.c >= p->variant_count) reject(r, "variant index out of range");
+        check_window(r, in.b, p->variants[in.c].arity, f);
+        break;
       case AGC_OP_CONST:
         check_register(r, in.a, f);
         if (bx >= p->constant_count) reject(r, "constant index out of range");
@@ -175,6 +200,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
       case AGC_OP_LE_F:
       case AGC_OP_CONCAT:
       case AGC_OP_LIST_GET:
+      case AGC_OP_SAME:
         check_register(r, in.a, f);
         check_register(r, in.b, f);
         check_register(r, in.c, f);
@@ -207,6 +233,87 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         reject(r, "unknown opcode %u", (unsigned)in.op);
     }
   }
+}
+
+static void load_types(reader *r, agc_program *p) {
+  p->type_count = read_count(r, 9, "type");
+  p->types = load_alloc(r, agc_size_mul(p->type_count, sizeof(agc_type)), true);
+  for (uint32_t i = 0; i < p->type_count; i++) {
+    agc_type *t = &p->types[i];
+    t->kind = read_u8(r);
+    t->x = read_u32(r);
+    t->y = read_u32(r);
+    switch (t->kind) {
+      case 0:
+      case 1:
+      case 2:
+      case 3:
+      case 7:
+        if (t->x || t->y) reject(r, "bad type operand");
+        break;
+      case 4:
+        if (t->x >= i || t->y) reject(r, "bad type operand");
+        break;
+      case 5:
+        if (t->x >= i || t->y >= i) reject(r, "bad type operand");
+        break;
+      case 6:
+        if (t->y) reject(r, "bad type operand");
+        break;
+      default: reject(r, "unsupported type kind %u", (unsigned)t->kind);
+    }
+  }
+
+  p->struct_count = read_count(r, 8, "struct");
+  p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
+  for (uint32_t i = 0; i < p->struct_count; i++) {
+    agc_struct_def *d = &p->structs[i];
+    d->name = read_string(r);
+    d->count = read_count(r, 8, "field");
+    if (d->count > 65535) reject(r, "too many fields");
+    d->fields = load_alloc(r, agc_size_mul(d->count, sizeof(agc_string *)), false);
+    d->types = load_alloc(r, agc_size_mul(d->count, sizeof(uint32_t)), true);
+    for (uint32_t k = 0; k < d->count; k++) {
+      d->fields[k] = read_string(r);
+      d->types[k] = read_u32(r);
+      if (d->types[k] >= p->type_count) reject(r, "field type out of range");
+    }
+    if (d->count > p->max_fields) p->max_fields = d->count;
+  }
+  for (uint32_t i = 0; i < p->type_count; i++)
+    if (p->types[i].kind == 6 && p->types[i].x >= p->struct_count) reject(r, "type struct index out of range");
+
+  p->enum_count = read_count(r, 8, "enum");
+  p->enums = load_alloc(r, agc_size_mul(p->enum_count, sizeof(agc_enum_def)), false);
+  agc_variant_def **variants = load_alloc(r, agc_size_mul(p->enum_count, sizeof(agc_variant_def *)), false);
+  uint64_t total = 0;
+  for (uint32_t i = 0; i < p->enum_count; i++) {
+    agc_enum_def *d = &p->enums[i];
+    d->name = read_string(r);
+    d->first = (uint32_t)total;
+    d->count = read_count(r, 8, "variant");
+    variants[i] = load_alloc(r, agc_size_mul(d->count, sizeof(agc_variant_def)), false);
+    for (uint32_t k = 0; k < d->count; k++) {
+      agc_variant_def *v = &variants[i][k];
+      v->name = read_string(r);
+      v->owner = i;
+      v->arity = read_u32(r);
+      if (v->arity > 65535) reject(r, "variant arity too large");
+      if (v->arity > p->max_arity) p->max_arity = v->arity;
+      if (v->arity == 0) {
+        agc_enum *shared = load_alloc(r, sizeof(agc_enum), false);
+        shared->variant = (uint32_t)(total + k);
+        shared->n = 0;
+        v->shared = agc_enum_value(shared);
+      }
+    }
+    total += d->count;
+  }
+  p->variant_count = (uint32_t)total;
+  p->variants = load_alloc(r, agc_size_mul(p->variant_count, sizeof(agc_variant_def)), false);
+  for (uint32_t i = 0; i < p->enum_count; i++)
+    if (p->enums[i].count)
+      memcpy(&p->variants[p->enums[i].first], variants[i], p->enums[i].count * sizeof(agc_variant_def));
 }
 
 static void load(reader *r, agc_program *p) {
@@ -263,9 +370,7 @@ static void load(reader *r, agc_program *p) {
     }
   }
 
-  if (read_u32(r) != 0) reject(r, "type tables are not supported yet");
-  if (read_u32(r) != 0) reject(r, "structs are not supported yet");
-  if (read_u32(r) != 0) reject(r, "enums are not supported yet");
+  load_types(r, p);
 
   p->builtin_count = read_count(r, 8, "builtin");
   p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);

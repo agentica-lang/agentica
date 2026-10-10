@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs structs, enums and `case`: struct construction (fields
+  in any order, evaluated as written), field access, generic and recursive
+  enums, nullary variants with or without `()`, struct and enum values in
+  locals, parameters, returns and lists, imported types, and `case` with
+  literal, `_` and variant patterns (payload bindings and `_` discards).
+  They print as `Name(f: v)` and `Enum.Variant(a)` through `puts`, `print`,
+  `IO.warn`, interpolation, `to_s` and `inspect`, with the same names as the
+  evaluator, and deep values print without C recursion. The `.agcb` format
+  is now version 2: it carries the type, struct and enum tables.
 - The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String
   and nested lists in locals, parameters and returns, list literals (long
   ones are built in chunks of 255), `for x in xs` with `break` and `next`,
@@ -87,6 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `vm/gen-unicode.rkt` moved to `vm/tools/gen-unicode.rkt`; `make vm-unicode`
+  runs it from there and writes the same `vm/unicode_data.c`.
 - libgc is built with `NO_EXECUTE_PERMISSION` and `ALL_INTERIOR_POINTERS`,
   as its own build systems do: the heap is no longer writable and
   executable (macOS on arm64 refuses such pages), and interior pointers

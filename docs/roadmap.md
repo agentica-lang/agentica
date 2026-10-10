@@ -8,8 +8,9 @@ The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
 (phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice, the
-Float and Strings PRs, the macOS and Windows CI and the Lists PR (`docs/vm.md`
-§12.2 items 1 to 4 and 5a) are done; the rest of item 5 (5b to 5e) and the
+Float and Strings PRs, the macOS and Windows CI, the Lists PR and the
+structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
+done; the rest of item 5 (5c to 5e) and the
 other widening PRs of §12.2 come next. Real applications and MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
@@ -1103,13 +1104,15 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 - [x] Source layout under `vm/` (one module per area: loader, values, interpreter loop, builtins, diagnostics; JSON joins in its PR; public names prefixed `agc_`); `make vm` builds `dist/agentica-vm` with libgc from the submodule; small C tests use plain `assert`, no framework (`make vm-test`).
 - [x] Loader with format and Agentica version checks and the full validation of `docs/vm.md` section 8 for the sections and opcodes of the slice; it rejects truncated or malformed bytecode without crashing, and a fuzz run (`make vm-fuzz`) proves it.
-- [ ] Loader validation for the type, struct and enum tables and the remaining opcodes, as they land.
+- [x] Loader validation for the type, struct and enum tables (format version 2).
+- [ ] Loader validation for the remaining opcodes, as they land.
 - [x] Values and checked Int arithmetic (`RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-DIVISION-BY-ZERO`).
 - [x] IEEE Float arithmetic and comparisons, and Float text as in the evaluator (`docs/vm.md` §2.2).
 - [x] Control flow, locals, function calls, returns, call-depth limit (`RUNTIME-STACK-OVERFLOW`), `--max-steps` (`RUNTIME-STEP-LIMIT`).
 - [x] Lists: literals (chunked above 255 elements), `for`, indexing with `RUNTIME-INDEX-OUT-OF-RANGE` at the index span, and their text and debug forms (`docs/vm.md` §12.2 item 5a).
-- [ ] Structs, maps (insertion order), map indexing errors with their spans.
-- [ ] Enums, `case`, `Result`, `try`, function values, closures, resumable `List` builtins.
+- [x] Structs, enums (generic too) and `case` with literal, `_` and variant patterns; text and debug forms with the linked display names (`docs/vm.md` §12.2 item 5b).
+- [ ] Maps (insertion order), map indexing errors with their spans.
+- [ ] `Result`, `try`, function values, closures, resumable `List` builtins.
 - [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.
 - [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).

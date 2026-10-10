@@ -1,6 +1,7 @@
 #include "agc.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <string.h>
 
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
@@ -61,6 +62,15 @@ static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
     return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
   }
   return agc_as_bool(vm, x) == agc_as_bool(vm, y);
+}
+
+static bool same_values(agc_vm *vm, agc_value x, agc_value y) {
+  if (x.tag != y.tag) return false;
+  if (agc_is(x, AGC_T_FLOAT)) {
+    double a = agc_as_float(vm, x), b = agc_as_float(vm, y);
+    return isnan(a) ? isnan(b) : a == b && signbit(a) == signbit(b);
+  }
+  return equal_values(vm, x, y);
 }
 
 static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, uint32_t span) {
@@ -154,6 +164,38 @@ static void run(agc_vm *vm) {
         R[in.a] = l->items[x];
         break;
       }
+      case AGC_OP_STRUCT: {
+        uint32_t n = p->structs[in.c].count;
+        agc_struct *st = agc_new_struct(in.c, n);
+        for (uint32_t k = 0; k < n; k++) st->fields[k] = R[(uint32_t)in.b + k];
+        R[in.a] = agc_struct_value(st);
+        break;
+      }
+      case AGC_OP_FIELD: {
+        const agc_struct *st = agc_as_struct(vm, R[in.b]);
+        if (in.c >= st->n) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: field index out of range", 0);
+        R[in.a] = st->fields[in.c];
+        break;
+      }
+      case AGC_OP_ENUM: {
+        const agc_variant_def *v = &p->variants[in.c];
+        if (v->arity == 0) {
+          R[in.a] = v->shared;
+          break;
+        }
+        agc_enum *e = agc_new_enum(in.c, v->arity);
+        for (uint32_t k = 0; k < v->arity; k++) e->payload[k] = R[(uint32_t)in.b + k];
+        R[in.a] = agc_enum_value(e);
+        break;
+      }
+      case AGC_OP_IS_VARIANT: R[in.a] = agc_bool(agc_as_enum(vm, R[in.b])->variant == in.c); break;
+      case AGC_OP_PAYLOAD: {
+        const agc_enum *e = agc_as_enum(vm, R[in.b]);
+        if (in.c >= e->n) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: payload index out of range", 0);
+        R[in.a] = e->payload[in.c];
+        break;
+      }
+      case AGC_OP_SAME: R[in.a] = agc_bool(same_values(vm, R[in.b], R[in.c])); break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
       case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
       case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;

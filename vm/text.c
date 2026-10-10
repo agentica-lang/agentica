@@ -139,47 +139,105 @@ static void append_item(agc_vm *vm, builder *b, agc_value v) {
   }
 }
 
-typedef struct {
-  const agc_list *list;
-  size_t next;
-} list_frame;
+static void append_string(builder *b, const agc_string *s) {
+  if (s->bytes) memcpy(reserve(b, s->bytes), s->data, s->bytes);
+  b->s->bytes += s->bytes;
+  b->s->chars += s->chars;
+}
 
-static agc_string *list_debug(agc_vm *vm, const agc_list *root) {
+static bool compound(agc_value v) {
+  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM);
+}
+
+typedef struct {
+  agc_value value;
+  size_t next;
+} debug_frame;
+
+static const agc_struct_def *struct_def(agc_vm *vm, const agc_struct *st) {
+  const agc_program *p = vm->program;
+  if (!p || st->type >= p->struct_count || p->structs[st->type].count != st->n)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown struct type", 0);
+  return &p->structs[st->type];
+}
+
+static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
+  const agc_program *p = vm->program;
+  if (!p || e->variant >= p->variant_count || p->variants[e->variant].arity != e->n)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown enum variant", 0);
+  return &p->variants[e->variant];
+}
+
+static size_t item_count(agc_vm *vm, agc_value v) {
+  if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->len;
+  if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->n;
+  return agc_as_enum(vm, v)->n;
+}
+
+static agc_value item_at(agc_vm *vm, agc_value v, size_t k) {
+  if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->items[k];
+  if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->fields[k];
+  return agc_as_enum(vm, v)->payload[k];
+}
+
+static bool open_value(agc_vm *vm, builder *b, agc_value v) {
+  if (agc_is(v, AGC_T_LIST)) {
+    append(b, "[", 1);
+    return true;
+  }
+  if (agc_is(v, AGC_T_STRUCT)) {
+    append_string(b, struct_def(vm, agc_as_struct(vm, v))->name);
+    append(b, "(", 1);
+    return true;
+  }
+  const agc_enum *e = agc_as_enum(vm, v);
+  const agc_variant_def *variant = variant_def(vm, e);
+  append_string(b, vm->program->enums[variant->owner].name);
+  append(b, ".", 1);
+  append_string(b, variant->name);
+  if (e->n == 0) return false;
+  append(b, "(", 1);
+  return true;
+}
+
+static agc_string *compound_debug(agc_vm *vm, agc_value root) {
   builder b;
   b.cap = 64;
   b.s = agc_new_string(b.cap, 0);
   b.s->bytes = 0;
-  size_t depth = 1, capacity = 16;
-  list_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(list_frame)));
-  stack[0].list = root;
-  stack[0].next = 0;
-  append(&b, "[", 1);
-  while (depth) {
-    list_frame *top = &stack[depth - 1];
-    if (top->next == top->list->len) {
-      append(&b, "]", 1);
-      depth--;
-      continue;
-    }
-    if (top->next) append(&b, ", ", 2);
-    agc_value item = top->list->items[top->next++];
-    if (!agc_is(item, AGC_T_LIST)) {
+  size_t depth = 0, capacity = 16;
+  debug_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(debug_frame)));
+  agc_value item = root;
+  for (;;) {
+    if (!compound(item)) {
       append_item(vm, &b, item);
-      continue;
+    } else if (open_value(vm, &b, item)) {
+      if (depth == capacity) {
+        size_t bigger = agc_size_mul(capacity, 2);
+        debug_frame *grown = agc_alloc(agc_size_mul(bigger, sizeof(debug_frame)));
+        memcpy(grown, stack, depth * sizeof(debug_frame));
+        stack = grown;
+        capacity = bigger;
+      }
+      stack[depth].value = item;
+      stack[depth].next = 0;
+      depth++;
     }
-    if (depth == capacity) {
-      size_t bigger = agc_size_mul(capacity, 2);
-      list_frame *grown = agc_alloc(agc_size_mul(bigger, sizeof(list_frame)));
-      memcpy(grown, stack, depth * sizeof(list_frame));
-      stack = grown;
-      capacity = bigger;
+    for (;;) {
+      if (!depth) return b.s;
+      debug_frame *top = &stack[depth - 1];
+      if (top->next < item_count(vm, top->value)) break;
+      append(&b, agc_is(top->value, AGC_T_LIST) ? "]" : ")", 1);
+      depth--;
     }
-    stack[depth].list = agc_as_list(vm, item);
-    stack[depth].next = 0;
-    depth++;
-    append(&b, "[", 1);
+    debug_frame *top = &stack[depth - 1];
+    if (top->next) append(&b, ", ", 2);
+    if (agc_is(top->value, AGC_T_STRUCT)) {
+      append_string(&b, struct_def(vm, agc_as_struct(vm, top->value))->fields[top->next]);
+      append(&b, ": ", 2);
+    }
+    item = item_at(vm, top->value, top->next++);
   }
-  return b.s;
 }
 
 agc_string *agc_text(agc_vm *vm, agc_value v) {
@@ -188,7 +246,7 @@ agc_string *agc_text(agc_vm *vm, agc_value v) {
 }
 
 agc_string *agc_debug(agc_vm *vm, agc_value v) {
-  if (agc_is(v, AGC_T_LIST)) return list_debug(vm, agc_as_list(vm, v));
+  if (compound(v)) return compound_debug(vm, v);
   if (!agc_is(v, AGC_T_STRING)) {
     char text[AGC_FLOAT_TEXT];
     size_t n = agc_scalar_text(vm, v, text);

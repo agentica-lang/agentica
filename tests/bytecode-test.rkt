@@ -65,7 +65,12 @@
     (check-equal? (unsupported-at "def get(m: Map[String, Int]) -> Int\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
                   '(2 10))
     (check-equal? (unsupported-at "def main() -> Void\n  puts([1, 2].size)\nend\n") '(2 8))
-    (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8)))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8))
+    (check-equal? (unsupported-at "def main() -> Void\n  h = Header(name: \"a\", value: \"b\")\nend\n") '(2 7))
+    (check-equal? (unsupported-at "struct S\n  m: Map[String, Int]\nend\n\ndef main() -> Void\n  s = S(m: {\"a\": 1})\nend\n")
+                  '(6 12))
+    (check-equal? (unsupported-at "def f(r: Result[Int]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
+                  '(2 8)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
     (define work (make-temporary-directory "agentica-compile~a"))
