@@ -134,14 +134,30 @@
     (define (pop-scope!) (set! scopes (cdr scopes)))
     (define loop-break (make-parameter #f))
     (define loop-next (make-parameter #f))
-    (define (run-loop body)
+    (define next-uses (make-weak-hasheq))
+    (define (has-next? statements)
+      (for/or ([statement (in-list statements)])
+        (cond
+          [(loop-control? statement) (eq? (loop-control-kind statement) 'next)]
+          [(if-stmt? statement)
+           (or (for/or ([branch (in-list (if-stmt-branches statement))])
+                 (has-next? (if-branch-body branch)))
+               (and (if-stmt-else-body statement) (has-next? (if-stmt-else-body statement))))]
+          [(case-stmt? statement)
+           (for/or ([arm (in-list (case-stmt-arms statement))])
+             (has-next? (case-arm-body arm)))]
+          [else #f])))
+    (define (run-loop loop-body body)
       (define saved scopes)
+      (define uses-next? (hash-ref! next-uses loop-body (lambda () (has-next? loop-body))))
       (let/ec break-k
         (parameterize ([loop-break (lambda () (set! scopes saved) (break-k (void)))])
-          (body (lambda (step)
-                  (let/ec next-k
-                    (parameterize ([loop-next (lambda () (set! scopes saved) (next-k (void)))])
-                      (step))))))))
+          (body (if uses-next?
+                    (lambda (step)
+                      (let/ec next-k
+                        (parameterize ([loop-next (lambda () (set! scopes saved) (next-k (void)))])
+                          (step))))
+                    (lambda (step) (step)))))))
 
     (define (lookup name)
       (for/or ([frame (in-list scopes)])
@@ -862,6 +878,7 @@
            [(if-stmt-else-body statement) (exec-scoped (if-stmt-else-body statement))])]
         [(while-stmt? statement)
          (run-loop
+          (while-stmt-body statement)
           (lambda (iterate)
             (let loop ()
               (when (eval-expression (while-stmt-condition statement))
@@ -870,6 +887,7 @@
         [(for-stmt? statement)
          (define elements (eval-expression (for-stmt-iterable statement)))
          (run-loop
+          (for-stmt-body statement)
           (lambda (iterate)
             (for ([element (in-list elements)])
               (iterate

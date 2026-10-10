@@ -409,7 +409,13 @@
                "    odd = i\n    total += odd\n  end\n"
                "  for x in [1, 2, 3]\n    while true\n      break\n    end\n    if x == 2\n      next\n    end\n"
                "    puts(\"#{x} #{first_negative([x, -x])}\")\n  end\n  puts(total.to_s)\nend\n")))
-    (check-equal? output "1 -1\n3 -3\n25\n"))
+    (check-equal? output "1 -1\n3 -3\n25\n")
+    (define-values (scoped-output scoped-err scoped-result)
+      (run-io (main-with (string-append
+                          "  for x in [1, 2]\n    if x == 1\n      inner = 10\n      next\n    end\n  end\n"
+                          "  while true\n    if true\n      inner = 20\n      break\n    end\n  end\n"
+                          "  inner = 30\n  puts(inner.to_s)"))))
+    (check-equal? scoped-output "30\n"))
 
   (test-case "IO.gets! at end of input is a located diagnostic"
     (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))

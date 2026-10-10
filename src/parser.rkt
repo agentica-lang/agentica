@@ -472,7 +472,9 @@
          (when (and (name-ref? value) (not (statement-end?))
                     (member (name-ref-name value) '("let" "var" "val" "const" "match" "break" "continue" "next")))
            (bail 'PARSE-UNEXPECTED-TOKEN
-                 (format "\"~a\" is not a keyword" (name-ref-name value))
+                 (if (member (name-ref-name value) '("break" "next"))
+                     (format "\"~a\" stands alone on its line" (name-ref-name value))
+                     (format "\"~a\" is not a keyword" (name-ref-name value)))
                  start
                  #:help (case (name-ref-name value)
                           [("match") "use case value do ... end"]

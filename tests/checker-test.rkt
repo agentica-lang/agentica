@@ -620,6 +620,8 @@
 
   (test-case "break and next only inside while or for, never across a block"
     (check-false (diagnostic? (check-text (main-with "  while true\n    if true\n      break\n    end\n    next\n  end\n  for x in [1]\n    next\n  end"))))
+    (check-false (diagnostic? (check-text (main-with "  while true\n    [1].each do |x|\n      while true\n        break\n      end\n    end\n    break\n  end"))))
+    (check-false (diagnostic? (check-text (main-with "  for x in [1, 2]\n    case x\n      1 -> next\n      _ -> break\n    end\n  end"))))
     (for ([entry '(("  break" 2 "inside while or for")
                    ("  [1].each do |x|\n    next\n  end" 3 "return leaves the block")
                    ("  while true\n    [1].each do |x|\n      break\n    end\n  end" 4 "cannot break"))])
