@@ -1,12 +1,11 @@
 def main() -> Void
   text = "  Agentica, hello  "
-  clean = String.trim(text)
-  puts(String.upcase(clean))
-  parts = String.split(clean, ", ")
-  for part in parts
-    puts(String.from_int(String.length(part)))
+  clean = text.strip
+  puts(clean.upcase)
+  clean.split(", ").each do |part|
+    puts(part.length.to_s)
   end
-  if String.contains?(clean, "Agentica")
-    puts(String.replace(clean, "hello", "world"))
+  if clean.include?("Agentica")
+    puts(clean.replace("hello", "world"))
   end
 end

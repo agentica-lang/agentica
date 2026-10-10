@@ -19,6 +19,10 @@ Tokens are input plus output per run. Failing runs are interpreter runs in the a
 | 2 | 2026-10-01 | `binary`, plain diagnostics (Firejail) | 15 | 15/15 | 38,740 | 120 | 3.2 | $0.014 |
 | 3 | 2026-10-01 | `binary`, labels, `help`, and suggestions | 15 | 15/15 | 25,733 | 58 | 2.5 | $0.009 |
 | 4 | 2026-10-02 | Same as round 3, prompt also says `agentica --help` lists the options | 15 | 15/15 | 24,574 | 70 | 1.33 | $0.008 |
+| 5 | 2026-10-10 | `binary`, Ruby-style language (methods, blocks, interpolation, hints), tasks t1–t5 | 15 | 15/15 | 24,526 | 89 | 4.2 | $0.009 |
+| 5 | 2026-10-10 | Same run, tasks t6–t8 (JSON and enums) | 9 | 9/9 | 76,363 | 261 | 12.7 | $0.035 |
+| 6 | 2026-10-10 | `binary`, round 5 plus the Ruby forms and hints it showed, tasks t1–t5 | 15 | 14/15 | 31,691 | 99 | 3.07 | $0.011 |
+| 6 | 2026-10-10 | Same run, tasks t6–t8 | 9 | 9/9 | 78,694 | 253 | 7.89 | $0.033 |
 
 The round-0 count joins two partial runs. A `binary` round run before the sandbox was fixed (15 runs, 15/15) is discarded: the agents found leftover work directories in `/tmp` that contained the skill (`tests/eval/results/20261001-230301-pi-INVALID`). A smoke run of 2 runs (`binary` and `skill`, `t1-stats`) is not counted.
 
@@ -71,6 +75,46 @@ Same checker and arm as round 3. The only change is one sentence in the `binary`
 
 - Every run read `--help` once or twice (in round 3 they did it unprompted too), but only one run (`t2-fix-types` rep 3) went on to use `--ai` or `--json`. The sentence made no visible difference; the means of rounds 3 and 4 are within the noise of this design.
 - Network: the sandbox leaves the network open, and two `t4-word-count` runs tried to download the language docs from the project's GitHub (`raw.githubusercontent.com/.../grammar.md` and the README) and to list the owner's repositories. The repository is private, so both downloads returned 404 and nothing leaked. If the repository is made public, the `binary` arm needs the network closed for its host (or a different check) before another round. The runs that did this also counted 22 attempts to read the repo path across the round (all blocked).
+
+## Round 5: the Ruby-style language
+
+The `binary` arm on the Ruby-style language (operators, methods on builtins, interpolation, blocks, foreign-habit hints, blank line after `end`), before the follow-up below. Docker sandbox, 3 reps of all 8 tasks, 24/24 runs passed every hidden case. Run directory `tests/eval/results/20261010-102333-pi`.
+
+| Task | Tokens (4 → 5) | Seconds (4 → 5) | Failing runs (4 → 5) |
+|---|---|---|---|
+| t1-stats | 39,631 → 30,482 | 89 → 128 | 0.3 → 6.0 |
+| t2-fix-types | 18,732 → 18,733 | 84 → 43 | 3.0 → 3.7 |
+| t3-struct-change | 3,871 → 7,677 | 13 → 22 | 0.0 → 0.0 |
+| t4-word-count | 52,239 → 46,319 | 128 → 182 | 1.3 → 9.3 |
+| t5-scope-return | 8,397 → 19,418 | 37 → 72 | 2.0 → 2.0 |
+| t6-json-catalog | – → 81,495 | – → 308 | – → 16.7 |
+| t7-json-stream | – → 86,025 | – → 224 | – → 5.0 |
+| t8-enum-ledger | – → 61,568 | – → 252 | – → 16.3 |
+
+- Tokens for t1–t5 did not change (24.6k → 24.5k per run); failing interpreter runs went up from 1.33 to 4.2 per run. With 3 reps per task this is within the noise for tokens, but not for failing runs.
+- The agent has no documentation in this arm. Told the language is like Ruby by the diagnostics and hints, it writes more Ruby: `while cond do`, `case x` without `do`, one-line arms (`1 -> puts("one")`), `IO.gets!` without parentheses, `var x = ...`, `when`. These were parse errors, and about half of the parse errors were repeated on the next call (see [eval-diagnostics.md](eval-diagnostics.md#round-5-2026-10-10)).
+- Follow-up, after this round: the parser accepts the optional `do`, one-line arms and module calls without parentheses, and gives a hint for the other forms (`let`/`var`, `match`, `when`, `then`, `fn`/`lambda`, `break`, `Result.Ok(x)` as a value, `Command.Show` without parentheses). Not measured yet.
+- Network: in t6 and t7 some runs tried `curl` against a guessed `agentica.dev` site and listed installed packages (6 commands). No reads outside the work directory.
+
+## Round 6: the Ruby forms from round 5
+
+Same arm, tasks and setup as round 5, after the parser accepted the optional `do`, one-line case arms and module calls without parentheses, and hinted the other forms (PR #31). Run directory `tests/eval/results/20261010-113647-pi`.
+
+| Task | Tokens (5 → 6) | Seconds (5 → 6) | Failing runs (5 → 6) |
+|---|---|---|---|
+| t1-stats | 30,482 → 38,270 | 128 → 275 | 6.0 → 2.3 |
+| t2-fix-types | 18,733 → 29,718 | 43 → 33 | 3.7 → 3.7 |
+| t3-struct-change | 7,677 → 15,261 | 22 → 18 | 0.0 → 0.0 |
+| t4-word-count | 46,319 → 55,263 | 182 → 131 | 9.3 → 8.0 |
+| t5-scope-return | 19,418 → 19,944 | 72 → 38 | 2.0 → 1.3 |
+| t6-json-catalog | 81,495 → 70,916 | 308 → 323 | 16.7 → 4.7 |
+| t7-json-stream | 86,025 → 109,596 | 224 → 253 | 5.0 → 5.3 |
+| t8-enum-ledger | 61,568 → 55,571 | 252 → 184 | 16.3 → 13.7 |
+
+- Failing interpreter runs went down: 4.2 → 3.07 per run on t1–t5, and 12.7 → 7.9 on t6–t8. Invocations with a diagnostic went from 183 to 117, and parse errors from 98 (48 repeated) to 47 (13 repeated); see [eval-diagnostics.md](eval-diagnostics.md#round-6-2026-10-10).
+- Tokens did not go down (24.5k → 31.7k on t1–t5, 76k → 79k on t6–t8). With 3 reps the per-task token means move a lot between rounds (t2 and t3 doubled with no relevant change), so this is mostly noise.
+- One run failed: `t1-stats` rep 3 hit the 10 minute limit without writing a file. It spent the run searching the `agentica` binary for builtin descriptions with `grep -a` instead of writing code. Its 600 s explain most of the t1 time.
+- Network: one `curl` in t1–t5 and five in t6–t8, as in round 5. No reads outside the work directory.
 
 ## What the results do not show
 

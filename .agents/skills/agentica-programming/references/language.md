@@ -1,6 +1,22 @@
 # Agentica language reference
 
-Agentica is a small statically typed language with Ruby-like syntax. This file is the whole language: if a form is not here, it does not exist.
+Agentica is Ruby with static types: Ruby-like syntax, checked before running, with immutable values. This file is the whole language: if a form is not here, it does not exist.
+
+## Style
+
+Write the Ruby forms. Each has a longer module form that means the same thing.
+
+| Write | Same as |
+|---|---|
+| `s.length`, `xs.size`, `s.strip.split(" ")` | `String.length(s)`, `List.size(xs)`, `String.split(String.trim(s), " ")` |
+| `n.to_s`, `s.to_i!`, `n.to_f` | `String.from_int(n)`, `String.to_int!(s)`, `Float.from_int(n)` |
+| `"total: #{n}"` | `"total: " + String.from_int(n)` |
+| `!done && (a \|\| b)` | `not done and (a or b)` |
+| `count += 1` | `count = count + 1` |
+| `xs.map do \|x\| x * 2 end` | `List.map(xs, &double)` with a separate `def double` |
+| `xs = xs.push(4)` | `xs = List.append(xs, 4)` |
+
+Values never change in place: a method returns a new value, so assign it (`xs = xs.push(4)`).
 
 ## Program shape
 
@@ -8,7 +24,7 @@ Agentica is a small statically typed language with Ruby-like syntax. This file i
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
-- Calls always use parentheses, even with no arguments: `main()`, `puts("hi")`.
+- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block (`s.length`, `xs.size`, `xs.each do |x| ... end`), and so may a module function with no arguments, builtin or through an import alias (`IO.gets!`, `IO.eof?`, `Util.reset`). `f = Util.helper` is a call; `&Util.helper` is the function value.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
 - Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
@@ -114,7 +130,7 @@ performance is promised.
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
 | `Option[T]` (example) | A user-defined generic enum; `Option` is not a builtin type |
 | `Json` | opaque JSON value; use `JSON` functions to access it |
-| `Fn[A, ..., R]` | named function value; last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
+| `Fn[A, ..., R]` | function value (a block or `&name`); last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
 | `Task[R]` | opaque lightweight task; exactly one result type |
 | Network handles | opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
 | Builtin records | `Header`, `Request`, `Response`, `HttpClientOptions`, `HttpServerOptions` |
@@ -162,7 +178,7 @@ Leave a blank line after the `end` of every `def`, `struct` and `enum` before th
 ```ruby
 count = 0              # new variable, type inferred (Int)
 total: Float = 0.5     # new variable with an annotation
-count = count + 1      # update: same name, same type
+count += 1             # update: same name, same type
 
 if count > 3
   puts("big")
@@ -173,7 +189,7 @@ else
 end
 
 while count < 10
-  count = count + 1
+  count += 1
 end
 
 for item in items      # items is a List[T]; item is a new, read-only variable
@@ -194,7 +210,7 @@ return count
 - A name created in a block is not visible after that block's `end`.
 - A new variable cannot reuse a name that is already visible in an outer scope (no shadowing).
 - The `for` variable cannot be assigned to.
-- `case value do pattern -> block end` is a statement. Each arm has a normal block and its bindings are local to that arm.
+- `case value do pattern -> block end` is a statement (`do` is optional). Each arm has a normal block and its bindings are local to that arm. A short arm may put one simple statement on the arrow line: `1 -> puts("one")`, `Command.Add(n) -> total += n`; more lines may follow it.
 - Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
 - `if` and `while` conditions must be `Bool`. There is no truthiness: `if 1` is an error.
@@ -209,7 +225,7 @@ return count
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.
 - Enum variants are qualified by their type. Construct payload variants positionally (`Option.Some("hi")`) and nullary variants with empty parentheses (`Option.None()`). Generic arguments are inferred from payloads and expected types; every type parameter must be known. A nullary generic variant therefore needs expected type context.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
-- Function call `f(a, b)` with positional arguments. Builtin module call `String.upcase(s)`. Method call on a builtin value `s.upcase`, `xs.map(&f)`: see "Methods on builtin types".
+- Function call `f(a, b)` with positional arguments. Method call on a builtin value `s.upcase`, `xs.map do |x| ... end`: see "Methods on builtin types". Builtin module call `String.upcase(s)` is the same as `s.upcase`.
 - `&name` references a declared top-level function, without capturing locals. `f: Fn[Int, Int] = &double`; call it with `f.call(21)`. A block (`do |x| ... end`, below) is also a function value and captures locals. Function values can be stored in containers, fields, parameters, and returns. Signatures must match exactly. Bare function names remain invalid as values. No standalone lambdas, equality, or JSON encoding; inspect prints `<Fn>`.
 
 Operators, from highest to lowest precedence:
@@ -230,7 +246,7 @@ Operators, from highest to lowest precedence:
 - `< <= > >=` take two numbers of the same type.
 - `==` and `!=` take two values of the same primitive type (`Int`, `Float`, `Bool`, `String`, `Nil`). Lists, maps, structs, Results, Json and Fn values cannot be compared.
 - Comparisons do not chain: write `a < b and b < c`, not `a < b < c`.
-- `and`, `or`, `not` take `Bool`, and `and` / `or` short-circuit. `&&`, `||`, `!` are the same operators. `not` / `!` bind tightly: write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
+- `&&`, `||`, `!` take `Bool`, and `&&` / `||` short-circuit. `and`, `or`, `not` are the same operators. `!` / `not` bind tightly: write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Arguments and operands are evaluated left to right.
 
 ## Builtin functions
@@ -379,10 +395,10 @@ found = xs.any? do |x| x > 10 end
 result = run(5) do |n| n + 1 end
 ```
 
-- Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end`. The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
+- Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end` (a function through an import alias may drop them: `Util.start do ... end`). The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
 - Parameter types come from the call; annotate when there is no context: `do |x: Int| ... end` (`CHECK-BLOCK-TYPE` otherwise).
 - The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]` known from the call (not in `map`/`sort_by`); end it with `ok(...)`.
-- In `case f() do`, `do` belongs to `case`; in `while` and `for` headers a `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
+- `case`, `while`, and `for` headers may end with an optional `do` (`while !done do`, `for x in xs do`); that `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
 - Blocks capture values when created; later changes outside do not affect them. A block cannot assign to an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): build the value with `map`/`reduce`, or use a `for` loop. Block parameters cannot reuse visible names.
 - A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn` through a function parameter, or register a BDD step with `BDD.step("pattern") do |args| ... end`.
 - `List.each` runs a block for each element; `List.any?` / `List.all?` stop at the first deciding element.
@@ -411,9 +427,9 @@ All collection updates preserve their inputs. `List.append`, `List.set`, and `Li
 ```ruby
 def main() -> Void
   data = IO.read_bytes(4)
-  if Result.ok?(data)
-    text = String.from_bytes(Result.unwrap!(data))
-    IO.print(Result.unwrap_or(text, "invalid UTF-8"))
+  if data.ok?
+    text = String.from_bytes(data.unwrap!)
+    IO.print(text.unwrap_or("invalid UTF-8"))
     IO.flush()
   end
 end
@@ -443,16 +459,16 @@ Result.message(r: Result[T]) -> String
 
 ```ruby
 def read_age(text: String) -> Result[Int]
-  age = try String.to_int(text)
+  age = try text.to_i
   return ok(age)
 end
 
 def main() -> Void
   age = read_age("bad")
-  if not Result.ok?(age)
-    puts(Result.message(age))
+  if !age.ok?
+    puts(age.message)
   end
-  puts(String.from_int(Result.unwrap_or(age, 0)))
+  puts(age.unwrap_or(0).to_s)
 end
 ```
 
@@ -483,8 +499,8 @@ end
 def main() -> Void
   first = Task.spawn(&double, 21)
   second = Task.spawn(&double, 7)
-  puts(String.from_int(Task.await(first)))
-  puts(String.from_int(Task.await(second)))
+  puts(Task.await(first).to_s)
+  puts(Task.await(second).to_s)
 end
 ```
 
@@ -868,6 +884,8 @@ expected Int, found String
 
 The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (names and types, before running), `RUNTIME-` (while running).
 
+Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break`, `loop do`, `puts(x) if ok`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.
+
 | Code | Meaning |
 |---|---|
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket |
@@ -932,7 +950,7 @@ def main() -> Void
 end
 ```
 
-Structs and lists:
+Structs, lists and blocks:
 
 ```ruby
 struct Todo
@@ -945,12 +963,11 @@ def main() -> Void
     Todo(title: "write code", done: false),
     Todo(title: "review code", done: true)
   ]
-
-  for task in tasks
-    if not task.done
-      puts(task.title)
-    end
+  pending = tasks.filter do |task| !task.done end
+  pending.each do |task|
+    puts("todo: #{task.title}")
   end
+  puts("#{pending.size} of #{tasks.size} left")
 end
 ```
 
@@ -959,11 +976,41 @@ Maps and strings:
 ```ruby
 def main() -> Void
   stock: Map[String, Int] = {"apple": 3, "pear": 0}
-  stock = Map.put(stock, "kiwi", 7)
-  for name in Map.keys(stock)
+  stock = stock.put("kiwi", 7)
+  for name in stock.keys
     if stock[name] > 0
-      puts(String.upcase(name) + ": " + String.from_int(stock[name]))
+      puts("#{name.upcase}: #{stock[name]}")
     end
   end
+end
+```
+
+Reading input, Result and `try`:
+
+```ruby
+def parse_numbers(line: String) -> Result[List[Int]]
+  numbers: List[Int] = []
+  words = line.strip.split(" ").filter do |w| w != "" end
+  for word in words
+    n = try word.to_i
+    numbers = numbers.push(n)
+  end
+  return ok(numbers)
+end
+
+def main() -> Void
+  total = 0
+  count = 0
+  while !IO.eof?()
+    line = IO.gets!()
+    case parse_numbers(line) do
+      Result.Ok(numbers) ->
+        total += numbers.reduce(0) do |sum, n| sum + n end
+        count += numbers.size
+      Result.Err(message) ->
+        IO.warn("skipped: #{message}")
+    end
+  end
+  puts("#{count} numbers, total #{total}")
 end
 ```

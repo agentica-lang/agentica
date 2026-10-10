@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Ruby forms seen in evaluations: an optional `do` after `case`, `while` and
+  `for` headers; a one-line case arm (`1 -> puts("one")`); module functions
+  without arguments, builtin or through an import alias, may drop the
+  parentheses (`IO.gets!`, `IO.eof?`).
+- Hints for `let`/`var`/`const`, `match`, `when`, `then`, `fn`/`lambda`, a
+  `do` block with no call, `loop do`, `if x do`, trailing `if`/`while`
+  modifiers, `Module.fn arg`, `Hash.new`/`Array.new`, `break`/`continue`/`next`
+  (also `break if x`), `Result.Ok(x)` used as a value, and an enum variant
+  without parentheses.
 - Hints for habits from other languages: `len`, `str`, `print`, `input`,
   `range`, `int`/`float`, `None`/`null`, `elif`/`else if`, Python-style
   string methods, and a `Result[T]` used where `T` is expected.
@@ -38,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The programming skill and the `inventory`, `strings` and `result` examples
+  teach the Ruby forms (methods, `!`/`&&`, `+=`, interpolation, blocks).
 - A declaration's `end` must be followed by a blank line before the next
   declaration (`PARSE-MISSING-BLANK-LINE`).
 - `#{` inside a string now starts an interpolation; write `\#{` for the

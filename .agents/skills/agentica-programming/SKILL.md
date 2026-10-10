@@ -9,6 +9,8 @@ description: Write, check, run, and repair Agentica programs (`.agc` files). Use
 
 Read [references/language.md](references/language.md). It is the self-contained language reference; do not guess syntax or APIs that are not documented there.
 
+Write Ruby style, as its "Style" section shows: methods on builtin values (`s.strip`, `xs.size`, `n.to_s`), `!`/`&&`/`||`, `+=`, `"#{x}"` interpolation and `do |x| ... end` blocks. Values are immutable, so assign what a method returns: `xs = xs.push(1)`.
+
 ## Write and verify
 
 1. Save the requested program as a `.agc` file. It needs one `main() -> Void`.

@@ -101,12 +101,44 @@
     (check-equal? (parse-code "def main() -> Void\n  x = 1 do\n  end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
     (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    if x\n      puts(x) end\n  end\nend\n")
                   'PARSE-UNEXPECTED-TOKEN)
-    (for ([text '("def main() -> Void\n  while xs.empty? do\n  end\nend\n"
-                  "def main() -> Void\n  for x in xs.reverse do\n  end\nend\n")])
-      (define problem (parse-text text))
-      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN text)
-      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2 text))
     (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    puts(x)\n") 'PARSE-UNCLOSED-BLOCK))
+
+  (test-case "Ruby headers, one-line case arms and module calls without parentheses"
+    (define program
+      (parse-ok (string-append
+                 "def main() -> Void\n  while !IO.eof? do\n    line = IO.gets!\n  end\n"
+                 "  for x in xs.reverse do\n    puts(x)\n  end\n"
+                 "  case n\n    1 -> puts(\"one\")\n    _ ->\n      puts(\"other\")\n      puts(\"more\")\n  end\nend\n")))
+    (define body (function-decl-body (car (program-declarations program))))
+    (define loop (car body))
+    (check-true (call? (unary-operand (while-stmt-condition loop))))
+    (check-equal? (call-args (unary-operand (while-stmt-condition loop))) '())
+    (check-true (call? (binding-value (car (while-stmt-body loop)))))
+    (check-true (field-access? (for-stmt-iterable (cadr body))))
+    (define arms (case-stmt-arms (caddr body)))
+    (check-equal? (map (lambda (arm) (length (case-arm-body arm))) arms) '(1 2)))
+
+  (test-case "habits from other languages get a parse hint"
+    (for ([entry '(("  case x\n    when 1\n      puts(\"a\")\n  end" "->")
+                   ("  let x = 5" "x = 5")
+                   ("  var x = 5" "x = 5")
+                   ("  match x" "case")
+                   ("  if x then\n    puts(\"a\")\n  end" "then")
+                   ("  f = fn(x: Int) -> Int" "block")
+                   ("  f = lambda do |x|\n    x\n  end" "lambdas")
+                   ("  f = do |x|\n    x\n  end" "lambdas")
+                   ("  ys = run do |x| x end" "run\\(\\)")
+                   ("  if x > 0 do\n    puts(\"a\")\n  end" "newline, not do")
+                   ("  loop do\n    puts(\"a\")\n  end" "while true")
+                   ("  break if x > 3" "while condition")
+                   ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
+                   ("  n = String.length \"abc\"" "String\\.length\\("))])
+      (define problem (parse-text (format "def main() -> Void\n~a\nend\n" (car entry))))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN (car entry))
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem)))
+                    (if (regexp-match? #rx"^  case" (car entry)) 3 2)
+                    (car entry))
+      (check-regexp-match (pregexp (cadr entry)) (diagnostic-help problem) (car entry))))
 
   (test-case "declarations need a blank line after their end"
     (define problem (parse-text "struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n"))
