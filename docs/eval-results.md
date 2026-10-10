@@ -1,6 +1,6 @@
 # Evaluation results so far
 
-The JSON tasks and their reference validation are documented in [eval-json.md](eval-json.md); the enum/pattern-matching task is in [eval-pattern-matching.md](eval-pattern-matching.md). Their model evaluations are tracked separately from the historical rounds below.
+The JSON tasks and their reference validation are documented in [eval-json.md](eval-json.md); the enum/pattern-matching task is in [eval-pattern-matching.md](eval-pattern-matching.md). The diagnostics agents saw across these rounds are summarized in [eval-diagnostics.md](eval-diagnostics.md). Their model evaluations are tracked separately from the historical rounds below.
 
 These are historical runs of `tests/eval/run.py` with `pi` and Fireworks DeepSeek V4.1 flash, one session per run, 10 minute limit, hidden cases graded at the end. They used earlier sandbox setups and do not validate the current Docker boundary. Method and caveats are in [`eval-6a.md`](eval-6a.md). Raw logs are in `tests/eval/results/` (not versioned).
 

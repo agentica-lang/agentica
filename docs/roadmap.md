@@ -618,6 +618,15 @@ On success it prints `check ok`.
 - [ ] `symbols`, `show`, `refs` (P1).
 - [ ] One test per command over `examples/`.
 
+Diagnostics from evaluation data (`docs/eval-diagnostics.md`, `tests/eval/diagnostics.py`):
+
+- [x] Count the diagnostics agents saw in past runs, with messages, source lines and repeats.
+- [x] Fix the stale Int/Float help: it now names `Float.from_int` and `Float.to_int!`.
+- [ ] Map common Python, Ruby and JavaScript habits (`len`, `str`, `print`, `range`, `input`, `Int.to_float`, `!`, `&&`, `||`, `+=`, `None`) to the Agentica form in `help`.
+- [ ] Suggest the module function for method-call style on builtin types (`s.length`, `x.to_i()`, `xs.append(v)`).
+- [ ] Fix the misleading `elif` and `None` messages.
+- [ ] Re-run the `binary` arm and the script to measure the change.
+
 ### Phase 6a: First agent evaluation
 
 Run a small evaluation now, with the language as it is, and again after 5e and 5f (6b). The agent should implement Agentica, and also be the subject of the experiment.
@@ -1035,14 +1044,9 @@ Rules for every subphase:
 - No placeholder files, directories or opcodes for later subphases.
 - C naming: every exported function, type and global of the VM library uses the `agc_` prefix (`agc_value`, `agc_vm_run`); macros and enum constants use `AGC_` (`AGC_OP_ADD`). File-local helpers are `static`, so they need no prefix.
 
-### 7a: Baseline measurements
+### 7a: Baseline measurements (merged into 7g)
 
-- [ ] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
-- [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt` and `dist/agentica`.
-- [ ] Record the numbers, machine and Racket version in `docs/vm-benchmarks.md`.
-- [ ] Profile the evaluator once to see where time goes (scope lookup, dispatch, allocation).
-
-**Done when:** we have a baseline to compare every later subphase against.
+The Racket evaluator stays in the repository until 7i, so it can be measured at any time. Profiling a Racket tree walker does not inform the design of a C VM. All measurement work therefore happens in 7g, when both backends run the same programs.
 
 ### 7b: Design decisions (`docs/vm.md`)
 
@@ -1101,8 +1105,11 @@ Rules for every subphase:
 
 ### 7g: Speed check
 
-- [ ] Re-run the 7a benchmarks on the VM and record them in `docs/vm-benchmarks.md`.
-- [ ] Fix the largest hot spots (instruction dispatch, list/map representation, string indexing).
+- [ ] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
+- [ ] Compare three runners on the same inputs: the Racket evaluator, the VM, and the Python reference solutions in `tests/eval/tasks/` as an outside reference.
+- [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt`, `dist/agentica` and the VM.
+- [ ] Record the numbers, machine and tool versions in `docs/vm-benchmarks.md`.
+- [ ] Fix the largest VM hot spots (instruction dispatch, list/map representation, string indexing).
 
 **Done when:** the numbers show whether the VM is worth finishing; decide here before 7h.
 

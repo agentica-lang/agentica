@@ -52,6 +52,8 @@
     [(and (eq? expected 'String) (eq? actual 'Float)) "convert it with String.from_float(...)"]
     [(and (eq? expected 'Int) (eq? actual 'String)) "convert it with String.to_int!(...)"]
     [(and (eq? expected 'Float) (eq? actual 'String)) "convert it with String.to_float!(...)"]
+    [(and (eq? expected 'Float) (eq? actual 'Int)) "convert it with Float.from_int(...)"]
+    [(and (eq? expected 'Int) (eq? actual 'Float)) "convert it with Float.to_int!(...), which truncates"]
     [else #f]))
 
 (define (contains-return? statements)
@@ -453,7 +455,7 @@
                 #:labels (list (cons (node-span (binary-left expression)) (format "this is ~a" (type->string left)))
                                (cons (node-span (binary-right expression)) (format "this is ~a" (type->string right))))
                 #:help (and (memq 'Int (list left right)) (memq 'Float (list left right))
-                            "there is no Int to Float conversion; make both sides the same type"))))
+                            "make both sides the same type: Float.from_int(...) turns the Int into a Float, Float.to_int!(...) truncates the Float"))))
       (case (binary-op expression)
         [(plus)
          (same!)

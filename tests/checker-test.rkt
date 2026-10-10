@@ -516,7 +516,11 @@
     (check-equal? (diagnostic-expected problem) "Int")
     (check-equal? (diagnostic-actual problem) "Float")
     (check-equal? (length (diagnostic-labels problem)) 2)
-    (check-true (string? (diagnostic-help problem)))
+    (check-regexp-match #rx"Float\\.from_int" (diagnostic-help problem))
+    (check-regexp-match #rx"Float\\.from_int"
+                        (diagnostic-help (check-text (main-with "  x: Float = 1"))))
+    (check-regexp-match #rx"Float\\.to_int!"
+                        (diagnostic-help (check-text (main-with "  x: Int = 1.5"))))
     (check-equal? (diagnostic-signature problem) "total(q: Int, p: Float) -> Float")
     (define arity
       (check-text "def f(a: Int) -> Int\n  return a\nend\ndef main() -> Void\n  x = f(1, 2)\nend\n"))

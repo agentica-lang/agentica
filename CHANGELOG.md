@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `tests/eval/diagnostics.py` summarizes the diagnostics agents saw in
+  evaluation runs.
 - `!`, `&&` and `||` as spellings of `not`, `and` and `or`, and compound
   assignment `+=`, `-=`, `*=`, `/=`, `%=`.
 - Embedded Agentica standard library with an immutable String FIFO at
@@ -24,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Int/Float type-mismatch help now suggests `Float.from_int` and
+  `Float.to_int!`.
 - `Time` and `Random` are reserved builtin module names; declarations or
   import aliases with those names no longer check.
 
