@@ -19,7 +19,14 @@
   {{- with $page -}}
     {{- $href = printf "%s%s" .RelPermalink $fragment -}}
   {{- else -}}
-    {{- $href = printf "%s/blob/master/%s%s" site.Params.repo $target $fragment -}}
+    {{- $href = "" -}}
+    {{- if site.Params.repoPublic -}}
+      {{- $href = printf "%s/blob/master/%s%s" site.Params.repo $target $fragment -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- if eq $href "" -}}
+{{ .Text }}
+{{- else -}}
 <a href="{{ $href }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if $url.IsAbs }} rel="noopener"{{ end }}>{{ .Text }}</a>
+{{- end -}}

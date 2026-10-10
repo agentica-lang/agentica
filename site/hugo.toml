@@ -2,11 +2,11 @@ baseURL = "https://sonic182.github.io/agentica/"
 locale = "en"
 title = "Agentica"
 disableKinds = ["taxonomy", "term", "rss"]
-enableRobotsTXT = true
 
 [params]
   description = "Agentica is Ruby with static types: Ruby-like syntax, checked before running, with immutable values."
   repo = "https://github.com/sonic182/agentica"
+  repoPublic = false
 
 [markup.highlight]
   noClasses = false

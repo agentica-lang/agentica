@@ -25,10 +25,10 @@ test-bdd: exe
 
 clean:
 	find . -name compiled -type d -prune -exec rm -rf {} +
-	rm -rf dist build
+	rm -rf dist build site/public site/resources
 
 site:
-	hugo --minify --source site --panicOnWarning $(HUGO_FLAGS)
+	hugo --minify --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
 
 site-serve:
 	hugo server --source site

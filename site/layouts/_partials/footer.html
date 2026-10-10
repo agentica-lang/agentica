@@ -1,6 +1,10 @@
 <footer class="site-footer">
+  {{- if site.Params.repoPublic }}
   {{- with partial "source-path.html" . }}
   <a href="{{ site.Params.repo }}/blob/master/{{ . }}">Page source</a> ·
   {{- end }}
   <a href="{{ site.Params.repo }}">Agentica on GitHub</a>
+  {{- else }}
+  Agentica: Ruby with static types
+  {{- end }}
 </footer>

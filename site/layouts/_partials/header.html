@@ -2,5 +2,7 @@
   <a class="skip" href="#main">Skip to content</a>
   <a class="brand" href="{{ site.Home.RelPermalink }}">{{ site.Title }}</a>
   <button class="nav-toggle" type="button" aria-controls="sidebar" aria-expanded="false">Menu</button>
+  {{- if site.Params.repoPublic }}
   <a class="repo" href="{{ site.Params.repo }}">GitHub</a>
+  {{- end }}
 </header>
