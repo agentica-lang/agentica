@@ -26,6 +26,8 @@ typedef struct {
   uint32_t helper_params;
   uint32_t entry;
   bool trailing;
+  uint32_t builtin_arity;
+  int64_t extra_int;
 } spec;
 
 static void u8(buffer *b, uint8_t v) { b->data[b->len++] = v; }
@@ -73,7 +75,7 @@ static const uint32_t two_spans[] = {0, 0};
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0};
   return s;
 }
 
@@ -104,12 +106,16 @@ static buffer build(spec s) {
     u32(&b, 0x3FF80000);
   }
   if (s.extra_kind == 6) str(&b, s.extra_string);
+  if (s.extra_kind == 4) {
+    u32(&b, (uint32_t)(uint64_t)s.extra_int);
+    u32(&b, (uint32_t)((uint64_t)s.extra_int >> 32));
+  }
   u32(&b, 0);
   u32(&b, 0);
   u32(&b, 0);
   u32(&b, 1);
   str(&b, s.builtin);
-  u32(&b, 1);
+  u32(&b, s.builtin_arity ? s.builtin_arity : 1);
   u32(&b, s.helper_params ? 2 : 1);
   function(&b, "main", s.params, s.registers, s.code, s.code_spans, s.count);
   if (s.helper_params) function(&b, "helper", s.helper_params, s.helper_params, helper_code, two_spans, 2);
@@ -380,6 +386,14 @@ int main(void) {
   static const agc_instr bad_list_get[] = {{AGC_OP_LIST_GET, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_code(bad_list_get, two_spans, 2, "register out of range"));
 
+  static const agc_instr exact_window[] = {{AGC_OP_LIST, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  s = base();
+  s.code = exact_window;
+  s.code_spans = two_spans;
+  s.count = 2;
+  s.registers = 2;
+  assert(loads(s, NULL));
+
   static const agc_instr nested_list[] = {
     {AGC_OP_STEP, 2, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_LIST, 0, 0, 1},
     {AGC_OP_LIST, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
@@ -418,6 +432,46 @@ int main(void) {
     wrong = agc_vm_run(&vm);
     assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
   }
+  static const agc_instr void_item_puts[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr void_item_inspect[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_INSPECT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t void_item_spans[] = {1, 2, 1, 0};
+  const agc_instr *void_items[] = {void_item_puts, void_item_inspect};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.code = void_items[k];
+    s.code_spans = void_item_spans;
+    s.count = 4;
+    confused = build(s);
+    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+    free(confused.data);
+    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+    wrong = agc_vm_run(&vm);
+    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  }
+
+  static const agc_instr concat_ints[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t concat_spans[] = {1, 2, 2, 0, 0};
+  s = base();
+  s.builtin = "List.concat";
+  s.builtin_arity = 2;
+  s.code = concat_ints;
+  s.code_spans = concat_spans;
+  s.count = 5;
+  s.registers = 2;
+  confused = build(s);
+  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+  free(confused.data);
+  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+  wrong = agc_vm_run(&vm);
+  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  s.builtin_arity = 3;
+  s.registers = 3;
+  assert(!loads(s, "unknown builtin"));
+
   static const agc_instr list_get_outside[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST, 1, 0, 1}, {AGC_OP_LIST_GET, 0, 1, 0},
     {AGC_OP_RETURN, 0, 0, 0}};
@@ -434,6 +488,29 @@ int main(void) {
   wrong = agc_vm_run(&vm);
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INDEX-OUT-OF-RANGE") == 0 && wrong.span == 2);
   assert(strcmp(wrong.message, "index 1 is outside a list of length 1") == 0);
+  static const agc_instr list_get_negative[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST, 1, 0, 1}, {AGC_OP_CONST, 0, 2, 0},
+    {AGC_OP_LIST_GET, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t negative_spans[] = {1, 2, 2, 2, 2, 0};
+  const int64_t negatives[] = {-1, INT64_MIN};
+  const char *negative_messages[] = {"index -1 is outside a list of length 1",
+                                     "index -9223372036854775808 is outside a list of length 1"};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.extra_kind = 4;
+    s.extra_int = negatives[k];
+    s.code = list_get_negative;
+    s.code_spans = negative_spans;
+    s.count = 6;
+    s.registers = 2;
+    confused = build(s);
+    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+    free(confused.data);
+    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+    wrong = agc_vm_run(&vm);
+    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INDEX-OUT-OF-RANGE") == 0 && wrong.span == 2);
+    assert(strcmp(wrong.message, negative_messages[k]) == 0);
+  }
 
   puts("loader tests passed");
   return 0;

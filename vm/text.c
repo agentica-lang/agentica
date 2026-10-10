@@ -48,7 +48,16 @@ size_t agc_write_form(const agc_string *s, char *out, size_t *chars) {
   bool join = false;
   if (out) out[0] = '"';
   while (at < s->bytes) {
-    size_t width = agc_utf8_width(data[at]);
+    uint8_t c = data[at];
+    if (c >= 0x20 && c < 0x7F && c != '"' && c != '\\') {
+      if (out) out[n] = (char)c;
+      n++;
+      count++;
+      at++;
+      join = c != ' ';
+      continue;
+    }
+    size_t width = agc_utf8_width(c);
     if (width > s->bytes - at) width = s->bytes - at;
     uint32_t cp = decode(data + at, width);
     const char *escape = short_escape(cp);

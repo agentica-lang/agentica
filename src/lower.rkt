@@ -21,8 +21,7 @@
 (define max-list-chunk 255)
 
 (define (vm-type? type)
-  (or (and (memq type value-types) #t)
-      (and (list-type? type) (vm-type? (cadr type)))))
+  (if (list-type? type) (vm-type? (cadr type)) (and (memq type value-types) #t)))
 
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
@@ -114,7 +113,7 @@
   (define (static-type expression)
     (if (typed-target? expression) (typed-target-type expression) (type-of expression)))
 
-  (define (lower-expression expression want #:void? [void? #f])
+  (define (lower-expression expression want #:void? [void? #f] #:known? [known? #f])
     (cond
       [(and (unary? expression) (eq? (unary-op expression) 'minus)
             (literal? (unary-operand expression))
@@ -137,7 +136,7 @@
        (lower-expression inner want)]
       [(or (interpolation? expression) (inspection? expression)) (lower-value expression want)]
       [else
-       (require-type! expression #f)
+       (unless known? (require-type! expression #f))
        (lower-value expression want)]))
 
   (define (lower-value expression want)
@@ -221,7 +220,7 @@
     (define (lower-elements! items)
       (define start next)
       (for ([element (in-list items)])
-        (lower-expression element (alloc!)))
+        (lower-expression element (alloc!) #:known? #t))
       start)
     (define dst
       (cond
@@ -388,12 +387,14 @@
          (define index (alloc!))
          (define count (alloc!))
          (define temp (alloc!))
+         (define one (alloc!))
          (define top (new-label!))
          (define increment (new-label!))
          (define test (new-label!))
          (define exit (new-label!))
          (emit! 'const (list index 0) span)
          (emit! 'list-len (list count items) span)
+         (emit! 'const (list one 1) span)
          (emit! 'jump (list test) span)
          (define outer loop-labels)
          (set! loop-labels (cons increment exit))
@@ -405,8 +406,7 @@
                    (lower-block body)))
          (set! loop-labels outer)
          (place! increment)
-         (emit! 'const (list temp 1) span)
-         (emit! 'add-i (list index index temp) span)
+         (emit! 'add-i (list index index one) span)
          (place! test)
          (emit! 'lt-i (list temp index count) span)
          (emit! 'jump-if-true (list temp top) span)

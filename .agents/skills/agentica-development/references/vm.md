@@ -219,8 +219,8 @@ is checked.
   empty body lowers to just the iterable.
 - The `for` iterable is copied into a hidden slot even when it is a local:
   the body may assign that local, and the evaluator iterates the old list.
-- Lists can share items, so a list's text can be exponential in the steps
-  that built it; printing then ends in the out-of-memory exit, as the trust
+- Lists can share items, so a list's text can be exponential in the code
+  that built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...); printing then ends in the out-of-memory exit, as the trust
   model allows. Never print or compare nested values with C recursion.
 - Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
   run (`make vm-gc-stress`), not ASan.

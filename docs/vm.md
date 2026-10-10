@@ -53,9 +53,11 @@ instructions, not memory: one `CONCAT` or `INSPECT` costs time and memory in
 proportion to its strings, so a file can double a string per instruction
 and reach the out-of-memory exit (70, 6.3) in a few dozen steps. A program
 on the evaluator grows strings the same way. Printing a list costs time and
-memory in proportion to its text, and lists can share items, so a list built
-by `x = [x, x]` in a loop has text exponential in the steps that built it;
-printing it ends in the same out-of-memory exit (the evaluator also runs out
+memory in proportion to its text, and lists can share items. A program with
+chained bindings `a1 = [a0, a0]`, `a2 = [a1, a1]`, ... (each a new type one
+level deeper, since a variable's type is fixed) has text exponential in the
+number of bindings, and a file can run `LIST r0 r0 2` in a loop; printing
+such a list ends in the same out-of-memory exit (the evaluator also runs out
 of memory). A heap cap is an open question (13).
 
 ## 2. Reference behavior the VM must copy
@@ -199,6 +201,9 @@ fails when the committed file differs from what the generator prints.
   U+200D and U+E0020 to U+E007F), and blanks (`agc_write_blank_ranges`: the
   17 `Zs` characters U+0020, U+00A0, U+1680, U+2000 to U+200A, U+202F,
   U+205F, U+3000).
+- `agc_write_form` takes printable ASCII other than `"` and `\` (0x20 to
+  0x7E) raw without a table search; that is what the tables give for them,
+  and the exhaustive pair test in `vm/tests/text_test.c` covers it.
 - The C rule in `agc_write_form`, with `join` false at the start: the ten
   short escapes above; else raw when the code point is in the raw table,
   or `join` is true and it is a joiner; else `\uXXXX` below U+10000 and
@@ -336,7 +341,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Arithmetic, ordering | Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (operands already evaluated; NaN stays false). |
 | `if` / `elsif` / `else` | Conditional jumps over each branch. |
 | `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
-| `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index and length slots (`const 0`, `list-len`); `jump` to the test; body; increment (`const 1`, `add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
+| `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index, length and one slots (`const 0`, `list-len`, `const 1`, set once); `jump` to the test; body; increment (`add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
 | Functions | One IR function each; falling off the end returns Void. |
 | Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`. |
 | Structs | Arguments evaluated in written order directly into the slot of their declared position, then `struct`. A `construct` named `Enum.Variant` is an enum constructor (`eval-step-expression`). |
@@ -399,7 +404,9 @@ of `List.size`.
 
 A list literal nested `d` levels deep needs about `d` registers in its
 function, so nesting beyond about 65,000 levels in one literal is
-`BYTECODE-LIMIT`; the evaluator has no such limit. This is a documented
+`BYTECODE-LIMIT`; the evaluator has no such limit. Lowering stays linear in
+the depth: the literal's own type is checked once, and its elements are not
+checked again. This is a documented
 difference, like the register cap (6.1).
 
 ## 4. Bytecode (7d)
@@ -1088,10 +1095,11 @@ the platform's OpenSSL package) to each job.
   `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
   every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
-  enum chain and nested JSON array, printed and encoded. A program cannot
-  build a list deeper than its literal (there are no user generics, and a
-  literal is capped by registers, 3.5), so `vm/tests/text_test.c` builds a
-  depth-1,000,000 list in C and prints it; the printer walks lists with an
+  enum chain and nested JSON array, printed and encoded. A program's lists
+  are only as deep as their types, which are written in the source (there
+  are no user generics), whether built by one literal (capped near 65,000
+  levels by registers, 3.5) or by chained bindings, so
+  `vm/tests/text_test.c` builds a depth-1,000,000 list in C and prints it; the printer walks lists with an
   explicit `agc_alloc`'d stack (7.3).
 - Tasks, processes and network programs join in 7h, with the independent
   counterparts the current tests use.
