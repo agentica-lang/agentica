@@ -1009,7 +1009,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 ## Ruby-style ergonomics
 
-Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each from `master`, each moving its part of section 11 into `grammar.md` and the programming reference.
+Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each stacked on the previous one and moving its part of section 11 into `grammar.md` and the programming reference.
 
 - [x] Specify operators, methods on builtins, interpolation, blocks and closures, and hints in `future.md` section 11.
 - [x] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).
