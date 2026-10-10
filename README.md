@@ -1,7 +1,11 @@
 # Agentica
 
-Interpreter for the Agentica language, written in Racket. The language is
-defined in [`docs/grammar.md`](docs/grammar.md), planned syntax is in
+Interpreter for the Agentica language, written in Racket. Agentica is Ruby
+with static types: Ruby-like syntax, checked before running, with immutable
+values. The language is defined in [`docs/grammar.md`](docs/grammar.md); the
+self-contained reference for agents writing Agentica is the
+[`agentica-programming` skill](.agents/skills/agentica-programming/SKILL.md).
+Planned syntax is in
 [`docs/future.md`](docs/future.md), and the phased plan is in
 [`docs/roadmap.md`](docs/roadmap.md).
 
@@ -119,8 +123,18 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/hello.agc`](examples/hello.agc): a minimal program.
 - [`examples/classify.agc`](examples/classify.agc): functions, control flow, and `try` propagation.
 - [`examples/tasks.agc`](examples/tasks.agc): structs, lists, and field access.
-- [`examples/inventory.agc`](examples/inventory.agc): maps and the `Map` module.
-
+- [`examples/inventory.agc`](examples/inventory.agc): maps, methods and interpolation.
+- [`examples/strings.agc`](examples/strings.agc): string methods in Ruby style.
+- [`examples/blocks.agc`](examples/blocks.agc): blocks and closures (`xs.map do |x| ... end`).
+- [`examples/dispatch.agc`](examples/dispatch.agc): function values and `.call`.
+- [`examples/echo.agc`](examples/echo.agc): read stdin line by line until EOF.
+- [`examples/file-summary.agc`](examples/file-summary.agc): read a file given as an argument.
+- [`examples/concurrency.agc`](examples/concurrency.agc): lightweight tasks with `Task.spawn` and `Task.await`.
+- [`examples/process-tool.agc`](examples/process-tool.agc): run another program (needs `--allow-run`).
+- [`examples/tcp_echo.agc`](examples/tcp_echo.agc), [`examples/http_get.agc`](examples/http_get.agc), [`examples/http_server.agc`](examples/http_server.agc): TCP and HTTP.
+- [`examples/queue.agc`](examples/queue.agc): the embedded `std/queue.agc` library.
+- [`examples/json-modules.agc`](examples/json-modules.agc): a program split across files (`examples/modules/json-tools.agc`).
+- [`examples/mcp/stdio.agc`](examples/mcp/stdio.agc): a minimal MCP stdio server.
 - [`examples/result.agc`](examples/result.agc): Result values, propagation, messages, and fallbacks.
 - [`examples/json.agc`](examples/json.agc): JSON encoding, parsing, extraction, and `try`.
 - [`examples/json-config.agc`](examples/json-config.agc): extract and validate a nested service config, then encode a typed struct.
@@ -150,8 +164,7 @@ printf '%s\n' '{"grid":[".#.","..."],"start":0,"goal":2}' | dist/agentica --max-
 
 Knight tours accept square boards of size 1–8 and a zero-based starting square (`row * size + column`). Output is `{"found":true,"path":[...]}` or `{"found":false,"path":[]}` after exhausting the search. Tours are open. The traveling salesman accepts a complete directed square matrix of 1–8 cities, with zero diagonal and integer costs from 0 to 1,000,000,000. It returns an optimal `{"cost":...,"route":[0,...,0]}` circuit; one city yields `[0,0]` and cost zero. Both validate input and print `{"error":"invalid input"}` on invalid documents. Searches can be expensive: a runtime step-limit diagnostic does not mean there is no solution.
 
-IO.gets now returns Result[String]; IO.gets! is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main returns Void. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
+IO.gets (and top-level gets) returns Result[String]; IO.gets! (and gets!) is the String-returning form that halts at EOF. String.to_int/to_float return Results; the existing bang forms retain their behavior. `try` is only valid inside a Result-returning function; main returns Void. Options precede the command/file, except the documented trailing --json on help. Arguments after a source file are program arguments.
 
 The maze accepts rectangular grids with 1–32 rows and columns. `.` is open and `#` is blocked; only horizontal and vertical steps are allowed. Start and goal use `row * width + column` and must be open, in-range cells. The example above returns `{"found":true,"distance":4,"path":[0,3,4,5,2]}`. An unreachable goal returns `{"found":false,"distance":-1,"path":[]}`; invalid input returns `{"error":"invalid input"}`. Start equal to goal returns distance zero and a one-cell path. The queue uses numeric keys and deletes consumed entries; `Map.delete` maintains insertion order in O(n), so this example demonstrates the API rather than a queue with constant-time operations.
 
-Enums and pattern matching are future extensions.

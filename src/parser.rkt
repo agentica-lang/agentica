@@ -489,7 +489,7 @@
                      (format "\"~a\" is not a keyword" (name-ref-name value)))
                  start
                  #:help (case (name-ref-name value)
-                          [("match") "use case value do ... end"]
+                          [("match") "use case value, then arms pattern -> ..., then end"]
                           [("break" "next")
                            (format "~a stands alone on its line; there are no if modifiers: write if cond, then ~a, then end"
                                    (name-ref-name value) (name-ref-name value))]

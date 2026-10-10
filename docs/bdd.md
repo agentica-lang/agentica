@@ -141,3 +141,17 @@ Scenarios run sequentially with fresh JSON state and a fresh process. A failure 
 Programs run with the host user's permissions and inherited environment, using the same Agentica executable as the verifier. Source execution launches Racket with `src/main.rkt`. BDD does not provide filesystem, environment or network isolation.
 
 Each scenario has a 30-second wall-clock deadline. Operations without an explicit timeout get 5 seconds; every evaluator invocation gets one million steps. Stdout and stderr are drained concurrently and each capped at 1 MiB; handler output is also bounded. Processes, ports and stream workers are cleaned up after success, failure, timeout, or interruption. These checks enforce the behaviors specified; they cannot prove coverage of requirements nobody expressed.
+
+## Diagnostics
+
+`agentica test` reports the first problem of each kind with a stable code:
+
+| Code | Meaning |
+|---|---|
+| `PARSE-GHERKIN-HEADER`, `-STEP`, `-ARGUMENT`, `-TABLE`, `-EXAMPLES`, `-TAGS`, `-EMPTY`, `-PARAMETER`, `-UNSUPPORTED` | the `.feature` file breaks the supported Gherkin subset (section order, a step outside a scenario, a Doc String or table in the wrong place, bad Examples, misplaced tags, a Feature without scenarios or a Background without steps, an Examples column missing for a `<parameter>`, a non-English keyword) |
+| `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY` | no step pattern matches, more than one matches, or no `.feature` files were found |
+| `RUNTIME-BDD-ASSERTION`, `RUNTIME-BDD-NO-ASSERTION` | an expectation failed, or a `Then` step or a whole scenario made no BDD assertion |
+| `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT` | an operation passed its deadline or got a bad timeout, or a step handler (or handler registration) called `System.exit` |
+| `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON` | a step out of order (two programs, no program), a missing `.agc` program, a JSON expectation that is not valid JSON |
+| `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS` | a step pattern registered twice, an invalid pattern, a handler that left tasks running |
+| `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`, `RUNTIME-BDD-USAGE` | program output over 1 MiB, an I/O failure, a missing executable, bad command-line usage |

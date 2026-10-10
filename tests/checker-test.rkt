@@ -589,7 +589,7 @@
   (test-case "habits from other languages get a hint with the Agentica form"
     (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")
                    ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
-                   ("  x = input()" CHECK-UNKNOWN-NAME "IO\\.gets")
+                   ("  x = input()" CHECK-UNKNOWN-NAME "gets")
                    ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
                    ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
                    ("  x = null" CHECK-UNKNOWN-NAME "nil")

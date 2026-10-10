@@ -143,7 +143,7 @@ for item in items      # items is a List[T]; item is a new, read-only variable
   puts(item)
 end
 
-case option do
+case option
   Option.Some(value) -> IO.inspect(value)
   Option.None -> puts("empty")
 end
@@ -157,7 +157,7 @@ return count
 - A name created in a block is not visible after that block's `end`.
 - A new variable cannot reuse a name that is already visible in an outer scope (no shadowing).
 - The `for` variable cannot be assigned to.
-- `case value do pattern -> block end` is a statement (`do` is optional). Each arm has a normal block and its bindings are local to that arm. A short arm may put one simple statement on the arrow line: `1 -> puts("one")`, `Command.Add(n) -> total += n`; more lines may follow it.
+- `case value` ... `end` is a statement, with arms `pattern -> block` (a `do` after the value is allowed but not needed). Each arm has a normal block and its bindings are local to that arm. A short arm may put one simple statement on the arrow line: `1 -> puts("one")`, `Command.Add(n) -> total += n`; more lines may follow it.
 - Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
 - `if` and `while` conditions must be `Bool`. There is no truthiness: `if 1` is an error.

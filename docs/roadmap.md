@@ -17,7 +17,7 @@ work rather than their numeric order.
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 5 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 6 | **Next:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures | Accept the Ruby habits agents already have, with static types |
+| 6 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
 | 7 | Bytecode VM in C with the Boehm GC (phase 7) | Run checked programs much faster, with the same output and diagnostics |
 
 After steps 1–2, target everyday scripts and automation. After steps 3–5,

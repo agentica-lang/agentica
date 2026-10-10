@@ -56,6 +56,10 @@ Float.from_int(n: Int) -> Float
 Float.to_int(x: Float) -> Result[Int]          # truncates; NaN, infinity, overflow are errors
 Float.to_int!(x: Float) -> Int                 # truncates; halts on those
 
+puts(value: String) -> Void
+print(value: String) -> Void                    # no newline
+gets() -> Result[String]                      # same as IO.gets
+gets!() -> String                             # same as IO.gets!
 IO.puts(value: String) -> Void
 IO.print(value: String) -> Void                 # no newline
 IO.warn(value: String) -> Void                  # standard error

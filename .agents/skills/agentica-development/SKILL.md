@@ -11,23 +11,14 @@ Read the active phase in the roadmap before adding code. Implement only what tha
 
 ## Commands
 
-Run all of these before calling a change done:
-
 ```sh
-make test                                 # every stage test, in parallel
+make test JOBS=4                          # every stage test, in parallel
 make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
-racket src/main.rkt --json check examples/result.agc
-racket src/main.rkt examples/classify.agc
-racket src/main.rkt examples/tasks.agc
-racket src/main.rkt examples/inventory.agc
-racket src/main.rkt examples/strings.agc
-racket src/main.rkt examples/result.agc
-racket src/main.rkt examples/blocks.agc
-racket src/main.rkt examples/json.agc
+racket src/main.rkt check examples/blocks.agc
 ```
 
-CI (`.github/workflows/ci.yml`) runs exactly these on Racket CS 9.3. Use the standard library only; the project adds no dependencies.
+Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the network tests against the compiled executable, and every example smoke run; it is the source of truth for that list. Use the standard library only; the project adds no dependencies.
 
 ## Repository map
 
@@ -48,15 +39,26 @@ src/
   gherkin.rkt     # English feature parser, expansion and source locations
   bdd.rkt         # scenario context, assertions and supervised local process streams
   bdd-runner.rkt  # deterministic step registration/resolution, execution and reports
-  main.rkt        # thin CLI driver: lex, parse, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
+  modules.rkt     # import linking: std/, pkg/ and relative files, aliases, exports, cycles; runs before check
+  stdlib.rkt      # std/ Agentica sources embedded at compile time
+  builtin-types.rkt # opaque handle types and builtin record layouts (Request, Header, FileInfo, ...)
+  json-typed.rkt  # JSON.decode into declared structs and JSON.schema
+  filesystem.rkt  # File, Dir and Path builtins
+  process.rkt     # Process builtins (needs --allow-run)
+  network.rkt     # TCP and TLS sockets
+  http-wire.rkt   # HTTP/1.1 framing shared by client and server
+  http-client.rkt # HTTP client with connection pool
+  http-server.rkt # HTTP server
+  version.rkt     # the version string
+  main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, or --dump the tree); exit 1 on a diagnostic, 2 on usage or a missing file
 tests/
-  lexer-test.rkt
-  parser-test.rkt
-  checker-test.rkt
-  evaluator-test.rkt
+  <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-examples/               # hello.agc, classify.agc, tasks.agc, inventory.agc, strings.agc, echo.agc, result.agc, json.agc, blocks.agc
+  stdlib-distribution-test.rkt # the relocated executable still finds std/
+  bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
+  eval/                 # agent evaluation runner (not part of make test)
+examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth
   future.md    # planned syntax, not implemented

@@ -15,7 +15,7 @@ Interpreter for the Agentica language, written in Racket. The language is define
 
 ## Layout
 
-- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `checker.rkt` → `evaluator.rkt`.
+- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `modules.rkt` (import linking) → `checker.rkt` → `evaluator.rkt`. Builtins are described once in `builtins.rkt`; runtime libraries (tasks, files, processes, network, HTTP, JSON, BDD) have their own modules.
 - `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
 - `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
 - `tests/<stage>-test.rkt` holds the focused tests for each stage.
