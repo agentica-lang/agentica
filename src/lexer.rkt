@@ -82,9 +82,8 @@
 
   ;; Scan string text from the current index. Ends at the closing quote or at
   ;; "#{", which opens an interpolation frame closed by the matching "}".
-  (define (scan-string-body! start first?)
+  (define (scan-string-body! start piece-start first?)
     (define decoded (open-output-string))
-    (define piece-start (if first? start (position)))
     (let string-loop ()
       (cond
         [(= index source-length)
@@ -96,10 +95,9 @@
          (emit! (if first? 'string 'interp-end) piece-start (get-output-string decoded))]
         [(and (char=? (current) #\#) (equal? (peek 1) #\{))
          (emit! (if first? 'interp-start 'interp-middle) piece-start (get-output-string decoded))
-         (define open-start (position))
          (advance!)
          (advance!)
-         (set! delimiters (cons (list #\# open-start start) delimiters))]
+         (set! delimiters (cons (list #\# start) delimiters))]
         [(char=? (current) #\\)
          (define escape-start (position))
          (advance!)
@@ -140,7 +138,7 @@
          (unless (null? delimiters)
            (define opening (car delimiters))
            (when (interpolation-frame? opening)
-             (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (caddr opening))))
+             (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr opening))))
            (return (fail 'LEX-UNCLOSED-DELIMITER
                          (format "unclosed ~a delimiter" (car opening))
                          (cdr opening))))
@@ -160,7 +158,7 @@
                             (position))))
             (define open-interpolation (findf interpolation-frame? delimiters))
             (when open-interpolation
-              (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (caddr open-interpolation))))
+              (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr open-interpolation))))
             (define start (advance-newline!))
             (when (null? delimiters)
               (emit! 'NL start #f))
@@ -205,7 +203,7 @@
            [(char=? char #\")
             (define start (position))
             (advance!)
-            (scan-string-body! start #t)
+            (scan-string-body! start start #t)
             (scan)]
            [else
             (define start (position))
@@ -241,7 +239,7 @@
               [(and (eq? kind 'right-brace) (pair? delimiters) (interpolation-frame? (car delimiters)))
                (define frame (car delimiters))
                (set! delimiters (cdr delimiters))
-               (scan-string-body! (caddr frame) #f)
+               (scan-string-body! (cadr frame) start #f)
                (scan)]
               [else
                (when (memq kind '(left-paren left-bracket left-brace))
@@ -258,4 +256,4 @@
                (scan)])])]))))
 
 (define (interpolation-frame? frame)
-  (and (list? frame) (char=? (car frame) #\#)))
+  (eqv? (car frame) #\#))

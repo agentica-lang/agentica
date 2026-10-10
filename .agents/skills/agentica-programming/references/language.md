@@ -201,7 +201,7 @@ return count
 ## Expressions
 
 - Literals: `42`, `3.14`, `"text"` (escapes `\" \\ \# \n \r \t`), `true`, `false`, `nil`. A minus sign is an operator, not part of the literal.
-- Interpolation: `"total: #{n + 1} for #{name}"` is a `String`. Strings go in as is; other values use their `IO.inspect` form (`2.5`, `[1, 2]`, `Item(name: "a")`). Keep the expression on one line; `\#{` is literal text.
+- Interpolation: `"total: #{n + 1} for #{name}"` is a `String`. Strings go in as is; other values use their `IO.inspect` form (`2.5`, `[1, 2]`, `Item(name: "a")`). Keep the expression on one line; `\#{` is literal text. `case` patterns and `import` paths take plain strings only.
 - Lists: `[1, 2, 3]`. Maps: `{"a": 1, "b": 2}` (a repeated key keeps the last value and its first-insertion position; `Map.put` replacement also keeps that position).
 - An empty `[]` or `{}` needs a known type: an annotation, a parameter, a field, or the function result. A non-empty list needs elements of one type.
 - Struct construction uses named fields, all of them exactly once, in any order: `User(name: "Ana", age: 25)`.

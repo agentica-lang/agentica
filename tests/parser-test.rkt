@@ -77,7 +77,9 @@
     (check-equal? (length parts) 3)
     (check-equal? (source-position-column (source-span-start (node-span expression))) 7)
     (check-equal? (parse-code "def main() -> Void\n  x = \"#{1 2}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def main() -> Void\n  x = \"#{}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN))
+    (check-equal? (parse-code "def main() -> Void\n  x = \"#{}\"\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (define empty-part (parse-text "def main() -> Void\n  x = \"a #{} b\"\nend\n"))
+    (check-equal? (source-position-column (source-span-start (diagnostic-span empty-part))) 12))
 
   (test-case "hello program parses"
     (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))

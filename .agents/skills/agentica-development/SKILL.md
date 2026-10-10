@@ -207,7 +207,7 @@ The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including eve
 
 ## String interpolation
 
-- The lexer scans string text in `scan-string-body!`. `#{` emits `interp-start`/`interp-middle` with the text so far and pushes a `(#\# open-position string-start)` frame on `delimiters`; the `}` that meets that frame resumes string scanning, and the closing quote emits `string` (no interpolation) or `interp-end`. Newlines and EOF inside an open frame are `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
+- The lexer scans string text in `scan-string-body!`. `#{` emits `interp-start`/`interp-middle` with the text so far and pushes a `(#\# string-start)` frame on `delimiters`; the `}` that meets that frame resumes string scanning, and the resumed `interp-middle`/`interp-end` token starts at that `}` so parse errors point at it, and the closing quote emits `string` (no interpolation) or `interp-end`. Newlines and EOF inside an open frame are `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
 - The parser builds `interpolation` with text and expression parts (empty text pieces dropped). The checker checks each expression with no context (Void is rejected) and types the node as String; the evaluator inserts strings raw and other values with `value->debug-string`.
 
 ## Enums and pattern matching
