@@ -483,7 +483,7 @@ Ruby aliases:
 
 Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
 
-Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt.
+Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
 
 ```ruby
 words = line.strip.split(" ")

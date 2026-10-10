@@ -189,7 +189,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-TYPE-MISMATCH` — operand, condition, argument, assignment, return, or field value of the wrong type.
 - `CHECK-EMPTY-LIST-TYPE` — an empty list with no expected type.
 - `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD` — constructor field rules.
-- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
+- `CHECK-UNKNOWN-METHOD` — a method that the receiver's type does not have (this replaced `CHECK-NOT-A-STRUCT`); `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
 - `CHECK-SHADOWED-NAME` — a new local reusing a name visible in an outer scope.
 - `CHECK-ANNOTATION-ON-EXISTING` — an annotation on a name that is already bound.
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
@@ -1009,7 +1009,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 ## Ruby-style ergonomics
 
-Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each from `master`, each moving its part of section 11 into `grammar.md` and the programming reference.
+Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each stacked on the previous one and moving its part of section 11 into `grammar.md` and the programming reference.
 
 - [x] Specify operators, methods on builtins, interpolation, blocks and closures, and hints in `future.md` section 11.
 - [x] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).

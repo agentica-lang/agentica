@@ -33,7 +33,9 @@
                     name multiply-assign integer NL name divide-assign integer NL
                     name modulo-assign integer NL EOF))
     (check-equal? (kinds (lex-text "a!=b"))
-                  '(name not-equal name NL EOF)))
+                  '(name not-equal name NL EOF))
+    (check-equal? (kinds (lex-text "a&&!b||c\nx+=1"))
+                  '(name and not name or name NL name plus-assign integer NL EOF)))
 
   (test-case "interpolated strings split into pieces around expression tokens"
     (define result (lex-text "x = \"a#{n + {\"k\": 1}[\"k\"]}b#{\"q\"}c\\#{d}\""))

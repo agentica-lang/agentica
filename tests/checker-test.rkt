@@ -534,7 +534,15 @@
     (define unused (check-text (main-with "  xs = [1]\n  xs.push(2)")))
     (check-equal? (source-position-column (source-span-start (diagnostic-span unused))) 3)
     (check-regexp-match #rx"xs =" (diagnostic-help unused))
-    (check-ok (main-with "  Result.unwrap!(ok(1))\n  \"4\".to_i!\n  IO.inspect(\"a\".upcase)")))
+    (check-ok (main-with "  Result.unwrap!(ok(1))\n  \"4\".to_i!\n  IO.inspect(\"a\".upcase)"))
+    (check-ok (string-append "def show(x: Int) -> Int\n  puts(String.from_int(x))\n  return x\nend\n"
+                             (main-with "  xs = [1]\n  xs.map(&show)\n  List.map(xs, &show)")))
+    (check-false (regexp-match? #rx"s =" (diagnostic-help (check-text (main-with "  s = \"a\"\n  s.length")))))
+    (check-regexp-match #rx"\\.handler\\.call"
+                        (diagnostic-help
+                         (check-text (string-append "struct Box\n  handler: Fn[Int, Int]\nend\n"
+                                                    "def inc(x: Int) -> Int\n  return x + 1\nend\n"
+                                                    (main-with "  b = Box(handler: &inc)\n  x = b.handler(1)"))))))
 
   (test-case "interpolation is a String and rejects Void parts"
     (check-ok (main-with "  n = 1\n  s: String = \"#{n} #{[n]} #{n.to_f}\""))

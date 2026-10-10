@@ -120,6 +120,15 @@
      (format "the last \"if\" has no \"else\"; add an \"else\" that returns ~a, or return after it" type-name)]
     [else #f]))
 
+(define (takes-function? entry)
+  (for/or ([parameter (in-list (builtin-parameters entry))])
+    (and (pair? (cadr parameter)) (eq? (car (cadr parameter)) 'Fn))))
+
+(define (keeps-first-type? entry)
+  (and entry
+       (pair? (builtin-parameters entry))
+       (equal? (cadr (car (builtin-parameters entry))) (builtin-result entry))))
+
 (define (field-help name fields)
   (define names (map car fields))
   (define guess (did-you-mean name names))
@@ -485,7 +494,7 @@
         [(not)
          (unless (eq? operand 'Bool)
            (bail 'CHECK-TYPE-MISMATCH
-                 (format "\"not\" expects Bool, found ~a" (type->string operand))
+                 (format "\"not\" (or \"!\") expects Bool, found ~a" (type->string operand))
                  (unary-op-span expression)))
          'Bool]
         [else (bail 'CHECK-INTERNAL "unsupported unary operator" (unary-op-span expression))]))
@@ -971,6 +980,10 @@
               #:help (cond
                        [(and (struct-type? target) (hash-ref functions name #f))
                         (format "structs have no methods; call ~a(...) with the struct as an argument" name)]
+                       [(and (struct-type? target)
+                             (let ([field (assoc name (hash-ref structs (cadr target)))])
+                               (and field (pair? (cdr field)) (eq? (car (cdr field)) 'Fn))))
+                        (format "~a is a function field; call it with .~a.call(...)" name name)]
                        [(struct-type? target)
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]
@@ -1143,6 +1156,7 @@
                  (or (typed-target? resolved)
                      (and entry
                           (null? (builtin-effects entry))
+                          (not (takes-function? entry))
                           (not (string-suffix? (call-name resolved) "!")))))
         (bail 'CHECK-UNUSED-VALUE
               (format "the result of ~a is not used"
@@ -1152,7 +1166,8 @@
                                          [(field-access? value) (field-access-target value)]
                                          [(and (call? value) (pair? (call-args value))) (car (call-args value))]
                                          [else #f])])
-                       (if (name-ref? target)
+                       (if (and (name-ref? target)
+                                (or (typed-target? resolved) (keeps-first-type? entry)))
                            (format "values are immutable, so this call changes nothing; assign the result, for example ~a = ..."
                                    (name-ref-name target))
                            "values are immutable, so this call changes nothing; assign or use the result")))))
