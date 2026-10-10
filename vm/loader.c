@@ -272,7 +272,6 @@ static void load_tables(reader *r, agc_program *p) {
   uint64_t total = count_variants(r, p->enum_count);
   p->variant_count = (uint32_t)total;
   p->variants = load_alloc(r, agc_size_mul(p->variant_count, sizeof(agc_variant_def)), false);
-  uint32_t nullary = 0;
   for (uint32_t i = 0, next = 0; i < p->enum_count; i++) {
     agc_enum_def *d = &p->enums[i];
     d->name = read_string(r);
@@ -285,15 +284,12 @@ static void load_tables(reader *r, agc_program *p) {
       v->arity = read_u32(r);
       if (v->arity > 65535) reject(r, "variant arity too large");
       if (v->arity > p->max_arity) p->max_arity = v->arity;
-      if (v->arity == 0) nullary++;
+      if (v->arity == 0) {
+        v->shared = load_alloc(r, sizeof(agc_enum), false);
+        v->shared->variant = next;
+        v->shared->n = 0;
+      }
     }
-  }
-  p->nullary = load_alloc(r, agc_size_mul(nullary, sizeof(agc_enum)), false);
-  for (uint32_t i = 0, k = 0; i < p->variant_count; i++) {
-    if (p->variants[i].arity) continue;
-    p->nullary[k].variant = i;
-    p->nullary[k].n = 0;
-    p->variants[i].shared = &p->nullary[k++];
   }
 }
 

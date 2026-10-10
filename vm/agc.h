@@ -110,7 +110,6 @@ typedef struct {
   agc_struct_def *structs;
   agc_enum_def *enums;
   agc_variant_def *variants;
-  agc_enum *nullary;
   const agc_builtin **builtins;
   agc_function *functions;
 } agc_program;

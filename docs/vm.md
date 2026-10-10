@@ -514,7 +514,8 @@ the tags differ, Int, Bool, Nil and String as in `EQ`, Float by `eqv?`
 `RUNTIME-INTERNAL`. `STRUCT` takes its field count and `ENUM` its arity from
 the tables; a nullary `ENUM` returns the variant's shared value, made by the
 loader. `IS_VARIANT` compares the global variant id, which is unique per
-enum declaration, as the evaluator compares the enum and variant names.
+enum declaration, as the evaluator compares the enum and variant names; an
+id from another enum (only in a hand-made file) is simply false.
 `FIELD` and `PAYLOAD` read item `c` of the value's own `n`; past it is
 `RUNTIME-INTERNAL`.
 
@@ -819,8 +820,10 @@ The loader validates the whole file before running anything. Failures print
 - **In the slice**: captures must be 0; constant kinds above 6 are
   rejected. Struct field counts and variant arities are at most 65535. All
   variants go into one array sized by a first pass over the Enums section,
-  and nullary variants share one array of empty enum values, so a file with
-  65535 variants or a struct with 65535 fields stays within the load budget.
+  and each nullary variant gets one small shared empty enum value, so a file
+  with 65535 variants or a struct with 65535 fields stays within the load
+  budget. `load_alloc` returns NULL for a zero size without charging the
+  budget; callers never read or copy through a zero-size result.
   `STRUCT` checks `a`, `c`
   below the struct count and the window of that struct's field count;
   `ENUM` checks `a`, `c` below the variant count and the window of its

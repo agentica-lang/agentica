@@ -70,7 +70,7 @@ int main(void) {
 #ifdef AGC_GC_STRESS
   size_t depth = 1000;
 #else
-  size_t depth = 200000;
+  size_t depth = 1000000;
 #endif
   agc_value deep = agc_int(1);
   for (size_t k = 0; k < depth; k++) {
