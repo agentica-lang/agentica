@@ -492,10 +492,13 @@ Ruby aliases:
 | `Float` | `to_s` | `String.from_float` |
 | `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
 | any data value | `to_s` | the text `"#{x}"` gives |
+| any data value | `inspect` | the text `IO.inspect(x)` prints |
 
 Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
 
 Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, Results, structs and enums made of those. `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON text, and anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). `puts(x)`, `print(x)` and `IO.warn(x)` take any value with `to_s` and write that text. Only a top-level `Json` becomes JSON text; inside a list or Result it shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`. Functions, tasks and resource handles (sockets, files, processes, HTTP values) have no `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`. A struct field named `to_s` is read as the field. Unlike Ruby, `nil.to_s` is `"nil"`, and `puts([1, 2])` writes `[1, 2]` on one line.
+
+`x.inspect` returns the `IO.inspect` form as a `String`, for the same types as `to_s`. It differs from `to_s` only for strings, which keep their quotes (`"a".inspect` is `"a"` with the quote characters), and for `Json`, which gives `<Json>`. Use `IO.inspect(x)` to print that form and get `x` back.
 
 Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
 
@@ -1013,6 +1016,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 |---|---|
 | `len(x)`, `x.len` | `x.size` for lists and maps, `s.length` for strings |
 | `str(x)`, `x.to_string()` | `x.to_s` or `"#{x}"` |
+| `inspect(x)` | `x.inspect`, or `IO.inspect(x)` to print it |
 | `println(x)` | `puts(x)` |
 | `input()`, `read_line()` | `gets` (a Result) or `gets!` |
 | `range(n)` | a `while` loop, or `for` over a list |

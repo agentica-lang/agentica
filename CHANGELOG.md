@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `x.inspect` on every data value: the `IO.inspect` text as a `String`, as
+  in Ruby. A bare `inspect(x)` gets a hint toward `x.inspect`.
 - `to_s` on every data value (Bool, nil, lists, maps, Results, structs,
   enums, Json), giving the same text as interpolation; `Json` gives its JSON
   text.

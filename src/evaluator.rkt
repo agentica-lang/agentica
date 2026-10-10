@@ -288,6 +288,7 @@
            (mapping-put result
                         (eval-expression (map-entry-key entry))
                         (eval-expression (map-entry-value entry))))]
+        [(inspection? expression) (value->debug-string (eval-expression (inspection-target expression)))]
         [(interpolation? expression)
          (apply string-append
                 (for/list ([part (in-list (interpolation-parts expression))])

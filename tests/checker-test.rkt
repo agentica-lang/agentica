@@ -596,7 +596,9 @@
                    ("  f = &main\n  x = f.to_s" CHECK-UNKNOWN-METHOD)
                    ("  b = Box(f: &main)\n  puts(b)" CHECK-TYPE-MISMATCH)
                    ("  b = Box(f: &main)\n  x = b.to_s" CHECK-UNKNOWN-METHOD)
-                   ("  o: Option[Option[Fn[Void]]] = Option.None()\n  puts(o)" CHECK-TYPE-MISMATCH))])
+                   ("  o: Option[Option[Fn[Void]]] = Option.None()\n  puts(o)" CHECK-TYPE-MISMATCH)
+                   ("  f = &main\n  x = f.inspect" CHECK-UNKNOWN-METHOD)
+                   ("  x = 1\n  x.inspect" CHECK-UNUSED-VALUE))])
       (check-equal? (check-code (string-append declarations (main-with (car entry)))) (cadr entry) (car entry)))
     (check-false (diagnostic? (check-text (string-append declarations
                                                          (main-with (string-append
@@ -608,6 +610,7 @@
                    ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
                    ("  x = input()" CHECK-UNKNOWN-NAME "^use gets,")
                    ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
+                   ("  x = inspect(3)" CHECK-UNKNOWN-NAME "x\\.inspect")
                    ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
                    ("  x = null" CHECK-UNKNOWN-NAME "nil")
                    ("  x = None" CHECK-TYPE-MISMATCH "nil")
