@@ -126,21 +126,11 @@ static void run(agc_vm *vm) {
       case AGC_OP_NEG_F: R[in.a] = agc_float(-agc_as_float(vm, R[in.b])); break;
       case AGC_OP_LT_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) < agc_as_float(vm, R[in.c])); break;
       case AGC_OP_LE_F: R[in.a] = agc_bool(agc_as_float(vm, R[in.b]) <= agc_as_float(vm, R[in.c])); break;
-      case AGC_OP_CONCAT: {
-        agc_string *joined = agc_concat(agc_as_string(vm, R[in.b]), agc_as_string(vm, R[in.c]));
-        R[in.a] = agc_string_value(joined);
+      case AGC_OP_CONCAT:
+        R[in.a] = agc_string_value(agc_concat(agc_as_string(vm, R[in.b]), agc_as_string(vm, R[in.c])));
         break;
-      }
-      case AGC_OP_TO_TEXT: {
-        agc_string *text = agc_text(vm, R[in.b]);
-        R[in.a] = agc_string_value(text);
-        break;
-      }
-      case AGC_OP_INSPECT: {
-        agc_string *text = agc_debug(vm, R[in.b]);
-        R[in.a] = agc_string_value(text);
-        break;
-      }
+      case AGC_OP_TO_TEXT: R[in.a] = agc_string_value(agc_text(vm, R[in.b])); break;
+      case AGC_OP_INSPECT: R[in.a] = agc_string_value(agc_debug(vm, R[in.b])); break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
       case AGC_OP_LT_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) < agc_as_int(vm, R[in.c])); break;
       case AGC_OP_LE_I: R[in.a] = agc_bool(agc_as_int(vm, R[in.b]) <= agc_as_int(vm, R[in.c])); break;

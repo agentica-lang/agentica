@@ -14,15 +14,18 @@
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
-(define vm-file (build-path root "dist" "agentica-vm"))
+(define vm-binary (getenv "AGENTICA_VM_BINARY"))
+(define vm-file (if vm-binary (path->complete-path vm-binary root) (build-path root "dist" "agentica-vm")))
 (define full-sweep-limit 2000)
 
 (define (vm-built?)
   (define make (find-executable-path "make"))
   (define built?
-    (and make
-         (parameterize ([current-directory root])
-           (system* make "-s" "vm"))))
+    (if vm-binary
+        (file-exists? vm-file)
+        (and make
+             (parameterize ([current-directory root])
+               (system* make "-s" "vm")))))
   (cond
     [built? #t]
     [(getenv "AGENTICA_REQUIRE_VM") (error 'vm-diff-test "the VM must build when AGENTICA_REQUIRE_VM is set")]
@@ -42,14 +45,11 @@
   (define err (open-output-string))
   (define result (evaluate checked #:out out #:err err #:in (open-input-string "") #:max-steps limit))
   (define text
-    (regexp-replace*
-     #px"[\u0000-\u0008\u000B-\u001F\u007F]"
-     (cond
-       [(not (diagnostic? result)) ""]
-       [(eq? style 'ai) (format-diagnostic-ai result)]
-       [(eq? style 'json) (jsexpr->string (diagnostic->jsexpr result))]
-       [else (format-diagnostic result)])
-     "?"))
+    (cond
+      [(not (diagnostic? result)) ""]
+      [(eq? style 'ai) (format-diagnostic-ai result)]
+      [(eq? style 'json) (jsexpr->string (diagnostic->jsexpr result))]
+      [else (format-diagnostic result)]))
   (list (if (diagnostic? result) 1 0)
         (get-output-string out)
         (string-append (get-output-string err) (if (diagnostic? result) (string-append text "\n") ""))))

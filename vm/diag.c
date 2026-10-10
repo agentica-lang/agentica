@@ -2,18 +2,26 @@
 
 #include <string.h>
 
-static size_t char_width(uint8_t c) {
-  if (c < 0x80) return 1;
-  if (c < 0xE0) return 2;
-  if (c < 0xF0) return 3;
-  return 4;
+typedef struct {
+  const char *text;
+  size_t start, end, chars;
+} source_line;
+
+static source_line line_of(const agc_source *source, uint32_t line) {
+  source_line l;
+  l.text = source->text->data;
+  l.start = source->line_start[line - 1];
+  l.end = line < source->lines ? source->line_start[line] - 1 : source->text->bytes;
+  l.chars = source->line_chars[line - 1];
+  if (l.end > l.start && l.text[l.end - 1] == '\r') {
+    l.end--;
+    l.chars--;
+  }
+  return l;
 }
 
 static void put_text(FILE *err, const char *text, size_t len) {
-  for (size_t i = 0; i < len; i++) {
-    uint8_t c = (uint8_t)text[i];
-    fputc((c < 0x20 && c != '\t') || c == 0x7F ? '?' : c, err);
-  }
+  if (len) fwrite(text, 1, len, err);
 }
 
 static void put_json(FILE *err, const char *text, size_t len) {
@@ -57,33 +65,23 @@ static void print_json(FILE *err, const agc_program *p, const agc_outcome *outco
 static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_source *source = &p->sources[span->source];
-  const char *text = source->text->data;
-  uint32_t line = span->start_line;
-  size_t start = source->line_start[line - 1];
-  size_t end = line < source->lines ? source->line_start[line] - 1 : source->text->bytes;
-  while (start < end && trimmed(text[start])) start++;
-  while (end > start && trimmed(text[end - 1])) end--;
+  source_line l = line_of(source, span->start_line);
+  while (l.start < l.end && trimmed(l.text[l.start])) l.start++;
+  while (l.end > l.start && trimmed(l.text[l.end - 1])) l.end--;
   fprintf(err, "check failed: 1 error\n\n[%s]\n  message: %s\n  at: ", outcome->code, outcome->message);
   put_text(err, source->name->data, source->name->bytes);
-  fprintf(err, ":%u:%u\n  source: ", (unsigned)line, (unsigned)span->start_column);
-  put_text(err, text + start, end - start);
+  fprintf(err, ":%u:%u\n  source: ", (unsigned)span->start_line, (unsigned)span->start_column);
+  put_text(err, l.text + l.start, l.end - l.start);
   fputc('\n', err);
 }
 
 static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outcome) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_source *source = &p->sources[span->source];
-  const char *text = source->text->data;
   uint32_t line = span->start_line;
   uint32_t column = span->start_column;
-  size_t start = source->line_start[line - 1];
-  size_t end = line < source->lines ? source->line_start[line] - 1 : source->text->bytes;
-  size_t chars = source->line_chars[line - 1];
-  if (end > start && text[end - 1] == '\r') {
-    end--;
-    chars--;
-  }
-  size_t room = chars > column - 1 ? chars - (column - 1) : 1;
+  source_line l = line_of(source, line);
+  size_t room = l.chars > column - 1 ? l.chars - (column - 1) : 1;
   size_t wanted = span->end_line == line ? span->end_column - column : room;
   size_t width = wanted < room ? wanted : room;
   if (width < 1) width = 1;
@@ -92,13 +90,13 @@ static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outc
   put_text(err, source->name->data, source->name->bytes);
   fprintf(err, ":%u:%u error[%s]\n%s\n\n%u | ", (unsigned)line, (unsigned)column, outcome->code,
           outcome->message, (unsigned)line);
-  put_text(err, text + start, end - start);
+  put_text(err, l.text + l.start, l.end - l.start);
   fprintf(err, "\n%*s | ", gutter, "");
-  size_t at = start;
+  size_t at = l.start;
   for (size_t i = 0; i < column - 1; i++) {
-    if (at < end) {
-      fputc(text[at] == '\t' ? '\t' : ' ', err);
-      at += char_width((uint8_t)text[at]);
+    if (at < l.end) {
+      fputc(l.text[at] == '\t' ? '\t' : ' ', err);
+      at += agc_utf8_width((uint8_t)l.text[at]);
     } else {
       fputc(' ', err);
     }

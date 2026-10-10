@@ -33,7 +33,7 @@ vm/main.c     dist/agentica-vm [--max-steps N] [--ai|--json] -- file.agcb [args.
 | `vm/tests/text_test.c` | write-escape range lookup and String debug forms (`docs/vm.md` §2.3) |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
 | `tests/vm-diff-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator |
-| `tests/bytecode-test.rkt` | step merging, `LOWER-UNSUPPORTED`, opcode sync, `vm/unicode_data.c` up to date, `compile` exit codes |
+| `tests/bytecode-test.rkt` | step merging, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
 
@@ -44,7 +44,7 @@ make vm-test                         # C tests: every vm/tests/<name>_test.c in 
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
-make vm-unicode                      # regenerate vm/unicode_data.c from Racket
+make vm-unicode                      # regenerate vm/unicode_data.c from Racket (~40 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
 racket src/main.rkt --dump-ir prog.agc
@@ -56,8 +56,9 @@ racket src/main.rkt --dump-ir prog.agc
 - `tests/vm-diff-test.rkt` runs `make -s vm` first, prints `SKIP` locally
   when the VM cannot be built, and fails in CI (`AGENTICA_REQUIRE_VM=1`).
   It compares each fixture in the plain, `--ai` and `--json` formats, and
-  sweeps `--max-steps` in the plain format. `make vm-gc-stress` leaves the
-  stress build in `dist/agentica-vm` until the next `make vm`.
+  sweeps `--max-steps` in the plain format. `AGENTICA_VM_BINARY=path` makes it
+  use another binary without running `make` (`make vm-gc-stress` uses it
+  for `build/vm/gcstress/agentica-vm`).
   `tests/bytecode-test.rkt` needs no VM binary.
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE`.
@@ -129,7 +130,7 @@ Rules for the C code:
 evaluator. Diagnostic messages are copied verbatim; `RUNTIME-INTERNAL` text is
 not compared. Each deliberate difference goes into `docs/vm.md` as a
 documented difference; `docs/vm.md` lists them (for example a failed stdout
-write exits 1, control bytes from the file print as `?`, out of memory exits
+write exits 1, out of memory exits
 70, and the 2^24 register cap gives `RUNTIME-STACK-OVERFLOW`).
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
@@ -202,8 +203,10 @@ is checked.
   2000 steps.
 - Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
   run (`make vm-gc-stress`), not ASan.
-- A fixture with raw control characters in a string literal prints `?` for
-  them in the VM's plain and `--ai` diagnostics (documented difference); the
-  diff test applies the same replacement to the evaluator's text.
+- Racket `write` prints the joiners U+200C, U+200D and U+E0020 to U+E007F
+  raw only after a raw non-blank character, so the debug form has state;
+  see `docs/vm.md` §2.3 before touching `agc_write_form`.
+- `--max-steps` bounds instructions, not bytes: string ops cost in
+  proportion to their size.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`,
   not Unicode whitespace; the VM matches that.

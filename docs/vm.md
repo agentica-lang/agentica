@@ -45,7 +45,12 @@ marked "In the slice" say where the code is still narrower.
 VM must not have memory errors, must not run child processes unless the VM
 itself got `--allow-run`, and must stop within `--max-steps` when a limit is
 given. A file that passes the loader can still compute wrong values or end
-with `RUNTIME-INTERNAL`; that is the whole guarantee.
+with `RUNTIME-INTERNAL`; that is the whole guarantee. `--max-steps` bounds
+instructions, not memory: one `CONCAT` or `INSPECT` costs time and memory in
+proportion to its strings, so a file can double a string per instruction
+and reach the out-of-memory exit (70, 6.3) in a few dozen steps. A program
+on the evaluator grows strings the same way. A heap cap is an open question
+(13).
 
 ## 2. Reference behavior the VM must copy
 
@@ -133,8 +138,16 @@ differential tests (section 12) check them.
   neighbors, decimal grids from 1e-330 to 1e309, dyadic values with exact
   ties, random arithmetic chains); the lasting checks are the 40 values in
   `vm/tests/float_text_test.c` and the `float-text` differential fixture.
-  Printing costs about 5 to 10 µs per value (one 768-digit `snprintf` plus a
-  few `snprintf`/`strtod` pairs); 7g revisits it.
+  The algorithm reads only the first 18 exact digits (index 17 decides the
+  nearest candidate). A `%.40e` print gives them unless rounding carried
+  into them, which needs digits 18 to 40 of its output to be all `0`; then,
+  unless the value has at most 34 fractional bits and is below 1e40 (so
+  `%.40e` is exact and the zeros are real), the 768-digit print runs as
+  before. A scratch comparison of the two paths agreed on 7 million values
+  (5 million random bit patterns, every power of two with both neighbors,
+  decimal and integer grids). Printing costs about 1 µs per value (about
+  5 µs on the slow path) plus a few `snprintf`/`strtod` pairs; 7g revisits
+  it.
 
 ### 2.3 Strings and text
 
@@ -166,16 +179,29 @@ differential tests (section 12) check them.
 The case mapping, final-sigma and write-escape data are generated from
 Racket itself by `vm/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
 so they agree with the reference by construction (Racket 9.3).
-`make vm-unicode` regenerates the file, and `tests/bytecode-test.rkt` fails
-when the committed file differs from what the generator prints.
+`make vm-unicode` regenerates the file (about 40 s), and the Linux CI job
+fails when the committed file differs from what the generator prints.
 
-- In the slice: only the write-escape data exists, as the sorted ranges of
-  code points that `write` prints as themselves (`agc_write_raw_ranges`).
-  The C rule is: the ten short escapes above, else raw when the code point
-  is in a range, else `\uXXXX` below U+10000 and `\UXXXXXXXX` above. The
-  generator checks this rule against `(format "~s" ...)` for every code
-  point, alone and inside one string holding all of them, and stops if
-  Racket ever prints something else. The case-mapping tables join with the
+- In the slice: only the write-escape data exists, as three range tables
+  derived from Racket's output, not written by hand: code points `write`
+  prints as themselves (`agc_write_raw_ranges`), joiners that print raw
+  only after a raw non-blank character (`agc_write_joiner_ranges`: U+200C,
+  U+200D and U+E0020 to U+E007F), and blanks (`agc_write_blank_ranges`: the
+  17 `Zs` characters U+0020, U+00A0, U+1680, U+2000 to U+200A, U+202F,
+  U+205F, U+3000).
+- The C rule in `agc_write_form`, with `join` false at the start: the ten
+  short escapes above; else raw when the code point is in the raw table,
+  or `join` is true and it is a joiner; else `\uXXXX` below U+10000 and
+  `\UXXXXXXXX` above. Then `join = raw && !blank`. So `"a\u200D\u200D"`
+  prints both joiners raw, while a joiner at the start, after a blank or
+  after an escaped character is escaped; family emoji and flag tag
+  sequences print raw.
+- The generator checks this rule against `(format "~s" ...)` for every code
+  point alone, after `a`, before U+200D and before U+E0041; for every pair
+  of joiners after 14 prefixes (empty, letters, blanks, an escape, a
+  combining mark, an emoji, joiners), also with `a` or a space between
+  them; and for one string holding every code point. It stops if Racket
+  ever prints something else. The case-mapping tables join with the
   `String` library (12.2 item 6).
 
 ### 2.4 Printing values (`value->text`, `value->debug-string`)
@@ -220,13 +246,10 @@ when the committed file differs from what the generator prints.
   failed write ends the run with `RUNTIME-INTERNAL`, exit 1. Documented
   difference: when stdout cannot be written (a full disk, `/dev/full`), the
   evaluator prints a Racket error and still exits 0.
-- Documented difference: when the VM prints a source name or a source line
-  in a plain or `--ai` diagnostic, it replaces each byte below 0x20 (except
-  tab) and 0x7F with `?`, so a hostile file cannot send terminal escapes.
-  Racket prints those bytes raw. Lexed programs rarely contain them (only
-  inside string literals); `tests/vm-diff-test.rkt` applies the same
-  replacement to the evaluator's diagnostic before comparing. JSON output
-  escapes them instead, exactly like the evaluator.
+- Source names and source lines are printed as raw bytes in the plain and
+  `--ai` formats, like Racket, control characters included. Filtering them
+  would protect nothing: any program can print any bytes with `puts` or
+  `IO.warn`.
 - A diagnostic exits with 1. `System.exit(n)` exits with `n` only when
   `1 <= n <= 255`, else with 0 (Racket's exit handler). Normal end exits 0.
 - `RUNTIME-INTERNAL` is at the program span. Its message text is not part of
@@ -618,9 +641,10 @@ kill-on-close job object, which covers crashes.
 
 At startup the VM sets `GC_set_oom_fn` and `GC_set_abort_func`. Their
 handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
-line `agentica-vm: out of memory` and call `_exit(70)` (no atexit handlers,
-no stdio flush, so buffered stdout is lost). Racket has no
-matching diagnostic, so this is a documented difference.
+line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
+GC error`) and call `_exit(70)` (no atexit handlers, no stdio flush, so
+buffered stdout is lost). Racket has no matching diagnostic, so this is a
+documented difference.
 
 ## 7. Builtins in C
 
@@ -722,7 +746,9 @@ The loader validates the whole file before running anything. Failures print
   `CALL_VALUE` or `CALL_BUILTIN` (the `const`/`return` of an empty body). The
   lowering in 3.3 always meets these rules. Together they mean every
   unbounded repetition charges a step, so `--max-steps` holds even for
-  hostile files: the step budget bounds the work to about steps × code size.
+  hostile files: the step budget bounds the number of instructions to about
+  steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
+  time and memory in proportion to their strings (trust model, 1).
 - **Entry**: exists, with no parameters or captures.
 - **In the slice**: captures must be 0 and the Types, Structs and Enums
   sections must be empty; constant kinds above 6 are rejected. `CONCAT`
@@ -761,9 +787,12 @@ and cost one predictable branch each.
   and `--`. `--seed` joins with `Random` (PR 6); until then it is an
   unknown option (exit 2). `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
-  the --ai option can only be specified once` and exits 2; Racket's
-  `command-line` prints the same sentence but exits 1. The VM keeps 2 for
-  every option error, since the 7i driver parses the user's options itself.
+  the --ai option can only be specified once`. Racket's `command-line`
+  exits 1 for every option error it raises itself (a repeated option, an
+  unknown switch, a missing value); the VM exits 2 for all of them, since
+  the 7i driver parses the user's options itself. Value errors that
+  `src/main.rkt` checks (`--max-steps needs a positive integer`) exit 2 on
+  both.
   Arguments after the file are accepted and unused until `System.args`
   lands.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
@@ -917,14 +946,14 @@ written `size > limit - total`. A hermetic test sends over-long values.
   `allocator_may_return_null=1` lets a huge request reach the out-of-memory
   path (6.3) instead of aborting.
   `make vm-test SANITIZE=1` and `make vm-fuzz SANITIZE=1` use the same flags.
-- GC stress: `make vm-gc-stress` builds with `GC_STRESS=1`
-  (`-DGC_DEBUG -DAGC_GC_STRESS`, gcc, `build/vm/gcstress`): `agc_alloc` and
+- GC stress: `make vm-gc-stress` builds `build/vm/gcstress/agentica-vm`
+  with `GC_STRESS=1` (`-DGC_DEBUG -DAGC_GC_STRESS`, gcc): `agc_alloc` and
   `agc_alloc_atomic` call `GC_gcollect()` every 64 allocations, and
   `GC_DEBUG` adds the debug headers whose smashed-object report on stderr
-  would fail the comparison. It then runs `make vm-test` and
-  `tests/vm-diff-test.rkt` on that binary. The Linux sanitizers job runs it
-  last; it leaves the stress build in `dist/agentica-vm` until the next
-  `make vm`. No Valgrind: conservative scanning makes it report many false
+  would fail the comparison. It runs `make vm-test` with those flags and
+  `tests/vm-diff-test.rkt` on that binary (`AGENTICA_VM_BINARY` points the
+  test at it; `dist/agentica-vm` is left alone). The Linux sanitizers job
+  runs it. No Valgrind: conservative scanning makes it report many false
   errors.
 - Fuzzing: `agc_fuzz_one(data, len)` (`vm/fuzz.c`) loads one file and, if
   accepted, runs it with `--max-steps 10000` and prints any diagnostic, all
@@ -989,14 +1018,18 @@ the platform's OpenSSL package) to each job.
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. Programs using `Random` run with several `--seed` values.
-- Generated corpora, checked by C tests against outputs from a Racket script:
-  float text, split and trim, case mapping of every code point, write escapes.
-  Float text has a fixed table in `vm/tests/float_text_test.c` (values picked
-  from a 708k-value comparison with Racket, 2.2) and the
-  `tests/fixtures/vm/float-text.agc` differential fixture; write escapes
-  have `vm/tests/text_test.c` (range lookup at every range edge and a few
-  debug forms) and the `string-inspect` fixture; `make vm-test` builds
-  every `vm/tests/<name>_test.c` listed in `VM_TESTS`.
+- Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
+  (values picked from a 708k-value comparison with Racket, 2.2) and the
+  `tests/fixtures/vm/float-text.agc` differential fixture. Write escapes
+  are checked where the data is made: `vm/gen-unicode.rkt` compares its C
+  rule with Racket's `write` for every code point and the joiner contexts
+  (2.3) and refuses to generate otherwise. On the C side,
+  `vm/tests/text_test.c` checks the range lookup at every range edge, a few
+  debug forms, and that the debug form of every adjacent pair of scalar
+  values is valid UTF-8 with an exact character count; the
+  `string-inspect` fixture compares with the evaluator. Split, trim and
+  case mapping join with the `String` library. `make vm-test` builds every
+  `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
   every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
   enum chain and nested JSON array, printed and encoded.
@@ -1034,4 +1067,8 @@ those that need files, processes, tasks or the network by name:
 ## 13. Open questions
 
 - **Random seeding**: port planned in PR 6, fallback in 7.4.
+- **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
+  runaway file reaches the out-of-memory exit. Before 7i runs untrusted
+  bytecode by default, decide on a cap such as `--max-heap N` through
+  `GC_set_max_heap_size`, and whether the evaluator gets a matching limit.
 - **BDD on the VM**: 7h decides whether handlers move to the VM.

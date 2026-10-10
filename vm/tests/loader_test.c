@@ -349,6 +349,21 @@ int main(void) {
   agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
   wrong = agc_vm_run(&vm);
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  static const agc_instr void_text[] = {{AGC_OP_TO_TEXT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr void_inspect[] = {{AGC_OP_INSPECT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const agc_instr *void_codes[] = {void_text, void_inspect};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.code = void_codes[k];
+    s.code_spans = two_spans;
+    s.count = 2;
+    confused = build(s);
+    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+    free(confused.data);
+    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+    wrong = agc_vm_run(&vm);
+    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  }
   s = base();
   s.extra_kind = 6;
   s.extra_string = "\xE2\x82";

@@ -120,12 +120,17 @@ agc_string *agc_as_string(agc_vm *vm, agc_value v);
 bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
+size_t agc_utf8_width(uint8_t lead);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 
 extern const uint32_t agc_write_raw_ranges[][2];
 extern const size_t agc_write_raw_count;
+extern const uint32_t agc_write_joiner_ranges[][2];
+extern const size_t agc_write_joiner_count;
+extern const uint32_t agc_write_blank_ranges[][2];
+extern const size_t agc_write_blank_count;
 bool agc_write_raw(uint32_t cp);
 size_t agc_write_form(const agc_string *s, char *out, size_t *chars);
 agc_string *agc_concat(const agc_string *a, const agc_string *b);

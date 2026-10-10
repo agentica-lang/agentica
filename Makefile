@@ -53,7 +53,6 @@ VM_CFLAGS := $(VM_WARN) -O1 -g -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS -
 VM_LDFLAGS := -pie -lpthread
 VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/gcstress
-FUZZ_RUNS ?= 10000
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
@@ -97,9 +96,12 @@ vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz
 	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
+$(VM_BUILD)/agentica-vm: $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_LDFLAGS)
+
 vm-gc-stress: build
-	$(MAKE) vm vm-test GC_STRESS=1 SANITIZE=0
-	GC_STRESS=1 SANITIZE=0 AGENTICA_REQUIRE_VM=1 $(RACO) test tests/vm-diff-test.rkt
+	$(MAKE) build/vm/gcstress/agentica-vm vm-test GC_STRESS=1 SANITIZE=0
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm AGENTICA_REQUIRE_VM=1 $(RACO) test tests/vm-diff-test.rkt
 
 vm-unicode:
 	racket vm/gen-unicode.rkt vm/unicode_data.c

@@ -746,3 +746,22 @@ const uint32_t agc_write_raw_ranges[][2] = {
 };
 
 const size_t agc_write_raw_count = sizeof agc_write_raw_ranges / sizeof agc_write_raw_ranges[0];
+
+const uint32_t agc_write_joiner_ranges[][2] = {
+  {0x200C, 0x200D},
+  {0xE0020, 0xE007F},
+};
+
+const size_t agc_write_joiner_count = sizeof agc_write_joiner_ranges / sizeof agc_write_joiner_ranges[0];
+
+const uint32_t agc_write_blank_ranges[][2] = {
+  {0x20, 0x20},
+  {0xA0, 0xA0},
+  {0x1680, 0x1680},
+  {0x2000, 0x200A},
+  {0x202F, 0x202F},
+  {0x205F, 0x205F},
+  {0x3000, 0x3000},
+};
+
+const size_t agc_write_blank_count = sizeof agc_write_blank_ranges / sizeof agc_write_blank_ranges[0];

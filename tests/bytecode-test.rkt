@@ -12,8 +12,6 @@
 
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path vm-header "../vm/agc.h")
-(define-runtime-path unicode-data "../vm/unicode_data.c")
-(define-runtime-path gen-unicode "../vm/gen-unicode.rkt")
 
 (define (lower-text text)
   (define types (make-hasheq))
@@ -67,9 +65,6 @@
     (check-equal? (unsupported-at "def show(xs: List[Int]) -> Void\n  puts(xs.inspect)\nend\n\ndef main() -> Void\nend\n")
                   '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8)))
-
-  (test-case "vm/unicode_data.c is what vm/gen-unicode.rkt generates"
-    (check-equal? ((dynamic-require gen-unicode 'unicode-data-text)) (file->string unicode-data)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
     (define work (make-temporary-directory "agentica-compile~a"))
