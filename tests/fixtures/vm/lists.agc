@@ -81,4 +81,18 @@ def main() -> Void
     puts(ints[i])
     i += 1
   end
+  for row in [[1, 2], [3]]
+    for v in row
+      print("#{v} ")
+    end
+    puts("")
+  end
+  k = 0
+  for n in [2, 1]
+    while k < n
+      print(n)
+      k += 1
+    end
+    puts("")
+  end
 end
