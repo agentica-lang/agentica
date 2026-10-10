@@ -104,5 +104,7 @@ jobs:
           version: '9.3'
       - run: gcc --version && echo '#include <stdio.h>' | gcc -std=c11 -D_POSIX_C_SOURCE=200809L -dM -E -x c - | sed -n '/MINGW_ANSI_STDIO\|define _UCRT/p'
       - run: make vm vm-test
+      - run: gcc -std=c11 -D__USE_MINGW_ANSI_STDIO=0 -DAGC_NO_GC -DAGC_VERSION='"x"' -O2 -U NDEBUG -o ucrt-float.exe vm/value.c vm/text.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c vm/fuzz.c vm/tests/float_text_test.c && ./ucrt-float.exe
+        continue-on-error: true
       - run: make build
       - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
