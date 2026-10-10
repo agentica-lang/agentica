@@ -587,11 +587,21 @@
     (check-equal? (check-code (main-with "  [\"a\"].each do |s|\n    s.strip\n  end")) 'CHECK-UNUSED-VALUE))
 
   (test-case "only values with to_s can be printed, interpolated or converted"
+    (define declarations
+      (string-append "struct Box\n  f: Fn[Void]\nend\n\nstruct Named\n  to_s: Int\nend\n\n"
+                     "enum Option[T]\n  Some(T)\n  None\nend\n\n"))
     (for ([entry '(("  f = &main\n  puts(f)" CHECK-TYPE-MISMATCH)
                    ("  xs = [&main]\n  print(xs)" CHECK-TYPE-MISMATCH)
                    ("  f = &main\n  x = \"#{f}\"" CHECK-TYPE-MISMATCH)
-                   ("  f = &main\n  x = f.to_s" CHECK-UNKNOWN-METHOD))])
-      (check-equal? (check-code (main-with (car entry))) (cadr entry) (car entry))))
+                   ("  f = &main\n  x = f.to_s" CHECK-UNKNOWN-METHOD)
+                   ("  b = Box(f: &main)\n  puts(b)" CHECK-TYPE-MISMATCH)
+                   ("  b = Box(f: &main)\n  x = b.to_s" CHECK-UNKNOWN-METHOD)
+                   ("  o: Option[Option[Fn[Void]]] = Option.None()\n  puts(o)" CHECK-TYPE-MISMATCH))])
+      (check-equal? (check-code (string-append declarations (main-with (car entry)))) (cadr entry) (car entry)))
+    (check-false (diagnostic? (check-text (string-append declarations
+                                                         (main-with (string-append
+                                                                     "  n: Int = Named(to_s: 1).to_s\n  IO.warn(n)\n"
+                                                                     "  x = 1\n  \"a#{x}\"\n  puts(Option.Some([2]))")))))))
 
   (test-case "habits from other languages get a hint with the Agentica form"
     (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")

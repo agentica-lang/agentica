@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `puts`, `print`, `IO.puts` and `IO.print` take any value with `to_s`, as
+- `puts`, `print`, `IO.puts`, `IO.print` and `IO.warn` take any value with `to_s`, as
   in Ruby. Functions, tasks and resource handles have no `to_s`; printing or
   interpolating one is `CHECK-TYPE-MISMATCH`.
 - Interpolating a `Json` value inserts its JSON text instead of `<Json>`.

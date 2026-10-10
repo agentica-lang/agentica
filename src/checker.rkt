@@ -642,24 +642,22 @@
 
     (define (printable-type? type [seen '()])
       (cond
-        [(or (primitive-type? type) (eq? type 'Json)) #t]
+        [(or (primitive-type? type) (eq? type 'Json) (type-variable? type)) #t]
         [(list-type? type) (printable-type? (cadr type) seen)]
         [(map-type? type) (and (printable-type? (cadr type) seen) (printable-type? (caddr type) seen))]
         [(result-type? type) (or (eq? (cadr type) 'Void) (printable-type? (cadr type) seen))]
         [(or (struct-type? type) (enum-type? type))
          (define key (cons (car type) (cadr type)))
-         (or (and (member key seen) #t)
-             (let ([seen (cons key seen)])
-               (if (struct-type? type)
-                   (for/and ([field (in-list (hash-ref structs (cadr type)))])
-                     (printable-type? (cdr field) seen))
-                   (let* ([definition (hash-ref enums (cadr type))]
-                          [substitutions (for/hash ([parameter (in-list (car definition))]
-                                                    [argument (in-list (cddr type))])
-                                           (values parameter argument))])
-                     (for*/and ([payload (in-hash-values (cdr definition))]
-                                [field (in-list payload)])
-                       (printable-type? (substitute-type field substitutions) seen))))))]
+         (and (for/and ([argument (in-list (cddr type))])
+                (printable-type? argument seen))
+              (or (and (member key seen) #t)
+                  (let ([seen (cons key seen)])
+                    (if (struct-type? type)
+                        (for/and ([field (in-list (hash-ref structs (cadr type)))])
+                          (printable-type? (cdr field) seen))
+                        (for*/and ([payload (in-hash-values (cdr (hash-ref enums (cadr type))))]
+                                   [field (in-list payload)])
+                          (printable-type? field seen))))))]
         [else #f]))
 
     (define (ensure-printable! type span)
@@ -1392,7 +1390,7 @@
       (define entry (and (call? resolved) (builtin-ref (call-name resolved))))
       (when (and (not (eq? type 'Void))
                  (or (typed-target? resolved)
-                     (interpolation? resolved)
+                     (and (not (eq? resolved value)) (interpolation? resolved))
                      (and entry
                           (null? (builtin-effects entry))
                           (not (takes-function? entry))

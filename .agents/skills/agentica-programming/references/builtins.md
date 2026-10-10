@@ -62,7 +62,7 @@ gets() -> Result[String]                       # same as IO.gets
 gets!() -> String                              # same as IO.gets!
 IO.puts(value: T) -> Void                      # T has to_s
 IO.print(value: T) -> Void                     # no newline
-IO.warn(value: String) -> Void                  # standard error
+IO.warn(value: T) -> Void                      # standard error
 IO.inspect(value: T) -> T                      # prints a debug form, returns the value
 IO.gets() -> Result[String]                   # ok(line) or error at EOF
 IO.gets!() -> String                          # next line; halts at end of input

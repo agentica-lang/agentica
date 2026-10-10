@@ -500,7 +500,7 @@
          (if (result-ok? (car arguments)) (result-ok-value (car arguments)) (cadr arguments))]
         [("IO.print") (display (value->text (car arguments))) (void)]
         [("IO.flush") (flush-output (current-output-port)) (void)]
-        [("IO.warn") (displayln (car arguments) (current-error-port)) (void)]
+        [("IO.warn") (displayln (value->text (car arguments)) (current-error-port)) (void)]
         [("IO.inspect")
          (displayln (value->debug-string (car arguments)))
          (car arguments)]

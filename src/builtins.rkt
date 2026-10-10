@@ -104,7 +104,7 @@
                     ("BDD.then_stderr" ((expected String)) Void #f "BDD.then_stderr" (stderr) "Compare complete stderr after program exit.")
                     ("IO.puts" ((value T)) Void show "puts" (stdout) "Write a value and a newline; non-String values print as in interpolation.")
                     ("IO.print" ((value T)) Void show "IO.print" (stdout) "Write a value without a newline; non-String values print as in interpolation.")
-                    ("IO.warn" ((value String)) Void #f "IO.warn" (stderr) "Write text and a newline to stderr.")
+                    ("IO.warn" ((value T)) Void show "IO.warn" (stderr) "Write a value and a newline to stderr; non-String values print as in interpolation.")
                     ("IO.inspect" ((value T)) T identity "IO.inspect" (stdout) "Print a stable debug form and return the value.")
                     ("IO.gets" () (Result String) #f "IO.gets" (stdin) "Read a line as a Result; EOF is an error value.")
                     ("IO.gets!" () String #f "IO.gets!" (stdin) "Read a line; halt at EOF.")
