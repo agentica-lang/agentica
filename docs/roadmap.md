@@ -120,9 +120,9 @@ Keep the AST free of parsing rules and the parser free of checking rules. Do not
 - A bare `TYPE_NAME` in expression position is an error: a type name is only a type or a constructor call.
 - `if 1` and other semantic errors are syntactically valid here; Phase 3 rejects them.
 - Trailing commas are accepted in parameters, arguments, named arguments, and list literals, as the grammar allows.
-- NL handling: skip stray `NL` tokens between declarations, between statements, and before `EOF`. Each LF/CRLF outside delimiters emits NL, including blank/comment lines; the parser tolerates the extra tokens. Phase 5d2 aligned the docs without changing accepted programs.
+- NL handling: skip stray `NL` tokens between declarations, between statements, and before `EOF`. Each LF/CRLF outside delimiters emits NL, including blank/comment lines; the parser tolerates the extra tokens. Phase 5d2 aligned the docs without changing accepted programs. Later, the Ruby-style phase made one blank (or comment) line required between a declaration's `end` and the next declaration or import (`PARSE-MISSING-BLANK-LINE`).
 - Stop at the first error and return one diagnostic, as the lexer does. No error recovery in this phase.
-- Diagnostic codes: `PARSE-UNEXPECTED-TOKEN` (expected X, found Y), `PARSE-UNCLOSED-BLOCK` (reached `EOF` before `end`), `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET`. The message for a `NAME` followed by another expression token (`puts "hello"`) should name the missing newline and mention that calls need parentheses.
+- Diagnostic codes: `PARSE-UNEXPECTED-TOKEN` (expected X, found Y), `PARSE-UNCLOSED-BLOCK` (reached `EOF` before `end`), `PARSE-TOP-LEVEL-STATEMENT`, `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET`, `PARSE-MISSING-BLANK-LINE` (added later). The message for a `NAME` followed by another expression token (`puts "hello"`) should name the missing newline and mention that calls need parentheses.
 
 ### Phase 2 checklist
 
