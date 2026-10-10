@@ -369,6 +369,72 @@ int main(void) {
   s.extra_string = "\xE2\x82";
   assert(!loads(s, "invalid UTF-8"));
 
+  static const agc_instr bad_list_target[] = {{AGC_OP_LIST, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_list_target, two_spans, 2, "register out of range"));
+  static const agc_instr bad_list_start[] = {{AGC_OP_LIST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_list_start, two_spans, 2, "register out of range"));
+  static const agc_instr bad_list_window[] = {{AGC_OP_LIST, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_list_window, two_spans, 2, "register range out of range"));
+  static const agc_instr bad_list_len[] = {{AGC_OP_LIST_LEN, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_list_len, two_spans, 2, "register out of range"));
+  static const agc_instr bad_list_get[] = {{AGC_OP_LIST_GET, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(bad_list_get, two_spans, 2, "register out of range"));
+
+  static const agc_instr nested_list[] = {
+    {AGC_OP_STEP, 2, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_LIST, 0, 0, 1},
+    {AGC_OP_LIST, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t nested_spans[] = {1, 2, 2, 2, 2, 1, 0, 0};
+  s = base();
+  s.code = nested_list;
+  s.code_spans = nested_spans;
+  s.count = 8;
+  s.registers = 2;
+  confused = build(s);
+  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+  free(confused.data);
+  out = tmpfile();
+  assert(out);
+  agc_vm_init(&vm, p, out, out, INT64_MAX);
+  assert(agc_vm_run(&vm).kind == AGC_DONE);
+  memset(text, 0, sizeof text);
+  rewind(out);
+  assert(fread(text, 1, sizeof text, out) == 6 && strcmp(text, "[[1]]\n") == 0);
+  fclose(out);
+
+  static const agc_instr int_list_len[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST_LEN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr int_list_get[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST_GET, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const agc_instr *not_lists[] = {int_list_len, int_list_get};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.code = not_lists[k];
+    s.code_spans = confused_spans;
+    s.count = 4;
+    confused = build(s);
+    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+    free(confused.data);
+    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+    wrong = agc_vm_run(&vm);
+    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
+  }
+  static const agc_instr list_get_outside[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST, 1, 0, 1}, {AGC_OP_LIST_GET, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t outside_spans[] = {1, 2, 2, 2, 0};
+  s = base();
+  s.code = list_get_outside;
+  s.code_spans = outside_spans;
+  s.count = 5;
+  s.registers = 2;
+  confused = build(s);
+  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
+  free(confused.data);
+  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
+  wrong = agc_vm_run(&vm);
+  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INDEX-OUT-OF-RANGE") == 0 && wrong.span == 2);
+  assert(strcmp(wrong.message, "index 1 is outside a list of length 1") == 0);
+
   puts("loader tests passed");
   return 0;
 }

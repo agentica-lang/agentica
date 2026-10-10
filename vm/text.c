@@ -91,15 +91,100 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_FLOAT_TEXT]) {
   return (size_t)snprintf(text, AGC_FLOAT_TEXT, "%" PRId64, agc_as_int(vm, v));
 }
 
+typedef struct {
+  agc_string *s;
+  size_t cap;
+} builder;
+
+static char *reserve(builder *b, size_t extra) {
+  size_t need = agc_size_add(b->s->bytes, extra);
+  if (need > b->cap) {
+    size_t cap = b->cap;
+    while (cap < need) cap = agc_size_mul(cap, 2);
+    agc_string *bigger = agc_new_string(cap, b->s->chars);
+    bigger->bytes = b->s->bytes;
+    if (b->s->bytes) memcpy(bigger->data, b->s->data, b->s->bytes);
+    b->s = bigger;
+    b->cap = cap;
+  }
+  return b->s->data + b->s->bytes;
+}
+
+static void append(builder *b, const char *text, size_t len) {
+  memcpy(reserve(b, len), text, len);
+  b->s->bytes += len;
+  b->s->chars += len;
+}
+
+static void append_item(agc_vm *vm, builder *b, agc_value v) {
+  if (agc_is(v, AGC_T_STRING)) {
+    const agc_string *s = agc_as_string(vm, v);
+    size_t chars;
+    size_t len = agc_write_form(s, NULL, &chars);
+    agc_write_form(s, reserve(b, len), &chars);
+    b->s->bytes += len;
+    b->s->chars += chars;
+  } else {
+    char text[AGC_FLOAT_TEXT];
+    append(b, text, agc_scalar_text(vm, v, text));
+  }
+}
+
+typedef struct {
+  const agc_list *list;
+  size_t next;
+} list_frame;
+
+static agc_string *list_debug(agc_vm *vm, const agc_list *root) {
+  builder b;
+  b.cap = 64;
+  b.s = agc_new_string(b.cap, 0);
+  b.s->bytes = 0;
+  size_t depth = 1, capacity = 16;
+  list_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(list_frame)));
+  stack[0].list = root;
+  stack[0].next = 0;
+  append(&b, "[", 1);
+  while (depth) {
+    list_frame *top = &stack[depth - 1];
+    if (top->next == top->list->len) {
+      append(&b, "]", 1);
+      depth--;
+      continue;
+    }
+    if (top->next) append(&b, ", ", 2);
+    agc_value item = top->list->items[top->next++];
+    if (!agc_is(item, AGC_T_LIST)) {
+      append_item(vm, &b, item);
+      continue;
+    }
+    if (depth == capacity) {
+      size_t bigger = agc_size_mul(capacity, 2);
+      list_frame *grown = agc_alloc(agc_size_mul(bigger, sizeof(list_frame)));
+      memcpy(grown, stack, depth * sizeof(list_frame));
+      stack = grown;
+      capacity = bigger;
+    }
+    stack[depth].list = agc_as_list(vm, item);
+    stack[depth].next = 0;
+    depth++;
+    append(&b, "[", 1);
+  }
+  return b.s;
+}
+
 agc_string *agc_text(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_STRING)) return agc_as_string(vm, v);
-  char text[AGC_FLOAT_TEXT];
-  size_t n = agc_scalar_text(vm, v, text);
-  return agc_make_string(text, n, n);
+  return agc_debug(vm, v);
 }
 
 agc_string *agc_debug(agc_vm *vm, agc_value v) {
-  if (!agc_is(v, AGC_T_STRING)) return agc_text(vm, v);
+  if (agc_is(v, AGC_T_LIST)) return list_debug(vm, agc_as_list(vm, v));
+  if (!agc_is(v, AGC_T_STRING)) {
+    char text[AGC_FLOAT_TEXT];
+    size_t n = agc_scalar_text(vm, v, text);
+    return agc_make_string(text, n, n);
+  }
   const agc_string *s = agc_as_string(vm, v);
   size_t chars;
   size_t bytes = agc_write_form(s, NULL, &chars);

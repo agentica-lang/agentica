@@ -18,6 +18,15 @@
 
 (define value-types '(Int Float Bool Nil String))
 
+(define max-list-chunk 255)
+
+(define (vm-type? type)
+  (or (and (memq type value-types) #t)
+      (and (list-type? type) (vm-type? (cadr type)))))
+
+(define (list-type? type)
+  (and (pair? type) (eq? (car type) 'List)))
+
 (define int-ops
   (hasheq 'plus 'add-i 'minus 'sub-i 'multiply 'mul-i 'divide 'div-i 'modulo 'mod-i
           'less 'lt-i 'less-equal 'le-i 'greater 'lt-i 'greater-equal 'le-i))
@@ -65,6 +74,7 @@
   (define scopes (list (make-hash)))
   (define label-count 0)
   (define loop-labels #f)
+  (define after-step #f)
 
   (define (emit! op args . spans)
     (for-each note-source! spans)
@@ -89,9 +99,9 @@
 
   (define (type-of expression)
     (hash-ref types expression #f))
-  (define (require-type! expression allowed [type (type-of expression)])
-    (unless (memq type allowed)
-      (unsupported (if (symbol? type) (format "values of type ~a" type) "this expression")
+  (define (require-type! expression void? [type (type-of expression)])
+    (unless (or (vm-type? type) (and void? (eq? type 'Void)))
+      (unsupported (if type (format "values of type ~a" (type->string type)) "this expression")
                    (node-span expression))))
 
   (define (target want)
@@ -117,17 +127,17 @@
       [(call? expression) (lower-call expression want void?)]
       [(resolved-of expression)
        => (lambda (resolved)
-            (require-type! expression (if void? (cons 'Void value-types) value-types))
+            (require-type! expression void?)
             (if (call? resolved)
                 (lower-call resolved want void? #:checked? #t)
                 (lower-expression resolved want)))]
       [(typed-target? expression)
        (define inner (typed-target-expression expression))
-       (require-type! inner value-types (typed-target-type expression))
+       (require-type! inner #f (typed-target-type expression))
        (lower-expression inner want)]
       [(or (interpolation? expression) (inspection? expression)) (lower-value expression want)]
       [else
-       (require-type! expression value-types)
+       (require-type! expression #f)
        (lower-value expression want)]))
 
   (define (lower-value expression want)
@@ -157,6 +167,19 @@
        (set! next (if want saved (add1 dst)))
        dst]
       [(binary? expression) (lower-binary expression want)]
+      [(list-lit? expression) (lower-list expression want)]
+      [(index-access? expression)
+       (define target-node (index-access-target expression))
+       (unless (list-type? (static-type target-node))
+         (unsupported "indexing a map" span))
+       (emit! 'step '() span)
+       (define saved next)
+       (define dst (target want))
+       (define items (lower-expression target-node #f))
+       (define index (lower-expression (index-access-index expression) #f))
+       (emit! 'list-get (list dst items index) (node-span (index-access-index expression)))
+       (set! next (if want saved (add1 dst)))
+       dst]
       [(inspection? expression)
        (emit! 'step '() span)
        (define saved next)
@@ -189,6 +212,44 @@
        (set! next (if want saved (add1 dst)))
        dst]
       [else (unsupported "this expression" span)]))
+
+  (define (lower-list expression want)
+    (define span (list-lit-span expression))
+    (emit! 'step '() span)
+    (define saved next)
+    (define elements (list-lit-elements expression))
+    (define (lower-elements! items)
+      (define start next)
+      (for ([element (in-list items)])
+        (lower-expression element (alloc!)))
+      start)
+    (define dst
+      (cond
+        [(<= (length elements) max-list-chunk)
+         (define dst (target want))
+         (define start (lower-elements! elements))
+         (emit! 'list (list dst (if (null? elements) dst start) (length elements)) span)
+         dst]
+        [else
+         (define base (alloc!))
+         (let loop ([items elements] [first? #t])
+           (define-values (chunk rest)
+             (if (> (length items) max-list-chunk)
+                 (split-at items max-list-chunk)
+                 (values items '())))
+           (set! next (add1 base))
+           (define start (lower-elements! chunk))
+           (cond
+             [first? (emit! 'list (list base start (length chunk)) span)]
+             [else
+              (emit! 'list (list start start (length chunk)) span)
+              (emit! 'call-builtin (list base "List.concat" 2) span span span)])
+           (unless (null? rest) (loop rest #f)))
+         (cond
+           [want (emit! 'move (list want base) span) want]
+           [else base])]))
+    (set! next (if want saved (add1 dst)))
+    dst)
 
   (define (lower-binary expression want)
     (emit! 'step '() (binary-span expression))
@@ -231,7 +292,7 @@
     (unless (or builtin? (hash-has-key? function-index name))
       (unsupported (format "the call to ~a" name) span))
     (unless checked?
-      (require-type! expression (if void? (cons 'Void value-types) value-types)))
+      (require-type! expression void?))
     (emit! 'step '() span)
     (define saved next)
     (define base (alloc!))
@@ -256,6 +317,10 @@
     (define span (node-span statement))
     (define saved next)
     (emit! 'step '() span)
+    (when after-step
+      (define hook after-step)
+      (set! after-step #f)
+      (hook))
     (cond
       [(binding? statement)
        (define name (binding-name statement))
@@ -315,7 +380,38 @@
                               (cdr loop-labels)
                               (car loop-labels)))
               span)]
-      [(for-stmt? statement) (unsupported "for loops" span)]
+      [(for-stmt? statement)
+       (define body (for-stmt-body statement))
+       (define items (alloc!))
+       (lower-expression (for-stmt-iterable statement) items)
+       (unless (null? body)
+         (define index (alloc!))
+         (define count (alloc!))
+         (define temp (alloc!))
+         (define top (new-label!))
+         (define increment (new-label!))
+         (define test (new-label!))
+         (define exit (new-label!))
+         (emit! 'const (list index 0) span)
+         (emit! 'list-len (list count items) span)
+         (emit! 'jump (list test) span)
+         (define outer loop-labels)
+         (set! loop-labels (cons increment exit))
+         (scoped (lambda ()
+                   (define element (alloc!))
+                   (hash-set! (car scopes) (for-stmt-var statement) element)
+                   (place! top)
+                   (set! after-step (lambda () (emit! 'list-get (list element items index) span)))
+                   (lower-block body)))
+         (set! loop-labels outer)
+         (place! increment)
+         (emit! 'const (list temp 1) span)
+         (emit! 'add-i (list index index temp) span)
+         (place! test)
+         (emit! 'lt-i (list temp index count) span)
+         (emit! 'jump-if-true (list temp top) span)
+         (place! exit))
+       (set! next saved)]
       [(case-stmt? statement) (unsupported "case" span)]
       [else (unsupported "this statement" span)]))
 
@@ -341,6 +437,7 @@
           (= index (if (eq? op 'jump) 0 1)))
      (format "L~a" value)]
     [(and (eq? op 'call) (= index 1)) (format "fn~a" value)]
+    [(and (eq? op 'list) (= index 2)) (format "~a" value)]
     [(and (eq? op 'call-builtin) (>= index 1)) (format "~a" value)]
     [else (format "r~a" value)]))
 

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String
+  and nested lists in locals, parameters and returns, list literals (long
+  ones are built in chunks of 255), `for x in xs` with `break` and `next`,
+  indexing `xs[i]` with `RUNTIME-INDEX-OUT-OF-RANGE` at the index, and the
+  `[a, b]` text through `puts`, `print`, `IO.warn`, interpolation, `to_s`
+  and `inspect`. Deeply nested lists print without C recursion.
 - The bytecode VM builds and passes its tests on macOS and on Windows
   (MSYS2 UCRT64 gcc, `dist/agentica-vm.exe`); CI runs both. On Windows the
   VM takes its arguments as UTF-16 (`wmain`) and opens the input file with
