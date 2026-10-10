@@ -1,0 +1,59 @@
+name: Platforms
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Which platforms to run
+        type: choice
+        options: [both, macos, windows]
+        default: both
+
+permissions:
+  contents: read
+
+jobs:
+  vm-macos:
+    if: inputs.os != 'windows'
+    runs-on: macos-15
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          variant: CS
+          version: '9.3'
+      - run: cc --version
+      - run: make vm vm-test
+      - run: make build
+      - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
+
+  vm-windows:
+    if: inputs.os != 'macos'
+    runs-on: windows-2025
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          update: false
+          install: make mingw-w64-ucrt-x86_64-gcc
+      - uses: Bogdanp/setup-racket@v1.15
+        with:
+          variant: CS
+          version: '9.3'
+      - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
+      - run: make vm vm-test
+      - run: make build
+      - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt

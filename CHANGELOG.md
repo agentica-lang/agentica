@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A documentation website in `site/`, built with Hugo and a small custom
   theme. It shows the language reference (`docs/grammar.md`), the guide and
   the library pages from the programming skill without copying them.
-  `make site` builds it, `make site-serve` serves it, CI builds it on every
-  pull request, and `.github/workflows/pages.yml` deploys it to GitHub Pages
+  `make site` builds it, `make site-serve` serves it, CI builds it on pull
+  requests that touch it, and `.github/workflows/pages.yml` deploys it to GitHub Pages
   from `master`.
 - A weekly CI workflow fuzzes the VM loader and interpreter with 5 million
   mutants and a random `FUZZ_SEED`, and uploads the crashing input on failure.
@@ -95,6 +95,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI runs on pull requests only, and only on Linux; pull requests that
+  change only docs, the site or Markdown skip it. Compiled Racket files are
+  cached per job. The macOS and Windows VM jobs moved to
+  `.github/workflows/platforms.yml` and the fuzz workflow no longer runs
+  weekly; both run by hand. The site build moved to
+  `.github/workflows/docs-site.yml`.
 - libgc is built with `NO_EXECUTE_PERMISSION` and `ALL_INTERIOR_POINTERS`,
   as its own build systems do: the heap is no longer writable and
   executable (macOS on arm64 refuses such pages), and interior pointers
