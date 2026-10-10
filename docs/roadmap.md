@@ -1022,7 +1022,7 @@ Rules for every subphase:
 
 ### 7a: Baseline measurements
 
-- [ ] Add a benchmark script (`bench/`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
+- [ ] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
 - [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt` and `dist/agentica`.
 - [ ] Record the numbers, machine and Racket version in `docs/vm-benchmarks.md`.
 - [ ] Profile the evaluator once to see where time goes (scope lookup, dispatch, allocation).
