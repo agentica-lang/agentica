@@ -192,7 +192,13 @@
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
        (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 6)
-       (check-regexp-match #rx"Command\\.Show\\(\\)" (diagnostic-help problem)))))
+       (check-regexp-match #rx"Command\\.Show\\(\\)" (diagnostic-help problem))))
+    (with-files
+     '(("root.agc" . "def main() -> Void\n  p: Geo.Point = nil\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-false (regexp-match? #rx"parentheses" (diagnostic-help problem))))))
 
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files

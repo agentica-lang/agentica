@@ -476,8 +476,8 @@
                    (name-ref-span expression)
                    #:help (and (not (hash-has-key? functions (name-ref-name expression)))
                                (not (builtin-ref (name-ref-name expression)))
-                               (or (hash-ref foreign-names (name-ref-name expression) #f)
-                                   (did-you-mean (name-ref-name expression) (visible-names))))))
+                               (or (did-you-mean (name-ref-name expression) (visible-names))
+                                   (hash-ref foreign-names (name-ref-name expression) #f)))))
            (car binding)]
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]

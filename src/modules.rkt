@@ -148,7 +148,7 @@
           (set! active (cdr active))))
       (visit root-key root (program-span root))
       (define (identity key name) (string-append (hash-ref prefixes key) name))
-      (define (resolve key name kind span)
+      (define (resolve key name kind span #:variant-hint? [variant-hint? #f])
         (define parts (string-split name "."))
         (cond
           [(= (length parts) 2)
@@ -170,7 +170,9 @@
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span
-                         #:help (format "import a module with import \"path\" as ~a; an enum variant without payload needs parentheses: ~a()" alias name))])]
+                         #:help (if variant-hint?
+                                    (format "import a module with import \"path\" as ~a; an enum variant without payload needs parentheses: ~a()" alias name)
+                                    (format "import a module with import \"path\" as ~a" alias)))])]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
           [(and (eq? kind 'enum) (string=? name "Result")) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]
@@ -180,7 +182,7 @@
         (define (walks nodes) (map walk nodes))
         (match node
           [(type-ref name args span) (type-ref (resolve key name 'type span) (walks args) span)]
-          [(type-expression name span) (type-expression (resolve key name 'type span) span)]
+          [(type-expression name span) (type-expression (resolve key name 'type span #:variant-hint? #t) span)]
           [(function-decl name params result body span)
            (function-decl (identity key name) (walks params) (walk result) (walks body) span)]
           [(struct-decl name fields span) (struct-decl (identity key name) (walks fields) span)]

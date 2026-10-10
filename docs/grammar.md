@@ -49,7 +49,7 @@ def main() -> Void
 end
 ```
 
-Blocks end with `end`. Indentation helps reading but does not determine structure. Calls use parentheses, even when they take no arguments; only builtin methods and module functions without arguments may drop them (`s.length`, `IO.gets!`). Structs are built with named fields; ordinary functions take positional arguments.
+Blocks end with `end`. Indentation helps reading but does not determine structure. Calls use parentheses, even when they take no arguments; only builtin methods, and module functions without arguments (builtin or reached through an import alias), may drop them (`s.length`, `IO.gets!`, `Util.reset`). Structs are built with named fields; ordinary functions take positional arguments.
 
 The executable starts by calling `main()`. The core has no executable statements at the top level, only declarations. This avoids having two different entry models.
 
@@ -308,7 +308,7 @@ literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 
 Calls are to named functions or function values via `.call(...)`; arbitrary user methods are not supported. `&name` references a declared top-level function without capturing variables; a block (see "Blocks and closures") captures them. `call` is not a reserved word. `user.name`, `users[0]`, and `find_user(1).name` also fit the grammar.
 
-`TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias. Without arguments the parentheses may be dropped: `IO.gets!` is `IO.gets!()`, and `while !IO.eof? do` reads like Ruby.
+`TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias. Without arguments the parentheses may be dropped: `IO.gets!` is `IO.gets!()`, and `while !IO.eof? do` reads like Ruby. This holds for imported functions too: `f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
 
 `and` and `or` short-circuit. Additions, subtractions, multiplications, divisions, and modulos group from left to right. Comparisons and equality checks do not chain: `a < b < c` is invalid; write `a < b and b < c`.
 
@@ -713,7 +713,7 @@ xs.each do |x|
 end
 ```
 
-- **Where.** `do |a, b| ... end` (or `do ... end` without parameters) right after the `)` of a call, or after a method name without parentheses: `xs.each do ... end`. A user function always needs its parentheses: `run(1) do ... end`, `start() do ... end`. The block becomes the last argument, so the called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET` otherwise, for user functions and builtins alike). `do || ... end` is rejected; write `do ... end`.
+- **Where.** `do |a, b| ... end` (or `do ... end` without parameters) right after the `)` of a call, or after a method name without parentheses: `xs.each do ... end`. A user function always needs its parentheses: `run(1) do ... end`, `start() do ... end`; only a function reached through an import alias may drop them, like a module function (`Util.start do ... end`). The block becomes the last argument, so the called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET` otherwise, for user functions and builtins alike). `do || ... end` is rejected; write `do ... end`.
 - **Lines.** The body may follow the parameters on the same line (`do |x| x * 2 end`) or start on the next one. Blocks may span lines inside parentheses: `puts(String.join(xs.map do |x| ... end, ","))`.
 - **`case`, `while`, `for`.** These headers may end with an optional `do`: `case x do`, `while !done do`, `for x in xs do`. That `do` belongs to the header and is never a block. A call with a block in these headers needs parentheses: `case (xs.map do |x| x end) do`.
 - **Parameter types** come from the call: the parameter types of the expected `Fn`, or the builtin's rule (`xs.map` gives `x` the element type). They may be annotated: `do |x: Int| ... end`. With neither, `CHECK-BLOCK-TYPE`. A wrong number of parameters is `CHECK-ARITY`.
@@ -1015,7 +1015,9 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `if x then` | a newline after the condition |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
-| `break`, `continue`, `next` | a `while` condition, `return`, or an `if` around the rest of the body |
+| `break`, `continue`, `next`, `break if x` | a `while` condition, `return`, or an `if` around the rest of the body |
+| `loop do ... end` | `while true ... end`, or a `while` condition |
+| `puts(x) if ok`, `if x do` | `if ok ... end`; an `if` condition ends with a newline |
 | `Result.Ok(x)`, `Result.Err(m)` as values | `ok(x)`, `error(m)` (the qualified forms are `case` patterns) |
 | `Command.Show` for a variant without payload | `Command.Show()` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |

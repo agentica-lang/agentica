@@ -386,6 +386,19 @@
      (output-of (main-with "  IO.inspect(String.from_bytes([]))\n  IO.inspect(String.from_bytes([65, 10, 66]))\n  IO.inspect(String.length(Result.unwrap!(String.from_bytes([0]))))"))
      "ok(\"\")\nok(\"A\\nB\")\n1\n"))
 
+  (test-case "Ruby headers, one-line case arms and IO.gets! without parentheses run"
+    (define-values (output err result)
+      (run-io (string-append
+               "enum Command\n  Add(Int)\n  Show\nend\n\n"
+               "def main() -> Void\n  total = 0\n"
+               "  while !IO.eof? do\n    line = IO.gets!.strip\n"
+               "    command: Command = Command.Show()\n"
+               "    if line != \"show\"\n      command = Command.Add(line.to_i!)\n    end\n"
+               "    case command do\n      Command.Add(n) -> total += n\n"
+               "      Command.Show -> puts(\"total #{total}\")\n    end\n  end\nend\n")
+              "2\n3\nshow\n4\nshow\n"))
+    (check-equal? output "total 5\ntotal 9\n"))
+
   (test-case "IO.gets! at end of input is a located diagnostic"
     (define-values (output err result) (run-io (main-with "  x = IO.gets!()") ""))
     (check-true (diagnostic? result))

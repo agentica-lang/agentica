@@ -77,6 +77,12 @@
       (or (kind? 'NL) (and (> block-depth 0) (kind? 'end))))
 
     (define (expect-statement-end description)
+      (when (memq (token-kind (current)) '(if while))
+        (bail 'PARSE-UNEXPECTED-TOKEN
+              (format "expected a newline after the statement, found ~a" (describe (current)))
+              (current)
+              #:help (format "there are no ~a modifiers: put the statement inside ~a cond ... end"
+                             (token-lexeme (current)) (token-lexeme (current)))))
       (if (and (> block-depth 0) (kind? 'end))
           (current)
           (expect 'NL description)))
@@ -459,13 +465,15 @@
                  start
                  #:help "write elsif: if a ... elsif b ... else ... end"))
          (when (and (name-ref? value) (not (statement-end?))
-                    (member (name-ref-name value) '("let" "var" "val" "const" "match")))
+                    (member (name-ref-name value) '("let" "var" "val" "const" "match" "break" "continue" "next")))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "\"~a\" is not a keyword" (name-ref-name value))
                  start
-                 #:help (if (equal? (name-ref-name value) "match")
-                            "use case value do ... end"
-                            "write x = 5, or x: Int = 5 to give a type")))
+                 #:help (case (name-ref-name value)
+                          [("match") "use case value do ... end"]
+                          [("break") "there is no break; put the stop test in the while condition, or return from a function"]
+                          [("continue" "next") "there is no continue or next; wrap the rest of the loop body in an if"]
+                          [else "write x = 5, or x: Int = 5 to give a type"])))
          (when (and (name-ref? value) (not (statement-end?)))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "expected a newline after the statement; calls need parentheses, as in ~a(...)"
@@ -523,6 +531,9 @@
       (when (and (kind? 'name) (equal? (token-lexeme (current)) "then"))
         (bail 'PARSE-UNEXPECTED-TOKEN "expected a newline after the condition, found \"then\"" (current)
               #:help "there is no then: end the condition with a newline"))
+      (when (kind? 'do)
+        (bail 'PARSE-UNEXPECTED-TOKEN "expected a newline after the condition, found do" (current)
+              #:help "an if condition ends with a newline, not do"))
       (expect 'NL "a newline after the condition")
       (define body (parse-block))
       (if-branch condition body (span-from start)))
@@ -634,9 +645,14 @@
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "a block needs a call before it, found the name \"~a\"" (name-ref-name target))
                  (current)
-                 #:help (if (member (name-ref-name target) '("lambda" "proc"))
-                            "there are no standalone lambdas: pass a block to a call (xs.map do |x| ... end) or use &name"
-                            (format "add parentheses: ~a() do ... end" (name-ref-name target))))]
+                 #:help (cond
+                          [(member (name-ref-name target) '("lambda" "proc"))
+                           "there are no standalone lambdas: pass a block to a call (xs.map do |x| ... end) or use &name"]
+                          [(equal? (name-ref-name target) "loop")
+                           "there is no loop; use while true ... end, or a while condition"]
+                          [else
+                           (format "to call a function, add parentheses: ~a() do ... end; an if condition ends with a newline, not do"
+                                   (name-ref-name target))]))]
           [(and allow-blocks (kind? 'do) (or (call? target) (method-call? target) (field-access? target)))
            (define block (parse-block-lit))
            (loop
@@ -791,6 +807,12 @@
                  (advance!)
                  (begin0 (parse-expression-list 'right-paren)
                          (expect 'right-paren "\")\""))]
+                [(memq (token-kind (current)) '(name type-name integer float string interp-start left-bracket))
+                 (bail 'PARSE-UNEXPECTED-TOKEN
+                       (format "expected \"(\" or the end of the call, found ~a" (describe (current)))
+                       (current)
+                       #:help (format "calls need parentheses, as in ~a.~a(...)"
+                                      (token-lexeme name) (token-lexeme member)))]
                 [else '()]))
             (call (string-append (token-lexeme name) "." (token-lexeme member))
                   arguments

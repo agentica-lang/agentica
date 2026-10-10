@@ -24,7 +24,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
-- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block (`s.length`, `xs.size`, `xs.each do |x| ... end`), and so may a module function with no arguments (`IO.gets!`, `IO.eof?`).
+- Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block (`s.length`, `xs.size`, `xs.each do |x| ... end`), and so may a module function with no arguments, builtin or through an import alias (`IO.gets!`, `IO.eof?`, `Util.reset`). `f = Util.helper` is a call; `&Util.helper` is the function value.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
 - Blank/comment lines each emit a newline token outside delimiters; extra newlines between statements/declarations are ignored.
@@ -395,7 +395,7 @@ found = xs.any? do |x| x > 10 end
 result = run(5) do |n| n + 1 end
 ```
 
-- Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end`. The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
+- Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end` (a function through an import alias may drop them: `Util.start do ... end`). The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
 - Parameter types come from the call; annotate when there is no context: `do |x: Int| ... end` (`CHECK-BLOCK-TYPE` otherwise).
 - The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]` known from the call (not in `map`/`sort_by`); end it with `ok(...)`.
 - `case`, `while`, and `for` headers may end with an optional `do` (`while !done do`, `for x in xs do`); that `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
@@ -884,7 +884,7 @@ expected Int, found String
 
 The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (names and types, before running), `RUNTIME-` (while running).
 
-Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.
+Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break`, `loop do`, `puts(x) if ok`, `Result.Ok(x)` as a value) are rejected with a `help` line that names the Agentica form.
 
 | Code | Meaning |
 |---|---|
