@@ -527,6 +527,9 @@
     (check-regexp-match #rx"total\\(" (diagnostic-help struct-method))
     (check-regexp-match #rx"length" (diagnostic-help (check-text (main-with "  s = \"a\"\n  x = s.lenght"))))
     (check-equal? (check-code (main-with "  x = \"a\".to_s(1)")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  x = \"a\".inspect(1)")) 'CHECK-ARITY)
+    (check-regexp-match #rx"inspect" (diagnostic-help (check-text (main-with "  xs = [1]\n  x = xs.inpsect"))))
+    (check-regexp-match #rx"to_s" (diagnostic-help (check-text (main-with "  x = true.to_z"))))
     (check-equal? (check-code (main-with "  x = \"a\".split")) 'CHECK-ARITY)
     (for ([body '("  xs = [1]\n  xs.push(2)" "  s = \"a\"\n  s.upcase" "  String.trim(\" a \")"
                   "  s = \"a\"\n  s.to_s" "  b = true\n  b.to_s")])
@@ -588,7 +591,7 @@
 
   (test-case "only values with to_s can be printed, interpolated or converted"
     (define declarations
-      (string-append "struct Box\n  f: Fn[Void]\nend\n\nstruct Named\n  to_s: Int\nend\n\n"
+      (string-append "struct Box\n  f: Fn[Void]\nend\n\nstruct Named\n  to_s: Int\n  inspect: Int\nend\n\n"
                      "enum Option[T]\n  Some(T)\n  None\nend\n\n"))
     (for ([entry '(("  f = &main\n  puts(f)" CHECK-TYPE-MISMATCH)
                    ("  xs = [&main]\n  print(xs)" CHECK-TYPE-MISMATCH)
@@ -596,11 +599,13 @@
                    ("  f = &main\n  x = f.to_s" CHECK-UNKNOWN-METHOD)
                    ("  b = Box(f: &main)\n  puts(b)" CHECK-TYPE-MISMATCH)
                    ("  b = Box(f: &main)\n  x = b.to_s" CHECK-UNKNOWN-METHOD)
-                   ("  o: Option[Option[Fn[Void]]] = Option.None()\n  puts(o)" CHECK-TYPE-MISMATCH))])
+                   ("  o: Option[Option[Fn[Void]]] = Option.None()\n  puts(o)" CHECK-TYPE-MISMATCH)
+                   ("  f = &main\n  x = f.inspect" CHECK-UNKNOWN-METHOD)
+                   ("  x = 1\n  x.inspect" CHECK-UNUSED-VALUE))])
       (check-equal? (check-code (string-append declarations (main-with (car entry)))) (cadr entry) (car entry)))
     (check-false (diagnostic? (check-text (string-append declarations
                                                          (main-with (string-append
-                                                                     "  n: Int = Named(to_s: 1).to_s\n  IO.warn(n)\n"
+                                                                     "  n: Int = Named(to_s: 1, inspect: 2).to_s + Named(to_s: 1, inspect: 2).inspect\n  IO.warn(n)\n"
                                                                      "  x = 1\n  \"a#{x}\"\n  puts(Option.Some([2]))")))))))
 
   (test-case "habits from other languages get a hint with the Agentica form"
@@ -608,6 +613,7 @@
                    ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
                    ("  x = input()" CHECK-UNKNOWN-NAME "^use gets,")
                    ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
+                   ("  x = inspect(3)" CHECK-UNKNOWN-NAME "x\\.inspect")
                    ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
                    ("  x = null" CHECK-UNKNOWN-NAME "nil")
                    ("  x = None" CHECK-TYPE-MISMATCH "nil")

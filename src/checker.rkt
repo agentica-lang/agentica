@@ -93,6 +93,7 @@
   (hash "len" "use x.size for lists and maps, or s.length for strings"
         "str" "use x.to_s, or interpolation: \"#{x}\""
         "println" "use puts(x)"
+        "inspect" "use x.inspect for the debug text, or IO.inspect(x) to print it and get x back"
         "input" "use gets, which returns Result[String]; gets! halts at the end of input"
         "read_line" "use gets, which returns Result[String]; gets! halts at the end of input"
         "readline" "use gets, which returns Result[String]; gets! halts at the end of input"
@@ -1106,19 +1107,24 @@
            (check-expression (map-entry-value entry) value-type))
          (list 'Map key-type value-type)]))
 
+    (define (receiver-method-names kind target)
+      (remove-duplicates
+       (append (method-names kind) (if (printable-type? target) '("to_s" "inspect") '()))))
+
     (define (check-method expression target-node name arguments span expected record!
                           #:target-type [known #f])
       (define target (or known (check-expression target-node #f)))
       (define kind (receiver-kind target))
       (define resolved-name (or (and kind (resolve-method kind name))
-                                (and (equal? name "to_s") (printable-type? target) 'text)))
+                                (and (member name '("to_s" "inspect")) (printable-type? target)
+                                     (if (equal? name "to_s") 'text 'inspect))))
       (unless resolved-name
         (bail 'CHECK-UNKNOWN-METHOD
               (format "~a has no method \"~a\"" (type->string target) name)
               span
               #:help (cond
-                       [(equal? name "to_s")
-                        "only data values have to_s: numbers, Bool, String, nil, Json, and lists, maps, Results, structs and enums of those"]
+                       [(member name '("to_s" "inspect"))
+                        "only data values have to_s and inspect: numbers, Bool, String, nil, Json, and lists, maps, Results, structs and enums of those"]
                        [(and (struct-type? target) (hash-ref functions name #f))
                         (format "structs have no methods; call ~a(...) with the struct as an argument" name)]
                        [(and (struct-type? target)
@@ -1129,9 +1135,10 @@
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]
                        [kind (or (foreign-method-help kind name)
-                                 (did-you-mean name (method-names kind))
+                                 (did-you-mean name (receiver-method-names kind target))
                                  (format "~a methods: ~a" (type->string target)
-                                         (string-join (sort (method-names kind) string<?) ", ")))]
+                                         (string-join (sort (receiver-method-names kind target) string<?) ", ")))]
+                       [(printable-type? target) (did-you-mean name '("to_s" "inspect"))]
                        [else #f])))
       (define receiver (typed-target target-node target))
       (cond
@@ -1144,6 +1151,11 @@
          (unless (null? arguments)
            (bail 'CHECK-ARITY (format "\"~a\" takes no arguments" name) span))
          (record! (interpolation (list receiver) span))
+         (ensure 'String expected span)]
+        [(eq? resolved-name 'inspect)
+         (unless (null? arguments)
+           (bail 'CHECK-ARITY (format "\"~a\" takes no arguments" name) span))
+         (record! (inspection receiver span))
          (ensure 'String expected span)]
         [else
          (define synthetic (call resolved-name (cons receiver arguments) span))
@@ -1232,8 +1244,8 @@
       (define target (check-expression (field-access-target expression) #f))
       (cond
         [(and (struct-type? target)
-              (not (and (equal? (field-access-name expression) "to_s")
-                        (not (assoc "to_s" (hash-ref structs (cadr target)))))))
+              (not (and (member (field-access-name expression) '("to_s" "inspect"))
+                        (not (assoc (field-access-name expression) (hash-ref structs (cadr target)))))))
          (check-struct-field expression target)]
         [else
          (check-method expression (field-access-target expression) (field-access-name expression)
@@ -1390,7 +1402,7 @@
       (define entry (and (call? resolved) (builtin-ref (call-name resolved))))
       (when (and (not (eq? type 'Void))
                  (or (typed-target? resolved)
-                     (and (not (eq? resolved value)) (interpolation? resolved))
+                     (and (not (eq? resolved value)) (or (interpolation? resolved) (inspection? resolved)))
                      (and entry
                           (null? (builtin-effects entry))
                           (not (takes-function? entry))

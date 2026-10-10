@@ -41,7 +41,7 @@ Integer JSON values may decode as Float; decimal/exponent values never decode
 as Int. Maps decoded from JSON use sorted key order.
 
 
-- Json is opaque: no constructor, equality, fields, or `j[key]` / `j[index]`. `IO.inspect` prints `<Json>`; `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give its JSON text.
+- Json is opaque: no constructor, equality, fields, or `j[key]` / `j[index]`. `IO.inspect` prints `<Json>` and `j.inspect` gives `"<Json>"`; `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give its JSON text.
 - Parse requires exactly one JSON value, with optional surrounding space/tab/CR/LF. Empty input, malformed JSON, trailing content, bad Unicode escapes, raw control characters in strings, and non-finite parsed numbers return errors. Repeated object keys keep the last value.
 - Get requires an object and a present key; at requires an array and a nonnegative index smaller than its length. Wrong kinds, missing keys, and bad indexes return errors. JSON false and null are present values, not missing-key sentinels.
 - String/Bool extraction requires that exact kind. Int extraction requires a signed 64-bit integer; `1.0` and `1e0` are not Int. Float extraction accepts integers and decimal/exponent numbers, with normal binary64 rounding, and rejects conversion overflow. Parsed integers may exceed Int bounds until extracted.

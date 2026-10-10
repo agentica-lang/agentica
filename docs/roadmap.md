@@ -1035,6 +1035,7 @@ Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agent
 - [x] Accept the forms round 6 still showed: `Result.Ok`/`Result.Err` as values, `ok`/`error` as patterns, nullary variants without parentheses, top-level `print`/`gets`/`gets!`.
 - [x] `break` and `next` in `while` and `for` (`CHECK-LOOP-CONTROL`).
 - [x] `puts`/`print`/`IO.warn` take any value with `to_s`, and `to_s` works on every data value (round 8 showed `puts(n)` and `Bool#to_s` with both models).
+- [x] `x.inspect` on every data value: the `IO.inspect` text as a `String`.
 
 **Done when:** the Ruby forms check and run with the same diagnostics quality as the module forms, and the evaluation shows the effect.
 

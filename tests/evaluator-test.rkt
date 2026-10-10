@@ -235,6 +235,16 @@
     (check-equal? (diagnostic-code empty) 'RUNTIME-INVALID-RANGE)
     (check-equal? (position-of empty) '(2 7)))
 
+  (test-case "inspect gives the IO.inspect text as a String"
+    (check-equal?
+     (output-of
+      (string-append
+       "struct P\n  name: String\nend\n\n"
+       "def main() -> Void\n  puts(\"a\".inspect + \" \" + \"a\".to_s)\n  puts(P(name: \"n\").inspect)\n"
+       "  j = Result.unwrap!(JSON.parse(\"[1]\"))\n  puts(j.inspect + \" \" + j.to_s)\n"
+       "  r: Result[Int] = ok(1)\n  puts(r.inspect + \" \" + nil.inspect)\nend\n\n"))
+     "\"a\" a\nP(name: \"n\")\n<Json> [1]\nok(1) nil\n"))
+
   (test-case "puts, print and to_s show any value as interpolation does"
     (check-equal?
      (output-of
