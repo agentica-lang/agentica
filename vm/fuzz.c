@@ -10,8 +10,10 @@ int agc_fuzz_one(const uint8_t *data, size_t len) {
   char error[160];
   if (!agc_load(data, len, &program, error, sizeof error)) return 0;
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
-  agc_vm_init(vm, program, sink, 10000);
+  agc_vm_init(vm, program, sink, sink, 10000);
   agc_outcome outcome = agc_vm_run(vm);
-  if (outcome.kind == AGC_FAILED) agc_print_diagnostic(sink, program, &outcome);
+  if (outcome.kind == AGC_FAILED)
+    for (int style = AGC_STYLE_PLAIN; style <= AGC_STYLE_JSON; style++)
+      agc_print_diagnostic(sink, program, &outcome, (agc_style)style);
   return 1;
 }

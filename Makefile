@@ -2,7 +2,7 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 
-.PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz FORCE
+.PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz vm-gc-stress vm-unicode FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -32,9 +32,11 @@ clean:
 # make vm-test            C tests in vm/tests/
 # make vm SANITIZE=1      clang with ASan and UBSan, no libgc
 # make vm-fuzz            mutate compiled fixtures and run them
+# make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
+# make vm-unicode         regenerate vm/unicode_data.c from Racket
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
-VM_SRC := vm/value.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c
+VM_SRC := vm/value.c vm/text.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"'
@@ -45,6 +47,13 @@ VM_LDFLAGS := -fsanitize=address,undefined
 VM_GC :=
 VM_BUILD := build/vm/sanitize
 FUZZ_RUNS ?= 30000
+else ifeq ($(GC_STRESS),1)
+VM_CC := $(CC)
+VM_CFLAGS := $(VM_WARN) -O1 -g -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS -fPIE
+VM_LDFLAGS := -pie -lpthread
+VM_GC := build/vm/gc.o
+VM_BUILD := build/vm/gcstress
+FUZZ_RUNS ?= 10000
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
@@ -87,3 +96,10 @@ vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz
 	@mkdir -p $(VM_BUILD)/corpus
 	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
+
+vm-gc-stress: build
+	$(MAKE) vm vm-test GC_STRESS=1 SANITIZE=0
+	GC_STRESS=1 SANITIZE=0 AGENTICA_REQUIRE_VM=1 $(RACO) test tests/vm-diff-test.rkt
+
+vm-unicode:
+	racket vm/gen-unicode.rkt vm/unicode_data.c

@@ -60,3 +60,4 @@ jobs:
       - run: make build
       - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
       - run: make vm-fuzz
+      - run: make vm-gc-stress

@@ -52,7 +52,17 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+#ifdef AGC_GC_STRESS
+static void stress(void) {
+  static unsigned count;
+  if (++count % 64 == 0) GC_gcollect();
+}
+#else
+static void stress(void) {}
+#endif
+
 void *agc_alloc(size_t size) {
+  stress();
 #ifdef AGC_NO_GC
   void *p = calloc(1, size ? size : 1);
 #else
@@ -63,6 +73,7 @@ void *agc_alloc(size_t size) {
 }
 
 void *agc_alloc_atomic(size_t size) {
+  stress();
 #ifdef AGC_NO_GC
   void *p = calloc(1, size ? size : 1);
 #else
@@ -124,6 +135,19 @@ agc_value agc_string_value(agc_string *s) {
   v.tag = AGC_T_STRING;
   v.as.p = s;
   return v;
+}
+
+agc_string *agc_new_string(size_t bytes, size_t chars) {
+  agc_string *s = agc_alloc_atomic(agc_size_add(sizeof(agc_string), bytes));
+  s->bytes = bytes;
+  s->chars = chars;
+  return s;
+}
+
+agc_string *agc_make_string(const char *data, size_t bytes, size_t chars) {
+  agc_string *s = agc_new_string(bytes, chars);
+  if (bytes) memcpy(s->data, data, bytes);
+  return s;
 }
 
 bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }

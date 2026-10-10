@@ -16,7 +16,7 @@
 
 (define int-min (- (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil))
+(define value-types '(Int Float Bool Nil String))
 
 (define int-ops
   (hasheq 'plus 'add-i 'minus 'sub-i 'multiply 'mul-i 'divide 'div-i 'modulo 'mod-i
@@ -26,7 +26,9 @@
   (hasheq 'plus 'add-f 'minus 'sub-f 'multiply 'mul-f 'divide 'div-f
           'less 'lt-f 'less-equal 'le-f 'greater 'lt-f 'greater-equal 'le-f))
 
-(define text-builtins '("puts" "IO.print"))
+(define string-ops (hasheq 'plus 'concat))
+
+(define vm-builtins '("puts" "IO.print" "IO.warn" "String.from_int" "String.from_float"))
 
 (define (lower program types)
   (let/ec return
@@ -87,14 +89,20 @@
 
   (define (type-of expression)
     (hash-ref types expression #f))
-  (define (require-type! expression allowed)
-    (define type (type-of expression))
+  (define (require-type! expression allowed [type (type-of expression)])
     (unless (memq type allowed)
       (unsupported (if (symbol? type) (format "values of type ~a" type) "this expression")
                    (node-span expression))))
 
   (define (target want)
     (or want (alloc!)))
+  (define (resolved-of expression)
+    (cond
+      [(method-call? expression) (method-call-resolved expression)]
+      [(field-access? expression) (field-access-resolved expression)]
+      [else #f]))
+  (define (static-type expression)
+    (if (typed-target? expression) (typed-target-type expression) (type-of expression)))
 
   (define (lower-expression expression want #:void? [void? #f])
     (cond
@@ -107,6 +115,17 @@
        (emit! 'const (list dst int-min) (unary-span expression))
        dst]
       [(call? expression) (lower-call expression want void?)]
+      [(resolved-of expression)
+       => (lambda (resolved)
+            (require-type! expression (if void? (cons 'Void value-types) value-types))
+            (if (call? resolved)
+                (lower-call resolved want void? #:checked? #t)
+                (lower-expression resolved want)))]
+      [(typed-target? expression)
+       (define inner (typed-target-expression expression))
+       (require-type! inner value-types (typed-target-type expression))
+       (lower-expression inner want)]
+      [(or (interpolation? expression) (inspection? expression)) (lower-value expression want)]
       [else
        (require-type! expression value-types)
        (lower-value expression want)]))
@@ -138,6 +157,37 @@
        (set! next (if want saved (add1 dst)))
        dst]
       [(binary? expression) (lower-binary expression want)]
+      [(inspection? expression)
+       (emit! 'step '() span)
+       (define saved next)
+       (define dst (target want))
+       (define operand (lower-expression (inspection-target expression) #f))
+       (emit! 'inspect (list dst operand) span)
+       (set! next (if want saved (add1 dst)))
+       dst]
+      [(interpolation? expression)
+       (emit! 'step '() span)
+       (define saved next)
+       (define dst (target want))
+       (define parts (interpolation-parts expression))
+       (define (lower-part! part slot)
+         (cond
+           [(string? part) (emit! 'const (list slot part) span)]
+           [else
+            (lower-expression part slot)
+            (unless (eq? (static-type part) 'String)
+              (emit! 'to-text (list slot slot) span))]))
+       (cond
+         [(null? parts) (emit! 'const (list dst "") span)]
+         [else
+          (lower-part! (car parts) dst)
+          (for ([part (in-list (cdr parts))])
+            (define slot (alloc!))
+            (lower-part! part slot)
+            (emit! 'concat (list dst dst slot) span)
+            (set! next slot))])
+       (set! next (if want saved (add1 dst)))
+       dst]
       [else (unsupported "this expression" span)]))
 
   (define (lower-binary expression want)
@@ -154,7 +204,10 @@
        (lower-expression (binary-right expression) dst)
        (place! end)]
       [else
-       (define ops (if (eq? (type-of (binary-left expression)) 'Float) float-ops int-ops))
+       (define ops (case (type-of (binary-left expression))
+                     [(Float) float-ops]
+                     [(String) string-ops]
+                     [else int-ops]))
        (define left (lower-expression (binary-left expression) #f))
        (define right (lower-expression (binary-right expression) #f))
        (case op
@@ -166,31 +219,28 @@
     (set! next (if want saved (add1 dst)))
     dst)
 
-  (define (lower-call expression want void?)
+  (define (lower-call expression want void? #:checked? [checked? #f])
     (define name (call-name expression))
     (define arguments (call-args expression))
     (define span (call-span expression))
     (define entry (builtin-ref name (length arguments)))
     (define key (and entry (builtin-implementation entry)))
-    (define text? (and key (member key text-builtins) #t))
-    (when (and entry (not text?))
+    (define builtin? (and key (member key vm-builtins) #t))
+    (when (and entry (not builtin?))
       (unsupported (format "the builtin ~a" name) span))
-    (unless (or text? (hash-has-key? function-index name))
+    (unless (or builtin? (hash-has-key? function-index name))
       (unsupported (format "the call to ~a" name) span))
-    (require-type! expression (if void? (cons 'Void value-types) value-types))
+    (unless checked?
+      (require-type! expression (if void? (cons 'Void value-types) value-types)))
     (emit! 'step '() span)
     (define saved next)
     (define base (alloc!))
     (for ([argument (in-list arguments)] [index (in-naturals)])
       (set! next (+ base index))
       (define slot (alloc!))
-      (cond
-        [(and text? (literal? argument) (string? (literal-value argument)))
-         (emit! 'step '() (literal-span argument))
-         (emit! 'const (list slot (literal-value argument)) (literal-span argument))]
-        [else (lower-expression argument slot)]))
-    (if text?
-        (apply emit! 'call-builtin (list base key 1) span (map node-span arguments))
+      (lower-expression argument slot))
+    (if builtin?
+        (apply emit! 'call-builtin (list base key (length arguments)) span (map node-span arguments))
         (emit! 'call (list base (hash-ref function-index name)) span))
     (cond
       [want (emit! 'move (list want base) span)

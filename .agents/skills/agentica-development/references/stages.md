@@ -107,7 +107,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 
 ## `src/lower.rkt`
 
-`(lower program types) -> ir-program | diagnostic`. One `ir-function` per `function-decl` (index order = declaration order, `entry` = `main`). Slots: parameters first, then locals, which are resolved statically like the evaluator's `define!`/`assign!` and freed when their scope ends, then temporaries with a stack discipline so a call window is always the highest live slots. A new local is lowered straight into its slot; an assignment to an existing local goes through a temporary and `move`. Unsupported forms or types are `LOWER-UNSUPPORTED` at the node span; a Racket exception becomes `LOWER-INTERNAL` at the program span. `format-ir` is the `--dump-ir` text.
+`(lower program types) -> ir-program | diagnostic`. One `ir-function` per `function-decl` (index order = declaration order, `entry` = `main`). Slots: parameters first, then locals, which are resolved statically like the evaluator's `define!`/`assign!` and freed when their scope ends, then temporaries with a stack discipline so a call window is always the highest live slots. A new local is lowered straight into its slot; an assignment to an existing local goes through a temporary and `move`. Unsupported forms or types are `LOWER-UNSUPPORTED` at the node span; a Racket exception becomes `LOWER-INTERNAL` at the program span. A `method-call` or `field-access` with `resolved` set lowers its resolved node without a step and checks the outer node's type, because the synthetic call that `check-method` builds is not in the types table; a `typed-target` lowers its expression and checks its recorded type. `format-ir` is the `--dump-ir` text.
 
 ## `src/bytecode.rkt`
 

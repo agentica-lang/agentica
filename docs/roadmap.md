@@ -7,8 +7,9 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
-(phase 7): the design in `docs/vm.md` (7b) and the 7e vertical slice
-(`docs/vm.md` §12.2 item 1) are done; the widening PRs of §12.2 come next. Real applications and MCP follow;
+(phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice and the
+Float and Strings PRs (`docs/vm.md` §12.2 items 1 to 3) are done; the other
+widening PRs of §12.2 come next. Real applications and MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
 order governs pending work rather than their numeric order.
@@ -1112,7 +1113,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
 - [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
-- [ ] Runtime diagnostics in the `--ai` and `--json` formats.
+- [x] Runtime diagnostics in the `--ai` and `--json` formats.
 - [x] CI: Linux and sanitizer jobs.
 - [ ] CI: macOS and Windows jobs.
 
