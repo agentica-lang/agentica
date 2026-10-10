@@ -278,33 +278,9 @@ Interpolation and the `\#` escape are in `grammar.md`.
 
 ### 11.4 Blocks and closures
 
-A block is a function written at the call site, as the last argument:
+Blocks, closures, `List.each`, `List.any?` and `List.all?` are in `grammar.md`.
 
-```ruby
-doubled = xs.map do |x|
-  x * 2
-end
-evens = xs.filter do |x| x % 2 == 0 end
-total = xs.reduce(0) do |sum, x|
-  sum + x
-end
-xs.each do |x|
-  puts("item #{x}")
-end
-```
-
-- **Syntax.** `do |p1, p2| ... end` or `do ... end` (no parameters) right after the closing `)` of a call or method call, or after a method name without parentheses (`xs.each do ... end`). Only `do`, not `{ |x| }`, because `{` is the map literal. The block body may start on the same line: `do |x| x * 2 end`. A block may span lines inside parentheses: `puts(xs.map do |x| ... end)`. Ruby's `do || ... end` is not accepted; write `do ... end`.
-- **`case` scrutinee.** Inside `case <expression> do`, the `do` always belongs to `case`, so `case f() do` and `case s.to_i do` keep their meaning. A call with a block there must be wrapped in parentheses: `case (xs.map do |x| x end) do`.
-- **Where.** The block is the last argument. It is allowed only when the called function's last parameter is a `Fn` (`CHECK-BLOCK-TARGET` otherwise). This covers user functions with a final `Fn` parameter, `List.map/filter/reduce/sort_by/each/any?/all?` and `BDD.step`.
-- **Parameter types.** Known from the context: the parameter types of a user function's `Fn`, or the builtin's rule (`xs.map` gives `x` the element type). Parameters may be annotated: `do |x: Int| ... end`. With neither, `CHECK-BLOCK-TYPE`.
-- **Result.** The block's body is a list of statements. `return value` returns from the block, not from the enclosing function, like a lambda. Without `return`, the value of the last expression statement is the block's value. A block whose result is not `Void` must produce a value on every path, like a function (`CHECK-MISSING-RETURN`).
-- **Result type.** It comes from the expected `Fn` type when the context gives it (a user function's parameter, `each`, `any?`, `all?`, and `reduce`, whose result is the accumulator type). For `map` and `sort_by` it comes from the body: every `return` value and the last expression must have one type (`CHECK-TYPE-MISMATCH` otherwise). When the result is `Void`, the last statement is only a statement and gives no value.
-- **`try` in a block** returns the error from the block, so it needs the block's result to be `Result[...]` (`CHECK-TRY-CONTEXT` otherwise); the success value is then written `ok(...)`, as in functions.
-- **Capture by value.** A block can read every variable visible where it is written. It captures their values when the block is created; later assignments outside do not change it. Assigning to an outer variable inside a block is `CHECK-CAPTURED-ASSIGNMENT`: use `reduce`, or a `for` loop. Block parameters and new variables inside a block cannot reuse a visible name (`CHECK-SHADOWED-NAME`).
-- **Values.** A block has the type `Fn[A, ..., R]` and works everywhere a function value works: stored, returned, passed to `Task.spawn` or HTTP callbacks through a variable. Function values have no equality and no JSON form; `IO.inspect` prints `<Fn>`.
-- **New builtins** for blocks: `List.each(list: List[A], f: Fn[A, Void]) -> Void`, `List.any?(list: List[A], f: Fn[A, Bool]) -> Bool`, `List.all?(list: List[A], f: Fn[A, Bool]) -> Bool`. Each callback runs in order; `any?` and `all?` stop at the first decisive element.
-
-Standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), methods on user types and `{ |x| }` blocks are out of scope for now.
+Still open: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), methods on user types and `{ |x| }` blocks.
 
 ### 11.5 Hints for foreign habits
 

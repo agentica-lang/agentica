@@ -244,6 +244,8 @@
           [(interpolation parts span)
            (interpolation (for/list ([part (in-list parts)]) (if (string? part) part (walk part))) span)]
           [(index-access target index span) (index-access (walk target) (walk index) span)]
+          [(block-lit params body span) (block-lit (walks params) (walks body) span)]
+          [(block-param name type span) (block-param name (and type (walk type)) span)]
           [(try-expr operand span) (try-expr (walk operand) span)]
           [(unary op op-span operand span) (unary op op-span (walk operand) span)]
           [(binary op op-span left right span) (binary op op-span (walk left) (walk right) span)]

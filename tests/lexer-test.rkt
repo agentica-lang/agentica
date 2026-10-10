@@ -65,6 +65,18 @@
                   '(name assign left-paren left-bracket integer comma integer
                     right-bracket right-paren NL name NL EOF)))
 
+  (test-case "blocks inside parentheses keep their newlines"
+    (check-equal? (kinds (lex-text "f(xs.map do |x|\n  if x\n  end\n  x\nend, 1)\ny"))
+                  '(name left-paren name dot name do pipe name pipe NL
+                    if name NL end NL name NL end comma integer right-paren NL name NL EOF))
+    (check-equal? (kinds (lex-text "f(\n1)\ndef g()\nend"))
+                  '(name left-paren integer right-paren NL def name left-paren right-paren NL end NL EOF))
+    (define unclosed (lex-text "f(xs.map do |x|\n  x\n)"))
+    (check-equal? (diagnostic-code unclosed) 'LEX-UNMATCHED-DELIMITER)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span unclosed))) 3)
+    (check-equal? (diagnostic-code (lex-text "f(xs.map do |x|\n")) 'LEX-UNCLOSED-DELIMITER)
+    (check-equal? (kinds (lex-text "def f()\n  if x\n")) '(def name left-paren right-paren NL if name NL EOF)))
+
   (test-case "newlines inside braces are suppressed"
     (check-equal? (kinds (lex-text "x = {\n\"a\": 1,\n}\ny"))
                   '(name assign left-brace string colon integer comma

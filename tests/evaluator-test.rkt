@@ -453,6 +453,9 @@
         ("List.map" "List.map([1, 2], &identity)" "[1, 2]\n")
         ("List.filter" "List.filter([1, 2], &positive)" "[1, 2]\n")
         ("List.reduce" "List.reduce([1, 2], 0, &add)" "3\n")
+        ("List.each" "List.each([1, 2]) do |n| IO.inspect(n) end" "1\n2\n")
+        ("List.any?" "List.any?([0, 2], &positive)" "true\n")
+        ("List.all?" "List.all?([0, 2]) do |n| n > 0 end" "false\n")
         ("List.concat" "List.concat([1], [2])" "[1, 2]\n")
         ("List.take" "List.take([1, 2], 1)" "[1]\n")
         ("List.drop" "List.drop([1, 2], 1)" "[2]\n")
@@ -511,6 +514,29 @@
       (if (equal? name "System.exit")
           (check-equal? (exit-code-code result) 0)
           (check-equal? result (void) name))))
+
+  (test-case "blocks capture values when created and return from themselves"
+    (check-equal?
+     (output-of
+      (string-append
+       "def make(n: Int) -> Fn[Int, Int]\n  return keep() do |x| x + n end\nend\n"
+       "def keep(f: Fn[Int, Int]) -> Fn[Int, Int]\n  return f\nend\n"
+       (main-with (string-append
+                   "  base = 10\n  add = make(base)\n  base = 0\n  IO.inspect(add.call(1))\n"
+                   "  labels = [1, 5].map do |x|\n    if x > 2\n      return \"big\"\n    end\n    \"small\"\n  end\n"
+                   "  IO.inspect(labels)\n  IO.inspect(add)\n"
+                   "  IO.inspect([[1, 2], [3]].map do |row|\n    row.map do |v| v * 10 + base end\n  end)\n"
+                   "  IO.inspect([1, 2, 3].any? do |v|\n    puts(\"saw #{v}\")\n    v == 2\n  end)"))))
+     "11\n[\"small\", \"big\"]\n<Fn>\n[[10, 20], [30]]\nsaw 1\nsaw 2\ntrue\n")
+    (define-values (out err limited)
+      (run-io (main-with "  xs = List.repeat(1, 100)\n  ys = xs.map do |x| x + 1 end") "" '() #:max-steps 150))
+    (check-equal? (diagnostic-code limited) 'RUNTIME-STEP-LIMIT)
+    (define deep
+      (diagnostic-of
+       (string-append "def down(n: Int, f: Fn[Int, Int]) -> Int\n  return f.call(n)\nend\n"
+                      "def loop(n: Int) -> Int\n  return down(n) do |v| loop(v + 1) end\nend\n"
+                      (main-with "  x = loop(0)"))))
+    (check-equal? (diagnostic-code deep) 'RUNTIME-STACK-OVERFLOW))
 
   (test-case "collection operations preserve originals, order, and present false/nil values"
     (check-equal?

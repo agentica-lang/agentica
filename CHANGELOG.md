@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Blocks and closures: `xs.map do |x| x * 2 end` as the last argument of a
+  call, capturing values when created; usable anywhere a `Fn` is, including
+  `Task.spawn`, HTTP callbacks and `BDD.step`. New diagnostics
+  `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET` and `CHECK-CAPTURED-ASSIGNMENT`.
+- `List.each`, `List.any?` and `List.all?`.
 - String interpolation: `"total: #{n + 1}"`, with `\#` for a literal `#`.
 - Methods on builtin values (`s.strip.size`, `xs.push(1)`, `r.ok?`), resolved
   by type to module functions, with Ruby aliases (`to_i`, `to_s`, `size`,

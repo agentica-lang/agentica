@@ -161,6 +161,7 @@
   (define scopes '())
   (define current-result 'Void)
   (define current-signature #f)
+  (define capture-boundary #f)
 
   (let/ec return
     (define (bail code message span
@@ -458,6 +459,7 @@
                          (method-call-args expression) (method-call-span expression) expected
                          (lambda (resolved) (set-method-call-resolved! expression resolved)))]
           [(typed-target? expression) (typed-target-type expression)]
+          [(block-lit? expression) (check-block-lit expression expected)]
           [(interpolation? expression)
            (for ([part (in-list (interpolation-parts expression))] #:unless (string? part))
              (check-expression part #f))
@@ -605,6 +607,19 @@
                       (length arguments))
               span #:callee (builtin-signature entry)))
       (define parameters (builtin-parameters selected))
+      (when (and (pair? arguments) (block-lit? (last arguments)))
+        (define last-type (cadr (last parameters)))
+        (unless (and (pair? last-type) (eq? (car last-type) 'Fn))
+          (bail 'CHECK-BLOCK-TARGET
+                (format "\"~a\" does not take a block: its last parameter is not a function"
+                        (builtin-name selected))
+                (block-lit-span (last arguments))
+                #:help "a block is only allowed when the last parameter is a function (Fn[...])")))
+      (define (annotated-parameter block index)
+        (define block-parameters (block-lit-params block))
+        (and (> (length block-parameters) index)
+             (block-param-type (list-ref block-parameters index))
+             (resolve-type (block-param-type (list-ref block-parameters index)))))
       (define (map-argument [context #f])
         (define type (check-expression (car arguments) context))
         (unless (map-type? type) (mismatch! '(Map K V) type (node-span (car arguments))))
@@ -686,19 +701,43 @@
          target]
         [(list-sort-by)
          (define callback-expression (cadr arguments))
-         (define callback (check-expression callback-expression #f))
+         (define block-target
+           (and (block-lit? callback-expression)
+                (list-argument (let ([element (annotated-parameter callback-expression 0)])
+                                 (and element (list 'List element))))))
+         (define callback
+           (if block-target
+               (check-block-body callback-expression (list (cadr block-target)) #f)
+               (check-expression callback-expression #f)))
          (unless (and (list? callback) (= (length callback) 3) (eq? (car callback) 'Fn))
            (bail 'CHECK-TYPE-MISMATCH "sort_by requires a key function with one parameter"
                  (node-span callback-expression)))
          (unless (memq (caddr callback) '(Int Float String))
            (bail 'CHECK-TYPE-MISMATCH "sort_by keys must be Int, Float or String"
                  (node-span callback-expression)))
-         (list-argument (list 'List (cadr callback)))]
-        [(list-map list-filter list-reduce)
+         (or block-target (list-argument (list 'List (cadr callback))))]
+        [(list-map list-filter list-reduce list-each list-any list-all)
          (define rule (builtin-rule selected))
          (define reduce? (eq? rule 'list-reduce))
          (define callback-expression (last arguments))
-         (define callback (check-expression callback-expression #f))
+         (define callback
+           (cond
+             [(block-lit? callback-expression)
+              (define annotated-element (annotated-parameter callback-expression (if reduce? 1 0)))
+              (define element
+                (cadr (list-argument (and annotated-element (list 'List annotated-element)))))
+              (cond
+                [reduce?
+                 (define accumulator
+                   (check-expression (cadr arguments)
+                                     (or expected (annotated-parameter callback-expression 0))))
+                 (check-block-body callback-expression (list accumulator element) accumulator)]
+                [(memq rule '(list-filter list-any list-all))
+                 (check-block-body callback-expression (list element) 'Bool)]
+                [(eq? rule 'list-each)
+                 (check-block-body callback-expression (list element) 'Void)]
+                [else (check-block-body callback-expression (list element) #f)])]
+             [else (check-expression callback-expression #f)]))
          (define arity (if reduce? 2 1))
          (unless (and (list? callback) (= (length callback) (+ arity 2))
                       (eq? (car callback) 'Fn))
@@ -706,17 +745,23 @@
                  (node-span callback-expression)))
          (define element (if reduce? (caddr callback) (cadr callback)))
          (define result (last callback))
-         (list-argument (list 'List element))
+         (unless (block-lit? callback-expression)
+           (list-argument (list 'List element)))
          (cond
            [reduce?
             (unless (equal? (cadr callback) result)
               (mismatch! (cadr callback) result (node-span callback-expression)))
-            (check-expression (cadr arguments) result)
+            (unless (block-lit? callback-expression)
+              (check-expression (cadr arguments) result))
             result]
-           [(eq? rule 'list-filter)
+           [(memq rule '(list-filter list-any list-all))
             (unless (eq? result 'Bool)
               (mismatch! 'Bool result (node-span callback-expression)))
-            (list 'List element)]
+            (if (eq? rule 'list-filter) (list 'List element) 'Bool)]
+           [(eq? rule 'list-each)
+            (unless (eq? result 'Void)
+              (mismatch! 'Void result (node-span callback-expression)))
+            'Void]
            [else
             (when (eq? result 'Void)
               (bail 'CHECK-VOID-VALUE "map callbacks must return data"
@@ -1005,6 +1050,81 @@
          (record! synthetic)
          (check-call synthetic expected)]))
 
+    (define (check-block-lit block expected)
+      (cond
+        [(and expected (not (and (pair? expected) (eq? (car expected) 'Fn))))
+         (bail 'CHECK-BLOCK-TARGET
+               (format "a block is passed where ~a is expected" (type->string expected))
+               (block-lit-span block)
+               #:help "a block is only allowed when the last parameter is a function (Fn[...])")]
+        [expected (check-block-body block (drop-right (cdr expected) 1) (last expected))]
+        [else (check-block-body block #f #f)]))
+
+    (define (check-block-body block known-parameters known-result)
+      (define parameters (block-lit-params block))
+      (when (and known-parameters (not (= (length known-parameters) (length parameters))))
+        (bail 'CHECK-ARITY
+              (format "this block takes ~a parameter(s), found ~a"
+                      (length known-parameters) (length parameters))
+              (block-lit-span block)))
+      (define parameter-types
+        (for/list ([parameter (in-list parameters)] [index (in-naturals)])
+          (define annotated (and (block-param-type parameter)
+                                 (resolve-type (block-param-type parameter))))
+          (define known (and known-parameters (list-ref known-parameters index)))
+          (cond
+            [(and annotated known)
+             (unless (equal? annotated known)
+               (mismatch! known annotated (block-param-span parameter)))
+             known]
+            [(or annotated known)]
+            [else
+             (bail 'CHECK-BLOCK-TYPE
+                   (format "the type of block parameter \"~a\" is not known here" (block-param-name parameter))
+                   (block-param-span parameter)
+                   #:help (format "annotate it, as in do |~a: Int| ... end" (block-param-name parameter)))])))
+      (define saved-result current-result)
+      (define saved-boundary capture-boundary)
+      (set! current-result (or known-result 'infer))
+      (set! capture-boundary (length scopes))
+      (push-scope!)
+      (for ([parameter (in-list parameters)] [type (in-list parameter-types)])
+        (introduce! (block-param-name parameter) type (block-param-span parameter)))
+      (define statements (block-lit-body block))
+      (define last-type
+        (cond
+          [(null? statements) #f]
+          [else
+           (for ([statement (in-list (drop-right statements 1))])
+             (check-statement statement))
+           (define final (last statements))
+           (cond
+             [(expr-stmt? final)
+              (define value (expr-stmt-value final))
+              (cond
+                [(eq? current-result 'Void)
+                 (check-unused-value! value (check-expression value #f #:completion? #t))
+                 #f]
+                [(eq? current-result 'infer) (check-expression value #f #:completion? #t)]
+                [else (check-expression value current-result)])]
+             [else (check-statement final) #f])]))
+      (pop-scope!)
+      (define result
+        (cond
+          [(not (eq? current-result 'infer)) current-result]
+          [last-type]
+          [else 'Void]))
+      (set! current-result saved-result)
+      (set! capture-boundary saved-boundary)
+      (when (and (not (eq? result 'Void))
+                 (not last-type)
+                 (not (block-returns? statements)))
+        (bail 'CHECK-MISSING-RETURN
+              (format "this block must give ~a on every path" (type->string result))
+              (block-lit-span block)
+              #:help "end the block with an expression, or return a value on every path"))
+      (cons 'Fn (append parameter-types (list result))))
+
     (define (check-field-access expression expected)
       (define target (check-expression (field-access-target expression) #f))
       (cond
@@ -1182,6 +1302,15 @@
       (define existing (lookup name))
       (cond
         [existing
+         (when (and capture-boundary
+                    (>= (for/first ([frame (in-list scopes)] [index (in-naturals)]
+                                    #:when (hash-has-key? frame name))
+                          index)
+                        (- (length scopes) capture-boundary)))
+           (bail 'CHECK-CAPTURED-ASSIGNMENT
+                 (format "a block cannot assign to \"~a\", which belongs to the enclosing code" name)
+                 (binding-span statement)
+                 #:help "blocks capture values; build the result with map or reduce, or use a for loop"))
          (when annotation
            (bail 'CHECK-ANNOTATION-ON-EXISTING
                  (format "an annotation is only allowed when \"~a\" is introduced" name)
@@ -1198,9 +1327,12 @@
 
     (define (check-return statement)
       (define value (return-stmt-value statement))
-      (if value
-          (check-expression value current-result #:completion? (eq? current-result 'Void))
-          (ensure 'Void current-result (return-stmt-span statement))))
+      (cond
+        [(eq? current-result 'infer)
+         (set! current-result (if value (check-expression value #f #:completion? #t) 'Void))]
+        [value
+         (check-expression value current-result #:completion? (eq? current-result 'Void))]
+        [else (ensure 'Void current-result (return-stmt-span statement))]))
 
     (define (check-if statement)
       (for ([branch (in-list (if-stmt-branches statement))])

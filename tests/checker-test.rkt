@@ -549,6 +549,43 @@
     (check-equal? (check-code (main-with "  x = \"#{puts(\"a\")}\"")) 'CHECK-VOID-VALUE)
     (check-equal? (check-code (main-with "  x = \"#{missing}\"")) 'CHECK-UNKNOWN-NAME))
 
+  (test-case "blocks infer parameter and result types from their call"
+    (check-ok (string-append
+               "def twice(x: Int, f: Fn[Int, Int]) -> Int\n  return f.call(f.call(x))\nend\n"
+               "def parse(f: Fn[String, Result[Int]]) -> Result[Int]\n  return f.call(\"4\")\nend\n"
+               (main-with (string-append
+                           "  xs = [3, 1]\n  ys: List[String] = xs.map do |x| x.to_s end\n"
+                           "  zs: List[Int] = xs.filter do |x| x > 1 end\n"
+                           "  total: Int = xs.reduce(0) do |sum, x| sum + x end\n"
+                           "  sorted: List[Int] = List.sort_by(xs) do |x| 0 - x end\n"
+                           "  xs.each do |x|\n    puts(x.to_s)\n  end\n"
+                           "  a: Bool = xs.any? do |x| x == 1 end\n  b: Bool = xs.all? do |x| x > 0 end\n"
+                           "  n: Int = twice(1) do |v| v + total end\n"
+                           "  labels: List[String] = xs.map do |x: Int|\n    if x > 1\n      return \"big\"\n    end\n    \"small\"\n  end\n"
+                           "  r = parse() do |s|\n    v = try s.to_i\n    ok(v * 2)\n  end\n"
+                           "  nested = [[1]].map do |row|\n    row.map do |v| v + n end\n  end"))))
+    (check-equal? (check-code (main-with "  x = Result.unwrap_or(ok(1)) do |y| y end")) 'CHECK-BLOCK-TARGET)
+    (check-equal? (check-code (main-with "  t = Task.spawn(5) do |n: Int| n end")) 'CHECK-BLOCK-TARGET)
+    (check-equal? (check-code (main-with "  ys = List.map([]) do |x| x end")) 'CHECK-EMPTY-LIST-TYPE)
+    (check-ok (main-with "  ys = List.map([]) do |x: Int| x end\n  zs = [1].reduce([]) do |acc: List[Int], x| acc.push(x) end"))
+    (define captured (check-text (main-with "  total = 0\n  [1].each do |x|\n    total += x\n  end")))
+    (check-equal? (diagnostic-code captured) 'CHECK-CAPTURED-ASSIGNMENT)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span captured))) 4)
+    (check-ok (main-with "  [1].each do |x|\n    local = x\n    local = local + 1\n  end"))
+    (check-equal? (check-code (string-append "def f(a: Int, b: Int) -> Int\n  return a\nend\n"
+                                             (main-with "  x = f(1) do |v| v end")))
+                  'CHECK-BLOCK-TARGET)
+    (check-equal? (check-code (main-with "  xs = [1].map do |x|\n    if x > 0\n      return 1\n    end\n  end"))
+                  'CHECK-MISSING-RETURN)
+    (check-equal? (check-code (main-with "  xs = [1].map do |x|\n    v = try \"1\".to_i\n    v\n  end"))
+                  'CHECK-TRY-CONTEXT)
+    (check-equal? (check-code (main-with "  xs = [1].map do |x| puts(\"a\") end")) 'CHECK-VOID-VALUE)
+    (check-equal? (check-code (main-with "  xs = [1].filter do |x| x end")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  x = 1\n  ys = [1].map do |x| x end")) 'CHECK-SHADOWED-NAME)
+    (check-equal? (check-code (main-with "  ys = [1].map do |x, y| x end")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  ys = [1].map do |x: String| x end")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  [\"a\"].each do |s|\n    s.strip\n  end")) 'CHECK-UNUSED-VALUE))
+
   (test-case "compound assignment keeps the assignment and operator rules"
     (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)
     (check-equal? (check-code (main-with "  x = 1\n  x += \"a\"")) 'CHECK-TYPE-MISMATCH)

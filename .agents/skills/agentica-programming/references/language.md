@@ -150,7 +150,7 @@ end
 ```
 
 - Every parameter and the return type need an annotation.
-- Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no methods, closures, nested functions, default arguments, or overloading.
+- Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no user methods, nested functions, default arguments, or overloading; closures are written as blocks (see "Blocks and closures").
 - Functions can be called before they are declared, and can be recursive.
 - A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
 - `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
@@ -208,7 +208,7 @@ return count
 - Enum variants are qualified by their type. Construct payload variants positionally (`Option.Some("hi")`) and nullary variants with empty parentheses (`Option.None()`). Generic arguments are inferred from payloads and expected types; every type parameter must be known. A nullary generic variant therefore needs expected type context.
 - Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for` for traversal.
 - Function call `f(a, b)` with positional arguments. Builtin module call `String.upcase(s)`. Method call on a builtin value `s.upcase`, `xs.map(&f)`: see "Methods on builtin types".
-- `&name` references a declared top-level function, without capturing locals. `f: Fn[Int, Int] = &double`; call it with `f.call(21)`. Function values can be stored in containers, fields, parameters, and returns. Signatures must match exactly. Bare function names remain invalid as values. No lambdas, closures, equality, or JSON encoding; inspect prints `<Fn>`.
+- `&name` references a declared top-level function, without capturing locals. `f: Fn[Int, Int] = &double`; call it with `f.call(21)`. A block (`do |x| ... end`, below) is also a function value and captures locals. Function values can be stored in containers, fields, parameters, and returns. Signatures must match exactly. Bare function names remain invalid as values. No standalone lambdas, equality, or JSON encoding; inspect prints `<Fn>`.
 
 Operators, from highest to lowest precedence:
 
@@ -258,6 +258,9 @@ List.drop(list: List[T], count: Int) -> List[T]
 List.at(list: List[T], index: Int) -> T
 List.sort(list: List[T]) -> List[T]
 List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
+List.each(list: List[A], f: Fn[A, Void]) -> Void
+List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
+List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
 
 String.length(s: String) -> Int                # counts Unicode characters
 String.upcase(s: String) -> String
@@ -356,9 +359,35 @@ first = words[0].to_i!
 xs = xs.push(first)
 ```
 
+### Blocks and closures
+
+A block is a function written at the call site as the last argument. Prefer blocks over `&name` for short callbacks.
+
+```ruby
+doubled = xs.map do |x|
+  x * 2
+end
+evens = xs.filter do |x| x % 2 == 0 end
+total = xs.reduce(0) do |sum, x| sum + x end
+sorted = people.sort_by do |p| p.age end
+xs.each do |x|
+  puts("item #{x}")
+end
+found = xs.any? do |x| x > 10 end
+result = run(5) do |n| n + 1 end
+```
+
+- Write `do |a, b| ... end` or `do ... end` after the `)` of a call, or after a method name without parentheses (`xs.each do`). User functions need parentheses: `run(5) do ... end`, `start() do ... end`. The called function's last parameter must be a `Fn` (`CHECK-BLOCK-TARGET`). Never `do || ... end` and never `{ |x| ... }`.
+- Parameter types come from the call; annotate when there is no context: `do |x: Int| ... end` (`CHECK-BLOCK-TYPE` otherwise).
+- The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]` known from the call (not in `map`/`sort_by`); end it with `ok(...)`.
+- In `case f() do`, `do` belongs to `case`; in `while` and `for` headers a `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
+- Blocks capture values when created; later changes outside do not affect them. A block cannot assign to an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): build the value with `map`/`reduce`, or use a `for` loop. Block parameters cannot reuse visible names.
+- A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn` through a function parameter, or register a BDD step with `BDD.step("pattern") do |args| ... end`.
+- `List.each` runs a block for each element; `List.any?` / `List.all?` stop at the first deciding element.
+
 ### Collections
 
-`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a named function reference (`&name`) or a function-valued variable; there are no closures.
+`List.map` transforms each element; `List.filter` keeps elements whose predicate returns true. Both preserve order and inputs. `List.reduce` folds left, calling `f(accumulator, item)` with the initial value first; an empty list returns the initial value. Callbacks run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; map callbacks must return data, not Void. Callback signatures (`&name`, a `Fn` variable, or a block with annotated parameters such as `do |x: Int|`) infer empty input lists and empty reduce initial values. All three operations cost O(n), excluding callback work. Pass a block, a named function reference (`&name`), or a function-valued variable.
 
 `List.concat` joins lists of the same element type in O(length of the first list). `List.take` returns the first count elements; `List.drop` removes them. Nonnegative counts above length return the whole list or empty list, respectively; negative counts halt with `RUNTIME-INVALID-COUNT` at the count argument. Both cost O(n). `List.at` reads a zero-based index in O(n); negative or out-of-range indexes halt with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
 
@@ -439,7 +468,7 @@ Task.sleep(milliseconds: Int) -> Void
 
 Start tasks before awaiting them to overlap I/O. They call named functions with one argument; pass a struct for multiple values. Each has independent variables, scopes and returns. Await returns the cached value and can be repeated. False, nil and error Results are normal values, with no extra Result wrapper. Task[R] has no constructor, equality, fields, indexing or JSON encoding; inspect prints `<Task>`. A handle belongs to its execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT.
 
-Any task diagnostic terminates the evaluation with its original code and span, even when unawaited. System.exit in any task terminates that evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending work; explicitly await tasks that must finish. External interruption cancels tasks and closes newly created resources while preserving caller-supplied ports. No channels, closures or CPU parallelism are exposed.
+Any task diagnostic terminates the evaluation with its original code and span, even when unawaited. System.exit in any task terminates that evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending work; explicitly await tasks that must finish. External interruption cancels tasks and closes newly created resources while preserving caller-supplied ports. No channels or CPU parallelism are exposed. A block can be the task function when passed through a `Fn` variable or parameter.
 
 Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
@@ -865,6 +894,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct |
 | `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
+| `CHECK-BLOCK-TYPE` | a block parameter has no type from the call; annotate it (`do |x: Int|`) |
+| `CHECK-BLOCK-TARGET` | a block is passed to a function whose last parameter is not a `Fn` |
+| `CHECK-CAPTURED-ASSIGNMENT` | a block assigns to an outer variable; use `reduce` or a `for` loop |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count |

@@ -81,6 +81,33 @@
     (define empty-part (parse-text "def main() -> Void\n  x = \"a #{} b\"\nend\n"))
     (check-equal? (source-position-column (source-span-start (diagnostic-span empty-part))) 12))
 
+  (test-case "blocks attach to calls as the last argument"
+    (define mapped (parse-expr "xs.map do |x, y: Int|\n    x\n  end"))
+    (check-true (method-call? mapped))
+    (define block (car (method-call-args mapped)))
+    (check-true (block-lit? block))
+    (check-equal? (map block-param-name (block-lit-params block)) '("x" "y"))
+    (check-false (block-param-type (car (block-lit-params block))))
+    (check-equal? (type-ref-name (block-param-type (cadr (block-lit-params block)))) "Int")
+    (check-equal? (source-position-line (source-span-end (node-span mapped))) 4)
+    (define one-line (parse-expr "List.reduce(xs, 0) do |a, b| a + b end"))
+    (check-equal? (length (call-args one-line)) 3)
+    (check-true (expr-stmt? (car (block-lit-body (caddr (call-args one-line))))))
+    (check-equal? (block-lit-params (car (call-args (parse-expr "f() do\n    return 1\n  end")))) '())
+    (define scrutinee
+      (parse-ok "def main() -> Void\n  case f() do\n    _ ->\n      puts(\"a\")\n  end\n  case (xs.map do |x| x end) do\n    _ ->\n      puts(\"b\")\n  end\nend\n"))
+    (check-true (call? (case-stmt-value (car (function-decl-body (car (program-declarations scrutinee)))))))
+    (check-equal? (parse-code "def main() -> Void\n  xs.each do || puts(\"a\") end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-equal? (parse-code "def main() -> Void\n  x = 1 do\n  end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    if x\n      puts(x) end\n  end\nend\n")
+                  'PARSE-UNEXPECTED-TOKEN)
+    (for ([text '("def main() -> Void\n  while xs.empty? do\n  end\nend\n"
+                  "def main() -> Void\n  for x in xs.reverse do\n  end\nend\n")])
+      (define problem (parse-text text))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN text)
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2 text))
+    (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    puts(x)\n") 'PARSE-UNCLOSED-BLOCK))
+
   (test-case "hello program parses"
     (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
     (check-equal? (length (program-declarations program)) 1)

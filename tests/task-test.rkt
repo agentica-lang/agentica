@@ -24,6 +24,15 @@
   (values caller results))
 
 (module+ test
+  (test-case "closures reach Task.spawn through a function parameter"
+    (define-values (result output)
+      (run (string-append
+            "def start(n: Int, f: Fn[Int, Int]) -> Task[Int]\n  return Task.spawn(f, n)\nend\n"
+            "def main() -> Void\n  offset = 100\n  task = start(5) do |n|\n    Task.sleep(0)\n    n + offset\n  end\n"
+            "  offset = 0\n  IO.inspect(Task.await(task))\nend\n")))
+    (check-equal? result (void))
+    (check-equal? output "105\n"))
+
   (test-case "HTTP handlers share global diagnostics and budget and close listeners on termination"
     (for ([body '("  n = 1 / 0" "  while true\n    Task.sleep(0)\n  end")]
           [code '(RUNTIME-DIVISION-BY-ZERO RUNTIME-STEP-LIMIT)])
