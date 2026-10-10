@@ -23,7 +23,7 @@ vm/main.c     dist/agentica-vm [--max-steps N] -- file.agcb [args...]
 | `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm.md` §8) |
 | `vm/value.c` | allocation, checked accessors, UTF-8 checks, OOM/abort handlers |
 | `vm/interp.c` | the loop: frames, registers, `STEP`, call depth, Int rules |
-| `vm/builtins.c` | builtin table matched by name and arity from the import table |
+| `vm/builtins.c` | builtin table matched by implementation key and arity from the import table |
 | `vm/diag.c` | the plain diagnostic format, byte-for-byte like `format-diagnostic` |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
 | `vm/tests/loader_test.c` | one assert per loader rule |
@@ -47,10 +47,11 @@ racket src/main.rkt --dump-ir prog.agc
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
-- VM tests run `make -s vm` first, print `SKIP` locally when the VM cannot be
-  built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
-- `-Wall -Wextra -Werror` and hardening flags apply to `vm/*.c` only, never
-  to `gc.c`.
+- `tests/vm-diff-test.rkt` runs `make -s vm` first, prints `SKIP` locally
+  when the VM cannot be built, and fails in CI (`AGENTICA_REQUIRE_VM=1`).
+  `tests/bytecode-test.rkt` needs no VM binary.
+- `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
+  `gc.c` gets only `-O2 -fPIE`.
 
 ## Widen the subset (new form or opcode)
 
@@ -65,7 +66,9 @@ racket src/main.rkt --dump-ir prog.agc
    `agc_opcode` in `vm/agc.h` at the same position (a test compares them).
    No opcodes for later PRs.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
-   indexes, jump targets, spans). Add one assert per new rule to
+   indexes, jump targets, spans). A new file section checks its counts
+   against the bytes left and allocates through `load_alloc`, which charges
+   the load memory budget. Add one assert per new rule to
    `vm/tests/loader_test.c`.
 5. `vm/interp.c`: implement it with checked accessors only.
 6. Add a fixture to `tests/fixtures/vm/` for each new runtime code or span;
@@ -75,9 +78,21 @@ racket src/main.rkt --dump-ir prog.agc
 
 ## Add a C builtin
 
-- The catalog in `src/builtins.rkt` stays the source of names and arity; the
-  file imports builtins by `(name, arity)` and the loader resolves them
-  against the C table.
+1. `src/lower.rkt`: let the call through the builtin check (today only the
+   `puts` implementation is accepted; everything else is
+   `LOWER-UNSUPPORTED`) and emit `call-builtin` with the catalog's
+   implementation key and arity. The import table carries the
+   implementation key, not the written name: `puts` and `IO.puts` both
+   import `"puts"`.
+2. `vm/builtins.c`: add the entry under that key and arity.
+3. Add a fixture to `tests/fixtures/vm/` for the happy path and for each
+   runtime code or span the builtin can raise; add a loader assert if the
+   import rules change.
+
+Rules for the C code:
+
+- The catalog in `src/builtins.rkt` stays the source of keys and arity; the
+  loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.
 - Fail at the span the evaluator uses (call span, or `span + 1 + i` for
@@ -85,10 +100,11 @@ racket src/main.rkt --dump-ir prog.agc
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
 - Strings reach the OS or a library only through `agc_cstr` (copy, NUL
-  terminate, fail on embedded NUL). Every String constructor validates UTF-8
+  terminate, fail on embedded NUL; add it with the first builtin that needs
+  it). Every String constructor validates UTF-8
   or decodes with U+FFFD.
 - No C recursion whose depth depends on a value (printing, `to_s`/`inspect`,
-  JSON): use an explicit `GC_MALLOC`'d stack.
+  JSON): use an explicit stack allocated with `agc_alloc`.
 - Builtins never call the interpreter. Callback builtins are resumable
   native frames. A builtin must not keep `args` across anything that pushes a
   frame or grows registers.
@@ -98,8 +114,9 @@ racket src/main.rkt --dump-ir prog.agc
 **Parity.** Same stdout, stderr, exit code, diagnostic code and span as the
 evaluator. Diagnostic messages are copied verbatim; `RUNTIME-INTERNAL` text is
 not compared. Each deliberate difference goes into `docs/vm.md` as a
-documented difference (today: a failed stdout write exits 1; control bytes
-from the file print as `?`; out of memory exits 70).
+documented difference; `docs/vm.md` lists them (for example a failed stdout
+write exits 1, control bytes from the file print as `?`, out of memory exits
+70, and the 2^24 register cap gives `RUNTIME-STACK-OVERFLOW`).
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, runs children only with its own
@@ -110,8 +127,9 @@ instructions. A file that loads may still compute wrong values or end with
 `RUNTIME-INTERNAL`.
 
 **C style.** C11. Exported names `agc_`, macros and enum constants `AGC_`,
-file-local helpers `static`. Only `value.c` reads the value union. Index and
-size sums use `uint64_t`. Immediates write the full word. No comments unless
+file-local helpers `static`. Only `value.c` reads the value union. Size
+arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's index
+and size sums use `uint64_t`. Immediates write the full word. No comments unless
 a line is unclear without one.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
@@ -120,9 +138,11 @@ stack. Only `vm/main.c` prints and exits. SIGPIPE is ignored and every write
 is checked.
 
 **Boehm GC.**
-- Objects that hold `agc_value`s use `GC_MALLOC`; strings and byte buffers
-  use `GC_MALLOC_ATOMIC`, which is not zeroed, so never expose an unfilled
-  tail.
+- Allocate only through `agc_alloc` (objects that hold `agc_value`s) and
+  `agc_alloc_atomic` (strings, byte buffers; not zeroed under Boehm, so never
+  expose an unfilled tail), or `load_alloc` in the loader. They switch to
+  `calloc` under `AGC_NO_GC` and route out-of-memory to the handler. Only
+  `value.c` calls `GC_*` or includes `gc.h`.
 - Never keep a GC pointer in `malloc` memory, an atomic object or a
   `_Thread_local`; never tag pointers. Frames hold register offsets, not
   pointers, because the register array moves when it grows.
@@ -161,4 +181,4 @@ is checked.
 - Step-limit sweeps on long programs are slow; the diff test samples above
   2000 steps.
 - Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
-  run, not ASan.
+  run (planned for the strings PR), not ASan.
