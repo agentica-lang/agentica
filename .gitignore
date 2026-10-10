@@ -1,4 +1,5 @@
 compiled/
 dist/
+build/
 tests/eval/results/
 __pycache__/

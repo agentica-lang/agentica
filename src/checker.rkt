@@ -203,7 +203,7 @@
        (block-returns? (case-arm-body arm)))]
     [else #f]))
 
-(define (check program)
+(define (check program #:types [types #f])
   (define structs (hash-copy builtin-records))
   (define enums (make-hash))
   (define functions (make-hash))
@@ -527,6 +527,7 @@
            'String]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
+      (when types (hash-set! types expression actual))
       (when (and (eq? actual 'Void) (not completion?))
         (bail 'CHECK-VOID-VALUE "a Void call has no value; use it as a statement" (node-span expression)))
       (ensure actual expected (node-span expression)))
