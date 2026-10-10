@@ -210,9 +210,12 @@
     ;; Expressions ----------------------------------------------------------
 
     (define (eval-expression expression)
-      (if (typed-target? expression)
-          (eval-expression (typed-target-expression expression))
-          (eval-step-expression expression)))
+      (cond
+        [(typed-target? expression) (eval-expression (typed-target-expression expression))]
+        [(method-call? expression) (eval-expression (method-call-resolved expression))]
+        [(and (field-access? expression) (field-access-resolved expression))
+         (eval-expression (field-access-resolved expression))]
+        [else (eval-step-expression expression)]))
 
     (define (eval-step-expression expression)
       (step! (node-span expression))
@@ -258,9 +261,6 @@
            (mapping-put result
                         (eval-expression (map-entry-key entry))
                         (eval-expression (map-entry-value entry))))]
-        [(method-call? expression) (eval-expression (method-call-resolved expression))]
-        [(and (field-access? expression) (field-access-resolved expression))
-         (eval-expression (field-access-resolved expression))]
         [(field-access? expression)
          (hash-ref (instance-fields (eval-expression (field-access-target expression)))
                    (field-access-name expression))]

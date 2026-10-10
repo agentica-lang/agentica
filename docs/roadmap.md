@@ -189,7 +189,7 @@ Use the `CHECK-` prefix, one code per rule family. Fold cases that read the same
 - `CHECK-TYPE-MISMATCH` — operand, condition, argument, assignment, return, or field value of the wrong type.
 - `CHECK-EMPTY-LIST-TYPE` — an empty list with no expected type.
 - `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`, `CHECK-MISSING-FIELD` — constructor field rules.
-- `CHECK-NOT-A-STRUCT` — field access on a non-struct; `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
+- `CHECK-UNKNOWN-METHOD` — a method that the receiver's type does not have (this replaced `CHECK-NOT-A-STRUCT`); `CHECK-NOT-INDEXABLE` — index on something that is not a list or a map.
 - `CHECK-SHADOWED-NAME` — a new local reusing a name visible in an outer scope.
 - `CHECK-ANNOTATION-ON-EXISTING` — an annotation on a name that is already bound.
 - `CHECK-IMMUTABLE-ASSIGNMENT` — an assignment to the `for` variable.
