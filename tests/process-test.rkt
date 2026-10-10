@@ -21,7 +21,7 @@
           (path->string node) (path->string peer) mode extra))
 
 (define (program mode body [prefix ""] [extra ""])
-  (string-append prefix "def main() -> Void\n" (spawn mode extra) body "\nend\n"))
+  (string-append prefix "def main() -> Void\n" (spawn mode extra) body "\nend\n\n"))
 
 (define (run text #:allowed? [allowed? #t] #:limit [limit #f])
   (define checked (compile-program text))
@@ -69,7 +69,7 @@
     (define executable (path->string (find-executable-path "racket")))
     (define counts '())
     (define text
-      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    BDD.assert(not Result.ok?(failed), \"failed spawn\")\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    BDD.assert(true, \"closed process\")\n  end\nend\n" executable))
+      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    BDD.assert(not Result.ok?(failed), \"failed spawn\")\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    BDD.assert(true, \"closed process\")\n  end\nend\n\n" executable))
     (define result
       (evaluate (compile-program text) #:allow-run #t
                 #:err (open-output-nowhere)
@@ -105,7 +105,7 @@
 
      (test-case "unavailable and malformed commands return errors without a child"
        (check-equal? (output
-         "def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn(\"agentica-nonexistent-command-5l\", [], 1000)))\n  IO.inspect(Result.ok?(Process.spawn(\"\", [], 1000)))\n  nul = Result.unwrap!(String.from_bytes([0]))\n  IO.inspect(Result.ok?(Process.spawn(\"node\", [nul], 1000)))\nend\n")
+         "def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn(\"agentica-nonexistent-command-5l\", [], 1000)))\n  IO.inspect(Result.ok?(Process.spawn(\"\", [], 1000)))\n  nul = Result.unwrap!(String.from_bytes([0]))\n  IO.inspect(Result.ok?(Process.spawn(\"node\", [nul], 1000)))\nend\n\n")
          "false\nfalse\nfalse\n"))
 
      (test-case "BDD capability reaches custom handlers and programs under test"
@@ -122,7 +122,7 @@
              "" ", \"child\"") (build-path directory "child.agc"))
            (display-to-file
              (string-append "def handler(args: List[String]) -> Void\n" (spawn "args" ", \"handler\"")
-               "  BDD.assert(Result.unwrap!(Process.read_line(p, 5000)) == \"[\\\"handler\\\"]\", \"argv\")\n  Result.unwrap!(Process.wait(p, 5000))\nend\ndef main() -> Void\n  BDD.step(\"the handler can spawn\", &handler)\nend\n") steps)
+               "  BDD.assert(Result.unwrap!(Process.read_line(p, 5000)) == \"[\\\"handler\\\"]\", \"argv\")\n  Result.unwrap!(Process.wait(p, 5000))\nend\n\ndef main() -> Void\n  BDD.step(\"the handler can spawn\", &handler)\nend\n\n") steps)
            (define args (list "test" (path->string feature) "--steps" (path->string steps) "--json"))
            (define denied (apply cli args))
            (check-equal? (car denied) 1)
@@ -135,10 +135,10 @@
      (test-case "cross-evaluation process access reports its own located diagnostic"
        (define p (evaluate
          (compile-program (string-append "def get() -> Process\n" (spawn "hold")
-                                         "  return p\nend\ndef main() -> Void\nend\n"))
+                                         "  return p\nend\n\ndef main() -> Void\nend\n\n"))
          #:entrypoint "get" #:allow-run #t))
        (define problem (evaluate
-         (compile-program "def take(p: Process) -> Void\n  Process.close(p)\nend\ndef main() -> Void\nend\n")
+         (compile-program "def take(p: Process) -> Void\n  Process.close(p)\nend\n\ndef main() -> Void\nend\n\n")
          #:entrypoint "take" #:arguments (list p)))
        (check-equal? (diagnostic-code problem) 'RUNTIME-PROCESS-CONTEXT)
        (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2))
@@ -185,7 +185,7 @@
 
      (test-case "streaming exceeds 1 MiB with concurrent reads and independently drained stderr"
        (define drain
-         "def drain(p: Process) -> Int\n  first = Result.unwrap!(Process.read_bytes(p, 1048576, 5000))\n  second = Result.unwrap!(Process.read_bytes(p, 1048576, 5000))\n  return List.size(first) + List.size(second)\nend\n")
+         "def drain(p: Process) -> Int\n  first = Result.unwrap!(Process.read_bytes(p, 1048576, 5000))\n  second = Result.unwrap!(Process.read_bytes(p, 1048576, 5000))\n  return List.size(first) + List.size(second)\nend\n\n")
        (check-equal? (output (program "flood"
          "  reader = Task.spawn(&drain, p)\n  IO.inspect(Process.wait(p, 5000))\n  IO.inspect(Task.await(reader))" drain))
          "ok(0)\n2097152\n")
@@ -197,7 +197,7 @@
      (test-case "wait retries preserve children; active stream deadlines abort them"
        (check-equal? (output (program "release"
          "  pid = Result.unwrap!(Process.read_line(p, 5000))\n  reader = Task.spawn(&read, p)\n  Task.sleep(100)\n  IO.inspect(Result.ok?(Process.read_line(p, 20)))\n  Result.unwrap!(Process.send(p, \"exit\\n\", 5000))\n  IO.inspect(Result.ok?(Task.await(reader)))\n  IO.inspect(Process.wait(p, 5000))"
-         "def read(p: Process) -> Result[String]\n  return Process.read_line(p, 5000)\nend\n"))
+         "def read(p: Process) -> Result[String]\n  return Process.read_line(p, 5000)\nend\n\n"))
          "false\nfalse\nok(3)\n")
        (check-equal? (output (program "release"
          "  pid = Result.unwrap!(Process.read_line(p, 5000))\n  IO.inspect(Result.ok?(Process.wait(p, 20)))\n  Result.unwrap!(Process.send(p, \"exit\\n\", 5000))\n  IO.inspect(Process.wait(p, 5000))"))
@@ -221,7 +221,7 @@
                                 "  task = Task.spawn(&crash, 0)\n  Task.sleep(60000)"))])
          (define-values (result out err)
            (run (program "hold" (string-append "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n" ending)
-                         "def crash(n: Int) -> Int\n  return 1 / 0\nend\n")
+                         "def crash(n: Int) -> Int\n  return 1 / 0\nend\n\n")
                 #:limit (and (string-contains? ending "while") 100)))
          (check-regexp-match #px"^[0-9]+\n$" out)
          (when (string-contains? ending "crash")

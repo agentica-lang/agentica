@@ -40,7 +40,7 @@
   (values output result))
 
 (define (code-of body)
-  (define-values (output result) (run-text (format "def main() -> Void\n~a\nend\n" body)))
+  (define-values (output result) (run-text (format "def main() -> Void\n~a\nend\n\n" body)))
   (if (diagnostic? result) (diagnostic-code result) result))
 
 (define (cli . arguments)
@@ -221,7 +221,7 @@
       "  IO.inspect(IO.eof?())\n  IO.flush()\n"
       "  data = Result.unwrap!(IO.read_bytes(2))\n"
       "  IO.print(Result.unwrap!(String.from_bytes(data)))\n  IO.flush()\n"
-      "  puts(IO.gets!())\nend\n")
+      "  puts(IO.gets!())\nend\n\n")
      file #:exists 'truncate)
     (define-values (process out in err)
       (subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) (path->string file)))
@@ -296,7 +296,7 @@
                        ("  x = JSON.encode({1: true})" "CHECK-NOT-ENCODABLE")
                        ("  large = 1.0\n  i = 0\n  while i < 40\n    large = large * 1000000000.0\n    i = i + 1\n  end\n  x = JSON.encode(large)" "RUNTIME-JSON-ENCODE")
                        ("  r: Result[Int] = error(\"bad\")\n  x = Result.unwrap!(r)" "RUNTIME-UNWRAP-ERROR"))])
-          (display-to-file (format "def main() -> Void\n~a\nend\n" (car entry)) file #:exists 'truncate)
+          (display-to-file (format "def main() -> Void\n~a\nend\n\n" (car entry)) file #:exists 'truncate)
           (for ([style '("plain" "--ai" "--json")])
             (define args (if (equal? style "plain") '() (list style)))
             (define result (apply cli (append args (list (path->string file)))))
@@ -314,7 +314,7 @@
     (dynamic-wind
       void
       (lambda ()
-        (display-to-file "def main() -> Void\n  while true\n  end\nend\n" file #:exists 'truncate)
+        (display-to-file "def main() -> Void\n  while true\n  end\nend\n\n" file #:exists 'truncate)
         (define path (path->string file))
         (check-equal? (cli "--max-steps" "1" "check" path) '(0 "check ok\n" ""))
         (define result (cli "--json" "--max-steps" "10" path))
@@ -329,7 +329,7 @@
 
   (test-case "CLI --seed repeats Random and rejects bad seeds"
     (define program (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Void\n  IO.inspect([Random.int(1, 1000000), Random.int(1, 1000000)])\nend\n"
+    (display-to-file "def main() -> Void\n  IO.inspect([Random.int(1, 1000000), Random.int(1, 1000000)])\nend\n\n"
                      program #:exists 'truncate)
     (define path (path->string program))
     (define first (cli "--seed" "5" path))
@@ -346,7 +346,7 @@
     (check-equal? (car (cli "no-such-file.agc")) 2)
     (check-equal? (cli "check" hello) '(0 "check ok\n" ""))
     (define type-error (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Void\n  puts(1)\nend\n" type-error #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  puts(1)\nend\n\n" type-error #:exists 'truncate)
     (define checked (cli "check" (path->string type-error)))
     (define ai (cli "--ai" "check" (path->string type-error)))
     (define json (cli "--json" "check" (path->string type-error)))
@@ -361,18 +361,18 @@
     (check-equal? (cadr json) "")
     (check-equal? (cli "--json" "check" hello) '(0 "{\"ok\":true}\n" ""))
     (define bad (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Void\n  x = 1 / 0\nend\n" bad #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  x = 1 / 0\nend\n\n" bad #:exists 'truncate)
     (define failed (cli (path->string bad)))
     (delete-file bad)
     (check-equal? (car failed) 1)
     (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))
     (define exit-file (make-temporary-file "agentica~a.agc"))
-    (display-to-file "def main() -> Void\n  System.exit(3)\nend\n" exit-file #:exists 'truncate)
+    (display-to-file "def main() -> Void\n  System.exit(3)\nend\n\n" exit-file #:exists 'truncate)
     (check-equal? (car (cli (path->string exit-file))) 3)
     (delete-file exit-file)
     (define args-file (make-temporary-file "agentica~a.agc"))
     (display-to-file
-     "def main() -> Void\n  for a in System.args()\n    puts(a)\n  end\nend\n"
+     "def main() -> Void\n  for a in System.args()\n    puts(a)\n  end\nend\n\n"
      args-file #:exists 'truncate)
     (check-equal? (cli (path->string args-file) "x" "y" "--json") '(0 "x\ny\n--json\n" ""))
     (delete-file args-file)))

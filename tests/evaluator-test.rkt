@@ -49,7 +49,7 @@
   result)
 
 (define (main-with body)
-  (format "def main() -> Void\n~a\nend\n" body))
+  (format "def main() -> Void\n~a\nend\n\n" body))
 
 (define (position-of problem)
   (define start (source-span-start (diagnostic-span problem)))
@@ -59,30 +59,30 @@
   (test-case "Void Results and tasks complete without turning nil data into completion"
     (check-equal?
      (output-of
-      (string-append "def effect(n: Int) -> Void\n  return\nend\n"
-                     "def finish() -> Result[Void]\n  return ok()\nend\n"
-                     "def propagate() -> Result[Void]\n  try finish()\n  failure: Result[Void] = error(\"bad\")\n  try failure\n  return ok()\nend\n"
+      (string-append "def effect(n: Int) -> Void\n  return\nend\n\n"
+                     "\ndef finish() -> Result[Void]\n  return ok()\nend\n\n"
+                     "\ndef propagate() -> Result[Void]\n  try finish()\n  failure: Result[Void] = error(\"bad\")\n  try failure\n  return ok()\nend\n\n"
                      (main-with "  IO.inspect(ok())\n  IO.inspect(ok(nil))\n  task: Task[Void] = Task.spawn(&effect, 0)\n  Task.await(task)\n  Task.await(task)\n  Result.unwrap!(finish())\n  IO.inspect(propagate())\n  puts(\"done\")")))
      "ok()\nok(nil)\nerror(\"bad\")\ndone\n"))
   (test-case "function values travel through parameters, returns and maps"
     (check-equal?
      (output-of
       (string-append
-       "def double(n: Int) -> Int\n  return n * 2\nend\n"
-       "def select() -> Fn[Int, Int]\n  return &double\nend\n"
-       "def apply(f: Fn[Int, Int], n: Int) -> Int\n  return f.call(n)\nend\n"
-       "def main() -> Void\n  handlers: Map[String, Fn[Int, Int]] = {\"double\": select()}\n"
-       "  IO.inspect(apply(handlers[\"double\"], 21))\n  IO.inspect(handlers[\"double\"])\nend\n"))
+       "def double(n: Int) -> Int\n  return n * 2\nend\n\n"
+       "\ndef select() -> Fn[Int, Int]\n  return &double\nend\n\n"
+       "\ndef apply(f: Fn[Int, Int], n: Int) -> Int\n  return f.call(n)\nend\n\n"
+       "\ndef main() -> Void\n  handlers: Map[String, Fn[Int, Int]] = {\"double\": select()}\n"
+       "  IO.inspect(apply(handlers[\"double\"], 21))\n  IO.inspect(handlers[\"double\"])\nend\n\n"))
      "42\n<Fn>\n"))
   (test-case "the section 8 programs run"
-    (check-equal? (output-of "def main() -> Void\n  puts(\"hello\")\nend\n") "hello\n")
+    (check-equal? (output-of "def main() -> Void\n  puts(\"hello\")\nend\n\n") "hello\n")
     (check-equal? (output-of (string-append
                               "def classify(age: Int) -> String\n"
                               "  if age >= 18\n    return \"adult\"\n"
                               "  elsif age >= 13\n    return \"teen\"\n"
                               "  else\n    return \"child\"\n  end\nend\n\n"
                               "def main() -> Void\n"
-                              "  puts(classify(25))\n  puts(classify(15))\n  puts(classify(3))\nend\n"))
+                              "  puts(classify(25))\n  puts(classify(15))\n  puts(classify(3))\nend\n\n"))
                   "adult\nteen\nchild\n")
     (check-equal? (output-of (string-append
                               "struct Todo\n  title: String\n  done: Bool\nend\n\n"
@@ -91,7 +91,7 @@
                               "    Todo(title: \"a\", done: false),\n"
                               "    Todo(done: true, title: \"b\"),\n"
                               "    Todo(title: \"c\", done: false)\n  ]\n"
-                              "  for task in tasks\n    if not task.done\n      puts(task.title)\n    end\n  end\nend\n"))
+                              "  for task in tasks\n    if not task.done\n      puts(task.title)\n    end\n  end\nend\n\n"))
                   "a\nc\n"))
 
   (test-case "control flow, scopes, and recursion"
@@ -105,14 +105,14 @@
                               "  while i < 4\n    total = total + i\n    i = i + 1\n  end\n"
                               "  empty: List[Int] = []\n  for e in empty\n    puts(\"never\")\n  end\n"
                               "  if total == 6\n    puts(\"six\")\n  end\n"
-                              "  puts(\"ok\")\nend\n"
-                              "def unused() -> Void\n  puts(\"\")\nend\n"))
+                              "  puts(\"ok\")\nend\n\n"
+                              "\ndef unused() -> Void\n  puts(\"\")\nend\n\n"))
                   "six\nok\n")
     (check-equal? (output-of (string-append
                               "def fact(n: Int) -> Int\n"
                               "  if n <= 1\n    return 1\n  end\n  return n * fact(n - 1)\nend\n\n"
-                              "def main() -> Void\n  if fact(5) == 120 and later() == 1\n    puts(\"yes\")\n  end\nend\n"
-                              "def later() -> Int\n  return 1\nend\n"))
+                              "def main() -> Void\n  if fact(5) == 120 and later() == 1\n    puts(\"yes\")\n  end\nend\n\n"
+                              "\ndef later() -> Int\n  return 1\nend\n\n"))
                   "yes\n"))
 
   (test-case "operators"
@@ -124,7 +124,7 @@
                     "  if true or noisy()\n    puts(\"skip\")\n  end\n"
                     "  a = 0 - 7\n"
                     "  if a / 2 == 0 - 3 and a % 2 == 0 - 1\n    puts(\"trunc\")\n  end\n"
-                    "  puts(\"a\" + \"b\")\nend\n"))
+                    "  puts(\"a\" + \"b\")\nend\n\n"))
                   "skip\ntrunc\nab\n"))
 
   (test-case "maps are immutable and keep insertion order"
@@ -262,7 +262,7 @@
     (check-equal?
      (output-of
       (string-append
-       "struct Item\n  name: String\n  price: Float\nend\n"
+       "struct Item\n  name: String\n  price: Float\nend\n\n"
        (main-with (string-append
         "  n = 3\n  item = Item(name: \"tea\", price: 2.5)\n  names = [\"a\", \"b\"]\n"
         "  puts(\"n=#{n}, next=#{n + 1}\")\n"
@@ -280,7 +280,7 @@
     (check-equal?
      (output-of
       (string-append
-       "def done!() -> Bool\n  IO.inspect(\"called\")\n  return true\nend\n"
+       "def done!() -> Bool\n  IO.inspect(\"called\")\n  return true\nend\n\n"
        (main-with (string-append
         "  n = 0\n  b = false\n"
         "  if !b && (n < 3 || done!())\n    n += 5\n  end\n"
@@ -300,7 +300,7 @@
                     "def value!() -> String\n  return \"ok\"\nend\n\n"
                     "def main() -> Void\n"
                     "  if ready?()\n    puts(value!())\n  end\n"
-                    "end\n"))
+                    "end\n\n"))
                   "ok\n"))
 
   (test-case "IO writes to the injected ports and inspect returns its value"
@@ -326,7 +326,7 @@
                "  IO.inspect({\"k\": 1})\n"
                "  IO.inspect(\"hi\")\n"
                "  IO.inspect(nil)\n"
-               "end\n")))
+               "end\n\n")))
     (check-equal? result (void))
     (check-equal? output "Todo(title: \"a\", done: true)\n{\"k\": 1}\n\"hi\"\nnil\n"))
 
@@ -504,7 +504,7 @@
       (define sample (assoc name samples))
       (unless sample (error 'catalog-test "missing behavioral example for ~a" name))
       (define-values (out err result)
-        (run-io (string-append "struct Empty\nend\ndef positive(n: Int) -> Bool\n  return n > 0\nend\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\ndef identity(n: Int) -> Int\n  return n\nend\n"
+        (run-io (string-append "struct Empty\nend\n\ndef positive(n: Int) -> Bool\n  return n > 0\nend\n\ndef add(acc: Int, n: Int) -> Int\n  return acc + n\nend\n\ndef identity(n: Int) -> Int\n  return n\nend\n\n"
                               (main-with (format "  r: Result[Int] = error(\"bad\")\n  ~a"
                                   (if (eq? (builtin-result (hash-ref builtins name)) 'Void)
                                       (cadr sample) (format "IO.inspect(~a)" (cadr sample))))))
@@ -519,8 +519,8 @@
     (check-equal?
      (output-of
       (string-append
-       "def make(n: Int) -> Fn[Int, Int]\n  return keep() do |x| x + n end\nend\n"
-       "def keep(f: Fn[Int, Int]) -> Fn[Int, Int]\n  return f\nend\n"
+       "def make(n: Int) -> Fn[Int, Int]\n  return keep() do |x| x + n end\nend\n\n"
+       "\ndef keep(f: Fn[Int, Int]) -> Fn[Int, Int]\n  return f\nend\n\n"
        (main-with (string-append
                    "  base = 10\n  add = make(base)\n  base = 0\n  IO.inspect(add.call(1))\n"
                    "  labels = [1, 5].map do |x|\n    if x > 2\n      return \"big\"\n    end\n    \"small\"\n  end\n"
@@ -533,8 +533,8 @@
     (check-equal? (diagnostic-code limited) 'RUNTIME-STEP-LIMIT)
     (define deep
       (diagnostic-of
-       (string-append "def down(n: Int, f: Fn[Int, Int]) -> Int\n  return f.call(n)\nend\n"
-                      "def loop(n: Int) -> Int\n  return down(n) do |v| loop(v + 1) end\nend\n"
+       (string-append "def down(n: Int, f: Fn[Int, Int]) -> Int\n  return f.call(n)\nend\n\n"
+                      "\ndef loop(n: Int) -> Int\n  return down(n) do |v| loop(v + 1) end\nend\n\n"
                       (main-with "  x = loop(0)"))))
     (check-equal? (diagnostic-code deep) 'RUNTIME-STACK-OVERFLOW))
 
@@ -542,7 +542,7 @@
     (check-equal?
      (output-of
       (string-append
-       "def fallback() -> Int\n  puts(\"default\")\n  return 9\nend\n"
+       "def fallback() -> Int\n  puts(\"default\")\n  return 9\nend\n\n"
        (main-with
         (string-append
          "  xs = [1, 2]\n  ys = List.set(xs, 0, 3)\n"
@@ -571,12 +571,12 @@
   (test-case "collection callbacks run left to right and preserve inputs"
     (define callbacks
       (string-append
-       "def show(n: Int) -> String\n  IO.inspect(n)\n  return String.from_int(n)\nend\n"
-       "def keep(n: Int) -> Bool\n  IO.inspect(n)\n  return n > 1\nend\n"
-       "def digits(acc: Int, n: Int) -> Int\n  return acc * 10 + n\nend\n"
-       "def wrap(n: Int) -> Result[Int]\n  return ok(n)\nend\n"
-       "def negate(b: Bool) -> Bool\n  return not b\nend\n"
-       "def nothing(acc: Nil, n: Int) -> Nil\n  return nil\nend\n"))
+       "def show(n: Int) -> String\n  IO.inspect(n)\n  return String.from_int(n)\nend\n\n"
+       "\ndef keep(n: Int) -> Bool\n  IO.inspect(n)\n  return n > 1\nend\n\n"
+       "\ndef digits(acc: Int, n: Int) -> Int\n  return acc * 10 + n\nend\n\n"
+       "\ndef wrap(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n"
+       "\ndef negate(b: Bool) -> Bool\n  return not b\nend\n\n"
+       "\ndef nothing(acc: Nil, n: Int) -> Nil\n  return nil\nend\n\n"))
     (check-equal?
      (output-of
       (string-append callbacks
@@ -599,8 +599,8 @@
     (check-equal?
      (output-of
       (string-append
-       "def tens(n: Int) -> Int\n  IO.inspect(n)\n  return n / 10\nend\n"
-       "def half(x: Float) -> Float\n  return x / 2.0\nend\n"
+       "def tens(n: Int) -> Int\n  IO.inspect(n)\n  return n / 10\nend\n\n"
+       "\ndef half(x: Float) -> Float\n  return x / 2.0\nend\n\n"
        (main-with (string-append
         "  xs = [21, 12, 25, 11]\n"
         "  IO.inspect(List.sort_by(xs, &tens))\n"
@@ -616,10 +616,10 @@
   (test-case "collection callbacks restore caller scopes and return targets"
     (define callbacks
       (string-append
-       "def change(n: Int) -> Int\n  saved = n + 10\n  return saved\nend\n"
-       "def keep(n: Int) -> Bool\n  saved = n > 1\n  return saved\nend\n"
-       "def add(acc: Int, n: Int) -> Int\n  saved = acc + n\n  return saved\nend\n"
-       "def caller() -> Int\n  saved = 42\n"
+       "def change(n: Int) -> Int\n  saved = n + 10\n  return saved\nend\n\n"
+       "\ndef keep(n: Int) -> Bool\n  saved = n > 1\n  return saved\nend\n\n"
+       "\ndef add(acc: Int, n: Int) -> Int\n  saved = acc + n\n  return saved\nend\n\n"
+       "\ndef caller() -> Int\n  saved = 42\n"
        "  if true\n"
        "    local = 7\n"
        "    IO.inspect(List.map([1, 2], &change))\n"
@@ -627,7 +627,7 @@
        "    IO.inspect(List.reduce([1, 2], 0, &add))\n"
        "    IO.inspect(local)\n"
        "  end\n"
-       "  return saved\nend\n"))
+       "  return saved\nend\n\n"))
     (check-equal?
      (output-of (string-append callbacks (main-with "  IO.inspect(caller())")))
      "[11, 12]\n[2]\n3\n7\n42\n"))
@@ -638,7 +638,7 @@
       (string-append
        "def descend(n: Int) -> Int\n"
        "  if n == 0\n    return 0\n  end\n"
-       "  return List.map([n - 1], &descend)[0]\nend\n"))
+       "  return List.map([n - 1], &descend)[0]\nend\n\n"))
     (define problem
       (diagnostic-of (string-append callbacks
                        (main-with "  IO.inspect(descend(10001))"))))
@@ -646,7 +646,7 @@
     (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 5))
 
   (test-case "collection callbacks propagate failure and share the step budget"
-    (define callbacks "def fail(n: Int) -> Int\n  return 1 / n\nend\n")
+    (define callbacks "def fail(n: Int) -> Int\n  return 1 / n\nend\n\n")
     (define problem
       (diagnostic-of (string-append callbacks
                        (main-with "  xs = List.map([1, 0, 2], &fail)"))))
@@ -765,9 +765,9 @@
     (check-equal?
      (output-of
       (string-append
-       "struct Inner\n  label: String\nend\n"
-       "struct Payload\n  z: Inner\n  a: Map[String, List[Bool]]\n  raw: Json\n  none: Nil\nend\n"
-       "struct Node\n  children: List[Node]\n  value: Int\nend\n"
+       "struct Inner\n  label: String\nend\n\n"
+       "\nstruct Payload\n  z: Inner\n  a: Map[String, List[Bool]]\n  raw: Json\n  none: Nil\nend\n\n"
+       "\nstruct Node\n  children: List[Node]\n  value: Int\nend\n\n"
        (main-with
         (string-append
          "  p = Payload(none: nil, raw: Result.unwrap!(JSON.parse(\"[null,false,1.25]\")),\n"
@@ -803,7 +803,7 @@
 
   (test-case "JSON schemas describe structs and recursive references independently"
     (define prefix
-      "struct Args\n  count: Int\n  ratio: Float\n  active: Bool\n  names: List[String]\n  scores: Map[String, Int]\nend\n")
+      "struct Args\n  count: Int\n  ratio: Float\n  active: Bool\n  names: List[String]\n  scores: Map[String, Int]\nend\n\n")
     (check-equal?
      (string->jsexpr (output-of (string-append prefix (main-with "  puts(JSON.encode(JSON.schema(Args)))"))))
      (hasheq 'type "object"
@@ -815,7 +815,7 @@
                                                  (hasheq 'type "integer" 'minimum (- (expt 2 63)) 'maximum (sub1 (expt 2 63)))))
              'required '("count" "ratio" "active" "names" "scores")))
     (define recursive
-      (string->jsexpr (output-of (string-append "struct Node\n  children: List[Node]\nend\n"
+      (string->jsexpr (output-of (string-append "struct Node\n  children: List[Node]\nend\n\n"
                                               (main-with "  puts(JSON.encode(JSON.schema(Node)))")))))
     (define expected
       (hasheq 'type "object" 'properties (hasheq 'children (hasheq 'type "array" 'items (hasheq '$ref "#/$defs/Node")))
@@ -824,7 +824,7 @@
 
   (test-case "typed JSON decoding validates nested fields and preserves data"
     (define prefix
-      "struct Item\n  count: Int\n  active: Bool\nend\nstruct Payload\n  items: List[Item]\n  weights: Map[String, Float]\nend\n")
+      "struct Item\n  count: Int\n  active: Bool\nend\n\nstruct Payload\n  items: List[Item]\n  weights: Map[String, Float]\nend\n\n")
     (check-equal?
      (output-of (string-append prefix
        (main-with "  p = Result.unwrap!(JSON.decode(\"{\\\"items\\\":[{\\\"count\\\":3,\\\"active\\\":false}],\\\"weights\\\":{\\\"a\\\":2},\\\"extra\\\":true}\", Payload))\n  IO.inspect(p.items[0].count)\n  IO.inspect(p.items[0].active)\n  IO.inspect(p.weights[\"a\"])\n  q = Result.unwrap!(JSON.decode(JSON.encode(p), Payload))\n  IO.inspect(q.items[0].count)")))
@@ -850,7 +850,7 @@
        "  root = try JSON.parse(text)\n  counts = try JSON.get(root, \"counts\")\n"
        "  items = try JSON.list(counts)\n  total = 0\n"
        "  for item in items\n    total = total + try JSON.int(item)\n  end\n"
-       "  return ok(total)\nend\n"
+       "  return ok(total)\nend\n\n"
        (main-with
         (string-append
          "  IO.inspect(sum(JSON.encode({\"counts\": [1, 2, 3]})))\n"
@@ -901,26 +901,26 @@
     (check-equal?
      (output-of
       (string-append
-       "def operand() -> Result[Int]\n  puts(\"operand\")\n  return error(\"bad\")\nend\n"
-       "def later() -> Int\n  puts(\"later\")\n  return 9\nend\n"
-       "def pair(a: Int, b: Int) -> Int\n  return a + b\nend\n"
-       "def propagate() -> Result[String]\n"
+       "def operand() -> Result[Int]\n  puts(\"operand\")\n  return error(\"bad\")\nend\n\n"
+       "\ndef later() -> Int\n  puts(\"later\")\n  return 9\nend\n\n"
+       "\ndef pair(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"
+       "\ndef propagate() -> Result[String]\n"
        "  for n in [1]\n    while true\n"
        "      value = pair(try operand(), later())\n"
        "      return ok(String.from_int(value))\n    end\n  end\n"
-       "  return ok(\"empty\")\nend\n"
-       "def success() -> Result[String]\n  n = try ok(7)\n  return ok(String.from_int(n))\nend\n"
-       "def main() -> Void\n  local = \"caller\"\n"
+       "  return ok(\"empty\")\nend\n\n"
+       "\ndef success() -> Result[String]\n  n = try ok(7)\n  return ok(String.from_int(n))\nend\n\n"
+       "\ndef main() -> Void\n  local = \"caller\"\n"
        "  r = propagate()\n  puts(Result.message(r))\n  puts(local)\n"
-       "  puts(Result.unwrap!(success()))\nend\n"))
+       "  puts(Result.unwrap!(success()))\nend\n\n"))
      "operand\nbad\ncaller\n7\n"))
 
   (test-case "unwrap_or evaluates its default eagerly after its Result"
     (check-equal?
      (output-of
       (string-append
-       "def first() -> Result[Int]\n  puts(\"first\")\n  return ok(1)\nend\n"
-       "def second() -> Int\n  puts(\"second\")\n  return 2\nend\n"
+       "def first() -> Result[Int]\n  puts(\"first\")\n  return ok(1)\nend\n\n"
+       "\ndef second() -> Int\n  puts(\"second\")\n  return 2\nend\n\n"
        (main-with "  IO.inspect(Result.unwrap_or(first(), second()))")))
      "first\nsecond\n1\n"))
 
@@ -955,18 +955,18 @@
                   'RUNTIME-INDEX-OUT-OF-RANGE)
     (check-equal? (diagnostic-code
                    (diagnostic-of (string-append
-                                   "def loop(n: Int) -> Int\n  return loop(n + 1)\nend\n"
-                                   "def main() -> Void\n  x = loop(0)\nend\n")))
+                                   "def loop(n: Int) -> Int\n  return loop(n + 1)\nend\n\n"
+                                   "\ndef main() -> Void\n  x = loop(0)\nend\n\n")))
                   'RUNTIME-STACK-OVERFLOW))
 
   (test-case "enum constructors and case matching bind or discard payloads"
     (check-equal?
      (output-of
       (string-append
-       "enum Option[T]\n  Some(T)\n  None\nend\n"
-       "def success() -> Result[Void]\n  return ok()\nend\n"
-       "def failure() -> Result[Int]\n  return error(\"bad\")\nend\n"
-       "def main() -> Void\n"
+       "enum Option[T]\n  Some(T)\n  None\nend\n\n"
+       "\ndef success() -> Result[Void]\n  return ok()\nend\n\n"
+       "\ndef failure() -> Result[Int]\n  return error(\"bad\")\nend\n\n"
+       "\ndef main() -> Void\n"
        "  value = Option.Some(\"payload\")\n"
        "  case value do\n"
        "    Option.Some(item) ->\n      puts(item)\n"
@@ -985,5 +985,5 @@
        "    Result.Ok(_) ->\n      puts(\"unexpected\")\n"
        "    Result.Err(message) ->\n      puts(message)\n"
        "  end\n"
-       "end\n"))
+       "end\n\n"))
      "payload\nempty\nok\nbad\n")))

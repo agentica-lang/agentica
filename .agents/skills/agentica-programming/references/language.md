@@ -149,6 +149,8 @@ def greet(user: User, times: Int) -> String
 end
 ```
 
+Leave a blank line after the `end` of every `def`, `struct` and `enum` before the next declaration (`PARSE-MISSING-BLANK-LINE`).
+
 - Every parameter and the return type need an annotation.
 - Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no user methods, nested functions, default arguments, or overloading; closures are written as blocks (see "Blocks and closures").
 - Functions can be called before they are declared, and can be recursive.
@@ -871,6 +873,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket |
 | `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
+| `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one |
 | `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function |
 | `PARSE-CHAINED-COMPARISON` | `a < b < c` |
 | `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |

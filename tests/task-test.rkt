@@ -27,9 +27,9 @@
   (test-case "closures reach Task.spawn through a function parameter"
     (define-values (result output)
       (run (string-append
-            "def start(n: Int, f: Fn[Int, Int]) -> Task[Int]\n  return Task.spawn(f, n)\nend\n"
-            "def main() -> Void\n  offset = 100\n  task = start(5) do |n|\n    Task.sleep(0)\n    n + offset\n  end\n"
-            "  offset = 0\n  IO.inspect(Task.await(task))\nend\n")))
+            "def start(n: Int, f: Fn[Int, Int]) -> Task[Int]\n  return Task.spawn(f, n)\nend\n\n"
+            "\ndef main() -> Void\n  offset = 100\n  task = start(5) do |n|\n    Task.sleep(0)\n    n + offset\n  end\n"
+            "  offset = 0\n  IO.inspect(Task.await(task))\nend\n\n")))
     (check-equal? result (void))
     (check-equal? output "105\n"))
 
@@ -44,8 +44,8 @@
             (define-values (input writer) (make-pipe))
             (define-values (caller results)
               (start (string-append "def handler(request: Request, writer: HttpWriter) -> Void\n" body
-                                    "\nend\ndef main() -> Void\n  server = Result.unwrap!(HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options()))\n"
-                                    "  puts(String.from_int(HTTP.local_port(server)))\n  IO.flush()\n  HTTP.wait(server)\nend\n")
+                                    "\nend\n\ndef main() -> Void\n  server = Result.unwrap!(HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options()))\n"
+                                    "  puts(String.from_int(HTTP.local_port(server)))\n  IO.flush()\n  HTTP.wait(server)\nend\n\n")
                      input output #:max-steps 200))
             (check-not-false (sync/timeout 5 reader))
             (define port (string->number (read-line reader)))
@@ -63,31 +63,31 @@
             (check-false (port-closed? output))))
         (lambda () (custodian-shutdown-all owner)))))
   (test-case "explicit server close clears supervised work before strict BDD return"
-    (define prefix "def handler(request: Request, writer: HttpWriter) -> Void\nend\ndef main() -> Void\n  server = Result.unwrap!(HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options()))\n")
-    (check-equal? (evaluate (checked (string-append prefix "  HTTP.close_server(server)\nend\n"))
+    (define prefix "def handler(request: Request, writer: HttpWriter) -> Void\nend\n\ndef main() -> Void\n  server = Result.unwrap!(HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options()))\n")
+    (check-equal? (evaluate (checked (string-append prefix "  HTTP.close_server(server)\nend\n\n"))
                            #:require-complete-tasks? #t) (void))
-    (define pending (evaluate (checked (string-append prefix "end\n")) #:require-complete-tasks? #t))
+    (define pending (evaluate (checked (string-append prefix "end\n\n")) #:require-complete-tasks? #t))
     (check-equal? (diagnostic-code pending) 'RUNTIME-BDD-PENDING-TASKS))
   (test-case "tasks infer results, retain values and isolate nested function scopes"
     (define-values (result output)
       (run (string-append
-            "struct Item\n  value: Int\nend\n"
-            "def boolean(n: Int) -> Bool\n  return false\nend\n"
-            "def nothing(n: Int) -> Nil\n  return nil\nend\n"
-            "def failure(n: Int) -> Result[Int]\n  return error(\"normal result\")\nend\n"
-            "def double(n: Int) -> Int\n  Task.sleep(0)\n  return n * 2\nend\n"
-            "def nested(n: Int) -> Item\n  child = Task.spawn(&double, n)\n  value = Task.await(child)\n  return Item(value: value)\nend\n"
-            "def main() -> Void\n  n = 99\n  a: Task[Item] = Task.spawn(&nested, 21)\n"
+            "struct Item\n  value: Int\nend\n\n"
+            "\ndef boolean(n: Int) -> Bool\n  return false\nend\n\n"
+            "\ndef nothing(n: Int) -> Nil\n  return nil\nend\n\n"
+            "\ndef failure(n: Int) -> Result[Int]\n  return error(\"normal result\")\nend\n\n"
+            "\ndef double(n: Int) -> Int\n  Task.sleep(0)\n  return n * 2\nend\n\n"
+            "\ndef nested(n: Int) -> Item\n  child = Task.spawn(&double, n)\n  value = Task.await(child)\n  return Item(value: value)\nend\n\n"
+            "\ndef main() -> Void\n  n = 99\n  a: Task[Item] = Task.spawn(&nested, 21)\n"
             "  b = Task.spawn(&nested, 7)\n  IO.inspect(Task.await(a))\n  IO.inspect(Task.await(b))\n"
             "  IO.inspect(Task.await(a))\n  IO.inspect(n)\n  IO.inspect(a)\n"
             "  IO.inspect(Task.await(Task.spawn(&boolean, 0)))\n"
             "  IO.inspect(Task.await(Task.spawn(&nothing, 0)))\n"
-            "  IO.inspect(Task.await(Task.spawn(&failure, 0)))\nend\n")))
+            "  IO.inspect(Task.await(Task.spawn(&failure, 0)))\nend\n\n")))
     (check-equal? result (void))
     (check-equal? output "Item(value: 42)\nItem(value: 14)\nItem(value: 42)\n99\n<Task>\nfalse\nnil\nerror(\"normal result\")\n"))
 
   (test-case "task types and sleep reject invalid programs at their boundaries"
-    (define prefix "def identity(n: Int) -> Int\n  return n\nend\n")
+    (define prefix "def identity(n: Int) -> Int\n  return n\nend\n\n")
     (for ([entry '(("Task.spawn(&identity, \"x\")" CHECK-TYPE-MISMATCH)
                    ("Task.spawn(7, 0)" CHECK-TYPE-MISMATCH)
                    ("Task.await(7)" CHECK-TYPE-MISMATCH)
@@ -96,12 +96,12 @@
                    ("Task.spawn(&main, nil)" CHECK-TYPE-MISMATCH)
                    ("JSON.encode(Task.spawn(&identity, 0))" CHECK-NOT-ENCODABLE)
                    ("t = Task.spawn(&identity, 0)\n  t == t" CHECK-TYPE-MISMATCH))])
-      (define program (checked (string-append prefix "def main() -> Void\n  " (car entry) "\nend\n")))
+      (define program (checked (string-append prefix "def main() -> Void\n  " (car entry) "\nend\n\n")))
       (check-true (diagnostic? program))
       (check-equal? (diagnostic-code program) (cadr entry)))
-    (define reserved (checked "struct Task\n  n: Int\nend\ndef main() -> Void\nend\n"))
+    (define reserved (checked "struct Task\n  n: Int\nend\n\ndef main() -> Void\nend\n\n"))
     (check-equal? (diagnostic-code reserved) 'CHECK-REDEFINED-NAME)
-    (define-values (negative output) (run "def main() -> Void\n  Task.sleep(-1)\nend\n"))
+    (define-values (negative output) (run "def main() -> Void\n  Task.sleep(-1)\nend\n\n"))
     (check-equal? (diagnostic-code negative) 'RUNTIME-INVALID-DURATION)
     (check-equal? (source-position-line (source-span-start (diagnostic-span negative))) 2))
 
@@ -115,10 +115,10 @@
         (parameterize ([current-custodian owner])
           (define-values (caller results)
             (start (string-append
-                    "def receive(n: Int) -> String\n  IO.warn(\"ready\")\n  return IO.gets!()\nend\n"
-                    "def double(n: Int) -> Int\n  return n * 2\nend\n"
-                    "def main() -> Void\n  waiting = Task.spawn(&receive, 0)\n  other = Task.spawn(&double, 21)\n"
-                    "  puts(String.from_int(Task.await(other)))\n  IO.flush()\n  puts(Task.await(waiting))\nend\n") input output #:err errors))
+                    "def receive(n: Int) -> String\n  IO.warn(\"ready\")\n  return IO.gets!()\nend\n\n"
+                    "\ndef double(n: Int) -> Int\n  return n * 2\nend\n\n"
+                    "\ndef main() -> Void\n  waiting = Task.spawn(&receive, 0)\n  other = Task.spawn(&double, 21)\n"
+                    "  puts(String.from_int(Task.await(other)))\n  IO.flush()\n  puts(Task.await(waiting))\nend\n\n") input output #:err errors))
           (check-not-false (sync/timeout 5 ready))
           (check-equal? (read-line ready) "ready")
           (check-not-false (sync/timeout 5 reader))
@@ -149,7 +149,7 @@
           (parameterize ([current-custodian owner])
             (define-values (caller results)
               (start (string-append "def fail(n: Int) -> Int\n  Task.sleep(0)\n  " body
-                                   "\nend\ndef main() -> Void\n  t = Task.spawn(&fail, 0)\n  line = IO.gets!()\nend\n") input output))
+                                   "\nend\n\ndef main() -> Void\n  t = Task.spawn(&fail, 0)\n  line = IO.gets!()\nend\n\n") input output))
             (define result (sync/timeout 5 results))
             (check-not-false result)
             (if crash?
@@ -165,9 +165,9 @@
         (lambda () (custodian-shutdown-all owner) (close-output-port writer) (close-input-port input)))))
 
   (test-case "nested and sibling tasks share a budget that resets between executions"
-    (define work "def work(n: Int) -> Int\n  i = 0\n  while i < n\n    i = i + 1\n  end\n  return i\nend\n")
-    (define single (string-append work "def main() -> Void\n  t = Task.spawn(&work, 8)\n  IO.inspect(Task.await(t))\nend\n"))
-    (define pair (string-append work "def nested(n: Int) -> Int\n  t = Task.spawn(&work, n)\n  return Task.await(t)\nend\ndef main() -> Void\n  a = Task.spawn(&nested, 8)\n  b = Task.spawn(&work, 8)\n  IO.inspect(Task.await(a))\n  IO.inspect(Task.await(b))\nend\n"))
+    (define work "def work(n: Int) -> Int\n  i = 0\n  while i < n\n    i = i + 1\n  end\n  return i\nend\n\n")
+    (define single (string-append work "def main() -> Void\n  t = Task.spawn(&work, 8)\n  IO.inspect(Task.await(t))\nend\n\n"))
+    (define pair (string-append work "def nested(n: Int) -> Int\n  t = Task.spawn(&work, n)\n  return Task.await(t)\nend\n\ndef main() -> Void\n  a = Task.spawn(&nested, 8)\n  b = Task.spawn(&work, 8)\n  IO.inspect(Task.await(a))\n  IO.inspect(Task.await(b))\nend\n\n"))
     (define-values (one output) (run single #:max-steps 100))
     (check-equal? one (void))
     (check-equal? output "8\n")
@@ -190,7 +190,7 @@
         (lambda ()
           (parameterize ([current-custodian owner])
             (define-values (caller results)
-              (start "def wait(n: Int) -> Void\n  IO.print(\"ready\")\n  Task.sleep(60000)\nend\ndef main() -> Void\n  t = Task.spawn(&wait, 0)\n  line = IO.gets!()\nend\n" input output))
+              (start "def wait(n: Int) -> Void\n  IO.print(\"ready\")\n  Task.sleep(60000)\nend\n\ndef main() -> Void\n  t = Task.spawn(&wait, 0)\n  line = IO.gets!()\nend\n\n" input output))
             (define worker (sync/timeout 5 writers))
             (check-true (thread? worker))
             (if interrupt?
