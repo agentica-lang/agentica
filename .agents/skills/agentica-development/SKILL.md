@@ -221,6 +221,10 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 - Checker: `check-block-body` takes known parameter types and result (or #f). With no known result, `current-result` is `'infer`: the first `return` or the last expression fixes it. `capture-boundary` holds the scope depth at the block; assigning to a name found below it is `CHECK-CAPTURED-ASSIGNMENT`. List callback rules check the list first when the callback is a block, then the block with the element type; the `&f` path is unchanged.
 - Evaluator: a `block-lit` evaluates to `closure-value` (block, flattened copy of the visible scopes). `apply-callable` dispatches `function-value` and `closure-value`; `call-closure` uses its own `return-to`, the shared depth and step budget, and returns the last expression statement's value. `evaluate #:entrypoint` and `evaluate-with-ports` accept a name or a callable, which is how Task.spawn, HTTP callbacks and BDD steps run closures.
 
+## Hints for foreign habits
+
+- `foreign-names` and `foreign-methods` in checker.rkt map names from other languages to a help text. They win over did-you-mean for `CHECK-UNKNOWN-NAME` (names and calls), `CHECK-UNKNOWN-METHOD` and a bare type name such as `None`. `conversion-help` explains a `Result[T]` found where `T` is expected. The parser gives `elif`/`elseif` and `else if` their own message and help (parser `bail` takes `#:help`). Tests assert the code and a regexp on the help, never the full text.
+
 ## Enums and pattern matching
 
 - `enum-decl` and `enum-variant` live in `ast.rkt`; `case-stmt`, `case-arm`, `wildcard-pattern`, `literal-pattern`, `variant-pattern`, and `enum-constructor` are the matching nodes. The parser maps `true`/`false`/`nil` patterns to `#t`/`#f`/`'nil`, just like expression literals. `_` in a payload slot is represented by `#f` in the bindings list; it never introduces a variable.

@@ -89,8 +89,54 @@
     [(eq? value 'nil) 'Nil]
     [else '?]))
 
+(define foreign-names
+  (hash "len" "use x.size for lists and maps, or s.length for strings"
+        "str" "use x.to_s, or interpolation: \"#{x}\""
+        "print" "use puts(x), or IO.print(x) to write without a newline"
+        "println" "use puts(x)"
+        "input" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "read_line" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "readline" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "gets" "use IO.gets(), which returns Result[String]; IO.gets!() halts at the end of input"
+        "range" "there is no range; use a while loop with a counter, or for over a list"
+        "int" "use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure"
+        "elif" "write elsif: if a ... elsif b ... else ... end"
+        "elseif" "write elsif: if a ... elsif b ... else ... end"
+        "float" "use n.to_f for an Int, s.to_f (a Result) or s.to_f! for a String"
+        "Int.to_float" "use n.to_f"
+        "Int.to_string" "use n.to_s"
+        "Int.parse" "use s.to_i (a Result) or s.to_i!"
+        "Float.to_string" "use x.to_s"
+        "null" "use nil"
+        "None" "use nil"
+        "nil?" "compare with nil: x == nil"))
+
+(define foreign-methods
+  (hash "to_string" '("to_s") "to_str" '("to_s") "len" '("size" "length")
+        "lower" '("downcase") "upper" '("upcase")
+        "startswith" '("start_with?") "endswith" '("end_with?")
+        "to_int" '("to_i" "to_int") "to_float" '("to_f" "to_float")))
+
+(define (foreign-method-help kind name)
+  (cond
+    [(equal? name "nil?") "values are never nil unless their type is Nil; compare with nil: x == nil"]
+    [else
+     (define target
+       (for/first ([candidate (in-list (hash-ref foreign-methods name '()))]
+                   #:when (resolve-method kind candidate))
+         candidate))
+     (and target (format "use .~a" target))]))
+
 (define (conversion-help expected actual)
   (cond
+    [(and (result-type? actual) (equal? (cadr actual) expected))
+     (format "this is ~a; unwrap it with a ! form (~a), with Result.unwrap!(...), or with try inside a function that returns Result"
+             (type->string actual)
+             (case expected
+               [(Int) "s.to_i!"]
+               [(Float) "s.to_f!"]
+               [(String) "IO.gets!()"]
+               [else "such as s.to_i!"]))]
     [(and (eq? expected 'String) (eq? actual 'Int)) "convert it with String.from_int(...)"]
     [(and (eq? expected 'String) (eq? actual 'Float)) "convert it with String.from_float(...)"]
     [(and (eq? expected 'Int) (eq? actual 'String)) "convert it with String.to_int!(...)"]
@@ -404,7 +450,8 @@
         (cond
           [(type-expression? expression)
            (bail 'CHECK-TYPE-MISMATCH "a type name is only valid as a JSON type argument"
-                 (node-span expression))]
+                 (node-span expression)
+                 #:help (hash-ref foreign-names (type-expression-name expression) #f))]
           [(literal? expression)
            (when (and (exact-integer? (literal-value expression))
                       (> (literal-value expression) int-max))
@@ -422,7 +469,10 @@
                                (name-ref-name expression))
                        (format "unknown name \"~a\"" (name-ref-name expression)))
                    (name-ref-span expression)
-                   #:help (did-you-mean (name-ref-name expression) (visible-names))))
+                   #:help (and (not (hash-has-key? functions (name-ref-name expression)))
+                               (not (builtin-ref (name-ref-name expression)))
+                               (or (hash-ref foreign-names (name-ref-name expression) #f)
+                                   (did-you-mean (name-ref-name expression) (visible-names))))))
            (car binding)]
           [(unary? expression) (check-unary expression)]
           [(binary? expression) (check-binary expression)]
@@ -855,7 +905,8 @@
         (bail 'CHECK-UNKNOWN-NAME
               (format "unknown function \"~a\"" name)
               (call-span expression)
-              #:help (did-you-mean name (append (hash-keys functions) (hash-keys builtins)))))
+              #:help (or (hash-ref foreign-names name #f)
+                         (did-you-mean name (append (hash-keys functions) (hash-keys builtins))))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))
@@ -1034,7 +1085,8 @@
                        [(struct-type? target)
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]
-                       [kind (or (did-you-mean name (method-names kind))
+                       [kind (or (foreign-method-help kind name)
+                                 (did-you-mean name (method-names kind))
                                  (format "~a methods: ~a" (type->string target)
                                          (string-join (sort (method-names kind) string<?) ", ")))]
                        [else #f])))
