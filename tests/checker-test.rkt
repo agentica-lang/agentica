@@ -501,6 +501,14 @@
     (check-equal? (diagnostic-code operator) 'CHECK-TYPE-MISMATCH)
     (check-equal? (source-position-column (source-span-start (diagnostic-span operator))) 9))
 
+  (test-case "compound assignment keeps the assignment and operator rules"
+    (check-equal? (check-code (main-with "  x += 1")) 'CHECK-UNKNOWN-NAME)
+    (check-equal? (check-code (main-with "  x = 1\n  x += \"a\"")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  for i in [1]\n    i += 1\n  end"))
+                  'CHECK-IMMUTABLE-ASSIGNMENT)
+    (check-equal? (check-code (main-with "  x = !1")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  x = 1 && true")) 'CHECK-TYPE-MISMATCH))
+
   (test-case "diagnostics carry types, operand labels, and the enclosing signature"
     (define problem
       (check-text "def total(q: Int, p: Float) -> Float\n  return q * p\nend\ndef main() -> Void\nend\n"))

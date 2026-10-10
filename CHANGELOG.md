@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `!`, `&&` and `||` as spellings of `not`, `and` and `or`, and compound
+  assignment `+=`, `-=`, `*=`, `/=`, `%=`.
 - Embedded Agentica standard library with an immutable String FIFO at
   `std/queue.agc`; executable releases need no separate stdlib installation.
 - `pkg/` imports with project-local, `AGENTICA_PATH`, user-data, and system

@@ -49,6 +49,24 @@
     (check-equal? (parse-code "def main() -> Void\n  ready? = true\nend\n")
                   'PARSE-UNEXPECTED-TOKEN))
 
+  (test-case "Ruby operators share the not/and/or nodes and compound assignment desugars"
+    (define expression (parse-expr "!a && b || c"))
+    (check-equal? (binary-op expression) 'or)
+    (check-equal? (binary-op (binary-left expression)) 'and)
+    (check-equal? (unary-op (binary-left (binary-left expression))) 'not)
+    (define program (parse-ok "def main() -> Void\n  total = 1\n  total -= 2 * 3\nend\n"))
+    (define statement (cadr (function-decl-body (car (program-declarations program)))))
+    (check-true (binding? statement))
+    (check-false (binding-type statement))
+    (define value (binding-value statement))
+    (check-equal? (binary-op value) 'minus)
+    (check-equal? (name-ref-name (binary-left value)) "total")
+    (check-equal? (binary-op (binary-right value)) 'multiply)
+    (check-equal? (source-position-column (source-span-start (binary-op-span value))) 9)
+    (for ([body '("  xs[0] += 1" "  f() *= 2" "  1 %= 2")])
+      (check-equal? (parse-code (format "def main() -> Void\n~a\nend\n" body))
+                    'PARSE-INVALID-ASSIGNMENT-TARGET)))
+
   (test-case "hello program parses"
     (define program (parse-ok "def main() -> Void\n  puts(\"hello\")\nend\n"))
     (check-equal? (length (program-declarations program)) 1)

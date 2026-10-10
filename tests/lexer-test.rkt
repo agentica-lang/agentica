@@ -24,6 +24,17 @@
                    (source-span-start (token-span (list-ref result 9))))
                   2))
 
+  (test-case "Ruby-style operators keep name suffixes and inequality"
+    (check-equal? (kinds (lex-text "!a && b || ready! != c"))
+                  '(not name and name or name not-equal name NL EOF))
+    (check-equal? (map token-lexeme (take (lex-text "!a && b") 3)) '("!" "a" "&&"))
+    (check-equal? (kinds (lex-text "x += 1\nx -= 1\nx *= 1\nx /= 1\nx %= 1"))
+                  '(name plus-assign integer NL name minus-assign integer NL
+                    name multiply-assign integer NL name divide-assign integer NL
+                    name modulo-assign integer NL EOF))
+    (check-equal? (kinds (lex-text "a!=b"))
+                  '(name not-equal name NL EOF)))
+
   (test-case "CRLF and comment newlines produce one NL each"
     (check-equal? (kinds (lex-text "x # comment\r\ny\r\n"))
                   '(name NL name NL EOF)))
