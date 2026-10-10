@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -84,7 +89,6 @@ jobs:
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
-      CC: gcc
     defaults:
       run:
         shell: msys2 {0}
@@ -102,7 +106,7 @@ jobs:
         with:
           variant: CS
           version: '9.3'
-      - run: gcc --version
+      - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
       - run: make vm vm-test
       - run: make build
       - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt

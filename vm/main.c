@@ -11,17 +11,25 @@
 #include <io.h>
 #include <windows.h>
 
-static int open_input(const char *path) {
-  int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
-  if (n <= 0) return -1;
-  wchar_t *wide = agc_alloc_atomic(agc_size_mul((size_t)n, sizeof(wchar_t)));
-  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, n) != n) return -1;
-  return _wopen(wide, _O_RDONLY | _O_BINARY | _O_NOINHERIT);
+typedef struct _stat64 file_info;
+#define file_stat _fstat64
+
+static wchar_t **wide_args;
+
+static int open_input(int index, const char *path) {
+  (void)path;
+  return _wopen(wide_args[index], _O_RDONLY | _O_BINARY | _O_NOINHERIT);
 }
 #else
 #include <unistd.h>
 
-static int open_input(const char *path) { return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK); }
+typedef struct stat file_info;
+#define file_stat fstat
+
+static int open_input(int index, const char *path) {
+  (void)index;
+  return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+}
 #endif
 
 static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
@@ -54,11 +62,11 @@ static bool parse_steps(const char *text, int64_t *steps) {
   return value > 0;
 }
 
-static uint8_t *read_file(const char *path, size_t *len) {
-  int fd = open_input(path);
+static uint8_t *read_file(int index, const char *path, size_t *len) {
+  int fd = open_input(index, path);
   if (fd < 0) return NULL;
-  struct stat info;
-  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+  file_info info;
+  if (file_stat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
       (uint64_t)info.st_size > AGC_MAX_FILE_BYTES) {
     close(fd);
     return NULL;
@@ -127,7 +135,7 @@ static int run(int argc, char **argv) {
   const char *path = argv[i];
 
   size_t len = 0;
-  uint8_t *data = read_file(path, &len);
+  uint8_t *data = read_file(i, path, &len);
   if (!data) {
     fprintf(stderr, "agentica-vm: cannot read %s\n", path);
     return 2;
@@ -161,6 +169,7 @@ int wmain(int argc, wchar_t **wide_argv) {
   _setmode(_fileno(stdin), _O_BINARY);
   _setmode(_fileno(stdout), _O_BINARY);
   _setmode(_fileno(stderr), _O_BINARY);
+  wide_args = wide_argv;
   char **argv = agc_alloc(agc_size_mul((size_t)argc + 1, sizeof *argv));
   for (int i = 0; i < argc; i++) {
     int n = WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1, NULL, 0, NULL, NULL);

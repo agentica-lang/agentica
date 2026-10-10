@@ -129,9 +129,9 @@ differential tests (section 12) check them.
   (`snprintf("%.767e")`; `vm/tests/float_text_test.c` checks it against the
   full expansion of 2^-1074 on every CI job: exact on glibc, on the macOS
   libc (`macos-15`, arm64) and on Windows, where the build uses mingw-w64's
-  own printf because `_POSIX_C_SOURCE` turns on `__USE_MINGW_ANSI_STDIO`;
-  a one-off CI run of the same test with the UCRT's printf and `strtod`
-  passed too), and for each length tries the
+  own printf because `_POSIX_C_SOURCE` turns on `__USE_MINGW_ANSI_STDIO`.
+  Verified in PR #44's CI: mingw-w64's printf, and the UCRT's printf and
+  `strtod` in a probe run), and for each length tries the
   nearest candidate (ties up) and then the other neighbor, keeping the first
   that round-trips through `strtod`. Lengths start at 1 for subnormals and at
   15 for normal values: there a 15-digit step is at least 4.5 ulp, so a
@@ -785,8 +785,13 @@ and cost one predictable branch each.
   always pass `--` before the file. A test checks that `--allow-run` after the
   file is a program argument. On Windows, arguments come from `wmain`
   (`-municode`) and are converted to UTF-8; the file path goes back to
-  UTF-16 for `_wopen`, so non-ASCII paths load (a differential test runs a
-  copy named `cálculo-λ-日本.agcb`).
+  the file is opened with `_wopen` on the original UTF-16 argument, so
+  non-ASCII paths load and a lone surrogate never maps to another file. The
+  size comes from `_fstat64`, so a file over 2 GiB is rejected, not read
+  as a prefix. Paths over 260 characters fail with `_wopen` unless they use
+  `\\?\` or the executable has a `longPathAware` manifest; 7h decides. A
+  differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
+  program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv and OpenSSL from 7h).
 - In the slice the VM accepts `--version`, `--max-steps N`, `--ai`, `--json`
@@ -822,12 +827,14 @@ The VM runs on Linux, macOS and Windows, always in the "C" locale. Windows
 specifics: binary-mode stdio, UTF-8 arguments from `wmain`,
 `BCryptGenRandom`, `GetSystemTimePreciseAsFileTime`,
 `QueryPerformanceCounter`; console rendering is outside the contract.
+Paths over 260 characters (`MAX_PATH`) fail with `_wopen` today; 7h, which
+opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 
 | Dependency | When | Choice |
 |---|---|---|
 | C compiler | 7e | C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile. |
 | libc | 7e | Dynamic (static glibc breaks NSS; macOS forbids static libc). |
-| Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically with `-lpthread`. No system package. |
+| Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | libuv | 7h | Vendored the same way: a git submodule from `https://github.com/libuv/libuv` pinned to a recent release tag, added in 7h when it is first needed, built from source and linked statically. No system package. |
 | OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
 
@@ -942,10 +949,15 @@ written `size > limit - total`. A hermetic test sends over-long values.
   (`$(CC) -std=c11 -O2 -fPIE -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION
   -I vm/third_party/bdwgc/include -c vm/third_party/bdwgc/extra/gc.c`, about
   3 s) into `build/vm/gc.o` and linked with `-lpthread` (not on Windows).
-  The two defines are what bdwgc's configure and CMake builds set: interior
-  pointers keep an object alive even when the compiler keeps only a pointer
-  into it, and macOS on arm64 refuses the writable and executable heap pages
-  libgc maps otherwise. libuv follows the same pattern in 7h. OpenSSL (7h)
+  The two defines are what bdwgc's configure and CMake builds set.
+  `NO_EXECUTE_PERMISSION` maps the heap without execute permission: macOS on
+  arm64 refuses writable and executable pages (`Cannot allocate executable
+  pages` once the heap grows), and Linux no longer gets RWX heap pages.
+  bdwgc always honors interior pointers from the stack and registers;
+  `ALL_INTERIOR_POINTERS` extends that to pointers stored in GC objects and
+  static data and to one-past-the-end pointers, at one extra byte per
+  object. Nothing in the VM relies on it today; it is upstream's default and
+  costs nothing measurable. libuv follows the same pattern in 7h. OpenSSL (7h)
   comes through `pkg-config --atleast-version` and its static archive path.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
   build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
@@ -1003,8 +1015,8 @@ CI matrix:
 Racket comes from `Bogdanp/setup-racket` everywhere, since the tests compile
 with the front end. The macOS and Windows jobs do not run the whole `make
 test`: the process and network tests are not portable yet. `.gitattributes`
-checks every text file out with LF (`.agcb` files and the
-`string-inspect.agc` fixture are binary), so Windows sees the same sources,
+checks every text file out with LF (`.agcb` files are binary, and git
+detects the `string-inspect.agc` fixture as binary from its NUL bytes), so Windows sees the same sources,
 spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
 the platform's OpenSSL package) to each job.
 
@@ -1072,7 +1084,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
 4. **macOS and Windows CI** (done). `make vm vm-test` and the differential
    and bytecode tests on `macos-15` and `windows-2025` (MSYS2 UCRT64 gcc),
    `wmain` with UTF-8 arguments, binary stdio, LF checkouts, and libgc built
-   with interior pointers and without executable pages.
+   with upstream's defines (no executable heap pages).
 5. **Data.** Lists, `for`, HAMT maps, structs, enums, `case`, Result, `try`,
    indexing errors, closures, `&name`, `.call`, resumable `List` builtins.
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,

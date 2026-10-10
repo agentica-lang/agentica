@@ -65,8 +65,10 @@ racket src/main.rkt --dump-ir prog.agc
   -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when the Makefile
   changes).
 - Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
-  Windows (`OS=Windows_NT`, MSYS2 UCRT64 with `CC=gcc`) in one block that
-  sets `EXE`, the PIE/RELRO flags, `-lpthread` and `-municode`. Every binary
+  Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
+  default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
+  `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
+  only drops `-pie` and RELRO. Every binary
   target ends in `$(EXE)`; the diff test runs `dist/agentica-vm.exe` on
   Windows. CI runs `make vm vm-test` and the diff and bytecode tests on
   `macos-15` and `windows-2025`, not the whole `make test`.
@@ -219,20 +221,24 @@ is checked.
 - Portability: keep platform code in `vm/main.c` (`open_input`, `wmain`)
   and the Makefile platform block. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
   guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
-  `open`, `read`, `fstat` and `ssize_t` with `-std=c11`. Windows paths go
-  through `_wopen` after UTF-8 to UTF-16, never through `open`, which uses
-  the ANSI code page. `-municode` goes only on binaries that link
+  `open`, `read`, `fstat` and `ssize_t` with `-std=c11`, but its `struct
+  stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. The input file
+  is opened with `_wopen` on the original UTF-16 argument (`wide_args`),
+  never through `open` (ANSI code page) or a UTF-8 round trip (a lone
+  surrogate would become U+FFFD and name another file). `-municode` goes only on binaries that link
   `vm/main.c`; the C tests have a plain `main`.
 - libgc without `NO_EXECUTE_PERMISSION` maps writable and executable pages,
   and macOS on arm64 aborts with `Cannot allocate executable pages` as soon
-  as the heap grows (the loader test does). Without
-  `ALL_INTERIOR_POINTERS` an object referenced only by an interior pointer
-  (for example `s->data` kept in a register) can be collected.
+  as the heap grows (the loader test does). Interior pointers on the stack
+  and in registers always count; `ALL_INTERIOR_POINTERS` only adds those
+  stored in GC objects and static data and one-past-the-end pointers (one
+  extra byte per object). Nothing relies on it; it is upstream's default.
 - `-D_POSIX_C_SOURCE` makes mingw-w64 use its own printf
   (`__USE_MINGW_ANSI_STDIO=1`), not the UCRT's; both print `%.767e`
   exactly, as does the macOS libc.
 - `.gitattributes` keeps LF on checkout (GitHub's Windows runners set
-  `core.autocrlf`); a new binary fixture needs a `binary` line there.
+  `core.autocrlf`). Git detects files with NUL bytes as binary; a binary
+  fixture without them needs a `binary` line there.
 - MSYS2 in CI has no `grep`; use `sed` or install the package.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`,
   not Unicode whitespace; the VM matches that.

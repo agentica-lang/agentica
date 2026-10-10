@@ -81,9 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- libgc is built with `ALL_INTERIOR_POINTERS` and `NO_EXECUTE_PERMISSION`,
-  as its own build systems do: a pointer into an object keeps it alive, and
-  the heap is not executable.
+- libgc is built with `NO_EXECUTE_PERMISSION` and `ALL_INTERIOR_POINTERS`,
+  as its own build systems do: the heap is no longer writable and
+  executable (macOS on arm64 refuses such pages), and interior pointers
+  stored in GC objects and static data also count.
 - `puts`, `print`, `IO.puts`, `IO.print` and `IO.warn` take any value with `to_s`, as
   in Ruby. Functions, tasks and resource handles have no `to_s`; printing or
   interpolating one is `CHECK-TYPE-MISMATCH`.

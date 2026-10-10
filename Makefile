@@ -39,7 +39,16 @@ GC_DIR := vm/third_party/bdwgc
 VM_SRC := vm/value.c vm/text.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
+EXE :=
+VM_PIC := -fPIE
+VM_PIE := -pie
+VM_HARDEN_LDFLAGS := $(VM_PIE) -Wl,-z,relro,-z,now
+VM_LIBS := -lpthread
+VM_ENTRY :=
 ifeq ($(OS),Windows_NT)
+ifeq ($(origin CC),default)
+CC := gcc
+endif
 EXE := .exe
 VM_PIC :=
 VM_PIE :=
@@ -47,19 +56,8 @@ VM_HARDEN_LDFLAGS := -Wl,--dynamicbase,--nxcompat,--high-entropy-va
 VM_LIBS :=
 VM_ENTRY := -municode
 else ifeq ($(shell uname -s),Darwin)
-EXE :=
-VM_PIC := -fPIE
 VM_PIE :=
 VM_HARDEN_LDFLAGS :=
-VM_LIBS := -lpthread
-VM_ENTRY :=
-else
-EXE :=
-VM_PIC := -fPIE
-VM_PIE := -pie
-VM_HARDEN_LDFLAGS := $(VM_PIE) -Wl,-z,relro,-z,now
-VM_LIBS := -lpthread
-VM_ENTRY :=
 endif
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"'
 ifeq ($(SANITIZE),1)

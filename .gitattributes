@@ -1,3 +1,2 @@
 * text=auto eol=lf
 *.agcb binary
-tests/fixtures/vm/string-inspect.agc binary
