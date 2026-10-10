@@ -1107,6 +1107,10 @@
            (check-expression (map-entry-value entry) value-type))
          (list 'Map key-type value-type)]))
 
+    (define (receiver-method-names kind target)
+      (remove-duplicates
+       (append (method-names kind) (if (printable-type? target) '("to_s" "inspect") '()))))
+
     (define (check-method expression target-node name arguments span expected record!
                           #:target-type [known #f])
       (define target (or known (check-expression target-node #f)))
@@ -1131,9 +1135,10 @@
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]
                        [kind (or (foreign-method-help kind name)
-                                 (did-you-mean name (method-names kind))
+                                 (did-you-mean name (receiver-method-names kind target))
                                  (format "~a methods: ~a" (type->string target)
-                                         (string-join (sort (method-names kind) string<?) ", ")))]
+                                         (string-join (sort (receiver-method-names kind target) string<?) ", ")))]
+                       [(printable-type? target) (did-you-mean name '("to_s" "inspect"))]
                        [else #f])))
       (define receiver (typed-target target-node target))
       (cond

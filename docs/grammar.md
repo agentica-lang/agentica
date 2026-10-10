@@ -498,7 +498,7 @@ Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!
 
 Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, Results, structs and enums made of those. `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON text, and anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). `puts(x)`, `print(x)` and `IO.warn(x)` take any value with `to_s` and write that text. Only a top-level `Json` becomes JSON text; inside a list or Result it shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`. Functions, tasks and resource handles (sockets, files, processes, HTTP values) have no `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`. A struct field named `to_s` is read as the field. Unlike Ruby, `nil.to_s` is `"nil"`, and `puts([1, 2])` writes `[1, 2]` on one line.
 
-`x.inspect` returns the `IO.inspect` form as a `String`, for the same types as `to_s`. It differs from `to_s` only for strings, which keep their quotes (`"a".inspect` is `"a"` with the quote characters), and for `Json`, which gives `<Json>`. Use `IO.inspect(x)` to print that form and get `x` back.
+`x.inspect` returns the `IO.inspect` form as a `String`, for the same types as `to_s`. It differs from `to_s` only for strings, which keep their quotes (`"a".inspect` is `"a"` with the quote characters), and for `Json`, which gives `<Json>`. Use `IO.inspect(x)` to print that form and get `x` back. The debug form is for display: strings use the host's escapes, so it is not guaranteed to be valid Agentica source (`"a\#{b}".inspect` shows `#{` without the backslash).
 
 Values are immutable, so a method never changes its receiver: `xs.push(2)` returns a new list. Calling a builtin without effects and ignoring a non-`Void` result is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`. Functions ending in `!` are exempt, since they can halt, and so are builtins that take a function (`xs.map(&save)`), since the function may have effects. A negative literal receiver needs parentheses: `(-5).to_s`, because `-5.to_s` is `-(5.to_s)`.
 
@@ -655,7 +655,7 @@ end
 
 ### JSON
 
-`Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` without exposing its contents. `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give its JSON text.
+`Json` and `JSON` are reserved builtin names. A `Json` is opaque: it has no constructor, equality, fields, or direct indexing. `IO.inspect` prints `<Json>` and `j.inspect` gives `"<Json>"` without exposing its contents. `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give its JSON text.
 
 ```text
 JSON.object(fields: Map[String, Json]) -> Json
