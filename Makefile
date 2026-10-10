@@ -2,7 +2,7 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 
-.PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz vm-gc-stress vm-unicode FORCE
+.PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -25,7 +25,13 @@ test-bdd: exe
 
 clean:
 	find . -name compiled -type d -prune -exec rm -rf {} +
-	rm -rf dist build
+	rm -rf dist build site/public site/resources
+
+site:
+	hugo --minify --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
+
+site-serve:
+	hugo server --source site
 
 # The C VM (docs/vm.md section 11). libgc is built from the pinned submodule.
 # make vm                 dist/agentica-vm
