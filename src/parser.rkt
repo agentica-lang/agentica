@@ -551,14 +551,16 @@
         (cond
           [(kind? 'dot)
            (advance!)
-           (define name (expect 'name "a field name"))
-           (if (and (equal? (token-lexeme name) "call") (kind? 'left-paren))
-               (let ()
-                 (advance!)
-                 (define arguments (parse-expression-list 'right-paren))
-                 (expect 'right-paren "\")\"")
-                 (loop (invoke target arguments (span-from start))))
-               (loop (field-access target (token-lexeme name) (span-from start))))]
+           (define name (expect 'name "a field or method name" #t))
+           (cond
+             [(kind? 'left-paren)
+              (advance!)
+              (define arguments (parse-expression-list 'right-paren))
+              (expect 'right-paren "\")\"")
+              (loop (if (equal? (token-lexeme name) "call")
+                        (invoke target arguments (span-from start))
+                        (method-call target (token-lexeme name) arguments (span-from start))))]
+             [else (loop (field-access target (token-lexeme name) (span-from start)))])]
           [(kind? 'left-bracket)
            (advance!)
            (define index (parse-expression))

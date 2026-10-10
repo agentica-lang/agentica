@@ -37,6 +37,49 @@
 (define (enum-type? type)
   (and (pair? type) (eq? (car type) 'Enum)))
 
+(define method-modules
+  (hasheq 'String "String" 'List "List" 'Map "Map" 'Float "Float" 'Result "Result" 'Json "JSON"))
+
+(define method-aliases
+  (hash '(String . "size") "String.length"
+        '(String . "to_i") "String.to_int" '(String . "to_i!") "String.to_int!"
+        '(String . "to_f") "String.to_float" '(String . "to_f!") "String.to_float!"
+        '(String . "strip") "String.trim" '(String . "include?") "String.contains?"
+        '(String . "start_with?") "String.starts_with?" '(String . "end_with?") "String.ends_with?"
+        '(String . "to_s") 'self
+        '(List . "length") "List.size" '(List . "push") "List.append" '(List . "join") "String.join"
+        '(Int . "to_s") "String.from_int" '(Int . "to_f") "Float.from_int"
+        '(Float . "to_s") "String.from_float"
+        '(Float . "to_i") "Float.to_int" '(Float . "to_i!") "Float.to_int!"))
+
+(define (type-head type)
+  (if (pair? type) (car type) type))
+
+(define (receiver-kind type)
+  (and (memq (type-head type) '(String List Map Float Result Json Int))
+       (type-head type)))
+
+(define (catalog-method kind name)
+  (define module (hash-ref method-modules kind #f))
+  (define entry (and module (builtin-ref (string-append module "." name))))
+  (and entry
+       (pair? (builtin-parameters entry))
+       (eq? (type-head (cadr (car (builtin-parameters entry)))) kind)
+       (builtin-name entry)))
+
+(define (resolve-method kind name)
+  (hash-ref method-aliases (cons kind name) (lambda () (catalog-method kind name))))
+
+(define (method-names kind)
+  (define module (hash-ref method-modules kind #f))
+  (remove-duplicates
+   (append
+    (for/list ([key (in-hash-keys method-aliases)] #:when (eq? (car key) kind)) (cdr key))
+    (for/list ([name (in-hash-keys builtins)]
+               #:when (and module (string-prefix? name (string-append module "."))
+                           (catalog-method kind (substring name (add1 (string-length module))))))
+      (substring name (add1 (string-length module)))))))
+
 (define (literal-type value)
   (cond
     [(boolean? value) 'Bool]
@@ -398,7 +441,12 @@
           [(construct? expression) (check-construct expression expected)]
           [(list-lit? expression) (check-list expression expected)]
           [(map-lit? expression) (check-map expression expected)]
-          [(field-access? expression) (check-field-access expression)]
+          [(field-access? expression) (check-field-access expression expected)]
+          [(method-call? expression)
+           (check-method expression (method-call-target expression) (method-call-name expression)
+                         (method-call-args expression) (method-call-span expression) expected
+                         (lambda (resolved) (set-method-call-resolved! expression resolved)))]
+          [(typed-target? expression) (typed-target-type expression)]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
       (when (and (eq? actual 'Void) (not completion?))
@@ -907,12 +955,48 @@
            (check-expression (map-entry-value entry) value-type))
          (list 'Map key-type value-type)]))
 
-    (define (check-field-access expression)
+    (define (check-method expression target-node name arguments span expected record!
+                          #:target-type [known #f])
+      (define target (or known (check-expression target-node #f)))
+      (define kind (receiver-kind target))
+      (define resolved-name (and kind (resolve-method kind name)))
+      (unless resolved-name
+        (bail 'CHECK-UNKNOWN-METHOD
+              (format "~a has no method \"~a\"" (type->string target) name)
+              span
+              #:help (cond
+                       [(and (struct-type? target) (hash-ref functions name #f))
+                        (format "structs have no methods; call ~a(...) with the struct as an argument" name)]
+                       [(struct-type? target)
+                        (format "structs have no methods; ~a"
+                                (field-help name (hash-ref structs (cadr target))))]
+                       [kind (or (did-you-mean name (method-names kind))
+                                 (format "~a methods: ~a" (type->string target)
+                                         (string-join (sort (method-names kind) string<?) ", ")))]
+                       [else #f])))
+      (define receiver (typed-target target-node target))
+      (cond
+        [(eq? resolved-name 'self)
+         (unless (null? arguments)
+           (bail 'CHECK-ARITY (format "\"~a\" takes no arguments" name) span))
+         (record! receiver)
+         (ensure target expected span)]
+        [else
+         (define synthetic (call resolved-name (cons receiver arguments) span))
+         (record! synthetic)
+         (check-call synthetic expected)]))
+
+    (define (check-field-access expression expected)
       (define target (check-expression (field-access-target expression) #f))
-      (unless (struct-type? target)
-        (bail 'CHECK-NOT-A-STRUCT
-              (format "field access needs a struct, found ~a" (type->string target))
-              (field-access-span expression)))
+      (cond
+        [(struct-type? target) (check-struct-field expression target)]
+        [else
+         (check-method expression (field-access-target expression) (field-access-name expression)
+                       '() (field-access-span expression) expected
+                       (lambda (resolved) (set-field-access-resolved! expression resolved))
+                       #:target-type target)]))
+
+    (define (check-struct-field expression target)
       (define field (assoc (field-access-name expression) (hash-ref structs (cadr target))))
       (unless field
         (bail 'CHECK-UNKNOWN-FIELD
@@ -1034,12 +1118,40 @@
       (cond
         [(binding? statement) (check-binding statement)]
         [(return-stmt? statement) (check-return statement)]
-        [(expr-stmt? statement) (check-expression (expr-stmt-value statement) #f #:completion? #t)]
+        [(expr-stmt? statement)
+         (define value (expr-stmt-value statement))
+         (define type (check-expression value #f #:completion? #t))
+         (check-unused-value! value type)]
         [(if-stmt? statement) (check-if statement)]
         [(case-stmt? statement) (check-case statement)]
         [(while-stmt? statement) (check-while statement)]
         [(for-stmt? statement) (check-for statement)]
         [else (bail 'CHECK-INTERNAL "unsupported statement" (node-span statement))]))
+
+    (define (check-unused-value! value type)
+      (define resolved
+        (cond
+          [(method-call? value) (method-call-resolved value)]
+          [(field-access? value) (field-access-resolved value)]
+          [else value]))
+      (define entry (and (call? resolved) (builtin-ref (call-name resolved))))
+      (when (and (not (eq? type 'Void))
+                 (or (typed-target? resolved)
+                     (and entry
+                          (null? (builtin-effects entry))
+                          (not (string-suffix? (call-name resolved) "!")))))
+        (bail 'CHECK-UNUSED-VALUE
+              (format "the result of ~a is not used"
+                      (if (call? resolved) (call-name resolved) "this expression"))
+              (node-span value)
+              #:help (let ([target (cond [(method-call? value) (method-call-target value)]
+                                         [(field-access? value) (field-access-target value)]
+                                         [(and (call? value) (pair? (call-args value))) (car (call-args value))]
+                                         [else #f])])
+                       (if (name-ref? target)
+                           (format "values are immutable, so this call changes nothing; assign the result, for example ~a = ..."
+                                   (name-ref-name target))
+                           "values are immutable, so this call changes nothing; assign or use the result")))))
 
     (define (check-binding statement)
       (define name (binding-name statement))

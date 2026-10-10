@@ -235,6 +235,29 @@
     (check-equal? (diagnostic-code empty) 'RUNTIME-INVALID-RANGE)
     (check-equal? (position-of empty) '(2 7)))
 
+  (test-case "methods on builtin types match their module functions"
+    (check-equal?
+     (output-of
+      (main-with (string-append
+       "  words = \"  10 20 30 \".strip.split(\" \")\n"
+       "  IO.inspect([words.size, words.length])\n  IO.inspect(words.join(\",\"))\n"
+       "  IO.inspect(words[0].to_i)\n  IO.inspect(words[1].to_i! + 1)\n"
+       "  IO.inspect(\"x\".to_i)\n  IO.inspect(\"abc\".include?(\"b\"))\n"
+       "  xs = [3, 1, 2]\n  ys = xs.push(0)\n  IO.inspect(ys.sort.reverse)\n  IO.inspect(xs)\n"
+       "  IO.inspect(7.to_s + \"!\")\n  IO.inspect(7.to_f / 2.0)\n"
+       "  IO.inspect(2.9.to_i)\n  IO.inspect(2.9.to_s)\n"
+       "  m = {\"a\": 1}\n  IO.inspect(m.get(\"b\", 5))\n  IO.inspect(m.keys)\n"
+       "  r: Result[Int] = ok(3)\n  IO.inspect(r.ok?)\n  IO.inspect(r.unwrap_or(0))\n"
+       "  IO.inspect(\"x\".to_s)")))
+     (string-append
+      "[3, 3]\n\"10,20,30\"\nok(10)\n21\nerror(\"cannot convert \\\"x\\\" to Int\")\ntrue\n"
+      "[3, 2, 1, 0]\n[3, 1, 2]\n\"7!\"\n3.5\nok(2)\n\"2.9\"\n5\n[\"a\"]\ntrue\n3\n\"x\"\n"))
+    (define bad-index (diagnostic-of (main-with "  s = \"ab\"\n  x = s.at(5)")))
+    (check-equal? (diagnostic-code bad-index) 'RUNTIME-INDEX-OUT-OF-RANGE)
+    (check-equal? (position-of bad-index) '(3 12))
+    (define bad-number (diagnostic-of (main-with "  x = \"z\".to_i!")))
+    (check-equal? (diagnostic-code bad-number) 'RUNTIME-INVALID-NUMBER))
+
   (test-case "Ruby operators and compound assignment"
     (check-equal?
      (output-of

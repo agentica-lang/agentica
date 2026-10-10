@@ -37,6 +37,8 @@
          (struct-out map-entry)
          (struct-out map-lit)
          (struct-out field-access)
+         (struct-out method-call)
+         (struct-out typed-target)
          (struct-out index-access)
          (struct-out try-expr)
          (struct-out unary)
@@ -80,7 +82,9 @@
 (struct list-lit (elements span) #:transparent)
 (struct map-entry (key value span) #:transparent)
 (struct map-lit (entries span) #:transparent)
-(struct field-access (target name span) #:transparent)
+(struct field-access (target name span [resolved #:auto #:mutable]) #:auto-value #f #:transparent)
+(struct method-call (target name args span [resolved #:auto #:mutable]) #:auto-value #f #:transparent)
+(struct typed-target (expression type) #:transparent)
 (struct index-access (target index span) #:transparent)
 (struct try-expr (operand span) #:transparent)
 (struct unary (op op-span operand span) #:transparent)
@@ -123,6 +127,8 @@
     [(map-entry? node) (map-entry-span node)]
     [(map-lit? node) (map-lit-span node)]
     [(field-access? node) (field-access-span node)]
+    [(method-call? node) (method-call-span node)]
+    [(typed-target? node) (node-span (typed-target-expression node))]
     [(index-access? node) (index-access-span node)]
     [(try-expr? node) (try-expr-span node)]
     [(unary? node) (unary-span node)]

@@ -269,52 +269,9 @@ Agentica is presented as "Ruby with types". The evaluation logs (`docs/eval-diag
 
 `!`, `&&`, `||` and compound assignment are in `grammar.md`.
 
-### 11.2 Methods on builtin types
+### 11.2 Methods on builtin types (implemented)
 
-`receiver.name(args)` calls a builtin function of the receiver's module with the receiver as the first argument. The checker chooses the module from the receiver's static type:
-
-| Receiver type | Module |
-|---|---|
-| `String` | `String` |
-| `List[T]` | `List` |
-| `Map[K, V]` | `Map` |
-| `Float` | `Float` |
-| `Result[T]` | `Result` |
-| `Json` | `JSON` |
-| `Int` | aliases only (below) |
-
-- `receiver.name` without parentheses on a non-struct receiver is a method call with no arguments: `s.length`, `xs.size`, `r.ok?`.
-- On a struct, `.name` is still field access. Structs and enums have no methods; user functions cannot be called as methods.
-- `.call(...)` still invokes a `Fn` value.
-- Unknown methods are `CHECK-UNKNOWN-METHOD`, with a suggestion from the methods of that type.
-- Methods are resolved before running; there is no dynamic dispatch.
-
-Ruby aliases, all resolved to existing functions:
-
-| Receiver | Alias | Same as |
-|---|---|---|
-| `String` | `size` | `String.length` |
-| `String` | `to_i`, `to_i!` | `String.to_int` (Result), `String.to_int!` |
-| `String` | `to_f`, `to_f!` | `String.to_float` (Result), `String.to_float!` |
-| `String` | `strip` | `String.trim` |
-| `String` | `include?`, `start_with?`, `end_with?` | `contains?`, `starts_with?`, `ends_with?` |
-| `String` | `to_s` | the same string |
-| `List` | `length` | `List.size` |
-| `List` | `push` | `List.append` |
-| `List[String]` | `join` | `String.join` |
-| `Int` | `to_s`, `to_f` | `String.from_int`, `Float.from_int` |
-| `Float` | `to_s` | `String.from_float` |
-| `Float` | `to_i`, `to_i!` | `Float.to_int` (Result), `Float.to_int!` |
-
-Unlike Ruby, `"abc".to_i` does not return `0`: it returns `Result[Int]`, as `String.to_int` does. Use `to_i!` to halt on bad text, or `try`.
-
-Values are immutable, so methods never change their receiver. `xs.push(2)` returns a new list. A call to a builtin without effects whose result is not used is `CHECK-UNUSED-VALUE`; write `xs = xs.push(2)`.
-
-```ruby
-words = line.strip.split(" ")
-puts(words.join(","))
-first = words[0].to_i!
-```
+Methods, the Ruby aliases and `CHECK-UNUSED-VALUE` are in `grammar.md`.
 
 ### 11.3 String interpolation
 

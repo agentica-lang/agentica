@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Methods on builtin values (`s.strip.size`, `xs.push(1)`, `r.ok?`), resolved
+  by type to module functions, with Ruby aliases (`to_i`, `to_s`, `size`,
+  `strip`, `include?`, `push`, `join`).
 - `!`, `&&` and `||` as spellings of `not`, `and` and `or`, and compound
   assignment `+=`, `-=`, `*=`, `/=`, `%=`.
 - Embedded Agentica standard library with an immutable String FIFO at
@@ -24,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Ignoring the result of a builtin without effects is `CHECK-UNUSED-VALUE`.
+- Field access on a non-struct value is a method call; unknown names are
+  `CHECK-UNKNOWN-METHOD` (replaces `CHECK-NOT-A-STRUCT`).
 - `Time` and `Random` are reserved builtin module names; declarations or
   import aliases with those names no longer check.
 

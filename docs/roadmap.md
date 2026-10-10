@@ -1013,7 +1013,7 @@ Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agent
 
 - [x] Specify operators, methods on builtins, interpolation, blocks and closures, and hints in `future.md` section 11.
 - [x] Operators: `!`, `&&`, `||`, and compound assignment (`+=`, `-=`, `*=`, `/=`, `%=`).
-- [ ] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE` for unused results of builtins without effects.
+- [x] Methods on builtin types with the Ruby aliases, and `CHECK-UNUSED-VALUE` for unused results of builtins without effects.
 - [ ] String interpolation with `#{...}` and the `\#` escape.
 - [ ] Blocks and closures: `do |x| ... end` as the last argument, capture by value, `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET`, `CHECK-CAPTURED-ASSIGNMENT`; closures accepted everywhere a `Fn` is (tasks, HTTP, BDD); `List.each`, `List.any?`, `List.all?`; `examples/blocks.agc`.
 - [ ] Hints for foreign habits (`len`, `str`, `print`, `input`, `range`, `None`, `elif`, `to_i` used as `Int`).
