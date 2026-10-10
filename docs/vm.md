@@ -1049,11 +1049,11 @@ CI matrix:
 
 | Job | Runner | Runs | Added in |
 |---|---|---|---|
-| Linux | `ubuntu-24.04`, submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests | first VM PR |
-| Linux sanitizers | same, clang | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run | first VM PR (GC stress in PR 3) |
+| Linux | self-hosted runner (`docker-runner`, Debian), submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests | first VM PR |
+| Linux sanitizers | same, clang (installed when missing) | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run | first VM PR (GC stress in PR 3) |
 | macOS (by hand, `platforms.yml`) | `macos-15` (Apple clang, arm64), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
 | Windows (by hand, `platforms.yml`) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
-| Fuzz (by hand, `fuzz.yml`) | `ubuntu-24.04`, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` | after PR 5a |
+| Fuzz (by hand, `fuzz.yml`) | self-hosted runner, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` | after PR 5a |
 
 The Linux jobs run on every pull request that changes more than docs; they
 cache `src/compiled` and `tests/compiled` per job and touch every tracked file

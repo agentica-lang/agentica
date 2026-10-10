@@ -6,7 +6,6 @@ on:
       - 'docs/**'
       - 'site/**'
       - '**/*.md'
-      - '.github/workflows/docs-site.yml'
       - '.github/workflows/fuzz.yml'
       - '.github/workflows/pages.yml'
       - '.github/workflows/platforms.yml'
