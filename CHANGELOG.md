@@ -179,6 +179,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Time` and `Random` are reserved builtin module names; declarations or
   import aliases with those names no longer check.
 
+### Security
+
+- `Process.spawn` on Windows refuses batch files whatever the extension case
+  (`x.BAT`, `x.Cmd`) and with trailing dots or spaces (`x.bat.`, `x.bat `),
+  which Windows strips. Before, only lowercase `.bat` and `.cmd` were
+  refused, so such names ran through `cmd.exe` and reopened argument
+  injection (BatBadBut, CVE-2024-24576). Both the command as given and the
+  resolved path are checked.
+
 ## [0.1.0] - 2026-10-04
 
 First tagged release of the Agentica interpreter: a small statically typed

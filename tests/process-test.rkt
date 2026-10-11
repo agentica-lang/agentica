@@ -65,6 +65,13 @@
       (close-input-port err))))
 
 (module+ test
+  (test-case "Windows batch names match regardless of case and trailing dots or spaces"
+    (for ([name (in-list '("x.bat" "x.BAT" "x.Cmd" "x.bat." "x.bat " "x.bat. ." "dir/x.CMD"
+                           "dir\\x.bAt"))])
+      (check-true (batch-file-name? name) name))
+    (check-true (batch-file-name? (string->path "dir/x.Bat")))
+    (for ([name (in-list '("x.batch" "bat" "x.exe" "x" "x.bat.exe" "dir.bat/x" ".bat/"))])
+      (check-false (batch-file-name? name) name)))
   (test-case "failed and explicitly closed processes leave the active registry"
     (define executable (path->string (find-executable-path "racket")))
     (define counts '())

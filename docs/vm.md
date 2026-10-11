@@ -1164,8 +1164,10 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - Windows: after resolution, allow only `.exe` and `.com`, case-insensitively,
   and reject names with a trailing dot or space. The Racket check in
-  `process.rkt` is case-sensitive today (`x.BAT` passes); it gets its own fix
-  before 7h so both backends match. Whether the current directory is searched
+  `process.rkt` (`batch-file-name?`) refuses `.bat` and `.cmd`
+  case-insensitively after stripping trailing dots and spaces from the file
+  name, on both the command as given and the resolved path; the VM must
+  refuse at least those same names. Whether the current directory is searched
   is decided once in `grammar.md` before 7h.
 
 ### 10.5 Limits the C runtime keeps
