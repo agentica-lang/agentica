@@ -29,7 +29,7 @@
      (simplify-path (build-path directory 'up "dist" vm-name) #f)]
     [else
      (define run (find-system-path 'run-file))
-     (define program (path->complete-path (or (find-executable-path run) run)))
+     (define program (normalize-path (or (find-executable-path run) run)))
      (build-path (path-only program) vm-name)]))
 
 (define (temporary-bytecode-path)

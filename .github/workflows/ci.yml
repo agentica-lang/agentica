@@ -78,6 +78,7 @@ jobs:
       - run: racket src/main.rkt examples/json.agc
       - run: dist/agentica examples/json-modules.agc
       - run: dist/agentica check examples/json-modules.agc
+      - run: dist/agentica --vm examples/hello.agc
       - run: diff <(dist/agentica examples/hello.agc) <(dist/agentica --vm examples/hello.agc)
         shell: bash
       - run: diff <(dist/agentica examples/tasks.agc) <(dist/agentica --vm examples/tasks.agc)

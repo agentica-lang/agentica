@@ -16,6 +16,7 @@
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
+(define linux? (eq? (system-type 'os*) 'linux))
 (define vm-file
   (if vm-binary
       (path->complete-path vm-binary root)
@@ -184,6 +185,7 @@
           (check-equal? (first rejected) 2)
           (check-true (string-prefix? (third rejected) "agentica-vm: invalid bytecode: ")))
 
+        (when linux?
         (test-case "agentica --vm gives the evaluator's stdout, stderr and exit code"
           (define temp (make-temporary-directory "agentica-cli~a"))
           (define (same . arguments)
@@ -243,7 +245,7 @@
           (check-equal? (first (run-process vm-file "--driver-pid" (number->string (getpid)) "--" (path->string link))) 2)
           (check-true (file-exists? copy))
           (delete-file link)
-          (delete-file copy))
+          (delete-file copy)))
 
         (test-case "deep tail calls run on the VM but overflow on the evaluator"
           (define program (build-path work "deep-tail.agc"))

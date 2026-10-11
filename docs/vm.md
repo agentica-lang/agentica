@@ -938,27 +938,30 @@ and cost one predictable branch each.
   close and the VM's open; these checks refuse a swapped file. After those
   checks it deletes the input, but only if the path still names the file it
   opened (same device and inode). The driver deletes the file too, when the
-  VM never ran or failed before loading, and on a break. When a driver port is not a file stream (rackunit, captured
-  output) it copies that stream through a pipe; otherwise it passes the
-  real stdin, stdout and stderr, so the VM's output and exit code reach
-  the user unchanged. Front-end and `LOWER-` diagnostics print as without
+  VM never ran or failed before loading, and on a break. When a driver
+  output port is not a file stream (rackunit, captured output) it copies
+  that stream through a pipe; a non-file stdin is closed at once, because
+  the VM reads no input yet. Otherwise it passes the real stdin, stdout
+  and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
   `--vm` (exit 1). `--allow-run`, `--seed`, `--steps`, `--dump`,
   `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with
   `--vm does not support X`.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is
-  `agentica-vm` next to the executable (`run-file`). A missing or
-  non-executable VM prints `agentica: cannot find the VM at PATH` and
-  exits 2. It does not use
+  `agentica-vm` next to the executable (`run-file`, with symlinks
+  resolved). A missing or non-executable VM prints `agentica: cannot find
+  the VM at PATH` and exits 2 before the front end runs, so this error
+  wins over a program diagnostic. It does not use
   `define-runtime-path`: `raco distribute` would then copy the VM into
   `lib/` and fail when it is not built. Packaging the VM in `bin/` of the
   release is a later 7i item.
 - Future work: Windows (a kill-on-close job object instead of
   `PR_SET_PDEATHSIG`) and macOS (no parent-death signal; the closest safe
   thing is the delete-after-load flag alone, or a pipe the VM watches).
-  Today the flag only deletes the input there, and `--vm` is tested on
-  Linux only.
+  There the flag skips the parent and privacy checks; on Windows the VM
+  may fail to delete its still-open input, but the driver deletes it
+  anyway. `--vm` is tested on Linux only.
 - `check`, `help` and `test` stay on Racket; 7h decides where BDD handlers
   run. `make vm` builds `dist/agentica-vm` (`.exe` on Windows); in 7i the
   release archive ships it in `bin/` next to `agentica`.
