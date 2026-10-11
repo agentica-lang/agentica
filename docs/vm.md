@@ -1163,7 +1163,7 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   path to `uv_spawn`. All three stdio streams are pipes.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - Windows: after resolution, allow only `.exe` and `.com`, case-insensitively,
-  and reject names with a trailing dot or space. Both backends use this same
+  and reject names with a trailing dot or space or any `:`. Both backends use this same
   allowlist: the Racket check in `process.rkt` (`windows-runnable-name?`)
   applies it to the last component of the resolved path, and the VM must do
   the same. Whether the current directory is searched is decided once in

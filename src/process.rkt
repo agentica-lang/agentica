@@ -48,7 +48,8 @@
 (define (windows-runnable-name? name)
   (define text (if (path? name) (path->string name) name))
   (define base (last (regexp-split #rx"[/\\\\]" text)))
-  (regexp-match? #rx"(?i:[.](exe|com))$" base))
+  (and (not (string-contains? base ":"))
+       (regexp-match? #rx"(?i:[.](exe|com))$" base)))
 
 (module+ test-support (provide windows-runnable-name?))
 
@@ -72,7 +73,7 @@
         (define executable (find-executable-path command))
         (unless executable (error 'process "executable is unavailable"))
         (when (and (eq? (system-type) 'windows) (not (windows-runnable-name? executable)))
-          (error 'process "Windows batch commands are not supported"))
+          (error 'process "on Windows only .exe and .com programs can run"))
         (call-with-semaphore (process-handle-state-lock p)
           (lambda ()
             (require-open p)

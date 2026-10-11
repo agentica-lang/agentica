@@ -71,7 +71,7 @@
     (check-true (windows-runnable-name? (string->path "dir/x.Exe")))
     (for ([name (in-list '("x.bat" "x.BAT" "x.Cmd" "x.bat." "x.bat " "x.bat. ." "dir/x.CMD"
                            "dir\\x.bAt" "x.exe." "x.com " "x" "x.ps1" "x.bat::$DATA"
-                           "x.exe::$DATA" "dir.exe\\x"))])
+                           "x.exe::$DATA" "x.bat:y.exe" "dir.exe\\x"))])
       (check-false (windows-runnable-name? name) name)))
   (test-case "failed and explicitly closed processes leave the active registry"
     (define executable (path->string (find-executable-path "racket")))
