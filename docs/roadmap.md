@@ -21,11 +21,11 @@ and the JSON part of 10c, need the VM JSON PR (`docs/vm.md` §12.2 item 7). Phas
 the VM and the disk backend with two separate programs (see its "Done when").
 Shared tables (phase 9) are
 on demand: they need tasks on the VM (7h) and start only when a real program
-needs them. Binary serialization (phase 11) is on demand too: it
-needs `Bytes` and the JSON form of enums. Real applications and MCP keep running on the Racket evaluator
-meanwhile, and their findings feed the VM's differential tests. Historical
-phase numbers below remain stable; this order governs pending work rather
-than their numeric order.
+needs them. Binary serialization (phase 11) is on demand too: it needs
+`Bytes` and the JSON form of enums (10d). Real applications and MCP keep
+running on the Racket evaluator meanwhile, and their findings feed the VM's
+differential tests. Historical phase numbers below remain stable; this order
+governs pending work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
@@ -39,7 +39,7 @@ than their numeric order.
 | 8 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 | 9 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums | Write adapters and read JSON of unknown shape without workarounds |
 | 10 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
-| 11 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes` and the JSON form of enums; starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
+| 11 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes` and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
 
 After steps 1–2, target everyday scripts and automation. After steps 7–8,
 target larger general-purpose programs.
@@ -1218,11 +1218,11 @@ Specified in [`future.md` section 15](future.md#15-adapters-and-json-inspection)
 
 ## Phase 11: Binary serialization (CBOR)
 
-Specified in [`future.md` section 16](future.md#16-binary-serialization-cbor). On demand: it starts when a real program needs it, for example a disk cache or messages between Agentica processes. It needs `Bytes` and the JSON-for-enums plan (PR #62), for the shared tag form. The codec lands in both backends in one PR, with `grammar.md`, the programming skill (a new `references/*.md` file needs its `[[cascade]]` entry in `site/hugo.toml`), the site docs and tests.
+Specified in [`future.md` section 16](future.md#16-binary-serialization-cbor). On demand: it starts when a real program needs it, for example a disk cache or messages between Agentica processes. It needs `Bytes` and the JSON form of enums (10d, `future.md` §15.4), so both formats share the tag and values order. The codec lands in both backends in one PR, with `grammar.md`, the programming skill (a new `references/*.md` file needs its `[[cascade]]` entry in `site/hugo.toml`), the site docs and tests.
 
 - [ ] 11a `Bytes`: not repeated here. It is the Phase 8 "Later" item (`future.md` §12.5); plan it there and land it first.
-- [ ] 11b `Term.encode(value: T) -> Bytes` and `Term.decode(data: Bytes, type: T) -> Result[T]` in the evaluator (Racket, no library) and the VM (in-house C, explicit stack): the mapping and deterministic encoding of §16.4; the checker reuses `printable-type?` and also rejects `Json`, `Result` and `Void`, with `CHECK-NOT-ENCODABLE` and `CHECK-NOT-DECODABLE`; nested generic instances decode; `RUNTIME-TERM-ENCODE` past the depth or size limit. `Term` becomes a reserved name (say so in the changelog).
-- [ ] 11c Tests: round trips both ways; RFC 8949 Appendix A vectors as fixtures; byte-identical output and equal error messages on both backends (`tests/vm-diff-test.rkt`); hostile input (truncation at every byte, lengths past the input, depth over the limit, duplicate keys, tags, indefinite lengths, non-shortest heads, invalid UTF-8, Ints outside int64, trailing bytes); a decode target for `make vm-fuzz`.
+- [ ] 11b `Term.encode(value: T) -> Result[Bytes]` and `Term.decode(data: Bytes, type: T) -> Result[T]` in the evaluator (Racket, no library) and the VM (in-house C, explicit stack): the mapping and deterministic encoding of §16.4, with enums as `[tag, values]`; the checker reuses `printable-type?` and also rejects `Json`, `Result`, `Void`, `Fn` and type variables at any depth, with `CHECK-NOT-ENCODABLE` and `CHECK-NOT-DECODABLE`; the `decode` target is a static type argument (a named non-generic struct or enum); nested generic instances decode; depth counts Agentica nesting (an enum is one level, §16.5); past the depth or 64 MiB limit both functions return `error(...)` with a `JSON.decode`-style path, never a runtime diagnostic. `Term` becomes a reserved name (say so in the changelog).
+- [ ] 11c Tests: round trips both ways (`encode(decode(b))` gives `b` for canonical bytes); RFC 8949 Appendix A vectors as fixtures; byte-identical output and equal error messages on both backends (`tests/vm-diff-test.rkt`); hostile input (truncation at every byte, lengths past the input, depth over the limit (enum nesting counted as one level), duplicate keys, tags, indefinite lengths, non-shortest heads, invalid UTF-8, Ints outside int64, trailing bytes); encode errors past the depth and size limits; a decode target for `make vm-fuzz`.
 
 **Done when:** an example writes a struct with an `Int`-keyed map, a Float NaN and an enum to bytes and reads it back, with the same bytes and output on both backends, and every hostile-input case returns `error(...)` with its path on both.
 
