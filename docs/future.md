@@ -831,7 +831,7 @@ No version prefix and no self-describing tag (55799). The type is the schema. A 
 
 - **Evaluator:** a small codec in Racket, in its own module (for example `src/term.rkt`), with no library. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of argument.
 - **VM:** an in-house C codec in `vm/`, with no new dependency. It needs the VM maps (`docs/vm.md` §12.2 item 5d) and `Bytes` on the VM. It lands with the evaluator codec in one PR.
-- **Same bytes:** both backends give byte-identical output and the same error messages for the same input. `tests/vm-diff-test.rkt` checks it.
+- **Same bytes:** both backends give byte-identical output and the same error messages for the same input. `tests/vm-diff-*-test.rkt` checks it.
 - **Tests:**
   - round trips: `decode(encode(v))` gives `v`; `encode(decode(b))` gives `b` for canonical `b`; for `b` with reordered or extra struct keys it gives the canonical bytes;
   - the RFC 8949 Appendix A vectors that fit the mapping, as fixed bytes in `tests/fixtures/`; they come from the RFC, not from our encoder, so they are the independent counterpart;
@@ -991,7 +991,7 @@ name: set to Ana
   - `JsonField[Nil]` as a direct struct field: `CHECK-NOT-DECODABLE` in a `JSON.decode` and a `JSON.schema` target, `CHECK-NOT-ENCODABLE` in a `JSON.encode` and a `JSON.from` argument;
   - once 10c lands: `JSON.encode` and `JSON.from` of a `Box[JsonField[Int]]` with `Absent`, `Null` and `Value`, `CHECK-NOT-DECODABLE` for `Box[JsonField[Int]]` in a decode and a schema target, and `CHECK-JSON-FIELD-PLACE` for `Box[T]` with `items: List[T]` used as `Box[JsonField[Int]]`;
   - `JsonField` used in an imported module (a struct field of type `JsonField[...]` in the imported module, field types, patterns, `JsonField.Value(x)`, bare `JsonField.Absent` and `JsonField.Null`), checked and run through an `import`;
-  - evaluator against VM (`tests/vm-diff-test.rkt`) once the VM has JSON.
+  - evaluator against VM (`tests/vm-diff-*-test.rkt`) once the VM has JSON.
 
 ## 18. Front-end implementation language
 
@@ -1000,7 +1000,7 @@ name: set to Ana
 **Why not now:**
 
 - Two front-ends would double the work of every language change.
-- The Racket evaluator stays anyway, as the parity reference for the VM (`tests/vm-diff-test.rkt`).
+- The Racket evaluator stays anyway, as the parity reference for the VM (`tests/vm-diff-*-test.rkt`).
 
 **The goal is distribution: one binary to download.** Measured on Linux x86_64 with Racket CS 9.3:
 
