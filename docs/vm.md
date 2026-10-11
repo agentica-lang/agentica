@@ -1055,7 +1055,10 @@ CI matrix:
 | Windows (by hand, `platforms.yml`) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
 | Fuzz (by hand, `fuzz.yml`) | self-hosted runner, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` | after PR 5a |
 
-The Linux jobs run on every pull request that changes more than docs; they
+The Linux jobs run on every pull request that changes more than docs. On
+the self-hosted runner, Racket is installed once into the runner's tool cache
+(`$RUNNER_TOOL_CACHE/racket-cs-9.3`, on its persistent work volume) and
+later jobs only add it to `PATH`. The jobs
 cache `src/compiled` and `tests/compiled` per job and touch every tracked file
 after the restore, so `raco make` checks each source's SHA-1 and recompiles
 only what changed. macOS and Windows minutes cost 10 and 2 times Linux minutes
