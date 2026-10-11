@@ -118,6 +118,18 @@ jobs:
       - if: steps.unicode.outputs.cache-hit != 'true'
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
 
+  dup-check:
+    runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/jscpd/package-lock.json
+      - run: make dup-check
+
   test:
     if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
