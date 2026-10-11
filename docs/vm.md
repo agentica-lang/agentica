@@ -1518,7 +1518,11 @@ concurrently. The design follows BEAM.
   in 10.2.1, and reductions and turns stay as they are there.
 - **Work stealing.** A scheduler whose queue is empty steals from the queues
   of others. It takes only ready tasks; a parked task stays with the
-  scheduler that owns what it waits on.
+  scheduler that owns what it waits on. A steal makes the thief the task's
+  home. A spawned or preempted task stays on its own scheduler's queue, for
+  locality. As in BEAM, when a scheduler pushes onto its queue while the
+  idle count is above 0 and its queue holds more than one task, it sends
+  `uv_async_send` to one idle scheduler, which then tries to steal.
 - **Home scheduler and waking.** Every task has a home scheduler: the one
   whose queue it was last put on. Waking a task (an await finishing, an I/O
   reply, cancellation) pushes it onto its home scheduler's MPSC wake queue
@@ -1528,12 +1532,14 @@ concurrently. The design follows BEAM.
   result. Cancellation sets a flag that the task checks at its next `STEP`,
   plus a wake if it is parked.
 - **Park and wake protocol.** Each task has an atomic state: RUNNING,
-  PARKED or WOKEN. A waker CASes PARKED to WOKEN and then queues the task;
-  if it finds RUNNING (the task is still parking), it CASes RUNNING to
-  WOKEN and does not queue. The parking task then tries RUNNING to PARKED;
-  if that fails because the state is WOKEN, it does not park and stays
-  ready. So a wake that arrives while the task is still parking is not lost,
-  and a task is queued at most once.
+  PARKING, PARKED or WOKEN. To park, the task sets RUNNING to PARKING
+  before it registers its wait, then CASes PARKING to PARKED. A waker acts
+  only on PARKING (CAS to WOKEN, no queue: the task's CAS fails, so it
+  stays ready) and on PARKED (CAS to WOKEN, then queue the task). A wake
+  that finds RUNNING or WOKEN is stale and dropped. The scheduler sets
+  WOKEN to RUNNING when the task's turn starts. A resumed task re-checks
+  its wait condition, so a wake is only a hint. No wake is lost, and a task
+  is queued at most once.
 - **State split.** Every field of today's `struct agc_vm` (`vm/agc.h`) has
   a place:
   - Runtime, read-only after start-up: `program` (with its constants),
@@ -1549,8 +1555,9 @@ concurrently. The design follows BEAM.
     jmp_buf target (armed on the thread that runs the task's turn), and the
     string cursor cache (`cursor`, `cursor_index`, `cursor_offset`).
   - A runtime diagnostic or `System.exit` on any scheduler ends the run
-    (6.2): that scheduler records the outcome once, and the others stop at
-    their next `STEP` or loop wake-up, then cleanup runs.
+    (6.2): that scheduler records the outcome once and sends
+    `uv_async_send` to every other scheduler; they stop at their next
+    `STEP` or loop wake-up, then cleanup runs.
 - **I/O ownership.** A libuv handle belongs to the loop that created it. A
   task parked on I/O wakes on the scheduler that owns that loop. If a task
   that was stolen to another scheduler uses a handle owned elsewhere, the
@@ -1569,12 +1576,14 @@ concurrently. The design follows BEAM.
   handle is never ref'd, so the plain "no active handles" check of 10.2.1
   still holds.
 - **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s
-  return value: an atomic count of idle schedulers, and an atomic count of
-  live handles, parked I/O and timer waiters, and pending wakes. A pending
-  wake counts as live: the waker increments the count before the push, and
-  the home scheduler decrements it when it drains the wake. The scheduler
-  that sees the idle count reach N and the live count at zero while tasks
-  are still parked fails the run with `RUNTIME-INTERNAL` (10.2.1, Fairness).
+  return value. One 64-bit atomic word packs the idle scheduler count and
+  the live count (handles, parked I/O and timer waiters, pending wakes), so
+  the check reads one snapshot. A pending wake counts as live: the waker
+  increments the count before the push, and the home scheduler decrements
+  it when it drains the wake. A scheduler leaves idle before it touches a
+  queue or drains a wake. The scheduler that sees the idle count reach N
+  and the live count at zero while tasks are still parked fails the run
+  with `RUNTIME-INTERNAL` (10.2.1, Fairness).
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
   `THREAD_LOCAL_ALLOC`. Scheduler threads are created with
   `GC_pthread_create` or register with `GC_register_my_thread`. Collections
@@ -1594,12 +1603,14 @@ concurrently. The design follows BEAM.
   - The GC-stress counter in `vm/value.c` (`AGC_GC_STRESS`, a test build
     only) becomes `_Atomic` or per thread.
   - `empty_string` (`vm/builtins.c`) and `empty_text` (`vm/strings.c`)
-    become `const`.
+    become `const` with a const-correct API, or are replaced by a fresh
+    zero-length value; no casts that drop `const`.
   - The SipHash keys in `vm/map.c` (set from OS entropy at start-up) move
     into the runtime as read-only data.
 
   The tasks PR does these moves. A follow-up PR enforces this with clang-tidy's
-  `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`.
+  `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`;
+  it excludes `vm/tests/*` and the fuzz files, or lists them as exceptions.
 - **Values are immutable**, so tasks on different schedulers share them
   without locks. Any in-place mutation inside the VM (caches, updates in
   place when a value is known to be unique, the faster lists of roadmap 8d)
@@ -1614,7 +1625,8 @@ concurrently. The design follows BEAM.
   I/O hand-off, and a stress test of the task fixtures with
   `--schedulers 4`, under TSan when available; TSan does not get along with
   Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build with
-  `-fsanitize=thread`); then round 2 of the
+  `-fsanitize=thread` that never calls `agc_set_alloc_limit`, so the
+  `AGC_NO_GC` block tracking stays off); then round 2 of the
   benchmarks covers multicore (roadmap phase 12). Multicore does not block
   7i: the evaluator cannot run in parallel anyway. The parity rule stays:
   with N=1, output, counts and spans match the evaluator. The differential,
