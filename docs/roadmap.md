@@ -1157,10 +1157,10 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7g: Speed check
 
-- [ ] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
-- [ ] Compare three runners on the same inputs: the Racket evaluator, the VM, and an idiomatic CPython version of each program as an outside reference.
-- [ ] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt`, `dist/agentica` and the VM.
-- [ ] Record the numbers, machine and tool versions in `docs/vm-benchmarks.md`.
+- [x] Add a benchmark script under `benchmarks/` (next to `maps.rkt`) that runs CPU-heavy programs with fixed inputs and reports wall time: `knight-tour`, `maze-bfs`, `traveling-salesman`, plus small loops for arithmetic, string building, list and map operations, function calls and `case`.
+- [x] Compare three runners on the same inputs: the Racket evaluator, the VM, and an idiomatic CPython version of each program as an outside reference.
+- [x] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt`, `dist/agentica` and the VM.
+- [x] Record the numbers, machine and tool versions in `docs/vm-benchmarks.md`.
 - [ ] Fix the largest VM hot spots (instruction dispatch, list/map representation, string indexing); merge steps across pure instructions only if profiling asks for it.
 
 **Done when:** the numbers show whether the VM is worth finishing; decide here before 7h.
