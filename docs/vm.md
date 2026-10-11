@@ -1352,7 +1352,7 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | C compiler | 7e | C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile. |
 | libc | 7e | Dynamic (static glibc breaks NSS; macOS forbids static libc). |
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
-| yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
+| yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: a git submodule from `https://github.com/libuv/libuv` pinned to a recent release tag, added in 7h when it is first needed, built from source and linked statically. No system package. |
 | OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
 
@@ -1571,7 +1571,18 @@ written `size > limit - total`. A hermetic test sends over-long values.
   errors.
 - Fuzzing: `agc_fuzz_one(data, len)` (`vm/fuzz.c`) loads one file and, if
   accepted, runs it with `--max-steps 10000` and prints any diagnostic, all
-  to `/dev/null`, so the diagnostic printer is fuzzed too. It is linked only
+  to `/dev/null`, so the diagnostic printer is fuzzed too. Under `AGC_NO_GC` it
+  then frees every block of that mutant (`agc_release_all`, a no-op with libgc),
+  so the fuzzer's peak memory is that of one mutant plus ASan's quarantine,
+  which still catches a use after free across mutants. Steps bound
+  instructions, not bytes, so a mutant can still grow a value to gigabytes;
+  `agc_set_alloc_limit` gives each mutant 256 MB (each block counted with 64
+  bytes of overhead), and an allocation past it longjmps back to
+  `agc_fuzz_one`, which frees the mutant and returns 2 (a mutant that counts
+  as run; a seed that fails). Blocks are tracked only while a limit is set,
+  and yyjson allocates through `agc_alloc_atomic` in this build, so its
+  documents count toward the limit and are freed with the mutant. The VM
+  itself sets no limit. `agc_fuzz_one` is linked only
   into the fuzz and test binaries. The plain C driver (`vm/fuzz_main.c`,
   `make vm-fuzz`) applies 1 to 4 mutations per run (byte deletion and
   insertion, bit flips, random bytes, small or maximal 16-bit operands) to a
