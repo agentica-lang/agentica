@@ -41,7 +41,7 @@ jobs:
           else
             while IFS= read -r f; do
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|tests/vm-diff-test.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-test.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"
@@ -111,7 +111,7 @@ jobs:
 
   vm-sanitizers:
     needs: changes
-    if: needs.changes.outputs.vm == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.vm != 'false' }}
     runs-on: [self-hosted, linux, docker-runner]
     env:
       AGENTICA_REQUIRE_VM: '1'
