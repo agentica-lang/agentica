@@ -205,6 +205,7 @@ static int run(int argc, char **argv) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
     outcome.message = "cannot write to standard output";
+    outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
   }
   if (outcome.kind == AGC_FAILED) {

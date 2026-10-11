@@ -28,6 +28,7 @@
 (define (vm-type? type user-types)
   (cond
     [(list-type? type) (vm-type? (cadr type) user-types)]
+    [(result-type? type) (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
     [(and (pair? type) (memq (car type) '(Struct Enum)))
      (eq? (hash-ref user-types (cadr type) #f) (car type))]
     [else (and (memq type value-types) #t)]))
@@ -44,6 +45,9 @@
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
 
+(define (result-type? type)
+  (and (pair? type) (eq? (car type) 'Result)))
+
 (define int-ops
   (hasheq 'plus 'add-i 'minus 'sub-i 'multiply 'mul-i 'divide 'div-i 'modulo 'mod-i
           'less 'lt-i 'less-equal 'le-i 'greater 'lt-i 'greater-equal 'le-i))
@@ -54,7 +58,8 @@
 
 (define string-ops (hasheq 'plus 'concat))
 
-(define vm-builtins '("puts" "IO.print" "IO.warn" "String.from_int" "String.from_float"))
+(define vm-builtins '("puts" "IO.print" "IO.warn" "String.from_int" "String.from_float"
+                      "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"))
 
 (define (lower program types)
   (let/ec return
@@ -167,6 +172,9 @@
        (require-type! inner #f (typed-target-type expression))
        (lower-expression inner want)]
       [(or (interpolation? expression) (inspection? expression)) (lower-value expression want)]
+      [(try-expr? expression)
+       (require-type! expression void?)
+       (lower-value expression want)]
       [else
        (unless known? (require-type! expression #f))
        (lower-value expression want)]))
@@ -230,6 +238,14 @@
        (define items (lower-expression target-node #f))
        (define index (lower-expression (index-access-index expression) #f))
        (emit! 'list-get (list dst items index) (node-span (index-access-index expression)))
+       (set! next (if want saved (add1 dst)))
+       dst]
+      [(try-expr? expression)
+       (emit! 'step '() span)
+       (define saved next)
+       (define dst (target want))
+       (define operand (lower-expression (try-expr-operand expression) #f))
+       (emit! 'try (list dst operand) span)
        (set! next (if want saved (add1 dst)))
        dst]
       [(inspection? expression)
@@ -506,6 +522,7 @@
          (place! exit))
        (set! next saved)]
       [(case-stmt? statement)
+       (define scrutinee-type (static-type (case-stmt-value statement)))
        (define value (lower-expression (case-stmt-value statement) #f))
        (define end (new-label!))
        (define arms (case-stmt-arms statement))
@@ -526,6 +543,11 @@
                (emit! 'const (list slot literal) pattern-span)
                (emit! 'same (list slot value slot) pattern-span)
                (emit! 'jump-if-false (list slot skip) pattern-span)])]
+           [(result-type? scrutinee-type)
+            (define slot (alloc!))
+            (emit! 'is-ok (list slot value) pattern-span)
+            (emit! (if (equal? (variant-pattern-variant-name pattern) "Ok") 'jump-if-false 'jump-if-true)
+                   (list slot skip) pattern-span)]
            [else
             (define id (hash-ref variant-ids (cons (variant-pattern-enum-name pattern)
                                                    (variant-pattern-variant-name pattern))))
@@ -539,7 +561,9 @@
                            #:when name)
                        (define slot (alloc!))
                        (hash-set! (car scopes) name slot)
-                       (emit! 'payload (list slot value item) pattern-span)))
+                       (if (result-type? scrutinee-type)
+                           (emit! 'result-value (list slot value) pattern-span)
+                           (emit! 'payload (list slot value item) pattern-span))))
                    (lower-block (case-arm-body arm))))
          (when (< index (length arms))
            (emit! 'jump (list end) span))

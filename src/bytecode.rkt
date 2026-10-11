@@ -21,7 +21,8 @@
     concat to-text inspect
     list list-len list-get
     struct field enum is-variant payload same
-    tail-call))
+    tail-call
+    try is-ok result-value))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -123,7 +124,8 @@
           (define (wide a x) (list a (bitwise-and x max-u16) (arithmetic-shift x -16)))
           (cons (hash-ref opcode-number op)
                 (case op
-                  [(move neg-i neg-f not to-text inspect list-len) (list (first args) (second args) 0)]
+                  [(move neg-i neg-f not to-text inspect list-len try is-ok result-value)
+                   (list (first args) (second args) 0)]
                   [(const) (wide (first args) (constant! (second args)))]
                   [(step) (list (first args) 0 0)]
                   [(jump) (wide 0 (hash-ref labels (first args)))]

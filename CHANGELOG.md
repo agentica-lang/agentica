@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs `Result[T]` values: `ok(x)`, `ok()`, `error(m)` (and
+  `Result.Ok`/`Result.Err`), `Result.ok?`, `Result.unwrap!` (with
+  `RUNTIME-UNWRAP-ERROR` at the call span), `Result.unwrap_or`,
+  `Result.message`, `try` (an error returns from the current function),
+  and `ok(v)`/`error(m)` patterns in `case`. Results print as `ok(v)`,
+  `ok()` and `error("msg")`, as on the evaluator. The `.agcb` format
+  version does not change.
 - `agentica --vm file.agc [args...]` runs a program on the bytecode VM
   (tested on Linux only). It compiles to a temporary bytecode file (random
   name, mode 0600, in the system temp directory), runs `agentica-vm` from

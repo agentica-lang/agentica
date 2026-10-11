@@ -14,7 +14,7 @@
 #define AGC_FLOAT_TEXT 40
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_STRUCT, AGC_T_ENUM
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT
 } agc_tag;
 
 typedef struct {
@@ -42,6 +42,11 @@ typedef struct {
   agc_value payload[];
 } agc_enum;
 
+typedef struct {
+  bool ok;
+  agc_value value;
+} agc_result;
+
 typedef enum {
   AGC_OP_MOVE, AGC_OP_CONST, AGC_OP_STEP,
   AGC_OP_ADD_I, AGC_OP_SUB_I, AGC_OP_MUL_I, AGC_OP_DIV_I, AGC_OP_MOD_I, AGC_OP_NEG_I,
@@ -53,6 +58,7 @@ typedef enum {
   AGC_OP_LIST, AGC_OP_LIST_LEN, AGC_OP_LIST_GET,
   AGC_OP_STRUCT, AGC_OP_FIELD, AGC_OP_ENUM, AGC_OP_IS_VARIANT, AGC_OP_PAYLOAD, AGC_OP_SAME,
   AGC_OP_TAIL_CALL,
+  AGC_OP_TRY, AGC_OP_IS_OK, AGC_OP_RESULT_VALUE,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -125,6 +131,8 @@ typedef struct {
   agc_outcome_kind kind;
   const char *code;
   const char *message;
+  const agc_string *text;
+  size_t message_len;
   uint32_t span;
 } agc_outcome;
 
@@ -157,6 +165,7 @@ agc_value agc_string_value(agc_string *s);
 agc_value agc_list_value(agc_list *l);
 agc_value agc_struct_value(agc_struct *s);
 agc_value agc_enum_value(agc_enum *e);
+agc_value agc_result_value(bool ok, agc_value value);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -164,6 +173,7 @@ agc_string *agc_as_string(agc_vm *vm, agc_value v);
 agc_list *agc_as_list(agc_vm *vm, agc_value v);
 agc_struct *agc_as_struct(agc_vm *vm, agc_value v);
 agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
+agc_result *agc_as_result(agc_vm *vm, agc_value v);
 bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
@@ -195,6 +205,7 @@ bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *erro
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
 agc_outcome agc_vm_run(agc_vm *vm);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
+_Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
 
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style);

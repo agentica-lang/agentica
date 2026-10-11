@@ -8,6 +8,18 @@ void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) 
   vm->outcome.kind = AGC_FAILED;
   vm->outcome.code = code;
   vm->outcome.message = message;
+  vm->outcome.message_len = strlen(message);
+  vm->outcome.text = NULL;
+  vm->outcome.span = span;
+  longjmp(vm->fail, 1);
+}
+
+void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span) {
+  vm->outcome.kind = AGC_FAILED;
+  vm->outcome.code = code;
+  vm->outcome.text = message;
+  vm->outcome.message = message->data;
+  vm->outcome.message_len = message->bytes;
   vm->outcome.span = span;
   longjmp(vm->fail, 1);
 }
@@ -61,6 +73,14 @@ static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32
   memmove(R, R + window, (size_t)callee->params * sizeof(agc_value));
   frame->function = function;
   frame->pc = 0;
+}
+
+static bool return_value(agc_vm *vm, agc_value result) {
+  uint32_t base = vm->frames[vm->depth - 1].base;
+  vm->depth--;
+  if (vm->depth == 0) return false;
+  vm->regs[base] = result;
+  return true;
 }
 
 static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
@@ -226,14 +246,21 @@ static void run(agc_vm *vm) {
         vm->regs[base] = result;
         break;
       }
-      case AGC_OP_RETURN: {
-        agc_value result = R[in.a];
-        uint32_t base = frame->base;
-        vm->depth--;
-        if (vm->depth == 0) return;
-        vm->regs[base] = result;
+      case AGC_OP_RETURN:
+        if (!return_value(vm, R[in.a])) return;
+        break;
+      case AGC_OP_TRY: {
+        const agc_result *r = agc_as_result(vm, R[in.b]);
+        if (r->ok) {
+          R[in.a] = r->value;
+        } else {
+          if (vm->depth == 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", s);
+          return_value(vm, R[in.b]);
+        }
         break;
       }
+      case AGC_OP_IS_OK: R[in.a] = agc_bool(agc_as_result(vm, R[in.b])->ok); break;
+      case AGC_OP_RESULT_VALUE: R[in.a] = agc_as_result(vm, R[in.b])->value; break;
       default: agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown opcode", 0);
     }
   }

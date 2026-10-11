@@ -162,6 +162,16 @@ agc_value agc_enum_value(agc_enum *e) {
   return v;
 }
 
+agc_value agc_result_value(bool ok, agc_value value) {
+  agc_result *r = agc_alloc(sizeof(agc_result));
+  r->ok = ok;
+  r->value = value;
+  agc_value v;
+  v.tag = AGC_T_RESULT;
+  v.as.p = r;
+  return v;
+}
+
 agc_struct *agc_new_struct(uint32_t type, uint32_t n) {
   agc_struct *s = agc_alloc(agc_size_add(sizeof(agc_struct), agc_size_mul(n, sizeof(agc_value))));
   s->type = type;
@@ -233,6 +243,11 @@ agc_struct *agc_as_struct(agc_vm *vm, agc_value v) {
 
 agc_enum *agc_as_enum(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_ENUM) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_result *agc_as_result(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_RESULT) wrong_tag(vm);
   return v.as.p;
 }
 
