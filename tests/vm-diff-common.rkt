@@ -32,12 +32,15 @@
 (define full-sweep-limit 2000)
 (define shard-count 4)
 (define heavy-fixtures
-  '(("tail-calls.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
+  '(("tail-calls.agc" . 1) ("files-large.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
     ("callback-overflow.agc" . 3) ("results.agc" . 3) ("list-chunks.agc" . 3)))
 (define light-shard-rotation '(2 3 4 3))
 (define extras-shard 4)
 (define fixture-input (make-parameter #""))
 (define fixture-args (make-parameter '()))
+(define tmp-token "@tmp")
+(define tmp-root (make-parameter #f))
+(define tmp-count 0)
 
 (define (exit-status code)
   (if (and (exact-integer? code) (<= 1 code 255)) code 0))
@@ -77,11 +80,39 @@
   (when (diagnostic? checked) (error 'vm-diff "~a" (format-diagnostic checked)))
   checked)
 
+(define (uses-tmp?)
+  (and (member tmp-token (fixture-args)) #t))
+
+(define (fresh-tmp prefix)
+  (set! tmp-count (add1 tmp-count))
+  (define directory (build-path (tmp-root) (format "~a-~a" prefix (~r tmp-count #:min-width 6 #:pad-string "0"))))
+  (make-directory directory)
+  (path->string directory))
+
+(define (tmp-args directory)
+  (for/list ([argument (in-list (fixture-args))])
+    (if (equal? argument tmp-token) directory argument)))
+
+(define (untmp directory result)
+  (list (first result)
+        (string-replace (second result) directory tmp-token)
+        (string-replace (third result) directory tmp-token)))
+
 (define (run-racket checked limit [style 'plain])
+  (cond
+    [(uses-tmp?)
+     (define directory (fresh-tmp "ev"))
+     (dynamic-wind
+       void
+       (lambda () (untmp directory (run-racket-with checked limit style (tmp-args directory))))
+       (lambda () (delete-directory/files directory #:must-exist? #f)))]
+    [else (run-racket-with checked limit style (fixture-args))]))
+
+(define (run-racket-with checked limit style arguments)
   (define out (open-output-string))
   (define err (open-output-string))
   (define result (evaluate checked #:out out #:err err #:in (open-input-bytes (fixture-input))
-                           #:args (fixture-args) #:max-steps limit))
+                           #:args arguments #:max-steps limit))
   (define text
     (cond
       [(not (diagnostic? result)) ""]
@@ -157,23 +188,27 @@
   (define process #f)
   (define out #f)
   (define err #f)
+  (define tmps
+    (for/list ([_options (in-list option-lists)])
+      (and (uses-tmp?) (fresh-tmp "vm"))))
   (dynamic-wind
     void
     (lambda ()
       (make-directory* directory)
       (define input (build-path directory "stdin"))
       (call-with-output-file input (lambda (port) (void (write-bytes (fixture-input) port))))
-      (define tail
-        (string-join (map shell-quote (append (list "--" (path->string bytecode)) (fixture-args)))))
+      (define (tail tmp)
+        (string-join (map shell-quote (append (list "--" (path->string bytecode))
+                                              (if tmp (tmp-args tmp) (fixture-args))))))
       (define script (build-path directory "run.sh"))
       (call-with-output-file script
         (lambda (port)
           (write-string "exec 2>/dev/null\n" port)
-          (for ([options (in-list option-lists)] [index (in-naturals)])
+          (for ([options (in-list option-lists)] [tmp (in-list tmps)] [index (in-naturals)])
             (define base (path->string (build-path directory (number->string index))))
             (write-string
              (format "~a ~a ~a < ~a > ~a 2> ~a\necho $? > ~a\n"
-                     (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) tail
+                     (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) (tail tmp)
                      (shell-quote (path->string input)) (shell-quote (string-append base ".out"))
                      (shell-quote (string-append base ".err")) (shell-quote (string-append base ".status")))
              port))))
@@ -191,11 +226,13 @@
       (unless (and (zero? (subprocess-status process)) (equal? stdout "") (equal? stderr ""))
         (error 'vm-diff "~a: VM batch failed: ~a ~a" name stdout stderr))
       (values
-       (for/list ([index (in-range (length option-lists))])
+       (for/list ([index (in-range (length option-lists))] [tmp (in-list tmps)])
          (define (part extension) (build-path directory (format "~a~a" index extension)))
-         (list (string->number (string-trim (file->string (part ".status"))))
-               (file->string (part ".out"))
-               (file->string (part ".err"))))
+         (define result
+           (list (string->number (string-trim (file->string (part ".status"))))
+                 (file->string (part ".out"))
+                 (file->string (part ".err"))))
+         (if tmp (untmp tmp result) result))
        expected))
     (lambda ()
       (when process
@@ -203,6 +240,8 @@
         (subprocess-wait process))
       (when out (close-input-port out))
       (when err (close-input-port err))
+      (for ([tmp (in-list tmps)] #:when tmp)
+        (delete-directory/files tmp #:must-exist? #f))
       (delete-directory/files directory #:must-exist? #f))))
 
 (define (shard-of name light-index)
@@ -282,8 +321,9 @@
     (dynamic-wind
       void
       (lambda ()
-        (for ([entry (in-list assignment)] #:when (= (cdr entry) shard))
-          (run-fixture work (car entry)))
+        (parameterize ([tmp-root work])
+          (for ([entry (in-list assignment)] #:when (= (cdr entry) shard))
+            (run-fixture work (car entry))))
         (when (= shard extras-shard)
           (run-extras work assignment)))
       (lambda () (delete-directory/files work)))))
@@ -387,7 +427,7 @@
           (check-equal? (first (same "--max-steps" "3" calls)) 1)
           (check-equal? (first (same calls "first" "--allow-run" "--json")) 0)
           (define unsupported (build-path temp "args.agc"))
-          (display-to-file "def main() -> Void\n  puts(File.read_text(\"a\", 10))\nend\n\n" unsupported)
+          (display-to-file "def main() -> Void\n  Task.sleep(10)\nend\n\n" unsupported)
           (define lowered (run-cli temp "--vm" "--json" (path->string unsupported)))
           (check-equal? (first lowered) 1)
           (check-equal? (hash-ref (string->jsexpr (third lowered)) 'code) "LOWER-UNSUPPORTED")
@@ -447,6 +487,55 @@
       (delete-file copy)))
 
   (when linux?
+    (test-case "a read stuck on a FIFO times out, closes the handle and does not hold the VM at exit"
+      (define program (build-path work "fifo-stuck.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  input = Result.unwrap!(File.open(System.args()[0], \"read\", 60000))\n"
+        "  IO.inspect(File.read_bytes(input, 4, 300))\n  IO.inspect(File.read_line(input, 300))\n"
+        "  IO.inspect(File.close(input, 300))\n  puts(\"done\")\nend\n")
+       program)
+      (define bytecode (build-path work "fifo-stuck.agcb"))
+      (compile-file program bytecode)
+      (define fifo (build-path work "stuck-fifo"))
+      (check-true (system* (find-executable-path "mkfifo") (path->string fifo)))
+      (define-values (held-in held-out) (open-input-output-file fifo #:exists 'update))
+      (define (release)
+        (close-input-port held-in)
+        (close-output-port held-out))
+      (define watchdog (thread (lambda () (sleep 30) (release))))
+      (dynamic-wind
+        void
+        (lambda ()
+          (parameterize ([fixture-args (list (path->string fifo))])
+            (define expected
+              (list 0 "error(\"filesystem: operation timed out\")\nerror(\"filesystem: file handle is closed\")\nok()\ndone\n" ""))
+            (check-equal? (run-racket (front-end program) #f) expected)
+            (define start (current-inexact-milliseconds))
+            (check-equal? (run-vm bytecode #f) expected)
+            (check-true (< (- (current-inexact-milliseconds) start) 20000))))
+        (lambda ()
+          (kill-thread watchdog)
+          (release)
+          (delete-file fifo))))
+
+    (test-case "relative file paths use the raw bytes of a non-UTF-8 working directory"
+      (define program (build-path work "raw-cwd.agc"))
+      (display-to-file
+       "def main() -> Void\n  IO.inspect(File.write_text(\"a.txt\", \"hi\", 60000))\n  IO.inspect(File.read_text(\"a.txt\", 60000))\nend\n"
+       program)
+      (define bytecode (build-path work "raw-cwd.agcb"))
+      (compile-file program bytecode)
+      (define folder (build-path work (bytes->path #"raw-\377")))
+      (make-directory folder)
+      (define expected (list 0 "ok()\nok(\"hi\")\n" ""))
+      (parameterize ([current-directory folder])
+        (check-equal? (run-racket (front-end program) #f) expected)
+        (delete-file "a.txt")
+        (check-equal? (run-vm bytecode #f) expected))
+      (check-equal? (file->string (build-path folder "a.txt")) "hi")
+      (delete-directory/files folder))
+
     (test-case "the VM decodes invalid UTF-8 arguments like the evaluator in a UTF-8 locale"
       (define program (build-path fixtures "system-args.agc"))
       (define bytecode (build-path work "system-args.agcb"))

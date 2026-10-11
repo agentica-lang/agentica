@@ -21,7 +21,15 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String Range Json))
+(define value-types '(Int Float Bool Nil String Range Json FileHandle))
+
+(define file-info (ir-struct "FileInfo" '("kind" "size_bytes" "modified_seconds") #f))
+
+(define (mentions-file-info? type)
+  (cond
+    [(equal? type '(Struct "FileInfo")) #t]
+    [(pair? type) (ormap mentions-file-info? type)]
+    [else #f]))
 
 (define max-list-chunk 255)
 (define max-map-chunk 255)
@@ -138,7 +146,10 @@
                       "Random.int" "Random.float"
                       "JSON.parse" "JSON.encode" "JSON.from" "JSON.object" "JSON.array" "JSON.null" "JSON.null?"
                       "JSON.get" "JSON.at" "JSON.string" "JSON.int" "JSON.float" "JSON.bool" "JSON.list"
-                      "JSON.decode" "JSON.schema"))
+                      "JSON.decode" "JSON.schema"
+                      "File.open" "File.read_bytes" "File.read_line" "File.write" "File.write_bytes" "File.flush"
+                      "File.close" "File.read_text" "File.write_text" "File.append_text" "File.stat"
+                      "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))
@@ -170,7 +181,11 @@
         (for/list ([declaration (in-list (program-declarations program))]
                    #:when (function-decl? declaration))
           declaration))
-      (define-values (structs enums) (user-tables (program-declarations program)))
+      (define-values (declared-structs enums) (user-tables (program-declarations program)))
+      (define structs
+        (if (for/or ([type (in-hash-values types)]) (mentions-file-info? type))
+            (append declared-structs (list file-info))
+            declared-structs))
       (define user-types (make-hash))
       (define struct-info (make-hash))
       (for ([entry (in-list structs)] [index (in-naturals)])

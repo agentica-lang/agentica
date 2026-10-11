@@ -512,6 +512,7 @@ static void run(agc_vm *vm) {
         }
         agc_value result = p->builtins[bx]->fn(vm, vm->regs + base, s);
         vm->regs[base] = result;
+        if (vm->parked) agc_io_park(vm, base);
         break;
       }
       case AGC_OP_RETURN:

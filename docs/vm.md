@@ -75,7 +75,12 @@ and every `JSON` builtin (`JSON.parse`, `encode`, `from`, `object`,
 `pkg/` imports are resolved and linked by the front end
 (`src/modules.rkt`) into one program before lowering, so the bytecode holds
 no imports, and code from an imported file keeps that file's spans (4.6).
-Runtime diagnostics come in the plain,
+On Linux the first part of 7h runs too: the libuv event loop and the
+resource registry (10.2.2) with every `File`, `Dir` and `Path` builtin
+(`File.open`, `read_bytes`, `read_line`, `write`, `write_bytes`, `flush`,
+`close`, `read_text`, `write_text`, `append_text`, `stat`; `Dir.list`,
+`mkdir`; `Path.cwd`, `join`, `resolve`), `FileHandle` values and the
+`FileInfo` record (2.8). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -484,6 +489,92 @@ fails when the committed file differs from what the generator prints.
   back). Neither recurses, so a
   recursive struct and a deep value are safe (7.3).
 
+### 2.8 Files and paths (`src/filesystem.rkt`)
+
+Every failure is an error value whose message is the evaluator's text, so
+the VM copies Racket's own messages where the evaluator lets them through.
+The checks run in this order:
+
+- `File.write`, `write_text`, `append_text`: text above 1 MiB (`filesystem:
+  text exceeds 1048576 bytes`); `File.write_bytes`: `network: bytes must be
+  0..255 and at most 1048576 per call`; `File.read_bytes`: `max_bytes` out
+  of 1..1048576. Then the timeout (`network: timeout must be positive
+  milliseconds`). `File.open` then checks the mode. A handle operation then
+  checks that the handle is open (`filesystem: file handle is closed`) and
+  readable or writable. `File.close` of a closed handle does no I/O.
+- A path must be a nonempty String without NUL, else `NAME: contract
+  violation\n  expected: E\n  given: FORM` with `path->complete-path` (and
+  `(or/c path-string? path-for-some-system?)`) for `File.*` and
+  `Path.resolve`, `directory-list` and `make-directory*` (`path-string?`)
+  for `Dir.*`, and `build-path` for `Path.join`. FORM is the String's
+  `write` form (2.3); above 256 characters it keeps the first 253 and adds
+  `...` (Racket's `error-print-width`).
+- A relative path is completed with the current directory (the raw
+  `getcwd` bytes, read once at start-up by `agc_files_init` as Racket fixes
+  `current-directory` when it starts, with a trailing `/`; if `getcwd`
+  fails it is `/`, Racket's fallback too), and runs of `/` collapse,
+  as Racket's host paths do. That path is what the OS gets and what
+  messages show after `path: `. `Path.cwd` and `Path.resolve` return the
+  directory decoded with U+FFFD for invalid UTF-8.
+- Output is buffered as Racket's file ports do, 4096 bytes per handle: a
+  `File.write` or `File.write_bytes` whose bytes fit with what is pending
+  (pending + n <= 4096) is only appended to the buffer, with no I/O;
+  otherwise the pending and the new bytes are written together and the
+  buffer is empty again. `File.flush` and `File.close` write the buffer
+  (`File.flush` with nothing pending does no I/O), and so does the end of
+  the run for handles left open. A write error therefore shows at the call
+  that writes the buffer. A handle closed by a timeout drops its buffer,
+  as the evaluator's custodian shutdown does.
+- Kinds follow `stat` (symlinks followed): a directory is `directory`,
+  anything else `file`; a failed `stat` is no kind, except `ELOOP`, a link
+  loop. Reads need a file (`filesystem: path does not refer to a regular
+  file`); writes refuse a directory or a loop and create a missing file.
+  A write path that ends in `/`, or `EISDIR`, gives `open-output-file: path
+  is a directory\n  path: P\n  system error: path refers to a directory;
+  rkt_err=9`. Other OS errors give `open-input-file: cannot open input
+  file`, `open-output-file: error opening file`, `directory-list: could not
+  open directory` or `make-directory: cannot make directory`, then
+  `\n  path: P\n  system error: S; errno=N`, with S from `strerror` in the
+  environment's message locale, like Racket.
+- `File.read_text` refuses a file above 1 MiB by its size, reads at most
+  size + 1 bytes, and decodes strictly: invalid UTF-8 gives
+  `bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\n
+  byte string: #"..."` with Racket's byte string form (`\a`..`\r`, `\e`,
+  octal with three digits only before a digit 0-7), cut at 256 characters
+  like FORM. `File.read_line` uses the same decoding, strips LF or CRLF,
+  and fails after 1048576 bytes without a LF, having consumed 1048577.
+  `File.read_bytes` reads until it has `max_bytes` or reaches EOF.
+- `File.stat` gives `filesystem: path does not exist` without a kind and
+  `filesystem: path is not a regular file or directory` for a loop; a
+  directory's size is 0; `modified_seconds` is `st_mtim.tv_sec`.
+- `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them
+  by code point. `Dir.mkdir` follows `make-directory*`: it walks up with
+  Racket's `split-path` until a parent exists, then creates each missing
+  level with mode 0777; `EEXIST` is ignored, so an existing file succeeds.
+- `Path.join` checks every part first, then refuses an absolute later part
+  (`build-path: absolute path cannot be added to a path\n  absolute path:
+  FORM`); parts join with one `/` unless the left side ends in one, and a
+  left side that starts with exactly `//name` followed by a single `/` or
+  the end loses one leading `/`, as `build-path` does. `Path.resolve`
+  completes the path, drops `.`, pops `..` (never above `/`) and collapses
+  `/`; the result ends in `/` when the input did or ended in `.` or `..`.
+
+After a timeout on an active handle operation both backends close the
+handle: later operations give `filesystem: file handle is closed` and
+`File.close` gives `ok()`.
+
+Documented differences: read and write errors after a successful open
+(`EIO`, `ENOSPC`) say `error reading from stream port` or `error writing to
+stream port` with the OS error, not Racket's port text. FIFOs and devices
+count as files on both backends, but they are not compared beyond a timed
+out read: the evaluator waits on them with Racket's nonblocking ports, while
+the VM does a blocking read or write on a thread-pool thread. So a FIFO with
+no peer can give `ok("")`, `ok([])`, end of file or an `ENXIO` error on the
+VM where the evaluator times out. A timed-out VM job keeps its pool thread
+until the OS call returns, and libuv's pool has 4 threads, so four calls
+stuck on FIFOs or devices make every later file call in the run time out. `JSON.decode` and `JSON.schema` of `FileInfo` stay
+`LOWER-UNSUPPORTED`.
+
 ## 3. IR (7c)
 
 ### 3.1 Types from the checker
@@ -627,7 +718,11 @@ unsupported type can only come from an expression the lowerer rejects. The only 
 (their implementation keys; `print` and `IO.puts` map to
 the first two, `gets` and `gets!` to `IO.gets` and `IO.gets!`).
 `String.from_int` and `String.from_float` are there because the checker
-resolves `x.to_s` on Int and Float to them.
+resolves `x.to_s` on Int and Float to them. The `File`, `Dir` and `Path`
+builtins are accepted too (2.8): `FileHandle` is a value type, and the
+builtin record `FileInfo` (fields `kind`, `size_bytes`,
+`modified_seconds`) is appended to the struct table when any checked type
+in the program mentions it; `File.stat` finds it there by name and fields.
 The lowerer also emits `List.concat` and `Map.put` for long literals
 (3.3). No core form turns into a `List` library call: `for`,
 literals and indexing have their own opcodes, `x.to_s` of a list is a
@@ -957,7 +1052,7 @@ typedef struct {
   point to a GC object only while the resource registry also roots it (10.2).
 - No GC finalizers for OS resources; closing is explicit (10.2).
 - Roots (runtime, schedulers, program, tasks) live in GC objects reachable
-  from the runtime struct, never in mutable static storage (10.2.2).
+  from the runtime struct, never in mutable static storage (10.2.3).
 
 ## 6. Execution
 
@@ -1049,7 +1144,8 @@ builtins copy what they need into their GC state.
 7e: `IO`, `puts`, `print`, `gets`, `gets!`, `System`, `String`, `List`,
 `Map`, `Float`, `Time`, `Random`, `ok`, `error`, `Result.*`, and `JSON`
 (parse, extract, encode, builders, typed decode, schema: pure C, no event
-loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
+loop). 7h: files (done on Linux, 2.8, 10.2.2), tasks, processes, TCP, TLS,
+HTTP, BDD.
 
 ### 7.3 Builtin safety and streams
 
@@ -1060,10 +1156,13 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
   JSON operation (parse, encode, from, decode, schema) walk values with an
   explicit `GC_MALLOC`'d stack. Recursion is fine only when its depth is
   bounded by a constant or `log n` (HAMT levels, merge sort).
-- **Strings to the OS.** `agc_cstr(vm, s)` copies a String, adds the NUL, and
-  fails on an embedded NUL with the matching Racket message (for example
-  "command must be nonempty and arguments cannot contain NUL" in
-  `process.rkt`). It is the only way a String reaches an OS or library call.
+- **Strings to the OS.** `agc_cstr(s)` copies a String into `malloc`
+  memory, so it can go to a thread-pool request, and adds the NUL; it
+  returns NULL on an embedded NUL, and the caller returns the matching
+  Racket message (2.8, or "command must be nonempty and arguments cannot
+  contain NUL" in `process.rkt`). It is the only way a String reaches an OS
+  or library call; file paths go through the same copy after the checks of
+  2.8.
 - **Sorting.** `List.sort` and `sort_by` are a stable merge sort with
   `order<?`: strings by code point (UTF-8 byte order), numbers by `<`, NaN
   last. `order<?` is a strict weak order on each key type (`-0.0` and
@@ -1115,7 +1214,7 @@ the `RUNTIME-INVALID-RANGE` error at the call.
   from `--seed`; a spawned task gets its own generator from its parent's at
   spawn time (a splitmix64 split of one parent draw). Each task's values
   then depend only on its own order of calls, so `--seed` repeats each
-  task's values even with N>1 schedulers (10.2.2); only how output from
+  task's values even with N>1 schedulers (10.2.3); only how output from
   different tasks interleaves is not repeatable. Every spawn takes exactly
   one draw from the parent's generator, whether or not the child uses
   `Random`, so the parent's later values depend on how many tasks it
@@ -1278,7 +1377,7 @@ and cost one predictable branch each.
   size comes from `_fstat64`, so a file over 2 GiB is rejected, not read
   as a prefix. Paths over 260 characters fail with `_wopen` unless they use
   `\\?\` or the executable has a `longPathAware` manifest; 7h decides.
-  `--schedulers N` (10.2.2) comes with the 7h multicore schedulers item;
+  `--schedulers N` (10.2.3) comes with the 7h multicore schedulers item;
   `agentica --vm --schedulers N` passes it through, as it does `--seed`. A
   differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
@@ -1366,7 +1465,7 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | libc | 7e | Dynamic (static glibc breaks NSS; macOS forbids static libc). |
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
-| libuv | 7h | Vendored the same way: a git submodule from `https://github.com/libuv/libuv` pinned to a recent release tag, added in 7h when it is first needed, built from source and linked statically. No system package. |
+| libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, its `LICENSE` stays in the submodule), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
 | OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
 
 ### 10.1 Event loop: libuv, not libevent
@@ -1387,7 +1486,7 @@ path: most of what libuv is, and the hardest platform code to get right. So
 the gap blocks `Process`, stdin and `File` on Windows, and the choice is
 libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 
-libuv also stays for multicore (10.2.2); we do not replace it with raw
+libuv also stays for multicore (10.2.3); we do not replace it with raw
 epoll or io_uring. libuv works with one loop per thread, which is what
 one loop per scheduler needs. It gives the thread pool for files (epoll
 cannot poll regular files), process spawn, signals and DNS, which we would
@@ -1397,7 +1496,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
 
 ### 10.2 Rules for 7h
 
-- The target is multicore: N scheduler threads (M:N, as in BEAM, 10.2.2),
+- The target is multicore: N scheduler threads (M:N, as in BEAM, 10.2.3),
   each running the interpreter and its own libuv loop. The first tasks PR
   of 7h runs N=1, but on the structures built for N schedulers. Tasks are
   VM stacks. A blocking builtin starts a libuv request, parks its task, and
@@ -1434,7 +1533,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
 - **Run queue.** Each scheduler has its own FIFO run queue of ready tasks. A
   new task, a task whose turn ended, and a task woken by a libuv callback
   all go to the back of their scheduler's queue. With N>1, an idle scheduler
-  steals ready tasks from other queues (10.2.2).
+  steals ready tasks from other queues (10.2.3).
 - **Reductions, as in BEAM.** Each turn has a budget of steps, counted by
   `STEP` like `--max-steps` (`STEP n` counts n). It starts at 2000 and is
   tuned by measurement in 7h; 7g gives the cost of `STEP` with one task. When
@@ -1478,7 +1577,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   If every scheduler is idle, no loop has an active handle, and tasks are
   still parked, the VM fails with `RUNTIME-INTERNAL` and does not spin. With
   N=1 this is the plain check that `uv_run` reports no active handles; for
-  N>1 see 10.2.2, Stall check.
+  N>1 see 10.2.3, Stall check.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
     6.1), as today. Preemption never changes what is charged. With one task,
@@ -1503,10 +1602,81 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
     BEAM's per-process heaps. Only a global heap limit is possible (13).
 - **N=1 first.** The first tasks PR of 7h runs one scheduler, but on the
-  split structures of 10.2.2, so going to N>1 later adds threads, stealing
+  split structures of 10.2.3, so going to N>1 later adds threads, stealing
   and the I/O hand-off without a rewrite.
 
-#### 10.2.2 Multicore: M:N schedulers
+#### 10.2.2 The loop today (one task)
+
+The first 7h PR has one task, so it has no run queue yet. What it has:
+
+- **Resource registry** (`vm/loop.c`). `vm->registry` is a GC object with
+  an array of `agc_resource` GC objects. Each one owns `malloc` memory
+  (`native`) and a `release` function, and keeps its slot until it is
+  unregistered. A `FileHandle` value points to its resource; its `native`
+  is the `malloc`'d file state (descriptor and read buffer), NULL once
+  closed. Each pending request is a resource too, whose `native` is a
+  `malloc`'d job with the `uv_work_t` and its `uv_timer_t`. The job stays
+  registered until its work callback has run, its timer's `uv_close`
+  callback has run, and its result was taken. No GC pointer is stored in
+  `malloc` memory, and no `handle->data` is used: callbacks find their job
+  with `offsetof`.
+- **Blocking builtins** are two halves. The C builtin checks its arguments
+  in the evaluator's order, copies what the OS needs into a `malloc`'d
+  request (paths through the rules of 2.8), and calls `agc_io_start`, which
+  queues one `uv_queue_work` request for the whole operation (stat, open,
+  read, close: one thread-pool job, so the task parks once per call) and
+  starts a timer for the call's timeout after `uv_update_time`. Then it
+  returns, and `CALL_BUILTIN` sees `vm->parked` and calls `agc_io_park`.
+- **Parking** is the scheduler's job. Today `agc_io_park` runs
+  `uv_run(UV_RUN_ONCE)` until the work or the timer is done, and fails with
+  `RUNTIME-INTERNAL` if the loop reports nothing active while it waits. It
+  then closes the timer and, on completion, calls the request's `done`
+  half on the interpreter thread, which turns the `malloc`'d result into
+  GC values and frees the request; on timeout it calls `expired`, which
+  gives `filesystem: operation timed out` and, for a handle operation,
+  closes the handle as the evaluator does (the stuck request then owns the
+  file state). The result goes into the call's result register. A
+  timed-out job stays registered until its work ends; then its `drop` half
+  frees it and the file state it owns, which closes the descriptor.
+- **Thread-pool threads** only run the `work` half: system calls on
+  `malloc` memory. The libuv pool keeps its default size (4,
+  `UV_THREADPOOL_SIZE`). `UV_USE_IO_URING` is set to `0` (unless already
+  set) before the loop is created, so libuv uses its plain thread pool and
+  epoll. Boehm is built without thread support (until 10.2.3) and never
+  sees these threads.
+- **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
+  check, then blocking for reads and writes in the pool).
+- **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
+  it ended: open handles are closed (the evaluator's cleanup), timers are
+  closed, the loop runs once without waiting, and the loop is freed when no
+  job is left. Closing a handle writes its pending output. `agc_io_close`
+  returns false when a job is still stuck in the OS (a read on a silent
+  FIFO, say); `vm/main.c` then flushes stdout and stderr and ends with
+  `_exit`, because a normal exit would run libuv's destructor, which joins
+  the pool threads and would wait for that read. The flush of a handle's
+  write buffer at the end of run is a blocking write, so it can block on a
+  FIFO whose reader stopped reading, as Racket's flush in
+  `filesystem-close-all!` does (parity).
+- **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
+  never touch the file system; a file builtin (`Path.cwd` and
+  `Path.resolve` too, since they read the current directory) then ends the
+  run with `RUNTIME-INTERNAL`. It still calls `agc_io_close` before
+  `agc_release_all`, on the normal path and after the allocation limit, so
+  a loop or a resource would never outlive the mutant.
+
+How tasks extend it (10.2.1): `agc_io_park` becomes the place where a task
+leaves its turn. It records the task and the result register, and the
+scheduler runs the next ready task; the work and timer callbacks, which
+today only set flags, also put the task at the back of the run queue;
+when the task runs again, the same completion code calls `done` or
+`expired` and stores the result. The scheduler calls `uv_run` with
+`UV_RUN_NOWAIT` between turns and `UV_RUN_ONCE` only when the run queue is
+empty. Handles also get a per-handle lock (the evaluator's semaphore)
+once two tasks can share one. With N>1 (10.2.3) each scheduler has its own
+loop, and an operation on a handle owned by another scheduler goes through
+the I/O hand-off.
+
+#### 10.2.3 Multicore: M:N schedulers
 
 The VM must use all CPU cores (parallelism), not only run tasks
 concurrently. The design follows BEAM.
@@ -1559,16 +1729,19 @@ concurrently. The design follows BEAM.
 - **State split.** Every field of today's `struct agc_vm` (`vm/agc.h`) has
   a place:
   - Runtime, read-only after start-up: `program` (with its constants),
-    `args`, and the config. Also in the runtime but shared under rules: the
+    `args`, `cwd` (raw bytes, read at start-up by `agc_files_init`),
+    `no_files`, and the config. Also in the runtime but shared under rules: the
     atomic `steps_left` (10.2.1, Quotas), `outcome` (set once by a CAS on the outcome kind, 6.2), `out`
     and `err` (one lock per stream, see Output). Stdin (`in`, an
     `agc_input`) is a handle owned by scheduler 0 (see I/O ownership).
-  - Per scheduler: the loop, the run queue, the resource registry and the
-    turn counter.
+  - Per scheduler: the loop (`loop`), the run queue, the resource registry
+    (`registry`) and the turn counter.
   - Per task: the registers and frames (`regs`, `reg_capacity`, `frames`,
     `frame_capacity`, `frame_count`, `depth`), `random` (7.4), the `fail`
-    jmp_buf target (armed on the thread that runs the task's turn), and the
-    string cursor cache (`cursor`, `cursor_index`, `cursor_offset`).
+    jmp_buf target (armed on the thread that runs the task's turn), the
+    string cursor cache (`cursor`, `cursor_index`, `cursor_offset`), and
+    `parked`, the request the task waits on, which it sets while PARKING
+    (see Park and wake protocol).
   - A runtime diagnostic or `System.exit` on any scheduler ends the run
     (6.2): that scheduler records the outcome once and sends
     `uv_async_send` to every other scheduler; they stop at their next
@@ -1648,6 +1821,12 @@ concurrently. The design follows BEAM.
     zero-length value; no casts that drop `const`.
   - The SipHash keys in `vm/map.c` (set from OS entropy at start-up) move
     into the runtime as read-only data.
+  - `messages_locale` and `messages_tried` in `vm/files.c` (the locale for
+    OS error text, made lazily on first use) are made once at start-up, or
+    with `pthread_once`, and kept in the runtime as read-only data.
+  - `setenv("UV_USE_IO_URING", "0", 0)` in `vm/loop.c` runs when the first
+    loop is made; `setenv` is not thread-safe, so it moves to start-up,
+    before any scheduler thread exists.
 
   The tasks PR does these moves. A follow-up PR enforces this with clang-tidy's
   `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`;
@@ -1702,6 +1881,9 @@ concurrently. The design follows BEAM.
   (PATH or a path relative to the working directory), and passes the absolute
   path to `uv_spawn`. All three stdio streams are pipes.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
+- The file loop sets `UV_USE_IO_URING=0` in the VM's own environment
+  (10.2.2). The processes PR must not pass it on: it removes it from the
+  child's environment unless the user had set it before the VM started.
 - Windows: after resolution, allow only `.exe` and `.com`, case-insensitively,
   and reject names with a trailing dot or space or any `:`. Both backends use this same
   allowlist: the Racket check in `process.rkt` (`windows-runnable-name?`)
@@ -1754,7 +1936,8 @@ written `size > limit - total`. A hermetic test sends over-long values.
   `ALL_INTERIOR_POINTERS` extends that to pointers stored in GC objects and
   static data and to one-past-the-end pointers, at one extra byte per
   object. Nothing in the VM relies on it today; it is upstream's default and
-  costs nothing measurable. libuv follows the same pattern in 7h. OpenSSL (7h)
+  costs nothing measurable. libuv (7h) is built from its submodule into
+  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h)
   comes through `pkg-config --atleast-version` and its static archive path.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
   build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
@@ -1907,6 +2090,13 @@ the platform's OpenSSL package) to each job.
   printer walks lists, structs and enums with one explicit `agc_alloc`'d
   stack (7.3). Recursive enums can be built to any depth in a loop; the
   `enums-case` fixture builds one and walks it with `case`.
+- File programs (7h) are hermetic: a fixture whose `.args` holds `@tmp`
+  gets a new empty directory under the shard's work directory for every
+  run, evaluator and VM alike (directory names have the same length, so
+  cut forms match), the argument is replaced by its path, the path is
+  replaced back by `@tmp` in stdout and stderr before the comparison, and
+  the directory is deleted afterwards. The fixtures use long timeouts, so
+  a loaded machine does not turn a slow write into a timeout.
 - Tasks, processes and network programs join in 7h, with the independent
   counterparts the current tests use.
 
@@ -2031,6 +2221,15 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      lists and maps, an imported struct beside a local one of the same
      name) and `json-decode-deep` (a 1,000-level recursive value and a
      path error at the bottom).
+
+8. **7h part 1: event loop and files** (done, Linux). libuv v1.53.0 as a
+   submodule built by the Makefile, the resource registry and the one-task
+   loop of 10.2.2, and every `File`, `Dir` and `Path` builtin with
+   `FileHandle` and `FileInfo` (2.8). `agentica-vm --version` names libuv.
+   The `files-*` fixtures run each backend in its own temporary directory
+   (an `.args` entry `@tmp`, 12.1), and `vm/tests/loop_test.c` checks the
+   registry, a completed job, a timed-out job that is dropped later, and
+   closing the loop. `examples/file-summary.agc` runs on the VM.
 
 Phase 8a (ranges, done) added the `Range` value (5.1), `RANGE` and
 `RANGE_BOUNDS` (4.2), the counter loops of 3.3, the `Range` builtins and

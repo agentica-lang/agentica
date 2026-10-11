@@ -254,6 +254,13 @@ agc_value agc_json_value(agc_json *j) {
   return v;
 }
 
+agc_value agc_handle_value(agc_resource *r) {
+  agc_value v;
+  v.tag = AGC_T_HANDLE;
+  v.as.p = r;
+  return v;
+}
+
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last) {
   *first = r->start;
   *last = r->end;
@@ -369,6 +376,20 @@ agc_range *agc_as_range(agc_vm *vm, agc_value v) {
 agc_json *agc_as_json(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_JSON) wrong_tag(vm);
   return v.as.p;
+}
+
+agc_resource *agc_as_handle(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_HANDLE) wrong_tag(vm);
+  return v.as.p;
+}
+
+char *agc_cstr(const agc_string *s) {
+  if (s->bytes && memchr(s->data, 0, s->bytes)) return NULL;
+  char *copy = malloc(agc_size_add(s->bytes, 1));
+  if (!copy) agc_out_of_memory();
+  if (s->bytes) memcpy(copy, s->data, s->bytes);
+  copy[s->bytes] = '\0';
+  return copy;
 }
 
 size_t agc_utf8_width(uint8_t lead) { return lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4; }
