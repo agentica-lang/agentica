@@ -7,6 +7,29 @@
 
 #include "yyjson.h"
 
+typedef struct {
+  union {
+    yyjson_arr_iter arr;
+    yyjson_obj_iter obj;
+  } it;
+  size_t next, n;
+  agc_json *node;
+  agc_list *items;
+} parse_frame;
+
+typedef struct {
+  char *data;
+  size_t len, cap;
+} buffer;
+
+typedef struct {
+  agc_value value;
+  size_t next, n;
+  agc_value *keys;
+  agc_json *node;
+  agc_list *items;
+} walk_frame;
+
 const char *agc_json_version(void) { return YYJSON_VERSION_STRING; }
 
 static agc_json *new_node(agc_json_kind kind, agc_value scalar) {
@@ -25,6 +48,14 @@ static agc_string *ascii(const char *text, size_t n) { return agc_make_string(te
 static bool digit(uint8_t c) { return c >= '0' && c <= '9'; }
 
 static bool json_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+static double decimal(const char *s, size_t len) {
+  char small[64];
+  char *text = len < sizeof small ? small : agc_alloc_atomic(agc_size_add(len, 1));
+  memcpy(text, s, len);
+  text[len] = '\0';
+  return strtod(text, NULL);
+}
 
 static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
   bool exact = true;
@@ -50,11 +81,7 @@ static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
     if (s[i] >= '1' && s[i] <= '9') zero = false;
   double x = 0.0;
   if (!zero) {
-    char small[64];
-    char *text = len < sizeof small ? small : agc_alloc_atomic(agc_size_add(len, 1));
-    memcpy(text, s, len);
-    text[len] = '\0';
-    x = strtod(text, NULL);
+    x = decimal((const char *)s, len);
     if (isinf(x)) return false;
   }
   *out = leaf(AGC_JSON_FLOAT, agc_float(x));
@@ -88,22 +115,28 @@ static size_t sort_members(agc_json_member *m, size_t n) {
   return count;
 }
 
-static agc_value container(bool object, size_t n, agc_json **node, agc_list **items, agc_json_member **members) {
-  *node = new_node(object ? AGC_JSON_OBJECT : AGC_JSON_ARRAY, agc_nil());
+static agc_json *container(bool object, size_t n, agc_list **items) {
+  agc_json *node = new_node(object ? AGC_JSON_OBJECT : AGC_JSON_ARRAY, agc_nil());
   *items = NULL;
-  *members = NULL;
   if (object) {
-    *members = n ? agc_alloc(agc_size_mul(n, sizeof(agc_json_member))) : NULL;
-    (*node)->members = *members;
+    node->members = n ? agc_alloc(agc_size_mul(n, sizeof(agc_json_member))) : NULL;
   } else {
     *items = agc_new_list(n);
-    (*node)->scalar = agc_list_value(*items);
+    node->scalar = agc_list_value(*items);
   }
-  return agc_json_value(*node);
+  return node;
 }
 
-static void finish(agc_json *node, agc_json_member *members, size_t n) {
-  if (node->kind == AGC_JSON_OBJECT) node->count = n ? sort_members(members, n) : 0;
+static void store(agc_json *node, agc_list *items, size_t k, agc_value v) {
+  if (items)
+    items->items[k] = v;
+  else
+    node->members[k].value = v;
+}
+
+static agc_value finish(agc_json *node, size_t n) {
+  if (node->kind == AGC_JSON_OBJECT && n) node->count = sort_members(node->members, n);
+  return agc_json_value(node);
 }
 
 static void *grow(void *stack, size_t *capacity, size_t depth, size_t size) {
@@ -115,21 +148,12 @@ static void *grow(void *stack, size_t *capacity, size_t depth, size_t size) {
   return grown;
 }
 
-typedef struct {
-  yyjson_arr_iter arr;
-  yyjson_obj_iter obj;
-  size_t next, n;
-  agc_json *node;
-  agc_list *items;
-  agc_json_member *members;
-} parse_frame;
-
 static yyjson_val *parse_child(parse_frame *f) {
-  if (!f->members) return yyjson_arr_iter_next(&f->arr);
-  yyjson_val *key = yyjson_obj_iter_next(&f->obj);
+  if (f->items) return yyjson_arr_iter_next(&f->it.arr);
+  yyjson_val *key = yyjson_obj_iter_next(&f->it.obj);
   const char *text = yyjson_get_str(key);
   size_t len = yyjson_get_len(key);
-  f->members[f->next].key = agc_make_string(text, len, agc_utf8_count((const uint8_t *)text, len));
+  f->node->members[f->next].key = agc_make_string(text, len, agc_utf8_count((const uint8_t *)text, len));
   return yyjson_obj_iter_get_val(key);
 }
 
@@ -156,22 +180,21 @@ static bool convert(yyjson_val *val, agc_value *out) {
     if (yyjson_is_arr(val) || yyjson_is_obj(val)) {
       bool object = yyjson_is_obj(val);
       size_t n = yyjson_get_len(val);
-      agc_json *node;
       agc_list *items;
-      agc_json_member *members;
-      v = container(object, n, &node, &items, &members);
-      if (n) {
+      agc_json *node = container(object, n, &items);
+      if (!n) {
+        v = agc_json_value(node);
+      } else {
         stack = grow(stack, &capacity, depth, sizeof(parse_frame));
         parse_frame *f = &stack[depth++];
         f->next = 0;
         f->n = n;
         f->node = node;
         f->items = items;
-        f->members = members;
         if (object)
-          yyjson_obj_iter_init(val, &f->obj);
+          yyjson_obj_iter_init(val, &f->it.obj);
         else
-          yyjson_arr_iter_init(val, &f->arr);
+          yyjson_arr_iter_init(val, &f->it.arr);
         val = parse_child(f);
         continue;
       }
@@ -184,16 +207,12 @@ static bool convert(yyjson_val *val, agc_value *out) {
         return true;
       }
       parse_frame *f = &stack[depth - 1];
-      if (f->members)
-        f->members[f->next].value = v;
-      else
-        f->items->items[f->next] = v;
+      store(f->node, f->items, f->next, v);
       if (++f->next < f->n) {
         val = parse_child(f);
         break;
       }
-      finish(f->node, f->members, f->n);
-      v = agc_json_value(f->node);
+      v = finish(f->node, f->n);
       depth--;
     }
   }
@@ -275,11 +294,6 @@ agc_json_status agc_json_parse(const uint8_t *s, size_t len, agc_value *out) {
   return finite ? AGC_JSON_PARSED : AGC_JSON_NOT_FINITE;
 }
 
-typedef struct {
-  char *data;
-  size_t len, cap;
-} buffer;
-
 static void put(buffer *b, const char *text, size_t n) {
   size_t need = agc_size_add(b->len, n);
   if (need > b->cap) {
@@ -353,22 +367,6 @@ static void put_big(agc_vm *vm, buffer *b, agc_value v) {
   put(b, s->data, s->bytes);
 }
 
-static const agc_struct_def *struct_def(agc_vm *vm, const agc_struct *st) {
-  const agc_program *p = vm->program;
-  if (!p || st->type >= p->struct_count || p->structs[st->type].count != st->n)
-    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown struct type", 0);
-  return &p->structs[st->type];
-}
-
-typedef struct {
-  agc_value value;
-  size_t next, n;
-  agc_value *keys;
-  agc_json *node;
-  agc_list *items;
-  agc_json_member *members;
-} walk_frame;
-
 static bool json_kind(agc_vm *vm, agc_value v, agc_json_kind kind) {
   return agc_is(v, AGC_T_JSON) && agc_as_json(vm, v)->kind == kind;
 }
@@ -384,7 +382,7 @@ static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
     f->n = m->size;
     f->keys = m->size ? agc_map_keys(vm, m, 0) : NULL;
   } else if (agc_is(v, AGC_T_STRUCT)) {
-    f->n = struct_def(vm, agc_as_struct(vm, v))->count;
+    f->n = agc_struct_def_of(vm, agc_as_struct(vm, v))->count;
   } else if (json_kind(vm, v, AGC_JSON_ARRAY)) {
     f->n = agc_as_list(vm, agc_as_json(vm, v)->scalar)->len;
   } else if (json_kind(vm, v, AGC_JSON_OBJECT)) {
@@ -413,7 +411,7 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
   }
   if (agc_is(v, AGC_T_STRUCT)) {
     const agc_struct *st = agc_as_struct(vm, v);
-    *key = struct_def(vm, st)->fields[k];
+    *key = agc_struct_def_of(vm, st)->fields[k];
     return st->fields[k];
   }
   const agc_json *j = agc_as_json(vm, v);
@@ -489,12 +487,13 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
     if (agc_is(item, AGC_T_JSON)) {
       v = item;
     } else if (open_frame(vm, item, f)) {
-      v = container(!agc_is(item, AGC_T_LIST), f->n, &f->node, &f->items, &f->members);
+      f->node = container(!agc_is(item, AGC_T_LIST), f->n, &f->items);
+      v = agc_json_value(f->node);
       if (f->n) {
         depth++;
         agc_string *key;
         item = child(vm, f, &key);
-        if (key) f->members[0].key = key;
+        if (key) f->node->members[0].key = key;
         continue;
       }
     } else {
@@ -503,18 +502,14 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
     for (;;) {
       if (depth == 0) return v;
       walk_frame *top = &stack[depth - 1];
-      if (top->members)
-        top->members[top->next].value = v;
-      else
-        top->items->items[top->next] = v;
+      store(top->node, top->items, top->next, v);
       if (++top->next < top->n) {
         agc_string *key;
         item = child(vm, top, &key);
-        if (key) top->members[top->next].key = key;
+        if (key) top->node->members[top->next].key = key;
         break;
       }
-      finish(top->node, top->members, top->n);
-      v = agc_json_value(top->node);
+      v = finish(top->node, top->n);
       depth--;
     }
   }
@@ -619,10 +614,7 @@ static agc_value builtin_float(agc_vm *vm, agc_value *args, uint32_t span) {
   if (j->kind == AGC_JSON_INT) return ok(agc_float((double)agc_as_int(vm, j->scalar)));
   if (j->kind == AGC_JSON_BIG) {
     const agc_string *s = agc_as_string(vm, j->scalar);
-    char *text = agc_alloc_atomic(agc_size_add(s->bytes, 1));
-    memcpy(text, s->data, s->bytes);
-    text[s->bytes] = '\0';
-    double x = strtod(text, NULL);
+    double x = decimal(s->data, s->bytes);
     if (isfinite(x)) return ok(agc_float(x));
   }
   return failure("expected a JSON number representable as a finite Float");

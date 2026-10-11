@@ -301,6 +301,7 @@ agc_string *agc_concat(const agc_string *a, const agc_string *b);
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]);
 agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
+const agc_struct_def *agc_struct_def_of(agc_vm *vm, const agc_struct *st);
 
 agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys);
 

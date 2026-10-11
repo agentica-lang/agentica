@@ -39,25 +39,10 @@ int main(void) {
   agc_init();
   memset(&vm, 0, sizeof vm);
 
-  agc_json *j = parse("-0", 2);
-  assert(j->kind == AGC_JSON_INT && agc_as_int(&vm, j->scalar) == 0);
-  j = parse("-0.0", 4);
+  agc_json *j = parse("-0.0", 4);
   assert(j->kind == AGC_JSON_FLOAT && agc_as_float(&vm, j->scalar) == 0.0 && !signbit(agc_as_float(&vm, j->scalar)));
   j = parse("-1e-500", 7);
   assert(j->kind == AGC_JSON_FLOAT && signbit(agc_as_float(&vm, j->scalar)));
-  j = parse("-9223372036854775808", 20);
-  assert(j->kind == AGC_JSON_INT && agc_as_int(&vm, j->scalar) == INT64_MIN);
-  j = parse("9223372036854775808", 19);
-  assert(j->kind == AGC_JSON_BIG);
-  agc_value v;
-  assert(agc_json_parse((const uint8_t *)"[1e400]", 7, &v) == AGC_JSON_NOT_FINITE);
-  assert(agc_json_parse((const uint8_t *)"1e400 x", 7, &v) == AGC_JSON_TRAILING);
-  assert(agc_json_parse((const uint8_t *)"01", 2, &v) == AGC_JSON_TRAILING);
-  assert(agc_json_parse((const uint8_t *)"[01]", 4, &v) == AGC_JSON_INVALID);
-  assert(agc_json_parse((const uint8_t *)"truex", 5, &v) == AGC_JSON_INVALID);
-  assert(agc_json_parse((const uint8_t *)" \r\n\t", 4, &v) == AGC_JSON_EMPTY);
-  assert(agc_json_parse((const uint8_t *)"x\"\x01\"", 4, &v) == AGC_JSON_CONTROL);
-  assert(agc_json_parse((const uint8_t *)"\"\\ud800\"", 8, &v) == AGC_JSON_INVALID);
 
   round_trip("[-9223372036854775809, 1e2, 0.1, 1e21, 1e-7, -0.0]", "[-9223372036854775809,100.0,0.1,1e+21,1e-7,0.0]");
   round_trip("\"\\u0000\\u001f\\b\\f\\n\\r\\t\\\"\\\\\\/\x7f\\u00e9\\ud83d\\ude00\"",
@@ -86,8 +71,10 @@ int main(void) {
   }
   free(wide);
 
-#ifdef AGC_GC_STRESS
+#if defined(AGC_GC_STRESS)
   size_t depth = 1000;
+#elif defined(AGC_NO_GC)
+  size_t depth = 100000;
 #else
   size_t depth = 1000000;
 #endif

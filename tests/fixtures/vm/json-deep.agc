@@ -4,13 +4,11 @@ def main() -> Void
   keys = "{\"a\":"
   braces = "}"
   i = 0
-  while i < 13
+  while i < 10
     open = open + open
     close = close + close
-    if i < 12
-      keys = keys + keys
-      braces = braces + braces
-    end
+    keys = keys + keys
+    braces = braces + braces
     i = i + 1
   end
   lists = open + "1" + close

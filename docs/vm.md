@@ -1736,14 +1736,15 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `list`, `null?`), `JSON.encode` and the builders (`from`, `object`,
      `array`, `null`) in `vm/json.c`, the `Json` value (5.1) with its text
      and debug forms, and `Json` in `vm-type?`. No format bump.
-     `vm/tests/json_test.c` checks the number rules, the parse statuses,
+     `vm/tests/json_test.c` checks the sign of zero,
      escapes, key order and dedupe on 5,000 keys, and depth-1,000,000
      arrays and objects parsed and encoded (and a list as deep through
-     `JSON.from`); the `json-*` fixtures cover round trips, every parse
+     `JSON.from`; 100,000 under ASan, 1,000 under GC stress); the `json-*` fixtures cover round trips, every parse
      message, the number fixtures of future.md §15.2, the builders,
      extract errors, `RUNTIME-JSON-ENCODE` from `encode` and `from`,
-     `RUNTIME-UNWRAP-ERROR` on a missing key, and an 8,192-deep array and a
-     4,096-deep object (kept small for the GC stress run).
+     `RUNTIME-UNWRAP-ERROR` on a missing key, and a 1,024-deep array and
+     object (kept small for the GC stress and sanitizer runs; the C test is
+     the deep guard).
    - **Part 2.** `JSON.decode` and `JSON.schema`, which need a type table
      in the bytecode and a format bump.
 
@@ -1772,6 +1773,8 @@ those that need files, processes, tasks or the network by name:
   runaway file reaches the out-of-memory exit. Before 7i runs untrusted
   bytecode by default, decide on a cap such as `--max-heap N` through
   `GC_set_max_heap_size`, and whether the evaluator gets a matching limit for the one release it
-  stays behind a flag.
+  stays behind a flag. yyjson allocates its parse document with libc
+  `malloc`, outside the GC heap, so such a cap must bound it too (for
+  example with a counting `yyjson_alc` passed to `yyjson_read_opts`).
 - **BDD on the VM**: decided; handlers move to the VM in 7h, and
   the evaluator is removed in 7i (roadmap).
