@@ -89,7 +89,7 @@
                    "  xs = [1].map do |x| x + m + n end\n  puts(ap(&ap2))\n  puts(xs)\nend\n\n"
                    "def ap2(x: Int) -> Int\n  return x\nend\n")))
     (define functions (ir-program-functions ir))
-    (check-equal? (map ir-function-name functions) '("ap" "main" "ap2" "block@8:16"))
+    (check-equal? (map ir-function-name functions) '("ap" "main" "ap2" "block@test.agc:8:16"))
     (define block (list-ref functions 3))
     (check-equal? (list (ir-function-params block) (ir-function-captures block)) '(1 2))
     (define (ops function kinds)

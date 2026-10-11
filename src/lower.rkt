@@ -338,7 +338,7 @@
        (define index
          (new-block!
           (lambda ()
-            (lower-function (format "block@~a" (span-text span))
+            (lower-function (format "block@~a:~a" (block-file span) (span-text span))
                             (map block-param-name (block-lit-params expression))
                             captured
                             (block-lit-body expression)
@@ -731,6 +731,10 @@
      (emit! 'const (list void-slot (void)) function-span)
      (emit! 'return (list void-slot) function-span)])
   (ir-function name params (length capture-names) high (reverse code) function-span))
+
+(define (block-file span)
+  (define-values (_ file __) (split-path (source-name (source-span-source span))))
+  (path->string file))
 
 (define (span-text span)
   (define start (source-span-start span))

@@ -295,7 +295,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   The `--vm` driver copies a non-file stdin into the VM with a thread that
   it kills once the VM exits.
 - Closures: a `block-lit` becomes an extra IR function after the declared
-  ones (`block@line:col`), lowered by a fresh `lower-function` context;
+  ones (`block@file:line:col`), lowered by a fresh `lower-function` context;
   its captures are the visible names its body (nested blocks included)
   reads, found by `referenced-names`, a generic walk over the transparent
   AST structs. Captures sit after the parameters; `closure` copies them

@@ -12,8 +12,8 @@ Float and Strings PRs, the macOS and Windows CI, the Lists PR, the
 structs, enums and `case` PR, the Result PR, the Maps PR, the closures PR and
 the IO and System PR (`docs/vm.md` §12.2 items 1 to 4, 5a to 5e and 6a) are
 done; the other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
-ranges may start once the VM has closures (7e PR 5e), in parallel with the rest of
-phase 7; queues also need only 7e PR 5e, and sets need the VM maps (7e PR 5d). Real
+ranges and queues are unblocked now that the VM has closures (7e PR 5e) and can
+proceed in parallel with the rest of phase 7, and sets need the VM maps (7e PR 5d). Real
 applications follow, then round 1 of the cross-language benchmarks (phase 12,
 once 7g, 8d and the VM `IO` library are done; round 2 runs whenever tasks land on the VM, 7h), then
 MCP. Adapters and JSON inspection (phase 10) come after MCP: they are small

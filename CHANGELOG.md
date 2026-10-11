@@ -195,6 +195,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Time` and `Random` are reserved builtin module names; declarations or
   import aliases with those names no longer check.
 
+### Fixed
+
+- The bytecode VM no longer does pointer arithmetic on a NULL buffer when
+  `IO.read` reads an empty stdin (`agc_input_all`).
+
 ## [0.1.0] - 2026-10-04
 
 First tagged release of the Agentica interpreter: a small statically typed

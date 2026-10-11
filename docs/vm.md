@@ -403,8 +403,8 @@ and a receiver wrapped in `typed-target` carries its type already.
 
 ### 3.4 Closure conversion
 
-- A `block-lit` becomes an IR function named `block@line:col` after its
-  span. Block functions follow the declared functions, numbered in the
+- A `block-lit` becomes an IR function named `block@file:line:col` after its
+  span (the source file name without its directory). Block functions follow the declared functions, numbered in the
   order the lowerer meets them (an outer block before the blocks inside
   it). Its parameters are the block parameters.
 - Its captures are the names that a `name-ref` anywhere in its body uses
@@ -771,7 +771,8 @@ typedef struct {
   frame (4.3) has `native` set. `RETURN` writes `ret`: the callee's base
   for `CALL` (the caller's `R[a]`), one register below the window for
   `CALL_VALUE` and callbacks. `frame_count` counts all frames, `depth`
-  only the bytecode ones.
+  only the bytecode ones. A native frame keeps function index 0 as a
+  placeholder, so code that walks frames must check `native` first.
 - The interpreter is one `switch` loop. Agentica calls push frames and never
   recurse on the C stack, so a 7h task switch only changes the current task.
 - Before `CALL`, `CALL_VALUE` or a callback push, `depth >= 10000` fails with
