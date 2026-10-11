@@ -61,24 +61,180 @@ static void ensure_registers(agc_vm *vm, size_t needed, uint32_t span) {
   vm->reg_capacity = capacity;
 }
 
-static void push_frame(agc_vm *vm, uint32_t function, uint32_t base, uint32_t span) {
-  if (vm->depth >= AGC_MAX_DEPTH) agc_fail(vm, "RUNTIME-STACK-OVERFLOW", "call depth limit exceeded", span);
-  ensure_registers(vm, (size_t)base + vm->program->functions[function].registers, span);
-  if (vm->depth == vm->frame_capacity) {
+struct agc_native {
+  agc_native_kind kind;
+  uint32_t span;
+  bool started;
+  size_t index, count;
+  agc_value list, fn, acc;
+  agc_list *out;
+};
+
+static agc_frame *new_frame(agc_vm *vm) {
+  if (vm->frame_count == vm->frame_capacity) {
     uint32_t capacity = vm->frame_capacity ? vm->frame_capacity * 2 : 64;
     agc_frame *frames = agc_alloc(agc_size_mul(capacity, sizeof(agc_frame)));
-    if (vm->depth) memcpy(frames, vm->frames, vm->depth * sizeof(agc_frame));
+    if (vm->frame_count) memcpy(frames, vm->frames, vm->frame_count * sizeof(agc_frame));
     vm->frames = frames;
     vm->frame_capacity = capacity;
   }
-  vm->frames[vm->depth].function = function;
-  vm->frames[vm->depth].pc = 0;
-  vm->frames[vm->depth].base = base;
+  return &vm->frames[vm->frame_count++];
+}
+
+static void push_frame(agc_vm *vm, uint32_t function, uint32_t base, uint32_t ret, uint32_t span) {
+  if (vm->depth >= AGC_MAX_DEPTH) agc_fail(vm, "RUNTIME-STACK-OVERFLOW", "call depth limit exceeded", span);
+  ensure_registers(vm, (size_t)base + vm->program->functions[function].registers, span);
+  agc_frame *frame = new_frame(vm);
+  frame->function = function;
+  frame->pc = 0;
+  frame->base = base;
+  frame->ret = ret;
+  frame->native = NULL;
   vm->depth++;
 }
 
+static void call_value(agc_vm *vm, agc_value value, uint32_t window, const agc_value *args, uint32_t argc,
+                       uint32_t ret, uint32_t span) {
+  const agc_program *p = vm->program;
+  const agc_fn *fn = agc_as_fn(vm, value);
+  if (fn->function >= p->function_count || p->functions[fn->function].params != argc ||
+      p->functions[fn->function].captures != fn->n)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", 0);
+  push_frame(vm, fn->function, window, ret, span);
+  agc_value *R = vm->regs + window;
+  if (args) memcpy(R, args, (size_t)argc * sizeof(agc_value));
+  if (fn->n) memcpy(R + argc, fn->captured, (size_t)fn->n * sizeof(agc_value));
+}
+
+static void finish_native(agc_vm *vm, agc_value result) {
+  agc_frame *frame = &vm->frames[vm->frame_count - 1];
+  uint32_t base = frame->base;
+  frame->native = NULL;
+  vm->frame_count--;
+  vm->regs[base] = result;
+}
+
+static bool key_less(agc_vm *vm, agc_value a, agc_value b) {
+  if (agc_is(a, AGC_T_STRING)) {
+    const agc_string *x = agc_as_string(vm, a), *y = agc_as_string(vm, b);
+    size_t n = x->bytes < y->bytes ? x->bytes : y->bytes;
+    int order = n ? memcmp(x->data, y->data, n) : 0;
+    return order < 0 || (order == 0 && x->bytes < y->bytes);
+  }
+  if (agc_is(a, AGC_T_FLOAT)) {
+    double x = agc_as_float(vm, a), y = agc_as_float(vm, b);
+    if (isnan(x)) return false;
+    if (isnan(y)) return true;
+    return x < y;
+  }
+  return agc_as_int(vm, a) < agc_as_int(vm, b);
+}
+
+static agc_value sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys) {
+  size_t n = items->len;
+  if (n < 2) return agc_list_value((agc_list *)items);
+  size_t *order = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
+  size_t *merged = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
+  for (size_t k = 0; k < n; k++) order[k] = k;
+  for (size_t width = 1; width < n; width *= 2) {
+    for (size_t lo = 0; lo < n; lo += 2 * width) {
+      size_t mid = n - lo < width ? n : lo + width;
+      size_t hi = n - mid < width ? n : mid + width;
+      size_t i = lo, j = mid, k = lo;
+      while (i < mid && j < hi)
+        merged[k++] = key_less(vm, keys->items[order[j]], keys->items[order[i]]) ? order[j++] : order[i++];
+      while (i < mid) merged[k++] = order[i++];
+      while (j < hi) merged[k++] = order[j++];
+    }
+    size_t *swap = order;
+    order = merged;
+    merged = swap;
+  }
+  agc_list *sorted = agc_new_list(n);
+  for (size_t k = 0; k < n; k++) sorted->items[k] = items->items[order[k]];
+  return agc_list_value(sorted);
+}
+
+static void resume_native(agc_vm *vm) {
+  agc_frame *frame = &vm->frames[vm->frame_count - 1];
+  agc_native *st = frame->native;
+  uint32_t base = frame->base;
+  const agc_list *items = agc_as_list(vm, st->list);
+  if (st->started) {
+    agc_value got = vm->regs[base];
+    switch (st->kind) {
+      case AGC_NATIVE_MAP:
+      case AGC_NATIVE_SORT_BY: st->out->items[st->count++] = got; break;
+      case AGC_NATIVE_FILTER:
+        if (agc_as_bool(vm, got)) st->out->items[st->count++] = items->items[st->index - 1];
+        break;
+      case AGC_NATIVE_ANY:
+        if (agc_as_bool(vm, got)) {
+          finish_native(vm, agc_bool(true));
+          return;
+        }
+        break;
+      case AGC_NATIVE_ALL:
+        if (!agc_as_bool(vm, got)) {
+          finish_native(vm, agc_bool(false));
+          return;
+        }
+        break;
+      case AGC_NATIVE_REDUCE: st->acc = got; break;
+      default: break;
+    }
+  }
+  st->started = true;
+  if (st->index < items->len) {
+    agc_value args[2];
+    uint32_t argc = 0;
+    if (st->kind == AGC_NATIVE_REDUCE) args[argc++] = st->acc;
+    args[argc++] = items->items[st->index++];
+    call_value(vm, st->fn, base + 1, args, argc, base, st->span);
+    return;
+  }
+  agc_value result = agc_void();
+  switch (st->kind) {
+    case AGC_NATIVE_MAP:
+    case AGC_NATIVE_FILTER:
+      st->out->len = st->count;
+      result = agc_list_value(st->out);
+      break;
+    case AGC_NATIVE_ANY: result = agc_bool(false); break;
+    case AGC_NATIVE_ALL: result = agc_bool(true); break;
+    case AGC_NATIVE_REDUCE: result = st->acc; break;
+    case AGC_NATIVE_SORT_BY: result = sort_by_keys(vm, items, st->out); break;
+    default: break;
+  }
+  finish_native(vm, result);
+}
+
+static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32_t span) {
+  agc_native *st = agc_alloc(sizeof(agc_native));
+  const agc_value *args = vm->regs + base;
+  st->kind = kind;
+  st->span = span;
+  st->list = args[0];
+  if (kind == AGC_NATIVE_REDUCE) {
+    st->acc = args[1];
+    st->fn = args[2];
+  } else {
+    st->fn = args[1];
+  }
+  size_t len = agc_as_list(vm, st->list)->len;
+  agc_as_fn(vm, st->fn);
+  if (kind == AGC_NATIVE_MAP || kind == AGC_NATIVE_FILTER || kind == AGC_NATIVE_SORT_BY) st->out = agc_new_list(len);
+  agc_frame *frame = new_frame(vm);
+  frame->function = 0;
+  frame->pc = 0;
+  frame->base = base;
+  frame->ret = base;
+  frame->native = st;
+  resume_native(vm);
+}
+
 static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32_t span) {
-  agc_frame *frame = &vm->frames[vm->depth - 1];
+  agc_frame *frame = &vm->frames[vm->frame_count - 1];
   const agc_function *callee = &vm->program->functions[function];
   ensure_registers(vm, (size_t)frame->base + callee->registers, span);
   agc_value *R = vm->regs + frame->base;
@@ -88,10 +244,12 @@ static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32
 }
 
 static bool return_value(agc_vm *vm, agc_value result) {
-  uint32_t base = vm->frames[vm->depth - 1].base;
+  uint32_t ret = vm->frames[vm->frame_count - 1].ret;
+  vm->frame_count--;
   vm->depth--;
-  if (vm->depth == 0) return false;
-  vm->regs[base] = result;
+  if (vm->frame_count == 0) return false;
+  vm->regs[ret] = result;
+  if (vm->frames[vm->frame_count - 1].native) resume_native(vm);
   return true;
 }
 
@@ -136,9 +294,9 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
 
 static void run(agc_vm *vm) {
   const agc_program *p = vm->program;
-  push_frame(vm, p->entry, 0, 0);
+  push_frame(vm, p->entry, 0, 0, 0);
   for (;;) {
-    agc_frame *frame = &vm->frames[vm->depth - 1];
+    agc_frame *frame = &vm->frames[vm->frame_count - 1];
     const agc_function *fn = &p->functions[frame->function];
     agc_value *R = vm->regs + frame->base;
     uint32_t pc = frame->pc;
@@ -274,10 +432,26 @@ static void run(agc_vm *vm) {
       case AGC_OP_JUMP_IF_TRUE:
         if (agc_as_bool(vm, R[in.a])) frame->pc = bx;
         break;
-      case AGC_OP_CALL: push_frame(vm, bx, frame->base + in.a, s); break;
+      case AGC_OP_CALL: push_frame(vm, bx, frame->base + in.a, frame->base + in.a, s); break;
+      case AGC_OP_CALL_VALUE: {
+        uint32_t at = frame->base + in.a;
+        call_value(vm, vm->regs[at], at + 1, NULL, in.b, at, s);
+        break;
+      }
+      case AGC_OP_CLOSURE: {
+        uint32_t n = p->functions[bx].captures;
+        agc_fn *f = agc_new_fn(bx, n);
+        for (uint32_t k = 0; k < n; k++) f->captured[k] = R[(uint32_t)in.a + k];
+        R[in.a] = agc_fn_value(f);
+        break;
+      }
       case AGC_OP_TAIL_CALL: replace_frame(vm, bx, in.a, s); break;
       case AGC_OP_CALL_BUILTIN: {
         uint32_t base = frame->base + in.a;
+        if (p->builtins[bx]->native) {
+          start_native(vm, p->builtins[bx]->native, base, s);
+          break;
+        }
         agc_value result = p->builtins[bx]->fn(vm, vm->regs + base, s);
         vm->regs[base] = result;
         break;
@@ -290,7 +464,7 @@ static void run(agc_vm *vm) {
         if (r->ok) {
           R[in.a] = r->value;
         } else {
-          if (vm->depth == 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", s);
+          if (vm->frame_count == 1) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", s);
           return_value(vm, R[in.b]);
         }
         break;

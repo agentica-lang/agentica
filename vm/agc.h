@@ -16,7 +16,7 @@
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN
 } agc_tag;
 
 typedef struct {
@@ -62,6 +62,11 @@ typedef struct {
   agc_value value;
 } agc_result;
 
+typedef struct {
+  uint32_t function, n;
+  agc_value captured[];
+} agc_fn;
+
 typedef enum {
   AGC_OP_MOVE, AGC_OP_CONST, AGC_OP_STEP,
   AGC_OP_ADD_I, AGC_OP_SUB_I, AGC_OP_MUL_I, AGC_OP_DIV_I, AGC_OP_MOD_I, AGC_OP_NEG_I,
@@ -75,6 +80,7 @@ typedef enum {
   AGC_OP_TAIL_CALL,
   AGC_OP_TRY, AGC_OP_IS_OK, AGC_OP_RESULT_VALUE,
   AGC_OP_MAP, AGC_OP_MAP_GET,
+  AGC_OP_CALL_VALUE, AGC_OP_CLOSURE,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -94,10 +100,16 @@ typedef struct agc_vm agc_vm;
 
 typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
 
+typedef enum {
+  AGC_NATIVE_NONE, AGC_NATIVE_MAP, AGC_NATIVE_FILTER, AGC_NATIVE_REDUCE, AGC_NATIVE_EACH,
+  AGC_NATIVE_ANY, AGC_NATIVE_ALL, AGC_NATIVE_SORT_BY
+} agc_native_kind;
+
 typedef struct {
   const char *name;
   uint32_t arity;
   agc_builtin_fn fn;
+  agc_native_kind native;
 } agc_builtin;
 
 typedef struct {
@@ -137,7 +149,12 @@ typedef struct {
   agc_function *functions;
 } agc_program;
 
-typedef struct { uint32_t function, pc, base; } agc_frame;
+typedef struct agc_native agc_native;
+
+typedef struct {
+  uint32_t function, pc, base, ret;
+  agc_native *native;
+} agc_frame;
 
 typedef enum { AGC_DONE, AGC_FAILED, AGC_EXITED } agc_outcome_kind;
 
@@ -167,7 +184,7 @@ struct agc_vm {
   agc_value *regs;
   size_t reg_capacity;
   agc_frame *frames;
-  uint32_t frame_capacity, depth;
+  uint32_t frame_capacity, frame_count, depth;
   agc_input in;
   agc_value args;
   agc_outcome outcome;
@@ -193,6 +210,7 @@ agc_value agc_map_value(agc_map *m);
 agc_value agc_struct_value(agc_struct *s);
 agc_value agc_enum_value(agc_enum *e);
 agc_value agc_result_value(bool ok, agc_value value);
+agc_value agc_fn_value(agc_fn *f);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -202,6 +220,7 @@ agc_map *agc_as_map(agc_vm *vm, agc_value v);
 agc_struct *agc_as_struct(agc_vm *vm, agc_value v);
 agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
 agc_result *agc_as_result(agc_vm *vm, agc_value v);
+agc_fn *agc_as_fn(agc_vm *vm, agc_value v);
 bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
@@ -214,6 +233,7 @@ agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 agc_list *agc_new_list(size_t len);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
+agc_fn *agc_new_fn(uint32_t function, uint32_t n);
 
 void agc_map_seed(uint64_t k0, uint64_t k1);
 uint64_t agc_key_hash(agc_vm *vm, agc_value key);

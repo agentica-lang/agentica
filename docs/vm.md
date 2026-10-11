@@ -31,20 +31,24 @@ details and reasons.
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
 and Windows CI, the Lists PR, the structs, enums and `case` PR and the
-Result PR, the Maps PR and the IO and System PR (12.2 items 1 to 4, 5a
-to 5d and 6a) are in, and so is the
+Result PR, the Maps PR, the closures PR and the IO and System PR (12.2
+items 1 to 4, 5a to 5e and 6a) are in, and so is the
 tail-call PR (after the list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
 imported ones included), `Result[T]` of any of them (and `Result[Void]`),
 `List[T]` of any of them (lists of lists too), and `Map[K, V]` with Int or
-String keys and any of them as values,
+String keys and any of them as values, function values `Fn[...]` of them
+(blocks `do |x| ... end` with their captures, `&name` of local and imported
+functions, `f.call(...)`),
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
 `break` and `next`, `for x in xs` with `break` and `next`, list literals,
 indexing `xs[i]`, map literals, map indexing `m[key]`, struct construction and field access, enum constructors,
 `case` with literal, `_`, variant and Result patterns, `ok`/`error`, the
 `Result.*` builtins, `try`, user functions, calls, tail
-calls (`return f(...)` reuses the frame, 6.1), `return`, interpolation,
+calls (`return f(...)` reuses the frame, 6.1), `return`, the callback
+builtins `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and
+`sort_by` (resumable, 4.3), interpolation,
 `x.to_s` and `x.inspect` of those values, `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn`/`IO.inspect` of any of them, blocking stdin
 (`gets`, `gets!`, `IO.read`, `IO.read_bytes`, `IO.eof?`), `IO.flush`,
@@ -348,8 +352,8 @@ and a receiver wrapped in `typed-target` carries its type already.
 ```
 
 - `body` is a flat list of `ir-instr` and `ir-label`; `--dump-ir` prints it.
-- In the slice, `ir-function` is `(name params slots body span)`; the
-  capture field joins with closures (5e). `ir-program` has every field.
+- `ir-function` and `ir-program` have every field; `captures` is 0 for
+  declared functions.
   The tables hold every struct and enum declaration of the linked program in
   declaration order. Enums are generic only in their checked types, so the
   table needs only each variant's arity. Field types are not in the IR yet:
@@ -391,24 +395,34 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Interpolation | `step`, then the first part straight into the target; each later part into the next free slot, then `concat target target slot`. A string part is a `const`; an expression part is lowered as usual and followed by `to-text slot slot` unless it is a String. String parts charge no step. |
 | `.inspect` | `inspect`. `.to_s` follows what the checker resolved: the receiver itself for String, `String.from_int`/`from_float` for Int/Float, a one-part interpolation for other types. A `method-call` or `field-access` with `resolved` set lowers its resolved node without a step, and a `typed-target` lowers its expression, as `eval-expression` does. |
 | `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's display name, as `type-expression` evaluates to its name. |
-| `&name` | `closure` with no captures. |
-| `f.call(...)` | `call-value` at the invoke span. |
-| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls, calls inside a larger expression (`return 1 + f(n)`) and `return try f(...)` are not tail calls; neither will `.call` be, once the VM lowers it. |
+| `&name` | `step`, then `closure dst fn` with no captures (a new function value each time, like `function-value`). |
+| `f.call(...)` | `step` (invoke span), the target into the window base, the arguments after it, then `call-value base n` at the invoke span; the result lands in the base. |
+| Blocks | `step` (block span), then closure conversion (3.4). |
+| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block (the block is its own function). When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls, calls inside a larger expression (`return 1 + f(n)`) and `return try f(...)` are not tail calls; neither will `.call` be, once the VM lowers it. |
 | Assignment to an existing local | Value into a temporary, then `move`. `and`/`or` write their target before the right side runs, so lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
 
 ### 3.4 Closure conversion
 
-- A `block-lit` becomes an IR function named after its position. Its
-  parameters are the block parameters.
-- Its captures are its free variables in order of first use, including those
-  only nested blocks use. The evaluator captures every visible variable
-  (`capture-scopes`), but a block can only read them
-  (`CHECK-CAPTURED-ASSIGNMENT`), so capturing just the used ones is not
-  observable.
+- A `block-lit` becomes an IR function named `block@line:col` after its
+  span. Block functions follow the declared functions, numbered in the
+  order the lowerer meets them (an outer block before the blocks inside
+  it). Its parameters are the block parameters.
+- Its captures are the names that a `name-ref` anywhere in its body uses
+  (nested blocks included) and that are visible where the block is
+  created, in order of first appearance. The evaluator captures every
+  visible variable (`capture-scopes`), but a block can only read them
+  (`CHECK-CAPTURED-ASSIGNMENT`), and nothing may shadow a visible name
+  (`CHECK-SHADOWED-NAME`), so capturing just the used ones is not
+  observable. The checker records each block's `Fn` type in the `#:types`
+  table, also for blocks it checks through a `List` rule.
 - At creation, captured values move into consecutive slots and `closure`
-  runs. The block-lit node is charged one step, as now.
+  copies them into the function value: a snapshot, as `capture-scopes`
+  unboxes the values, so a later assignment to the outer local does not
+  reach the block. The block-lit node is charged one step, as now.
 - At a call, the VM copies the captures into the callee's capture slots.
-- A block returns the value of its final expression statement, or Void.
+- A block returns the value of its final expression statement (charged as
+  a statement, then lowered as an expression into the returned slot), or
+  Void. `try` inside a block returns from the block.
 - `break` and `next` never cross a function or block (`CHECK-LOOP-CONTROL`),
   so they are plain jumps.
 
@@ -428,15 +442,16 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
 exit 1. Today a value outside Int, Float, Bool, Nil, String, structs and
 enums declared in the program, and `List`, `Map` and `Result` of those (nested to
-any depth; `Result[Void]` too) is rejected, except a Void call or `try`
+any depth; `Result[Void]` too) and `Fn` over those (a Void result too) is rejected, except a Void call or `try`
 used as a statement or returned. A struct or
 enum type is accepted whatever its fields or payloads hold: a value of an
 unsupported type can only come from an expression the lowerer rejects. The only builtins a program may call are `puts`,
 `IO.print`, `IO.warn`, `IO.inspect`, `IO.gets`, `IO.gets!`, `IO.read`,
 `IO.read_bytes`, `IO.flush`, `IO.eof?`, `System.args`, `System.exit`,
 `String.from_int`, `String.from_float`, `ok`,
-`error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or` and
-`Result.message` (their implementation keys; `print` and `IO.puts` map to
+`error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`,
+`Result.message`, `List.map`, `List.filter`, `List.reduce`, `List.each`,
+`List.any?`, `List.all?` and `List.sort_by` (their implementation keys; `print` and `IO.puts` map to
 the first two, `gets` and `gets!` to `IO.gets` and `IO.gets!`).
 `String.from_int` and `String.from_float` are there because the checker
 resolves `x.to_s` on Int and Float to them.
@@ -528,7 +543,11 @@ LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30); the Lists
 PR appended `LIST LIST_LEN LIST_GET` (33); the structs, enums and `case` PR
 appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39); the tail-call PR
 appended `TAIL_CALL` (40); the Result PR appended `TRY IS_OK RESULT_VALUE`
-(43); the Maps PR appended `MAP MAP_GET` (45). `EQ`/`NE`
+(43); the Maps PR appended `MAP MAP_GET` (45); the closures PR appended
+`CALL_VALUE CLOSURE` (47). `CLOSURE` takes the capture count from the
+function table; `CALL_VALUE` checks that `R[a]` is a function value whose
+function takes exactly `b` parameters and has as many captures as the
+value holds (otherwise `RUNTIME-INTERNAL`). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
@@ -595,6 +614,26 @@ when the callback returns. So no builtin ever calls the interpreter from C,
 iteration is bounded by the list length, and a task can block inside a
 callback (7h). Native frames do not count toward call depth, matching the
 evaluator. `sort_by` collects all keys first, then sorts (7.3).
+
+In C (`vm/interp.c`): the C table marks these entries with an
+`agc_native_kind` instead of a function. `CALL_BUILTIN` copies the list,
+the callback and the initial value (`reduce`) out of the argument window
+into an `agc_native` state, allocates the result list up front for `map`,
+`filter` and `sort_by` (one slot per item, so it never grows), and pushes
+a native frame whose base is the call's result register `R[a]`. Each
+callback runs as an ordinary frame at base `R[a+1]` with its result
+register `R[a]`, pushed by the same code as `CALL_VALUE` (depth check,
+arity check, captures copied after the arguments). When a frame returns
+into a native frame, the interpreter resumes it: the state reads the
+callback result from `R[a]`, records it (`map` stores it, `filter` keeps
+the item when it is `true`, `reduce` makes it the accumulator, `sort_by`
+stores the key, `any?` stops at the first `true` and `all?` at the first
+`false`), then either pushes the next callback or pops itself and writes
+the builtin's result into `R[a]`. `reduce` calls `f(accumulator, item)`.
+A `return` or `try` inside a block leaves only the block's frame, and a
+tail call inside it keeps the frame's result register, so the native
+frame still gets the value. Registers above `a` are free by the lowering
+invariant, so the callback frames may use them.
 
 ### 4.4 Steps
 
@@ -672,7 +711,7 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Result, in that order; Fn, Json and Handle join with their PRs. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Fn, in that order; Json and Handle join with their PRs. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
@@ -680,7 +719,7 @@ typedef struct {
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
-| Function value | `{ uint32_t function, n; agc_value captured[]; }`. |
+| Function value | `agc_fn { uint32_t function, n; agc_value captured[]; }` (`GC_MALLOC`), tag `AGC_T_FN`. `&name` is a value with `n = 0`. Text and debug form `<Fn>` (the checker never lets a program print one). |
 | Json | Tree: null, bool, int64, big integer as decimal text (parsed integers may exceed Int until extracted), double, string, array, object. Objects are built by collecting pairs, then one sort and dedupe with the last value winning, which is the order `write-json` prints. |
 | Handle (7h) | `{ uint32_t kind; void *resource; }` for Task, Socket, Listener, HTTP values, FileHandle, Process. |
 
@@ -728,10 +767,11 @@ typedef struct {
   `GC_MALLOC` (native frames point to their state) and grown by doubling. A
   call grows the registers to fit the callee's declared count; new registers
   are zeroed. Frames hold base offsets, never raw pointers:
-  `{ uint32_t function, pc, base, ret; }`, or a native frame (4.3). In the
-  slice a frame is `{ function, pc, base }`: `RETURN` writes the callee's
-  base register, which is the caller's `R[a]`; `ret` joins with
-  `CALL_VALUE`, whose result register differs from its window.
+  `{ uint32_t function, pc, base, ret; agc_native *native; }`; a native
+  frame (4.3) has `native` set. `RETURN` writes `ret`: the callee's base
+  for `CALL` (the caller's `R[a]`), one register below the window for
+  `CALL_VALUE` and callbacks. `frame_count` counts all frames, `depth`
+  only the bytecode ones.
 - The interpreter is one `switch` loop. Agentica calls push frames and never
   recurse on the C stack, so a 7h task switch only changes the current task.
 - Before `CALL`, `CALL_VALUE` or a callback push, `depth >= 10000` fails with
@@ -824,7 +864,10 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
   `process.rkt`). It is the only way a String reaches an OS or library call.
 - **Sorting.** `List.sort` and `sort_by` are a stable merge sort with
   `order<?`: strings by code point (UTF-8 byte order), numbers by `<`, NaN
-  last.
+  last. `order<?` is a strict weak order on each key type (`-0.0` and
+  `0.0` tie, NaNs tie with each other), so any stable sort gives Racket's
+  result; `sort_by` is a bottom-up merge sort over item indexes (no
+  recursion), and keys of mixed or other types are `RUNTIME-INTERNAL`.
 - **Streams.** In 7e, stdin is one buffered reader over `read(0)`, shared by
   `gets`, `read`, `read_bytes` and `eof?`, like the single Racket port. It
   lives in `vm/input.c` (`agc_input_*`), the only code that reads stdin:
@@ -921,7 +964,11 @@ The loader validates the whole file before running anything. Failures print
   at most 255 pairs, so one step cannot pay for a huge literal; longer
   literals are extended one `Map.put` at a time.
 - **Entry**: exists, with no parameters or captures.
-- **In the slice**: captures must be 0; constant kinds above 6 are
+- **Closures**: `CALL_VALUE` checks the window `a..a+b`; `CLOSURE` checks
+  the function index and the window of that function's captures (`a`
+  itself when it has none). A `CALL_VALUE` counts as a call for the
+  termination rules.
+- **In the slice**: constant kinds above 6 are
   rejected. Struct field counts and variant arities are at most 65535. All
   variants go into one array sized by a first pass over the Enums section,
   and each nullary variant gets one small shared empty enum value, so a file
@@ -961,11 +1008,18 @@ The loader validates the whole file before running anything. Failures print
   `MAP_GET` registers (and, at
   run time, a missing key's code, span and message, a nested map printed,
   and `RUNTIME-INTERNAL` for a Void key or a `MAP_GET` on a list), a
-  `Map.put` import of the wrong arity, `STEP 0`, a backward jump that misses a `STEP`,
+  `Map.put` import of the wrong arity, the `CALL_VALUE` window, a
+  `CALL_VALUE` that does not start its function with a `STEP`, a `CLOSURE`
+  of a function out of range or with a capture window out of range,
+  captures that do not fit the registers, an entry with captures (and, at
+  run time, a `CLOSURE` called through `CALL_VALUE`, `List.map` with a
+  closure, and `RUNTIME-INTERNAL` for a call of a non-function and for a
+  wrong parameter count, directly or as a callback), a `List.map` import
+  of the wrong arity, `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one (one is just `TAIL_CALL`, `RETURN`), an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
-- **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
-  string bounds, and the register cap (6.1).
+- **Run time**: `CALL_VALUE` and callback parameter and capture counts,
+  tags (5.2), list, map and string bounds, and the register cap (6.1).
 
 Types are not verified statically; tag checks at run time are far simpler
 and cost one predictable branch each.
@@ -1367,7 +1421,10 @@ the platform's OpenSSL package) to each job.
   total step count with the evaluator and sweeps every limit from 1 to it
   when the total is at most 2000; above that (the call-depth program, about
   60,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
-  and the total minus one. The run without a limit compares all three
+  and the total minus one. A fixture with a `name.sweep` file (a stride,
+  read with `file->value`) sweeps every stride-th limit from 1 plus the
+  total and the total minus one instead, which keeps big fixtures cheap.
+  The run without a limit compares all three
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. Programs using `Random` run with several `--seed` values.
@@ -1449,9 +1506,14 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      nested map printed. No format bump: `MAP` and `MAP_GET` are appended.
      There is no `for` over a map (the checker rejects it); Map library
      functions stay in item 6b.
-   - **5e** Closures (`block-lit`), `&name`, `.call`, the resumable `List`
-     builtins (`map`, `filter`, `reduce`, `sort_by`, `each`, `any?`,
-     `all?`).
+   - **5e Closures** (done). Blocks (`block-lit`) as closures with
+     snapshot captures (3.4), `&name` of local and imported functions,
+     `.call` (`CALL_VALUE`, `CLOSURE`), `Fn` values in lists, maps and
+     structs, and the resumable `List` builtins (`map`, `filter`,
+     `reduce`, `sort_by`, `each`, `any?`, `all?`) as native frames
+     (4.3). No format bump: the function table always had its captures
+     field, and the two opcodes are appended. Closures passed to
+     `Task.spawn`, HTTP or BDD stay `LOWER-UNSUPPORTED` until 7h.
 6. **Library.** Two PRs:
    - **6a IO and System** (done). Blocking stdio; it moves to libuv
      resumable builtins with the scheduler (7h). `IO.inspect`, `IO.gets`

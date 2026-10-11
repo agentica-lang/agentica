@@ -14,7 +14,7 @@
 (struct ir-program (sources structs enums functions entry span) #:transparent)
 (struct ir-struct (name fields) #:transparent)
 (struct ir-enum (name variants) #:transparent)
-(struct ir-function (name params slots body span) #:transparent)
+(struct ir-function (name params captures slots body span) #:transparent)
 (struct ir-label (id) #:transparent)
 (struct ir-instr (op args spans) #:transparent)
 
@@ -33,6 +33,10 @@
     [(result-type? type) (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
     [(and (pair? type) (memq (car type) '(Struct Enum)))
      (eq? (hash-ref user-types (cadr type) #f) (car type))]
+    [(and (pair? type) (eq? (car type) 'Fn))
+     (and (for/and ([parameter (in-list (drop-right (cdr type) 1))])
+            (vm-type? parameter user-types))
+          (or (eq? (last type) 'Void) (vm-type? (last type) user-types)))]
     [else (and (memq type value-types) #t)]))
 
 (define (user-tables declarations)
@@ -65,7 +69,25 @@
 
 (define vm-builtins '("puts" "IO.print" "IO.warn" "IO.inspect" "IO.gets" "IO.gets!" "IO.read"
                       "IO.read_bytes" "IO.flush" "IO.eof?" "System.args" "System.exit"
-                      "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"))
+                      "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"
+                      "List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?" "List.sort_by"))
+
+(define (referenced-names node)
+  (define seen (make-hasheq))
+  (define found (make-hash))
+  (define names '())
+  (let walk ([node node])
+    (cond
+      [(name-ref? node)
+       (unless (hash-ref found (name-ref-name node) #f)
+         (hash-set! found (name-ref-name node) #t)
+         (set! names (cons (name-ref-name node) names)))]
+      [(pair? node) (walk (car node)) (walk (cdr node))]
+      [(and (struct? node) (not (hash-ref seen node #f)))
+       (hash-set! seen node #t)
+       (for ([field (in-vector (struct->vector node) 1)]) (walk field))]
+      [else (void)]))
+  (reverse names))
 
 (define (lower program types)
   (let/ec return
@@ -102,13 +124,32 @@
         (unless (memq text-source sources)
           (set! sources (append sources (list text-source)))))
       (note-source! (program-span program))
+      (define blocks (make-hasheqv))
+      (define block-count (length declarations))
+      (define (new-block! make)
+        (define index block-count)
+        (set! block-count (add1 block-count))
+        (hash-set! blocks index (make))
+        index)
+      (define env (list types program-types function-index unsupported note-source! new-block!))
       (define functions
         (for/list ([declaration (in-list declarations)])
-          (lower-function declaration types program-types function-index unsupported note-source!)))
-      (ir-program sources structs enums functions (hash-ref function-index "main")
+          (lower-function (function-decl-name declaration)
+                          (map param-name (function-decl-params declaration))
+                          '()
+                          (function-decl-body declaration)
+                          (function-decl-span declaration)
+                          #f
+                          env)))
+      (ir-program sources structs enums
+                  (append functions
+                          (for/list ([index (in-range (length declarations) block-count)])
+                            (hash-ref blocks index)))
+                  (hash-ref function-index "main")
                   (program-span program)))))
 
-(define (lower-function declaration types program-types function-index unsupported note-source!)
+(define (lower-function name parameter-names capture-names statements function-span block? env)
+  (match-define (list types program-types function-index unsupported note-source! new-block!) env)
   (match-define (list user-types struct-info variant-ids) program-types)
   (define code '())
   (define next 0)
@@ -178,7 +219,7 @@
        (require-type! inner #f (typed-target-type expression))
        (lower-expression inner want)]
       [(or (interpolation? expression) (inspection? expression)) (lower-value expression want)]
-      [(try-expr? expression)
+      [(or (try-expr? expression) (invoke? expression))
        (require-type! expression void?)
        (lower-value expression want)]
       [else
@@ -285,7 +326,64 @@
             (set! next slot))])
        (set! next (if want saved (add1 dst)))
        dst]
+      [(function-ref? expression)
+       (emit! 'step '() span)
+       (lower-closure (hash-ref function-index (function-ref-name expression)) '() span want)]
+      [(block-lit? expression)
+       (emit! 'step '() span)
+       (define captured
+         (for/list ([name (in-list (referenced-names (block-lit-body expression)))]
+                    #:when (lookup name))
+           name))
+       (define index
+         (new-block!
+          (lambda ()
+            (lower-function (format "block@~a" (span-text span))
+                            (map block-param-name (block-lit-params expression))
+                            captured
+                            (block-lit-body expression)
+                            span
+                            #t
+                            env))))
+       (lower-closure index (map lookup captured) span want)]
+      [(invoke? expression)
+       (emit! 'step '() span)
+       (define saved next)
+       (define base (alloc!))
+       (lower-expression (invoke-target expression) base)
+       (for ([argument (in-list (invoke-args expression))] [index (in-naturals 1)])
+         (set! next (+ base index))
+         (lower-expression argument (alloc!)))
+       (emit! 'call-value (list base (length (invoke-args expression))) span)
+       (cond
+         [want (emit! 'move (list want base) span)
+               (set! next saved)
+               want]
+         [else (set! next (add1 base)) base])]
       [else (unsupported "this expression" span)]))
+
+  (define (lower-closure index slots span want)
+    (if (and want (<= (length slots) 1))
+        (lower-closure-into index slots span want)
+        (lower-closure-window index slots span want)))
+
+  (define (lower-closure-into index slots span want)
+    (for ([slot (in-list slots)])
+      (emit! 'move (list want slot) span))
+    (emit! 'closure (list want index) span)
+    want)
+
+  (define (lower-closure-window index slots span want)
+    (define saved next)
+    (define base (alloc!))
+    (for ([slot (in-list slots)] [k (in-naturals)])
+      (emit! 'move (list (if (zero? k) base (alloc!)) slot) span))
+    (emit! 'closure (list base index) span)
+    (cond
+      [want (emit! 'move (list want base) span)
+            (set! next saved)
+            want]
+      [else (set! next (add1 base)) base]))
 
   (define (lower-list expression want)
     (define span (list-lit-span expression))
@@ -610,15 +708,29 @@
        (set! next saved)]
       [else (unsupported "this statement" span)]))
 
-  (for ([parameter (in-list (function-decl-params declaration))])
-    (hash-set! (car scopes) (param-name parameter) (alloc!)))
+  (for ([parameter (in-list parameter-names)])
+    (hash-set! (car scopes) parameter (alloc!)))
   (define params next)
-  (lower-block (function-decl-body declaration))
-  (define void-slot (alloc!))
-  (emit! 'const (list void-slot (void)) (function-decl-span declaration))
-  (emit! 'return (list void-slot) (function-decl-span declaration))
-  (ir-function (function-decl-name declaration) params high (reverse code)
-               (function-decl-span declaration)))
+  (unless (null? capture-names)
+    (define captures (make-hash))
+    (for ([capture (in-list capture-names)])
+      (hash-set! captures capture (alloc!)))
+    (set! scopes (list (car scopes) captures)))
+  (define final
+    (and block? (pair? statements) (expr-stmt? (last statements)) (last statements)))
+  (cond
+    [final
+     (lower-block (drop-right statements 1))
+     (define final-span (node-span final))
+     (emit! 'step '() final-span)
+     (define slot (lower-expression (expr-stmt-value final) #f #:void? #t))
+     (emit! 'return (list slot) final-span)]
+    [else
+     (lower-block statements)
+     (define void-slot (alloc!))
+     (emit! 'const (list void-slot (void)) function-span)
+     (emit! 'return (list void-slot) function-span)])
+  (ir-function name params (length capture-names) high (reverse code) function-span))
 
 (define (span-text span)
   (define start (source-span-start span))
@@ -631,7 +743,8 @@
     [(and (memq op '(jump jump-if-false jump-if-true))
           (= index (if (eq? op 'jump) 0 1)))
      (format "L~a" value)]
-    [(and (memq op '(call tail-call)) (= index 1)) (format "fn~a" value)]
+    [(and (memq op '(call tail-call closure)) (= index 1)) (format "fn~a" value)]
+    [(and (eq? op 'call-value) (= index 1)) (format "~a" value)]
     [(and (memq op '(enum is-variant)) (= index 2)) (format "v~a" value)]
     [(and (eq? op 'struct) (= index 2)) (format "s~a" value)]
     [(and (memq op '(field payload)) (= index 2)) (format "~a" value)]
@@ -670,8 +783,12 @@
   (string-join
    (for/list ([function (in-list (ir-program-functions ir))] [index (in-naturals)])
      (string-join
-      (cons (format "fn~a ~a params=~a slots=~a~a" index (ir-function-name function)
-                    (ir-function-params function) (ir-function-slots function)
+      (cons (format "fn~a ~a params=~a~a slots=~a~a" index (ir-function-name function)
+                    (ir-function-params function)
+                    (if (zero? (ir-function-captures function))
+                        ""
+                        (format " captures=~a" (ir-function-captures function)))
+                    (ir-function-slots function)
                     (if (= index (ir-program-entry ir)) " entry" ""))
             (for/list ([item (in-list (ir-function-body function))])
               (cond

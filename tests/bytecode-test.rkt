@@ -81,6 +81,30 @@
                   '((map 255) (call-builtin 0) (call-builtin 0) (call-builtin 0)))
     (check-equal? (bc-program-builtins program) '(("Map.put" . 3) ("puts" . 1))))
 
+  (test-case "a block becomes a function with its captures after its parameters"
+    (define ir
+      (lower-text (string-append
+                   "def ap(f: Fn[Int, Int]) -> Int\n  return f.call(2)\nend\n\n"
+                   "def main() -> Void\n  n = 1\n  m = 2\n"
+                   "  xs = [1].map do |x| x + m + n end\n  puts(ap(&ap2))\n  puts(xs)\nend\n\n"
+                   "def ap2(x: Int) -> Int\n  return x\nend\n")))
+    (define functions (ir-program-functions ir))
+    (check-equal? (map ir-function-name functions) '("ap" "main" "ap2" "block@8:16"))
+    (define block (list-ref functions 3))
+    (check-equal? (list (ir-function-params block) (ir-function-captures block)) '(1 2))
+    (define (ops function kinds)
+      (for/list ([item (in-list (ir-function-body function))]
+                 #:when (and (ir-instr? item) (memq (ir-instr-op item) kinds)))
+        (cons (ir-instr-op item) (ir-instr-args item))))
+    (check-equal? (ops (list-ref functions 0) '(call call-value tail-call return))
+                  '((call-value 1 1) (return 1) (return 1)))
+    (check-equal? (ops (list-ref functions 1) '(move closure))
+                  '((move 5 1) (move 6 0) (closure 5 3) (move 4 5) (move 2 3) (closure 4 2) (move 3 4) (move 3 2)))
+    (define program (ir->bytecode ir))
+    (define encoded (list-ref (bc-program-functions program) 3))
+    (check-equal? (list (bc-function-params encoded) (bc-function-captures encoded)) '(1 2))
+    (check-equal? (bc-program-builtins program) '(("List.map" . 2) ("puts" . 1))))
+
   (test-case "opcode numbers match vm/agc.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)
@@ -108,6 +132,8 @@
                   '(2 10))
     (check-equal? (unsupported-at "def main() -> Void\n  puts([1, 2].size)\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8))
+    (check-equal? (unsupported-at "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\nend\n")
+                  '(6 7))
     (check-equal? (unsupported-at "def main() -> Void\n  h = Header(name: \"a\", value: \"b\")\nend\n") '(2 7))
     (check-equal? (unsupported-at "struct S\n  j: Json\nend\n\ndef main() -> Void\n  s = S(j: JSON.null)\nend\n")
                   '(6 12))

@@ -9,9 +9,9 @@ tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
 (phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice, the
 Float and Strings PRs, the macOS and Windows CI, the Lists PR, the
-structs, enums and `case` PR, the Result PR, the Maps PR and the IO and
-System PR (`docs/vm.md` §12.2 items 1 to 4, 5a to 5d and 6a) are done; the rest of item 5 (7e PR 5e) and the
-other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
+structs, enums and `case` PR, the Result PR, the Maps PR, the closures PR and
+the IO and System PR (`docs/vm.md` §12.2 items 1 to 4, 5a to 5e and 6a) are
+done; the other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (7e PR 5e), in parallel with the rest of
 phase 7; queues also need only 7e PR 5e, and sets need the VM maps (7e PR 5d). Real
 applications follow, then round 1 of the cross-language benchmarks (phase 12,
@@ -1103,7 +1103,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 - [x] `src/lower.rkt`: checked program → IR. Resolve names to slots and indexes, make types explicit, keep spans. Forms outside the supported subset fail with `LOWER-UNSUPPORTED` (`docs/vm.md` section 3.5).
 - [x] Lower the slice forms: Int and Bool literals and operators (with short-circuit `and`/`or`), locals, `if`/`elsif`/`else`, `while`, `break`/`next`, functions, calls, returns, `puts` of String literals and Ints.
 - [x] Lower Float and Nil literals and operators, and `puts`/`print` of Float, Bool and Nil.
-- [ ] Lower every other core form: strings, `for`, structs, field access, lists, maps, indexing, enums and `case`, `Result`, `try`, `&name` and `.call`.
+- [x] Lower every other core form: strings, `for`, structs, field access, lists, maps, indexing, enums and `case`, `Result`, `try`, `&name` and `.call`.
 - [x] `--dump-ir` in the CLI for debugging.
 - [ ] `tests/lower-test.rkt`: one test per form, plus span checks. Step counts are covered by the VM's `--max-steps` sweep in the differential tests.
 
@@ -1135,7 +1135,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Tail calls: `return f(...)` of a user function lowers to `TAIL_CALL`, which reuses the frame, so tail and mutual recursion do not grow the call depth on the VM; same steps as `CALL` + `RETURN`; a documented difference from the evaluator, which still overflows (`docs/vm.md` §4.3, §6.1).
 - [x] Maps as a persistent HAMT plus the evaluator's reversed key list (insertion order), map literals (typed empty ones too), `m[key]` with `RUNTIME-KEY-NOT-FOUND` at the index span, and their text and debug forms (`docs/vm.md` §12.2 item 5d).
 - [x] `Result` values, `ok`/`error`, the `Result.*` builtins (`RUNTIME-UNWRAP-ERROR` at the call span), `try`, Result patterns in `case`, and their text and debug forms (`docs/vm.md` §12.2 item 5c).
-- [ ] Function values, closures, resumable `List` builtins.
+- [x] Function values, closures (blocks with snapshot captures), `&name`, `.call`, and the resumable `List` builtins `map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` as native frames (`docs/vm.md` §12.2 item 5e).
 - [x] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`, on blocking stdio through one input layer (`vm/input.c`); it moves to libuv resumable builtins with the scheduler in 7h (`docs/vm.md` §12.2 item 6a).
 - [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).

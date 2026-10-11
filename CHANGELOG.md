@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs function values: blocks (`do |x| ... end`) as
+  closures that capture the values visible when they are made, `&name` of
+  local and imported functions, `f.call(...)`, and `Fn` values in lists,
+  maps and structs. `List.map`, `filter`, `reduce`, `each`, `any?`, `all?`
+  and `sort_by` call their callbacks as resumable native frames, with the
+  evaluator's step counts, call-depth limit, spans, early stops and stable
+  `sort_by` order (NaN last). Closures for `Task.spawn`, HTTP and BDD stay
+  unsupported on the VM. The `.agcb` format version does not change.
 - The bytecode VM runs the `IO` and `System` builtins: `IO.inspect`,
   `gets`/`IO.gets` (EOF is an error value), `gets!`/`IO.gets!`
   (`RUNTIME-END-OF-INPUT` at the call span), `IO.read`, `IO.read_bytes`

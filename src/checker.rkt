@@ -1239,7 +1239,9 @@
               (format "this block must give ~a on every path" (type->string result))
               (block-lit-span block)
               #:help "end the block with an expression, or return a value on every path"))
-      (cons 'Fn (append parameter-types (list result))))
+      (define block-type (cons 'Fn (append parameter-types (list result))))
+      (when types (hash-set! types block block-type))
+      block-type)
 
     (define (check-field-access expression expected)
       (define target (check-expression (field-access-target expression) #f))

@@ -126,7 +126,8 @@ static void check_spans(reader *r, const agc_program *p, uint32_t first, uint32_
 
 static bool calls_anything(const agc_function *f) {
   for (uint32_t pc = 0; pc < f->count; pc++)
-    if (f->code[pc].op == AGC_OP_CALL || f->code[pc].op == AGC_OP_TAIL_CALL || f->code[pc].op == AGC_OP_CALL_BUILTIN)
+    if (f->code[pc].op == AGC_OP_CALL || f->code[pc].op == AGC_OP_TAIL_CALL || f->code[pc].op == AGC_OP_CALL_BUILTIN ||
+        f->code[pc].op == AGC_OP_CALL_VALUE)
       return true;
   return false;
 }
@@ -237,6 +238,13 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         if (bx >= p->builtin_count) reject(r, "builtin index out of range");
         check_window(r, in.a, p->builtins[bx]->arity, f);
         check_spans(r, p, span, p->builtins[bx]->arity + 1);
+        break;
+      case AGC_OP_CALL_VALUE:
+        check_window(r, in.a, (uint32_t)in.b + 1, f);
+        break;
+      case AGC_OP_CLOSURE:
+        if (bx >= p->function_count) reject(r, "function index out of range");
+        check_window(r, in.a, p->functions[bx].captures, f);
         break;
       case AGC_OP_RETURN:
         check_register(r, in.a, f);
@@ -379,8 +387,8 @@ static void load(reader *r, agc_program *p) {
     f->captures = read_u32(r);
     f->registers = read_u32(r);
     f->span = read_u32(r);
-    if (f->captures != 0) reject(r, "captures are not supported yet");
-    if (f->registers == 0 || f->registers > 65535 || f->params > f->registers) reject(r, "bad register count");
+    if (f->registers == 0 || f->registers > 65535 || (uint64_t)f->params + f->captures > f->registers)
+      reject(r, "bad register count");
     if (f->span >= p->span_count) reject(r, "span index out of range");
     f->count = read_count(r, 12, "instruction");
     if (f->count == 0) reject(r, "empty function");
@@ -398,6 +406,7 @@ static void load(reader *r, agc_program *p) {
   p->entry = read_u32(r);
   if (p->entry >= p->function_count) reject(r, "entry out of range");
   if (p->functions[p->entry].params != 0) reject(r, "entry takes parameters");
+  if (p->functions[p->entry].captures != 0) reject(r, "entry has captures");
   if (left(r) != 0) reject(r, "trailing bytes");
 
   for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);

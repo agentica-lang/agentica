@@ -180,6 +180,20 @@ agc_value agc_result_value(bool ok, agc_value value) {
   return v;
 }
 
+agc_value agc_fn_value(agc_fn *f) {
+  agc_value v;
+  v.tag = AGC_T_FN;
+  v.as.p = f;
+  return v;
+}
+
+agc_fn *agc_new_fn(uint32_t function, uint32_t n) {
+  agc_fn *f = agc_alloc(agc_size_add(sizeof(agc_fn), agc_size_mul(n, sizeof(agc_value))));
+  f->function = function;
+  f->n = n;
+  return f;
+}
+
 agc_struct *agc_new_struct(uint32_t type, uint32_t n) {
   agc_struct *s = agc_alloc(agc_size_add(sizeof(agc_struct), agc_size_mul(n, sizeof(agc_value))));
   s->type = type;
@@ -261,6 +275,11 @@ agc_enum *agc_as_enum(agc_vm *vm, agc_value v) {
 
 agc_result *agc_as_result(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_RESULT) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_fn *agc_as_fn(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_FN) wrong_tag(vm);
   return v.as.p;
 }
 
