@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs linked programs: relative, `std/` (such as
+  `std/queue.agc`) and `pkg/` imports, linked by the front end into one
+  bytecode file. A runtime error inside an imported file reports that
+  file's path, line and column, as the evaluator does.
 - The bytecode VM runs `JSON.decode` and `JSON.schema` for user structs,
   with the evaluator's error values and paths and byte-identical schemas
   (imported structs keep their linked `$defs` names). Deep and recursive

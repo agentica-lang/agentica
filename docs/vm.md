@@ -71,7 +71,11 @@ and every `JSON` builtin (`JSON.parse`, `encode`, `from`, `object`,
 `array`, `null`, `null?`, `get`, `at`, `string`, `int`, `float`, `bool`,
 `list`, also as methods such as `j.get("a")`, and the typed `decode` and
 `schema` of user structs through the Types section; 2.4, 2.6, 2.7, 4.6,
-5.1). Runtime diagnostics come in the plain,
+5.1). Linked programs run: relative, `std/` and
+`pkg/` imports are resolved and linked by the front end
+(`src/modules.rkt`) into one program before lowering, so the bytecode holds
+no imports, and code from an imported file keeps that file's spans (4.6).
+Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -858,7 +862,14 @@ bytes. Sections come in this fixed order; each starts with a `u32` count
 | Entry | `u32` index of `main` |
 
 The full source texts are embedded so the VM prints diagnostics without
-reading files.
+reading files. A linked program has one Sources entry per file that a span
+points into: the entry file first (span 0), then the others in the order
+the lowerer meets them. Each entry keeps the name the front end gave the
+file (the entry file as given on the command line, other files by their
+full path, `std/` modules by their `std/...` key), so a diagnostic raised in
+imported code names that file, line and column exactly as the evaluator
+does. The loader checks every span's line and column against its own
+source.
 
 Format version 2 (the structs, enums and `case` PR) fills the Structs and
 Enums sections; version 1 had three empty sections there (Types, Structs,
@@ -1812,6 +1823,17 @@ Outside this list, the **tail-call** PR (done) added `TAIL_CALL`: a
 `return f(...)` of a user function reuses the frame (3.3, 4.2, 4.3, 6.1),
 with loader rules (8), the `tail-calls` fixture, and a VM-only test of a
 loop and a mutually recursive pair one million calls deep.
+
+The **linked programs** PR (done) needed no new code: `compile` and
+`--vm` already link through `src/modules.rkt`, and the Sources section
+already held every file. It added the `linked` fixture (nested relative
+imports, a `pkg/` module from `tests/fixtures/vm/agc_libs/`, imported
+structs, enums and blocks, and `RUNTIME-INDEX-OUT-OF-RANGE` raised inside
+`lib/stock.agc`), the `std-queue` fixture, the `same-basename` fixture
+(`lib/a/m.agc` and `lib/b/m.agc` with blocks at the same line and column,
+so two functions are named `block@m.agc:2:17`), `--vm` CLI runs of
+`linked` in the three formats,
+and loader asserts for spans in a second source. No format bump.
 
 7e is done when every example runs on the VM with the same results, except
 those that need files, processes, tasks or the network by name:
