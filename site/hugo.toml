@@ -15,6 +15,9 @@ disableKinds = ["taxonomy", "term", "rss"]
   startLevel = 2
   endLevel = 2
 
+[minify]
+  minifyOutput = true
+
 [[module.mounts]]
   source = "content"
   target = "content"
