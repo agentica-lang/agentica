@@ -2,7 +2,49 @@ def show(n: Int) -> Void
   print(n)
 end
 
+struct Span
+  name: String
+  r: Range
+end
+
+enum Shape
+  Line(Range)
+  Dot
+end
+
+def find(r: Range, want: Int) -> Int
+  for i in r
+    if i == want
+      return i * 10
+    end
+  end
+  return -1
+end
+
+def checked(r: Range) -> Result[Int]
+  total = 0
+  for i in r
+    v: Result[Int] = ok(i)
+    if i == 3
+      v = error("three")
+    end
+    total += try v
+  end
+  return ok(total)
+end
+
 def main() -> Void
+  s = Span(name: "a", r: 1...3)
+  m = {"x": 4..6}
+  IO.inspect([s, Span(name: "b", r: m["x"])])
+  IO.inspect([Shape.Line(s.r), Shape.Dot])
+  case Shape.Line(m["x"])
+    Shape.Line(r) -> puts(r.size)
+    Shape.Dot -> puts("dot")
+  end
+  puts([find(1..9, 4), find(1...4, 4)])
+  puts([checked(1..2), checked(1..5)])
+  puts([(1..2) != (1..2), (1..2) != (1...2), s.r != m["x"]])
   for i in 0...3 do
     print(i)
   end

@@ -465,7 +465,7 @@ evens = (0..10).to_a.filter do |n|
 end
 ```
 
-- `for x in range` yields each `Int` in order without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `downto`, or `List.reverse` on `to_a`). Iteration up to the largest `Int` does not overflow. Each iteration costs steps like `for` over a list. The range is evaluated once, so assigning to its variable in the body does not change the loop.
+- `for x in range` yields each `Int` in order without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `downto`, or `List.reverse` on `to_a`). Iteration up to the largest `Int` does not overflow. Each iteration costs one step (even with an empty body), plus its body. The range is evaluated once, so assigning to its variable in the body does not change the loop.
 - `Range` functions, also methods (`(1..5).size`):
 
   | Function | Result |
@@ -476,7 +476,7 @@ end
   | `Range.each(r: Range, f: Fn[Int, Void]) -> Void` | calls `f` on each value in order |
   | `Range.first(r: Range) -> Result[Int]`, `Range.last(r: Range) -> Result[Int]` | the first and last included values; `error("the range is empty")` for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)` |
 
-- `Int` methods for loops, all returning `Void`: `n.times(f)` calls `f` with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, f)` with `a` up to `b` (nothing when `b < a`); `a.downto(b, f)` with `a` down to `b` (nothing when `b > a`). `f` is `Fn[Int, Void]`, usually a block. They are also module functions: `Int.times(n, f)`, `Int.upto(a, b, f)`, `Int.downto(a, b, f)`.
+- `Int` methods for loops, all returning `Void`: `n.times(f)` calls `f` with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, f)` with `a` up to `b` (nothing when `b < a`); `a.downto(b, f)` with `a` down to `b` (nothing when `b > a`). `f` is `Fn[Int, Void]`, usually a block. They are also module functions: `Int.times(n, f)`, `Int.upto(a, b, f)`, `Int.downto(a, b, f)`. Each call of `f` (and `Range.each`'s) costs one step plus the block. A negative literal receiver needs parentheses: `-5.times do ... end` is `-(5.times ...)`, a `CHECK-VOID-VALUE` whose help says to write `(-5).times`.
 - Text form: `1..5` and `1...5`, as Ruby's `inspect`; `to_s`, interpolation and `IO.inspect` all show it. Ranges have `==` (start, end and kind match). They are not JSON-encodable and cannot be `Map` keys.
 - Ranges of `String` or `Float` and `step` are not supported.
 

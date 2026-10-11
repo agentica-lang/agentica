@@ -16,8 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   receiver), `Range.to_a` (at most 1048576 values), `Range.include?`,
   `Range.each`, `Range.first` and `Range.last` (both `Result[Int]`), also
   as methods. `Int.times`, `Int.upto` and `Int.downto` take a block:
-  `3.times do |i| ... end`. Ranges print as `1..5` / `1...5` and support
-  `==`. Both the evaluator and the bytecode VM run them; the VM appends the
+  `3.times do |i| ... end`. Each range `for` iteration and each callback
+  call of `Range.each`, `times`, `upto` and `downto` costs one step, so
+  `--max-steps` stops even an empty loop over a huge range. Ranges print
+  as `1..5` / `1...5` and support `==`. Both the evaluator and the bytecode VM run them; the VM appends the
   `RANGE` and `RANGE_BOUNDS` opcodes (the `.agcb` format version does not
   change), and a `for` over a range literal allocates nothing.
 

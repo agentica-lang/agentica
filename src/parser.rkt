@@ -595,7 +595,8 @@
          (when (memq (token-kind (current)) '(dot-dot dot-dot-dot))
            (bail 'PARSE-UNEXPECTED-TOKEN
                  (format "ranges do not chain, found ~a" (describe (current)))
-                 (current)))
+                 (current)
+                 #:help "wrap each range in parentheses: (a..b) == (c..d)"))
          (binary (token-kind operator) (token-span operator) left right (span-from start))]
         [else left]))
 

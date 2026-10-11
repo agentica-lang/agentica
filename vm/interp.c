@@ -157,6 +157,11 @@ static agc_value sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list 
   return agc_list_value(sorted);
 }
 
+static void charge_step(agc_vm *vm, uint32_t span) {
+  if (vm->steps_left < 1) agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", span);
+  vm->steps_left--;
+}
+
 static bool counting(agc_native_kind kind) {
   return kind == AGC_NATIVE_RANGE_EACH || kind == AGC_NATIVE_TIMES || kind == AGC_NATIVE_UPTO ||
          kind == AGC_NATIVE_DOWNTO;
@@ -171,6 +176,7 @@ static void resume_native(agc_vm *vm) {
       finish_native(vm, agc_void());
       return;
     }
+    charge_step(vm, st->span);
     agc_value arg = agc_int(st->cur);
     st->more = st->cur != st->last;
     if (st->more) st->cur += st->dir;
@@ -300,16 +306,17 @@ static bool return_value(agc_vm *vm, agc_value result) {
 }
 
 static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
-  if (agc_is(x, AGC_T_RANGE) && agc_is(y, AGC_T_RANGE)) {
-    const agc_range *a = agc_as_range(vm, x), *b = agc_as_range(vm, y);
-    return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
-  }
   if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
   if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
   if (agc_is(x, AGC_T_NIL) && agc_is(y, AGC_T_NIL)) return true;
   if (agc_is(x, AGC_T_STRING) && agc_is(y, AGC_T_STRING)) {
     const agc_string *a = agc_as_string(vm, x), *b = agc_as_string(vm, y);
     return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
+  }
+  if (agc_is(x, AGC_T_BOOL) && agc_is(y, AGC_T_BOOL)) return agc_as_bool(vm, x) == agc_as_bool(vm, y);
+  if (agc_is(x, AGC_T_RANGE) && agc_is(y, AGC_T_RANGE)) {
+    const agc_range *a = agc_as_range(vm, x), *b = agc_as_range(vm, y);
+    return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
   }
   return agc_as_bool(vm, x) == agc_as_bool(vm, y);
 }

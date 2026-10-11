@@ -36,6 +36,10 @@
     (check-ok (string-append "def show(x: Int) -> Void\n  puts(x)\nend\n\n"
                              (main-with "  (1..3).each do |i|\n    puts(i)\n  end\n  3.times do |i|\n    puts(i)\n  end\n  1.upto(3) do |i|\n    puts(i)\n  end\n  Int.downto(3, 1, &show)")))
     (check-equal? (check-code (main-with "  r = 1..2.5")) 'CHECK-TYPE-MISMATCH)
+    (check-regexp-match #rx"\\(a\\.\\.b\\)\\.to_a" (diagnostic-help (check-text (main-with "  xs = 1..5.to_a"))))
+    (define negated (check-text (main-with "  -5.times do |i|\n    puts(i)\n  end")))
+    (check-equal? (diagnostic-code negated) 'CHECK-VOID-VALUE)
+    (check-regexp-match #rx"\\(-5\\)\\.times" (diagnostic-help negated))
     (check-equal? (check-code (main-with "  r = \"a\"...\"b\"")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  r = (1..2) == 3")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  for i in 1..3\n    i = 2\n  end")) 'CHECK-IMMUTABLE-ASSIGNMENT)

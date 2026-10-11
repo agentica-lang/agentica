@@ -657,6 +657,7 @@
              ["Int.upto" (in-range (car arguments) (add1 (cadr arguments)))]
              ["Int.downto" (in-range (car arguments) (sub1 (cadr arguments)) -1)]))
          (for ([value sequence])
+           (step! span)
            (apply-callable callback (list value) span))
          (void)]
         [("List.take" "List.drop")
@@ -940,11 +941,13 @@
                 (loop)))))]
         [(for-stmt? statement)
          (define iterable (eval-expression (for-stmt-iterable statement)))
-         (define elements (if (range-value? iterable) (range-sequence iterable) (in-list iterable)))
+         (define counting? (range-value? iterable))
+         (define elements (if counting? (range-sequence iterable) (in-list iterable)))
          (run-loop
           (for-stmt-body statement)
           (lambda (iterate)
             (for ([element elements])
+              (when counting? (step! (node-span statement)))
               (iterate
                (lambda ()
                  (push-scope!)

@@ -214,6 +214,7 @@
   (define current-signature #f)
   (define capture-boundary #f)
   (define loop-depth 0)
+  (define range-chain '())
 
   (let/ec return
     (define (bail code message span
@@ -549,7 +550,17 @@
                  (literal? inner)
                  (eqv? (literal-value inner) (add1 int-max)))
             'Int
-            (check-expression inner #f)))
+            (check-expression inner #f #:completion? #t)))
+      (when (eq? operand 'Void)
+        (bail 'CHECK-VOID-VALUE "a Void call has no value; use it as a statement" (node-span inner)
+              #:help (and (eq? (unary-op expression) 'minus)
+                          (method-call? inner)
+                          (literal? (method-call-target inner))
+                          (exact-integer? (literal-value (method-call-target inner)))
+                          (format "-~a.~a is -(~a.~a); write (-~a).~a"
+                                  (literal-value (method-call-target inner)) (method-call-name inner)
+                                  (literal-value (method-call-target inner)) (method-call-name inner)
+                                  (literal-value (method-call-target inner)) (method-call-name inner)))))
       (case (unary-op expression)
         [(minus)
          (unless (numeric-type? operand)
@@ -567,7 +578,19 @@
 
     (define (check-binary expression)
       (define left (check-expression (binary-left expression) #f))
-      (define right (check-expression (binary-right expression) #f))
+      (define right
+        (cond
+          [(memq (binary-op expression) '(dot-dot dot-dot-dot))
+           (define saved range-chain)
+           (set! range-chain
+                 (let loop ([node (binary-right expression)])
+                   (cond
+                     [(method-call? node) (cons node (loop (method-call-target node)))]
+                     [(field-access? node) (cons node (loop (field-access-target node)))]
+                     [else '()])))
+           (begin0 (check-expression (binary-right expression) #f)
+                   (set! range-chain saved))]
+          [else (check-expression (binary-right expression) #f)]))
       (define span (binary-op-span expression))
       (define (same!)
         (unless (equal? left right)
@@ -1131,6 +1154,8 @@
               (format "~a has no method \"~a\"" (type->string target) name)
               span
               #:help (cond
+                       [(and (memq expression range-chain) (resolve-method 'Range name))
+                        (format "a method call on a range needs parentheses: (a..b).~a" name)]
                        [(member name '("to_s" "inspect"))
                         "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, Results, structs and enums of those"]
                        [(and (struct-type? target) (hash-ref functions name #f))

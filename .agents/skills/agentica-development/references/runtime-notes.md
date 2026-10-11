@@ -46,7 +46,7 @@ Implementation notes for the Racket evaluator and its libraries, by area. Read t
 ## Ranges (phase 8a)
 
 - `a..b` / `a...b` are `binary` nodes with op `'dot-dot` / `'dot-dot-dot`, parsed by `parse-range` above `parse-or` (one operator, no chaining). The checker type is the symbol `'Range` (in `reserved-type-names`, printable, `==` allowed, not encodable). `for` over a Range binds an `Int`. `Range` and `Int` are method modules, so `r.size` is `Range.size(r)` and `3.times` is `Int.times(3, f)`; the catalog rows use the generic `#f` rule (a block gets its `Fn[Int, Void]` from the parameter).
-- Evaluator: `range-value` (runtime-values.rkt, transparent, so `equal?` is `==`). `range-last`, `range-size` and `range-sequence` work on exact integers, so iteration at the Int edges cannot overflow; `size` checks Int range at the receiver span, `to_a` checks the 1048576 cap there. `Range.each`, `times`, `upto`, `downto` call `apply-callable` per value like `List.each`.
+- Evaluator: `range-value` (runtime-values.rkt, transparent, so `equal?` is `==`). `range-last`, `range-size` and `range-sequence` work on exact integers, so iteration at the Int edges cannot overflow; `size` checks Int range at the receiver span, `to_a` checks the 1048576 cap there. `Range.each`, `times`, `upto`, `downto` call `apply-callable` per value like `List.each`, but first charge one `step!` at the call span; a `for` over a range charges one `step!` at the `for` span per iteration. Without that, an empty body over a huge range would ignore `--max-steps`.
 - VM: see `references/vm.md` (counter loops, `RANGE`/`RANGE_BOUNDS`, counting native frames).
 
 ## File modules

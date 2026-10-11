@@ -82,7 +82,14 @@
     (define too-many (diagnostic-of (main-with "  xs = (1..1048577).to_a")))
     (check-equal? (diagnostic-code too-many) 'RUNTIME-INVALID-COUNT)
     (check-equal? (position-of too-many) '(2 9))
-    (check-equal? (output-of (main-with "  puts((1..1048576).to_a.size)")) "1048576\n"))
+    (check-equal? (output-of (main-with "  puts((1..1048576).to_a.size)")) "1048576\n")
+    (for ([body (in-list '("  for i in 0..9223372036854775807 do\n  end"
+                           "  9223372036854775807.times do |i|\n  end"
+                           "  (0..9223372036854775807).each do |i|\n  end"
+                           "  0.upto(9223372036854775807) do |i|\n  end"
+                           "  0.downto(-9223372036854775807) do |i|\n  end"))])
+      (define-values (out err result) (run-io (main-with body) #:max-steps 100))
+      (check-equal? (diagnostic-code result) 'RUNTIME-STEP-LIMIT body)))
 
   (test-case "Void Results and tasks complete without turning nil data into completion"
     (check-equal?

@@ -338,7 +338,13 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   with no `RANGE` (`lower-range-for`); over a Range value it reads
   `RANGE_BOUNDS` once into three slots. The loop variable is the counter
   slot, and the exit test (`eq` with the last value) runs before `add-i`,
-  so the largest Int never overflows. `Range.each`, `Int.times`, `upto` and
+  so the largest Int never overflows. The loop top is a `STEP` with the
+  `for` span, so each iteration charges one step even with an empty body
+  (never drop the loop); the counting natives call `charge_step` before
+  each callback. The evaluator charges the same (`step!` per range
+  iteration and per counting callback). `tests/fixtures/vm/step-limited/`
+  holds huge loops that the extras shard runs only with small
+  `--max-steps` values. `Range.each`, `Int.times`, `upto` and
   `downto` are counting native frames (`counting()` in `vm/interp.c`): no
   list, a current value, a last value, a direction and a "more" flag. The
   range text is at most 43 bytes, so `AGC_FLOAT_TEXT` is 48.

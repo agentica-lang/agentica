@@ -97,9 +97,16 @@ differential tests (section 12) check them.
   `for` variable, and work inside builtins.
 - A `while` condition is charged on every evaluation, including the last
   false one. A `for` iterable is charged once.
+- A `for` over a range charges one step per iteration at the `for`
+  statement's span, before the body, even when the body is empty, so a loop
+  over a huge range always stops at `--max-steps`. A `for` over a list
+  charges nothing per iteration (the list length bounds it).
 - A block's final expression statement is charged as a statement
   (`call-closure`). Callbacks run by the `List` builtins charge only their
-  bodies.
+  bodies, since the list length bounds them. The counting builtins
+  (`Range.each`, `Int.times`, `Int.upto`, `Int.downto`) charge one step at
+  the call's span before each callback call, so an empty block or a leaf
+  function still meets the step limit.
 - Without `--max-steps`, nothing is counted. With limit N, the first N entries
   run and entry N+1 fails with `RUNTIME-STEP-LIMIT` at its own span. All tasks
   share one counter. Racket accepts any positive integer; the VM clamps values
@@ -386,7 +393,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Arithmetic, ordering | Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (operands already evaluated; NaN stays false). |
 | `if` / `elsif` / `else` | Conditional jumps over each branch. |
 | `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
-| `for x in a..b`, `for x in a...b` | No `Range` value. `step` (the range span), `a` into the counter slot `i`, `b` into `last`, then `le-i` (or `lt-i` for `...`) into `ok`; with an empty body nothing more. Else `jump-if-false ok` past the loop, `const 1`, and for `...` `sub-i last last one` (`b` is above `a`, so no overflow). The loop variable is the counter slot itself (it is read-only); the body starts with its first statement's `step`. After the body (the target of `next`): `eq` of `i` and `last`, `jump-if-true` past the loop, `add-i i i one`, `jump` back to the body. The equality test comes before the increment, so a range ending at the largest Int never overflows. |
+| `for x in a..b`, `for x in a...b` | No `Range` value. `step` (the range span), `a` into the counter slot `i`, `b` into `last`, then `le-i` (or `lt-i` for `...`) into `ok`, `jump-if-false ok` past the loop, `const 1`, and for `...` `sub-i last last one` (`b` is above `a`, so no overflow). The loop variable is the counter slot itself (it is read-only); the loop top is a `step` with the `for` span (one per iteration, 2.1), then the body; an empty body keeps the loop. After the body (the target of `next`): `eq` of `i` and `last`, `jump-if-true` past the loop, `add-i i i one`, `jump` back to the body. The equality test comes before the increment, so a range ending at the largest Int never overflows. |
 | `for x in r` (a `Range` value) | The iterable once, then `range-bounds i r`, which writes the first value, the last included value and whether the range is non-empty into `i`, `i+1`, `i+2`; then the same counter loop. The bounds are read once, so assigning `r` in the body does not change the loop, and `to_a` (and its cap) is never used. |
 | `a..b`, `a...b` (as a value) | `step` (binary span), `a` and `b` into a window `w`, `w+1`, then `range dst w kind` (kind 0 for `..`, 1 for `...`). |
 | `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index, length and one slots (`const 0`, `list-len`, `const 1`, set once); `jump` to the test; body; increment (`add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
@@ -625,14 +632,17 @@ list, the position, the partial result) lives in a GC object that bytecode
 cannot reach. The interpreter asks it for the next callback call, pushes that
 as a normal frame with the builtin's call span, and resumes the native frame
 when the callback returns. So no builtin ever calls the interpreter from C,
-iteration is bounded by the list length, and a task can block inside a
+iteration is bounded by the list length (the counting builtins, which
+have no list, charge one step per callback instead), and a task can block inside a
 callback (7h). Native frames do not count toward call depth, matching the
 evaluator. `sort_by` collects all keys first, then sorts (7.3).
 `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
 frames: their state is a current value, the last value, a direction (+1 or
 -1) and a "more" flag, set once from the arguments (`n > 0`, `a <= b`,
 `a >= b`, or the range's bounds). Each resume calls the callback with the
-current value, then clears "more" when it equals the last value and steps
+current value after charging one step at the call's span (the same check
+as `STEP`: `RUNTIME-STEP-LIMIT` when the budget is gone, and the place a
+task will yield in 7h), then clears "more" when it equals the last value and steps
 otherwise, so counting up to the largest Int (or down to the smallest)
 never overflows, and memory stays O(1).
 
@@ -977,7 +987,9 @@ The loader validates the whole file before running anything. Failures print
   starts with a `STEP` unless it has at most 2 instructions and no `CALL`,
   `TAIL_CALL`, `CALL_VALUE` or `CALL_BUILTIN` (the `const`/`return` of an empty body). The
   lowering in 3.3 always meets these rules. Together they mean every
-  unbounded repetition charges a step (a cycle of tail calls runs only
+  unbounded repetition charges a step (a range loop charges its own `STEP`
+  each iteration, and a counting native frame charges one step before each
+  callback, like `STEP`; a cycle of tail calls runs only
   functions that call, so each one charges its leading `STEP`), so `--max-steps` holds even for
   hostile files: the step budget bounds the number of instructions to about
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
@@ -1228,8 +1240,10 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   A callback short enough to skip its leading `STEP` (8) charges nothing, so
   a resumable builtin can run a whole list with it without a switch. This
   work is still bounded by the list length, so it is accepted. Counting
-  builtin iterations toward the turn would change step counts, so it is not
-  done.
+  `List` builtin iterations toward the turn would change step counts, so it
+  is not done. The counting builtins (`Range.each`, `Int.times`, `upto`,
+  `downto`) have no list to bound them, so each callback call charges one
+  step through the same check as `STEP` and is a switch point.
 - **One counter for both budgets.** `STEP` counts down one "next stop"
   counter, set to `min(turn_left, steps_left)` when a turn starts. The fast
   path runs while `counter > n` for `STEP n`: one compare and one

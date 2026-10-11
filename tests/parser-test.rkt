@@ -43,6 +43,8 @@
                                  (car (program-declarations
                                        (parse-ok "def main() -> Void\n  for i in 0...3 do\n    puts(i)\n  end\nend\n\n")))))))
     (check-equal? (parse-code "def f() -> Void\n  x = 1..2..3\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-regexp-match #rx"parentheses"
+                        (diagnostic-help (parse-text "def f() -> Void\n  x = 1..2 == 3..4\nend\n\n")))
     (check-equal? (parse-code "def f() -> Void\n  x = 1..\n  2\nend\n\n") 'PARSE-UNEXPECTED-TOKEN))
 
   (test-case "function references and chained calls retain their spans"
