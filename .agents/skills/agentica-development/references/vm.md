@@ -235,6 +235,7 @@ instructions. A file that loads may still compute wrong values or end with
   `agc.h` and enum constants start with `AGC_`; file-local macros are plain
   upper case.
 - File-local helpers and data are `static` (*checked*).
+- No prototypes of `static` functions: define each helper before its first use, so files read bottom-up and the `agc_*` functions usually come last (*checked*); only unavoidable mutual recursion may have one.
 - No value-driven C recursion (`docs/vm.md` §7.3; *checked*). Depth bounded
   by a constant or `log n` (HAMT levels) is allowed with
   `// NOLINT(misc-no-recursion)` on the function line.

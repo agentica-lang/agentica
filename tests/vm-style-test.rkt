@@ -63,8 +63,9 @@
       [(zero? depth)
        (case c
          [(#\;)
-          (when (regexp-match? #px"^\\s*typedef\\b" header)
-            (set! headers (cons (cons (or start line) (string-normalize-spaces header)) headers)))
+          (when (regexp-match? #px"^\\s*(typedef|static)\\b" header)
+            (set! headers (cons (cons (or start line) (string-append (string-normalize-spaces header) ";"))
+                                headers)))
           (next (add1 i) line "" #f)]
          [(#\{)
           (set! headers (cons (cons (or start line) (string-normalize-spaces header)) headers))
@@ -76,27 +77,40 @@
 
 (define (header-kind h)
   (cond
+    [(regexp-match? #px";$" h)
+     (cond
+       [(regexp-match? #px"^typedef\\b" h) 'type]
+       [(regexp-match? #px"=|^[^(]*\\(\\s*\\*" h) 'data]
+       [(regexp-match? #px"\\(" h) 'prototype]
+       [else 'data])]
     [(regexp-match? #px"^typedef\\b" h) 'type]
     [(regexp-match? #px"=" h) 'data]
     [(regexp-match? #px"\\(" h) 'function]
     [(regexp-match? #px"^((static|const|extern)\\s+)*(struct|union|enum)\\b" h) 'type]
     [else 'other]))
 
-(define (late-types file)
+(define (style-problems file)
   (define headers (top-level-headers (file->string (build-path vm-dir file))))
   (define first-function
     (for/first ([h headers] #:when (eq? (header-kind (cdr h)) 'function)) (car h)))
   (for/list ([h headers]
-             #:when (and first-function
-                         (> (car h) first-function)
-                         (eq? (header-kind (cdr h)) 'type)))
-    (format "vm/~a:~a: type definition after the first function (line ~a): ~a"
-            file (car h) first-function (cdr h))))
+             #:when (or (eq? (header-kind (cdr h)) 'prototype)
+                        (and first-function
+                             (> (car h) first-function)
+                             (eq? (header-kind (cdr h)) 'type))))
+    (if (eq? (header-kind (cdr h)) 'prototype)
+        (format "vm/~a:~a: prototype of a static function (define it before its first use): ~a"
+                file (car h) (cdr h))
+        (format "vm/~a:~a: type definition after the first function (line ~a): ~a"
+                file (car h) first-function (cdr h)))))
 
 (test-case "scanner finds functions and late type definitions"
   (define headers
     (top-level-headers
      (string-append "#define M(x) /* {\n  } */ \\\n  { x }\n"
+                    "static int helper(int a);\n"
+                    "static void (*hook)(int);\n"
+                    "static int count, table[2];\n"
                     "typedef struct { int a; } t;\n"
                     "static const char *s = \"{\";\n"
                     "struct p *f(struct p *q);\n"
@@ -105,11 +119,12 @@
                     "static struct p *h(void) { return 0; }\n"
                     "struct late {\n  int b;\n};\n"
                     "typedef struct late late_t;\n")))
-  (check-equal? (map car headers) '(4 7 11 12 13 16))
-  (check-equal? (map (compose header-kind cdr) headers) '(type function data function type type)))
+  (check-equal? (map car headers) '(4 5 6 7 8 10 14 15 16 19))
+  (check-equal? (map (compose header-kind cdr) headers)
+                '(prototype data data type data function data function type type)))
 
-(test-case "no type definition after the first function in vm/*.c"
+(test-case "no late type definition or static prototype in vm/*.c"
   (define files (vm-files))
   (check-not-false (member "interp.c" files))
-  (define problems (append-map late-types files))
+  (define problems (append-map style-problems files))
   (check-true (null? problems) (string-join problems "\n")))
