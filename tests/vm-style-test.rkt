@@ -26,7 +26,7 @@
       (loop j line* depth header* start* #f))
     (cond
       [(>= i n) (reverse headers)]
-      [(char=? c #\newline) (loop (add1 i) (add1 line) depth (string-append header " ") start #t)]
+      [(char=? c #\newline) (loop (add1 i) (add1 line) depth (if (zero? depth) (string-append header " ") header) start #t)]
       [(and line-start? (char=? c #\#))
        (let skip ([j i] [line line])
          (cond
@@ -56,7 +56,7 @@
            [(char=? (char-at j) #\\) (skip (+ j 2))]
            [(char=? (char-at j) c) (next (add1 j) line (if (zero? depth) (string-append header "\"\"") header) start)]
            [else (skip (add1 j))]))]
-      [(char-whitespace? c) (loop (add1 i) line depth (string-append header " ") start line-start?)]
+      [(char-whitespace? c) (loop (add1 i) line depth (if (zero? depth) (string-append header " ") header) start line-start?)]
       [(zero? depth)
        (case c
          [(#\;)

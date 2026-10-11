@@ -257,9 +257,12 @@ instructions. A file that loads may still compute wrong values or end with
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
 skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
 (`__asan_default_options`) takes an exact `NOLINT(check,...)`. The style test
-is a line scanner: it misses prototypes of functions that return function
-pointers, and it miscounts when `#if` branches open or close different
-numbers of braces.
+is a line scanner with known limits: it misses prototypes of functions that
+return function pointers or that start with a macro or attribute; it reports
+static arrays whose size contains `(` (`x[sizeof(y)]`) as prototypes; it
+miscounts when `#if` branches open or close different numbers of braces; and
+a `\`+newline inside a literal shifts its line numbers. The `_WIN32` and
+macOS branches are not linted while those platforms are paused.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
