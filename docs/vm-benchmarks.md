@@ -5,7 +5,7 @@ Speed numbers for the roadmap's 7g speed check. Phase 12 adds a cross-language s
 ## How to run
 
 ```sh
-make build vm exe          # exe is optional: dist/agentica is timed when it exists
+make build vm exe          # exe is optional: dist/agentica is timed whenever it exists, so rebuild it after a change or leave it out with --runners
 make bench                 # same as: python3 benchmarks/run.py
 python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners evaluator,vm,python
 ```
@@ -15,11 +15,11 @@ python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners e
 | Runner | Command | What is timed |
 |---|---|---|
 | `evaluator` | `racket src/main.rkt f.agc` | the whole run, start-up included |
-| `exe` | `dist/agentica f.agc` (if built with `make exe`) | the whole run, start-up included |
+| `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included |
 | `vm` | `racket src/main.rkt compile f.agc -o f.agcb`, then `dist/agentica-vm -- f.agcb` | only the VM run; compiling happens once, untimed |
-| `python` | `python3 benchmarks/python/<name>.py SIZE` | the whole run, an idiomatic CPython version as an outside reference |
+| `python` | the interpreter running the script (`sys.executable`) on `benchmarks/python/<name>.py SIZE` | the whole run, an idiomatic CPython version as an outside reference |
 
-For each program and runner it does one warm-up run under `/usr/bin/time -f %M` for the peak RSS, then `--runs` timed runs (default 5), and reports the median and the minimum wall time. Every run must print the same stdout as the first runner that succeeded; a different output is a `mismatch` and the script exits 1. A program the VM cannot compile yet is reported as `unsupported` with the `LOWER-UNSUPPORTED` reason. `hello.agc` start-up is measured apart (`--no-startup` skips it).
+For each program and runner it does one warm-up run under GNU `/usr/bin/time -f %M` for the peak RSS (without GNU time the RSS column shows `n/a`), then `--runs` timed runs (default 5), and reports the median and the minimum wall time. Every run must print the same stdout as the first runner that succeeded; a different output is a `mismatch`, and a `failed` or `mismatch` row (start-up rows included) makes the script exit 1. A program the VM cannot compile yet is reported as `unsupported` with a one-line summary of the `LOWER-UNSUPPORTED` diagnostic. `hello.agc` start-up is measured apart (`--no-startup` skips it).
 
 `--size N` multiplies the work of every program: each `.agc` has a `def scale() -> Int` that returns 1, which the script rewrites to N in a temporary copy, and each Python version takes N as its first argument. Size 1 keeps every program at a few seconds at most on the evaluator.
 
@@ -37,7 +37,9 @@ The programs print a deterministic checksum and use only fixed inputs (a seeded 
 | `calls` | recursive `fib(20)`/`fib(21)` and 40,000 small helper calls |
 | `case` | an `enum` instruction list run 5,000 times through `case`, plus `case` on `Int` literals |
 
-The VM today has no `List`/`Map`/`String` library functions (`docs/vm.md` §12.2 item 6b), so `knight-tour`, `maze-bfs`, `traveling-salesman`, `lists` and `maps` are unsupported on it. They stay written the idiomatic way (`push`, `size`, `set`, `put`, `get`) rather than bent around the gap; they run on the VM once 6b lands.
+The VM today has no `List`/`Map`/`String` library functions (`docs/vm.md` §12.2 item 6b), so `knight-tour`, `maze-bfs`, `traveling-salesman`, `lists` and `maps` are unsupported on it. The tables below name the first missing builtin the lowering stopped at, not the whole list. They stay written the idiomatic way (`push`, `size`, `set`, `put`, `get`) rather than bent around the gap; they run on the VM once 6b lands.
+
+The Python versions are idiomatic CPython, not step-by-step copies: they compute the same result but use Python's own tools. `strings` builds each line with `"".join` over f-string parts where the Agentica version uses repeated `+`; `arithmetic` sums a list comprehension; `knight_tour` and `traveling_salesman` mutate one `visited` list and path in place and undo the change on backtrack, where Agentica builds new values; `maze_bfs` uses a `deque` and a `set`. So a ratio against Python compares two idiomatic programs, not two interpreters on identical steps.
 
 ## Results, 2026-10-11
 
@@ -65,15 +67,15 @@ The host is shared with the self-hosted CI runners, so other jobs may run at the
 |---|---|---:|---:|---:|---:|
 | knight-tour | evaluator | 2.311 | 2.299 | 144.1 | 1.0x |
 | knight-tour | exe | 1.283 | 1.235 | 148.7 | 1.8x |
-| knight-tour | vm | unsupported (`List.append`) | | | |
+| knight-tour | vm | unsupported (first missing builtin: `List.append`) | | | |
 | knight-tour | python | 0.031 | 0.027 | 9.1 | 74.0x |
 | maze-bfs | evaluator | 0.955 | 0.870 | 144.1 | 1.0x |
 | maze-bfs | exe | 1.036 | 0.983 | 144.5 | 0.9x |
-| maze-bfs | vm | unsupported (`Map.put`) | | | |
+| maze-bfs | vm | unsupported (first missing builtin: `Map.put`) | | | |
 | maze-bfs | python | 0.044 | 0.039 | 9.6 | 21.6x |
 | traveling-salesman | evaluator | 1.331 | 1.310 | 146.1 | 1.0x |
 | traveling-salesman | exe | 1.218 | 1.194 | 148.1 | 1.1x |
-| traveling-salesman | vm | unsupported (`List.size`) | | | |
+| traveling-salesman | vm | unsupported (first missing builtin: `List.size`) | | | |
 | traveling-salesman | python | 0.030 | 0.027 | 9.2 | 43.8x |
 | arithmetic | evaluator | 2.065 | 1.513 | 143.9 | 1.0x |
 | arithmetic | exe | 1.453 | 1.416 | 148.1 | 1.4x |
@@ -85,11 +87,11 @@ The host is shared with the self-hosted CI runners, so other jobs may run at the
 | strings | python | 0.026 | 0.021 | 8.8 | 33.9x |
 | lists | evaluator | 1.205 | 1.160 | 143.8 | 1.0x |
 | lists | exe | 1.332 | 1.256 | 159.6 | 0.9x |
-| lists | vm | unsupported (`List.append`) | | | |
+| lists | vm | unsupported (first missing builtin: `List.append`) | | | |
 | lists | python | 0.030 | 0.027 | 9.0 | 40.1x |
 | maps | evaluator | 1.005 | 0.980 | 144.1 | 1.0x |
 | maps | exe | 0.973 | 0.942 | 148.4 | 1.0x |
-| maps | vm | unsupported (`Map.put`) | | | |
+| maps | vm | unsupported (first missing builtin: `Map.put`) | | | |
 | maps | python | 0.024 | 0.023 | 9.0 | 42.3x |
 | calls | evaluator | 1.195 | 1.181 | 144.1 | 1.0x |
 | calls | exe | 1.256 | 1.176 | 149.7 | 1.0x |
@@ -113,6 +115,6 @@ At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are domin
 
 - Start-up: the VM starts in about 1 ms and 2 MB; the evaluator needs 0.6 to 0.8 s and about 145 MB (Racket CS boot plus loading the front end), and the `raco exe` build is only slightly faster.
 - Where it runs, the VM is about 45x to 60x faster than the evaluator per program at size 1, start-up included. Most of that gap is the evaluator's start-up: subtracting the `hello.agc` median leaves about 1.2 s for `arithmetic` (about 28x the VM), 0.35 s for `calls` (about 17x) and 0.15 s for `case` (about 7x), while `strings` is within the noise of start-up. Larger sizes are needed to compare the evaluator's run time itself.
-- Against CPython the VM is in the same range: as fast on `case`, 1.5x to 2x slower on `arithmetic`, `strings` and `calls` at size 20, with about a fifth of the memory. These are the first hot-spot candidates for the next 7g item (instruction dispatch, Int arithmetic, string concatenation).
-- The evaluator, start-up included, is 15x to 75x slower than CPython on every program.
+- Against CPython the VM is in the same range: as fast on `case`, 1.5x to 2x slower on `arithmetic`, `strings` and `calls` at size 20, with about a fifth of the memory. Instruction dispatch and Int arithmetic are the first hot-spot candidates for the next 7g item. The `strings` gap is weaker evidence, since the Python twin uses `"".join` rather than repeated `+`; profile before blaming string concatenation.
+- The evaluator, start-up included, is 14.5x to 74x slower than CPython on every program.
 - The three real programs, `lists` and `maps` cannot be compared on the VM until the `List`/`Map` library lands (`docs/vm.md` §12.2 item 6b); rerun this page then.

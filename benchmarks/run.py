@@ -66,8 +66,9 @@ def peak_rss(command: list[str]) -> tuple[Sample, int | None]:
     with tempfile.NamedTemporaryFile(mode="r") as report:
         sample = run([str(TIME), "-f", "%M", "-o", report.name, *command])
         lines = report.read().strip().splitlines()
-    rss = int(lines[-1]) if lines and lines[-1].isdigit() else None
-    return sample, rss
+    if not lines or not lines[-1].isdigit():
+        return run(command), None
+    return sample, int(lines[-1])
 
 
 def diagnostic(stderr: str) -> str:
@@ -119,6 +120,15 @@ def measure(name: str, runner: str, command: list[str], runs: int, expected: str
     return Row(name, runner, "ok", statistics.median(times), min(times), rss), expected
 
 
+def compile_vm(name: str, runner: str, source: Path, bytecode: Path) -> Row | None:
+    compiled = run(["racket", str(MAIN), "compile", str(source), "-o", str(bytecode)])
+    if compiled.code == 0:
+        return None
+    reason = diagnostic(compiled.stderr)
+    status = "unsupported" if reason.startswith("LOWER-UNSUPPORTED") else "failed"
+    return Row(name, runner, status, note=reason)
+
+
 def benchmark(name: str, size: int, runs: int, commands: dict[str, list[str] | None],
               workdir: Path) -> list[Row]:
     source = scaled_source(name, size, workdir)
@@ -132,11 +142,9 @@ def benchmark(name: str, size: int, runs: int, commands: dict[str, list[str] | N
             argv = command + [str(PYTHON / f"{name.replace('-', '_')}.py"), str(size)]
         elif runner == "vm":
             bytecode = workdir / f"{name}.agcb"
-            compiled = run(["racket", str(MAIN), "compile", str(source), "-o", str(bytecode)])
-            if compiled.code != 0:
-                reason = diagnostic(compiled.stderr)
-                status = "unsupported" if reason.startswith("LOWER-UNSUPPORTED") else "failed"
-                rows.append(Row(name, runner, status, note=reason))
+            failure = compile_vm(name, runner, source, bytecode)
+            if failure:
+                rows.append(failure)
                 continue
             argv = command + [str(bytecode)]
         else:
@@ -158,7 +166,10 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
             argv = command + ["-c", "print('hello')"]
         elif runner == "vm":
             bytecode = workdir / "hello.agcb"
-            run(["racket", str(MAIN), "compile", str(HELLO), "-o", str(bytecode)])
+            failure = compile_vm("hello", runner, HELLO, bytecode)
+            if failure:
+                rows.append(failure)
+                continue
             argv = command + [str(bytecode)]
         else:
             argv = command + [str(HELLO)]
@@ -200,17 +211,21 @@ def main() -> int:
             parser.error(f"unknown program {name}; choose from {', '.join(NAMES)}")
     commands = runners([runner for runner in args.runners.split(",") if runner])
     workdir = Path(tempfile.mkdtemp(prefix="agentica-bench-"))
+    rows = []
     try:
         if not args.no_startup:
             print(f"## Start-up (hello.agc, {args.runs} runs)\n")
-            print(table(startup(args.runs, commands, workdir)), flush=True)
+            startup_rows = startup(args.runs, commands, workdir)
+            rows.extend(startup_rows)
+            print(table(startup_rows), flush=True)
             print()
         print(f"## Programs (size {args.size}, {args.runs} runs)\n")
-        rows = []
+        program_rows = []
         for name in names:
-            rows.extend(benchmark(name, args.size, args.runs, commands, workdir))
+            program_rows.extend(benchmark(name, args.size, args.runs, commands, workdir))
             print(f"{name}: done", file=sys.stderr, flush=True)
-        print(table(rows))
+        rows.extend(program_rows)
+        print(table(program_rows))
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     return 1 if any(row.status in ("failed", "mismatch") for row in rows) else 0
