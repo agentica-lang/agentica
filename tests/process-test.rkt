@@ -3,7 +3,7 @@
 (require (except-in rackunit check) racket/runtime-path racket/system json
          "../src/lexer.rkt" "../src/parser.rkt" "../src/checker.rkt"
          "../src/source.rkt" "../src/diagnostic.rkt" "../src/evaluator.rkt"
-         "../src/process.rkt")
+         "../src/process.rkt" (submod "../src/process.rkt" test-support))
 
 (define-runtime-path peer "fixtures/process-peer.js")
 (define-runtime-path main-file "../src/main.rkt")
@@ -65,13 +65,14 @@
       (close-input-port err))))
 
 (module+ test
-  (test-case "Windows batch names match regardless of case and trailing dots or spaces"
+  (test-case "Windows runs only .exe and .com names"
+    (for ([name (in-list '("x.exe" "X.EXE" "dir\\x.Com" "C:\\Tools\\git.exe"))])
+      (check-true (windows-runnable-name? name) name))
+    (check-true (windows-runnable-name? (string->path "dir/x.Exe")))
     (for ([name (in-list '("x.bat" "x.BAT" "x.Cmd" "x.bat." "x.bat " "x.bat. ." "dir/x.CMD"
-                           "dir\\x.bAt"))])
-      (check-true (batch-file-name? name) name))
-    (check-true (batch-file-name? (string->path "dir/x.Bat")))
-    (for ([name (in-list '("x.batch" "bat" "x.exe" "x" "x.bat.exe" "dir.bat/x" ".bat/"))])
-      (check-false (batch-file-name? name) name)))
+                           "dir\\x.bAt" "x.exe." "x.com " "x" "x.ps1" "x.bat::$DATA"
+                           "x.exe::$DATA" "dir.exe\\x"))])
+      (check-false (windows-runnable-name? name) name)))
   (test-case "failed and explicitly closed processes leave the active registry"
     (define executable (path->string (find-executable-path "racket")))
     (define counts '())

@@ -2,7 +2,7 @@
 
 (require "runtime-values.rkt" "diagnostic.rkt" "network.rkt")
 
-(provide process-call process-handle? process-close-all! batch-file-name?
+(provide process-call process-handle? process-close-all!
          current-process-owner current-process-registry current-process-registry-lock
          current-process-closing current-process-custodian current-process-allowed?)
 
@@ -45,10 +45,12 @@
   (when (process-handle-closed? p) (error 'process "process is closed"))
   (when (unbox (process-handle-failure p)) (raise (unbox (process-handle-failure p)))))
 
-(define (batch-file-name? name)
+(define (windows-runnable-name? name)
   (define text (if (path? name) (path->string name) name))
   (define base (last (regexp-split #rx"[/\\\\]" text)))
-  (regexp-match? #rx"(?i:[.](bat|cmd))$" (regexp-replace #rx"[. ]+$" base "")))
+  (regexp-match? #rx"(?i:[.](exe|com))$" base))
+
+(module+ test-support (provide windows-runnable-name?))
 
 (define (spawn-process command arguments timeout)
   (unless (current-process-allowed?) (error 'process "spawning requires --allow-run"))
@@ -69,8 +71,7 @@
       (lambda ()
         (define executable (find-executable-path command))
         (unless executable (error 'process "executable is unavailable"))
-        (when (and (eq? (system-type) 'windows)
-                   (or (batch-file-name? command) (batch-file-name? executable)))
+        (when (and (eq? (system-type) 'windows) (not (windows-runnable-name? executable)))
           (error 'process "Windows batch commands are not supported"))
         (call-with-semaphore (process-handle-state-lock p)
           (lambda ()

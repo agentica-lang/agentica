@@ -181,12 +181,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- `Process.spawn` on Windows refuses batch files whatever the extension case
-  (`x.BAT`, `x.Cmd`) and with trailing dots or spaces (`x.bat.`, `x.bat `),
-  which Windows strips. Before, only lowercase `.bat` and `.cmd` were
-  refused, so such names ran through `cmd.exe` and reopened argument
-  injection (BatBadBut, CVE-2024-24576). Both the command as given and the
-  resolved path are checked.
+- `Process.spawn` on Windows runs only `.exe` and `.com` programs
+  (any case). Anything else is refused: `.bat`, `.cmd`, `.ps1`, no
+  extension, names ending in a dot or space (`x.exe.`, `x.com `), and
+  stream names (`x.bat::$DATA`). Before, only lowercase `.bat` and `.cmd`
+  were refused, so `x.BAT` or `x.bat.` ran through `cmd.exe` and reopened
+  argument injection (BatBadBut, CVE-2024-24576). The check uses the
+  resolved path.
 
 ## [0.1.0] - 2026-10-04
 
