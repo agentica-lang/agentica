@@ -3,3 +3,7 @@ dist/
 build/
 tests/eval/results/
 __pycache__/
+*.agcb
+site/public/
+site/resources/
+.hugo_build.lock

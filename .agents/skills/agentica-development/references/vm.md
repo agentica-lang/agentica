@@ -43,7 +43,7 @@ make vm                              # dist/agentica-vm (libgc from extra/gc.c, 
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
-FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the weekly CI run picks a random seed
+FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~40 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
@@ -71,8 +71,9 @@ racket src/main.rkt --dump-ir prog.agc
   `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
   only drops `-pie` and RELRO. Every binary
   target ends in `$(EXE)`; the diff test runs `dist/agentica-vm.exe` on
-  Windows. CI runs `make vm vm-test` and the diff and bytecode tests on
-  `macos-15` and `windows-2025`, not the whole `make test`.
+  Windows. The `platforms.yml` workflow, run by hand, runs `make vm vm-test`
+  and the diff and bytecode tests on `macos-15` and `windows-2025`, not the
+  whole `make test`; run it before merging platform code.
 
 ## Widen the subset (new form or opcode)
 

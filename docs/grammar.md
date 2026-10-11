@@ -960,7 +960,7 @@ absolute path and does not resolve symlinks.
 
 ### Processes
 
-Process is an opaque handle with no constructor, fields, equality, or JSON encoding. IO.inspect prints <Process>.
+Process is an opaque handle with no constructor, fields, equality, or JSON encoding. IO.inspect prints `<Process>`.
 
 ~~~text
 Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process]

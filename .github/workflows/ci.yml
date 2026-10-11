@@ -1,20 +1,27 @@
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'site/**'
+      - '**/*.md'
+      - '.github/workflows/fuzz.yml'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/platforms.yml'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   test:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, docker-runner]
     env:
       AGENTICA_REQUIRE_VM: '1'
     steps:
@@ -24,12 +31,37 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - uses: Bogdanp/setup-racket@v1.15
+      - id: racket
+        run: |
+          dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          if "$dir/bin/racket" -e '(exit (if (equal? (version) "9.3") 0 1))' 2>/dev/null; then
+            echo "$dir/bin" >> "$GITHUB_PATH"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.racket.outputs.found != 'true'
+        uses: Bogdanp/setup-racket@v1.15
         with:
           variant: CS
           version: '9.3'
+          dest: ${{ steps.racket.outputs.dir }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            src/compiled
+            tests/compiled
+          key: racket-zo-${{ github.job }}-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
+          restore-keys: racket-zo-${{ github.job }}-9.3-
+      - run: git ls-files -z | xargs -0 touch
+      - run: make build && raco make -j 4 tests/*.rkt
       - run: make vm vm-test
-      - run: make vm-unicode && git diff --exit-code vm/unicode_data.c
+      - id: unicode
+        uses: actions/cache@v4
+        with:
+          path: build/unicode-checked
+          key: unicode-checked-9.3-${{ hashFiles('vm/**/gen-unicode.rkt', 'vm/unicode_data.c', 'Makefile') }}
+      - if: steps.unicode.outputs.cache-hit != 'true'
+        run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
       - run: make test
       - run: make test-bdd
       - run: AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/tcp-test.rkt tests/http-test.rkt tests/process-test.rkt tests/modules-test.rkt
@@ -49,7 +81,7 @@ jobs:
       - run: dist/agentica examples/queue.agc
 
   vm-sanitizers:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, docker-runner]
     env:
       AGENTICA_REQUIRE_VM: '1'
       SANITIZE: '1'
@@ -57,56 +89,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - uses: Bogdanp/setup-racket@v1.15
+      - id: racket
+        run: |
+          dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          if "$dir/bin/racket" -e '(exit (if (equal? (version) "9.3") 0 1))' 2>/dev/null; then
+            echo "$dir/bin" >> "$GITHUB_PATH"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.racket.outputs.found != 'true'
+        uses: Bogdanp/setup-racket@v1.15
         with:
           variant: CS
           version: '9.3'
+          dest: ${{ steps.racket.outputs.dir }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            src/compiled
+            tests/compiled
+          key: racket-zo-${{ github.job }}-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
+          restore-keys: racket-zo-${{ github.job }}-9.3-
+      - run: git ls-files -z | xargs -0 touch
       - run: clang --version
       - run: make vm vm-test
-      - run: make build
+      - run: make build && raco make -j 4 tests/vm-diff-test.rkt tests/bytecode-test.rkt
       - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
       - run: make vm-fuzz
       - run: make vm-gc-stress
-
-  vm-macos:
-    runs-on: macos-15
-    env:
-      AGENTICA_REQUIRE_VM: '1'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - uses: Bogdanp/setup-racket@v1.15
-        with:
-          variant: CS
-          version: '9.3'
-      - run: cc --version
-      - run: make vm vm-test
-      - run: make build
-      - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
-
-  vm-windows:
-    runs-on: windows-2025
-    env:
-      AGENTICA_REQUIRE_VM: '1'
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          path-type: inherit
-          update: false
-          install: make mingw-w64-ucrt-x86_64-gcc
-      - uses: Bogdanp/setup-racket@v1.15
-        with:
-          variant: CS
-          version: '9.3'
-      - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
-      - run: make vm vm-test
-      - run: make build
-      - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt

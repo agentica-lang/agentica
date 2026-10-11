@@ -18,7 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IO.warn`, interpolation, `to_s` and `inspect`, with the same names as the
   evaluator, and deep values print without C recursion. The `.agcb` format
   is now version 2: it carries the struct and enum tables.
-- A weekly CI workflow fuzzes the VM loader and interpreter with 5 million
+- A documentation website in `site/`, built with Hugo and a small custom
+  theme. It shows the language reference (`docs/grammar.md`), the guide and
+  the library pages from the programming skill without copying them.
+  `make site` builds it, `make site-serve` serves it, and
+  `.github/workflows/pages.yml` deploys it to GitHub Pages from `master`.
+- A CI workflow, run by hand, fuzzes the VM loader and interpreter with 5 million
   mutants and a random `FUZZ_SEED`, and uploads the crashing input on failure.
 - The bytecode VM runs List code: `List[T]` of Int, Float, Bool, Nil, String
   and nested lists in locals, parameters and returns, list literals (long
@@ -100,6 +105,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `vm/gen-unicode.rkt` moved to `vm/tools/gen-unicode.rkt`; `make vm-unicode`
   runs it from there and writes the same `vm/unicode_data.c`.
+- CI runs on pull requests only, and only on Linux; pull requests that
+  change only docs, the site or Markdown skip it. Compiled Racket files are
+  cached per job. The macOS and Windows VM jobs moved to
+  `.github/workflows/platforms.yml` and the fuzz workflow no longer runs
+  weekly; both run by hand. The site is built only on `master`, by the
+  Pages workflow. The Linux workflows run on a self-hosted runner.
 - libgc is built with `NO_EXECUTE_PERMISSION` and `ALL_INTERIOR_POINTERS`,
   as its own build systems do: the heap is no longer writable and
   executable (macOS on arm64 refuses such pages), and interior pointers
