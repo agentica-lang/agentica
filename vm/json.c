@@ -27,6 +27,25 @@ typedef struct {
 
 const char *agc_json_version(void) { return YYJSON_VERSION_STRING; }
 
+#ifdef AGC_NO_GC
+static void *yy_malloc(void *ctx, size_t size) {
+  (void)ctx;
+  return agc_alloc_atomic(size);
+}
+
+static void *yy_realloc(void *ctx, void *ptr, size_t old_size, size_t size) {
+  (void)ctx;
+  void *p = agc_alloc_atomic(size);
+  memcpy(p, ptr, old_size < size ? old_size : size);
+  return p;
+}
+
+static void yy_free(void *ctx, void *ptr) {
+  (void)ctx;
+  (void)ptr;
+}
+#endif
+
 static agc_json *new_node(agc_json_kind kind, agc_value scalar) {
   agc_json *j = agc_alloc(sizeof(agc_json));
   j->kind = kind;
@@ -274,8 +293,14 @@ agc_json_status agc_json_parse(const uint8_t *s, size_t len, agc_value *out) {
   }
   if (c != '"' && c != '[' && c != '{') return AGC_JSON_INVALID;
   yyjson_read_err err;
+#ifdef AGC_NO_GC
+  yyjson_alc alc = {yy_malloc, yy_realloc, yy_free, NULL};
+  const yyjson_alc *use = &alc;
+#else
+  const yyjson_alc *use = NULL;
+#endif
   yyjson_doc *doc = yyjson_read_opts((char *)(s + i), len - i,
-                                     YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_NUMBER_AS_RAW, NULL, &err);
+                                     YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_NUMBER_AS_RAW, use, &err);
   if (!doc) {
     if (err.code == YYJSON_READ_ERROR_MEMORY_ALLOCATION) agc_out_of_memory();
     return AGC_JSON_INVALID;
