@@ -23,10 +23,11 @@ order governs pending work rather than their numeric order.
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
 | 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7): the vertical slice is in; widen it PR by PR (`docs/vm.md` §12.2) | Run checked programs much faster, with the same output and diagnostics |
-| 6 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 7 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 6 | Core data structures (phase 8): ranges first, then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
+| 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 8 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
-After steps 1–2, target everyday scripts and automation. After steps 6–7,
+After steps 1–2, target everyday scripts and automation. After steps 7–8,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
 grammar, and the self-contained programming reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
@@ -1164,6 +1165,17 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.
 
 **Done when:** a release ships with the VM as the default backend.
+
+## Phase 8: Core data structures
+
+Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges can start as soon as the VM covers closures (7e PR 5e, for the block forms); sets need the VM maps (PR 5d).
+
+- [ ] 8a Ranges: `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
+- [ ] 8b `Set[T]`.
+- [ ] 8c `Queue[T]`; `std/queue` points to it.
+- [ ] Later, each after a real program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map or set, a deque.
+
+**Done when:** the three structures run on both backends, and an evaluation round shows agents use ranges without `while` workarounds.
 
 ## Later extensions
 

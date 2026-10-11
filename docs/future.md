@@ -110,9 +110,9 @@ Continue primitive operations through the builtins catalog. Function values (5j)
 Besides remaining List operations, these gaps remain. Check each against a real task before building it.
 
 - **Math:** `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`, `gcd`.
-- **Maps and sets:** a set type; meanwhile use `Map[Int, Bool]` or `Map[String, Bool]`. Dedicated stack, queue, and priority queue APIs remain future work.
+- **Ranges, sets and queues:** planned in [section 12](#12-data-structures). Meanwhile use `while` with a counter, `Map[T, Bool]` and `std/queue`.
 - **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
-- **Structures:** tuples or pairs. Nested lists and matrices are exercised by the traveling-salesman example.
+- **Structures:** tuples or pairs ([section 12.4](#124-later)). Nested lists and matrices are exercised by the traveling-salesman example.
 - **Performance:** `List.append` copies the list, so repeated appends are O(n²); a persistent vector remains a possible later optimization. Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
 - **Bounds:** Int is signed 64-bit and recursion has a 10000-call limit. Large challenge workloads still need practical runtime measurements.
 - **Outside the language:** online judges do not accept Agentica, so challenges run locally against hidden cases, as in `tests/eval/`. The interpreter is a tree walker on Racket, so judge time limits are tight.
@@ -292,3 +292,78 @@ Still open: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), methods o
 ### 11.5 Hints for foreign habits
 
 Implemented: the hints are listed in `grammar.md`, section 7.
+
+## 12. Data structures
+
+Today the language has `List[T]`, `Map[K, V]`, `Result[T]`, user structs and enums (a user `Option[T]` is a generic enum), and `std/queue`, a FIFO of Strings whose `push` copies the list. There are no user generic functions, so a generic structure cannot be written in Agentica: it must be a builtin, like `Map`. Each one lands in the evaluator and the VM in the same PR, with the grammar, the programming skill and the site docs.
+
+Order: ranges first (12.1), then `Set[T]` (12.2), then `Queue[T]` (12.3). The rest is later (12.4).
+
+### 12.1 Ranges
+
+Agents write Ruby loops (`for i in 0...n`, `n.times do |i|`) and today must rewrite them as `while` loops with a counter. Ranges accept those forms.
+
+```agentica
+for i in 0...3 do
+  puts(i)
+end
+# 0, 1, 2
+
+for i in 1..3
+  puts(i)
+end
+# 1, 2, 3
+
+3.times do |i|
+  puts(i)
+end
+# 0, 1, 2
+
+1.upto(3) do |i|
+  puts(i)
+end
+# 1, 2, 3
+
+evens = (0..10).to_a.filter do |n|
+  n % 2 == 0
+end
+```
+
+- `a..b` includes `b`; `a...b` excludes it, as in Ruby. Both operands are `Int`; anything else is a type error, like other operators. The result has the builtin type `Range`.
+- Precedence: lowest, below `or`/`||`, and not associative, so `0...n + 1` is `0...(n + 1)` and `1..2..3` is a parse error. Calling a method needs parentheses: `(1..5).to_a`.
+- `for x in range` yields each `Int` in order, without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `List.reverse` on `to_a`). Each iteration costs steps like `for` over a list. Iteration up to the largest `Int` must not overflow.
+- `Range` methods (and module functions `Range.name(r, ...)`): `to_a -> List[Int]`, `size -> Int`, `include?(x: Int) -> Bool`, `each(Fn[Int, Void])`, `first`, `last` (the last included value; a `Result` error for an empty range).
+- `Int` methods for loops: `n.times(Fn[Int, Void])` calls the block with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, Fn[Int, Void])` with `a` to `b`; `a.downto(b, Fn[Int, Void])` with `a` down to `b`.
+- Text form: `1..5` and `1...5`, as Ruby's `inspect`. Ranges compare with `==` (same start, end and kind).
+- VM: `for` over a range literal lowers to a counter loop with no allocation; a `Range` value is a small immutable object.
+- Open: `step` (`(0..10).step(2)`), and ranges of `String` or `Float`. Not planned until a real program needs them.
+
+### 12.2 Sets
+
+```agentica
+seen = Set.new(["a", "b"])
+seen = seen.add("c")
+puts(seen.include?("a"))   # true
+puts(seen.size)            # 3
+```
+
+- `Set[T]` is a builtin generic, immutable like `Map`. Elements use the same types and equality as `Map` keys. Iteration and `to_a` follow first-insertion order, like `Map.keys`.
+- Functions (also methods): `Set.new() -> Set[T]` (needs an expected type, like an empty map), `Set.new(List[T])`, `add`, `delete`, `include?`, `size`, `empty?`, `to_a`, `union`, `intersection`, `difference`, `subset?`. `for x in set` iterates in order.
+- Text form: `#<Set: {1, 2}>`, as Ruby. `==` compares elements regardless of order. Sets are not JSON-encodable at first.
+- VM: built on the HAMT of 7e PR 5d, so it comes after maps.
+
+### 12.3 Queues
+
+- `Queue[T]` is a builtin generic, persistent FIFO (two lists): `Queue.new()`, `push(q, x) -> Queue[T]`, `peek(q) -> Result[T]`, `drop(q) -> Queue[T]` (an empty queue stays empty), `size`, `empty?`, `to_a`. Used linearly, each operation is O(1) amortized; reusing an old version can cost O(n) once.
+- `pop` returning both the value and the rest waits for tuples (12.4). Until then, `peek` then `drop`.
+- `std/queue` stays for compatibility and points to `Queue[T]`.
+
+### 12.4 Later
+
+Each needs a real program first.
+
+- **Tuples:** `(Int, String)` values and destructuring, to return two values without a struct; then `Queue.pop`.
+- **`Bytes`:** binary data instead of `List[Int]` (`IO.read_bytes`, `String.from_bytes`).
+- **Priority queue (`Heap[T]`):** for Dijkstra and scheduling; elements `Int`, `Float` or `String`, or a key function.
+- **Sorted map or set:** iterate in key order; today sort the keys.
+- **Deque:** both ends of a `Queue`.
