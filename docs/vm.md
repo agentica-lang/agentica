@@ -973,11 +973,10 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 
 - One OS thread runs the interpreter and the loop. Tasks are VM stacks. A
   blocking builtin starts a libuv request, parks its task, and the scheduler
-  runs another ready task or `uv_run(UV_RUN_ONCE)`. Only the scheduler calls
-  `uv_run`. libuv and OpenSSL callbacks only copy results and mark tasks
-  ready.
-- Racket threads are preemptive, so the scheduler also switches after a fixed
-  number of instructions. Cross-task output order is not compared.
+  runs another ready task (10.2.1). Only the scheduler calls `uv_run`. libuv
+  and OpenSSL callbacks only copy results and mark tasks ready.
+- Racket threads are preemptive, so the scheduler also switches tasks that do
+  not block, by reductions (10.2.1). Cross-task output order is not compared.
 - Builtins that take a function (`Task.spawn`, `HTTP.listen` and
   `HTTP.listen_tls` handlers, `HTTP.request_stream`'s producer, `BDD.step`)
   run it as a new VM task; the ones that need its result await it.
@@ -995,6 +994,46 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   while registered. `CRYPTO_set_mem_functions` is never routed to the GC.
 - All VM file descriptors and handles are created non-inheritable
   (`O_CLOEXEC`, no handle inheritance on Windows).
+
+#### 10.2.1 Scheduler
+
+- **libuv does I/O only.** It gives readiness, timers, processes, DNS, and
+  the thread pool for file I/O, which epoll cannot poll. It never decides
+  which task runs; the scheduler is ours. Raw epoll or io_uring would make us
+  rewrite the file thread pool, processes, signals and DNS ourselves, on each
+  platform.
+- **Run queue.** Ready tasks wait in one FIFO queue. A new task, a task whose
+  turn ended, and a task woken by a libuv callback all go to the back.
+- **Reductions, as in BEAM.** Each turn has a budget of steps, counted by
+  `STEP` like `--max-steps` (`STEP n` counts n). The number is decided by
+  measurement in 7g and 7h; it starts at 2000. When a `STEP` spends the turn's
+  budget, the task goes to the back of the run queue and the next one runs.
+  To the program the scheduler is preemptive; inside the VM it switches only
+  at a `STEP`, a safe point, so no builtin is stopped halfway. A long builtin
+  (sorting a big list, for example) finishes in its turn. Every loop passes a
+  `STEP`: backward jumps land on one, and every function that calls starts
+  with one (8), so a `TAIL_CALL` loop passes it too. A task also leaves its
+  turn when it blocks.
+- **Fairness with I/O.** After each turn (or every N turns, if measurement
+  asks for it) the scheduler calls `uv_run(UV_RUN_NOWAIT)`, so ready I/O wakes
+  its tasks even while other tasks keep computing. It blocks in
+  `uv_run(UV_RUN_ONCE)` only when the run queue is empty.
+- **Quotas.**
+  - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
+    6.1), as today, so counts and failing spans match the evaluator's
+    synchronized counter (2.1). Preemption never changes what is charged.
+  - Per-task step quotas could later use the same counter. They are not in
+    7h.
+  - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
+    BEAM's per-process heaps. Only a global heap limit is possible (13).
+- **One OS thread in 7h.** Multicore (M:N, one scheduler per core with work
+  stealing) is later work, done only if 7g and 7h measurements justify it.
+  Immutable values make sharing safe, and the shared tables plan avoids
+  locks. The costs: Boehm stops the world for each collection once there are
+  threads, the interpreter state must become per-thread, and builtins that
+  rely on the single thread (table calls, the resource registry) need
+  atomics. `future.md` §13 relies on the single-thread rule for atomic table
+  calls on the VM, so it must be revisited if multicore lands.
 
 ### 10.3 TLS
 
