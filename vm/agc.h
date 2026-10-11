@@ -11,6 +11,7 @@
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
+#define AGC_MAX_MAP_CHUNK 255u
 #define AGC_FLOAT_TEXT 40
 
 typedef enum {

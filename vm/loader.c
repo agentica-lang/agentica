@@ -217,6 +217,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         break;
       case AGC_OP_MAP:
         check_register(r, in.a, f);
+        if (in.c > AGC_MAX_MAP_CHUNK) reject(r, "map literal chunk too large");
         check_window(r, in.b, 2 * (uint32_t)in.c, f);
         break;
       case AGC_OP_JUMP_IF_FALSE:

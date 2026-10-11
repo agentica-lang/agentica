@@ -829,7 +829,11 @@ int main(void) {
   static const agc_instr bad_map_window[] = {{AGC_OP_MAP, 0, 1, 2}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_map_window, two_spans, 2, 4, "register range out of range"));
   static const agc_instr huge_map_window[] = {{AGC_OP_MAP, 0, 0, 65535}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(huge_map_window, two_spans, 2, 65535, "register range out of range"));
+  assert(!loads_with_tables(huge_map_window, two_spans, 2, 65535, "map literal chunk too large"));
+  static const agc_instr big_map_chunk[] = {{AGC_OP_MAP, 0, 0, 256}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(big_map_chunk, two_spans, 2, 1024, "map literal chunk too large"));
+  static const agc_instr max_map_chunk[] = {{AGC_OP_MAP, 0, 0, 255}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads_with_tables(max_map_chunk, two_spans, 2, 510, NULL));
   static const agc_instr exact_map_window[] = {{AGC_OP_MAP, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(loads_with_tables(exact_map_window, two_spans, 2, 4, NULL));
   static const agc_instr bad_map_get[] = {{AGC_OP_MAP_GET, 0, 0, 4}, {AGC_OP_RETURN, 0, 0, 0}};

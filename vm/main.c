@@ -57,23 +57,8 @@ static void remove_input(int index, const char *path, const file_info *info) {
 }
 #endif
 
-#ifdef __linux__
-#include <sys/random.h>
-
-static bool os_entropy(uint8_t *out, size_t len) {
-  return getrandom(out, len, 0) == (ssize_t)len;
-}
-#elif defined(_WIN32)
-static bool os_entropy(uint8_t *out, size_t len) {
-  for (size_t k = 0; k < len; k++) {
-    unsigned int x;
-    if (rand_s(&x) != 0) return false;
-    out[k] = (uint8_t)x;
-  }
-  return true;
-}
-#else
-static bool os_entropy(uint8_t *out, size_t len) {
+#ifndef _WIN32
+static bool urandom_entropy(uint8_t *out, size_t len) {
   int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
   if (fd < 0) return false;
   size_t done = 0;
@@ -86,6 +71,32 @@ static bool os_entropy(uint8_t *out, size_t len) {
   close(fd);
   return done == len;
 }
+#endif
+
+#ifdef __linux__
+#include <sys/random.h>
+
+static bool os_entropy(uint8_t *out, size_t len) {
+  size_t done = 0;
+  while (done < len) {
+    ssize_t n = getrandom(out + done, len - done, 0);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) return urandom_entropy(out, len);
+    done += (size_t)n;
+  }
+  return true;
+}
+#elif defined(_WIN32)
+static bool os_entropy(uint8_t *out, size_t len) {
+  for (size_t k = 0; k < len; k++) {
+    unsigned int x;
+    if (rand_s(&x) != 0) return false;
+    out[k] = (uint8_t)x;
+  }
+  return true;
+}
+#else
+static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, len); }
 #endif
 
 static void seed_map_hash(void) {

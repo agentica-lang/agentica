@@ -43,9 +43,12 @@ static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b))
     v2 = rotl(v2, 32);                                                                             \
   } while (0)
 
-static uint64_t siphash13(const uint8_t *in, size_t len) {
+static uint64_t siphash13(uint64_t domain, const uint8_t *in, size_t len) {
   uint64_t v0 = 0x736f6d6570736575ULL ^ sip_k0, v1 = 0x646f72616e646f6dULL ^ sip_k1;
   uint64_t v2 = 0x6c7967656e657261ULL ^ sip_k0, v3 = 0x7465646279746573ULL ^ sip_k1;
+  v3 ^= domain;
+  SIPROUND;
+  v0 ^= domain;
   size_t full = len - len % 8;
   for (size_t i = 0; i < full; i += 8) {
     uint64_t m = 0;
@@ -71,10 +74,10 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
     uint64_t x = (uint64_t)agc_as_int(vm, key);
     uint8_t bytes[8];
     for (unsigned k = 0; k < 8; k++) bytes[k] = (uint8_t)(x >> (8 * k));
-    return siphash13(bytes, sizeof bytes);
+    return siphash13((uint64_t)key.tag, bytes, sizeof bytes);
   }
   const agc_string *s = agc_as_string(vm, key);
-  return siphash13((const uint8_t *)s->data, s->bytes);
+  return siphash13((uint64_t)key.tag, (const uint8_t *)s->data, s->bytes);
 }
 
 static bool key_equal(agc_vm *vm, agc_value a, agc_value b) {

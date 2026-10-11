@@ -487,7 +487,7 @@ through the checked accessors (5.2); a wrong tag is `RUNTIME-INTERNAL`
 | Data | `LIST` | a b c | List of `R[b..b+c-1]` |
 | | `LIST_LEN` | a b | Length of list `R[b]` |
 | | `LIST_GET` | a b c | `R[b][R[c]]`; out of range fails at the index span |
-| | `MAP` | a b c | Map from `c` key/value pairs at `R[b..b+2c-1]`, `mapping-put` rules |
+| | `MAP` | a b c | Map from `c <= 255` key/value pairs at `R[b..b+2c-1]`, `mapping-put` rules |
 | | `MAP_GET` | a b c | `R[b][R[c]]`; missing key fails at the index span |
 | | `STRUCT` | a b c | Struct of type `c` from `R[b..]` in declaration order |
 | | `FIELD` | a b c | Field `c` of struct `R[b]` |
@@ -659,7 +659,7 @@ typedef struct {
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
-| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (13 levels of 5 hash bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing (and later `Map.keys`/`values`) walks the list once into an array, oldest first, then looks each value up: O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (12.2 item 6) will copy the list without its key, O(n) like `remove` in the evaluator. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3 under a per-run key from OS entropy (`getrandom` on Linux, `/dev/urandom` elsewhere, `rand_s` on Windows; independent of `--seed`), set in `vm/main.c`. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. |
+| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (13 levels of 5 hash bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing (and later `Map.keys`/`values`) walks the list once into an array, oldest first, then looks each value up: O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (12.2 item 6) will copy the list without its key, O(n) like `remove` in the evaluator. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3, the value tag compressed as a leading 64-bit word before the bytes, so an Int and a String with the same bytes hash apart. The SipHash key is seeded once per run in `vm/main.c` from OS entropy, independent of `--seed`: on Linux `getrandom` (retried on `EINTR` and short reads), then `/dev/urandom` if `getrandom` fails (for example `ENOSYS` or `EPERM` under seccomp); `/dev/urandom` on other Unix systems and `rand_s` on Windows. If every source fails, the fixed default key stays. That is acceptable as a last resort: the hash is still 64 bits and a HAMT only degrades on full 64-bit collisions (a collision node is searched linearly), and forcing those still costs about 2^32 work per pair even with a known key. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. |
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
@@ -873,7 +873,9 @@ The loader validates the whole file before running anything. Failures print
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
   time and memory in proportion to their strings (trust model, 1). `LIST`
   and `TAIL_CALL` copy up to 65534 values in one instruction, so they cost
-  O(count) per step, still within steps × code size.
+  O(count) per step, still within steps × code size. `MAP` hashes and puts
+  at most 255 pairs, so one step cannot pay for a huge literal; longer
+  literals are extended one `Map.put` at a time.
 - **Entry**: exists, with no parameters or captures.
 - **In the slice**: captures must be 0; constant kinds above 6 are
   rejected. Struct field counts and variant arities are at most 65535. All
@@ -889,8 +891,9 @@ The loader validates the whole file before running anything. Failures print
   variant id; `FIELD` and `PAYLOAD` check two registers and `c` below the
   largest field count or arity (the run time checks the value's own `n`);
   `SAME` checks three registers; `TRY`, `IS_OK` and `RESULT_VALUE` two;
-  `MAP` checks `a` and the window `b..b+2c-1` (`b` itself when `c` is 0;
-  `2c` is computed in 32 bits), `MAP_GET` three registers.
+  `MAP` checks `a`, `c <= 255` (the lowerer's chunk size, 3.3) and the
+  window `b..b+2c-1` (`b` itself when `c` is 0; `2c` is computed in 32
+  bits), `MAP_GET` three registers.
   Builtin record layouts are not checked
   yet: the lowerer rejects builtin record types, and the check joins with
   the first library PR that reads one. `CONCAT`
@@ -910,7 +913,8 @@ The loader validates the whole file before running anything. Failures print
   `TAIL_CALL` and `CALL_BUILTIN` windows, a `TAIL_CALL` to a function out of
   range, the registers of `TRY`, `IS_OK` and `RESULT_VALUE` (and, at run
   time, that they fail on a non-Result and that a `TRY` error in `main`
-  is `RUNTIME-INTERNAL`), the `MAP` window and `MAP_GET` registers (and, at
+  is `RUNTIME-INTERNAL`), the `MAP` window, a `MAP` count of 256 (and that 255 loads) and
+  `MAP_GET` registers (and, at
   run time, a missing key's code, span and message, a nested map printed,
   and `RUNTIME-INTERNAL` for a Void key or a `MAP_GET` on a list), a
   `Map.put` import of the wrong arity, `STEP 0`, a backward jump that misses a `STEP`,
