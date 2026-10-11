@@ -1182,6 +1182,16 @@ Specified in [`future.md` section 12](future.md#12-data-structures). Each item l
 
 **Done when:** ranges, sets, queues and the faster lists run on both backends, and an evaluation round shows agents use ranges without `while` workarounds.
 
+## Phase 9: Shared tables (ATS)
+
+Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs lightweight tasks on the VM (7h), so it starts after Phase 7 and lands in both backends in one PR, with `grammar.md`, the programming skill, the site docs and tests.
+
+- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `Table` becomes a reserved type and module name (say so in the changelog).
+- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; a table is freed once unreachable.
+- [ ] Later, each after a real program needs it: ordered tables, duplicate keys, a block-based `update`.
+
+**Done when:** an example with several tasks sharing a cache and a counter runs on both backends with the same output.
+
 ## Later extensions
 
 - [x] Faster maps: replaced association lists in `src/evaluator.rkt` with Racket immutable equal?-based hashes plus reversed insertion-order keys; `mapping-put` remains the only writer. Lookup/update are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison), Map.size is O(1), and Map.keys is O(n). Replacement preserves first-insertion order, old maps stay unchanged, and missing keys keep their diagnostic spans. Extended evaluator coverage for replacements, equal String keys, Int keys, false/nil payloads, empty maps, and nested debug order. `racket benchmarks/maps.rkt` compares checked build/build+read workloads at 1k/10k/50k entries (three-sample medians, no CI timing thresholds). Completed before JSON (5f). Lists retain O(n) indexing; favor `for`, with no runtime rewrite.

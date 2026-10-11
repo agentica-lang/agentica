@@ -387,3 +387,43 @@ Each needs a real program first.
 - **Priority queue (`Heap[T]`):** for Dijkstra and scheduling; elements `Int`, `Float` or `String`, or a key function.
 - **Sorted map or set:** iterate in key order; today sort the keys.
 - **Deque:** both ends of a `Queue`.
+
+## 13. Shared tables (ATS)
+
+ATS (Agentica Table Storage) plays the role of Erlang's ETS. Values are immutable and tasks share nothing but the argument they start with and the result they return. A cache, a counter or a large lookup table that many tasks read must today travel through `Task.spawn` and `Task.await`, copied or rebuilt each time. A table is one mutable place that tasks share through a handle.
+
+```agentica
+def count_visit(hits: Table[String, Int]) -> Void
+  hits.add("home", 1)
+end
+
+def main() -> Void
+  hits: Table[String, Int] = Table.new()
+  a = Task.spawn(&count_visit, hits)
+  b = Task.spawn(&count_visit, hits)
+  Task.await(a)
+  Task.await(b)
+  IO.inspect(hits.get("home"))   # ok(2)
+end
+```
+
+- `Table[K, V]` is a builtin opaque generic, like `Task[T]`. A table value is a handle: assigning or passing it shares the same table, it does not copy it. This is the one place where Agentica has shared mutable state, so the name and the type say so.
+- Keys are `Int` or `String`, like `Map`. Values are data: anything that `Map` holds except functions, tasks, tables and resources (ports, processes, sockets). A value is copied in on `put` and is immutable once stored, so a reader never sees a half-written value.
+- Functions (also methods, with the table first):
+
+  | Function | Result |
+  |---|---|
+  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map` |
+  | `Table.put(t, k: K, v: V) -> Void` | insert or replace |
+  | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent; `false` leaves the table unchanged (ETS `insert_new`) |
+  | `Table.get(t, k: K) -> Result[V]`, `Table.has_key?(t, k: K) -> Bool` | |
+  | `Table.delete(t, k: K) -> Void` | absent keys are ignored |
+  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent counts as 0) and returns the new value, atomically (ETS `update_counter`) |
+  | `Table.size(t) -> Int`, `Table.keys(t) -> List[K]`, `Table.to_map(t) -> Map[K, V]` | snapshots, in first-insertion order |
+
+- **Atomicity:** each call is atomic on its own. There are no transactions over several keys and no user code runs while the table is locked (no `update` with a block), so a call cannot deadlock or re-enter the table. A read-modify-write on a non-counter value uses `put_new` or a single owner task.
+- **Lifetime:** a table lives while some value refers to it; the garbage collector frees it. There is no owner process and no named global table, unlike ETS: a task reaches a table only through a handle it was given. A table does not outlive the evaluation.
+- **No `==`, no JSON, text form `<Table>`.** `IO.inspect` does not print the contents; use `to_map`.
+- **Not in the first version:** ordered tables (`ordered_set`), duplicate keys (`bag`), match specifications, and tables shared between OS processes. Each waits for a real program.
+- **Effects:** `Table.put`, `delete` and `add` are effects, so `CHECK-UNUSED-VALUE` never fires on them, and `Table.add`'s result may be ignored.
+- **Backends:** the evaluator guards each table with a Racket semaphore; the VM with one lock per table on top of its task scheduler (7h). Both land in the same PR.
