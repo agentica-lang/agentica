@@ -398,6 +398,23 @@ blockquote {
     display: none;
   }
 
+  .js .sidebar.open {
+    position: fixed;
+    top: var(--header);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 9;
+    align-self: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--bg);
+  }
+
+  .nav-open body {
+    overflow: hidden;
+  }
+
   main {
     padding: 1.25rem 1rem 3rem;
     border-left: 0;
