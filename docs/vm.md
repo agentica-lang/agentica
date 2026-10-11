@@ -1152,8 +1152,8 @@ and cost one predictable branch each.
   driver must call `subprocess` from the main thread.
 - The hidden flag deletes its private input after loading, so it must not
   be reused for anything else.
-- `check`, `help` and `test` stay on Racket; 7h decides where BDD handlers
-  run. `make vm` builds `dist/agentica-vm` (`.exe` on Windows); in 7i the
+- `check`, `help` and `test` stay Racket commands; from 7h, BDD handlers
+  run on the VM. `make vm` builds `dist/agentica-vm` (`.exe` on Windows); in 7i the
   release archive ships it in `bin/` next to `agentica`.
 
 ## 10. Dependencies and platforms
@@ -1607,5 +1607,7 @@ those that need files, processes, tasks or the network by name:
 - **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
   runaway file reaches the out-of-memory exit. Before 7i runs untrusted
   bytecode by default, decide on a cap such as `--max-heap N` through
-  `GC_set_max_heap_size`, and whether the evaluator gets a matching limit.
-- **BDD on the VM**: 7h decides whether handlers move to the VM.
+  `GC_set_max_heap_size`, and whether the evaluator gets a matching limit for the one release it
+  stays behind a flag.
+- **BDD on the VM**: decided; handlers move to the VM in 7h, and the
+  evaluator is removed in 7i (roadmap).
