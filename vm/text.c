@@ -245,7 +245,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
       }
       stack[depth].value = item;
       stack[depth].next = 0;
-      stack[depth].keys = agc_is(item, AGC_T_MAP) ? agc_map_keys(agc_as_map(vm, item)) : NULL;
+      stack[depth].keys = agc_is(item, AGC_T_MAP) ? agc_map_keys(vm, agc_as_map(vm, item)) : NULL;
       depth++;
     }
     for (;;) {

@@ -227,10 +227,11 @@ bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value) 
   return agc_map_get_hash(vm, m, agc_key_hash(vm, key), key, value);
 }
 
-agc_value *agc_map_keys(const agc_map *m) {
+agc_value *agc_map_keys(agc_vm *vm, const agc_map *m) {
   agc_value *keys = agc_alloc(agc_size_mul(m->size, sizeof(agc_value)));
   size_t k = m->size;
   for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) keys[--k] = cell->key;
+  if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", 0);
   return keys;
 }
 
@@ -269,10 +270,10 @@ static agc_hamt *take(agc_vm *vm, agc_hamt *node, unsigned shift, uint64_t hash,
   return node->n == 1 ? NULL : remove_at(node, node->bitmap & ~bit, at);
 }
 
-agc_map *agc_map_delete_hash(agc_vm *vm, agc_map *m, uint64_t hash, agc_value key) {
+agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key) {
   bool removed = false;
   agc_hamt *table = m->table ? take(vm, m->table, 0, hash, key, &removed) : NULL;
-  if (!removed) return m;
+  if (!removed) return (agc_map *)m;
   agc_map *result = agc_new_map();
   result->table = table;
   result->size = m->size - 1;
@@ -290,6 +291,6 @@ agc_map *agc_map_delete_hash(agc_vm *vm, agc_map *m, uint64_t hash, agc_value ke
   return result;
 }
 
-agc_map *agc_map_delete(agc_vm *vm, agc_map *m, agc_value key) {
+agc_map *agc_map_delete(agc_vm *vm, const agc_map *m, agc_value key) {
   return agc_map_delete_hash(vm, m, agc_key_hash(vm, key), key);
 }

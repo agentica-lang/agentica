@@ -126,9 +126,9 @@ static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_map_value(agc_map_put(vm, agc_as_map(vm, args[0]), args[1], args[2]));
 }
 
-static agc_list *list_prefix(const agc_list *src, size_t len, size_t extra) {
+static agc_list *list_slice(const agc_list *src, size_t from, size_t len, size_t extra) {
   agc_list *l = agc_new_list(agc_size_add(len, extra));
-  if (len) memcpy(l->items, src->items, len * sizeof(agc_value));
+  if (len) memcpy(l->items, src->items + from, len * sizeof(agc_value));
   return l;
 }
 
@@ -140,7 +140,7 @@ static agc_value builtin_list_size(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_list_append(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *a = agc_as_list(vm, args[0]);
-  agc_list *l = list_prefix(a, a->len, 1);
+  agc_list *l = list_slice(a, 0, a->len, 1);
   l->items[a->len] = args[1];
   return agc_list_value(l);
 }
@@ -159,7 +159,7 @@ static agc_value builtin_list_at(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_list_set(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
   size_t k = list_index(vm, a, args[1], span);
-  agc_list *l = list_prefix(a, a->len, 0);
+  agc_list *l = list_slice(a, 0, a->len, 0);
   l->items[k] = args[2];
   return agc_list_value(l);
 }
@@ -181,15 +181,13 @@ static size_t list_count(agc_vm *vm, const agc_list *l, agc_value count, uint32_
 
 static agc_value builtin_list_take(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
-  return agc_list_value(list_prefix(a, list_count(vm, a, args[1], span), 0));
+  return agc_list_value(list_slice(a, 0, list_count(vm, a, args[1], span), 0));
 }
 
 static agc_value builtin_list_drop(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
   size_t k = list_count(vm, a, args[1], span);
-  agc_list *l = agc_new_list(a->len - k);
-  if (a->len > k) memcpy(l->items, a->items + k, (a->len - k) * sizeof(agc_value));
-  return agc_list_value(l);
+  return agc_list_value(list_slice(a, k, a->len - k, 0));
 }
 
 static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -227,6 +225,7 @@ static agc_value map_walk(agc_vm *vm, agc_value map, bool values, uint32_t span)
       agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
     l->items[--k] = item;
   }
+  if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
   return agc_list_value(l);
 }
 
