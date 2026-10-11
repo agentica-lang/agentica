@@ -3,6 +3,7 @@
 (require (except-in rackunit check)
          json
          racket/runtime-path
+         "cli-in-process.rkt"
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
          "../src/evaluator.rkt"
@@ -44,6 +45,9 @@
   (if (diagnostic? result) (diagnostic-code result) result))
 
 (define (cli . arguments)
+  (apply run-main-in-process arguments))
+
+(define (cli-process . arguments)
   (define-values (process out in err)
     (apply subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) arguments))
   (close-output-port in)
@@ -342,6 +346,7 @@
 
   (test-case "CLI exit codes"
     (define hello (path->string (build-path examples-dir "hello.agc")))
+    (check-equal? (cli-process hello) '(0 "hello\n" ""))
     (check-equal? (cli hello) '(0 "hello\n" ""))
     (check-equal? (car (cli "no-such-file.agc")) 2)
     (check-equal? (cli "check" hello) '(0 "check ok\n" ""))
@@ -362,12 +367,13 @@
     (check-equal? (cli "--json" "check" hello) '(0 "{\"ok\":true}\n" ""))
     (define bad (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Void\n  x = 1 / 0\nend\n\n" bad #:exists 'truncate)
-    (define failed (cli (path->string bad)))
+    (define failed (cli-process (path->string bad)))
     (delete-file bad)
     (check-equal? (car failed) 1)
     (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))
     (define exit-file (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Void\n  System.exit(3)\nend\n\n" exit-file #:exists 'truncate)
+    (check-equal? (car (cli-process (path->string exit-file))) 3)
     (check-equal? (car (cli (path->string exit-file))) 3)
     (delete-file exit-file)
     (define args-file (make-temporary-file "agentica~a.agc"))
