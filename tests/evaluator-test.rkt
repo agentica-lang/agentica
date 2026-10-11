@@ -403,8 +403,11 @@
                             "  IO.inspect(String.split(\"one\\ntwo\\n\", \"\\n\"))\n"
                             "  IO.inspect(String.split(\" a b  c \", \" \"))\n"
                             "  IO.inspect(String.split(\"\", \",\"))\n"
+                            "  IO.inspect(String.split(\"a.b.c\", \".\"))\n"
+                            "  IO.inspect(String.split(\"aaa\", \"aa\"))\n"
+                            "  IO.inspect(String.split(\",,a,,\", \",\"))\n"
                             "  IO.inspect(String.join(String.split(\",a,,b,\", \",\"), \",\"))")))
-     "[\"one\", \"two\", \"\"]\n[\"\", \"a\", \"b\", \"\", \"c\", \"\"]\n[\"\"]\n\",a,,b,\"\n"))
+     "[\"one\", \"two\", \"\"]\n[\"\", \"a\", \"b\", \"\", \"c\", \"\"]\n[\"\"]\n[\"a\", \"b\", \"c\"]\n[\"\", \"a\"]\n[\"\", \"\", \"a\", \"\", \"\"]\n\",a,,b,\"\n"))
 
   (test-case "String.from_bytes validates byte values and decodes UTF-8 strictly"
     (for ([data '("[-1]" "[256]" "[9223372036854775807]" "[195]" "[128]"
