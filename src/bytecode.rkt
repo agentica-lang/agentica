@@ -8,11 +8,12 @@
          (struct-out bc-program)
          (struct-out bc-function))
 
-(struct bc-program (span sources spans constants structs enums builtins functions entry) #:transparent)
+(struct bc-program (span sources spans constants structs types decodable enums builtins functions entry) #:transparent)
 (struct bc-function (name params captures registers span code spans) #:transparent)
 
-(define format-version 2)
+(define format-version 3)
 (define max-u16 65535)
+(define max-type-depth 1024)
 
 (define opcodes
   '(move const step add-i sub-i mul-i div-i mod-i neg-i not lt-i le-i eq ne
@@ -51,6 +52,36 @@
     (when (for/or ([entry (in-list enums)])
             (for/or ([variant (in-list (ir-enum-variants entry))]) (> (cdr variant) max-u16)))
       (too-big "payload items in one variant" (ir-program-span ir)))
+    (define struct-index
+      (for/hash ([entry (in-list structs)] [index (in-naturals)]) (values (ir-struct-name entry) index)))
+    (define types '())
+    (define type-count 0)
+    (define type-index (make-hash))
+    (define (nesting type)
+      (match type
+        [(list 'List item) (add1 (nesting item))]
+        [(list 'Map _ item) (add1 (nesting item))]
+        [_ 0]))
+    (define (type! type)
+      (hash-ref type-index type
+                (lambda ()
+                  (define entry
+                    (match type
+                      ['Int '(0)] ['Float '(1)] ['Bool '(2)] ['String '(3)]
+                      [(list 'List item) (list 4 (type! item))]
+                      [(list 'Map 'String value) (list 5 (type! value))]
+                      [(list 'Struct name) (list 6 (hash-ref struct-index name))]))
+                  (set! types (cons entry types))
+                  (set! type-count (add1 type-count))
+                  (hash-set! type-index type (sub1 type-count))
+                  (sub1 type-count))))
+    (define decodable
+      (for/list ([entry (in-list structs)] [index (in-naturals)] #:when (ir-struct-types entry))
+        (list index (ir-struct-name entry) (map type! (ir-struct-types entry)))))
+    (when (> type-count max-u16) (too-big "JSON field types" (ir-program-span ir)))
+    (when (for/or ([entry (in-list structs)] #:when (ir-struct-types entry))
+            (for/or ([type (in-list (ir-struct-types entry))]) (> (nesting type) max-type-depth)))
+      (too-big "nested List and Map levels in a JSON field type" (ir-program-span ir)))
     (define sources (ir-program-sources ir))
     (define source-index
       (for/hasheq ([text-source (in-list sources)] [index (in-naturals)])
@@ -150,6 +181,8 @@
                 (list->vector (reverse spans))
                 (list->vector (reverse constants))
                 structs
+                (list->vector (reverse types))
+                decodable
                 enums
                 builtins
                 functions
@@ -195,6 +228,15 @@
     (u32 out (length (ir-struct-fields entry)))
     (for ([field (in-list (ir-struct-fields entry))])
       (str out field)))
+  (u32 out (vector-length (bc-program-types program)))
+  (for ([entry (in-vector (bc-program-types program))])
+    (u8 out (car entry))
+    (for ([n (in-list (cdr entry))]) (u32 out n)))
+  (u32 out (length (bc-program-decodable program)))
+  (for ([entry (in-list (bc-program-decodable program))])
+    (u32 out (first entry))
+    (str out (second entry))
+    (for ([n (in-list (third entry))]) (u32 out n)))
   (u32 out (length (bc-program-enums program)))
   (for ([entry (in-list (bc-program-enums program))])
     (str out (display-name (ir-enum-name entry)))

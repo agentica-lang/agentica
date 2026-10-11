@@ -1,6 +1,7 @@
 #include "agc.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef AGC_VERSION
@@ -283,6 +284,59 @@ static uint64_t count_variants(reader *r, uint32_t enums) {
   return total;
 }
 
+static int compare_names(const void *a, const void *b) {
+  const agc_string *x = *(agc_string *const *)a;
+  const agc_string *y = *(agc_string *const *)b;
+  size_t n = x->bytes < y->bytes ? x->bytes : y->bytes;
+  int c = n ? memcmp(x->data, y->data, n) : 0;
+  if (c) return c;
+  return x->bytes < y->bytes ? -1 : x->bytes > y->bytes;
+}
+
+static void load_types(reader *r, agc_program *p) {
+  p->type_count = read_count(r, 1, "type");
+  if (p->type_count > AGC_MAX_TYPES) reject(r, "too many types");
+  p->types = load_alloc(r, agc_size_mul(p->type_count, sizeof(agc_type)), true);
+  uint16_t *depth = load_alloc(r, agc_size_mul(p->type_count, sizeof(uint16_t)), true);
+  for (uint32_t i = 0; i < p->type_count; i++) {
+    depth[i] = 0;
+    agc_type *t = &p->types[i];
+    t->kind = read_u8(r);
+    t->arg = 0;
+    if (t->kind > AGC_TYPE_STRUCT) reject(r, "unknown type kind %u", (unsigned)t->kind);
+    if (t->kind < AGC_TYPE_LIST) continue;
+    t->arg = read_u32(r);
+    if (t->kind == AGC_TYPE_STRUCT && t->arg >= p->struct_count) reject(r, "struct index out of range");
+    if (t->kind == AGC_TYPE_STRUCT) continue;
+    if (t->arg >= i) reject(r, "element type is not an earlier type");
+    if (depth[t->arg] >= AGC_MAX_TYPE_DEPTH) reject(r, "type nesting too deep");
+    depth[i] = (uint16_t)(depth[t->arg] + 1);
+  }
+  uint32_t count = read_count(r, 8, "decodable struct");
+  agc_string **names = load_alloc(r, agc_size_mul(count, sizeof(agc_string *)), false);
+  for (uint32_t i = 0, last = 0; i < count; i++) {
+    uint32_t index = read_u32(r);
+    if (index >= p->struct_count) reject(r, "struct index out of range");
+    if (i && index <= last) reject(r, "decodable structs out of order");
+    last = index;
+    agc_struct_def *d = &p->structs[index];
+    d->json_name = read_string(r);
+    names[i] = d->json_name;
+    if ((uint64_t)d->count * 4 > left(r)) reject(r, "field type count exceeds the file");
+    d->field_types = load_alloc(r, agc_size_mul(d->count, sizeof(uint32_t)), true);
+    for (uint32_t k = 0; k < d->count; k++) {
+      d->field_types[k] = read_u32(r);
+      if (d->field_types[k] >= p->type_count) reject(r, "type index out of range");
+    }
+  }
+  if (count) qsort(names, count, sizeof(agc_string *), compare_names);
+  for (uint32_t i = 1; i < count; i++)
+    if (compare_names(&names[i - 1], &names[i]) == 0) reject(r, "duplicate JSON type name");
+  for (uint32_t i = 0; i < p->type_count; i++)
+    if (p->types[i].kind == AGC_TYPE_STRUCT && !p->structs[p->types[i].arg].json_name)
+      reject(r, "type names a struct without field types");
+}
+
 static void load_tables(reader *r, agc_program *p) {
   p->struct_count = read_count(r, 8, "struct");
   p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
@@ -294,7 +348,11 @@ static void load_tables(reader *r, agc_program *p) {
     d->fields = load_alloc(r, agc_size_mul(d->count, sizeof(agc_string *)), false);
     for (uint32_t k = 0; k < d->count; k++) d->fields[k] = read_string(r);
     if (d->count > p->max_fields) p->max_fields = d->count;
+    d->json_name = NULL;
+    d->field_types = NULL;
   }
+
+  load_types(r, p);
 
   p->enum_count = read_count(r, 8, "enum");
   p->enums = load_alloc(r, agc_size_mul(p->enum_count, sizeof(agc_enum_def)), false);

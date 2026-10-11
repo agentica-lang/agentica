@@ -1113,7 +1113,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 - [x] `src/bytecode.rkt`: IR → bytecode plus constant pool, builtin imports and span table; merge adjacent steps only.
 - [x] Struct and enum tables in `src/bytecode.rkt` (format version 2).
-- [ ] Type table and field types for `JSON.decode`/`JSON.schema`, with the JSON PR.
+- [x] Type table and field types for `JSON.decode`/`JSON.schema` (format version 3).
 - [x] Serialize to the format from 7b; `agentica compile file.agc -o file.agcb` writes it.
 - [x] Writer checks: no Racket reader; every differential test sends writer output through the C loader, and `tests/bytecode-test.rkt` checks step merging and that the opcode list matches `vm/agc.h`.
 
@@ -1141,7 +1141,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] `String` builtins, with the case and final-sigma data generated from Racket (`docs/vm.md` §2.3, §12.2 item 6b).
 - [x] `Float`, `Time` and `Random` builtins; the VM's `Random` uses xoshiro256**, so seeded values differ from the evaluator by design, and `agentica --vm` passes `--seed` (`docs/vm.md` §7.4).
 - [x] JSON part 1: parse (the yyjson reader, a pinned submodule), extract, encode and builders, with the big-integer node and the number rules of `docs/future.md` §15.2 (`docs/vm.md` §12.2 item 7).
-- [ ] JSON part 2: typed decode and schema (pure C, no event loop).
+- [x] JSON part 2: typed decode and schema (pure C, no event loop).
 - [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
 - [x] Runtime diagnostics in the `--ai` and `--json` formats.

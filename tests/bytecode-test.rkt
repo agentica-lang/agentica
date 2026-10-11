@@ -142,7 +142,11 @@
                   '(2 11))
     (check-equal? (unsupported-at "def get(m: Map[String, Header]) -> Header\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
                   '(2 10))
-    (check-equal? (unsupported-at "struct P\n  a: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n") '(6 8))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(JSON.schema(Header))\nend\n") '(2 20))
+    (check-equal? (unsupported-at "def main() -> Void\n  r = JSON.decode(\"{}\", Header)\nend\n") '(2 7))
+    (check-equal? (unsupported-at "struct Wrap\n  h: Header\n  n: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(Wrap))\nend\n") '(7 20))
+    (check-equal? (unsupported-at "struct Wrap\n  h: Header\n  n: Int\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Wrap)\nend\n") '(7 25))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(File.read_text(\"a\", 10))\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(Path.resolve(\"a\"))\nend\n") '(2 8))
     (check-equal? (unsupported-at "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\nend\n")
                   '(6 7))
@@ -152,13 +156,24 @@
     (check-equal? (unsupported-at "def f(r: Result[Header]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
                   '(2 8)))
 
+  (test-case "JSON field types are written only for programs that use them, up to 1024 nested levels"
+    (define (nested n) (string-append (string-append* (make-list n "List[")) "Int" (make-string n #\])))
+    (define (program n use?)
+      (format "struct Deep\n  xs: ~a\nend\n\ndef main() -> Void\n  ~a\nend\n"
+              (nested n) (if use? "puts(JSON.schema(Deep))" "puts(1)")))
+    (check-pred bc-program? (ir->bytecode (lower-text (program 1024 #t))))
+    (define deep (ir->bytecode (lower-text (program 1025 #t))))
+    (check-equal? (and (diagnostic? deep) (diagnostic-code deep)) 'BYTECODE-LIMIT)
+    (define plain (ir->bytecode (lower-text (program 1025 #f))))
+    (check-equal? (vector-length (bc-program-types plain)) 0))
+
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
     (define work (make-temporary-directory "agentica-compile~a"))
     (dynamic-wind
       void
       (lambda ()
-        (define unsupported (path->string (build-path work "json.agc")))
-        (display-to-file "struct P\n  a: Int\nend\n\ndef main() -> Void\n  puts(JSON.decode(\"1\", P))\nend\n" unsupported)
+        (define unsupported (path->string (build-path work "file.agc")))
+        (display-to-file "def main() -> Void\n  puts(File.read_text(\"a\", 10))\nend\n" unsupported)
         (define rejected (cli "compile" unsupported "-o" (path->string (build-path work "out.agcb"))))
         (check-equal? (first rejected) 1)
         (check-true (string-contains? (third rejected) "error[LOWER-UNSUPPORTED]"))

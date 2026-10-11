@@ -386,7 +386,7 @@
           (check-equal? (first (same "--max-steps" "3" calls)) 1)
           (check-equal? (first (same calls "first" "--allow-run" "--json")) 0)
           (define unsupported (build-path temp "args.agc"))
-          (display-to-file "struct P\n  a: Int\nend\n\ndef main() -> Void\n  puts(JSON.decode(\"1\", P))\nend\n\n" unsupported)
+          (display-to-file "def main() -> Void\n  puts(File.read_text(\"a\", 10))\nend\n\n" unsupported)
           (define lowered (run-cli temp "--vm" "--json" (path->string unsupported)))
           (check-equal? (first lowered) 1)
           (check-equal? (hash-ref (string->jsexpr (third lowered)) 'code) "LOWER-UNSUPPORTED")
