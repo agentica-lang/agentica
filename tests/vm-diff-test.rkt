@@ -2,6 +2,7 @@
 
 (require (except-in rackunit check)
          json
+         racket/os
          racket/runtime-path
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
@@ -15,6 +16,7 @@
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
+(define linux? (eq? (system-type 'os*) 'linux))
 (define vm-file
   (if vm-binary
       (path->complete-path vm-binary root)
@@ -75,6 +77,37 @@
                  (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])
                  (list "--" (path->string bytecode))
                  extra)))
+
+(define (cli-environment temp vm)
+  (define env (environment-variables-copy (current-environment-variables)))
+  (environment-variables-set! env #"TMPDIR" (path->bytes temp))
+  (environment-variables-set! env #"AGENTICA_VM" (path->bytes vm))
+  env)
+
+(define (run-cli temp #:vm [vm vm-file] . arguments)
+  (parameterize ([current-environment-variables (cli-environment temp vm)])
+    (apply run-process (find-system-path 'exec-file) (path->string main-file) arguments)))
+
+(define (run-cli-in-process temp . arguments)
+  (define out (open-output-string))
+  (define err (open-output-string))
+  (define status
+    (let/ec escape
+      (parameterize ([current-environment-variables (cli-environment temp vm-file)]
+                     [current-namespace (make-base-namespace)]
+                     [current-command-line-arguments (list->vector arguments)]
+                     [current-input-port (open-input-string "")]
+                     [current-output-port out]
+                     [current-error-port err]
+                     [exit-handler escape])
+        (dynamic-require `(submod ,main-file main) #f)
+        0)))
+  (list status (get-output-string out) (get-output-string err)))
+
+(define (bytecode-files directory)
+  (for/list ([file (in-list (directory-list directory))]
+             #:when (path-has-extension? file #".agcb"))
+    file))
 
 (define (compile-file path output)
   (define result (run-process (find-system-path 'exec-file) (path->string main-file)
@@ -151,6 +184,66 @@
           (define rejected (run-process vm-file "--" (path->string bad)))
           (check-equal? (first rejected) 2)
           (check-true (string-prefix? (third rejected) "agentica-vm: invalid bytecode: ")))
+
+        (when linux?
+          (test-case "agentica --vm gives the evaluator's stdout, stderr and exit code"
+            (define temp (make-temporary-directory "agentica-cli~a"))
+            (define (same . arguments)
+              (define on-vm (apply run-cli temp "--vm" arguments))
+              (check-equal? on-vm (apply run-cli temp arguments) (format "~a" arguments))
+              (check-equal? (bytecode-files temp) '() (format "~a leaves no bytecode" arguments))
+              on-vm)
+            (dynamic-wind
+              void
+              (lambda ()
+                (for* ([name (in-list '("calls.agc" "division-by-zero.agc"))]
+                       [style (in-list '(() ("--ai") ("--json")))])
+                  (apply same (append style (list (path->string (build-path fixtures name))))))
+                (define calls (path->string (build-path fixtures "calls.agc")))
+                (check-equal? (first (same "--max-steps" "3" calls)) 1)
+                (check-equal? (first (same calls "first" "--allow-run" "--json")) 0)
+                (define unsupported (build-path temp "args.agc"))
+                (display-to-file "def main() -> Void\n  puts(System.args().size.to_s)\nend\n\n" unsupported)
+                (define lowered (run-cli temp "--vm" "--json" (path->string unsupported)))
+                (check-equal? (first lowered) 1)
+                (check-equal? (hash-ref (string->jsexpr (third lowered)) 'code) "LOWER-UNSUPPORTED")
+                (delete-file unsupported)
+                (check-equal? (first (run-cli temp "--vm" "--allow-run" calls)) 2)
+                (check-equal? (first (run-cli temp "--vm" "--max-steps" "0" calls)) 2)
+                (define missing (run-cli temp #:vm (build-path temp "no-vm") "--vm" calls))
+                (check-equal? (first missing) 2)
+                (define plain (build-path temp "plain-vm"))
+                (copy-file vm-file plain)
+                (file-or-directory-permissions plain #o644)
+                (check-equal? (first (run-cli temp #:vm plain "--vm" calls)) 2)
+                (delete-file plain)
+                (check-equal? (run-cli-in-process temp "--vm" calls) (run-cli temp calls))
+                (check-equal? (directory-list temp) '()))
+              (lambda () (delete-directory/files temp))))
+
+          (test-case "the hidden --driver-pid flag loads only a private input and then deletes it"
+            (define bytecode (build-path work "calls.agcb"))
+            (define copy (build-path work "driver-copy.agcb"))
+            (define (driven pid)
+              (run-process vm-file "--driver-pid" (number->string pid) "--" (path->string copy)))
+            (copy-file bytecode copy)
+            (file-or-directory-permissions copy #o600)
+            (check-equal? (driven (getpid)) (run-vm bytecode #f))
+            (check-false (file-exists? copy))
+            (copy-file bytecode copy)
+            (file-or-directory-permissions copy #o644)
+            (check-equal? (first (driven (getpid))) 2)
+            (check-true (file-exists? copy))
+            (file-or-directory-permissions copy #o600)
+            (define mismatch (driven (add1 (getpid))))
+            (check-equal? (first mismatch) 2)
+            (check-true (file-exists? copy))
+            (define link (build-path work "driver-link.agcb"))
+            (make-file-or-directory-link copy link)
+            (check-equal? (first (run-process vm-file "--driver-pid" (number->string (getpid)) "--" (path->string link))) 2)
+            (check-true (file-exists? copy))
+            (delete-file link)
+            (delete-file copy)))
 
         (test-case "deep tail calls run on the VM but overflow on the evaluator"
           (define program (build-path work "deep-tail.agc"))

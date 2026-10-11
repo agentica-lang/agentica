@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `agentica --vm file.agc [args...]` runs a program on the bytecode VM
+  (tested on Linux only). It compiles to a temporary bytecode file (random
+  name, mode 0600, in the system temp directory), runs `agentica-vm` from
+  next to the executable (or `dist/` in a checkout; `AGENTICA_VM` overrides
+  it), and passes `--max-steps`, `--ai`, `--json`, program arguments (unused
+  until `System.args`), the VM's stdout, stderr and exit code through. The
+  evaluator stays the default. Options the VM does not support yet exit 2 with `--vm`.
 - The bytecode VM has tail calls: `return f(...)` of a user function (local
   or imported, in any branch, `case` arm or loop body) replaces the current
   frame, so tail recursion and mutual recursion run at any depth there. Step
