@@ -16,9 +16,21 @@ typedef struct _stat64 file_info;
 
 static wchar_t **wide_args;
 
-static int open_input(int index, const char *path) {
+static int open_input(int index, const char *path, bool driven) {
   (void)path;
+  (void)driven;
   return _wopen(wide_args[index], _O_RDONLY | _O_BINARY | _O_NOINHERIT);
+}
+
+static bool private_input(const file_info *info) {
+  (void)info;
+  return true;
+}
+
+static void remove_input(int index, const char *path, const file_info *info) {
+  (void)path;
+  (void)info;
+  _wunlink(wide_args[index]);
 }
 #else
 #include <unistd.h>
@@ -26,9 +38,33 @@ static int open_input(int index, const char *path) {
 typedef struct stat file_info;
 #define file_stat fstat
 
-static int open_input(int index, const char *path) {
+static int open_input(int index, const char *path, bool driven) {
   (void)index;
-  return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+  return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | (driven ? O_NOFOLLOW : 0));
+}
+
+static bool private_input(const file_info *info) {
+  return info->st_uid == geteuid() && info->st_nlink == 1 && (info->st_mode & 077) == 0;
+}
+
+static void remove_input(int index, const char *path, const file_info *info) {
+  (void)index;
+  struct stat now;
+  if (lstat(path, &now) == 0 && now.st_dev == info->st_dev && now.st_ino == info->st_ino) unlink(path);
+}
+#endif
+
+#ifdef __linux__
+#include <sys/prctl.h>
+
+static bool bind_to_driver(int64_t driver) {
+  if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) return false;
+  return (int64_t)getppid() == driver;
+}
+#else
+static bool bind_to_driver(int64_t driver) {
+  (void)driver;
+  return true;
 }
 #endif
 
@@ -62,15 +98,16 @@ static bool parse_steps(const char *text, int64_t *steps) {
   return value > 0;
 }
 
-static uint8_t *read_file(int index, const char *path, size_t *len) {
-  int fd = open_input(index, path);
+static uint8_t *read_file(int index, const char *path, bool driven, size_t *len) {
+  int fd = open_input(index, path, driven);
   if (fd < 0) return NULL;
   file_info info;
   if (file_stat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
-      (uint64_t)info.st_size > AGC_MAX_FILE_BYTES) {
+      (uint64_t)info.st_size > AGC_MAX_FILE_BYTES || (driven && !private_input(&info))) {
     close(fd);
     return NULL;
   }
+  if (driven) remove_input(index, path, &info);
   size_t size = (size_t)info.st_size;
   uint8_t *data = agc_alloc_atomic(size);
   size_t done = 0;
@@ -93,7 +130,8 @@ static int run(int argc, char **argv) {
   agc_init();
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
-  bool seen_steps = false, seen_ai = false, seen_json = false;
+  int64_t driver = 0;
+  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false;
   int i = 1;
   while (i < argc) {
     const char *arg = argv[i];
@@ -125,6 +163,15 @@ static int run(int argc, char **argv) {
       i += 2;
       continue;
     }
+    if (strcmp(arg, "--driver-pid") == 0) {
+      if (!once(&seen_driver, arg)) return 2;
+      if (i + 1 >= argc || !parse_steps(argv[i + 1], &driver)) {
+        fputs("agentica-vm: --driver-pid needs a positive integer\n", stderr);
+        return 2;
+      }
+      i += 2;
+      continue;
+    }
     if (arg[0] == '-' && arg[1] != '\0') {
       fprintf(stderr, "agentica-vm: unknown option %s\n", arg);
       return 2;
@@ -134,8 +181,12 @@ static int run(int argc, char **argv) {
   if (i >= argc) return usage_error();
   const char *path = argv[i];
 
+  if (seen_driver && !bind_to_driver(driver)) {
+    fputs("agentica-vm: --driver-pid does not match the parent process\n", stderr);
+    return 2;
+  }
   size_t len = 0;
-  uint8_t *data = read_file(i, path, &len);
+  uint8_t *data = read_file(i, path, seen_driver, &len);
   if (!data) {
     fprintf(stderr, "agentica-vm: cannot read %s\n", path);
     return 2;
