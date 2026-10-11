@@ -1174,7 +1174,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Processes, behind the VM's own `--allow-run` flag; before this, decide in `grammar.md` whether the current directory is searched.
 - [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
 - [ ] HTTP/1.1 clients and servers.
-- [ ] BDD: decide whether handlers keep using the Racket evaluator or move to the VM.
+- [ ] BDD: handlers move to the VM (the evaluator goes away in 7i).
 - [ ] Extend the differential tests and the independent network/process fixtures to the VM.
 
 **Done when:** every example and every CI smoke test runs on the VM with the same results.
@@ -1186,7 +1186,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Package the VM in `dist/` and the release workflow.
 - [ ] Single-file Linux release: `raco exe --orig-exe` with the VM embedded, older glibc baseline ([`future.md` section 18](future.md#18-front-end-implementation-language)).
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
-- [ ] Remove the Racket evaluator once the VM runs every program (6b, JSON and 7h done) and the flag release is out. The front end (lexer, parser, checker, lowering) stays. The VM differential tests become golden-output tests (program plus expected stdout, stderr and exit code). Until then the evaluator runs what the VM cannot and stays the reference.
+- [ ] Remove the Racket evaluator once the VM runs every program (`docs/vm.md` §12.2 items 6b and 7 (JSON), and 7h with BDD on the VM, done) and the flag release is out. The front end (lexer, parser, checker, lowering) stays. The VM differential tests become golden-output tests: the expected stdout, stderr, exit code and diagnostic code and span are generated from the evaluator before it goes, and the `--max-steps` sweep, seeded runs and the extreme-Int and deep-value corpora are kept. After removal, items that say "evaluator and VM" land on the VM only. The same PR updates `docs/vm.md`, this roadmap's phase 7 rules, the `ci.yml` path list and the AGENTS.md test notes. Until then the evaluator runs what the VM cannot and stays the reference.
 
 **Done when:** a release ships with the VM as the default backend.
 
