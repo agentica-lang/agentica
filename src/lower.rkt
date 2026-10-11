@@ -72,7 +72,10 @@
                       "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"
                       "List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?" "List.sort_by"
                       "Range.size" "Range.to_a" "Range.include?" "Range.each" "Range.first" "Range.last"
-                      "Int.times" "Int.upto" "Int.downto"))
+                      "Int.times" "Int.upto" "Int.downto"
+                      "List.size" "List.append" "List.set" "List.repeat" "List.concat" "List.take"
+                      "List.drop" "List.at" "List.reverse" "List.sort"
+                      "Map.has_key?" "Map.keys" "Map.size" "Map.put" "Map.get" "Map.delete" "Map.values"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))

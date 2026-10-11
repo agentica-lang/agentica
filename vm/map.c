@@ -233,3 +233,63 @@ agc_value *agc_map_keys(const agc_map *m) {
   for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) keys[--k] = cell->key;
   return keys;
 }
+
+static agc_hamt *remove_at(const agc_hamt *node, uint32_t bitmap, uint32_t at) {
+  agc_hamt *copy = new_node(bitmap, node->n - 1);
+  memcpy(copy->entries, node->entries, (size_t)at * sizeof(hamt_entry));
+  memcpy(copy->entries + at, node->entries + at + 1, (size_t)(node->n - at - 1) * sizeof(hamt_entry));
+  return copy;
+}
+
+static agc_hamt *take(agc_vm *vm, agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed) {
+  if (shift >= HAMT_HASH_BITS) {
+    for (uint32_t k = 0; k < node->n; k++) {
+      if (key_equal(vm, node->entries[k].key, key)) {
+        *removed = true;
+        return node->n == 1 ? NULL : remove_at(node, 0, k);
+      }
+    }
+    return node;
+  }
+  uint32_t bit = 1u << slot_of(hash, shift);
+  if (!(node->bitmap & bit)) return node;
+  uint32_t at = index_of(node->bitmap, bit);
+  const hamt_entry *entry = &node->entries[at];
+  if (entry->child) {
+    agc_hamt *child = take(vm, entry->child, shift + HAMT_BITS, hash, key, removed);
+    if (!*removed) return node;
+    if (!child) return node->n == 1 ? NULL : remove_at(node, node->bitmap & ~bit, at);
+    agc_hamt *copy = copy_node(node, node->bitmap, node->n);
+    if (child->n == 1 && !child->entries[0].child) copy->entries[at] = child->entries[0];
+    else copy->entries[at].child = child;
+    return copy;
+  }
+  if (entry->hash != hash || !key_equal(vm, entry->key, key)) return node;
+  *removed = true;
+  return node->n == 1 ? NULL : remove_at(node, node->bitmap & ~bit, at);
+}
+
+agc_map *agc_map_delete_hash(agc_vm *vm, agc_map *m, uint64_t hash, agc_value key) {
+  bool removed = false;
+  agc_hamt *table = m->table ? take(vm, m->table, 0, hash, key, &removed) : NULL;
+  if (!removed) return m;
+  agc_map *result = agc_new_map();
+  result->table = table;
+  result->size = m->size - 1;
+  agc_keys **tail = &result->reversed;
+  for (const agc_keys *cell = m->reversed; cell; cell = cell->next) {
+    if (key_equal(vm, cell->key, key)) {
+      *tail = cell->next;
+      break;
+    }
+    agc_keys *copy = agc_alloc(sizeof(agc_keys));
+    copy->key = cell->key;
+    *tail = copy;
+    tail = &copy->next;
+  }
+  return result;
+}
+
+agc_map *agc_map_delete(agc_vm *vm, agc_map *m, agc_value key) {
+  return agc_map_delete_hash(vm, m, agc_key_hash(vm, key), key);
+}

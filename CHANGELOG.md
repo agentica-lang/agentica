@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs the `List` and `Map` library: `List.size`,
+  `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`, `reverse` and
+  `sort`, and `Map.has_key?`, `keys`, `values`, `size`, `put`, `get` (with
+  and without a default) and `delete`, also as methods (`xs.size`,
+  `m.keys`), with the evaluator's errors and spans. `Map.delete` removes
+  the key from the HAMT and keeps the insertion order of the other keys.
+
 - Ranges (Phase 8a): `a..b` includes `b`, `a...b` excludes it; both ends
   are `Int` and the value has the new builtin type `Range` (start, end and
   kind, no list inside). `for x in range` iterates without building a list

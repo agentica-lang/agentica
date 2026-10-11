@@ -255,6 +255,8 @@ agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value
 bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value);
 bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value *value);
 agc_value *agc_map_keys(const agc_map *m);
+agc_map *agc_map_delete(agc_vm *vm, agc_map *m, agc_value key);
+agc_map *agc_map_delete_hash(agc_vm *vm, agc_map *m, uint64_t hash, agc_value key);
 
 extern const uint32_t agc_write_raw_ranges[][2];
 extern const size_t agc_write_raw_count;
@@ -269,6 +271,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]);
 agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
 
+agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys);
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
