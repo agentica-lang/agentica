@@ -169,11 +169,11 @@ differential tests (section 12) check them.
   `index_of`, `reverse` and `split(s, "")` count code points.
 - `String.trim` removes exactly space, `\t`, `\n`, `\f` and `\r` (Racket's
   `\s`); NBSP, `\v` and U+3000 stay.
-- `String.split(s, sep)` with a non-empty separator follows `string-split`:
-  remove one separator match at the start and one at the end (if they
-  overlap or meet, the text is empty), then split on every non-overlapping
-  match; empty text gives `[]`. So `",,a,,"` gives `["", "a", ""]` and
-  `"aaa"` split by `"aa"` gives `[]`.
+- `String.split(s, sep)` with a non-empty separator splits on every
+  non-overlapping match from the left and keeps every part, even empty ones
+  at the ends or between two matches, so joining the parts with `sep` gives
+  back `s`; empty text gives `[""]`. So `",,a,,"` gives
+  `["", "", "a", "", ""]` and `"aaa"` split by `"aa"` gives `["", "a"]`.
 - `String.replace` replaces every non-overlapping match; an empty `from`
   inserts at every position (`"abc"` gives `"xaxbxcx"`).
 - `upcase` and `downcase` are full Unicode mappings with special cases
