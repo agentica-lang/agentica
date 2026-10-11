@@ -1,0 +1,16 @@
+{
+  "path": ["src", "vm"],
+  "format": ["c", "c-header", "racket"],
+  "ignore": [
+    "**/third_party/**",
+    "**/unicode_data.c",
+    "**/build/**",
+    "**/compiled/**",
+    "**/tests/fixtures/**",
+    "vm/tools/**"
+  ],
+  "minTokens": 50,
+  "minLines": 5,
+  "reporters": ["console"],
+  "gitignore": true
+}

@@ -3,7 +3,7 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd bench version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass FORCE
+.PHONY: build test exe clean test-bdd bench version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -28,6 +28,11 @@ bench: build vm
 
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+
+JSCPD ?= npx --yes jscpd@5.3.2
+
+dup-check:
+	$(JSCPD) --baseline .jscpd-baseline.json --fail-on-new-clones
 
 clean:
 	find . -name compiled -type d -prune -exec rm -rf {} +
