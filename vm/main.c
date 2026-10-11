@@ -20,6 +20,11 @@ static int open_input(int index, const char *path) {
   (void)path;
   return _wopen(wide_args[index], _O_RDONLY | _O_BINARY | _O_NOINHERIT);
 }
+
+static void remove_input(int index, const char *path) {
+  (void)path;
+  _wunlink(wide_args[index]);
+}
 #else
 #include <unistd.h>
 
@@ -29,6 +34,25 @@ typedef struct stat file_info;
 static int open_input(int index, const char *path) {
   (void)index;
   return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+}
+
+static void remove_input(int index, const char *path) {
+  (void)index;
+  unlink(path);
+}
+#endif
+
+#ifdef __linux__
+#include <sys/prctl.h>
+
+static bool bind_to_driver(int64_t driver) {
+  if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) return false;
+  return (int64_t)getppid() == driver;
+}
+#else
+static bool bind_to_driver(int64_t driver) {
+  (void)driver;
+  return true;
 }
 #endif
 
@@ -93,7 +117,8 @@ static int run(int argc, char **argv) {
   agc_init();
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
-  bool seen_steps = false, seen_ai = false, seen_json = false;
+  int64_t driver = 0;
+  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false;
   int i = 1;
   while (i < argc) {
     const char *arg = argv[i];
@@ -125,6 +150,15 @@ static int run(int argc, char **argv) {
       i += 2;
       continue;
     }
+    if (strcmp(arg, "--driver-pid") == 0) {
+      if (!once(&seen_driver, arg)) return 2;
+      if (i + 1 >= argc || !parse_steps(argv[i + 1], &driver)) {
+        fputs("agentica-vm: --driver-pid needs a positive integer\n", stderr);
+        return 2;
+      }
+      i += 2;
+      continue;
+    }
     if (arg[0] == '-' && arg[1] != '\0') {
       fprintf(stderr, "agentica-vm: unknown option %s\n", arg);
       return 2;
@@ -134,8 +168,13 @@ static int run(int argc, char **argv) {
   if (i >= argc) return usage_error();
   const char *path = argv[i];
 
+  if (seen_driver && !bind_to_driver(driver)) {
+    remove_input(i, path);
+    return 2;
+  }
   size_t len = 0;
   uint8_t *data = read_file(i, path, &len);
+  if (seen_driver) remove_input(i, path);
   if (!data) {
     fprintf(stderr, "agentica-vm: cannot read %s\n", path);
     return 2;
