@@ -33,7 +33,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-TRY-CONTEXT` | try in a function not returning Result |
 | `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function |
 | `CHECK-MAIN` | missing or wrong `main` |
-| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map, `for` over a non-list |
+| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map, `for` over something that is not a list or a range |
 | `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE` | unknown enum variant, named arguments to a variant, generic enum type not known from payloads or context |
 | `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, `CHECK-UNREACHABLE-CASE-ARM` | a pattern that does not fit the value, a `case` missing variants or `_`, an arm already covered |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |

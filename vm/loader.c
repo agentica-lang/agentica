@@ -247,6 +247,15 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         if (bx >= p->function_count) reject(r, "function index out of range");
         check_window(r, in.a, p->functions[bx].captures, f);
         break;
+      case AGC_OP_RANGE:
+        check_register(r, in.a, f);
+        check_window(r, in.b, 2, f);
+        if (in.c > 1) reject(r, "bad range kind");
+        break;
+      case AGC_OP_RANGE_BOUNDS:
+        check_window(r, in.a, 3, f);
+        check_register(r, in.b, f);
+        break;
       case AGC_OP_RETURN:
         check_register(r, in.a, f);
         break;

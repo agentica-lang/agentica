@@ -212,12 +212,16 @@
             (scan)]
            [else
             (define start (position))
+            (define three-char
+              (and (peek 2)
+                   (equal? (string (current) (peek 1) (peek 2)) "...")
+                   "..."))
             (define two-char
               (and (peek 1)
                    (member (string (current) (peek 1))
-                           '("->" "==" "!=" "<=" ">=" "&&" "||" "+=" "-=" "*=" "/=" "%="))
+                           '("->" "==" "!=" "<=" ">=" "&&" "||" "+=" "-=" "*=" "/=" "%=" ".."))
                    (string (current) (peek 1))))
-            (define lexeme (or two-char (string char)))
+            (define lexeme (or three-char two-char (string char)))
             (define kind
               (hash-ref
                (hash "->" 'arrow "==" 'equal "!=" 'not-equal
@@ -228,7 +232,7 @@
                      "(" 'left-paren ")" 'right-paren
                      "[" 'left-bracket "]" 'right-bracket
                      "{" 'left-brace "}" 'right-brace
-                     "," 'comma ":" 'colon "." 'dot
+                     "," 'comma ":" 'colon "." 'dot ".." 'dot-dot "..." 'dot-dot-dot
                      "=" 'assign "+" 'plus "-" 'minus
                      "*" 'multiply "/" 'divide "%" 'modulo
                      "<" 'less ">" 'greater "&" 'ampersand "|" 'pipe)

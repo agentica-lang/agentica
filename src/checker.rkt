@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "Time" "Random")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "Time" "Random" "Range")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -38,7 +38,8 @@
   (and (pair? type) (eq? (car type) 'Enum)))
 
 (define method-modules
-  (hasheq 'String "String" 'List "List" 'Map "Map" 'Float "Float" 'Result "Result" 'Json "JSON"))
+  (hasheq 'String "String" 'List "List" 'Map "Map" 'Float "Float" 'Result "Result" 'Json "JSON"
+          'Int "Int" 'Range "Range"))
 
 (define method-aliases
   (hash '(String . "size") "String.length"
@@ -56,7 +57,7 @@
   (if (pair? type) (car type) type))
 
 (define (receiver-kind type)
-  (and (memq (type-head type) '(String List Map Float Result Json Int))
+  (and (memq (type-head type) '(String List Map Float Result Json Int Range))
        (type-head type)))
 
 (define (catalog-method kind name)
@@ -97,7 +98,7 @@
         "input" "use gets, which returns Result[String]; gets! halts at the end of input"
         "read_line" "use gets, which returns Result[String]; gets! halts at the end of input"
         "readline" "use gets, which returns Result[String]; gets! halts at the end of input"
-        "range" "there is no range; use a while loop with a counter, or for over a list"
+        "range" "write a range: a..b includes b, a...b excludes it, as in for i in 0...n"
         "int" "use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure"
         "elif" "write elsif: if a ... elsif b ... else ... end"
         "elseif" "write elsif: if a ... elsif b ... else ... end"
@@ -271,7 +272,7 @@
          (unless completion?
            (bail 'CHECK-VOID-TYPE "Void is only valid in a completion type position" (type-ref-span reference)))
          'Void]
-        [(and (member name '("Int" "Float" "Bool" "String" "Nil" "Json"))
+        [(and (member name '("Int" "Float" "Bool" "String" "Nil" "Json" "Range"))
               (null? arguments))
          (string->symbol name)]
         [(and (member (string->symbol name) opaque-types) (null? arguments)) (string->symbol name)]
@@ -307,7 +308,7 @@
                (type-ref-span reference)
                #:help (did-you-mean name
                                     (append (hash-keys structs) (hash-keys enums))
-                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
+                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task" "Range")
                                                      (map symbol->string opaque-types))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -611,11 +612,18 @@
                  (format "comparison expects two numbers, found ~a" (type->string left))
                  span))
          'Bool]
+        [(dot-dot dot-dot-dot)
+         (unless (and (eq? left 'Int) (eq? right 'Int))
+           (bail 'CHECK-TYPE-MISMATCH
+                 (format "a range expects two Ints, found ~a and ~a"
+                         (type->string left) (type->string right))
+                 span))
+         'Range]
         [(equal not-equal)
          (same!)
-         (unless (primitive-type? left)
+         (unless (or (primitive-type? left) (eq? left 'Range))
            (bail 'CHECK-TYPE-MISMATCH
-                 (format "equality is only defined for primitive values, found ~a"
+                 (format "equality is only defined for primitive values and ranges, found ~a"
                          (type->string left))
                  span))
          'Bool]
@@ -643,7 +651,7 @@
 
     (define (printable-type? type [seen '()])
       (cond
-        [(or (primitive-type? type) (eq? type 'Json) (type-variable? type)) #t]
+        [(or (primitive-type? type) (memq type '(Json Range)) (type-variable? type)) #t]
         [(list-type? type) (printable-type? (cadr type) seen)]
         [(map-type? type) (and (printable-type? (cadr type) seen) (printable-type? (caddr type) seen))]
         [(result-type? type) (or (eq? (cadr type) 'Void) (printable-type? (cadr type) seen))]
@@ -666,7 +674,7 @@
         (bail 'CHECK-TYPE-MISMATCH
               (format "~a has no to_s, so it cannot be printed or interpolated" (type->string type))
               span
-              #:help "only data values have to_s: numbers, Bool, String, nil, Json, and lists, maps, Results, structs and enums of those")))
+              #:help "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, Results, structs and enums of those")))
 
     (define (decodable-type? type [seen '()])
       (cond
@@ -1124,7 +1132,7 @@
               span
               #:help (cond
                        [(member name '("to_s" "inspect"))
-                        "only data values have to_s and inspect: numbers, Bool, String, nil, Json, and lists, maps, Results, structs and enums of those"]
+                        "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, Results, structs and enums of those"]
                        [(and (struct-type? target) (hash-ref functions name #f))
                         (format "structs have no methods; call ~a(...) with the struct as an argument" name)]
                        [(and (struct-type? target)
@@ -1488,12 +1496,13 @@
 
     (define (check-for statement)
       (define iterable (check-expression (for-stmt-iterable statement) #f))
-      (unless (list-type? iterable)
+      (unless (or (list-type? iterable) (eq? iterable 'Range))
         (bail 'CHECK-NOT-A-LIST
-              (format "\"for\" iterates over a list, found ~a" (type->string iterable))
+              (format "\"for\" iterates over a list or a range, found ~a" (type->string iterable))
               (for-stmt-span statement)))
       (push-scope!)
-      (introduce! (for-stmt-var statement) (cadr iterable) (for-stmt-span statement) #t)
+      (introduce! (for-stmt-var statement) (if (eq? iterable 'Range) 'Int (cadr iterable))
+                  (for-stmt-span statement) #t)
       (in-loop (lambda () (check-block (for-stmt-body statement))))
       (pop-scope!))
 

@@ -105,6 +105,18 @@
     (check-equal? (list (bc-function-params encoded) (bc-function-captures encoded)) '(1 2))
     (check-equal? (bc-program-builtins program) '(("List.map" . 2) ("puts" . 1))))
 
+  (test-case "for over a range literal counts without a Range value"
+    (define ir
+      (lower-text (string-append
+                   "def main() -> Void\n  for i in 0...3\n    puts(i)\n  end\n"
+                   "  r = 1..2\n  for j in r\n    puts(j)\n  end\nend\n")))
+    (define main (car (ir-program-functions ir)))
+    (define ops (for/list ([item (in-list (ir-function-body main))]
+                           #:when (and (ir-instr? item) (memq (ir-instr-op item) '(range range-bounds sub-i add-i))))
+                  (ir-instr-op item)))
+    (check-equal? ops '(sub-i add-i range range-bounds add-i))
+    (check-false (diagnostic? (ir->bytecode ir))))
+
   (test-case "opcode numbers match vm/agc.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)

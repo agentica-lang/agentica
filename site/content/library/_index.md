@@ -6,7 +6,7 @@ description: Every builtin module, with a signature and an example for each func
 
 The builtin modules, one page each. Every function has its signature, a short
 description and a small example. Functions in the `String`, `List`, `Map`,
-`Float`, `Result` and `JSON` modules whose first parameter has that type can
+`Range`, `Int`, `Float`, `Result` and `JSON` modules whose first parameter has that type can
 also be called as methods: `String.upcase(s)` is the same as `s.upcase`.
 
 You can also look up any builtin from the command line with

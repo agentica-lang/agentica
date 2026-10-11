@@ -112,7 +112,7 @@ Continue primitive operations through the builtins catalog. Function values (5j)
 Besides remaining List operations, these gaps remain. Check each against a real task before building it.
 
 - **Math:** `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`, `gcd`.
-- **Ranges, sets and queues:** planned in [section 12](#12-data-structures). Meanwhile use `while` with a counter, `Map[T, Bool]` and `std/queue`.
+- **Ranges, sets and queues:** ranges are in `grammar.md` (8a); sets and queues are planned in [section 12](#12-data-structures). Meanwhile use `Map[T, Bool]` and `std/queue`.
 - **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
 - **Structures:** tuples or pairs ([section 12.5](#125-later)). Nested lists and matrices are exercised by the traveling-salesman example.
 - **Performance:** `List.append` copies the list, so repeated appends are O(n²); a persistent vector is planned in [section 12.4](#124-faster-lists). Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
@@ -302,6 +302,8 @@ Today the language has `List[T]`, `Map[K, V]`, `Result[T]`, user structs and enu
 Order: ranges first (12.1), then `Set[T]` (12.2), then `Queue[T]` (12.3). Faster lists are 12.4; the rest is later (12.5). `Range`, `Set` and `Queue` join the reserved type and module names: a user `struct Set`, `enum Range` or `import ... as Queue` becomes `CHECK-REDEFINED-NAME`.
 
 ### 12.1 Ranges
+
+Implemented in 8a: the rules are in `grammar.md` ("Ranges"). This section keeps the design notes.
 
 Agents write Ruby loops (`for i in 0...n`, `n.times do |i|`) and today must rewrite them as `while` loops with a counter. Ranges accept those forms.
 

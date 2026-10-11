@@ -583,7 +583,21 @@
 
     ;; Expressions ---------------------------------------------------------
 
-    (define (parse-expression) (parse-or))
+    (define (parse-expression) (parse-range))
+
+    (define (parse-range)
+      (define start (current))
+      (define left (parse-or))
+      (cond
+        [(memq (token-kind (current)) '(dot-dot dot-dot-dot))
+         (define operator (advance!))
+         (define right (parse-or))
+         (when (memq (token-kind (current)) '(dot-dot dot-dot-dot))
+           (bail 'PARSE-UNEXPECTED-TOKEN
+                 (format "ranges do not chain, found ~a" (describe (current)))
+                 (current)))
+         (binary (token-kind operator) (token-span operator) left right (span-from start))]
+        [else left]))
 
     (define (parse-left-assoc kinds parse-operand)
       (define start (current))

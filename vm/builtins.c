@@ -171,6 +171,58 @@ static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t sp
   return r->value;
 }
 
+static bool range_size(agc_vm *vm, agc_value v, uint64_t *size) {
+  int64_t first, last;
+  if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) {
+    *size = 0;
+    return true;
+  }
+  uint64_t gap = (uint64_t)last - (uint64_t)first;
+  if (gap >= (uint64_t)INT64_MAX) return false;
+  *size = gap + 1;
+  return true;
+}
+
+static agc_value builtin_range_size(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t size;
+  if (!range_size(vm, args[0], &size))
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span + 1);
+  return agc_int((int64_t)size);
+}
+
+static agc_value builtin_range_to_a(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t size;
+  if (!range_size(vm, args[0], &size) || size > (uint64_t)AGC_MAX_LIST_COUNT)
+    agc_fail(vm, "RUNTIME-INVALID-COUNT", "to_a needs a range of at most 1048576 values", span + 1);
+  agc_list *l = agc_new_list((size_t)size);
+  int64_t first = agc_as_range(vm, args[0])->start;
+  for (size_t k = 0; k < (size_t)size; k++) l->items[k] = agc_int(first + (int64_t)k);
+  return agc_list_value(l);
+}
+
+static agc_value builtin_range_include(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t first, last, x = agc_as_int(vm, args[1]);
+  bool more = agc_range_bounds(agc_as_range(vm, args[0]), &first, &last);
+  return agc_bool(more && first <= x && x <= last);
+}
+
+static agc_value range_end(agc_vm *vm, agc_value v, bool first_end) {
+  int64_t first, last;
+  if (!agc_range_bounds(agc_as_range(vm, v), &first, &last)) return text_error("the range is empty");
+  return agc_result_value(true, agc_int(first_end ? first : last));
+}
+
+static agc_value builtin_range_first(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return range_end(vm, args[0], true);
+}
+
+static agc_value builtin_range_last(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return range_end(vm, args[0], false);
+}
+
 static const agc_builtin table[] = {
   {"puts", 1, builtin_puts, AGC_NATIVE_NONE},
   {"IO.print", 1, builtin_print, AGC_NATIVE_NONE},
@@ -202,6 +254,15 @@ static const agc_builtin table[] = {
   {"List.any?", 2, NULL, AGC_NATIVE_ANY},
   {"List.all?", 2, NULL, AGC_NATIVE_ALL},
   {"List.sort_by", 2, NULL, AGC_NATIVE_SORT_BY},
+  {"Range.size", 1, builtin_range_size, AGC_NATIVE_NONE},
+  {"Range.to_a", 1, builtin_range_to_a, AGC_NATIVE_NONE},
+  {"Range.include?", 2, builtin_range_include, AGC_NATIVE_NONE},
+  {"Range.first", 1, builtin_range_first, AGC_NATIVE_NONE},
+  {"Range.last", 1, builtin_range_last, AGC_NATIVE_NONE},
+  {"Range.each", 2, NULL, AGC_NATIVE_RANGE_EACH},
+  {"Int.times", 2, NULL, AGC_NATIVE_TIMES},
+  {"Int.upto", 3, NULL, AGC_NATIVE_UPTO},
+  {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO},
 };
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {

@@ -65,7 +65,9 @@ struct agc_native {
   agc_native_kind kind;
   uint32_t span;
   bool started;
+  bool more;
   size_t index, count;
+  int64_t cur, last, dir;
   agc_value list, fn, acc;
   agc_list *out;
 };
@@ -155,10 +157,26 @@ static agc_value sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list 
   return agc_list_value(sorted);
 }
 
+static bool counting(agc_native_kind kind) {
+  return kind == AGC_NATIVE_RANGE_EACH || kind == AGC_NATIVE_TIMES || kind == AGC_NATIVE_UPTO ||
+         kind == AGC_NATIVE_DOWNTO;
+}
+
 static void resume_native(agc_vm *vm) {
   agc_frame *frame = &vm->frames[vm->frame_count - 1];
   agc_native *st = frame->native;
   uint32_t base = frame->base;
+  if (counting(st->kind)) {
+    if (!st->more) {
+      finish_native(vm, agc_void());
+      return;
+    }
+    agc_value arg = agc_int(st->cur);
+    st->more = st->cur != st->last;
+    if (st->more) st->cur += st->dir;
+    call_value(vm, st->fn, base + 1, &arg, 1, base, st->span);
+    return;
+  }
   const agc_list *items = agc_as_list(vm, st->list);
   if (st->started) {
     agc_value got = vm->regs[base];
@@ -214,6 +232,34 @@ static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32
   const agc_value *args = vm->regs + base;
   st->kind = kind;
   st->span = span;
+  if (counting(kind)) {
+    st->dir = 1;
+    if (kind == AGC_NATIVE_RANGE_EACH) {
+      st->more = agc_range_bounds(agc_as_range(vm, args[0]), &st->cur, &st->last);
+      st->fn = args[1];
+    } else if (kind == AGC_NATIVE_TIMES) {
+      int64_t n = agc_as_int(vm, args[0]);
+      st->more = n > 0;
+      st->cur = 0;
+      st->last = st->more ? n - 1 : 0;
+      st->fn = args[1];
+    } else {
+      st->cur = agc_as_int(vm, args[0]);
+      st->last = agc_as_int(vm, args[1]);
+      st->fn = args[2];
+      if (kind == AGC_NATIVE_DOWNTO) st->dir = -1;
+      st->more = kind == AGC_NATIVE_DOWNTO ? st->cur >= st->last : st->cur <= st->last;
+    }
+    agc_as_fn(vm, st->fn);
+    agc_frame *frame = new_frame(vm);
+    frame->function = 0;
+    frame->pc = 0;
+    frame->base = base;
+    frame->ret = base;
+    frame->native = st;
+    resume_native(vm);
+    return;
+  }
   st->list = args[0];
   if (kind == AGC_NATIVE_REDUCE) {
     st->acc = args[1];
@@ -254,6 +300,10 @@ static bool return_value(agc_vm *vm, agc_value result) {
 }
 
 static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
+  if (agc_is(x, AGC_T_RANGE) && agc_is(y, AGC_T_RANGE)) {
+    const agc_range *a = agc_as_range(vm, x), *b = agc_as_range(vm, y);
+    return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
+  }
   if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
   if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
   if (agc_is(x, AGC_T_NIL) && agc_is(y, AGC_T_NIL)) return true;
@@ -446,6 +496,17 @@ static void run(agc_vm *vm) {
         break;
       }
       case AGC_OP_TAIL_CALL: replace_frame(vm, bx, in.a, s); break;
+      case AGC_OP_RANGE:
+        R[in.a] = agc_range_value(agc_as_int(vm, R[in.b]), agc_as_int(vm, R[(uint32_t)in.b + 1]), in.c != 0);
+        break;
+      case AGC_OP_RANGE_BOUNDS: {
+        int64_t first, last;
+        bool more = agc_range_bounds(agc_as_range(vm, R[in.b]), &first, &last);
+        R[in.a] = agc_int(first);
+        R[(uint32_t)in.a + 1] = agc_int(last);
+        R[(uint32_t)in.a + 2] = agc_bool(more);
+        break;
+      }
       case AGC_OP_CALL_BUILTIN: {
         uint32_t base = frame->base + in.a;
         if (p->builtins[bx]->native) {

@@ -30,6 +30,21 @@
   (format "def main() -> Void\n~a\nend\n\n" body))
 
 (module+ test
+  (test-case "ranges take Ints, iterate as Int and reserve the Range name"
+    (check-ok (main-with "  r: Range = 0...3\n  for i in r\n    x: Int = i\n  end\n  for j in 1..2\n    puts(j + 1)\n  end"))
+    (check-ok (main-with "  r = 1..5\n  n: Int = r.size\n  xs: List[Int] = r.to_a\n  b: Bool = r.include?(3) and r == (1..5)\n  f: Result[Int] = Range.first(r)\n  l: Result[Int] = r.last\n  puts(\"#{r} #{r.inspect}\")"))
+    (check-ok (string-append "def show(x: Int) -> Void\n  puts(x)\nend\n\n"
+                             (main-with "  (1..3).each do |i|\n    puts(i)\n  end\n  3.times do |i|\n    puts(i)\n  end\n  1.upto(3) do |i|\n    puts(i)\n  end\n  Int.downto(3, 1, &show)")))
+    (check-equal? (check-code (main-with "  r = 1..2.5")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  r = \"a\"...\"b\"")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  r = (1..2) == 3")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  for i in 1..3\n    i = 2\n  end")) 'CHECK-IMMUTABLE-ASSIGNMENT)
+    (check-equal? (check-code (main-with "  x = (1..2).step(2)")) 'CHECK-UNKNOWN-METHOD)
+    (check-equal? (check-code (main-with "  s = JSON.encode(1..2)")) 'CHECK-NOT-ENCODABLE)
+    (check-equal? (check-code (main-with "  m: Map[Range, Int] = {}")) 'CHECK-MAP-KEY-TYPE)
+    (check-equal? (check-code "struct Range\n  a: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME)
+    (check-equal? (check-code "enum Range\n  A\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
+
   (test-case "JSON builders and schemas enforce their input contracts"
     (check-ok (main-with "  object = JSON.object({})\n  array = JSON.array([])"))
     (for ([body '("  x = JSON.object({\"a\": 1})" "  x = JSON.array([false])"
@@ -612,7 +627,7 @@
     (for ([entry '(("  x = len(\"ab\")" CHECK-UNKNOWN-NAME "\\.size")
                    ("  x = str(1)" CHECK-UNKNOWN-NAME "to_s")
                    ("  x = input()" CHECK-UNKNOWN-NAME "^use gets,")
-                   ("  x = range(3)" CHECK-UNKNOWN-NAME "while")
+                   ("  x = range(3)" CHECK-UNKNOWN-NAME "for i in 0")
                    ("  x = inspect(3)" CHECK-UNKNOWN-NAME "x\\.inspect")
                    ("  x = Int.to_float(2)" CHECK-UNKNOWN-NAME "to_f")
                    ("  x = null" CHECK-UNKNOWN-NAME "nil")

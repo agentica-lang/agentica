@@ -26,6 +26,15 @@
 
 (define max-call-depth 10000)
 
+(define (range-last target)
+  (if (range-value-exclusive? target) (sub1 (range-value-end target)) (range-value-end target)))
+
+(define (range-size target)
+  (max 0 (add1 (- (range-last target) (range-value-start target)))))
+
+(define (range-sequence target)
+  (in-range (range-value-start target) (add1 (range-last target))))
+
 (define max-seed (sub1 (expt 2 31)))
 
 (define (random-seed-from-os)
@@ -332,6 +341,8 @@
       (case op
         [(and) (and left (eval-expression (binary-right expression)))]
         [(or) (or left (eval-expression (binary-right expression)))]
+        [(dot-dot dot-dot-dot)
+         (range-value left (eval-expression (binary-right expression)) (eq? op 'dot-dot-dot))]
         [else
          (define right (eval-expression (binary-right expression)))
          (define ints? (exact-integer? left))
@@ -378,6 +389,10 @@
         [(http-writer? value) "<HttpWriter>"]
         [(file-handle? value) "<FileHandle>"]
         [(process-handle? value) "<Process>"]
+        [(range-value? value)
+         (format "~a~a~a" (range-value-start value)
+                 (if (range-value-exclusive? value) "..." "..")
+                 (range-value-end value))]
         [(result-ok? value) (if (void? (result-ok-value value)) "ok()"
                                (format "ok(~a)" (value->debug-string (result-ok-value value))))]
         [(result-error? value) (format "error(~s)" (result-error-message value))]
@@ -615,6 +630,35 @@
             (for/fold ([accumulator (cadr arguments)]) ([item (in-list target)])
               (invoke-callback (list accumulator item)))])]
         [("List.concat") (append (car arguments) (cadr arguments))]
+        [("Range.size")
+         (in-int-range (range-size (car arguments)) (node-span (car (call-args expression))))]
+        [("Range.to_a")
+         (define target (car arguments))
+         (unless (<= (range-size target) (* 1024 1024))
+           (bail 'RUNTIME-INVALID-COUNT "to_a needs a range of at most 1048576 values"
+                 (node-span (car (call-args expression)))))
+         (for/list ([value (range-sequence target)]) value)]
+        [("Range.include?")
+         (define target (car arguments))
+         (define value (cadr arguments))
+         (and (<= (range-value-start target) value) (<= value (range-last target)))]
+        [("Range.first" "Range.last")
+         (define target (car arguments))
+         (cond
+           [(zero? (range-size target)) (result-error "the range is empty")]
+           [(equal? name "Range.first") (result-ok (range-value-start target))]
+           [else (result-ok (range-last target))])]
+        [("Range.each" "Int.times" "Int.upto" "Int.downto")
+         (define callback (last arguments))
+         (define sequence
+           (match name
+             ["Range.each" (range-sequence (car arguments))]
+             ["Int.times" (in-range (car arguments))]
+             ["Int.upto" (in-range (car arguments) (add1 (cadr arguments)))]
+             ["Int.downto" (in-range (car arguments) (sub1 (cadr arguments)) -1)]))
+         (for ([value sequence])
+           (apply-callable callback (list value) span))
+         (void)]
         [("List.take" "List.drop")
          (define target (car arguments))
          (define count (cadr arguments))
@@ -895,11 +939,12 @@
                 (iterate (lambda () (exec-scoped (while-stmt-body statement))))
                 (loop)))))]
         [(for-stmt? statement)
-         (define elements (eval-expression (for-stmt-iterable statement)))
+         (define iterable (eval-expression (for-stmt-iterable statement)))
+         (define elements (if (range-value? iterable) (range-sequence iterable) (in-list iterable)))
          (run-loop
           (for-stmt-body statement)
           (lambda (iterate)
-            (for ([element (in-list elements)])
+            (for ([element elements])
               (iterate
                (lambda ()
                  (push-scope!)

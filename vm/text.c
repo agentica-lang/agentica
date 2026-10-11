@@ -98,6 +98,11 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_FLOAT_TEXT]) {
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_FLOAT_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
   if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);
   if (agc_is(v, AGC_T_FN)) return (size_t)snprintf(text, AGC_FLOAT_TEXT, "<Fn>");
+  if (agc_is(v, AGC_T_RANGE)) {
+    const agc_range *r = agc_as_range(vm, v);
+    return (size_t)snprintf(text, AGC_FLOAT_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
+                            r->end);
+  }
   return (size_t)snprintf(text, AGC_FLOAT_TEXT, "%" PRId64, agc_as_int(vm, v));
 }
 

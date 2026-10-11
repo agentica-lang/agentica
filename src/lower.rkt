@@ -21,7 +21,7 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String))
+(define value-types '(Int Float Bool Nil String Range))
 
 (define max-list-chunk 255)
 (define max-map-chunk 255)
@@ -70,7 +70,9 @@
 (define vm-builtins '("puts" "IO.print" "IO.warn" "IO.inspect" "IO.gets" "IO.gets!" "IO.read"
                       "IO.read_bytes" "IO.flush" "IO.eof?" "System.args" "System.exit"
                       "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"
-                      "List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?" "List.sort_by"))
+                      "List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?" "List.sort_by"
+                      "Range.size" "Range.to_a" "Range.include?" "Range.each" "Range.first" "Range.last"
+                      "Int.times" "Int.upto" "Int.downto"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))
@@ -491,6 +493,11 @@
     (define saved next)
     (define dst (target want))
     (cond
+      [(memq op '(dot-dot dot-dot-dot))
+       (define window (alloc!))
+       (lower-expression (binary-left expression) window)
+       (lower-expression (binary-right expression) (alloc!))
+       (emit! 'range (list dst window (if (eq? op 'dot-dot-dot) 1 0)) op-span)]
       [(memq op '(and or))
        (define end (new-label!))
        (lower-expression (binary-left expression) dst)
@@ -623,6 +630,9 @@
                               (cdr loop-labels)
                               (car loop-labels)))
               span)]
+      [(and (for-stmt? statement) (eq? (static-type (for-stmt-iterable statement)) 'Range))
+       (lower-range-for statement span)
+       (set! next saved)]
       [(for-stmt? statement)
        (define body (for-stmt-body statement))
        (define items (alloc!))
@@ -708,6 +718,48 @@
        (set! next saved)]
       [else (unsupported "this statement" span)]))
 
+  (define (lower-range-for statement span)
+    (define iterable (for-stmt-iterable statement))
+    (define body (for-stmt-body statement))
+    (define bounds (alloc!))
+    (define last-slot (alloc!))
+    (define nonempty (alloc!))
+    (cond
+      [(and (binary? iterable) (memq (binary-op iterable) '(dot-dot dot-dot-dot)))
+       (emit! 'step '() (binary-span iterable))
+       (lower-expression (binary-left iterable) bounds)
+       (lower-expression (binary-right iterable) last-slot)
+       (define exclusive? (eq? (binary-op iterable) 'dot-dot-dot))
+       (unless (null? body)
+         (emit! (if exclusive? 'lt-i 'le-i) (list nonempty bounds last-slot) span))]
+      [else
+       (define source (lower-expression iterable #f))
+       (unless (null? body)
+         (emit! 'range-bounds (list bounds source) span))])
+    (unless (null? body)
+      (define exit (new-label!))
+      (define top (new-label!))
+      (define increment (new-label!))
+      (define one (alloc!))
+      (define temp (alloc!))
+      (emit! 'jump-if-false (list nonempty exit) span)
+      (emit! 'const (list one 1) span)
+      (when (and (binary? iterable) (eq? (binary-op iterable) 'dot-dot-dot))
+        (emit! 'sub-i (list last-slot last-slot one) span))
+      (define outer loop-labels)
+      (set! loop-labels (cons increment exit))
+      (scoped (lambda ()
+                (hash-set! (car scopes) (for-stmt-var statement) bounds)
+                (place! top)
+                (lower-block body)))
+      (set! loop-labels outer)
+      (place! increment)
+      (emit! 'eq (list temp bounds last-slot) span)
+      (emit! 'jump-if-true (list temp exit) span)
+      (emit! 'add-i (list bounds bounds one) span)
+      (emit! 'jump (list top) span)
+      (place! exit)))
+
   (for ([parameter (in-list parameter-names)])
     (hash-set! (car scopes) parameter (alloc!)))
   (define params next)
@@ -753,6 +805,7 @@
     [(and (eq? op 'struct) (= index 2)) (format "s~a" value)]
     [(and (memq op '(field payload)) (= index 2)) (format "~a" value)]
     [(and (memq op '(list map)) (= index 2)) (format "~a" value)]
+    [(and (eq? op 'range) (= index 2)) (if (= value 1) "..." "..")]
     [(and (eq? op 'call-builtin) (>= index 1)) (format "~a" value)]
     [else (format "r~a" value)]))
 

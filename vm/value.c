@@ -187,6 +187,28 @@ agc_value agc_fn_value(agc_fn *f) {
   return v;
 }
 
+agc_value agc_range_value(int64_t start, int64_t end, bool exclusive) {
+  agc_range *r = agc_alloc_atomic(sizeof(agc_range));
+  r->start = start;
+  r->end = end;
+  r->exclusive = exclusive;
+  agc_value v;
+  v.tag = AGC_T_RANGE;
+  v.as.p = r;
+  return v;
+}
+
+bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last) {
+  *first = r->start;
+  *last = r->end;
+  if (r->exclusive) {
+    if (r->end <= r->start) return false;
+    *last = r->end - 1;
+    return true;
+  }
+  return r->start <= r->end;
+}
+
 agc_fn *agc_new_fn(uint32_t function, uint32_t n) {
   agc_fn *f = agc_alloc(agc_size_add(sizeof(agc_fn), agc_size_mul(n, sizeof(agc_value))));
   f->function = function;
@@ -280,6 +302,11 @@ agc_result *agc_as_result(agc_vm *vm, agc_value v) {
 
 agc_fn *agc_as_fn(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_FN) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_range *agc_as_range(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_RANGE) wrong_tag(vm);
   return v.as.p;
 }
 

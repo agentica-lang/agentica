@@ -1193,7 +1193,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges and queues can start as soon as the VM covers closures (7e PR 5e, for the block forms); sets need the VM maps (PR 5d).
 
-- [ ] 8a Ranges (reserving `Range` breaks a user type of that name; say so in the changelog, as for `Set` in 8b): `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
+- [x] 8a Ranges (reserving `Range` breaks a user type of that name; say so in the changelog, as for `Set` in 8b): `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
 - [ ] 8b `Set[T]`.
 - [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue` (breaking change for `as Queue`).
 - [ ] 8d Faster lists: a persistent vector behind `List` in both backends, no language change (`future.md` §12.4).

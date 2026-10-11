@@ -1,6 +1,6 @@
 # Builtin functions
 
-`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `Range`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -28,6 +28,15 @@ List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
 List.each(list: List[A], f: Fn[A, Void]) -> Void
 List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
 List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
+Range.size(r: Range) -> Int                    # halts when the count does not fit in Int
+Range.to_a(r: Range) -> List[Int]              # at most 1048576 values
+Range.include?(r: Range, value: Int) -> Bool
+Range.each(r: Range, f: Fn[Int, Void]) -> Void
+Range.first(r: Range) -> Result[Int]           # error for an empty range
+Range.last(r: Range) -> Result[Int]            # last included value: (1...5).last is ok(4)
+Int.times(n: Int, f: Fn[Int, Void]) -> Void    # 0 .. n - 1; nothing when n <= 0
+Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void    # nothing when to < from
+Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void  # nothing when to > from
 
 String.length(s: String) -> Int                # counts Unicode characters
 String.upcase(s: String) -> String
@@ -97,6 +106,12 @@ Random.float() -> Float                       # uniform in 0.0 up to, not includ
 All collection updates preserve their inputs. `List.append`, `List.set`, and `List.reverse` cost O(n); repeated appends cost O(n²). Indexing is still O(n). `List.repeat` costs O(count) and accepts 0..1048576; zero returns an empty list of the inferred element type, and invalid counts halt with `RUNTIME-INVALID-COUNT` at the count argument. `List.set` requires an index in 0..length-1; otherwise it halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument. Expected types support empty collections and Result elements; annotate when there is insufficient context.
 
 `Map.get(map, key)` returns `Result[V]`: `ok(value)` if present, `error(message)` if missing. `Map.get(map, key, default)` returns V and eagerly evaluates the default even when the key exists. False and nil are present values. `Map.delete` ignores absent keys, preserves remaining insertion order, and costs O(n); reinsertion adds the key at the end. `Map.values` costs O(n) and follows `Map.keys` order.
+
+## Ranges
+
+`a..b` includes `b`; `a...b` excludes it. Both ends are `Int`, and the value has type `Range` (start, end and kind; no list inside). `for i in 0...n` iterates without building a list, up to the largest `Int` without overflow; a range whose end is before its start is empty, so `for` never counts down: use `a.downto(b) do |i| ... end`. Ranges bind looser than every other operator (`0...n + 1` is `0...(n + 1)`) and do not chain; a method call needs parentheses: `(1..5).to_a`, `(0...n).include?(i)`. `Range` functions are also methods: `r.size`, `r.to_a`, `r.include?(x)`, `r.each do |i| ... end`, `r.first`, `r.last`. `size` halts with `RUNTIME-INTEGER-OVERFLOW` and `to_a` above 1048576 values with `RUNTIME-INVALID-COUNT`, both at the receiver. `first` and `last` return `error("the range is empty")` for an empty range. A range prints as `1..5` or `1...5` and has `==` (same start, end and kind). It is not JSON-encodable.
+
+`n.times do |i| ... end` runs with `0` to `n - 1`; `a.upto(b) do |i| ... end` and `a.downto(b) do |i| ... end` count up or down, both ends included. They return `Void`. A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
 
 `agentica help Map.get` and `agentica help HTTP.client` show their signatures. Their JSON help contains `overloads`, with one entry per arity. Other builtin JSON help retains the single-signature format.
 

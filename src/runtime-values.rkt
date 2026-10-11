@@ -2,7 +2,7 @@
 
 (provide (struct-out instance) (struct-out mapping) (struct-out exit-code)
          (struct-out function-value) (struct-out closure-value) (struct-out result-ok) (struct-out result-error)
-         (struct-out enum-value) mapping-put)
+         (struct-out enum-value) (struct-out range-value) mapping-put)
 
 (struct instance (type-name fields) #:transparent)
 (struct mapping (table reversed-keys) #:transparent)
@@ -12,6 +12,7 @@
 (struct result-ok (value) #:transparent)
 (struct result-error (message) #:transparent)
 (struct enum-value (type-name variant-name payload) #:transparent)
+(struct range-value (start end exclusive?) #:transparent)
 
 (define (mapping-put target key value)
   (define table (mapping-table target))

@@ -12,11 +12,12 @@
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
 #define AGC_MAX_MAP_CHUNK 255u
-#define AGC_FLOAT_TEXT 40
+#define AGC_FLOAT_TEXT 48
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
+#define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE
 } agc_tag;
 
 typedef struct {
@@ -67,6 +68,11 @@ typedef struct {
   agc_value captured[];
 } agc_fn;
 
+typedef struct {
+  int64_t start, end;
+  bool exclusive;
+} agc_range;
+
 typedef enum {
   AGC_OP_MOVE, AGC_OP_CONST, AGC_OP_STEP,
   AGC_OP_ADD_I, AGC_OP_SUB_I, AGC_OP_MUL_I, AGC_OP_DIV_I, AGC_OP_MOD_I, AGC_OP_NEG_I,
@@ -81,6 +87,7 @@ typedef enum {
   AGC_OP_TRY, AGC_OP_IS_OK, AGC_OP_RESULT_VALUE,
   AGC_OP_MAP, AGC_OP_MAP_GET,
   AGC_OP_CALL_VALUE, AGC_OP_CLOSURE,
+  AGC_OP_RANGE, AGC_OP_RANGE_BOUNDS,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -102,7 +109,8 @@ typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
 
 typedef enum {
   AGC_NATIVE_NONE, AGC_NATIVE_MAP, AGC_NATIVE_FILTER, AGC_NATIVE_REDUCE, AGC_NATIVE_EACH,
-  AGC_NATIVE_ANY, AGC_NATIVE_ALL, AGC_NATIVE_SORT_BY
+  AGC_NATIVE_ANY, AGC_NATIVE_ALL, AGC_NATIVE_SORT_BY,
+  AGC_NATIVE_RANGE_EACH, AGC_NATIVE_TIMES, AGC_NATIVE_UPTO, AGC_NATIVE_DOWNTO
 } agc_native_kind;
 
 typedef struct {
@@ -211,6 +219,7 @@ agc_value agc_struct_value(agc_struct *s);
 agc_value agc_enum_value(agc_enum *e);
 agc_value agc_result_value(bool ok, agc_value value);
 agc_value agc_fn_value(agc_fn *f);
+agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -221,6 +230,8 @@ agc_struct *agc_as_struct(agc_vm *vm, agc_value v);
 agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
 agc_result *agc_as_result(agc_vm *vm, agc_value v);
 agc_fn *agc_as_fn(agc_vm *vm, agc_value v);
+agc_range *agc_as_range(agc_vm *vm, agc_value v);
+bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);

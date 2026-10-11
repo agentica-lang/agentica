@@ -93,7 +93,7 @@ Future extensions will introduce more reserved words; they are not available.
 
 A trailing `?` or `!` is part of a lowercase `NAME`, regardless of the next parenthesis or whitespace: `contains? (s, part)` is valid. `!` is not a suffix when followed by `=`, so `a!=b` still means `a != b`. By convention, `?` marks a predicate that returns `Bool`, and `!` marks the version that halts the run with an error instead of returning a `Result`. Variables, fields, and parameters cannot have the suffix.
 
-The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `IO`, and `System` are reserved and cannot be redefined. `ok` and `error` remain NAME tokens, but cannot be declared as user functions, variables, parameters, loop variables, or fields (`CHECK-REDEFINED-NAME`).
+The type and module names `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `Range`, `IO`, and `System` are reserved and cannot be redefined. `ok` and `error` remain NAME tokens, but cannot be declared as user functions, variables, parameters, loop variables, or fields (`CHECK-REDEFINED-NAME`).
 
 ### Literals
 
@@ -269,7 +269,7 @@ Assignments are statements: they do not produce a value. `if`, `while`, and `for
 ### Expressions and precedence
 
 ```ebnf
-expression       = or_expr ;
+expression       = or_expr, [ ( ".." | "..." ), or_expr ] ;
 or_expr          = and_expr, { ( "or" | "||" ), and_expr } ;
 and_expr         = equality_expr, { ( "and" | "&&" ), equality_expr } ;
 equality_expr    = comparison_expr,
@@ -314,6 +314,8 @@ Calls are to named functions or function values via `.call(...)`; arbitrary user
 
 `TYPE_NAME, ".", NAME, "(" … ")"` calls a builtin module function (`Map.put(...)`) or an exported function through an import alias. Without arguments the parentheses may be dropped: `IO.gets!` is `IO.gets!()`, and `while !IO.eof? do` reads like Ruby. This holds for imported functions too: `f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
 
+`a..b` and `a...b` build a `Range` (see "Ranges"). They have the lowest precedence and do not chain: `0...n + 1` is `0...(n + 1)`, and `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator. `x = 0...n`, `f(0..n)` and `for i in 0...n` need no parentheses; a method call does: `(1..5).to_a`. A line that ends in `..` or `...` does not continue on the next line. `1..5` lexes as two integers around `..`, never as a Float.
+
 `and` and `or` short-circuit. Additions, subtractions, multiplications, divisions, and modulos group from left to right. Comparisons and equality checks do not chain: `a < b < c` is invalid; write `a < b and b < c`.
 
 | Precedence, high to low | Operations |
@@ -326,6 +328,7 @@ Calls are to named functions or function values via `.call(...)`; arbitrary user
 | 6 | `==`, `!=` |
 | 7 | `and` / `&&` |
 | 8 | `or` / `\|\|` |
+| 9 | `..`, `...` (not associative) |
 
 `not` has high precedence: to negate a comparison, write `not (age >= 18)`.
 
@@ -347,6 +350,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Map[K, V]` | Homogeneous, immutable dictionary; the key `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | Exactly one payload type; successful `ok(value)` or String-valued `error(message)` |
 | `Json` | Opaque JSON value, accessed through the `JSON` module |
+| `Range` | Immutable range of `Int` values: `a..b` includes `b`, `a...b` excludes it |
 | `Fn[A, ..., R]` | Function value (`&name` or a block); final type is its return, preceding types are parameters |
 | `Task[R]` | Opaque lightweight task with exactly one result type |
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
@@ -371,7 +375,8 @@ An empty list needs an expected type, which can come from an annotation, a param
 - Integer division truncates toward zero. `%` accepts only integers and is defined by `a = (a / b) * b + (a % b)`.
 - Dividing by zero is a runtime error, also for `Float`. Integer operations that do not fit in `Int` produce an error.
 - The ordering operators accept only two numbers of the same type.
-- `==` and `!=` accept values of the same primitive type. The core has no list or struct equality.
+- `==` and `!=` accept values of the same primitive type, or two `Range` values: two ranges are equal when start, end and kind (`..` or `...`) match. The core has no list or struct equality.
+- `..` and `...` accept two `Int` values and give a `Range`; anything else is `CHECK-TYPE-MISMATCH`.
 - `and`, `or`, and `not` accept only `Bool`. `&&`, `||`, and `!` are the same operators with the same precedence. A `!` directly after a name belongs to the name (`read!`), and `!=` is inequality; a standalone `!` is `not`.
 - There is no user-defined operator overloading.
 
@@ -440,7 +445,40 @@ All fields of a constructor are required and given exactly once. The order of na
 user = User(age: 25, name: "Ana")
 ```
 
-List indexes must be between zero and length minus one; a negative or out-of-range index is an error. Indexing costs O(n) in this interpreter; prefer `for` for traversal rather than repeated indexed access. `for` iterates over `List[T]` in order. Slices and string indexing are not supported in the core.
+List indexes must be between zero and length minus one; a negative or out-of-range index is an error. Indexing costs O(n) in this interpreter; prefer `for` for traversal rather than repeated indexed access. `for` iterates over `List[T]` in order, and over a `Range` (next section). Slices and string indexing are not supported in the core.
+
+### Ranges
+
+`a..b` is the range of `Int` values from `a` to `b`, both included; `a...b` excludes `b`, as in Ruby. Both operands are `Int`. The result has the builtin type `Range`, a small immutable value (start, end and kind); it never holds a list.
+
+```ruby
+for i in 0...3 do
+  puts(i)          # 0, 1, 2
+end
+
+3.times do |i|
+  puts(i)          # 0, 1, 2
+end
+
+evens = (0..10).to_a.filter do |n|
+  n % 2 == 0
+end
+```
+
+- `for x in range` yields each `Int` in order without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `downto`, or `List.reverse` on `to_a`). Iteration up to the largest `Int` does not overflow. Each iteration costs steps like `for` over a list. The range is evaluated once, so assigning to its variable in the body does not change the loop.
+- `Range` functions, also methods (`(1..5).size`):
+
+  | Function | Result |
+  |---|---|
+  | `Range.size(r: Range) -> Int` | the number of values; `RUNTIME-INTEGER-OVERFLOW` at the receiver when it does not fit in `Int` (`(0..9223372036854775807).size`) |
+  | `Range.to_a(r: Range) -> List[Int]` | the values in order; above 1048576 values, `RUNTIME-INVALID-COUNT` at the receiver |
+  | `Range.include?(r: Range, value: Int) -> Bool` | whether the value is in the range |
+  | `Range.each(r: Range, f: Fn[Int, Void]) -> Void` | calls `f` on each value in order |
+  | `Range.first(r: Range) -> Result[Int]`, `Range.last(r: Range) -> Result[Int]` | the first and last included values; `error("the range is empty")` for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)` |
+
+- `Int` methods for loops, all returning `Void`: `n.times(f)` calls `f` with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, f)` with `a` up to `b` (nothing when `b < a`); `a.downto(b, f)` with `a` down to `b` (nothing when `b > a`). `f` is `Fn[Int, Void]`, usually a block. They are also module functions: `Int.times(n, f)`, `Int.upto(a, b, f)`, `Int.downto(a, b, f)`.
+- Text form: `1..5` and `1...5`, as Ruby's `inspect`; `to_s`, interpolation and `IO.inspect` all show it. Ranges have `==` (start, end and kind match). They are not JSON-encodable and cannot be `Map` keys.
+- Ranges of `String` or `Float` and `step` are not supported.
 
 ### Maps
 
@@ -471,7 +509,8 @@ more = Map.put(stock, "kiwi", 7)
 | `Float` | `Float` |
 | `Result[T]` | `Result` |
 | `Json` | `JSON` |
-| `Int` | aliases only |
+| `Range` | `Range` |
+| `Int` | `Int` (`times`, `upto`, `downto`) and aliases |
 
 Only functions whose first parameter has the receiver's type are methods: `s.trim` is `String.trim(s)`, `xs.map(&f)` is `List.map(xs, &f)`, but `"a".from_int` is not a method. Without parentheses, `receiver.name` on a non-struct value is a method with no arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` is field access; structs and enums have no methods, and user functions cannot be called as methods. `.call(...)` invokes a function value.
 
@@ -496,7 +535,7 @@ Ruby aliases:
 
 Unlike Ruby, `"abc".to_i` returns `Result[Int]` (an error here), not `0`; `to_i!` halts on bad text. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
 
-Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and lists, maps, Results, structs and enums made of those. `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON text, and anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). `puts(x)`, `print(x)` and `IO.warn(x)` take any value with `to_s` and write that text. Only a top-level `Json` becomes JSON text; inside a list or Result it shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`. Functions, tasks and resource handles (sockets, files, processes, HTTP values) have no `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`. A struct field named `to_s` is read as the field. Unlike Ruby, `nil.to_s` is `"nil"`, and `puts([1, 2])` writes `[1, 2]` on one line.
+Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, ranges, and lists, maps, Results, structs and enums made of those. `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON text, and anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`, `Shape.Box(1, 2)`). `puts(x)`, `print(x)` and `IO.warn(x)` take any value with `to_s` and write that text. Only a top-level `Json` becomes JSON text; inside a list or Result it shows as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`. Functions, tasks and resource handles (sockets, files, processes, HTTP values) have no `to_s`: printing or interpolating one is `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`. A struct field named `to_s` is read as the field. Unlike Ruby, `nil.to_s` is `"nil"`, and `puts([1, 2])` writes `[1, 2]` on one line.
 
 `x.inspect` returns the `IO.inspect` form as a `String`, for the same types as `to_s`. It differs from `to_s` only for strings, which keep their quotes (`"a".inspect` is `"a"` with the quote characters), and for `Json`, which gives `<Json>`. Use `IO.inspect(x)` to print that form and get `x` back. The debug form is for display: strings use the host's escapes, so it is not guaranteed to be valid Agentica source (`"a\#{b}".inspect` shows `#{` without the backslash).
 
@@ -1021,7 +1060,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `inspect(x)` | `x.inspect`, or `IO.inspect(x)` to print it |
 | `println(x)` | `puts(x)` |
 | `input()`, `read_line()` | `gets` (a Result) or `gets!` |
-| `range(n)` | a `while` loop, or `for` over a list |
+| `range(n)` | a range: `for i in 0...n`, or `n.times do \|i\| ... end` |
 | `int(x)`, `float(n)`, `Int.to_float(n)` | `x.to_i`, `n.to_f` |
 | `x.lower`, `x.upper`, `x.startswith(...)` | `downcase`, `upcase`, `start_with?` |
 | `x.nil?` | `x == nil` |
