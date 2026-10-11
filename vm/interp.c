@@ -53,6 +53,16 @@ static void push_frame(agc_vm *vm, uint32_t function, uint32_t base, uint32_t sp
   vm->depth++;
 }
 
+static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32_t span) {
+  agc_frame *frame = &vm->frames[vm->depth - 1];
+  const agc_function *callee = &vm->program->functions[function];
+  ensure_registers(vm, (size_t)frame->base + callee->registers, span);
+  agc_value *R = vm->regs + frame->base;
+  memmove(R, R + window, (size_t)callee->params * sizeof(agc_value));
+  frame->function = function;
+  frame->pc = 0;
+}
+
 static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
   if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
   if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
@@ -209,6 +219,7 @@ static void run(agc_vm *vm) {
         if (agc_as_bool(vm, R[in.a])) frame->pc = bx;
         break;
       case AGC_OP_CALL: push_frame(vm, bx, frame->base + in.a, s); break;
+      case AGC_OP_TAIL_CALL: replace_frame(vm, bx, in.a, s); break;
       case AGC_OP_CALL_BUILTIN: {
         uint32_t base = frame->base + in.a;
         agc_value result = p->builtins[bx]->fn(vm, vm->regs + base, s);

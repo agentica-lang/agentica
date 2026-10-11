@@ -39,6 +39,22 @@
     (check-equal? (vector-ref (bc-function-code main) 0)
                   (list (index-of opcodes 'step) 3 0 0)))
 
+  (test-case "only a returned user call becomes a tail call"
+    (define program
+      (ir->bytecode
+       (lower-text (string-append
+                    "def f(n: Int) -> Int\n  if n > 0\n    return f(n - 1)\n  end\n  return 1 + f(n)\nend\n\n"
+                    "def g(n: Int) -> String\n  return String.from_int(n)\nend\n\n"
+                    "def main() -> Void\n  puts(f(2))\nend\n"))))
+    (define (ops index)
+      (for/list ([instr (in-vector (bc-function-code (list-ref (bc-program-functions program) index)))]
+                 #:when (memv (first instr) (map (lambda (op) (index-of opcodes op))
+                                                 '(call tail-call call-builtin return))))
+        (list-ref opcodes (first instr))))
+    (check-equal? (ops 0) '(tail-call call return return))
+    (check-equal? (ops 1) '(call-builtin return return))
+    (check-equal? (ops 2) '(call call-builtin return)))
+
   (test-case "opcode numbers match vm/agc.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)

@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it), and passes `--max-steps`, `--ai`, `--json`, program arguments, the
   VM's stdout, stderr and exit code through. The evaluator stays the
   default. Options the VM does not support yet exit 2 with `--vm`.
+- The bytecode VM has tail calls: `return f(...)` of a user function (local
+  or imported, in any branch, `case` arm or loop body) replaces the current
+  frame, so tail recursion and mutual recursion run at any depth there. Step
+  counts and `--max-steps` behave as before. The evaluator has no tail
+  calls, so a deep tail-recursive program still stops there with
+  `RUNTIME-STACK-OVERFLOW`; this is a documented difference. Non-tail
+  recursion keeps the 10000 call-depth limit on both. The `.agcb` format
+  version does not change.
 - The bytecode VM runs structs, enums and `case`: struct construction (fields
   in any order, evaluated as written), field access, generic and recursive
   enums, nullary variants with or without `()`, struct and enum values in

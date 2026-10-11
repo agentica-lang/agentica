@@ -957,6 +957,8 @@ absolute path and does not resolve symlinks.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
 
+Calls nest at most 10000 deep in each task; a deeper call is `RUNTIME-STACK-OVERFLOW` at the call. On the bytecode VM (`agentica-vm`), a tail call (`return f(...)`, a direct call to a user function) replaces the caller's frame and does not count toward this limit, so deep tail recursion runs there while the evaluator stops with `RUNTIME-STACK-OVERFLOW`.
+
 
 ### Processes
 
