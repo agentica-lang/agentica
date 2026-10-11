@@ -3,10 +3,11 @@ title: Agentica
 description: Agentica is Ruby with static types. Ruby-like syntax, checked before running, with immutable values.
 ---
 
-Agentica is Ruby with static types: Ruby-like syntax, checked before the
-program runs, with immutable values. It is small on purpose, so people and AI
-agents can write, read and fix programs with few surprises. Every error has a
-stable code, a source position and often a hint with the fix.
+Agentica is Ruby with static types. It has Ruby-like syntax. Every program is
+checked before it runs, and values never change in place. The language is small
+on purpose, so people and AI agents can write, read and fix programs with few
+surprises. Every error has a stable code, a source position and often a hint
+with the fix.
 
 ```agentica
 struct Item
@@ -51,7 +52,7 @@ end
 
 Run it with `agentica shop.agc`:
 
-```text
+```output
 tea is cheap
 cake costs 5
 total: 8
@@ -60,6 +61,8 @@ error("negative price: -2")
 
 ## Read next
 
-- [Guide](/guide/): how to write, check and run programs, and the core language.
-- [Language reference](/reference/): the full grammar and rules.
-- [Library](/library/): builtins, modules, JSON, files, processes, tasks, network, BDD tests and diagnostics.
+- [Getting started](/getting-started/): install Agentica, run a program and
+  read its errors.
+- [Language tour](/tour/): the language in short pages, one idea at a time.
+- [Library](/library/): every builtin module, with one example per function.
+- [Language specification](/reference/): the formal grammar and rules.

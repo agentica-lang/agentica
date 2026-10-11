@@ -249,6 +249,26 @@ pre code {
   font-size: inherit;
 }
 
+.sample {
+  margin: -0.5rem 0 1rem;
+}
+
+.sample-label {
+  display: block;
+  margin: 0 0 0.2rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sample pre {
+  margin: 0;
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+}
+
 table {
   display: block;
   max-width: 100%;
