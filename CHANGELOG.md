@@ -185,8 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Point(x: 2)`, `Shape.Empty`) instead of the linker's internal
   `@2::Point` on both the evaluator and the VM, through `puts`,
   `IO.print`, `IO.warn`, interpolation, `to_s` and `inspect`, also nested
-  in lists, maps, results and enum payloads. Checker messages name these
-  types the same way. Types with the same name from different modules print
+  in lists, maps, results and enum payloads. Checker messages (type
+  mismatches, unknown or missing fields, enum variants, arity and
+  missing-return signatures) name imported types and functions the same
+  way, and did-you-mean never suggests an internal name. Types with the same name from different modules print
   the same; `JSON.schema` keeps unique internal `$defs` keys.
 
 ## [0.1.0] - 2026-10-04

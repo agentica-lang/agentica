@@ -241,7 +241,7 @@ fails when the committed file differs from what the generator prints.
 - A list prints its items in debug form even in the text form:
   `puts(["a"])` prints `["a"]`. Only a String at the top is printed raw.
 - Struct and enum names in the tables are display names: the bytecode
-  writer passes each linked name through `display-type-name`
+  writer passes each linked name through `display-name`
   (`src/builtins.rkt`), the same function the evaluator prints with, so an
   imported type prints its declared name (`Point(x: 1)`, `Shape.Dot`), not
   the linker's internal `@2::` identity. Two modules that both declare

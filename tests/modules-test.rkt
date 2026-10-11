@@ -185,7 +185,19 @@
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-TYPE-MISMATCH)
-       (check-equal? (diagnostic-actual problem) "Point"))))
+       (check-equal? (diagnostic-actual problem) "Point")))
+    (with-files
+     '(("a.agc" . "export struct Point\n  x: Int\nend\n\nexport def make(x: Int) -> Point\n  return Point(x: x)\nend\n\n")
+       ("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\n  n = A.Point(x: 1).z\nend\n\n")
+       ("arity.agc" . "import \"a.agc\" as A\ndef main() -> Void\n  p = A.make()\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-FIELD)
+       (define start (source-span-start (diagnostic-span problem)))
+       (check-equal? (list (source-position-line start) (source-position-column start)) '(3 7))
+       (define arity (checked (build-path directory "arity.agc")))
+       (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
+       (check-false (regexp-match? #rx"@" (diagnostic-callee arity))))))
 
   (test-case "module errors are located and do not expose private declarations"
     (for ([entry

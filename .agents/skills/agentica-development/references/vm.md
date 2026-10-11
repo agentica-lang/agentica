@@ -246,7 +246,7 @@ is checked.
 - Step-limit sweeps on long programs are slow; the diff test samples above
   2000 steps.
 - Struct and enum table names are display names: `write-bytecode` passes
-  the linked name through `display-type-name` (`builtins.rkt`), as the
+  the linked name through `display-name` (`builtins.rkt`), as the
   evaluator does when printing (`docs/vm.md` §2.4). The lowerer keeps the
   unique linked names as its keys and in `format-ir`. Variant ids are global in file order;
   struct ids and field indexes follow declaration order. Generic enums need

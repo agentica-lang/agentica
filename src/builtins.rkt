@@ -1,23 +1,23 @@
 #lang racket
 
-(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-type-name did-you-mean)
+(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
                       [alternatives #:auto #:mutable]) #:auto-value '() #:transparent)
 
-(define (display-type-name name)
+(define (display-name name)
   (regexp-replace #rx"^@[0-9]+::" name ""))
 
 (define (type->string type)
   (cond
     [(symbol? type) (symbol->string type)]
-    [(eq? (car type) 'Struct) (display-type-name (cadr type))]
+    [(eq? (car type) 'Struct) (display-name (cadr type))]
     [(eq? (car type) 'TypeVar) (cadr type)]
     [(eq? (car type) 'Enum)
      (if (null? (cddr type))
-         (display-type-name (cadr type))
-         (format "~a[~a]" (display-type-name (cadr type)) (string-join (map type->string (cddr type)) ", ")))]
+         (display-name (cadr type))
+         (format "~a[~a]" (display-name (cadr type)) (string-join (map type->string (cddr type)) ", ")))]
     [else (format "~a[~a]" (car type) (string-join (map type->string (cdr type)) ", "))]))
 
 (define builtins
@@ -234,6 +234,7 @@
   (define near
     (sort (for/list ([candidate (in-list (remove-duplicates candidates))]
                      #:unless (string=? candidate name)
+                     #:unless (regexp-match? #rx"^@[0-9]+::" candidate)
                      #:when (<= (edit-distance name candidate) limit))
             candidate)
           (lambda (x y)
