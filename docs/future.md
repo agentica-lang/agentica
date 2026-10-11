@@ -523,17 +523,30 @@ end
     age: Int
   end
 
+  def valid_name?(name: String) -> Bool
+    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+    return name != "" and String.split(name, "").all? do |c|
+      String.contains?(allowed, c)
+    end
+  end
+
   export def save_user(dir: String, user: User) -> Result[Void]
+    if !valid_name?(user.name)
+      return error("bad user name")
+    end
     return File.write_text("#{dir}/#{user.name}.json", JSON.encode(user), 1000)
   end
 
   export def load_user(dir: String, name: String) -> Result[User]
+    if !valid_name?(name)
+      return error("bad user name")
+    end
     text = try File.read_text("#{dir}/#{name}.json", 1000)
     return JSON.decode(text, User)
   end
   ```
 
-  Callers write `import "users.agc" as Users` and call `Users.load_user(dir, "ana")`. A real facade must check `user.name` (and `name`) with an allow-list before it uses it in a path: the name is not empty and has only letters, digits, `-` and `_`. Otherwise it returns `error(...)`.
+  Callers write `import "users.agc" as Users` and call `Users.load_user(dir, "ana")`; `valid_name?` stays hidden. A facade must check a name with an allow-list before it uses it in a path, as `valid_name?` does: the name is not empty and has only ASCII letters, digits, `-` and `_`. Otherwise it returns `error(...)`.
 - **Limit:** values are immutable and blocks capture by value, so an in-memory adapter cannot change its own data. A memory adapter that writes needs a new struct per write (its `put` returns one, for example `Fn[String, String, MemoryStorage]`), or, later, blocks that capture a shared table (§13).
 - Evaluator: it resolves a struct method call to the field call in the same checker-filled `resolved` slot it uses for builtin methods.
 - VM: no new opcode. The checker records the call as an invoke of the field value, so lowering emits a field read and `call-value`, as for `.call`. It needs `.call` on the VM (7e PR 5e).
@@ -578,11 +591,12 @@ end
   ```
 
 - **Numbers** follow `JSON.int` and `JSON.float`, and `JSON.parse` does not change:
-  - `JsonInt(n)` exactly when `JSON.int(j)` is `ok(n)`: an integer written without a fraction or exponent that fits in a signed 64-bit `Int`.
-  - `JsonBigInt(text)` for any other integer written without a fraction or exponent. `text` is its decimal text, so it stays exact; `JSON.int` fails on it, as it does today.
-  - `JsonFloat(x)` for a number with a fraction or exponent, the value `JSON.float` returns. `3.0` and `1e2` are `JsonFloat`, even when they are whole numbers.
+  The rule is by value, not by text:
+  - `JsonInt(n)` for an exact integer that fits in a signed 64-bit `Int`. This is exactly when `JSON.int(j)` is `ok(n)`.
+  - `JsonBigInt(text)` for any other exact integer. `text` is its decimal text, so it stays exact; `JSON.int` fails on it, as it does today.
+  - `JsonFloat(x)` for a double, the value `JSON.float` returns.
 
-  So `kind` stays total.
+  `JSON.parse` makes a double exactly for a number written with a fraction or exponent, so `3.0` and `1e2` are `JsonFloat` even when they are whole numbers; a number that is not finite is the existing error. Values from the builders and `JSON.from` follow the same rule: an `Int` is `JsonInt` and a `Float` is `JsonFloat`. So `kind` stays total.
 - **Object order:** the keys of `JsonObject` use the same sorted order as `JSON.decode` into a `Map`: sorted by Unicode code point (the evaluator sorts with `symbol<?`; a byte-wise compare of UTF-8 text gives the same order). The text order is not kept, so `JSON.parse` does not change. Text order may come later if a real program needs it; it would need an ordered object representation in the evaluator.
 - It works with the existing `case`, the branch check and bindings, with no grammar change. Variants are qualified like any enum (`JsonValue.JsonInt(n)`). `JsonValue` values are for reading: they have `to_s` and `inspect` like other enums. `JsonValue` stays out of all four JSON type functions: `JSON.encode` and `JSON.from` reject it with `CHECK-NOT-ENCODABLE`, and `JSON.decode` and `JSON.schema` with `CHECK-NOT-DECODABLE`; build Json with the builders, and use `Json` for free-form data.
 - `JsonValue` becomes a reserved name: a user `struct JsonValue`, `enum JsonValue` or `import ... as JsonValue` is `CHECK-REDEFINED-NAME`. This is a breaking change; say so in the changelog.
@@ -592,7 +606,7 @@ end
 - Evaluator: `JsonValue` is the first builtin enum, so it needs a path in the checker's enum table and in the evaluator.
 - Import linking (`src/modules.rkt`): it renames each module's names and rejects unknown aliases, so `JsonValue` needs a path there too, like the existing `Result` exception (`[(and (eq? kind 'enum) (string=? name "Result")) name]`). It covers enum patterns and constructors (`JsonValue.JsonInt(n)`), and the bare nullary form `JsonValue.JsonNull`, which arrives as a `type-expression` and is resolved there. Without it, linking renames these names or rejects them with `CHECK-IMPORT-NAME`.
 - Planned tests: besides `case` over every variant and the number fixtures below, `JsonValue` used inside an imported module (patterns, a payload constructor and `JsonValue.JsonNull`), checked and run through an `import`.
-- VM: needs the JSON PR (`docs/vm.md` §12.2 item 7). `JsonValue` is a builtin entry of the enum table with this fixed variant order, so `case` lowers as for user enums. The entry rides on the JSON PR's planned format bump (`docs/vm.md` §4), so it needs no bump of its own. Numbers in the VM:
+- VM: needs the JSON PR (`docs/vm.md` §12.2 item 7). `JsonValue` is a builtin entry of the enum table with this fixed variant order, so `case` lowers as for user enums. Like a user enum, `JsonValue` is written to the bytecode Enums section only when a program uses it, so the file layout and the opcode meanings do not change and 10b needs no format bump. If the implementation ever needs a fixed index or a layout change, 10b bumps the format version itself (`docs/vm.md` §4). The JSON PR adds no placeholder for it. Numbers in the VM:
   - The VM Json tree already has a big-integer node kept as decimal text (`docs/vm.md` §5, Json row). An integer written without a fraction or exponent that is outside int64 is that node, and `JSON.kind` maps it to `JsonBigInt` with its exact decimal text.
   - A number with a fraction or exponent is a double (`JsonFloat`). A non-finite one, such as `1e400`, is the existing `JSON number is not finite` error.
   - The rule holds for every JSON builtin that reads the tree, not only `kind`: `JSON.float` on a big integer gives the same float as the evaluator (`exact->inexact`, and the same error when the result is not finite); `JSON.encode` writes it back as its exact decimal text; typed decode treats it as the evaluator does (an `Int` target fails, a `Float` target takes `exact->inexact` of it when that is finite).
