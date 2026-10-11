@@ -103,6 +103,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `String.split` keeps every empty part. Before, it dropped empty parts at
+  the ends (`"a\n".split("\n")` gave `["a"]`) but kept them in the middle;
+  now it gives `["a", ""]`, and `join` after `split` gives back the text.
 - `vm/gen-unicode.rkt` moved to `vm/tools/gen-unicode.rkt`; `make vm-unicode`
   runs it from there and writes the same `vm/unicode_data.c`.
 - CI runs on pull requests only, and only on Linux; pull requests that
