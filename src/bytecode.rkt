@@ -13,6 +13,7 @@
 
 (define format-version 3)
 (define max-u16 65535)
+(define max-type-depth 1024)
 
 (define opcodes
   '(move const step add-i sub-i mul-i div-i mod-i neg-i not lt-i le-i eq ne
@@ -56,6 +57,11 @@
     (define types '())
     (define type-count 0)
     (define type-index (make-hash))
+    (define (nesting type)
+      (match type
+        [(list 'List item) (add1 (nesting item))]
+        [(list 'Map _ item) (add1 (nesting item))]
+        [_ 0]))
     (define (type! type)
       (hash-ref type-index type
                 (lambda ()
@@ -73,6 +79,9 @@
       (for/list ([entry (in-list structs)] [index (in-naturals)] #:when (ir-struct-types entry))
         (list index (ir-struct-name entry) (map type! (ir-struct-types entry)))))
     (when (> type-count max-u16) (too-big "JSON field types" (ir-program-span ir)))
+    (when (for/or ([entry (in-list structs)] #:when (ir-struct-types entry))
+            (for/or ([type (in-list (ir-struct-types entry))]) (> (nesting type) max-type-depth)))
+      (too-big "nested List and Map levels in a JSON field type" (ir-program-span ir)))
     (define sources (ir-program-sources ir))
     (define source-index
       (for/hasheq ([text-source (in-list sources)] [index (in-naturals)])

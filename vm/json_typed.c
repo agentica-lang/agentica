@@ -2,8 +2,6 @@
 
 #include <string.h>
 
-#define NO_STRUCT UINT32_MAX
-
 typedef struct {
   const agc_json *node;
   const agc_list *items;
@@ -15,31 +13,12 @@ typedef struct {
   agc_map *map;
 } decode_frame;
 
-typedef struct {
-  char *data;
-  size_t len, cap;
-} text_buffer;
-
-static void append(text_buffer *b, const char *text, size_t n) {
-  size_t need = agc_size_add(b->len, n);
-  if (need > b->cap) {
-    size_t cap = b->cap;
-    while (cap < need) cap = agc_size_mul(cap, 2);
-    char *bigger = agc_alloc_atomic(cap);
-    memcpy(bigger, b->data, b->len);
-    b->data = bigger;
-    b->cap = cap;
-  }
-  memcpy(b->data + b->len, text, n);
-  b->len = need;
-}
-
-static agc_string *buffer_string(const text_buffer *b) {
+static agc_string *buffer_string(const agc_json_buffer *b) {
   return agc_make_string(b->data, b->len, agc_utf8_count((const uint8_t *)b->data, b->len));
 }
 
 static agc_value decode_error(const decode_frame *stack, size_t depth, const char *expected) {
-  text_buffer b;
+  agc_json_buffer b;
   b.cap = 64;
   b.len = 0;
   b.data = agc_alloc_atomic(b.cap);
@@ -47,30 +26,21 @@ static agc_value decode_error(const decode_frame *stack, size_t depth, const cha
     const decode_frame *f = &stack[i];
     if (f->kind == AGC_TYPE_STRUCT) {
       const agc_string *key = f->def->fields[f->next];
-      if (b.len) append(&b, ".", 1);
-      append(&b, key->data, key->bytes);
+      if (b.len) agc_json_put(&b, ".", 1);
+      agc_json_put(&b, key->data, key->bytes);
     } else if (f->kind == AGC_TYPE_LIST) {
       char index[32];
       int n = snprintf(index, sizeof index, "[%zu]", f->next);
-      append(&b, index, (size_t)n);
+      agc_json_put(&b, index, (size_t)n);
     } else {
       const agc_string *key = agc_around("[", f->node->members[f->next].key, "]");
-      append(&b, key->data, key->bytes);
+      agc_json_put(&b, key->data, key->bytes);
     }
   }
-  if (!b.len) append(&b, "$", 1);
-  append(&b, ": expected ", 11);
-  append(&b, expected, strlen(expected));
+  if (!b.len) agc_json_put(&b, "$", 1);
+  agc_json_put(&b, ": expected ", 11);
+  agc_json_put(&b, expected, strlen(expected));
   return agc_result_value(false, agc_string_value(buffer_string(&b)));
-}
-
-static decode_frame *grow_frames(decode_frame *stack, size_t *capacity, size_t depth) {
-  if (depth < *capacity) return stack;
-  size_t bigger = agc_size_mul(*capacity, 2);
-  decode_frame *grown = agc_alloc(agc_size_mul(bigger, sizeof(decode_frame)));
-  memcpy(grown, stack, depth * sizeof(decode_frame));
-  *capacity = bigger;
-  return grown;
 }
 
 static bool next_child(const agc_program *p, const decode_frame *f, agc_value *item, const agc_type **type) {
@@ -154,7 +124,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
       bool list = kind == AGC_TYPE_LIST;
       if (j->kind != (list ? AGC_JSON_ARRAY : AGC_JSON_OBJECT))
         return decode_error(stack, depth, list ? "array" : "object");
-      stack = grow_frames(stack, &capacity, depth);
+      stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
       decode_frame *f = &stack[depth];
       open_frame(vm, f, j, kind, arg);
       v = frame_value(f);
@@ -185,19 +155,13 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
 }
 
 static agc_value json_text(const char *text) {
-  size_t n = strlen(text);
-  return agc_json_leaf(AGC_JSON_STRING, agc_string_value(agc_make_string(text, n, n)));
-}
-
-static agc_string *ascii(const char *text) {
-  size_t n = strlen(text);
-  return agc_make_string(text, n, n);
+  return agc_json_leaf(AGC_JSON_STRING, agc_string_value(agc_json_ascii(text, strlen(text))));
 }
 
 static agc_value object_of(size_t n, const char *const *keys, const agc_value *values) {
   agc_json_member *members = agc_alloc(agc_size_mul(n, sizeof(agc_json_member)));
   for (size_t i = 0; i < n; i++) {
-    members[i].key = ascii(keys[i]);
+    members[i].key = agc_json_ascii(keys[i], strlen(keys[i]));
     members[i].value = values[i];
   }
   return agc_json_object(members, n);
@@ -210,19 +174,19 @@ static agc_value typed(const char *name) {
 }
 
 static agc_value reference(const agc_string *name) {
-  text_buffer b;
+  agc_json_buffer b;
   b.cap = agc_size_add(name->bytes, 16);
   b.len = 0;
   b.data = agc_alloc_atomic(b.cap);
-  append(&b, "#/$defs/", 8);
+  agc_json_put(&b, "#/$defs/", 8);
   size_t start = 0;
   for (size_t i = 0; i < name->bytes; i++) {
     if (name->data[i] != '~' && name->data[i] != '/') continue;
-    append(&b, name->data + start, i - start);
-    append(&b, name->data[i] == '~' ? "~0" : "~1", 2);
+    agc_json_put(&b, name->data + start, i - start);
+    agc_json_put(&b, name->data[i] == '~' ? "~0" : "~1", 2);
     start = i + 1;
   }
-  append(&b, name->data + start, name->bytes - start);
+  agc_json_put(&b, name->data + start, name->bytes - start);
   static const char *const keys[] = {"$ref"};
   agc_value values[] = {agc_json_leaf(AGC_JSON_STRING, agc_string_value(buffer_string(&b)))};
   return object_of(1, keys, values);
@@ -262,15 +226,26 @@ static agc_value struct_schema(const agc_struct_def *def, const agc_value *schem
   return object_of(agc_is(defs, AGC_T_VOID) ? 3 : 4, keys, values);
 }
 
+static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen, uint32_t *queue, size_t *count) {
+  while (!needed[t]) {
+    needed[t] = true;
+    const agc_type *type = &p->types[t];
+    if (type->kind == AGC_TYPE_STRUCT) {
+      if (!seen[type->arg]) {
+        seen[type->arg] = true;
+        queue[(*count)++] = type->arg;
+      }
+      return;
+    }
+    if (type->kind < AGC_TYPE_LIST) return;
+    t = type->arg;
+  }
+}
+
 agc_value agc_json_schema(agc_vm *vm, uint32_t type) {
   const agc_program *p = vm->program;
-  agc_value *schemas = agc_alloc(agc_size_mul(p->type_count, sizeof(agc_value)));
-  uint32_t *base = agc_alloc_atomic(agc_size_mul(p->type_count, sizeof(uint32_t)));
-  for (uint32_t i = 0; i < p->type_count; i++) {
-    const agc_type *t = &p->types[i];
-    base[i] = t->kind == AGC_TYPE_STRUCT ? t->arg : t->kind >= AGC_TYPE_LIST ? base[t->arg] : NO_STRUCT;
-    schemas[i] = type_schema(p, t, schemas);
-  }
+  bool *needed = agc_alloc_atomic(p->type_count);
+  memset(needed, 0, p->type_count);
   bool *seen = agc_alloc_atomic(p->struct_count);
   memset(seen, 0, p->struct_count);
   uint32_t *queue = agc_alloc_atomic(agc_size_mul(p->struct_count, sizeof(uint32_t)));
@@ -278,14 +253,12 @@ agc_value agc_json_schema(agc_vm *vm, uint32_t type) {
   uint32_t current = type;
   for (size_t head = 0;; current = queue[head++]) {
     const agc_struct_def *def = &p->structs[current];
-    for (uint32_t k = 0; k < def->count; k++) {
-      uint32_t s = base[def->field_types[k]];
-      if (s == NO_STRUCT || seen[s]) continue;
-      seen[s] = true;
-      queue[count++] = s;
-    }
+    for (uint32_t k = 0; k < def->count; k++) mark_type(p, def->field_types[k], needed, seen, queue, &count);
     if (head == count) break;
   }
+  agc_value *schemas = agc_alloc(agc_size_mul(p->type_count, sizeof(agc_value)));
+  for (uint32_t i = 0; i < p->type_count; i++)
+    if (needed[i]) schemas[i] = type_schema(p, &p->types[i], schemas);
   agc_value defs = agc_void();
   if (count) {
     agc_json_member *members = agc_alloc(agc_size_mul(count, sizeof(agc_json_member)));

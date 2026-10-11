@@ -260,6 +260,14 @@ static buffer type_tables(int which) {
   if (which == 7) {
     u32(&t, 65536);
     for (uint32_t k = 0; k < 65536; k++) u8(&t, 0);
+  } else if (which == 10 || which == 12) {
+    uint32_t lists = which == 10 ? 1025 : 1024;
+    u32(&t, lists + 1);
+    u8(&t, 0);
+    for (uint32_t k = 0; k < lists; k++) {
+      u8(&t, 4);
+      u32(&t, k);
+    }
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
@@ -275,7 +283,7 @@ static buffer type_tables(int which) {
     u32(&t, which == 4 ? 3 : 2);
   }
   u32(&t, 1);
-  str(&t, "@1::Q");
+  str(&t, which == 11 ? "P" : "@1::Q");
   u32(&t, 1);
   u32(&t, 0);
   if (which == 5) {
@@ -1057,6 +1065,9 @@ int main(void) {
   assert(!loads_types(7, "too many types"));
   assert(!loads_types(8, "type count exceeds the file"));
   assert(!loads_types(9, "struct index out of range"));
+  assert(!loads_types(10, "type nesting too deep"));
+  assert(!loads_types(11, "duplicate JSON type name"));
+  assert(loads_types(12, NULL));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

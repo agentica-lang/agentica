@@ -13,6 +13,7 @@
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
 #define AGC_MAX_MAP_CHUNK 255u
 #define AGC_MAX_TYPES 65535u
+#define AGC_MAX_TYPE_DEPTH 1024u
 #define AGC_SCALAR_TEXT 48
 _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
@@ -90,6 +91,11 @@ typedef struct {
   size_t count;
   agc_json_member *members;
 } agc_json;
+
+typedef struct {
+  char *data;
+  size_t len, cap;
+} agc_json_buffer;
 
 typedef enum {
   AGC_JSON_PARSED, AGC_JSON_CONTROL, AGC_JSON_INVALID, AGC_JSON_EMPTY, AGC_JSON_TRAILING, AGC_JSON_NOT_FINITE
@@ -346,6 +352,9 @@ extern const size_t agc_number_builtin_count;
 const char *agc_json_version(void);
 agc_json_status agc_json_parse(const uint8_t *text, size_t len, agc_value *out);
 const char *agc_json_status_message(agc_json_status status);
+agc_string *agc_json_ascii(const char *text, size_t n);
+void *agc_json_grow(void *stack, size_t *capacity, size_t depth, size_t size);
+void agc_json_put(agc_json_buffer *b, const char *text, size_t n);
 agc_value agc_json_leaf(agc_json_kind kind, agc_value scalar);
 agc_value agc_json_object(agc_json_member *members, size_t n);
 agc_value agc_json_array(agc_list *items);

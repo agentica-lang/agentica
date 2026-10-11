@@ -16,8 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/mcp/stdio.agc` now run on the VM. The `.agcb` format is now
   version 3: a new Types section after Structs carries the JSON field
   types, and the loader validates it fully (indexes, counts, kinds, and
-  cycles only through named structs). Decoding into a builtin record such
-  as `Header` stays `LOWER-UNSUPPORTED`.
+  cycles only through named structs, at most 1024 nested List and Map
+  levels, unique names). A target that is a builtin record such as
+  `Header`, or a struct with one in its fields, stays `LOWER-UNSUPPORTED`
+  until 7h.
 
 - The bytecode VM runs `Json` values and the `JSON` builtins that need no
   type table: `JSON.parse`, `encode`, `from`, `object`, `array`, `null`,

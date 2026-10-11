@@ -475,8 +475,9 @@ fails when the committed file differs from what the generator prints.
   `~1`. Int is `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
 - The VM (`vm/json_typed.c`) walks the JSON tree and the type table with
   one explicit stack and builds the error path only on failure; schema
-  builds one schema per type-table entry in index order (entries only point
-  back), then the reachable structs with a queue. Neither recurses, so a
+  marks the types and structs reachable from the target with a queue, then
+  builds one schema per marked type in index order (entries only point
+  back). Neither recurses, so a
   recursive struct and a deep value are safe (7.3).
 
 ## 3. IR (7c)
@@ -556,7 +557,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `ok`, `error`, `Result.*` | Builtin calls: keys `ok` (arity 1, and arity 0 for `ok()`), `error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`, `Result.message`. `Result.Ok(x)` and `Result.Err(m)` are already `ok`/`error` calls after parsing, and method forms (`r.ok?`, `r.unwrap!`) are resolved calls. |
 | Interpolation | `step`, then the first part straight into the target; each later part into the next free slot, then `concat target target slot`. A string part is a `const`; an expression part is lowered as usual and followed by `to-text slot slot` unless it is a String. String parts charge no step. |
 | `.inspect` | `inspect`. `.to_s` follows what the checker resolved: the receiver itself for String, `String.from_int`/`from_float` for Int/Float, a one-part interpolation for other types. A `method-call` or `field-access` with `resolved` set lowers its resolved node without a step, and a `typed-target` lowers its expression, as `eval-expression` does. |
-| `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's linked name (`@2::User` when imported), as `type-expression` evaluates to it; the builtin finds the struct with that name in the Types section. A type that is not a user struct (a builtin record such as `Header`) is `LOWER-UNSUPPORTED` at the type argument. |
+| `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's linked name (`@2::User` when imported), as `type-expression` evaluates to it; the builtin finds the struct with that name in the Types section. A type without JSON field types (a builtin record such as `Header`, or a user struct whose fields reach one) is `LOWER-UNSUPPORTED` at the type argument; builtin records come with HTTP in 7h. |
 | `&name` | `step`, then `closure dst fn` with no captures (a new function value each time, like `function-value`). |
 | `f.call(...)` | `step` (invoke span), the target into the window base, the arguments after it, then `call-value base n` at the invoke span; the result lands in the base. |
 | Blocks | `step` (block span), then closure conversion (3.4). |
@@ -1142,9 +1143,11 @@ The loader validates the whole file before running anything. Failures print
   builtin record names only with their exact C layout; builtin `(name,
   arity)` pairs exist.
 - **Types**: at most 65535 types, each with a known kind; a List or Map
-  entry names an earlier type, a Struct entry a struct in range that has a
+  entry names an earlier type and nests at most 1024 List and Map levels
+  (the writer gives `BYTECODE-LIMIT` past that), a Struct entry a struct in range that has a
   decodable record; records name structs in range in increasing order (so
-  at most one each), have one field type per field (the count checked
+  at most one each) with distinct names (sorted, then adjacent names
+  compared), have one field type per field (the count checked
   against the bytes left), and every field type index is in range. So the
   only cycles go through named structs. `vm/tests/loader_test.c` checks
   each rule and truncation at every byte of a file with a type table.

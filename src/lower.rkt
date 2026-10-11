@@ -168,7 +168,9 @@
         (for/fold ([id id]) ([variant (in-list (ir-enum-variants entry))])
           (hash-set! variant-ids (cons (ir-enum-name entry) (car variant)) id)
           (add1 id)))
-      (define program-types (list user-types struct-info variant-ids))
+      (define json-structs
+        (for/hash ([entry (in-list structs)] #:when (ir-struct-types entry)) (values (ir-struct-name entry) #t)))
+      (define program-types (list user-types struct-info variant-ids json-structs))
       (define function-index
         (for/hash ([declaration (in-list declarations)] [index (in-naturals)])
           (values (function-decl-name declaration) index)))
@@ -204,7 +206,7 @@
 
 (define (lower-function name parameter-names capture-names statements function-span block? env)
   (match-define (list types program-types function-index unsupported note-source! new-block!) env)
-  (match-define (list user-types struct-info variant-ids) program-types)
+  (match-define (list user-types struct-info variant-ids json-structs) program-types)
   (define code '())
   (define next 0)
   (define high 0)
@@ -275,7 +277,7 @@
       [(type-expression? expression)
        (define name (type-expression-name expression))
        (define span (node-span expression))
-       (unless (hash-has-key? struct-info name)
+       (unless (hash-has-key? json-structs name)
          (unsupported (format "the type ~a" (display-name name)) span))
        (emit! 'step '() span)
        (define dst (target want))

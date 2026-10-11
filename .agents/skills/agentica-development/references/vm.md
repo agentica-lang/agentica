@@ -21,7 +21,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | Path | Owns |
 |---|---|
 | `vm/agc.h` | shared types, `agc_opcode` (same order as `opcodes` in `src/bytecode.rkt`) |
-| `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm.md` §8), including the struct and enum tables (one variant array sized by a first pass, one shared empty value per nullary variant) and the Types section (`load_types`: kinds, back-pointing List/Map entries, struct records with `json_name` and `field_types`) |
+| `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm.md` §8), including the struct and enum tables (one variant array sized by a first pass, one shared empty value per nullary variant) and the Types section (`load_types`: kinds, back-pointing List/Map entries at most 1024 deep, struct records with unique `json_name`s and `field_types`) |
 | `vm/value.c` | allocation (and the GC stress hook), checked accessors, String allocation, UTF-8 checks, OOM/abort handlers |
 | `vm/map.c` | maps: SipHash-1-3 over the value tag word then the key bytes (`agc_map_seed`, set from OS entropy in `vm/main.c`: `getrandom`, then `/dev/urandom`, else the fixed key), the persistent HAMT (`agc_map_put`, `agc_map_get`, `agc_map_delete`, and `_hash` variants that take a given hash, for tests), and `agc_map_keys` (insertion order from the reversed key list) |
 | `vm/text.c` | text and debug forms (`agc_text`, `agc_debug`; lists, maps, structs, enums and Results through one explicit `agc_alloc`'d stack and a growing String, names from the program's tables), `agc_concat`, and `agc_write_form`, the one Racket `write` escaper for Strings |
@@ -32,7 +32,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/numbers.c` | `Float`, `Time` and `Random` builtins (`agc_number_builtins`) |
 | `vm/random.c` | xoshiro256** seeded with splitmix64, both public domain (`agc_random_seed`, `agc_random_next`, `agc_random_float`, `agc_random_int`; `docs/vm.md` §7.4) |
 | `vm/json.c` | `Json` (`agc_json` nodes, 5.1) and the `JSON` builtins (`agc_json_builtins`): `agc_json_parse` (the Racket control-character pass, top-level numbers and literals by hand, strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack; `docs/vm.md` §2.6), `agc_json_encode` (the one `write-json` writer, for `JSON.encode` and the text form of a Json) and `agc_json_from` (builders), both over one explicit stack |
-| `vm/json_typed.c` | `agc_json_decode` and `agc_json_schema` (`docs/vm.md` §2.7): one explicit frame stack over the Json tree and the type table, the error path built from the frames only on failure; schema builds one schema per type entry in index order, then the reachable structs with a queue. The builtins in `vm/json.c` find the struct by its linked name (`json_name`) |
+| `vm/json_typed.c` | `agc_json_decode` and `agc_json_schema` (`docs/vm.md` §2.7): one explicit frame stack over the Json tree and the type table, the error path built from the frames only on failure; schema marks the types and structs reachable from the target with a queue, then builds their schemas in index order. The buffer, stack growth and ASCII helpers are `agc_json_put`, `agc_json_grow` and `agc_json_ascii` from `vm/json.c`. The builtins in `vm/json.c` find the struct by its linked name (`json_name`) |
 | `vm/input.c` | the only stdin reader (`agc_input_*`): one growing buffer shared by `gets`, `read`, `read_bytes` and `eof?`, blocking `read` (Linux `poll` on `EAGAIN`), U+FFFD decoding of consumed bytes, a pending EOF after a peek; 7h replaces it with libuv reads |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, byte-for-byte like `src/diagnostic.rkt` |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
@@ -178,7 +178,8 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
    `Float.to_int`, `Float.to_int!`, `Time.now_ms`, `Time.monotonic_ms`,
    `Random.int` and `Random.float`, and every `JSON.*` builtin (the type
    argument of `JSON.decode` and `JSON.schema` lowers to a String constant
-   with the struct's linked name) are
+   with the struct's linked name; a struct without JSON field types, such
+   as `Header` or a struct that contains one, is `LOWER-UNSUPPORTED`) are
    accepted; everything else is
    `LOWER-UNSUPPORTED`; the lowerer also emits `List.concat` and `Map.put`
    for list and map literals above 255 elements; the loader rejects `MAP`
