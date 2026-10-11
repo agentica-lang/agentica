@@ -141,12 +141,7 @@
            [(step-limited? (run-racket checked middle)) (narrow (add1 middle) high)]
            [else (narrow low middle)]))])))
 
-(define (sweep-limits total [stride #f])
-  (cond
-    [stride (remove-duplicates (append (range 1 (add1 total) stride) (list (max 1 (sub1 total)) total)))]
-    [else (default-limits total)]))
-
-(define (default-limits total)
+(define (sweep-limits total)
   (if (<= total full-sweep-limit)
       (range 1 (add1 total))
       (remove-duplicates
@@ -181,7 +176,7 @@
                               (format "~a ~a" name style))))
             (test-case (format "~a matches under every --max-steps" name)
               (define total (total-steps checked))
-              (for ([limit (in-list (sweep-limits total (sidecar #".sweep" file->value #f)))])
+              (for ([limit (in-list (sweep-limits total))])
                 (check-equal? (run-vm bytecode limit) (run-racket checked limit)
                               (format "~a --max-steps ~a" name limit))))))
 

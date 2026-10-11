@@ -232,6 +232,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
       case AGC_OP_CALL:
       case AGC_OP_TAIL_CALL:
         if (bx >= p->function_count) reject(r, "function index out of range");
+        if (p->functions[bx].captures) reject(r, "direct call to a function with captures");
         check_window(r, in.a, p->functions[bx].params, f);
         break;
       case AGC_OP_CALL_BUILTIN:

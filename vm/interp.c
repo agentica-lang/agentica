@@ -99,7 +99,7 @@ static void call_value(agc_vm *vm, agc_value value, uint32_t window, const agc_v
   const agc_fn *fn = agc_as_fn(vm, value);
   if (fn->function >= p->function_count || p->functions[fn->function].params != argc ||
       p->functions[fn->function].captures != fn->n)
-    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", 0);
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span);
   push_frame(vm, fn->function, window, ret, span);
   agc_value *R = vm->regs + window;
   if (args) memcpy(R, args, (size_t)argc * sizeof(agc_value));

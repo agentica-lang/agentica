@@ -904,6 +904,16 @@ int main(void) {
   s.registers = 3;
   agc_outcome arity = run_spec(s, stdout);
   assert(arity.kind == AGC_FAILED && strcmp(arity.code, "RUNTIME-INTERNAL") == 0);
+  s = base();
+  s.code = call_window;
+  s.code_spans = four_spans;
+  s.count = 4;
+  s.registers = 3;
+  s.helper_params = 1;
+  s.helper_captures = 1;
+  assert(!loads(s, "direct call to a function with captures"));
+  s.code = tail_window;
+  assert(!loads(s, "direct call to a function with captures"));
   static const agc_instr call_int[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   s = base();

@@ -138,6 +138,10 @@ def main() -> Void
     end
     i = i + 1
   end
+  made = [3, 4].reduce(keep() do |x: Int| x end) do |acc, k|
+    keep() do |x: Int| acc.call(x) * k + base end
+  end
+  puts(made.call(1))
   noop = [1, 2].map do |x|
     puts("visit #{x}")
     x

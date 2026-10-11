@@ -135,6 +135,7 @@ agc_string *agc_input_all(agc_vm *vm) {
     if (r < 0) read_failed(vm);
     if (r == 0) break;
   }
+  if (!in->buf) return agc_new_string(0, 0);
   agc_string *text = decode(in->buf + in->start, in->end - in->start);
   in->start = in->end;
   return text;

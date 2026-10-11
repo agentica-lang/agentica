@@ -547,7 +547,7 @@ appended `TAIL_CALL` (40); the Result PR appended `TRY IS_OK RESULT_VALUE`
 `CALL_VALUE CLOSURE` (47). `CLOSURE` takes the capture count from the
 function table; `CALL_VALUE` checks that `R[a]` is a function value whose
 function takes exactly `b` parameters and has as many captures as the
-value holds (otherwise `RUNTIME-INTERNAL`). `EQ`/`NE`
+value holds (otherwise `RUNTIME-INTERNAL` at the call's span). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
@@ -966,8 +966,9 @@ The loader validates the whole file before running anything. Failures print
 - **Entry**: exists, with no parameters or captures.
 - **Closures**: `CALL_VALUE` checks the window `a..a+b`; `CLOSURE` checks
   the function index and the window of that function's captures (`a`
-  itself when it has none). A `CALL_VALUE` counts as a call for the
-  termination rules.
+  itself when it has none). `CALL` and `TAIL_CALL` may not name a
+  function with captures (only `CALL_VALUE` fills them). A `CALL_VALUE`
+  counts as a call for the termination rules.
 - **In the slice**: constant kinds above 6 are
   rejected. Struct field counts and variant arities are at most 65535. All
   variants go into one array sized by a first pass over the Enums section,
@@ -1010,7 +1011,8 @@ The loader validates the whole file before running anything. Failures print
   and `RUNTIME-INTERNAL` for a Void key or a `MAP_GET` on a list), a
   `Map.put` import of the wrong arity, the `CALL_VALUE` window, a
   `CALL_VALUE` that does not start its function with a `STEP`, a `CLOSURE`
-  of a function out of range or with a capture window out of range,
+  of a function out of range or with a capture window out of range, a
+  `CALL` or `TAIL_CALL` of a function with captures,
   captures that do not fit the registers, an entry with captures (and, at
   run time, a `CLOSURE` called through `CALL_VALUE`, `List.map` with a
   closure, and `RUNTIME-INTERNAL` for a call of a non-function and for a
@@ -1421,10 +1423,7 @@ the platform's OpenSSL package) to each job.
   total step count with the evaluator and sweeps every limit from 1 to it
   when the total is at most 2000; above that (the call-depth program, about
   60,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
-  and the total minus one. A fixture with a `name.sweep` file (a stride,
-  read with `file->value`) sweeps every stride-th limit from 1 plus the
-  total and the total minus one instead, which keeps big fixtures cheap.
-  The run without a limit compares all three
+  and the total minus one. The run without a limit compares all three
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. Programs using `Random` run with several `--seed` values.

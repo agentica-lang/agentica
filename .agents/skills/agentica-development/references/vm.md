@@ -314,9 +314,6 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   builtin's call span). Deep recursion through a callback must not use
   `return f(...)` in the block in a fixture: that is a tail call on the
   VM only.
-- `tests/vm-diff-test.rkt` reads an optional `name.sweep` next to a
-  fixture: a stride for the `--max-steps` sweep, so big fixtures stay
-  cheap (`closures`, `list-callbacks`, `callback-overflow`).
 - Results: `ok`, `error` and `Result.*` are builtins (`vm/builtins.c`);
   `try`, `is-ok` and `result-value` are opcodes. A Result pattern is a
   `variant-pattern` with enum name `"Result"` and variant `"Ok"` or `"Err"`
