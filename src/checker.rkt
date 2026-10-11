@@ -303,13 +303,12 @@
          (list 'Struct name)]
         [else
          (bail 'CHECK-UNKNOWN-TYPE
-               (format "unknown type \"~a\"" name)
+               (format "unknown type \"~a\"" (display-name name))
                (type-ref-span reference)
                #:help (did-you-mean name
-                                    (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
-                                            (map symbol->string opaque-types)
-                                            (hash-keys structs)
-                                            (hash-keys enums))))]))
+                                    (append (hash-keys structs) (hash-keys enums))
+                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
+                                                     (map symbol->string opaque-types))))]))
 
     ;; Scopes ---------------------------------------------------------------
 
@@ -946,7 +945,7 @@
               (format "unknown function \"~a\"" (display-name name))
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
-                         (did-you-mean name (append (hash-keys functions) (hash-keys builtins))))))
+                         (did-you-mean name (hash-keys functions) #:shared (hash-keys builtins)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))

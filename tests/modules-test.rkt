@@ -197,7 +197,27 @@
        (check-equal? (list (source-position-line start) (source-position-column start)) '(3 7))
        (define arity (checked (build-path directory "arity.agc")))
        (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
-       (check-false (regexp-match? #rx"@" (diagnostic-callee arity))))))
+       (check-false (regexp-match? #rx"@" (diagnostic-callee arity)))))
+    (with-files
+     '(("bad.agc" . "struct Point\n  x: Int\nend\n\nstruct Pair\n  p: Pont\nend\n\n")
+       ("calls.agc" . "def helper() -> Int\n  return 1\nend\n\nexport def go() -> Int\n  return helpr()\nend\n\n")
+       ("types.agc" . "import \"bad.agc\" as B\ndef main() -> Void\nend\n\n")
+       ("funcs.agc" . "import \"calls.agc\" as C\n\ndef helpe() -> Int\n  return 2\nend\n\ndef main() -> Void\n  n = C.go()\nend\n\n"))
+     (lambda (directory)
+       (define type-problem (checked (build-path directory "types.agc")))
+       (check-equal? (diagnostic-code type-problem) 'CHECK-UNKNOWN-TYPE)
+       (define span (diagnostic-span type-problem))
+       (check-equal? (source-name (source-span-source span)) (path->string (build-path directory "bad.agc")))
+       (check-equal? (list (source-position-line (source-span-start span))
+                           (source-position-column (source-span-start span)))
+                     '(6 6))
+       (check-true (string? (diagnostic-help type-problem)))
+       (check-false (regexp-match? #rx"@" (diagnostic-help type-problem)))
+       (define call-problem (checked (build-path directory "funcs.agc")))
+       (check-equal? (diagnostic-code call-problem) 'CHECK-UNKNOWN-NAME)
+       (check-true (string? (diagnostic-help call-problem)))
+       (check-regexp-match #rx"helper" (diagnostic-help call-problem))
+       (check-false (regexp-match? #rx"@" (diagnostic-help call-problem))))))
 
   (test-case "module errors are located and do not expose private declarations"
     (for ([entry

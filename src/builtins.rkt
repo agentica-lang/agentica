@@ -229,12 +229,21 @@
     (vector-copy! last-row 0 row))
   (vector-ref last-row n))
 
-(define (did-you-mean name candidates)
+(define (name-prefix name)
+  (car (or (regexp-match #rx"^@[0-9]+::" name) '(""))))
+
+(define (did-you-mean full-name candidates #:shared [shared '()])
+  (define prefix (name-prefix full-name))
+  (define name (display-name full-name))
   (define limit (if (<= (string-length name) 4) 1 2))
+  (define pool
+    (append (for/list ([candidate (in-list candidates)]
+                       #:when (string=? (name-prefix candidate) prefix))
+              (display-name candidate))
+            shared))
   (define near
-    (sort (for/list ([candidate (in-list (remove-duplicates candidates))]
+    (sort (for/list ([candidate (in-list (remove-duplicates pool))]
                      #:unless (string=? candidate name)
-                     #:unless (regexp-match? #rx"^@[0-9]+::" candidate)
                      #:when (<= (edit-distance name candidate) limit))
             candidate)
           (lambda (x y)
