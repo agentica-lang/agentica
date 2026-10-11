@@ -288,7 +288,12 @@ fails when the committed file differs from what the generator prints.
   cursor is closest, and the cursor moves to just after the result. So a
   loop `s.at(j)` over `j` from 0 or down from the end costs O(1) per call,
   like the evaluator's O(1) `string-ref`; jumping around a long non-ASCII
-  string costs O(distance). Every function is one or two
+  string costs O(distance). The cursor keeps the last non-ASCII string
+  indexed by `at` or `slice` reachable until the next such call.
+  `agc_utf8_next`, the one decoder shared by these builtins and
+  `agc_write_form`, expects valid UTF-8 and a code point start (every VM
+  String is valid UTF-8); on a truncated tail it stays inside the buffer.
+  Every function is one or two
   O(n) passes that size the result first, then fill it; substring search
   is byte-wise Knuth-Morris-Pratt (a valid UTF-8 match always starts on a
   code point), so `split`, `replace`, `contains?` and `index_of` stay

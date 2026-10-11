@@ -108,6 +108,30 @@ int main(void) {
     if (k % 97 == 0) assert(agc_utf8_offset(&vm, other, 3) == 4);
   }
   free(built);
+  size_t n = 4096;
+  char *accents = malloc(2 * n + 1);
+  assert(accents);
+  for (size_t k = 0; k < n; k++) memcpy(accents + 2 * k, "\xc3\xa9", 2);
+  accents[2 * n] = '\0';
+  agc_string *e = text(accents);
+  free(accents);
+  memset(&vm, 0, sizeof vm);
+  for (size_t k = 0; k < n; k++) {
+    assert(agc_utf8_offset(&vm, e, k) == 2 * k);
+    assert(vm.cursor == e && vm.cursor_index == k && vm.cursor_offset == 2 * k);
+  }
+  vm.cursor_index = 1000;
+  vm.cursor_offset = 2 * 999;
+  assert(agc_utf8_offset(&vm, e, 1001) == 2 * 1000);
+  vm.cursor_index = 1000;
+  vm.cursor_offset = 2 * 999;
+  assert(agc_utf8_offset(&vm, e, 999) == 2 * 998);
+  vm.cursor_index = 3000;
+  vm.cursor_offset = 2 * 2999;
+  assert(agc_utf8_offset(&vm, e, 2990) == 2 * 2989);
+  vm.cursor = NULL;
+  assert(agc_utf8_offset(&vm, e, 4000) == 2 * 4000);
+  assert(agc_utf8_offset(&vm, e, 10) == 2 * 10);
 
   find_is("aaab", "aab", 0, 1);
   find_is("abababc", "ababc", 0, 2);
