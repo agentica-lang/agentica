@@ -20,9 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and linked statically; `agentica-vm --version` names it. A resource
   registry owns open handles and pending requests until libuv is done with
   them, thread-pool threads never touch GC memory, and descriptors are
-  close-on-exec. The VM writes each `File.write` through at once, while the
-  evaluator buffers up to 4 KiB until `File.flush` or `File.close`.
+  close-on-exec.
 
+- The bytecode VM runs linked programs: relative, `std/` (such as
+  `std/queue.agc`) and `pkg/` imports, linked by the front end into one
+  bytecode file. A runtime error inside an imported file reports that
+  file's path, line and column, as the evaluator does.
 - The bytecode VM runs `JSON.decode` and `JSON.schema` for user structs,
   with the evaluator's error values and paths and byte-identical schemas
   (imported structs keep their linked `$defs` names). Deep and recursive

@@ -49,7 +49,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
-| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator, split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`) |
+| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator, split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue.agc` |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
@@ -142,6 +142,23 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   Windows. The `platforms.yml` workflow, run by hand, runs `make vm vm-test`
   and the diff and bytecode tests on `macos-15` and `windows-2025`, not the
   whole `make test`; run it before merging platform code.
+
+## Linked programs
+
+Imports never reach the VM. `src/main.rkt` (`compile`, `--vm`) and
+`compile-file` in `tests/vm-diff-common.rkt` run `link-program`
+(`src/modules.rkt`) before `check`, so `lower` sees one program whose
+imported declarations carry `@N::` prefixes (display names drop them,
+`write-bytecode` uses `display-name`). The span table names its source
+per span: `lower` collects every `source` a span points to (`note-source!`,
+entry file first), and `vm/diag.c` prints `p->sources[span->source]`, so a
+diagnostic in imported code shows that file as the evaluator does (full
+path, or `std/queue.agc` for an embedded module). Block function names use
+only the file's base name, so two imported files may give equal
+`block@m.agc:2:17` names (the `same-basename` fixture); nothing looks
+functions up by name. A std module
+that needs a builtin the VM lacks fails with `LOWER-UNSUPPORTED` at that
+call in the module's file.
 
 ## Widen the subset (new form or opcode)
 

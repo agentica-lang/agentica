@@ -419,9 +419,10 @@
       (dynamic-wind
         void
         (lambda ()
-          (for* ([name (in-list '("calls.agc" "division-by-zero.agc"))]
+          (for* ([name (in-list '("calls.agc" "division-by-zero.agc" "linked.agc"))]
                  [style (in-list '(() ("--ai") ("--json")))])
-            (apply same (append style (list (path->string (build-path fixtures name))))))
+            (define result (apply same (append style (list (path->string (build-path fixtures name))))))
+            (when (equal? name "linked.agc") (check-equal? (first result) 1)))
           (define calls (path->string (build-path fixtures "calls.agc")))
           (check-equal? (first (same "--max-steps" "3" calls)) 1)
           (check-equal? (first (same calls "first" "--allow-run" "--json")) 0)

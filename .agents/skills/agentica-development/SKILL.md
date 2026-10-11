@@ -17,9 +17,10 @@ make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
 racket src/main.rkt check examples/blocks.agc
 make vm vm-test                           # the C VM and its loader tests (references/vm.md)
+make dup-check                            # jscpd copy-paste check over src/*.rkt and vm/ C code
 ```
 
-Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the network tests against the compiled executable, and every example smoke run; it is the source of truth for that list. Use the standard library only; the project adds no dependencies.
+Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the network tests against the compiled executable, and every example smoke run; it is the source of truth for that list. It also runs `make dup-check`: a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 
 ## Repository map
 
