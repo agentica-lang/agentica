@@ -155,9 +155,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now it gives `["a", ""]`, and `join` after `split` gives back the text.
 - `vm/gen-unicode.rkt` moved to `vm/tools/gen-unicode.rkt`; `make vm-unicode`
   runs it from there and writes the same `vm/unicode_data.c`.
-- CI runs on pull requests only, and only on Linux; pull requests that
-  change only docs, the site or Markdown skip it. Compiled Racket files are
-  cached per job. The macOS and Windows VM jobs moved to
+- CI runs its checks on pull requests only, and only on Linux; pull
+  requests that change only docs, the site or Markdown skip it. A push to
+  `master` runs no checks: it only warms the compiled Racket files cache and
+  the `vm/unicode_data.c` check cache, so new pull requests start warm.
+  Compiled Racket files are cached per job; `vm-sanitizers` and the site
+  examples job fall back to the `test` job's cache. The macOS and Windows VM jobs moved to
   `.github/workflows/platforms.yml` and the fuzz workflow no longer runs
   weekly; both run by hand. The site is built only on `master`, by the
   Pages workflow. The Linux workflows run on a self-hosted runner.
