@@ -18,6 +18,7 @@ permissions:
 jobs:
   site-examples:
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - id: racket
@@ -34,5 +35,13 @@ jobs:
           variant: CS
           version: '9.3'
           dest: ${{ steps.racket.outputs.dir }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            src/compiled
+            tests/compiled
+          key: racket-zo-${{ github.job }}-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
+          restore-keys: racket-zo-${{ github.job }}-9.3-
+      - run: git ls-files -z | xargs -0 touch
       - run: make build
       - run: raco test tests/site-examples-test.rkt

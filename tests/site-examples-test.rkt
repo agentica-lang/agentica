@@ -78,7 +78,7 @@
          (cond
            [(member (block-lang b) '("input" "output"))
             (check-true (and previous #t) (format "~a: ~a block without a program before it" where (block-lang b)))
-            (loop (cdr rest) previous)]
+            (loop (cdr rest) (and (equal? (block-lang b) "input") previous))]
            [(and (program? b) (hash-ref attributes "file" #f))
             (hash-update! counts 'module add1 0)
             (loop (cdr rest) #f)]
