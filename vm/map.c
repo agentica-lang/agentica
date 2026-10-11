@@ -2,28 +2,8 @@
 
 #include <string.h>
 
-typedef struct {
-  agc_hamt *child;
-  uint64_t hash;
-  agc_value key, value;
-} hamt_entry;
-
-struct agc_hamt {
-  uint32_t bitmap, n;
-  hamt_entry entries[];
-};
-
 #define HAMT_BITS 5u
 #define HAMT_HASH_BITS 64u
-
-static uint64_t sip_k0 = 0x0706050403020100ULL, sip_k1 = 0x0f0e0d0c0b0a0908ULL;
-
-void agc_map_seed(uint64_t k0, uint64_t k1) {
-  sip_k0 = k0;
-  sip_k1 = k1;
-}
-
-static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b)); }
 
 #define SIPROUND                                                                                   \
   do {                                                                                             \
@@ -42,6 +22,26 @@ static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b))
     v1 ^= v2;                                                                                      \
     v2 = rotl(v2, 32);                                                                             \
   } while (0)
+
+typedef struct {
+  agc_hamt *child;
+  uint64_t hash;
+  agc_value key, value;
+} hamt_entry;
+
+struct agc_hamt {
+  uint32_t bitmap, n;
+  hamt_entry entries[];
+};
+
+static uint64_t sip_k0 = 0x0706050403020100ULL, sip_k1 = 0x0f0e0d0c0b0a0908ULL;
+
+void agc_map_seed(uint64_t k0, uint64_t k1) {
+  sip_k0 = k0;
+  sip_k1 = k1;
+}
+
+static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b)); }
 
 static uint64_t siphash13(uint64_t domain, const uint8_t *in, size_t len) {
   uint64_t v0 = 0x736f6d6570736575ULL ^ sip_k0, v1 = 0x646f72616e646f6dULL ^ sip_k1;
