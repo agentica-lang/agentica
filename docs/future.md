@@ -407,8 +407,10 @@ def main() -> Void
 end
 ```
 
-- `Table[K, V]` is a builtin opaque generic, like `Task[T]`. A table value is a handle: assigning or passing it shares the same table, it does not copy it. This is the one place where Agentica has shared mutable state, so the name and the type say so.
-- Keys are `Int` or `String`, like `Map`. Values are data: anything that `Map` holds except functions, tasks, tables and resources (ports, processes, sockets). A value is copied in on `put` and is immutable once stored, so a reader never sees a half-written value.
+- `Table[K, V]` is a builtin opaque generic, like `Task[T]`. A table value is a handle: assigning or passing it shares the same table, it does not copy it. This is the one place where data values are shared and mutable, so the name and the type say so.
+- **Nesting:** a `Table` may be a struct field, a list element, a `Map` value, or a `Task.spawn` argument or result. It may not be stored inside a table (next rule).
+- **Keys and values:** keys are `Int` or `String`. The rule on `V` is deep: no `Fn`, `Task`, `Table` or resource (ports, processes, sockets, listeners) anywhere inside it, including struct fields, list elements, enum payloads, `Map` values and `Result`. The checker enforces it wherever a `Table[K, V]` type is written or inferred, with `CHECK-TABLE-VALUE` (span on the type, or on `Table.new()` when inferred).
+- **Sharing values:** values are immutable, so storing one shares it safely. Each call is atomic, so a reader sees either the old value or the new one.
 - Functions (also methods, with the table first):
 
   | Function | Result |
@@ -418,12 +420,14 @@ end
   | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent; `false` leaves the table unchanged (ETS `insert_new`) |
   | `Table.get(t, k: K) -> Result[V]`, `Table.has_key?(t, k: K) -> Bool` | |
   | `Table.delete(t, k: K) -> Void` | absent keys are ignored |
-  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent counts as 0) and returns the new value, atomically (ETS `update_counter`) |
-  | `Table.size(t) -> Int`, `Table.keys(t) -> List[K]`, `Table.to_map(t) -> Map[K, V]` | snapshots, in first-insertion order |
+  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent counts as 0) and returns the new value, atomically (ETS `update_counter`); overflow halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the table unchanged |
+  | `Table.size(t) -> Int`, `Table.keys(t) -> List[K]`, `Table.to_map(t) -> Map[K, V]` | snapshots, in first-insertion order; a key deleted and then put again goes to the end, as in `Map` |
 
+- **Left out on purpose:** `get` with a default and `values`, which `Map` has. Use `Result.unwrap_or` and `to_map`.
+- **Costs:** `get`, `put`, `put_new`, `has_key?`, `delete`, `add` and `size` take at most O(log n) in the table size (unlike `Map.delete`, which is O(n)). `keys` and `to_map` are O(n) and hold the lock for that time.
 - **Atomicity:** each call is atomic on its own. There are no transactions over several keys and no user code runs while the table is locked (no `update` with a block), so a call cannot deadlock or re-enter the table. A read-modify-write on a non-counter value uses `put_new` or a single owner task.
-- **Lifetime:** a table lives while some value refers to it; the garbage collector frees it. There is no owner process and no named global table, unlike ETS: a task reaches a table only through a handle it was given. A table does not outlive the evaluation.
+- **Lifetime:** a table lives while some value refers to it; the garbage collector frees it. There is no owner process and no named global table, unlike ETS: a task reaches a table only through a handle it was given. A table does not outlive the evaluation. A handle used in another evaluation, such as a BDD handler run or a nested evaluation, halts with `RUNTIME-TABLE-CONTEXT`, like `RUNTIME-TASK-CONTEXT` for tasks.
 - **No `==`, no JSON, text form `<Table>`.** `IO.inspect` does not print the contents; use `to_map`.
 - **Not in the first version:** ordered tables (`ordered_set`), duplicate keys (`bag`), match specifications, and tables shared between OS processes. Each waits for a real program.
-- **Effects:** `Table.put`, `delete` and `add` are effects, so `CHECK-UNUSED-VALUE` never fires on them, and `Table.add`'s result may be ignored.
-- **Backends:** the evaluator guards each table with a Racket semaphore; the VM with one lock per table on top of its task scheduler (7h). Both land in the same PR.
+- **Effects:** `Table.put`, `put_new`, `delete` and `add` are effects with a new label, `table`, so ignoring their result never gives `CHECK-UNUSED-VALUE`.
+- **Backends:** the contract is only that each call is atomic; the implementation PR picks the mechanism (a lock per table is one possible way). The evaluator and the VM land in the same PR.

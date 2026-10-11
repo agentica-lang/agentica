@@ -13,8 +13,9 @@ structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
 done; the rest of item 5 (5c to 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (5e), in parallel with the rest of
-phase 7; queues also need only 5e, and sets need the VM maps (5d). Real applications and
-MCP follow;
+phase 7; queues also need only 5e, and sets need the VM maps (5d). Shared
+tables (phase 9) follow phase 8; they need tasks on the VM (7h). Real
+applications and MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
 order governs pending work rather than their numeric order.
@@ -27,10 +28,11 @@ order governs pending work rather than their numeric order.
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
 | 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7): the vertical slice is in; widen it PR by PR (`docs/vm.md` §12.2) | Run checked programs much faster, with the same output and diagnostics |
 | 6 | Core data structures (phase 8): ranges first (may start after 7e PR 5e), then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
-| 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 8 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 7 | Shared tables (phase 9): `Table[K, V]`, after tasks on the VM (7h) | Share a cache or a counter between tasks without copying it |
+| 8 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 9 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
-After steps 1–2, target everyday scripts and automation. After steps 7–8,
+After steps 1–2, target everyday scripts and automation. After steps 8–9,
 target larger general-purpose programs. Keep diagnostics, behavior tests,
 grammar, and the self-contained programming reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
@@ -1186,8 +1188,8 @@ Specified in [`future.md` section 12](future.md#12-data-structures). Each item l
 
 Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs lightweight tasks on the VM (7h), so it starts after Phase 7 and lands in both backends in one PR, with `grammar.md`, the programming skill, the site docs and tests.
 
-- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `Table` becomes a reserved type and module name (say so in the changelog).
-- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; a table is freed once unreachable.
+- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `CHECK-TABLE-VALUE`, `RUNTIME-TABLE-CONTEXT` and the `table` effect label. `Table` becomes a reserved type and module name (say so in the changelog). `grammar.md` gets a `Table` exception to its "values are immutable" rule, and its sentence that effects describe I/O only is updated.
+- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; no leak in a stress loop that creates and drops many tables.
 - [ ] Later, each after a real program needs it: ordered tables, duplicate keys, a block-based `update`.
 
 **Done when:** an example with several tasks sharing a cache and a counter runs on both backends with the same output.
