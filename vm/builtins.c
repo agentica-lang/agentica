@@ -217,15 +217,13 @@ static agc_value builtin_map_size(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value map_walk(agc_vm *vm, agc_value map, bool values, uint32_t span) {
   const agc_map *m = agc_as_map(vm, map);
+  agc_value *keys = agc_map_keys(vm, m, span);
   agc_list *l = agc_new_list(m->size);
-  size_t k = m->size;
-  for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) {
-    agc_value item = cell->key;
-    if (values && !agc_map_get(vm, m, cell->key, &item))
+  for (size_t k = 0; k < m->size; k++) {
+    l->items[k] = keys[k];
+    if (values && !agc_map_get(vm, m, keys[k], &l->items[k]))
       agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
-    l->items[--k] = item;
   }
-  if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
   return agc_list_value(l);
 }
 

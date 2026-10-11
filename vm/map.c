@@ -227,11 +227,11 @@ bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value) 
   return agc_map_get_hash(vm, m, agc_key_hash(vm, key), key, value);
 }
 
-agc_value *agc_map_keys(agc_vm *vm, const agc_map *m) {
+agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   agc_value *keys = agc_alloc(agc_size_mul(m->size, sizeof(agc_value)));
   size_t k = m->size;
   for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) keys[--k] = cell->key;
-  if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", 0);
+  if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
   return keys;
 }
 
