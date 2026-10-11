@@ -17,7 +17,7 @@ int agc_fuzz_one(const uint8_t *data, size_t len) {
   jmp_buf over_limit;
   if (setjmp(over_limit)) {
     agc_release_all();
-    return 1;
+    return 2;
   }
   agc_set_alloc_limit(&over_limit, ALLOC_LIMIT);
   agc_program *program = NULL;

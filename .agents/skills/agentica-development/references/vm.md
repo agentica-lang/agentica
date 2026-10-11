@@ -42,6 +42,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/float_text_test.c` | Float text against values printed by Racket (`docs/vm.md` §2.2) |
 | `vm/tests/string_test.c` | UTF-8 helpers over every code point, case mapping (special cases, final sigma), KMP search on repetitive text, Int and Float parsing edge cases with the bits Racket gives |
 | `vm/tests/json_test.c` | the sign of zero (`-0.0`, `-1e-500`), escapes, key order and dedupe on 5,000 keys, depth-1,000,000 arrays and objects parsed and encoded, a deep list through `JSON.from` (100,000 under ASan's `AGC_NO_GC`, 1,000 under `AGC_GC_STRESS`); parse statuses and number edge cases live in the `json-*` fixtures |
+| `vm/tests/budget_test.c` | under `AGC_NO_GC`, an allocation past `agc_set_alloc_limit` longjmps once, and after `agc_release_all` no limit is set |
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
@@ -282,9 +283,11 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `value.c` calls `GC_*` or includes `gc.h`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant
   (`agc_release_all`), so never cache an `agc_alloc` pointer in a static.
-  It also sets a 256 MB budget (`agc_set_alloc_limit`); an allocation past it
-  longjmps out of the mutant, so anything outside the agc heap (a libuv loop,
-  a yyjson doc) must be closed there too.
+  It also sets a 256 MB budget (`agc_set_alloc_limit`, blocks tracked only
+  while it is set); an allocation past it longjmps out of the mutant and
+  `agc_fuzz_one` returns 2. yyjson allocates through `agc_alloc_atomic` under
+  `AGC_NO_GC` for this reason; anything else outside the agc heap (a libuv
+  loop) must be closed on that path too.
 - Never keep a GC pointer in `malloc` memory, an atomic object or a
   `_Thread_local`; never tag pointers. Frames hold register offsets, not
   pointers, because the register array moves when it grows.

@@ -12,7 +12,9 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 #include <gc.h>
 #endif
 
+#ifdef AGC_NO_GC
 #define BLOCK_COST ((size_t)64)
+#endif
 
 static const char oom_line[] = "agentica-vm: out of memory\n";
 
@@ -67,8 +69,9 @@ unsigned agc_gc_version(void) {
 
 #ifdef AGC_NO_GC
 static void *own(size_t size) {
+  if (!on_limit) return calloc(1, size);
   size_t cost = size > SIZE_MAX - BLOCK_COST ? SIZE_MAX : size + BLOCK_COST;
-  if (on_limit && cost > limit_bytes - owned_bytes) longjmp(*on_limit, 1);
+  if (owned_bytes > limit_bytes || cost > limit_bytes - owned_bytes) longjmp(*on_limit, 1);
   void *p = calloc(1, size);
   if (!p) agc_out_of_memory();
   owned_bytes += cost;

@@ -154,7 +154,8 @@ int main(int argc, char **argv) {
     current = buffer;
     current_len = len;
     current_index = n;
-    if (agc_fuzz_one(buffer, len) == 1) accepted++;
+    int result = agc_fuzz_one(buffer, len);
+    if (result == 1 || result == 2) accepted++;
   }
   printf("fuzz: %ld mutants, %ld accepted and run\n", iterations, accepted);
   return 0;
