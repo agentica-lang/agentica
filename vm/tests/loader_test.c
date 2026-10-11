@@ -360,6 +360,38 @@ int main(void) {
   assert(!loads(s, "register range"));
   s.registers = 3;
   assert(loads(s, NULL));
+  static const agc_instr tail_window[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 1, 1, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s = base();
+  s.code = tail_window;
+  s.code_spans = four_spans;
+  s.count = 4;
+  s.registers = 2;
+  s.helper_params = 2;
+  assert(!loads(s, "register range"));
+  s.registers = 3;
+  assert(loads(s, NULL));
+  out = tmpfile();
+  assert(out);
+  assert(run_spec(s, out).kind == AGC_DONE);
+  expect_output(out, "");
+  static const agc_instr tail_far[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 2, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(tail_far, four_spans, 4, "function index out of range"));
+  static const agc_instr tail_without_step[] = {{AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(tail_without_step, two_spans, 2, "does not start with STEP"));
+  static const agc_instr tail_spin[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t tail_spin_spans[] = {1, 1, 0};
+  s = base();
+  s.code = tail_spin;
+  s.code_spans = tail_spin_spans;
+  s.count = 3;
+  buffer spin_file = build(s);
+  assert(agc_load(spin_file.data, spin_file.len, &p, error, sizeof error));
+  free(spin_file.data);
+  agc_vm_init(&vm, p, stdout, stdout, 100000);
+  agc_outcome spun = agc_vm_run(&vm);
+  assert(spun.kind == AGC_FAILED && strcmp(spun.code, "RUNTIME-STEP-LIMIT") == 0 && spun.span == 1 && vm.depth == 1);
   static const agc_instr builtin_window[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static const uint32_t builtin_spans[] = {1, 1, 0, 0};

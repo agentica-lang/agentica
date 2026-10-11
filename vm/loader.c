@@ -126,7 +126,8 @@ static void check_spans(reader *r, const agc_program *p, uint32_t first, uint32_
 
 static bool calls_anything(const agc_function *f) {
   for (uint32_t pc = 0; pc < f->count; pc++)
-    if (f->code[pc].op == AGC_OP_CALL || f->code[pc].op == AGC_OP_CALL_BUILTIN) return true;
+    if (f->code[pc].op == AGC_OP_CALL || f->code[pc].op == AGC_OP_TAIL_CALL || f->code[pc].op == AGC_OP_CALL_BUILTIN)
+      return true;
   return false;
 }
 
@@ -219,6 +220,7 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
         if (bx <= pc && f->code[bx].op != AGC_OP_STEP) reject(r, "backward jump does not target a STEP");
         break;
       case AGC_OP_CALL:
+      case AGC_OP_TAIL_CALL:
         if (bx >= p->function_count) reject(r, "function index out of range");
         check_window(r, in.a, p->functions[bx].params, f);
         break;

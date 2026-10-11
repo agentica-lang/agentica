@@ -20,7 +20,8 @@
     add-f sub-f mul-f div-f neg-f lt-f le-f
     concat to-text inspect
     list list-len list-get
-    struct field enum is-variant payload same))
+    struct field enum is-variant payload same
+    tail-call))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -127,7 +128,7 @@
                   [(step) (list (first args) 0 0)]
                   [(jump) (wide 0 (hash-ref labels (first args)))]
                   [(jump-if-false jump-if-true) (wide (first args) (hash-ref labels (second args)))]
-                  [(call) (wide (first args) (second args))]
+                  [(call tail-call) (wide (first args) (second args))]
                   [(call-builtin) (wide (first args) (builtin! (second args) (third args)))]
                   [(return) (list (first args) 0 0)]
                   [else args]))))
