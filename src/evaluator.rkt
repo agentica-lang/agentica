@@ -383,13 +383,13 @@
         [(result-error? value) (format "error(~s)" (result-error-message value))]
         [(enum-value? value)
          (define payload (enum-value-payload value))
-         (format "~a.~a~a" (enum-value-type-name value) (enum-value-variant-name value)
+         (format "~a.~a~a" (display-type-name (enum-value-type-name value)) (enum-value-variant-name value)
                  (if (null? payload) ""
                      (format "(~a)" (string-join (map value->debug-string payload) ", "))))]
         [(instance? value)
          (define field-order (hash-ref struct-fields (instance-type-name value) '()))
          (format "~a(~a)"
-                 (instance-type-name value)
+                 (display-type-name (instance-type-name value))
                  (string-join
                   (for/list ([field (in-list field-order)])
                     (format "~a: ~a" field

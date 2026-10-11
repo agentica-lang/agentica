@@ -296,7 +296,7 @@
          (unless (= (length parameters) (length arguments))
            (bail 'CHECK-UNKNOWN-TYPE
                  (format "enum ~a expects ~a type argument(s), found ~a"
-                         name (length parameters) (length arguments))
+                         (display-type-name name) (length parameters) (length arguments))
                  (type-ref-span reference)))
          (cons 'Enum (cons name (map resolve-type arguments)))]
         [(and (hash-has-key? structs name) (null? arguments))
@@ -978,12 +978,12 @@
       (define payload-types (hash-ref variants variant-name #f))
       (unless payload-types
         (bail 'CHECK-UNKNOWN-VARIANT
-              (format "enum \"~a\" has no variant \"~a\"" enum-name variant-name)
+              (format "enum \"~a\" has no variant \"~a\"" (display-type-name enum-name) variant-name)
               span))
       (unless (= (length arguments) (length payload-types))
         (bail 'CHECK-ARITY
               (format "variant ~a.~a expects ~a argument(s), found ~a"
-                      enum-name variant-name (length payload-types) (length arguments))
+                      (display-type-name enum-name) variant-name (length payload-types) (length arguments))
               span))
       (when (ormap named-arg? arguments)
         (bail 'CHECK-ENUM-POSITIONAL-ARGS "enum variants use positional arguments" span))
@@ -1009,7 +1009,7 @@
       (when (pair? unresolved)
         (bail 'CHECK-ENUM-TYPE-INFERENCE
               (format "cannot infer enum type parameter(s) ~a for ~a.~a"
-                      (string-join unresolved ", ") enum-name variant-name)
+                      (string-join unresolved ", ") (display-type-name enum-name) variant-name)
               span))
       (define result-type
         (cons 'Enum (cons enum-name (map (lambda (parameter)
@@ -1332,11 +1332,11 @@
            (unless payload-types
              (if (and enum-definition (equal? enum-name (cadr value-type)))
                  (bail 'CHECK-UNKNOWN-VARIANT
-                       (format "enum \"~a\" has no variant \"~a\"" enum-name variant-name)
+                       (format "enum \"~a\" has no variant \"~a\"" (display-type-name enum-name) variant-name)
                        (node-span pattern))
                  (bail 'CHECK-PATTERN-TYPE
                        (format "variant pattern \"~a.~a\" does not match ~a"
-                               enum-name variant-name (type->string value-type))
+                               (display-type-name enum-name) variant-name (type->string value-type))
                        (node-span pattern))))
            (when (member variant-name covered-variants)
              (bail 'CHECK-UNREACHABLE-CASE-ARM "duplicate enum variant arm" (node-span arm)))

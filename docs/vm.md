@@ -240,11 +240,13 @@ fails when the committed file differs from what the generator prints.
   `<FileHandle>`, `<Process>`.
 - A list prints its items in debug form even in the text form:
   `puts(["a"])` prints `["a"]`. Only a String at the top is printed raw.
-- Struct and enum names are the display names the lowerer copies verbatim
-  from the linked program, so the VM prints what the evaluator prints.
-  Today that includes the linker's internal prefix for imported types
-  (`@2::Point(x: 1)`, `@2::Shape.Dot`), an evaluator bug; when the evaluator
-  is fixed, the lowerer copies the fixed name and the VM follows.
+- Struct and enum names in the tables are display names: the bytecode
+  writer passes each linked name through `display-type-name`
+  (`src/builtins.rkt`), the same function the evaluator prints with, so an
+  imported type prints its declared name (`Point(x: 1)`, `Shape.Dot`), not
+  the linker's internal `@2::` identity. Two modules that both declare
+  `Point` both print `Point`; the name is display text only, and the VM
+  never looks a type up by it.
 - A struct prints its fields in declaration order whatever order the
   constructor wrote them in; a struct with no fields prints `Name()`, a
   nullary variant `Enum.Variant` (with no parentheses even when written
@@ -1380,7 +1382,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      interpolation, `to_s` and `inspect`. The checker rejects `==` on lists,
      so there is no list equality. List library functions stay in item 6.
    - **5b Structs, enums, `case`** (done). User structs and enums (generic
-     and recursive too, imported ones with their linked display names),
+     and recursive too, imported ones with their declared display names),
      construction, field access, `case` with literal, `_` and variant
      patterns, their text and debug forms, and format version 2 with the
      struct and enum tables. The checker rejects `==` on them, so

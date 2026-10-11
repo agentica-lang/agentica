@@ -163,6 +163,30 @@
        (check-equal? out "[2, 3]\n[11, 12]\n")
        (check-equal? result (void)))))
 
+  (test-case "imported structs and enums print their declared names"
+    (with-files
+     '(("a.agc" . "export struct Point\n  x: Int\nend\n\nexport enum Shape\n  Dot(Point)\n  Empty\nend\n\nexport def show() -> Void\n  puts(\"#{Point(x: 2)} #{Shape.Empty}\")\nend\n\n")
+       ("b.agc" . "export struct Point\n  y: Int\nend\n\n")
+       ("root.agc" . "import \"a.agc\" as A\nimport \"b.agc\" as B\n\nstruct Both\n  a: A.Point\n  b: B.Point\nend\n\ndef main() -> Void\n  A.show()\n  p = A.Point(x: 3)\n  puts(p)\n  puts(B.Point(y: 4).inspect)\n  puts([A.Shape.Dot(p)].to_s)\n  puts({\"k\": ok(A.Shape.Empty)})\n  IO.warn(p)\n  IO.warn(JSON.schema(Both))\nend\n\n"))
+     (lambda (directory)
+       (define program (checked (build-path directory "root.agc")))
+       (define out (open-output-string))
+       (define err (open-output-string))
+       (check-equal? (evaluate program #:out out #:err err) (void))
+       (check-equal? (get-output-string out)
+                     (string-append "Point(x: 2) Shape.Empty\nPoint(x: 3)\nPoint(y: 4)\n"
+                                    "[Shape.Dot(Point(x: 3))]\n{\"k\": ok(Shape.Empty)}\n"))
+       (define warnings (string-split (get-output-string err) "\n"))
+       (check-equal? (car warnings) "Point(x: 3)")
+       (check-equal? (hash-count (hash-ref (string->jsexpr (cadr warnings)) '$defs)) 2)))
+    (with-files
+     '(("a.agc" . "export struct Point\n  x: Int\nend\n\n")
+       ("root.agc" . "import \"a.agc\" as A\ndef main() -> Void\n  n: Int = A.Point(x: 1)\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-TYPE-MISMATCH)
+       (check-equal? (diagnostic-actual problem) "Point"))))
+
   (test-case "module errors are located and do not expose private declarations"
     (for ([entry
            '(("import \"missing.agc\" as Missing\n" "" CHECK-IMPORT-IO)

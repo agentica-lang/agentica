@@ -1,6 +1,6 @@
 #lang racket
 
-(require "diagnostic.rkt" "lower.rkt" "source.rkt" "version.rkt")
+(require "builtins.rkt" "diagnostic.rkt" "lower.rkt" "source.rkt" "version.rkt")
 
 (provide ir->bytecode
          write-bytecode
@@ -187,13 +187,13 @@
       [(string? value) (u8 out 6) (str out value)]))
   (u32 out (length (bc-program-structs program)))
   (for ([entry (in-list (bc-program-structs program))])
-    (str out (ir-struct-name entry))
+    (str out (display-type-name (ir-struct-name entry)))
     (u32 out (length (ir-struct-fields entry)))
     (for ([field (in-list (ir-struct-fields entry))])
       (str out field)))
   (u32 out (length (bc-program-enums program)))
   (for ([entry (in-list (bc-program-enums program))])
-    (str out (ir-enum-name entry))
+    (str out (display-type-name (ir-enum-name entry)))
     (u32 out (length (ir-enum-variants entry)))
     (for ([variant (in-list (ir-enum-variants entry))])
       (str out (car variant))

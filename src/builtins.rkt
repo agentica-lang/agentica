@@ -1,20 +1,23 @@
 #lang racket
 
-(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string did-you-mean)
+(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-type-name did-you-mean)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
                       [alternatives #:auto #:mutable]) #:auto-value '() #:transparent)
 
+(define (display-type-name name)
+  (regexp-replace #rx"^@[0-9]+::" name ""))
+
 (define (type->string type)
   (cond
     [(symbol? type) (symbol->string type)]
-    [(eq? (car type) 'Struct) (cadr type)]
+    [(eq? (car type) 'Struct) (display-type-name (cadr type))]
     [(eq? (car type) 'TypeVar) (cadr type)]
     [(eq? (car type) 'Enum)
      (if (null? (cddr type))
-         (cadr type)
-         (format "~a[~a]" (cadr type) (string-join (map type->string (cddr type)) ", ")))]
+         (display-type-name (cadr type))
+         (format "~a[~a]" (display-type-name (cadr type)) (string-join (map type->string (cddr type)) ", ")))]
     [else (format "~a[~a]" (car type) (string-join (map type->string (cdr type)) ", "))]))
 
 (define builtins
