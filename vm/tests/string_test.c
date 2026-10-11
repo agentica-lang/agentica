@@ -53,7 +53,7 @@ static char *repeat_text(const char *head, char fill, size_t count, const char *
   size_t h = strlen(head), t = strlen(tail);
   char *s = malloc(h + count + t + 1);
   assert(s);
-  memcpy(s, head, h);
+  memcpy(s, head, h + 1);
   memset(s + h, fill, count);
   memcpy(s + h + count, tail, t + 1);
   return s;
@@ -121,17 +121,17 @@ int main(void) {
     assert(vm.cursor == e && vm.cursor_index == k && vm.cursor_offset == 2 * k);
   }
   vm.cursor_index = 1000;
-  vm.cursor_offset = 2 * 999;
-  assert(agc_utf8_offset(&vm, e, 1001) == 2 * 1000);
+  vm.cursor_offset = (size_t)2 * 999;
+  assert(agc_utf8_offset(&vm, e, 1001) == (size_t)2 * 1000);
   vm.cursor_index = 1000;
-  vm.cursor_offset = 2 * 999;
-  assert(agc_utf8_offset(&vm, e, 999) == 2 * 998);
+  vm.cursor_offset = (size_t)2 * 999;
+  assert(agc_utf8_offset(&vm, e, 999) == (size_t)2 * 998);
   vm.cursor_index = 3000;
-  vm.cursor_offset = 2 * 2999;
-  assert(agc_utf8_offset(&vm, e, 2990) == 2 * 2989);
+  vm.cursor_offset = (size_t)2 * 2999;
+  assert(agc_utf8_offset(&vm, e, 2990) == (size_t)2 * 2989);
   vm.cursor = NULL;
-  assert(agc_utf8_offset(&vm, e, 4000) == 2 * 4000);
-  assert(agc_utf8_offset(&vm, e, 10) == 2 * 10);
+  assert(agc_utf8_offset(&vm, e, 4000) == (size_t)2 * 4000);
+  assert(agc_utf8_offset(&vm, e, 10) == (size_t)2 * 10);
 
   find_is("aaab", "aab", 0, 1);
   find_is("abababc", "ababc", 0, 2);

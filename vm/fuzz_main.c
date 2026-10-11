@@ -4,7 +4,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX_INSERT ((size_t)16)
+
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define AGC_FUZZ_DEATH 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#define AGC_FUZZ_DEATH 1
+#endif
+
 static uint64_t state = 0x9E3779B97F4A7C15u;
+static const uint8_t *current;
+static size_t current_len;
+static long current_index = -1;
 
 static uint64_t next_random(void) {
   state ^= state << 13;
@@ -32,8 +46,6 @@ static uint8_t *read_all(const char *path, size_t *len) {
   *len = n;
   return data;
 }
-
-#define MAX_INSERT 16
 
 static size_t mutate_once(uint8_t *data, size_t len) {
   size_t at = len ? (size_t)(next_random() % len) : 0;
@@ -66,21 +78,8 @@ static size_t mutate_once(uint8_t *data, size_t len) {
   }
 }
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define AGC_FUZZ_DEATH 1
-#endif
-#endif
-#if defined(__SANITIZE_ADDRESS__)
-#define AGC_FUZZ_DEATH 1
-#endif
-
-static const uint8_t *current;
-static size_t current_len;
-static long current_index = -1;
-
 #ifdef AGC_FUZZ_DEATH
-void __sanitizer_set_death_callback(void (*callback)(void));
+void __sanitizer_set_death_callback(void (*callback)(void)); // NOLINT(readability-identifier-naming)
 
 static void save_crash(void) {
   if (!current) return;

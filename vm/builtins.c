@@ -2,6 +2,11 @@
 
 #include <string.h>
 
+typedef struct {
+  const agc_builtin *entries;
+  const size_t *count;
+} builtin_table;
+
 static void write_text(agc_vm *vm, FILE *stream, agc_value v, bool newline) {
   if (!agc_is(v, AGC_T_NIL) && !agc_is(v, AGC_T_BOOL) && !agc_is(v, AGC_T_INT) && !agc_is(v, AGC_T_FLOAT)) {
     agc_string *s = agc_text(vm, v);
@@ -416,10 +421,7 @@ static const agc_builtin table[] = {
 
 static const size_t table_count = sizeof table / sizeof table[0];
 
-static const struct {
-  const agc_builtin *entries;
-  const size_t *count;
-} tables[] = {
+static const builtin_table tables[] = {
   {table, &table_count},
   {agc_string_builtins, &agc_string_builtin_count},
   {agc_number_builtins, &agc_number_builtin_count},

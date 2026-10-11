@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #ifdef AGC_NO_GC
-const char *__asan_default_options(void);
+const char *__asan_default_options(void); // NOLINT(readability-identifier-naming,misc-use-internal-linkage)
 const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_return_null=1"; }
 #else
 #include <gc.h>

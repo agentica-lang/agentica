@@ -58,6 +58,7 @@ make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (callo
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
+make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
@@ -65,11 +66,11 @@ racket src/main.rkt --dump-ir prog.agc
 racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=path picks the binary
 ```
 
-- CI runs `vm-sanitizers` (ASan diff and bytecode tests, `make vm-fuzz`,
+- CI runs `vm-sanitizers` (`make vm-lint`, ASan diff and bytecode tests, `make vm-fuzz`,
   `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
   in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
   bytecode, `src/version.rkt`, their tests and fixtures, the Makefile,
-  `.gitmodules`, `ci.yml`). A new VM source or test file outside those paths must be added
+  `.gitmodules`, `.clang-tidy`, `ci.yml`). A new VM source or test file outside those paths must be added
   there.
 - `agentica --vm` (Linux only for now, `docs/vm.md` §9): `src/main.rkt`
   writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
@@ -235,11 +236,35 @@ calls starts with one, and a function without a leading `STEP` has at most 2
 instructions. A file that loads may still compute wrong values or end with
 `RUNTIME-INTERNAL`.
 
-**C style.** C11. Exported names `agc_`, macros and enum constants `AGC_`,
-file-local helpers `static`. Only `value.c` reads the value union. Size
-arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's index
-and size sums use `uint64_t`. Immediates write the full word. No comments unless
-a line is unclear without one.
+**C style.** C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
+`tests/vm-style-test.rkt` check the rules marked *checked*.
+
+- File order: includes, macros, every `struct`/`typedef`/`enum`/`union`
+  definition, static data, functions. No type definition between functions
+  (*checked*). Builtin tables that point to the file's functions come last.
+- Exported names start with `agc_` (*checked* for functions); macros in
+  `agc.h` and enum constants start with `AGC_`; file-local macros are plain
+  upper case.
+- File-local helpers and data are `static` (*checked*).
+- No prototypes of `static` functions: define each helper before its first use, so files read bottom-up and the `agc_*` functions usually come last (*checked*); only unavoidable mutual recursion may have one.
+- No value-driven C recursion (`docs/vm.md` §7.3; *checked* by
+  `misc-no-recursion` within one file only: recursion across files through
+  `agc_*` calls is not caught). Depth bounded by a constant or `log n` (HAMT
+  levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
+- Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
+  index and size sums use `uint64_t`.
+- No code comments, except a legal header if one is ever needed.
+- Only `value.c` reads the value union. Immediates write the full word.
+
+`make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
+skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
+(`__asan_default_options`) takes an exact `NOLINT(check,...)`. The style test
+is a line scanner with known limits: it misses prototypes of functions that
+return function pointers or that start with a macro or attribute; it reports
+static arrays whose size contains `(` (`x[sizeof(y)]`) as prototypes; it
+miscounts when `#if` branches open or close different numbers of braces; and
+a `\`+newline inside a literal shifts its line numbers. The `_WIN32` and
+macOS branches are not linted while those platforms are paused.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C

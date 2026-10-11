@@ -1,0 +1,16 @@
+Checks: >
+  -*,
+  misc-no-recursion,
+  misc-use-internal-linkage,
+  readability-identifier-naming,
+  bugprone-sizeof-expression,
+  bugprone-signed-char-misuse,
+  bugprone-implicit-widening-of-multiplication-result,
+  bugprone-too-small-loop-variable,
+  bugprone-integer-division,
+  bugprone-suspicious-memset-usage,
+  bugprone-misplaced-widening-cast
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'vm/agc\.h'
+CheckOptions:
+  readability-identifier-naming.GlobalFunctionPrefix: agc_
