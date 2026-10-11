@@ -1357,6 +1357,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
    `Random` (with the seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
+   The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 
 Outside this list, the **tail-call** PR (done) added `TAIL_CALL`: a
 `return f(...)` of a user function reuses the frame (3.3, 4.2, 4.3, 6.1),

@@ -10,11 +10,16 @@ Ruby-style ergonomics are implemented. The next priority is the bytecode VM
 (phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice, the
 Float and Strings PRs, the macOS and Windows CI, the Lists PR and the
 structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
-done; the rest of item 5 (5c to 5e) and the
+done; the rest of item 5 (7e PRs 5c to 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
-ranges may start once the VM has closures (5e), in parallel with the rest of
-phase 7; queues also need only 5e, and sets need the VM maps (5d). Real
-applications follow, then MCP. Shared tables (phase 9) come after MCP and are
+ranges may start once the VM has closures (7e PR 5e), in parallel with the rest of
+phase 7; queues also need only 7e PR 5e, and sets need the VM maps (7e PR 5d). Real
+applications follow, then MCP. Adapters and JSON inspection (phase 10) come
+after MCP: they are small language items, so they go before shared tables,
+which wait for a real program. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d,
+and the JSON part of 10c, need the VM JSON PR (`docs/vm.md` §12.2 item 7). Phase 10 checks
+the VM and the disk backend with two separate programs (see its "Done when").
+Shared tables (phase 9) are
 on demand: they need tasks on the VM (7h) and start only when a real program
 needs them. Binary serialization (phase 11) is on demand too: it
 needs `Bytes` and the JSON form of enums. Real applications and MCP keep running on the Racket evaluator
@@ -32,8 +37,9 @@ than their numeric order.
 | 6 | Core data structures (phase 8): ranges first (may start after 7e PR 5e), then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
 | 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 8 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 9 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
-| 10 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes` and the JSON form of enums; starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
+| 9 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums | Write adapters and read JSON of unknown shape without workarounds |
+| 10 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
+| 11 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes` and the JSON form of enums; starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
 
 After steps 1–2, target everyday scripts and automation. After steps 7–8,
 target larger general-purpose programs.
@@ -1198,6 +1204,17 @@ Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs 
 - [ ] Later, each after a real program needs it: ordered tables, duplicate keys, a block-based `update`.
 
 **Done when:** an example with several tasks sharing a cache and a counter runs on both backends with the same output.
+
+## Phase 10: Adapters and JSON inspection
+
+Specified in [`future.md` section 15](future.md#15-adapters-and-json-inspection). Each item lands in the evaluator and the VM in one PR, with `grammar.md`, the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d, and the JSON part of 10c, need the VM JSON PR (`docs/vm.md` §12.2 item 7). The VM check and the disk example are two separate programs; see "Done when" below.
+
+- [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the ".put.call(...)" help. A block without parentheses (`s.run do |x| ... end`) is a call with the block as its only argument; a bare `s.run` stays the field value. Update these `grammar.md` sentences: "structs and enums have no methods, and user functions cannot be called as methods" (method section), "arbitrary user methods are not supported" (calls section), and "`f.call(21)` invokes it" (the `Fn` section), and the programming skill's `.call` line and "structs and enums have no methods ... `.call(...)` invokes a function value". Show the adapter pattern in an example. The facade and adapter disk examples on the site page and in the skill must check the name with an allow-list in the code itself (not empty, only ASCII letters, digits, `-` and `_`, else `error(...)`; the adapter's `get` and `put` return `error("bad key")`; the adapter has its own copy of the check, or lives in the facade's module, since the facade's `valid_name?` is private), as in `future.md` §15.1, not only in prose.
+- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Numbers, by value: an exact integer in int64 is `JsonInt(n)` (exactly when `JSON.int(j)` is `ok(n)`), any other exact integer is `JsonBigInt(text)`, a double is `JsonFloat`. `JSON.parse` makes a double exactly for a number written with a fraction or exponent, and a non-finite one is the existing error; builder and `JSON.from` values follow the same rule. `JsonObject` keys are sorted by Unicode code point, the same order as `JSON.decode` into a `Map`, so `JSON.parse` does not change. The VM follows the number rules and differential fixtures of `future.md` §15.2. `JsonValue` is the first builtin enum: it needs a path in the checker's enum table, in the evaluator, and in `src/modules.rkt` import linking (enum patterns and constructors, like the existing `Result` exception, and the bare `JsonValue.JsonNull` `type-expression`), or linking renames or rejects it (`CHECK-IMPORT-NAME`). Test `JsonValue` used inside an imported module. `JsonValue` stays out of `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema` (`CHECK-NOT-ENCODABLE` / `CHECK-NOT-DECODABLE`). The only breaking change: `JsonValue` becomes a reserved name (say so in the changelog). Bytecode format version: see `future.md` §15.2 (no bump unless the layout changes).
+- [ ] 10c Generic structs (`struct Box[T]`): inference at construction, substituted field types, the generic enum diagnostics; a type parameter used as a `Map` key is `CHECK-MAP-KEY-TYPE` at the declaration, tested for both a generic struct and a generic enum (`enum E[K]` with `Map[K, Int]`), since no test covers the enum case today; `printable-type?` is checked after substitution. `JSON.encode` and `JSON.from` work on generic instances since encoding needs no `$defs`: structs with 10c, enum instances only once 10d lands; only `JSON.decode` and `JSON.schema` reject a generic instance anywhere in the target (`CHECK-NOT-DECODABLE`). A bare generic target with no type arguments (`JSON.decode(text, Box)`, `JSON.schema(Option)`) is `CHECK-UNKNOWN-TYPE`, as today. Add a note to the programming skill's diagnostics reference that `CHECK-ENUM-TYPE-INFERENCE` also covers structs. Update the `grammar.md` sentences "only enum declarations may declare type parameters" and "generic structs are not supported", add `[ type_parameters ]` to the `struct_decl` rule in grammar.md, and add a type-parameter field to `struct-decl` in `src/ast.rkt`. Carry the type parameters through `src/modules.rkt` import linking (the `struct-decl` case, like `rewrite-enum-type` for enums), or a bare `T` gets the module prefix; test a generic struct declared in an imported module and used as `M.Box[Int]`.
+- [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`. `JSON.encode` and `JSON.from` work on any user enum (not `JsonValue`) whose payloads are encodable, generic instances too; decode and schema take non-generic enums only. The tag is a one-value `enum` (`{"enum": ["Rect"]}`), not `const`. The schema is accepted by every draft; per-payload types are checked from 2020-12 (`prefixItems`): `values` has its length fixed with `minItems` and `maxItems`; `prefixItems` only when the variant has payloads; no `"items": false`; a nullary variant gets `"values": {"type": "array", "maxItems": 0}` and `values` is not in its `required`. The root gets no `$schema`, as today. `JSON.encode` text puts `tag` before `values`. If the VM JSON PR's type table has no enum entry kind, 10d adds it and bumps the bytecode format version (`docs/vm.md` §4); the JSON PR adds no placeholder.
+
+**Done when:** two programs run. The VM program has a `Storage` adapter with a read-only memory backend, used by a function that takes `Storage`, and a walker over unknown JSON; it uses no `File.*` and no `System.args`, needs the library builtins of `docs/vm.md` §12.2 item 6 (`Map.get`, `Map.keys`), and gives the same output on both backends (VM differential check). The disk program uses the same `Storage` shape with a disk backend whose `get` and `put` check each key with an allow-list before they build a path (`error("bad key")` otherwise, tested with a key such as `../x`), in a temporary directory that the Racket test creates and passes as an argument (read with `System.args`); it runs only on the evaluator until files reach the VM (7h).
 
 ## Phase 11: Binary serialization (CBOR)
 

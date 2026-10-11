@@ -53,6 +53,12 @@ racket src/main.rkt --dump-ir prog.agc
 racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=path picks the binary
 ```
 
+- CI runs `vm-sanitizers` (ASan diff and bytecode tests, `make vm-fuzz`,
+  `make vm-gc-stress`) only when a pull request touches the VM paths listed
+  in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
+  bytecode, `src/version.rkt`, their tests and fixtures, the Makefile,
+  `ci.yml`). A new VM source or test file outside those paths must be added
+  there.
 - `agentica --vm` (Linux only for now, `docs/vm.md` §9): `src/main.rkt`
   writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`
