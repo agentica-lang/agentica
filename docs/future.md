@@ -990,3 +990,24 @@ name: set to Ana
   - once 10c lands: `JSON.encode` and `JSON.from` of a `Box[JsonField[Int]]` with `Absent`, `Null` and `Value`, `CHECK-NOT-DECODABLE` for `Box[JsonField[Int]]` in a decode and a schema target, and `CHECK-JSON-FIELD-PLACE` for `Box[T]` with `items: List[T]` used as `Box[JsonField[Int]]`;
   - `JsonField` used in an imported module (a struct field of type `JsonField[...]` in the imported module, field types, patterns, `JsonField.Value(x)`, bare `JsonField.Absent` and `JsonField.Null`), checked and run through an `import`;
   - evaluator against VM (`tests/vm-diff-test.rkt`) once the VM has JSON.
+
+## 18. Front-end implementation language
+
+**Today:** the front-end (lexer, parser, linker, checker, lowering, bytecode) and the reference evaluator are written in Racket; the VM is C. This stays while the language still changes a lot (Ruby-style ergonomics, closures, JSON).
+
+**Why not now:**
+
+- Two front-ends would double the work of every language change.
+- The Racket evaluator stays anyway, as the parity reference for the VM (`tests/vm-diff-test.rkt`).
+
+**Short-term pain, fixed without a rewrite:** Racket starts on each `--vm` run, and users need Racket installed. Ship a packaged executable (`raco exe`, `raco distribute`), and reuse a compiled `.agcb` instead of compiling again.
+
+**When to look again:** once the grammar is stable (after the Ruby-style ergonomics and Phase 8), and only if measurements show that the Racket front-end is a large share of a typical program's run time, or that distribution hurts.
+
+**Options then:**
+
+- Preferred: self-host the compiler in Agentica (dogfooding), once the VM is fast enough.
+- Alternative to evaluate at that moment: Rust. Its enums and `match` fit the AST and the checker, close to Racket's `match`.
+- Less suited: Go, which has no sum types.
+
+No decision is taken now.
