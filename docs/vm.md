@@ -1116,7 +1116,11 @@ the `RUNTIME-INVALID-RANGE` error at the call.
   spawn time (a splitmix64 split of one parent draw). Each task's values
   then depend only on its own order of calls, so `--seed` repeats each
   task's values even with N>1 schedulers (10.2.2); only how output from
-  different tasks interleaves is not repeatable.
+  different tasks interleaves is not repeatable. Every spawn takes exactly
+  one draw from the parent's generator, whether or not the child uses
+  `Random`, so the parent's later values depend on how many tasks it
+  spawned before them. That is deterministic, but a seeded fixture that
+  adds or removes a spawn changes the parent's values.
 - `Random.float` is `(next >> 11) * 2^-53`. It can return exactly 0.0,
   which the evaluator's `(random)` never does; both stay in `[0, 1)`, so a
   fixture must not rely on `x > 0.0`.
@@ -1483,7 +1487,8 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     cross-task output order, it is not compared.
   - With N schedulers, `steps_left` is one atomic counter. A scheduler takes
     a batch from it when a turn starts (one turn's budget, or what is left
-    if less) and gives the unspent part back when the turn ends. The "next
+    if less) and gives the unspent part back at once when the turn ends,
+    when the task parks mid-turn, and when the scheduler goes idle. The "next
     stop" counter is set from the batch, so the fast path stays one compare
     and one subtraction and touches no atomic. A `STEP n` that crosses the
     end of its batch first takes more from the shared counter, and fails
@@ -1522,14 +1527,27 @@ concurrently. The design follows BEAM.
   per-task lock, so an awaiting task on another scheduler sees the whole
   result. Cancellation sets a flag that the task checks at its next `STEP`,
   plus a wake if it is parked.
-- **State split.**
-  - Shared and read-only after start-up (the runtime): the program,
-    constants and config. The shared atomic `steps_left` (10.2.1, Quotas)
-    and the run's outcome also hang here.
+- **Park and wake protocol.** Each task has an atomic state: RUNNING,
+  PARKED or WOKEN. A waker CASes PARKED to WOKEN and then queues the task;
+  if it finds RUNNING (the task is still parking), it CASes RUNNING to
+  WOKEN and does not queue. The parking task then tries RUNNING to PARKED;
+  if that fails because the state is WOKEN, it does not park and stays
+  ready. So a wake that arrives while the task is still parking is not lost,
+  and a task is queued at most once.
+- **State split.** Every field of today's `struct agc_vm` (`vm/agc.h`) has
+  a place:
+  - Runtime, read-only after start-up: `program` (with its constants),
+    `args`, and the config. Also in the runtime but shared under rules: the
+    atomic `steps_left` (10.2.1, Quotas), `outcome` (set once, 6.2), `out`
+    and `err` (one lock per stream, see Output), and stdin (`in`, an
+    `agc_input`): one reader owned by the runtime under a lock, each read
+    done whole under that lock, as for output.
   - Per scheduler: the loop, the run queue, the resource registry and the
     turn counter.
-  - Per task: the stack, the registers, the current frame and the random
-    generator (7.4).
+  - Per task: the registers and frames (`regs`, `reg_capacity`, `frames`,
+    `frame_capacity`, `frame_count`, `depth`), `random` (7.4), the `fail`
+    jmp_buf target (armed on the thread that runs the task's turn), and the
+    string cursor cache (`cursor`, `cursor_index`, `cursor_offset`).
   - A runtime diagnostic or `System.exit` on any scheduler ends the run
     (6.2): that scheduler records the outcome once, and the others stop at
     their next `STEP` or loop wake-up, then cleanup runs.
@@ -1543,12 +1561,20 @@ concurrently. The design follows BEAM.
 - **Output.** Each print to stdout or stderr is written whole under one lock
   per stream, so lines from different tasks never mix mid-line. Only the
   order in which output from different tasks interleaves is not repeatable.
-- **Stall check.** The wake `uv_async_t` handles are `uv_unref`'d, so they
-  do not count as active handles. The runtime keeps an atomic count of idle
-  schedulers and an atomic count of live handles plus parked I/O and timer
-  waiters. The last scheduler to go idle, seeing both counts at zero while
-  tasks are still parked, fails the run with `RUNTIME-INTERNAL` (10.2.1,
-  Fairness).
+- **Idle schedulers park, not spin.** An idle scheduler (empty queue,
+  nothing to steal) refs its wake `uv_async_t` and blocks in
+  `uv_run(UV_RUN_ONCE)`, so its loop stays alive even with no other handle.
+  A wake or new work for it calls `uv_async_send`. When the run ends, each
+  scheduler unrefs its wake handle so its loop can close. With N=1 the wake
+  handle is never ref'd, so the plain "no active handles" check of 10.2.1
+  still holds.
+- **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s
+  return value: an atomic count of idle schedulers, and an atomic count of
+  live handles, parked I/O and timer waiters, and pending wakes. A pending
+  wake counts as live: the waker increments the count before the push, and
+  the home scheduler decrements it when it drains the wake. The scheduler
+  that sees the idle count reach N and the live count at zero while tasks
+  are still parked fails the run with `RUNTIME-INTERNAL` (10.2.1, Fairness).
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
   `THREAD_LOCAL_ALLOC`. Scheduler threads are created with
   `GC_pthread_create` or register with `GC_register_my_thread`. Collections
@@ -1575,7 +1601,9 @@ concurrently. The design follows BEAM.
   The tasks PR does these moves. A follow-up PR enforces this with clang-tidy's
   `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`.
 - **Values are immutable**, so tasks on different schedulers share them
-  without locks. Future mutable structures (for example mutable vectors)
+  without locks. Any in-place mutation inside the VM (caches, updates in
+  place when a value is known to be unique, the faster lists of roadmap 8d)
+  must be proven unshared or made atomic. Future mutable structures (for example mutable vectors)
   and the shared tables of `future.md` §13 must use an owner scheduler or
   locks and atomics. A table call does not yield, so it is atomic with N=1;
   once N>1, each table call needs a lock, an owner scheduler, or a
