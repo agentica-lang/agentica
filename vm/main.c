@@ -238,11 +238,13 @@ static int run(int argc, char **argv) {
     }
     if (strcmp(arg, "--version") == 0) {
       unsigned gc = agc_gc_version();
+      const char *uv = agc_uv_version();
       if (gc)
-        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
-               agc_json_version());
+        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
+               agc_json_version(), uv ? ", libuv " : "", uv ? uv : "");
       else
-        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s)\n", AGC_VERSION, agc_json_version());
+        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s)\n", AGC_VERSION, agc_json_version(),
+               uv ? ", libuv " : "", uv ? uv : "");
       return fflush(stdout) == 0 ? 0 : 1;
     }
     if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
@@ -308,10 +310,12 @@ static int run(int argc, char **argv) {
   seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  agc_files_init(vm);
   agc_random_seed(&vm->random, seen_seed ? seed : entropy_seed());
   vm->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);
+  bool settled = agc_io_close(vm);
   if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
@@ -319,12 +323,23 @@ static int run(int argc, char **argv) {
     outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
   }
+  int code = 0;
   if (outcome.kind == AGC_FAILED) {
     agc_print_diagnostic(stderr, program, &outcome, style);
-    return 1;
+    code = 1;
+  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
+    code = (int)outcome.exit_code;
   }
-  if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) return (int)outcome.exit_code;
-  return 0;
+#ifdef __linux__
+  if (!settled) {
+    fflush(stdout);
+    fflush(stderr);
+    _exit(code);
+  }
+#else
+  (void)settled;
+#endif
+  return code;
 }
 
 #ifdef _WIN32

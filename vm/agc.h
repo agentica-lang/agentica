@@ -20,7 +20,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE
 } agc_tag;
 
 typedef struct {
@@ -133,6 +133,28 @@ typedef struct {
 
 typedef struct agc_vm agc_vm;
 
+typedef void (*agc_release_fn)(void *native);
+
+typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
+
+typedef struct {
+  size_t slot;
+  agc_resource_kind kind;
+  void *native;
+  agc_release_fn release;
+  agc_value context;
+} agc_resource;
+
+typedef struct agc_registry agc_registry;
+typedef struct agc_loop agc_loop;
+
+typedef struct {
+  void (*work)(void *data);
+  agc_value (*done)(agc_vm *vm, void *data, agc_value context);
+  agc_value (*expired)(agc_vm *vm, void *data, agc_value context);
+  void (*drop)(void *data);
+} agc_io_kind;
+
 typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
 
 typedef enum {
@@ -241,6 +263,11 @@ struct agc_vm {
   agc_value args;
   const agc_string *cursor;
   size_t cursor_index, cursor_offset;
+  agc_registry *registry;
+  agc_loop *loop;
+  agc_resource *parked;
+  agc_string *cwd;
+  bool no_files;
   agc_outcome outcome;
   jmp_buf fail;
 };
@@ -269,6 +296,7 @@ agc_value agc_result_value(bool ok, agc_value value);
 agc_value agc_fn_value(agc_fn *f);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 agc_value agc_json_value(agc_json *j);
+agc_value agc_handle_value(agc_resource *r);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -281,6 +309,8 @@ agc_result *agc_as_result(agc_vm *vm, agc_value v);
 agc_fn *agc_as_fn(agc_vm *vm, agc_value v);
 agc_range *agc_as_range(agc_vm *vm, agc_value v);
 agc_json *agc_as_json(agc_vm *vm, agc_value v);
+agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
+char *agc_cstr(const agc_string *s);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 bool agc_is(agc_value v, agc_tag tag);
 
@@ -368,7 +398,17 @@ agc_string *agc_json_encode(agc_vm *vm, agc_value v, uint32_t span);
 agc_value agc_json_from(agc_vm *vm, agc_value v, uint32_t span);
 extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
+extern const agc_builtin agc_file_builtins[];
+extern const size_t agc_file_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
+
+agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
+void agc_unregister(agc_vm *vm, agc_resource *r);
+const char *agc_uv_version(void);
+void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+void agc_io_park(agc_vm *vm, size_t reg);
+bool agc_io_close(agc_vm *vm);
+void agc_files_init(agc_vm *vm);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 

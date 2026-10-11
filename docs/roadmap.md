@@ -1170,8 +1170,8 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7h: Runtime services on the VM
 
-- [ ] Event loop on libuv and the resource registry, following the rules in `docs/vm.md` section 10.2. libuv is vendored as a git submodule from `https://github.com/libuv/libuv`, pinned to a recent release tag and built from source, not taken from system packages.
-- [ ] Files and paths.
+- [x] Event loop on libuv and the resource registry, following the rules in `docs/vm.md` section 10.2. libuv is vendored as a git submodule from `https://github.com/libuv/libuv`, pinned to a recent release tag and built from source, not taken from system packages. (libuv v1.53.0, built by the Makefile and linked statically on Linux; one task for now, `docs/vm.md` 10.2.2.)
+- [x] Files and paths. (Every `File`, `Dir` and `Path` builtin with the evaluator's messages, `FileHandle` and `FileInfo`, Linux; `docs/vm.md` 2.8.)
 - [ ] Lightweight tasks: reduction-based scheduler and I/O fairness (`docs/vm.md` section 10.2.1), `Task.spawn/await/sleep`, shared step budget, cancellation on return.
 - [ ] Processes, behind the VM's own `--allow-run` flag; before this, decide in `grammar.md` whether the current directory is searched.
 - [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
