@@ -44,6 +44,13 @@ int main(void) {
   j = parse("-1e-500", 7);
   assert(j->kind == AGC_JSON_FLOAT && signbit(agc_as_float(&vm, j->scalar)));
 
+  agc_value v;
+  assert(agc_json_parse((const uint8_t *)"\"\x01\"", 3, &v) == AGC_JSON_CONTROL);
+  assert(agc_json_parse((const uint8_t *)" ", 1, &v) == AGC_JSON_EMPTY);
+  assert(agc_json_parse((const uint8_t *)"[1,]", 4, &v) == AGC_JSON_INVALID);
+  assert(agc_json_parse((const uint8_t *)"01", 2, &v) == AGC_JSON_TRAILING);
+  assert(agc_json_parse((const uint8_t *)"[1e400]", 7, &v) == AGC_JSON_NOT_FINITE);
+
   round_trip("[-9223372036854775809, 1e2, 0.1, 1e21, 1e-7, -0.0]", "[-9223372036854775809,100.0,0.1,1e+21,1e-7,0.0]");
   round_trip("\"\\u0000\\u001f\\b\\f\\n\\r\\t\\\"\\\\\\/\x7f\\u00e9\\ud83d\\ude00\"",
              "\"\\u0000\\u001f\\b\\f\\n\\r\\t\\\"\\\\/\\u007f\xc3\xa9\xf0\x9f\x98\x80\"");

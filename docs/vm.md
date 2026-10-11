@@ -444,7 +444,9 @@ fails when the committed file differs from what the generator prints.
   that fits int64 is an Int node, any other integer the big-integer node
   holding the text as written (JSON integers have no leading zeros, so the
   text is canonical), and a Float is `strtod` of the text with the zero
-  rule above. The yyjson tree is then copied into GC nodes with an
+  rule above. Number parity relies on glibc `strtod` being correctly
+  rounded in the "C" locale; recheck it on macOS and Windows when
+  `platforms.yml` runs again. The yyjson tree is then copied into GC nodes with an
   explicit stack (7.3) and freed; objects are sorted by key bytes
   (`symbol<?` on the UTF-8 text) with a stable merge sort, and the last of
   equal keys is kept.
