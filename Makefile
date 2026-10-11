@@ -58,7 +58,7 @@ AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/interp.c vm/diag.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/interp.c vm/diag.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
 EXE :=

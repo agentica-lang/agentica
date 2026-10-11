@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `std/queue.agc`) and `pkg/` imports, linked by the front end into one
   bytecode file. A runtime error inside an imported file reports that
   file's path, line and column, as the evaluator does.
+- The bytecode VM runs `JSON.decode` and `JSON.schema` for user structs,
+  with the evaluator's error values and paths and byte-identical schemas
+  (imported structs keep their linked `$defs` names). Deep and recursive
+  values decode without C recursion. `examples/json-modules.agc` and
+  `examples/mcp/stdio.agc` now run on the VM. The `.agcb` format is now
+  version 3: a new Types section after Structs carries the JSON field
+  types, and the loader validates it fully (indexes, counts, kinds, and
+  cycles only through named structs, at most 1024 nested List and Map
+  levels, unique names). A target that is a builtin record such as
+  `Header`, or a struct with one in its fields, stays `LOWER-UNSUPPORTED`
+  until 7h.
 
 - The bytecode VM runs `Json` values and the `JSON` builtins that need no
   type table: `JSON.parse`, `encode`, `from`, `object`, `array`, `null`,
@@ -21,8 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outside 64 bits stay exact through parse and encode, and `JSON.float`
   converts them like the evaluator. Parsing uses the yyjson reader (MIT),
   vendored as the git submodule `vm/third_party/yyjson` at tag 0.13.0, so
-  a VM build needs `git submodule update --init`. `JSON.decode` and
-  `JSON.schema` still report `LOWER-UNSUPPORTED`.
+  a VM build needs `git submodule update --init`.
 
 - The bytecode VM runs the `Float`, `Time` and `Random` builtins:
   `Float.from_int`, `Float.to_int` and `to_int!` (also `n.to_f`,
