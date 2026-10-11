@@ -340,14 +340,14 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   slot, and the exit test (`eq` with the last value) runs before `add-i`,
   so the largest Int never overflows. The loop top is a `STEP` with the
   `for` span, so each iteration charges one step even with an empty body
-  (never drop the loop); the counting natives call `charge_step` before
+  (never drop the loop); the counting natives call `charge_steps`, shared with `STEP`, before
   each callback. The evaluator charges the same (`step!` per range
   iteration and per counting callback). `tests/fixtures/vm/step-limited/`
   holds huge loops that the extras shard runs only with small
   `--max-steps` values. `Range.each`, `Int.times`, `upto` and
   `downto` are counting native frames (`counting()` in `vm/interp.c`): no
   list, a current value, a last value, a direction and a "more" flag. The
-  range text is at most 43 bytes, so `AGC_FLOAT_TEXT` is 48.
+  range text is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert` keeps it at least 44).
 - Results: `ok`, `error` and `Result.*` are builtins (`vm/builtins.c`);
   `try`, `is-ok` and `result-value` are opcodes. A Result pattern is a
   `variant-pattern` with enum name `"Result"` and variant `"Ok"` or `"Err"`

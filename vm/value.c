@@ -409,7 +409,7 @@ static int decimal_digits(double x, int precision, char *all) {
   return atoi(mark + 1);
 }
 
-size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
+size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
   if (isnan(x)) return put(out, 0, "+nan.0", 6);
   if (isinf(x)) return put(out, 0, x > 0 ? "+inf.0" : "-inf.0", 6);
   size_t at = 0;
@@ -445,7 +445,7 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
           digits[k - 1]++;
         }
       }
-      char text[AGC_FLOAT_TEXT];
+      char text[AGC_SCALAR_TEXT];
       snprintf(text, sizeof text, "%c.%.*se%d", digits[0], (int)n - 1, digits + 1, digits_e);
       found = strtod(text, NULL) == x;
     }
@@ -461,7 +461,7 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
       out[at++] = '.';
       at = put(out, at, digits + 1, n - 1);
     }
-    return at + (size_t)snprintf(out + at, AGC_FLOAT_TEXT - at, "e%c%d", e < 0 ? '-' : '+', e < 0 ? -e : e);
+    return at + (size_t)snprintf(out + at, AGC_SCALAR_TEXT - at, "e%c%d", e < 0 ? '-' : '+', e < 0 ? -e : e);
   }
   if (e < 0) {
     at = put(out, at, "0.", 2);

@@ -557,10 +557,9 @@
                           (method-call? inner)
                           (literal? (method-call-target inner))
                           (exact-integer? (literal-value (method-call-target inner)))
-                          (format "-~a.~a is -(~a.~a); write (-~a).~a"
-                                  (literal-value (method-call-target inner)) (method-call-name inner)
-                                  (literal-value (method-call-target inner)) (method-call-name inner)
-                                  (literal-value (method-call-target inner)) (method-call-name inner)))))
+                          (let ([n (literal-value (method-call-target inner))]
+                                [name (method-call-name inner)])
+                            (format "-~a.~a is -(~a.~a); write (-~a).~a" n name n name n name)))))
       (case (unary-op expression)
         [(minus)
          (unless (numeric-type? operand)

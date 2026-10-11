@@ -12,7 +12,8 @@
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
 #define AGC_MAX_MAP_CHUNK 255u
-#define AGC_FLOAT_TEXT 48
+#define AGC_SCALAR_TEXT 48
+_Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
 
@@ -234,7 +235,7 @@ agc_range *agc_as_range(agc_vm *vm, agc_value v);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 bool agc_is(agc_value v, agc_tag tag);
 
-size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
+size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
@@ -264,7 +265,7 @@ extern const size_t agc_write_blank_count;
 bool agc_write_raw(uint32_t cp);
 size_t agc_write_form(const agc_string *s, char *out, size_t *chars);
 agc_string *agc_concat(const agc_string *a, const agc_string *b);
-size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_FLOAT_TEXT]);
+size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]);
 agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
 

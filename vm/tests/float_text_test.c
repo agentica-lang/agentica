@@ -72,7 +72,7 @@ int main(void) {
   for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
     double x;
     memcpy(&x, &cases[i].bits, sizeof x);
-    char text[AGC_FLOAT_TEXT];
+    char text[AGC_SCALAR_TEXT];
     size_t n = agc_float_text(x, text);
     text[n] = '\0';
     if (strcmp(text, cases[i].text) != 0) fprintf(stderr, "%s: got %s\n", cases[i].text, text);

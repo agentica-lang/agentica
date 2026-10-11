@@ -7,7 +7,7 @@ static void write_text(agc_vm *vm, FILE *stream, agc_value v, bool newline) {
     agc_string *s = agc_text(vm, v);
     agc_write(vm, stream, s->data, s->bytes);
   } else {
-    char text[AGC_FLOAT_TEXT];
+    char text[AGC_SCALAR_TEXT];
     agc_write(vm, stream, text, agc_scalar_text(vm, v, text));
   }
   if (newline) agc_write(vm, stream, "\n", 1);

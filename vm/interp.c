@@ -157,9 +157,10 @@ static agc_value sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list 
   return agc_list_value(sorted);
 }
 
-static void charge_step(agc_vm *vm, uint32_t span) {
-  if (vm->steps_left < 1) agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", span);
-  vm->steps_left--;
+static void charge_steps(agc_vm *vm, int64_t count, uint32_t span) {
+  if (vm->steps_left < count)
+    agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", span + (uint32_t)vm->steps_left);
+  vm->steps_left -= count;
 }
 
 static bool counting(agc_native_kind kind) {
@@ -176,7 +177,7 @@ static void resume_native(agc_vm *vm) {
       finish_native(vm, agc_void());
       return;
     }
-    charge_step(vm, st->span);
+    charge_steps(vm, 1, st->span);
     agc_value arg = agc_int(st->cur);
     st->more = st->cur != st->last;
     if (st->more) st->cur += st->dir;
@@ -257,25 +258,18 @@ static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32
       st->more = kind == AGC_NATIVE_DOWNTO ? st->cur >= st->last : st->cur <= st->last;
     }
     agc_as_fn(vm, st->fn);
-    agc_frame *frame = new_frame(vm);
-    frame->function = 0;
-    frame->pc = 0;
-    frame->base = base;
-    frame->ret = base;
-    frame->native = st;
-    resume_native(vm);
-    return;
-  }
-  st->list = args[0];
-  if (kind == AGC_NATIVE_REDUCE) {
-    st->acc = args[1];
-    st->fn = args[2];
   } else {
-    st->fn = args[1];
+    st->list = args[0];
+    if (kind == AGC_NATIVE_REDUCE) {
+      st->acc = args[1];
+      st->fn = args[2];
+    } else {
+      st->fn = args[1];
+    }
+    size_t len = agc_as_list(vm, st->list)->len;
+    agc_as_fn(vm, st->fn);
+    if (kind == AGC_NATIVE_MAP || kind == AGC_NATIVE_FILTER || kind == AGC_NATIVE_SORT_BY) st->out = agc_new_list(len);
   }
-  size_t len = agc_as_list(vm, st->list)->len;
-  agc_as_fn(vm, st->fn);
-  if (kind == AGC_NATIVE_MAP || kind == AGC_NATIVE_FILTER || kind == AGC_NATIVE_SORT_BY) st->out = agc_new_list(len);
   agc_frame *frame = new_frame(vm);
   frame->function = 0;
   frame->pc = 0;
@@ -313,7 +307,6 @@ static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
     const agc_string *a = agc_as_string(vm, x), *b = agc_as_string(vm, y);
     return a->bytes == b->bytes && (a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0);
   }
-  if (agc_is(x, AGC_T_BOOL) && agc_is(y, AGC_T_BOOL)) return agc_as_bool(vm, x) == agc_as_bool(vm, y);
   if (agc_is(x, AGC_T_RANGE) && agc_is(y, AGC_T_RANGE)) {
     const agc_range *a = agc_as_range(vm, x), *b = agc_as_range(vm, y);
     return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
@@ -365,11 +358,7 @@ static void run(agc_vm *vm) {
     switch (in.op) {
       case AGC_OP_MOVE: R[in.a] = R[in.b]; break;
       case AGC_OP_CONST: R[in.a] = p->constants[bx]; break;
-      case AGC_OP_STEP:
-        if (vm->steps_left < in.a)
-          agc_fail(vm, "RUNTIME-STEP-LIMIT", "execution step budget exhausted", s + (uint32_t)vm->steps_left);
-        vm->steps_left -= in.a;
-        break;
+      case AGC_OP_STEP: charge_steps(vm, in.a, s); break;
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
       case AGC_OP_MUL_I: {
