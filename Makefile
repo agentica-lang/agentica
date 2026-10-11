@@ -50,7 +50,7 @@ site-serve: site-sass
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/input.c vm/interp.c vm/diag.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/input.c vm/interp.c vm/diag.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
 EXE :=

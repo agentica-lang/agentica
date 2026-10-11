@@ -1137,7 +1137,8 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] `Result` values, `ok`/`error`, the `Result.*` builtins (`RUNTIME-UNWRAP-ERROR` at the call span), `try`, Result patterns in `case`, and their text and debug forms (`docs/vm.md` §12.2 item 5c).
 - [x] Function values, closures (blocks with snapshot captures), `&name`, `.call`, and the resumable `List` builtins `map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` as native frames (`docs/vm.md` §12.2 item 5e).
 - [x] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`, on blocking stdio through one input layer (`vm/input.c`); it moves to libuv resumable builtins with the scheduler in 7h (`docs/vm.md` §12.2 item 6a).
-- [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
+- [x] `String` builtins, with the case and final-sigma data generated from Racket (`docs/vm.md` §2.3, §12.2 item 6b).
+- [ ] `List`, `Map`, `Float`, `Time` and `Random` builtins.
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
 - [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.

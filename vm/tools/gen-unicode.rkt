@@ -80,6 +80,96 @@
   (check! code-points raw joiner blank)
   (values (ranges-of raw-list) (ranges-of joiner-list) (ranges-of blank-list)))
 
+(define sigma #x3A3)
+(define final-sigma #x3C2)
+(define capital-a 65)
+(define capital-b 66)
+
+(define (chars->string ns) (list->string (map integer->char ns)))
+(define (string->code-points text) (map char->integer (string->list text)))
+(define (final-at? text index) (= (char->integer (string-ref text index)) final-sigma))
+(define (ends-final? text) (final-at? text (sub1 (string-length text))))
+
+(define (case-mapping convert)
+  (for*/list ([n (in-list code-points)]
+              [mapped (in-value (string->code-points (convert (string (integer->char n)))))]
+              #:unless (equal? mapped (list n)))
+    (cons n mapped)))
+
+(define (model-upcase ns up)
+  (append* (for/list ([n (in-list ns)]) (hash-ref up n (lambda () (list n))))))
+
+(define (model-downcase ns down cased ignorable)
+  (define v (list->vector ns))
+  (define len (vector-length v))
+  (define (cased-after? j)
+    (cond
+      [(= j len) #f]
+      [(hash-ref cased (vector-ref v j) #f) #t]
+      [(hash-ref ignorable (vector-ref v j) #f) (cased-after? (add1 j))]
+      [else #f]))
+  (let loop ([i 0] [before #f] [out '()])
+    (cond
+      [(= i len) (append* (reverse out))]
+      [else
+       (define n (vector-ref v i))
+       (define mapped
+         (if (and (= n sigma) before (not (cased-after? (add1 i))))
+             (list final-sigma)
+             (hash-ref down n (lambda () (list n)))))
+       (loop (add1 i)
+             (cond [(hash-ref cased n #f) #t] [(hash-ref ignorable n #f) before] [else #f])
+             (cons mapped out))])))
+
+(define (case-tables)
+  (define up-list (case-mapping string-upcase))
+  (define down-list (case-mapping string-downcase))
+  (define up (for/hasheqv ([entry (in-list up-list)]) (values (car entry) (cdr entry))))
+  (define down (for/hasheqv ([entry (in-list down-list)]) (values (car entry) (cdr entry))))
+  (define cased-list
+    (filter (lambda (n) (ends-final? (string-downcase (chars->string (list n sigma))))) code-points))
+  (define cased (for/hasheqv ([n (in-list cased-list)]) (values n #t)))
+  (define ignorable-list
+    (filter (lambda (n)
+              (and (not (hash-ref cased n #f))
+                   (ends-final? (string-downcase (chars->string (list capital-a n sigma))))))
+            code-points))
+  (define ignorable (for/hasheqv ([n (in-list ignorable-list)]) (values n #t)))
+  (define (check-case! ns)
+    (define text (chars->string ns))
+    (unless (equal? (string->code-points (string-upcase text)) (model-upcase ns up))
+      (error 'gen-unicode "upcase of ~s is ~s, the C rule gives ~s"
+             ns (string-upcase text) (chars->string (model-upcase ns up))))
+    (unless (equal? (string->code-points (string-downcase text)) (model-downcase ns down cased ignorable))
+      (error 'gen-unicode "downcase of ~s is ~s, the C rule gives ~s"
+             ns (string-downcase text) (chars->string (model-downcase ns down cased ignorable)))))
+  (for ([n (in-list code-points)])
+    (check-case! (list n sigma))
+    (check-case! (list capital-a n sigma))
+    (check-case! (list capital-a sigma n))
+    (check-case! (list capital-a sigma n capital-b))
+    (check-case! (list 49 n sigma)))
+  (for ([n (in-list ignorable-list)])
+    (check-case! (list capital-a n n sigma))
+    (check-case! (list capital-a sigma n n capital-b))
+    (check-case! (list capital-a sigma n n))
+    (check-case! (list sigma n sigma n)))
+  (for ([n (in-list cased-list)])
+    (check-case! (list n #x301 sigma #x301 32)))
+  (check-case! code-points)
+  (check-case! (reverse code-points))
+  (values up-list down-list (ranges-of cased-list) (ranges-of ignorable-list)))
+
+(define (c-case-table name entries)
+  (string-append
+   (format "const uint32_t ~a[][4] = {\n" name)
+   (string-append*
+    (for/list ([entry (in-list entries)])
+      (define padded (append entry (make-list (- 4 (length entry)) 0)))
+      (format "  {~a},\n" (string-join (map (lambda (n) (format "0x~a" (~r n #:base '(up 16)))) padded) ", "))))
+   "};\n\n"
+   (format "const size_t ~a_count = sizeof ~a / sizeof ~a[0];\n" name name name)))
+
 (define (c-table name ranges)
   (string-append
    (format "const uint32_t ~a_ranges[][2] = {\n" name)
@@ -91,13 +181,22 @@
 
 (define (unicode-data-text)
   (define-values (raw joiner blank) (tables))
+  (define-values (up down cased ignorable) (case-tables))
   (string-append
    "#include \"agc.h\"\n\n"
    (c-table "agc_write_raw" raw)
    "\n"
    (c-table "agc_write_joiner" joiner)
    "\n"
-   (c-table "agc_write_blank" blank)))
+   (c-table "agc_write_blank" blank)
+   "\n"
+   (c-case-table "agc_upcase_map" up)
+   "\n"
+   (c-case-table "agc_downcase_map" down)
+   "\n"
+   (c-table "agc_cased" cased)
+   "\n"
+   (c-table "agc_case_ignorable" ignorable)))
 
 (module+ main
   (define arguments (current-command-line-arguments))

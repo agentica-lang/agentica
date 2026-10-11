@@ -262,12 +262,34 @@ extern const uint32_t agc_write_joiner_ranges[][2];
 extern const size_t agc_write_joiner_count;
 extern const uint32_t agc_write_blank_ranges[][2];
 extern const size_t agc_write_blank_count;
+bool agc_in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp);
 bool agc_write_raw(uint32_t cp);
 size_t agc_write_form(const agc_string *s, char *out, size_t *chars);
 agc_string *agc_concat(const agc_string *a, const agc_string *b);
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]);
 agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
+
+extern const uint32_t agc_upcase_map[][4];
+extern const size_t agc_upcase_map_count;
+extern const uint32_t agc_downcase_map[][4];
+extern const size_t agc_downcase_map_count;
+extern const uint32_t agc_cased_ranges[][2];
+extern const size_t agc_cased_count;
+extern const uint32_t agc_case_ignorable_ranges[][2];
+extern const size_t agc_case_ignorable_count;
+
+typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_number_status;
+
+size_t agc_utf8_encode(uint32_t cp, char out[4]);
+size_t agc_utf8_count(const uint8_t *s, size_t len);
+size_t agc_utf8_offset(const agc_string *s, size_t index);
+size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
+agc_string *agc_change_case(const agc_string *s, bool up);
+agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
+agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
+extern const agc_builtin agc_string_builtins[];
+extern const size_t agc_string_builtin_count;
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 

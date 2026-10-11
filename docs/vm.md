@@ -54,7 +54,11 @@ over a range, the `Range` builtins and `Int.times`, `upto`, `downto`, 3.3,
 `x.to_s` and `x.inspect` of those values, `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn`/`IO.inspect` of any of them, blocking stdin
 (`gets`, `gets!`, `IO.read`, `IO.read_bytes`, `IO.eof?`), `IO.flush`,
-`System.args` and `System.exit`. List and Map library functions
+`System.args` and `System.exit`, and every `String` builtin of the catalog
+(`length`, `upcase`, `downcase`, `trim`, `split`, `join`, `contains?`,
+`starts_with?`, `ends_with?`, `replace`, `slice`, `index_of`, `at`,
+`reverse`, `code`, `from_code`, `from_int`, `from_float`, `from_bytes`,
+`to_int`, `to_int!`, `to_float`, `to_float!`, 2.3). List and Map library functions
 (`xs.size`, `List.append`, `Map.get`, `Map.keys`, ...) join with the library
 PR (12.2 item 6b). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
@@ -226,12 +230,12 @@ differential tests (section 12) check them.
 The case mapping, final-sigma and write-escape data are generated from
 Racket itself by `vm/tools/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
 so they agree with the reference by construction (Racket 9.3).
-`make vm-unicode` regenerates the file (about 40 s; run it with Racket CS 9.3,
+`make vm-unicode` regenerates the file (about 55 s; run it with Racket CS 9.3,
 the CI version, since the tables follow Racket's Unicode data), and the Linux CI job
 fails when the committed file differs from what the generator prints.
 
-- In the slice: only the write-escape data exists, as three range tables
-  derived from Racket's output, not written by hand: code points `write`
+- The tables are derived from Racket's output, not written by hand. The
+  write-escape data is three range tables: code points `write`
   prints as themselves (`agc_write_raw_ranges`), joiners that print raw
   only after a raw non-blank character (`agc_write_joiner_ranges`: U+200C,
   U+200D and U+E0020 to U+E007F), and blanks (`agc_write_blank_ranges`: the
@@ -252,8 +256,56 @@ fails when the committed file differs from what the generator prints.
   of joiners after 14 prefixes (empty, letters, blanks, an escape, a
   combining mark, an emoji, joiners), also with `a` or a space between
   them; and for one string holding every code point. It stops if Racket
-  ever prints something else. The case-mapping tables join with the
-  `String` library (12.2 item 6b).
+  ever prints something else.
+- The case data is two mapping tables and two range tables.
+  `agc_upcase_map` and `agc_downcase_map` hold, sorted by code point, every
+  code point whose `string-upcase` or `string-downcase` as a one-character
+  string is not itself, with its full mapping (at most three code points,
+  so `ß` gives `SS` and `İ` gives `i` plus U+0307). `agc_cased_ranges` are
+  the code points after which a final `Σ` becomes `ς` (`xΣ`), and
+  `agc_case_ignorable_ranges` the other code points that may stand between
+  them (`AxΣ`); Racket uses the same two sets for the look-ahead.
+- The C rule for case: upcase maps each code point through its table.
+  Downcase does the same, except that `Σ` becomes `ς` when the last code
+  point before it that is not case-ignorable (a cased one counts even when
+  it is also ignorable) is cased, and the first one after it that is not
+  case-ignorable is missing or not cased. So `ΣΣ` gives `σς`, `AΣ.B` gives
+  `aσ.b`, `A\u0301Σ` gives `aς` and `AΣ Σ` gives `aς σ`. The generator
+  checks this against Racket for every code point next to `Σ` in five
+  contexts, for runs of two case-ignorable code points, for a cased code
+  point with combining marks around `Σ`, and for the whole code point range
+  in both orders; it stops on any difference.
+- `String` library in C (`vm/strings.c`): lengths and indexes count code
+  points (`agc_string` keeps both the byte and the code point count, and
+  ASCII-only strings index bytes directly); every function is one or two
+  O(n) passes that size the result first, then fill it; substring search
+  is byte-wise Knuth-Morris-Pratt (a valid UTF-8 match always starts on a
+  code point), so `split`, `replace`, `contains?` and `index_of` stay
+  linear even on `aaaa...ab`. `String.trim` checks only the five ASCII
+  bytes above, so it needs no table.
+- `String.to_int` accepts `^[+-]?[0-9]+$` (ASCII digits only; no spaces,
+  `_`, `0x` or exponent; `$` does not match before a final newline) and
+  gives `Int result is outside the 64-bit range` past 64 bits;
+  `String.to_float` accepts `^[+-]?[0-9]+(\.[0-9]+)?$`. Other text gives
+  `cannot convert "TEXT" to Int` (or `Float`) with the String's debug form.
+  The Result forms return these as `error(...)`; `to_int!` halts with
+  `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`, `to_float!` with
+  `RUNTIME-INVALID-NUMBER`, all at the call span. After the pattern check,
+  the C code runs `strtod` on a NUL-terminated copy (only digits, sign and
+  dot reach it, so no locale, hex, `inf` or `nan` path), which rounds
+  correctly like Racket: text without a dot is an exact integer in Racket
+  that `exact->inexact` rounds, so `-0` gives `0.0`, while `-0.0` gives
+  `-0.0`; 400 nines give `+inf.0`.
+- `String.from_bytes` first checks that every item is 0 to 255
+  (`bytes must be integers between 0 and 255`), then decodes strictly
+  (`invalid or incomplete UTF-8`: no surrogates, overlong forms or code
+  points above U+10FFFF). `String.code` needs exactly one code point and
+  `String.from_code` a Unicode scalar value, else
+  `RUNTIME-INVALID-CHARACTER` at the argument span (the receiver for
+  `s.code`). `String.at` fails at the index argument's span and
+  `String.slice` at the call span, both with `RUNTIME-INDEX-OUT-OF-RANGE`.
+  `String.split(s, "")` of empty text is `[]`, while a non-empty separator
+  gives `[""]`.
 
 ### 2.4 Printing values (`value->text`, `value->debug-string`)
 
@@ -1564,7 +1616,11 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      stdin through. Fixtures with a `.stdin` and an `.args` file next to
      them feed the differential test.
    - **6b** `String`, `List`, `Map`, `Float`, `Time`, `Random` (with the
-     seeding port).
+     seeding port). The `String` part is done: every `String.*` builtin of
+     the catalog in `vm/strings.c` (2.3), the case and final-sigma tables in
+     `vm/unicode_data.c`, `vm/tests/string_test.c` (UTF-8 helpers, search,
+     case, number parsing edge cases) and the `string-*` fixtures (non-ASCII
+     text, empty strings, every runtime code and span).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 

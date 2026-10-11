@@ -3,7 +3,7 @@
 #include <inttypes.h>
 #include <string.h>
 
-static bool in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp) {
+bool agc_in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp) {
   size_t lo = 0, hi = count;
   while (lo < hi) {
     size_t mid = lo + (hi - lo) / 2;
@@ -17,7 +17,7 @@ static bool in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp) {
   return false;
 }
 
-bool agc_write_raw(uint32_t cp) { return in_ranges(agc_write_raw_ranges, agc_write_raw_count, cp); }
+bool agc_write_raw(uint32_t cp) { return agc_in_ranges(agc_write_raw_ranges, agc_write_raw_count, cp); }
 
 static uint32_t decode(const uint8_t *s, size_t width) {
   static const uint8_t lead_mask[] = {0, 0x7F, 0x1F, 0x0F, 0x07};
@@ -61,8 +61,8 @@ size_t agc_write_form(const agc_string *s, char *out, size_t *chars) {
     if (width > s->bytes - at) width = s->bytes - at;
     uint32_t cp = decode(data + at, width);
     const char *escape = short_escape(cp);
-    bool raw = !escape && (agc_write_raw(cp) || (join && in_ranges(agc_write_joiner_ranges, agc_write_joiner_count, cp)));
-    join = raw && !in_ranges(agc_write_blank_ranges, agc_write_blank_count, cp);
+    bool raw = !escape && (agc_write_raw(cp) || (join && agc_in_ranges(agc_write_joiner_ranges, agc_write_joiner_count, cp)));
+    join = raw && !agc_in_ranges(agc_write_blank_ranges, agc_write_blank_count, cp);
     char hex[12];
     const char *piece = (const char *)data + at;
     size_t len = width;

@@ -265,10 +265,16 @@ static const agc_builtin table[] = {
   {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO},
 };
 
-const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {
-  for (size_t i = 0; i < sizeof table / sizeof table[0]; i++) {
-    if (table[i].arity == arity && strlen(table[i].name) == len && memcmp(table[i].name, name, len) == 0)
-      return &table[i];
+static const agc_builtin *find_in(const agc_builtin *entries, size_t count, const uint8_t *name, size_t len,
+                                  uint32_t arity) {
+  for (size_t i = 0; i < count; i++) {
+    if (entries[i].arity == arity && strlen(entries[i].name) == len && memcmp(entries[i].name, name, len) == 0)
+      return &entries[i];
   }
   return NULL;
+}
+
+const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {
+  const agc_builtin *found = find_in(table, sizeof table / sizeof table[0], name, len, arity);
+  return found ? found : find_in(agc_string_builtins, agc_string_builtin_count, name, len, arity);
 }

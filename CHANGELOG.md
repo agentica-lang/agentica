@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs every `String` builtin: `length`, `upcase`,
+  `downcase`, `trim`, `split`, `join`, `contains?`, `starts_with?`,
+  `ends_with?`, `replace`, `slice`, `index_of`, `at`, `reverse`, `code`,
+  `from_code`, `from_bytes`, `to_int`, `to_int!`, `to_float` and
+  `to_float!`, with the evaluator's results, messages and spans. Lengths
+  and indexes count code points; case mapping (special cases and final
+  sigma) comes from tables generated from Racket; search, split and
+  replace stay linear.
+
 - Ranges (Phase 8a): `a..b` includes `b`, `a...b` excludes it; both ends
   are `Int` and the value has the new builtin type `Range` (start, end and
   kind, no list inside). `for x in range` iterates without building a list
