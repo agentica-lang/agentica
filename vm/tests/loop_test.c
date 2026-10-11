@@ -1,0 +1,95 @@
+#include "../agc.h"
+
+#include <assert.h>
+#include <stdlib.h>
+#include <time.h>
+
+typedef struct {
+  long sleep_ms;
+  int value;
+} task_data;
+
+static int dropped;
+static int released;
+
+static void pause_ms(long ms) {
+  struct timespec delay = {ms / 1000, (ms % 1000) * 1000000};
+  while (nanosleep(&delay, &delay) != 0) {}
+}
+
+static void slow_work(void *data) {
+  task_data *t = data;
+  pause_ms(t->sleep_ms);
+  t->value = 7;
+}
+
+static agc_value finished(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  task_data *t = data;
+  int value = t->value + (int)agc_as_int(vm, context);
+  free(t);
+  return agc_int(value);
+}
+
+static agc_value expired(agc_vm *vm, agc_value context) {
+  (void)vm;
+  (void)context;
+  return agc_int(-1);
+}
+
+static void drop(void *data) {
+  task_data *t = data;
+  assert(t->value == 7);
+  free(t);
+  dropped++;
+}
+
+static const agc_io_kind kind = {slow_work, finished, expired, drop};
+
+static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
+  task_data *t = calloc(1, sizeof(task_data));
+  assert(t);
+  t->sleep_ms = sleep_ms;
+  agc_io_start(vm, &kind, t, agc_int(100), timeout_ms);
+  assert(vm->parked);
+  agc_io_park(vm, 0);
+  assert(!vm->parked);
+  return agc_as_int(vm, vm->regs[0]);
+}
+
+static void release_count(void *native) { (*(int *)native)++; }
+
+int main(void) {
+  agc_init();
+  agc_vm vm;
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  vm.regs = agc_alloc(4 * sizeof(agc_value));
+  vm.reg_capacity = 4;
+
+  agc_resource *items[1000];
+  for (int k = 0; k < 1000; k++) items[k] = agc_register(&vm, &released, release_count);
+  for (int k = 0; k < 1000; k += 2) agc_unregister(&vm, items[k]);
+  agc_unregister(&vm, items[0]);
+  for (int k = 0; k < 1000; k++) assert((k % 2 == 0) == (items[k]->slot == SIZE_MAX));
+
+#ifdef __linux__
+  assert(agc_uv_version());
+  assert(run_one(&vm, 0, 5000) == 107);
+  assert(run_one(&vm, 300, 20) == -1);
+  assert(dropped == 0);
+  assert(run_one(&vm, 0, 5000) == 107);
+  pause_ms(400);
+  agc_io_close(&vm);
+  assert(dropped == 1);
+  assert(released == 500);
+  assert(vm.loop == NULL);
+  agc_resource *again = agc_register(&vm, &released, release_count);
+  assert(again->slot == 0);
+  agc_unregister(&vm, again);
+  assert(run_one(&vm, 0, 5000) == 107);
+  agc_io_close(&vm);
+  assert(vm.loop == NULL);
+#endif
+  puts("loop tests passed");
+  return 0;
+}

@@ -238,11 +238,13 @@ static int run(int argc, char **argv) {
     }
     if (strcmp(arg, "--version") == 0) {
       unsigned gc = agc_gc_version();
+      const char *uv = agc_uv_version();
       if (gc)
-        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
-               agc_json_version());
+        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
+               agc_json_version(), uv ? ", libuv " : "", uv ? uv : "");
       else
-        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s)\n", AGC_VERSION, agc_json_version());
+        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s)\n", AGC_VERSION, agc_json_version(),
+               uv ? ", libuv " : "", uv ? uv : "");
       return fflush(stdout) == 0 ? 0 : 1;
     }
     if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
@@ -312,6 +314,7 @@ static int run(int argc, char **argv) {
   vm->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);
+  agc_io_close(vm);
   if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";

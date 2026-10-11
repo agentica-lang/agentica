@@ -143,7 +143,7 @@
     (check-equal? (unsupported-at "def get(m: Map[String, Header]) -> Header\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
                   '(2 10))
     (check-equal? (unsupported-at "struct P\n  a: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n") '(6 8))
-    (check-equal? (unsupported-at "def main() -> Void\n  puts(Path.resolve(\"a\"))\nend\n") '(2 8))
+    (check-equal? (unsupported-at "def main() -> Void\n  Task.sleep(5)\nend\n") '(2 3))
     (check-equal? (unsupported-at "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\nend\n")
                   '(6 7))
     (check-equal? (unsupported-at "def main() -> Void\n  h = Header(name: \"a\", value: \"b\")\nend\n") '(2 7))

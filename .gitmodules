@@ -4,3 +4,6 @@
 [submodule "vm/third_party/yyjson"]
 	path = vm/third_party/yyjson
 	url = https://github.com/ibireme/yyjson.git
+[submodule "vm/third_party/libuv"]
+	path = vm/third_party/libuv
+	url = https://github.com/libuv/libuv.git

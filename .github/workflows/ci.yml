@@ -184,6 +184,8 @@ jobs:
         shell: bash
       - run: diff <(dist/agentica examples/tasks.agc) <(dist/agentica --vm examples/tasks.agc)
         shell: bash
+      - run: diff <(dist/agentica examples/file-summary.agc examples/hello.agc) <(dist/agentica --vm examples/file-summary.agc examples/hello.agc)
+        shell: bash
       - run: dist/agentica examples/queue.agc
 
   vm-sanitizers:
