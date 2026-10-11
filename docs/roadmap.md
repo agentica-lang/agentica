@@ -1156,8 +1156,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 - [ ] Event loop on libuv and the resource registry, following the rules in `docs/vm.md` section 10.2. libuv is vendored as a git submodule from `https://github.com/libuv/libuv`, pinned to a recent release tag and built from source, not taken from system packages.
 - [ ] Files and paths.
-- [ ] Lightweight tasks: scheduler, `Task.spawn/await/sleep`, shared step budget, cancellation on return.
-- [ ] Reduction-based scheduler and fairness with I/O, as in `docs/vm.md` section 10.2.1.
+- [ ] Lightweight tasks: reduction-based scheduler and I/O fairness (`docs/vm.md` section 10.2.1), `Task.spawn/await/sleep`, shared step budget, cancellation on return.
 - [ ] Processes, behind the VM's own `--allow-run` flag; before this, fix the case-sensitive Windows batch check in `process.rkt` and decide in `grammar.md` whether the current directory is searched.
 - [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
 - [ ] HTTP/1.1 clients and servers.

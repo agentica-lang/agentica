@@ -711,8 +711,10 @@ typedef struct {
   runtime diagnostic carries one span and no stack trace, so the replaced
   frames are not visible. Non-tail recursion keeps the limit and its span.
   The evaluator is not changed: it goes away in 7i.
-- `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. `STEP`
-  is one compare and one subtraction. All tasks share it.
+- `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. All
+  tasks share it. `STEP` is one compare and one subtraction on a "next stop"
+  counter; before 7h it is just `steps_left`, and from 7h it also covers the
+  turn budget (10.2.1).
 
 ### 6.2 Failure, exit and cleanup
 
@@ -1005,29 +1007,46 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 - **Run queue.** Ready tasks wait in one FIFO queue. A new task, a task whose
   turn ended, and a task woken by a libuv callback all go to the back.
 - **Reductions, as in BEAM.** Each turn has a budget of steps, counted by
-  `STEP` like `--max-steps` (`STEP n` counts n). The number is decided by
-  measurement in 7g and 7h; it starts at 2000. When a `STEP` spends the turn's
-  budget, the task goes to the back of the run queue and the next one runs.
-  To the program the scheduler is preemptive; inside the VM it switches only
-  at a `STEP`, a safe point, so no builtin is stopped halfway. A long builtin
-  (sorting a big list, for example) finishes in its turn. Every loop passes a
-  `STEP`: backward jumps land on one, and every function that calls starts
+  `STEP` like `--max-steps` (`STEP n` counts n). It starts at 2000 and is
+  tuned by measurement in 7h; 7g gives the cost of `STEP` with one task. When
+  a `STEP` spends the turn's budget, the task goes to the back of the run
+  queue and the next one runs. A merged `STEP n` that crosses the budget
+  charges all n, then yields because the turn budget is ≤ 0; the extra is not
+  carried over to the next turn. To the program the scheduler is preemptive;
+  inside the VM it switches only at a `STEP`, a safe point. Every loop passes
+  a `STEP`: backward jumps land on one, and every function that calls starts
   with one (8), so a `TAIL_CALL` loop passes it too. A task also leaves its
   turn when it blocks.
+- **Builtins.** No builtin's C code is stopped halfway. A resumable builtin
+  (4.3: `map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) can be
+  switched out only between its callbacks, at their `STEP`s. Any other
+  builtin finishes in its turn: `List.sort` on a big list, or the sort inside
+  `sort_by` after its keys are collected, runs to the end without a switch.
+- **One counter for both budgets.** `STEP` counts down one "next stop"
+  counter, set to `min(turn_left, steps_left)` when a turn starts. The fast
+  path stays one compare and one subtraction. When the counter runs out, the
+  slow path works out which budget ran out: it moves the spent steps out of
+  both, fails with `RUNTIME-STEP-LIMIT` if `steps_left` is spent, and yields
+  if the turn is spent.
 - **Fairness with I/O.** After each turn (or every N turns, if measurement
   asks for it) the scheduler calls `uv_run(UV_RUN_NOWAIT)`, so ready I/O wakes
-  its tasks even while other tasks keep computing. It blocks in
-  `uv_run(UV_RUN_ONCE)` only when the run queue is empty.
+  its tasks even while other tasks keep computing. Timers (`Task.sleep`) wake
+  the same way, inside `uv_run`. Tasks woken during a `NOWAIT` go behind the
+  tasks already queued. The scheduler blocks in `uv_run(UV_RUN_ONCE)` only
+  when the run queue is empty.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
-    6.1), as today, so counts and failing spans match the evaluator's
-    synchronized counter (2.1). Preemption never changes what is charged.
+    6.1), as today. Preemption never changes what is charged. With one task,
+    counts and failing spans match the evaluator (2.1). With several tasks,
+    which task fails at the limit depends on the interleaving, so, like
+    cross-task output order, it is not compared.
   - Per-task step quotas could later use the same counter. They are not in
     7h.
   - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
     BEAM's per-process heaps. Only a global heap limit is possible (13).
 - **One OS thread in 7h.** Multicore (M:N, one scheduler per core with work
-  stealing) is later work, done only if 7g and 7h measurements justify it.
+  stealing) is later work, done only if measurements of the 7h scheduler
+  justify it.
   Immutable values make sharing safe, and the shared tables plan avoids
   locks. The costs: Boehm stops the world for each collection once there are
   threads, the interpreter state must become per-thread, and builtins that
