@@ -1672,7 +1672,8 @@ when the task runs again, the same completion code calls `done` or
 `expired` and stores the result. The scheduler calls `uv_run` with
 `UV_RUN_NOWAIT` between turns and `UV_RUN_ONCE` only when the run queue is
 empty. Handles also get a per-handle lock (the evaluator's semaphore)
-once two tasks can share one. With N>1 (10.2.3) each scheduler has its own
+once two tasks can share one. It is a task-level lock: waiters park in a
+FIFO, and it is never an OS mutex. With N>1 (10.2.3) each scheduler has its own
 loop, and an operation on a handle owned by another scheduler goes through
 the I/O hand-off.
 
@@ -1681,8 +1682,10 @@ the I/O hand-off.
 The VM must use all CPU cores (parallelism), not only run tasks
 concurrently. The design follows BEAM.
 
-- **Schedulers.** N scheduler threads. The default is the number of cores;
-  `--schedulers N` sets it, and `--schedulers 1` gives deterministic runs.
+- **Schedulers.** N scheduler threads. The default is
+  `uv_available_parallelism()`, which respects CPU affinity; `--schedulers
+  N` sets it, capped at 1024, and 0, negative or non-numeric values exit 2
+  like other bad VM flags. `--schedulers 1` gives deterministic runs.
   `--seed` does not imply `--schedulers 1`: a repeatable run needs
   `--schedulers 1` given explicitly; at N>1 only each task's random values
   repeat (7.4).
@@ -1698,7 +1701,11 @@ concurrently. The design follows BEAM.
   home. A spawned or preempted task stays on its own scheduler's queue, for
   locality. As in BEAM, when a scheduler pushes onto its queue while the
   idle count is above 0 and its queue holds more than one task, it sends
-  `uv_async_send` to one idle scheduler, which then tries to steal.
+  `uv_async_send` to one idle scheduler, which then tries to steal. It
+  picks that scheduler from an atomic idle bitmask (one bit per scheduler,
+  set while idle). Requeueing a preempted task onto the same queue does not
+  touch the shared packed word (Stall check), since the task never stops
+  being live.
 - **Home scheduler and waking.** Every task has a home scheduler: the one
   whose queue it was last put on. Waking a task (an await finishing, an I/O
   reply, cancellation) pushes it onto its home scheduler's MPSC wake queue
@@ -1758,10 +1765,11 @@ concurrently. The design follows BEAM.
 - **Stdin.** Stdin is a handle owned by scheduler 0. Reads from other
   schedulers go through the same hand-off. Each read stays whole because
   the owner keeps a FIFO of waiting reader tasks and serves one read at a
-  time. No lock is ever held across a park.
+  time. No OS mutex or spinlock is ever held across a park.
 - **Output.** Each print to stdout or stderr is written whole under one lock
   per stream, so lines from different tasks never mix mid-line. These
-  writes never park, so the lock is never held across a park. Once the
+  writes never park, so the lock is never held across a park. Under the
+  lock, a write checks for short writes and `ferror` and retries. Once the
   outcome is set, writes are dropped; the check is made under the stream
   lock. The final diagnostic that `vm/main.c` prints is exempt. Only the order in which output from different tasks interleaves is
   not repeatable.
@@ -1789,6 +1797,10 @@ concurrently. The design follows BEAM.
   live == 0: the idle increment and every live decrement. The thread that
   makes that change, if tasks are still parked, fails the run with
   `RUNTIME-INTERNAL` and wakes the other schedulers (10.2.1, Fairness).
+- **Main thread.** It does the start-up-only work (`GC_INIT`,
+  `GC_allow_register_threads`, the `setenv`, the SipHash keys, the messages
+  locale), starts schedulers 1..N-1, runs scheduler 0 itself, and joins the
+  others after its own loop ends.
 - **Shutdown.** Each scheduler closes its own registry's handles and runs
   its own loop to completion on its own thread before the main thread
   joins it.
@@ -1801,8 +1813,10 @@ concurrently. The design follows BEAM.
   and hand-off queue nodes, and the run-queue and steal-deque storage, are
   GC-allocated; if one is not, the task or payload it carries is also
   rooted in the owner's registry until it is drained. Collections
-  stop the world; that cost is accepted and measured (round 2 benchmarks).
-  Boehm stops threads with signals, so the VM's syscall paths retry on
+  stop the world; that cost is accepted and measured (round 2 benchmarks,
+  which also measure contention on the packed word of the Stall check).
+  Boehm stops threads with signals, installed with `SA_RESTART`, and the
+  VM's syscall paths retry on
   `EINTR`, and libuv signal handling (`uv_signal_t`) must never take
   Boehm's suspend and restart signals.
 - **No mutable global state in `vm/`.** Every mutable `static` or global
