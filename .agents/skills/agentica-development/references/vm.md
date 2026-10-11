@@ -233,8 +233,8 @@ is checked.
   temporary copies): a real program with 65535 variants must load.
   `load_alloc(0)` returns NULL without charging anything.
 - Tail calls: the lowerer turns `return f(...)` into `tail-call` when the
-  value is a direct user call (`tail-call?` in `src/lower.rkt`; builtins,
-  `try` and calls inside larger expressions do not count) and emits no `return`
+  value is a direct user call (`tail-call?` in `src/lower.rkt`; builtins
+  and calls inside larger expressions do not count) and emits no `return`
   after it. `TAIL_CALL` grows the registers to the frame base plus the
   callee's count first, then `memmove`s the argument window to `R[0..]`
   (windows overlap). It does not touch the depth, so on the VM deep tail

@@ -372,7 +372,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's display name, as `type-expression` evaluates to its name. |
 | `&name` | `closure` with no captures. |
 | `f.call(...)` | `call-value` at the invoke span. |
-| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls, `return try f(...)`, calls inside a larger expression (`return 1 + f(n)`) and `.call` (`call-value`) are not tail calls. |
+| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls and calls inside a larger expression (`return 1 + f(n)`) are not tail calls; neither will `return try f(...)` and `.call` be, once the VM lowers them. |
 | Assignment to an existing local | Value into a temporary, then `move`. `and`/`or` write their target before the right side runs, so lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
 
 ### 3.4 Closure conversion
@@ -845,7 +845,9 @@ The loader validates the whole file before running anything. Failures print
   functions that call, so each one charges its leading `STEP`), so `--max-steps` holds even for
   hostile files: the step budget bounds the number of instructions to about
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
-  time and memory in proportion to their strings (trust model, 1).
+  time and memory in proportion to their strings (trust model, 1). `LIST`
+  and `TAIL_CALL` copy up to 65534 values in one instruction, so they cost
+  O(count) per step, still within steps × code size.
 - **Entry**: exists, with no parameters or captures.
 - **In the slice**: captures must be 0; constant kinds above 6 are
   rejected. Struct field counts and variant arities are at most 65535. All

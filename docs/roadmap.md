@@ -1065,7 +1065,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 - [x] IR: closures (block bodies with their captured values): each block is its own IR function; free variables are captured by value; `&name` is a closure with no captures.
 - [x] IR: shape of the lowered program: flat instruction lists over numbered slots, labels, typed operations, spans; the checker records expression types for the lowerer.
-- [x] Bytecode: register machine, 46 opcodes (47 with `TAIL_CALL`, added later), generic `CALL_BUILTIN`, constant pool, type/struct/enum/function tables, span table, format version.
+- [x] Bytecode: register machine, 46 opcodes, generic `CALL_BUILTIN`, constant pool, type/struct/enum/function tables, span table, format version.
 - [x] Serialization between Racket and the VM: little-endian binary with magic `AGCB`, format version and Agentica version, rejected on mismatch.
 - [x] Value representation in C: 16-byte tagged values with the Boehm GC; HAMT maps with insertion order; checked accessors for every value read.
 - [x] Execution limits: one step per former AST entry through `STEP` instructions; counts and spans match the evaluator.

@@ -363,8 +363,7 @@
 
   (define (tail-call? expression)
     (and (call? expression)
-         (not (builtin-ref (call-name expression) (length (call-args expression))))
-         (hash-has-key? function-index (call-name expression))))
+         (not (builtin-ref (call-name expression) (length (call-args expression))))))
 
   (define (lower-call expression want void? #:checked? [checked? #f] #:tail? [tail? #f])
     (define name (call-name expression))
