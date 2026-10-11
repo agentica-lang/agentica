@@ -323,8 +323,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   per-scheduler loop, run queue, registry and turn counter; per-task stack,
   registers and frame). Only the scheduler that owns a loop calls `uv_run`
   on it; libuv and OpenSSL callbacks only copy results and mark tasks
-  ready. New code adds no mutable `static` or global variable in `vm/` (only
-  the `AGC_NO_GC` allocation tracking may); state goes in the runtime,
+  ready. New code adds no mutable `static` or global variable in `vm/` (the
+  exceptions that stay are listed in `docs/vm.md` §10.2.2); state goes in the runtime,
   scheduler or task struct, and lazy init uses `pthread_once` or runs at
   start-up. Handles and requests are `malloc`'d; the GC object that owns one
   stays in its scheduler's resource registry until its `uv_close` callback, and

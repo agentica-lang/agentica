@@ -1111,6 +1111,12 @@ the `RUNTIME-INVALID-RANGE` error at the call.
 - Generator (`vm/random.c`): xoshiro256** (Blackman and Vigna, public
   domain), its four state words (`agc_random` in `agc_vm`) filled by four
   splitmix64 outputs from the seed (also public domain).
+- Tasks (7h): the generator state becomes per task. The main task is seeded
+  from `--seed`; a spawned task gets its own generator from its parent's at
+  spawn time (a splitmix64 split of one parent draw). Each task's values
+  then depend only on its own order of calls, so `--seed` repeats each
+  task's values even with N>1 schedulers (10.2.2); only how output from
+  different tasks interleaves is not repeatable.
 - `Random.float` is `(next >> 11) * 2^-53`. It can return exactly 0.0,
   which the evaluator's `(random)` never does; both stay in `[0, 1)`, so a
   fixture must not rely on `x > 0.0`.
@@ -1267,7 +1273,9 @@ and cost one predictable branch each.
   non-ASCII paths load and a lone surrogate never maps to another file. The
   size comes from `_fstat64`, so a file over 2 GiB is rejected, not read
   as a prefix. Paths over 260 characters fail with `_wopen` unless they use
-  `\\?\` or the executable has a `longPathAware` manifest; 7h decides. A
+  `\\?\` or the executable has a `longPathAware` manifest; 7h decides.
+  `--schedulers N` (10.2.2) comes with the 7h multicore schedulers item;
+  `agentica --vm --schedulers N` passes it through, as it does `--seed`. A
   differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
@@ -1465,7 +1473,8 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   task, so either some loop has an active handle or some queue is not empty.
   If every scheduler is idle, no loop has an active handle, and tasks are
   still parked, the VM fails with `RUNTIME-INTERNAL` and does not spin. With
-  N=1 this is the plain check that `uv_run` reports no active handles.
+  N=1 this is the plain check that `uv_run` reports no active handles; for
+  N>1 see 10.2.2, Stall check.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
     6.1), as today. Preemption never changes what is charged. With one task,
@@ -1476,11 +1485,14 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     a batch from it when a turn starts (one turn's budget, or what is left
     if less) and gives the unspent part back when the turn ends. The "next
     stop" counter is set from the batch, so the fast path stays one compare
-    and one subtraction and touches no atomic. A task fails with
-    `RUNTIME-STEP-LIMIT` only when its batch is spent and the shared counter
-    is empty. With N=1 this is the same as one plain counter, so counts and
-    spans still match the evaluator exactly. With N>1, which task hits the
-    limit is not compared, as cross-task output order is not compared.
+    and one subtraction and touches no atomic. A `STEP n` that crosses the
+    end of its batch first takes more from the shared counter, and fails
+    with `RUNTIME-STEP-LIMIT` only when that is not enough. With N=1 this is
+    the same as one plain counter, so counts and the span `s + steps_left`
+    still match the evaluator exactly. With N>1, other schedulers may hold
+    unspent batches, so the run may stop up to (N-1) times the turn budget
+    below the limit, and which task hits the limit is not compared, as
+    cross-task output order is not compared.
   - Per-task step quotas could later use the same counter. They are not in
     7h.
   - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
@@ -1501,15 +1513,23 @@ concurrently. The design follows BEAM.
   in 10.2.1, and reductions and turns stay as they are there.
 - **Work stealing.** A scheduler whose queue is empty steals from the queues
   of others. It takes only ready tasks; a parked task stays with the
-  scheduler that owns what it waits on. An idle scheduler that is blocked in
-  `uv_run` is woken with `uv_async_send` when work appears.
+  scheduler that owns what it waits on.
+- **Home scheduler and waking.** Every task has a home scheduler: the one
+  whose queue it was last put on. Waking a task (an await finishing, an I/O
+  reply, cancellation) pushes it onto its home scheduler's MPSC wake queue
+  and calls `uv_async_send` on that scheduler's wake handle. A task's result
+  and state changes are published with release/acquire, or under a small
+  per-task lock, so an awaiting task on another scheduler sees the whole
+  result. Cancellation sets a flag that the task checks at its next `STEP`,
+  plus a wake if it is parked.
 - **State split.**
   - Shared and read-only after start-up (the runtime): the program,
     constants and config. The shared atomic `steps_left` (10.2.1, Quotas)
     and the run's outcome also hang here.
   - Per scheduler: the loop, the run queue, the resource registry and the
     turn counter.
-  - Per task: the stack, the registers and the current frame.
+  - Per task: the stack, the registers, the current frame and the random
+    generator (7.4).
   - A runtime diagnostic or `System.exit` on any scheduler ends the run
     (6.2): that scheduler records the outcome once, and the others stop at
     their next `STEP` or loop wake-up, then cleanup runs.
@@ -1517,32 +1537,61 @@ concurrently. The design follows BEAM.
   task parked on I/O wakes on the scheduler that owns that loop. If a task
   that was stolen to another scheduler uses a handle owned elsewhere, the
   operation is sent to the owner loop (an MPSC queue plus `uv_async_send`),
-  and the task parks until the reply. Thread-pool threads still never touch
-  GC memory (10.2).
+  and the task parks until the reply. The reply wakes it on the scheduler
+  that owns the loop: that one becomes its home. Thread-pool threads still
+  never touch GC memory (10.2).
+- **Output.** Each print to stdout or stderr is written whole under one lock
+  per stream, so lines from different tasks never mix mid-line. Only the
+  order in which output from different tasks interleaves is not repeatable.
+- **Stall check.** The wake `uv_async_t` handles are `uv_unref`'d, so they
+  do not count as active handles. The runtime keeps an atomic count of idle
+  schedulers and an atomic count of live handles plus parked I/O and timer
+  waiters. The last scheduler to go idle, seeing both counts at zero while
+  tasks are still parked, fails the run with `RUNTIME-INTERNAL` (10.2.1,
+  Fairness).
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
   `THREAD_LOCAL_ALLOC`. Scheduler threads are created with
   `GC_pthread_create` or register with `GC_register_my_thread`. Collections
   stop the world; that cost is accepted and measured (round 2 benchmarks).
+  Boehm stops threads with signals, so the VM's syscall paths retry on
+  `EINTR`, and libuv signal handling (`uv_signal_t`) must never take
+  Boehm's suspend and restart signals.
 - **No mutable global state in `vm/`.** Every mutable `static` or global
   variable goes into the runtime, scheduler or task struct. Lazy one-time
-  init uses `pthread_once` or happens at start-up. The only exception is the
-  sanitizer-only allocation tracking (`AGC_NO_GC`), which stays
-  single-threaded. The tasks PR moves the ones left today (for example the
-  SipHash keys in `vm/map.c`) into those structs or makes them `const`. A
-  follow-up PR enforces this with clang-tidy's
+  init uses `pthread_once` or happens at start-up. What `vm/` has today:
+  - Exceptions that stay: the `AGC_NO_GC` block tracking in `vm/value.c`
+    (fuzz and test builds only, single-threaded); the fuzz harness statics
+    in `vm/fuzz.c` and `vm/fuzz_main.c`; `wide_args` in `vm/main.c`
+    (Windows), set once before any scheduler starts.
+  - The `ready` flag in `agc_init` (`vm/value.c`) moves to start-up or uses
+    `pthread_once`.
+  - The GC-stress counter in `vm/value.c` (`AGC_GC_STRESS`, a test build
+    only) becomes `_Atomic` or per thread.
+  - `empty_string` (`vm/builtins.c`) and `empty_text` (`vm/strings.c`)
+    become `const`.
+  - The SipHash keys in `vm/map.c` (set from OS entropy at start-up) move
+    into the runtime as read-only data.
+
+  The tasks PR does these moves. A follow-up PR enforces this with clang-tidy's
   `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`.
 - **Values are immutable**, so tasks on different schedulers share them
   without locks. Future mutable structures (for example mutable vectors)
   and the shared tables of `future.md` §13 must use an owner scheduler or
   locks and atomics. A table call does not yield, so it is atomic with N=1;
-  once N>1, each table call needs a lock or an owner scheduler.
+  once N>1, each table call needs a lock, an owner scheduler, or a
+  persistent structure installed with compare-and-swap (as the evaluator
+  does with `box-cas!`).
 - **Order of work.** First the tasks PR on these split structures with N=1;
   then the multicore schedulers item (N>1, work stealing, Boehm threads, the
   I/O hand-off, and a stress test of the task fixtures with
-  `--schedulers 4`, under TSan when available); then round 2 of the
+  `--schedulers 4`, under TSan when available; TSan does not get along with
+  Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build with
+  `-fsanitize=thread`); then round 2 of the
   benchmarks covers multicore (roadmap phase 12). Multicore does not block
   7i: the evaluator cannot run in parallel anyway. The parity rule stays:
-  with N=1, output, counts and spans match the evaluator.
+  with N=1, output, counts and spans match the evaluator. The differential,
+  bytecode and golden tests, the `--max-steps` sweep and the seeded runs
+  all run the VM with `--schedulers 1`.
 
 ### 10.3 TLS
 
