@@ -37,8 +37,9 @@
               (format "agentica-~a.agcb" (bytes->hex-string (crypto-random-bytes 16)))))
 
 (define (write-temporary-bytecode path data created!)
-  (define out (open-output-file path #:exists 'error #:permissions #o600))
-  (created!)
+  (define out (parameterize-break #f
+                (begin0 (open-output-file path #:exists 'error #:permissions #o600)
+                        (created!))))
   (dynamic-wind void (lambda () (write-bytes data out)) (lambda () (close-output-port out))))
 
 (define (delete-temporary path)

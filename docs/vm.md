@@ -959,9 +959,14 @@ and cost one predictable branch each.
 - Future work: Windows (a kill-on-close job object instead of
   `PR_SET_PDEATHSIG`) and macOS (no parent-death signal; the closest safe
   thing is the delete-after-load flag alone, or a pipe the VM watches).
-  There the flag skips the parent and privacy checks; on Windows the VM
-  may fail to delete its still-open input, but the driver deletes it
-  anyway. `--vm` is tested on Linux only.
+  On macOS the flag skips only the parent check: the `O_NOFOLLOW`,
+  privacy and inode checks run on every non-Windows system. Windows skips
+  both checks, and the VM may fail to delete its still-open input, but the
+  driver deletes it anyway. `--vm` is tested on Linux only.
+- `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the
+  driver must call `subprocess` from the main thread.
+- The hidden flag deletes its private input after loading, so it must not
+  be reused for anything else.
 - `check`, `help` and `test` stay on Racket; 7h decides where BDD handlers
   run. `make vm` builds `dist/agentica-vm` (`.exe` on Windows); in 7i the
   release archive ships it in `bin/` next to `agentica`.
