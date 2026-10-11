@@ -187,6 +187,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Time` and `Random` are reserved builtin module names; declarations or
   import aliases with those names no longer check.
 
+### Fixed
+
+- A struct or enum declared in an imported module prints its declared name
+  (`Point(x: 2)`, `Shape.Empty`) instead of the linker's internal
+  `@2::Point` on both the evaluator and the VM, through `puts`,
+  `IO.print`, `IO.warn`, interpolation, `to_s` and `inspect`, also nested
+  in lists, maps, results and enum payloads. Checker messages (unknown
+  types, type mismatches, unknown or missing fields, enum variants, arity
+  and missing-return signatures) name imported types and functions the
+  same way. Did-you-mean suggests only names of the same module (and
+  builtins), by their declared names. Types with the same name from
+  different modules print the same; `JSON.schema` keeps unique internal
+  `$defs` keys.
+
 ### Security
 
 - `Process.spawn` on Windows runs only `.exe` and `.com` programs

@@ -254,9 +254,10 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   back.
 - Step-limit sweeps on long programs are slow; the diff test samples above
   2000 steps.
-- Struct and enum display names come from the linked program verbatim
-  (`docs/vm.md` §2.4), so imported types print with the linker's `@2::`
-  prefix, as the evaluator does today. Variant ids are global in file order;
+- Struct and enum table names are display names: `write-bytecode` passes
+  the linked name through `display-name` (`builtins.rkt`), as the
+  evaluator does when printing (`docs/vm.md` §2.4). The lowerer keeps the
+  unique linked names as its keys and in `format-ir`. Variant ids are global in file order;
   struct ids and field indexes follow declaration order. Generic enums need
   nothing special: type arguments exist only in the checker.
 - `case` reads a local scrutinee in place (no copy) because every test and

@@ -296,20 +296,19 @@
          (unless (= (length parameters) (length arguments))
            (bail 'CHECK-UNKNOWN-TYPE
                  (format "enum ~a expects ~a type argument(s), found ~a"
-                         name (length parameters) (length arguments))
+                         (display-name name) (length parameters) (length arguments))
                  (type-ref-span reference)))
          (cons 'Enum (cons name (map resolve-type arguments)))]
         [(and (hash-has-key? structs name) (null? arguments))
          (list 'Struct name)]
         [else
          (bail 'CHECK-UNKNOWN-TYPE
-               (format "unknown type \"~a\"" name)
+               (format "unknown type \"~a\"" (display-name name))
                (type-ref-span reference)
                #:help (did-you-mean name
-                                    (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
-                                            (map symbol->string opaque-types)
-                                            (hash-keys structs)
-                                            (hash-keys enums))))]))
+                                    (append (hash-keys structs) (hash-keys enums))
+                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task")
+                                                     (map symbol->string opaque-types))))]))
 
     ;; Scopes ---------------------------------------------------------------
 
@@ -360,7 +359,7 @@
                   (hash-has-key? structs name)
                   (hash-has-key? enums name)
                   (hash-has-key? functions name))
-          (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is already defined" name)
+          (bail 'CHECK-REDEFINED-NAME (format "\"~a\" is already defined" (display-name name))
                 (enum-decl-span declaration)))
         (when (check-duplicates parameters)
           (bail 'CHECK-REDEFINED-NAME "duplicate enum type parameter"
@@ -383,7 +382,7 @@
           (define variant-name (enum-variant-name variant))
           (when (hash-has-key? variants variant-name)
             (bail 'CHECK-REDEFINED-NAME
-                  (format "duplicate variant \"~a\" in enum \"~a\"" variant-name name)
+                  (format "duplicate variant \"~a\" in enum \"~a\"" variant-name (display-name name))
                   (enum-variant-span variant)))
           (hash-set! variants variant-name
                      (map resolve-type (enum-variant-payload-types variant))))
@@ -398,7 +397,7 @@
                     (hash-has-key? enums name)
                     (hash-has-key? functions name))
             (bail 'CHECK-REDEFINED-NAME
-                  (format "\"~a\" is already defined" name)
+                  (format "\"~a\" is already defined" (display-name name))
                   (struct-decl-span declaration)))
           (hash-set! structs name '())))
       (for ([declaration (in-list (program-declarations program))])
@@ -424,7 +423,7 @@
                     (hash-has-key? structs name)
                     (hash-has-key? enums name))
             (bail 'CHECK-REDEFINED-NAME
-                  (format "\"~a\" is already defined" name)
+                  (format "\"~a\" is already defined" (display-name name))
                   (function-decl-span declaration)))
           (define seen '())
           (define parameter-types
@@ -943,19 +942,19 @@
       (define entry (hash-ref functions name #f))
       (unless entry
         (bail 'CHECK-UNKNOWN-NAME
-              (format "unknown function \"~a\"" name)
+              (format "unknown function \"~a\"" (display-name name))
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
-                         (did-you-mean name (append (hash-keys functions) (hash-keys builtins))))))
+                         (did-you-mean name (hash-keys functions) #:shared (hash-keys builtins)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))
       (unless (= (length arguments) (length parameter-types))
         (bail 'CHECK-ARITY
               (format "\"~a\" expects ~a argument(s), found ~a"
-                      name (length parameter-types) (length arguments))
+                      (display-name name) (length parameter-types) (length arguments))
               (call-span expression)
-              #:callee (format "~a(~a) -> ~a" name
+              #:callee (format "~a(~a) -> ~a" (display-name name)
                                (string-join (map type->string parameter-types) ", ")
                                (type->string result-type))))
       (for ([argument (in-list arguments)]
@@ -978,12 +977,12 @@
       (define payload-types (hash-ref variants variant-name #f))
       (unless payload-types
         (bail 'CHECK-UNKNOWN-VARIANT
-              (format "enum \"~a\" has no variant \"~a\"" enum-name variant-name)
+              (format "enum \"~a\" has no variant \"~a\"" (display-name enum-name) variant-name)
               span))
       (unless (= (length arguments) (length payload-types))
         (bail 'CHECK-ARITY
               (format "variant ~a.~a expects ~a argument(s), found ~a"
-                      enum-name variant-name (length payload-types) (length arguments))
+                      (display-name enum-name) variant-name (length payload-types) (length arguments))
               span))
       (when (ormap named-arg? arguments)
         (bail 'CHECK-ENUM-POSITIONAL-ARGS "enum variants use positional arguments" span))
@@ -1009,7 +1008,7 @@
       (when (pair? unresolved)
         (bail 'CHECK-ENUM-TYPE-INFERENCE
               (format "cannot infer enum type parameter(s) ~a for ~a.~a"
-                      (string-join unresolved ", ") enum-name variant-name)
+                      (string-join unresolved ", ") (display-name enum-name) variant-name)
               span))
       (define result-type
         (cons 'Enum (cons enum-name (map (lambda (parameter)
@@ -1028,7 +1027,7 @@
       (define name (construct-type-name expression))
       (unless (hash-has-key? structs name)
         (bail 'CHECK-UNKNOWN-TYPE
-              (format "\"~a\" is not a declared struct" name)
+              (format "\"~a\" is not a declared struct" (display-name name))
               (construct-span expression)
               #:help (did-you-mean name (hash-keys structs))))
       (define fields (hash-ref structs name))
@@ -1038,7 +1037,7 @@
         (define field (assoc field-name fields))
         (unless field
           (bail 'CHECK-UNKNOWN-FIELD
-                (format "\"~a\" has no field \"~a\"" name field-name)
+                (format "\"~a\" has no field \"~a\"" (display-name name) field-name)
                 (named-arg-span argument)
                 #:help (field-help field-name fields)))
         (when (member field-name seen)
@@ -1050,7 +1049,7 @@
       (for ([field (in-list fields)])
         (unless (member (car field) seen)
           (bail 'CHECK-MISSING-FIELD
-                (format "constructor \"~a\" is missing field \"~a\"" name (car field))
+                (format "constructor \"~a\" is missing field \"~a\"" (display-name name) (car field))
                 (construct-span expression)
                 #:help (format "add \"~a: ...\" with a value of type ~a" (car field) (type->string (cdr field))))))
       (list 'Struct name))
@@ -1258,7 +1257,7 @@
       (define field (assoc (field-access-name expression) (hash-ref structs (cadr target))))
       (unless field
         (bail 'CHECK-UNKNOWN-FIELD
-              (format "\"~a\" has no field \"~a\"" (cadr target) (field-access-name expression))
+              (format "\"~a\" has no field \"~a\"" (display-name (cadr target)) (field-access-name expression))
               (field-access-span expression)
               #:help (field-help (field-access-name expression) (hash-ref structs (cadr target)))))
       (cdr field))
@@ -1332,11 +1331,11 @@
            (unless payload-types
              (if (and enum-definition (equal? enum-name (cadr value-type)))
                  (bail 'CHECK-UNKNOWN-VARIANT
-                       (format "enum \"~a\" has no variant \"~a\"" enum-name variant-name)
+                       (format "enum \"~a\" has no variant \"~a\"" (display-name enum-name) variant-name)
                        (node-span pattern))
                  (bail 'CHECK-PATTERN-TYPE
                        (format "variant pattern \"~a.~a\" does not match ~a"
-                               enum-name variant-name (type->string value-type))
+                               (display-name enum-name) variant-name (type->string value-type))
                        (node-span pattern))))
            (when (member variant-name covered-variants)
              (bail 'CHECK-UNREACHABLE-CASE-ARM "duplicate enum variant arm" (node-span arm)))
@@ -1502,7 +1501,7 @@
       (set! current-result result-type)
       (set! current-signature
             (format "~a(~a) -> ~a"
-                    (function-decl-name declaration)
+                    (display-name (function-decl-name declaration))
                     (string-join (for/list ([parameter (in-list (function-decl-params declaration))])
                                    (format "~a: ~a" (param-name parameter)
                                            (type->string (resolve-type (param-type parameter)))))
@@ -1517,7 +1516,7 @@
                  (not (block-returns? (function-decl-body declaration))))
         (bail 'CHECK-MISSING-RETURN
               (format "function \"~a\" must return ~a on every path"
-                      (function-decl-name declaration) (type->string result-type))
+                      (display-name (function-decl-name declaration)) (type->string result-type))
               (function-decl-span declaration)
               #:help (missing-return-help (function-decl-body declaration) (type->string result-type)))))
 

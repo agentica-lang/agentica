@@ -25,4 +25,9 @@ def main() -> Void
     end
   end
   puts("#{here.y} #{mine.x}")
+  puts(Geo.describe(here))
+  puts(here.inspect)
+  puts(shapes.inspect)
+  puts(shapes[1].to_s)
+  puts("#{shapes[0]} #{mine}")
 end
