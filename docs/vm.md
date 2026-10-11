@@ -289,14 +289,16 @@ fails when the committed file differs from what the generator prints.
   loop `s.at(j)` over `j` from 0 or down from the end costs O(1) per call,
   like the evaluator's O(1) `string-ref`; jumping around a long non-ASCII
   string costs O(distance). The cursor keeps the last non-ASCII string
-  indexed by `at` or `slice` reachable until the next such call.
+  indexed by `at` or `slice` alive until the next non-ASCII `at` or
+  `slice` replaces it, so it holds at most one string.
   `agc_utf8_next`, the one decoder shared by these builtins and
   `agc_write_form`, expects valid UTF-8 and a code point start (every VM
   String is valid UTF-8); on a truncated tail it stays inside the buffer.
   Every function is one or two
   O(n) passes that size the result first, then fill it; substring search
-  is byte-wise Knuth-Morris-Pratt (a valid UTF-8 match always starts on a
-  code point), so `split`, `replace`, `contains?` and `index_of` stay
+  is byte-wise (a valid UTF-8 match always starts on a code point): needles
+  of 8 bytes or fewer use a `memchr` + `memcmp` scan with no allocation,
+  longer ones Knuth-Morris-Pratt, so `split`, `replace`, `contains?` and `index_of` stay
   linear even on `aaaa...ab`. `String.trim` checks only the five ASCII
   bytes above, so it needs no table.
 - `String.to_int` accepts `^[+-]?[0-9]+$` (ASCII digits only; no spaces,
@@ -311,7 +313,9 @@ fails when the committed file differs from what the generator prints.
   dot reach it, so no locale, hex, `inf` or `nan` path), which rounds
   correctly like Racket: text without a dot is an exact integer in Racket
   that `exact->inexact` rounds, so `-0` gives `0.0`, while `-0.0` gives
-  `-0.0`; 400 nines give `+inf.0`.
+  `-0.0`; 400 nines give `+inf.0`. `String.to_float` parity relies on
+  glibc `strtod` rounding correctly; check it on macOS and Windows when
+  those platforms come back.
 - `String.from_bytes` first checks that every item is 0 to 255
   (`bytes must be integers between 0 and 255`), then decodes strictly
   (`invalid or incomplete UTF-8`: no surrogates, overlong forms or code

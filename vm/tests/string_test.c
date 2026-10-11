@@ -137,8 +137,8 @@ int main(void) {
   find_is("abababc", "ababc", 0, 2);
   find_is("abc", "", 0, 0);
   find_is("abc", "", 3, 3);
-  find_is("abc", "", 4, SIZE_MAX);
-  find_is("abc", "abcd", 0, SIZE_MAX);
+  find_is("abc", "", 4, AGC_NOT_FOUND);
+  find_is("abc", "abcd", 0, AGC_NOT_FOUND);
   find_is("abcabc", "bc", 2, 4);
   find_is("x\xc3\xa9y\xc3\xa9", "\xc3\xa9", 2, 4);
   find_is("aaaaaaaaaaaaaaaaaaaaaaaaaaaaab", "aaaaaaaab", 0, 21);

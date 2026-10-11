@@ -291,6 +291,7 @@ typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_numb
 size_t agc_utf8_encode(uint32_t cp, char out[4]);
 size_t agc_utf8_count(const uint8_t *s, size_t len);
 size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index);
+#define AGC_NOT_FOUND SIZE_MAX
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
 agc_string *agc_change_case(const agc_string *s, bool up);
 agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
