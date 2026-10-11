@@ -6,7 +6,6 @@ on:
     paths:
       - 'site/**'
       - 'docs/grammar.md'
-      - '.agents/skills/agentica-programming/**'
       - '.github/workflows/pages.yml'
       - 'Makefile'
   workflow_dispatch:

@@ -20,85 +20,11 @@ disableKinds = ["taxonomy", "term", "rss"]
   target = "content"
 
 [[module.mounts]]
-  source = "../.agents/skills/agentica-programming/SKILL.md"
-  target = "content/guide.md"
-
-[[module.mounts]]
   source = "../docs/grammar.md"
   target = "content/reference.md"
 
-[[module.mounts]]
-  source = "../.agents/skills/agentica-programming/references"
-  target = "content/library"
-
 [[cascade]]
-  title = "Guide"
-  weight = 1
-  [cascade.target]
-    path = "/guide"
-
-[[cascade]]
-  title = "Language reference"
-  weight = 2
-  [cascade.target]
-    path = "/reference"
-
-[[cascade]]
-  title = "Builtins"
-  weight = 1
-  [cascade.target]
-    path = "/library/builtins"
-
-[[cascade]]
-  title = "Examples"
-  weight = 2
-  [cascade.target]
-    path = "/library/examples"
-
-[[cascade]]
-  title = "Modules"
-  weight = 3
-  [cascade.target]
-    path = "/library/modules"
-
-[[cascade]]
-  title = "JSON"
+  title = "Language specification"
   weight = 4
   [cascade.target]
-    path = "/library/json"
-
-[[cascade]]
-  title = "Files"
-  weight = 5
-  [cascade.target]
-    path = "/library/files"
-
-[[cascade]]
-  title = "Processes"
-  weight = 6
-  [cascade.target]
-    path = "/library/processes"
-
-[[cascade]]
-  title = "Tasks"
-  weight = 7
-  [cascade.target]
-    path = "/library/tasks"
-
-[[cascade]]
-  title = "Network"
-  weight = 8
-  [cascade.target]
-    path = "/library/network"
-
-[[cascade]]
-  title = "BDD"
-  weight = 9
-  [cascade.target]
-    path = "/library/bdd"
-
-[[cascade]]
-  title = "Diagnostics"
-  weight = 10
-  [cascade.target]
-    path = "/library/diagnostics"
+    path = "/reference"
