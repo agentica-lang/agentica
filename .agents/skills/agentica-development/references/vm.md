@@ -278,6 +278,8 @@ is checked.
   prints `ok()`. `Result.unwrap!` fails with the error's own String
   through `agc_fail_text`, which keeps the byte length (the String may hold
   NUL); `agc_outcome` has `message_len`, and `vm/diag.c` prints by length.
+  `agc_outcome.text` is never read: it keeps the String reachable while
+  `message` points into its data, so do not remove it.
 - `SAME` (case literals) is `equal?`, not `=`: Float by `eqv?`, so `-0.0`
   and `0.0` are different patterns.
 - A loop body is the target of a backward jump, so it must start with a
