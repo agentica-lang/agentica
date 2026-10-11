@@ -126,6 +126,139 @@ static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_map_value(agc_map_put(vm, agc_as_map(vm, args[0]), args[1], args[2]));
 }
 
+static agc_list *list_slice(const agc_list *src, size_t from, size_t len, size_t extra) {
+  agc_list *l = agc_new_list(agc_size_add(len, extra));
+  if (len) memcpy(l->items, src->items + from, len * sizeof(agc_value));
+  return l;
+}
+
+static agc_value builtin_list_size(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int((int64_t)agc_as_list(vm, args[0])->len);
+}
+
+static agc_value builtin_list_append(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_list *a = agc_as_list(vm, args[0]);
+  agc_list *l = list_slice(a, 0, a->len, 1);
+  l->items[a->len] = args[1];
+  return agc_list_value(l);
+}
+
+static size_t list_index(agc_vm *vm, const agc_list *l, agc_value index, uint32_t span) {
+  int64_t i = agc_as_int(vm, index);
+  if (i < 0 || (uint64_t)i >= l->len) agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "list index is out of range", span + 2);
+  return (size_t)i;
+}
+
+static agc_value builtin_list_at(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_list *a = agc_as_list(vm, args[0]);
+  return a->items[list_index(vm, a, args[1], span)];
+}
+
+static agc_value builtin_list_set(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_list *a = agc_as_list(vm, args[0]);
+  size_t k = list_index(vm, a, args[1], span);
+  agc_list *l = list_slice(a, 0, a->len, 0);
+  l->items[k] = args[2];
+  return agc_list_value(l);
+}
+
+static agc_value builtin_list_repeat(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t count = agc_as_int(vm, args[1]);
+  if (count < 0 || count > AGC_MAX_LIST_COUNT)
+    agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be between 0 and 1048576", span + 2);
+  agc_list *l = agc_new_list((size_t)count);
+  for (size_t k = 0; k < (size_t)count; k++) l->items[k] = args[0];
+  return agc_list_value(l);
+}
+
+static size_t list_count(agc_vm *vm, const agc_list *l, agc_value count, uint32_t span) {
+  int64_t n = agc_as_int(vm, count);
+  if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be nonnegative", span + 2);
+  return (uint64_t)n < l->len ? (size_t)n : l->len;
+}
+
+static agc_value builtin_list_take(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_list *a = agc_as_list(vm, args[0]);
+  return agc_list_value(list_slice(a, 0, list_count(vm, a, args[1], span), 0));
+}
+
+static agc_value builtin_list_drop(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_list *a = agc_as_list(vm, args[0]);
+  size_t k = list_count(vm, a, args[1], span);
+  return agc_list_value(list_slice(a, k, a->len - k, 0));
+}
+
+static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_list *a = agc_as_list(vm, args[0]);
+  agc_list *l = agc_new_list(a->len);
+  for (size_t k = 0; k < a->len; k++) l->items[k] = a->items[a->len - 1 - k];
+  return agc_list_value(l);
+}
+
+static agc_value builtin_list_sort(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_list *a = agc_as_list(vm, args[0]);
+  return agc_sort_by_keys(vm, a, a);
+}
+
+static agc_value builtin_map_has_key(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_value value;
+  return agc_bool(agc_map_get(vm, agc_as_map(vm, args[0]), args[1], &value));
+}
+
+static agc_value builtin_map_size(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int((int64_t)agc_as_map(vm, args[0])->size);
+}
+
+static agc_value map_walk(agc_vm *vm, agc_value map, bool values, uint32_t span) {
+  const agc_map *m = agc_as_map(vm, map);
+  agc_value *keys = agc_map_keys(vm, m, span);
+  agc_list *l = agc_new_list(m->size);
+  for (size_t k = 0; k < m->size; k++) {
+    l->items[k] = keys[k];
+    if (values && !agc_map_get(vm, m, keys[k], &l->items[k]))
+      agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
+  }
+  return agc_list_value(l);
+}
+
+static agc_value builtin_map_keys(agc_vm *vm, agc_value *args, uint32_t span) {
+  return map_walk(vm, args[0], false, span);
+}
+
+static agc_value builtin_map_values(agc_vm *vm, agc_value *args, uint32_t span) {
+  return map_walk(vm, args[0], true, span);
+}
+
+static agc_string *ascii(const char *text) {
+  size_t n = strlen(text);
+  return agc_make_string(text, n, n);
+}
+
+static agc_value builtin_map_get(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_value value;
+  if (agc_map_get(vm, agc_as_map(vm, args[0]), args[1], &value)) return agc_result_value(true, value);
+  agc_string *message = agc_concat(agc_concat(ascii("key "), agc_debug(vm, args[1])), ascii(" is not in the map"));
+  return agc_result_value(false, agc_string_value(message));
+}
+
+static agc_value builtin_map_get_default(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_value value;
+  return agc_map_get(vm, agc_as_map(vm, args[0]), args[1], &value) ? value : args[2];
+}
+
+static agc_value builtin_map_delete(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_map_value(agc_map_delete(vm, agc_as_map(vm, args[0]), args[1]));
+}
+
 static agc_value builtin_ok(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)vm;
   (void)span;
@@ -240,6 +373,22 @@ static const agc_builtin table[] = {
   {"String.from_float", 1, builtin_from_float, AGC_NATIVE_NONE},
   {"List.concat", 2, builtin_list_concat, AGC_NATIVE_NONE},
   {"Map.put", 3, builtin_map_put, AGC_NATIVE_NONE},
+  {"List.size", 1, builtin_list_size, AGC_NATIVE_NONE},
+  {"List.append", 2, builtin_list_append, AGC_NATIVE_NONE},
+  {"List.at", 2, builtin_list_at, AGC_NATIVE_NONE},
+  {"List.set", 3, builtin_list_set, AGC_NATIVE_NONE},
+  {"List.repeat", 2, builtin_list_repeat, AGC_NATIVE_NONE},
+  {"List.take", 2, builtin_list_take, AGC_NATIVE_NONE},
+  {"List.drop", 2, builtin_list_drop, AGC_NATIVE_NONE},
+  {"List.reverse", 1, builtin_list_reverse, AGC_NATIVE_NONE},
+  {"List.sort", 1, builtin_list_sort, AGC_NATIVE_NONE},
+  {"Map.has_key?", 2, builtin_map_has_key, AGC_NATIVE_NONE},
+  {"Map.size", 1, builtin_map_size, AGC_NATIVE_NONE},
+  {"Map.keys", 1, builtin_map_keys, AGC_NATIVE_NONE},
+  {"Map.values", 1, builtin_map_values, AGC_NATIVE_NONE},
+  {"Map.get", 2, builtin_map_get, AGC_NATIVE_NONE},
+  {"Map.get", 3, builtin_map_get_default, AGC_NATIVE_NONE},
+  {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE},
   {"ok", 1, builtin_ok, AGC_NATIVE_NONE},
   {"ok", 0, builtin_ok_void, AGC_NATIVE_NONE},
   {"error", 1, builtin_error, AGC_NATIVE_NONE},

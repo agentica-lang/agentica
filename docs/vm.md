@@ -54,13 +54,16 @@ over a range, the `Range` builtins and `Int.times`, `upto`, `downto`, 3.3,
 `x.to_s` and `x.inspect` of those values, `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn`/`IO.inspect` of any of them, blocking stdin
 (`gets`, `gets!`, `IO.read`, `IO.read_bytes`, `IO.eof?`), `IO.flush`,
-`System.args` and `System.exit`, and every `String` builtin of the catalog
+`System.args` and `System.exit`, the `List` and `Map` library
+(`List.size`, `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`,
+`reverse`, `sort`; `Map.has_key?`, `keys`, `values`, `size`, `put`, `get`
+with or without a default, `delete`; also as methods such as `xs.size` and
+`m.keys`; 12.2 item 6b), and every `String` builtin of the catalog
 (`length`, `upcase`, `downcase`, `trim`, `split`, `join`, `contains?`,
 `starts_with?`, `ends_with?`, `replace`, `slice`, `index_of`, `at`,
 `reverse`, `code`, `from_code`, `from_int`, `from_float`, `from_bytes`,
-`to_int`, `to_int!`, `to_float`, `to_float!`, 2.3). List and Map library functions
-(`xs.size`, `List.append`, `Map.get`, `Map.keys`, ...) join with the library
-PR (12.2 item 6b). Runtime diagnostics come in the plain,
+`to_int`, `to_int!`, `to_float`, `to_float!`, 2.3). The other 6b modules
+(`Float`, `Time`, `Random`) follow. Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -527,13 +530,16 @@ unsupported type can only come from an expression the lowerer rejects. The only 
 `Result.message`, `List.map`, `List.filter`, `List.reduce`, `List.each`,
 `List.any?`, `List.all?`, `List.sort_by`, `Range.size`, `Range.to_a`,
 `Range.include?`, `Range.each`, `Range.first`, `Range.last`, `Int.times`,
-`Int.upto` and `Int.downto` (their implementation keys; `print` and `IO.puts` map to
+`Int.upto`, `Int.downto`, `List.size`, `List.append`, `List.set`,
+`List.repeat`, `List.concat`, `List.take`, `List.drop`, `List.at`,
+`List.reverse`, `List.sort`, `Map.has_key?`, `Map.keys`, `Map.size`,
+`Map.put`, `Map.get` (arities 2 and 3), `Map.delete` and `Map.values`
+(their implementation keys; `print` and `IO.puts` map to
 the first two, `gets` and `gets!` to `IO.gets` and `IO.gets!`).
 `String.from_int` and `String.from_float` are there because the checker
 resolves `x.to_s` on Int and Float to them.
-`List.concat` and `Map.put` are in the C table too, but only the lowerer
-emits them, for long literals (3.3); a written call to either stays
-`LOWER-UNSUPPORTED` until the library PR. No core form turns into a `List` library call: `for`,
+The lowerer also emits `List.concat` and `Map.put` for long literals
+(3.3). No core form turns into a `List` library call: `for`,
 literals and indexing have their own opcodes, `x.to_s` of a list is a
 one-part interpolation, and `xs.size`/`xs.length` are written method calls
 of `List.size`.
@@ -806,7 +812,7 @@ typedef struct {
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
-| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (12 levels of 5 hash bits and a 13th of 4 bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing (and later `Map.keys`/`values`) walks the list once into an array, oldest first, then looks each value up: O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (12.2 item 6b) will copy the list without its key, O(n) like `remove` in the evaluator. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3, the value tag compressed as a leading 64-bit word before the bytes, so an Int and a String with the same bytes hash apart. The SipHash key is seeded once per run in `vm/main.c` from OS entropy, independent of `--seed`: on Linux `getrandom` (retried on `EINTR` and short reads), then `/dev/urandom` if `getrandom` fails (for example `ENOSYS` or `EPERM` under seccomp); `/dev/urandom` on other Unix systems and `rand_s` on Windows. If every source fails, the fixed default key stays. That is acceptable as a last resort: the hash is still 64 bits and a HAMT only degrades on full 64-bit collisions (a collision node is searched linearly), and forcing those still costs about 2^32 work per pair even with a known key. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. Later, with the Map library (12.2 item 6b): `MAP` can build its fresh literal with a transient in-place put instead of a persistent copy per pair, and a node can split child and leaf slots to use less memory. |
+| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (12 levels of 5 hash bits and a 13th of 4 bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing, `Map.keys` and `Map.values` walk the list once into an array, oldest first (`values` then looks each value up): O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (`agc_map_delete`) removes the key from the trie by copying its path (a child left with one leaf is pulled up into its parent, an empty node disappears, an empty map has no table) and copies the key list up to the key's cell, sharing the rest: O(n) like `remove` in the evaluator. A missing key returns the same map. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3, the value tag compressed as a leading 64-bit word before the bytes, so an Int and a String with the same bytes hash apart. The SipHash key is seeded once per run in `vm/main.c` from OS entropy, independent of `--seed`: on Linux `getrandom` (retried on `EINTR` and short reads), then `/dev/urandom` if `getrandom` fails (for example `ENOSYS` or `EPERM` under seccomp); `/dev/urandom` on other Unix systems and `rand_s` on Windows. If every source fails, the fixed default key stays. That is acceptable as a last resort: the hash is still 64 bits and a HAMT only degrades on full 64-bit collisions (a collision node is searched linearly), and forcing those still costs about 2^32 work per pair even with a known key. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. Later, if profiling asks for it: `MAP` can build its fresh literal with a transient in-place put instead of a persistent copy per pair, and a node can split child and leaf slots to use less memory. |
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
@@ -1624,11 +1630,23 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      stdin through. Fixtures with a `.stdin` and an `.args` file next to
      them feed the differential test.
    - **6b** `String`, `List`, `Map`, `Float`, `Time`, `Random` (with the
-     seeding port). The `String` part is done: every `String.*` builtin of
-     the catalog in `vm/strings.c` (2.3), the case and final-sigma tables in
-     `vm/unicode_data.c`, `vm/tests/string_test.c` (UTF-8 helpers, search,
-     case, number parsing edge cases) and the `string-*` fixtures (non-ASCII
-     text, empty strings, every runtime code and span).
+     seeding port). `List` and `Map` are done: plain C builtins (no native
+     frames), the evaluator's messages and spans (`RUNTIME-INDEX-OUT-OF-RANGE`
+     for `at`/`set`, `RUNTIME-INVALID-COUNT` for `take`/`drop` and
+     `repeat`, at the argument span), `Map.get` as a Result with the
+     key's debug form in the message, and `List.sort` through the same
+     merge sort as `sort_by` with the items as their own keys. Lists stay
+     arrays, so `append` and `set` copy (O(n)); `repeat`, `concat`,
+     `take`, `drop` and `reverse` are one pass, and `repeat` is capped at
+     1048576 before allocating. `vm/tests/map_test.c` covers `delete`
+     (persistence, order, collision nodes, shared prefixes, deleting to
+     empty); the `list-library`, `map-library` and `list-*` error
+     fixtures cover the rest. The `String` part is done too: every
+     `String.*` builtin of the catalog in `vm/strings.c` (2.3), the case
+     and final-sigma tables in `vm/unicode_data.c`,
+     `vm/tests/string_test.c` (UTF-8 helpers, search, case, number
+     parsing edge cases) and the `string-*` fixtures (non-ASCII text,
+     empty strings, every runtime code and span).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 

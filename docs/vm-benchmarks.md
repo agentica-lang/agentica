@@ -38,7 +38,7 @@ The programs print a deterministic checksum and use only fixed inputs (a seeded 
 | `case` | an `enum` instruction list run 5,000 times through `case`, plus `case` on `Int` literals |
 | `string-library` | 300 rounds of `split`, `trim`, `upcase`, `join`, `replace`, `downcase` (final sigma), `index_of` and `at` over every code point of non-ASCII text |
 
-The VM today has the `String` library but no `List`/`Map` library functions (`docs/vm.md` §12.2 item 6b), so `knight-tour`, `maze-bfs`, `traveling-salesman`, `lists` and `maps` are unsupported on it. The tables below name the first missing builtin the lowering stopped at, not the whole list. They stay written the idiomatic way (`push`, `size`, `set`, `put`, `get`) rather than bent around the gap; they run on the VM once 6b lands.
+The VM has the `List` and `Map` library since PR #80 and the `String` library since PR #81; of `docs/vm.md` §12.2 item 6b only `Float`, `Time` and `Random` are still missing, and none of these programs needs them. The programs stay written the idiomatic way (`push`, `size`, `set`, `put`, `get`). The tables below were measured before PR #80, so their VM rows for `knight-tour`, `maze-bfs`, `traveling-salesman`, `lists` and `maps` come from a later run, described under the programs table.
 
 The Python versions are idiomatic CPython, not step-by-step copies: they compute the same result but use Python's own tools. `strings` builds each line with `"".join` over f-string parts where the Agentica version uses repeated `+`; `arithmetic` sums a list comprehension; `knight_tour` and `traveling_salesman` mutate one `visited` list and path in place and undo the change on backtrack, where Agentica builds new values; `maze_bfs` uses a `deque` and a `set`. So a ratio against Python compares two idiomatic programs, not two interpreters on identical steps.
 
@@ -68,15 +68,15 @@ The host is shared with the self-hosted CI runners, so other jobs may run at the
 |---|---|---:|---:|---:|---:|
 | knight-tour | evaluator | 2.311 | 2.299 | 144.1 | 1.0x |
 | knight-tour | exe | 1.283 | 1.235 | 148.7 | 1.8x |
-| knight-tour | vm | unsupported (first missing builtin: `List.append`) | | | |
+| knight-tour | vm | 0.037 | 0.033 | 2.4 | 33.3x* |
 | knight-tour | python | 0.031 | 0.027 | 9.1 | 74.0x |
 | maze-bfs | evaluator | 0.955 | 0.870 | 144.1 | 1.0x |
 | maze-bfs | exe | 1.036 | 0.983 | 144.5 | 0.9x |
-| maze-bfs | vm | unsupported (first missing builtin: `Map.put`) | | | |
+| maze-bfs | vm | 0.059 | 0.050 | 3.0 | 18.5x* |
 | maze-bfs | python | 0.044 | 0.039 | 9.6 | 21.6x |
 | traveling-salesman | evaluator | 1.331 | 1.310 | 146.1 | 1.0x |
 | traveling-salesman | exe | 1.218 | 1.194 | 148.1 | 1.1x |
-| traveling-salesman | vm | unsupported (first missing builtin: `List.size`) | | | |
+| traveling-salesman | vm | 0.031 | 0.030 | 2.1 | 38.5x* |
 | traveling-salesman | python | 0.030 | 0.027 | 9.2 | 43.8x |
 | arithmetic | evaluator | 2.065 | 1.513 | 143.9 | 1.0x |
 | arithmetic | exe | 1.453 | 1.416 | 148.1 | 1.4x |
@@ -88,11 +88,11 @@ The host is shared with the self-hosted CI runners, so other jobs may run at the
 | strings | python | 0.026 | 0.021 | 8.8 | 33.9x |
 | lists | evaluator | 1.205 | 1.160 | 143.8 | 1.0x |
 | lists | exe | 1.332 | 1.256 | 159.6 | 0.9x |
-| lists | vm | unsupported (first missing builtin: `List.append`) | | | |
+| lists | vm | 0.089 | 0.083 | 2.2 | 15.3x* |
 | lists | python | 0.030 | 0.027 | 9.0 | 40.1x |
 | maps | evaluator | 1.005 | 0.980 | 144.1 | 1.0x |
 | maps | exe | 0.973 | 0.942 | 148.4 | 1.0x |
-| maps | vm | unsupported (first missing builtin: `Map.put`) | | | |
+| maps | vm | 0.094 | 0.091 | 2.4 | 11.1x* |
 | maps | python | 0.024 | 0.023 | 9.0 | 42.3x |
 | calls | evaluator | 1.195 | 1.181 | 144.1 | 1.0x |
 | calls | exe | 1.256 | 1.176 | 149.7 | 1.0x |
@@ -102,6 +102,8 @@ The host is shared with the self-hosted CI runners, so other jobs may run at the
 | case | exe | 1.041 | 1.030 | 148.6 | 1.0x |
 | case | vm | 0.022 | 0.021 | 1.9 | 46.1x |
 | case | python | 0.069 | 0.068 | 12.4 | 14.5x |
+
+\* From a later run on the PR #80 branch: `python3 benchmarks/run.py --runs 3 --only knight-tour,maze-bfs,traveling-salesman,lists,maps`, on the same shared host, so other jobs may have run at the same time. The ratio is against that run's evaluator medians (knight-tour 1.249 s, maze-bfs 1.097 s, traveling-salesman 1.180 s, lists 1.368 s, maps 1.043 s); CPython there took 0.028 to 0.036 s for each of the five.
 
 At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are dominated by the evaluator's start-up. A second run with more work shows the VM against CPython (`--runners vm,python --only arithmetic,strings,calls,case --size 20 --no-startup`):
 
@@ -118,5 +120,5 @@ At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are domin
 - Where it runs, the VM is about 45x to 60x faster than the evaluator per program at size 1, start-up included. Most of that gap is the evaluator's start-up: subtracting the `hello.agc` median leaves about 1.2 s for `arithmetic` (about 28x the VM), 0.35 s for `calls` (about 17x) and 0.15 s for `case` (about 7x), while `strings` is within the noise of start-up. Larger sizes are needed to compare the evaluator's run time itself.
 - Against CPython the VM is in the same range: as fast on `case`, 1.5x to 2x slower on `arithmetic`, `strings` and `calls` at size 20, with about a fifth of the memory. Instruction dispatch and Int arithmetic are the first hot-spot candidates for the next 7g item. The `strings` gap is weaker evidence, since the Python twin uses `"".join` rather than repeated `+`; profile before blaming string concatenation.
 - The evaluator, start-up included, is 14.5x to 74x slower than CPython on every program.
+- With the `List`/`Map` library (PR #80) the three real programs, `lists` and `maps` run on the VM in 31 to 94 ms at size 1, 11x to 39x faster than the evaluator with its start-up. `knight-tour` and `traveling-salesman` are about as fast as CPython; `maze-bfs`, `lists` and `maps` are 1.6x to 3.1x slower, which fits arrays copied on every `push`/`set` (persistent vectors come with 8d) and map puts that copy a HAMT path.
 - `string-library` was added after this run with the `String` library on the VM (branch `vm/lib-string`, `--runs 3`): at size 1 the evaluator takes 3.645 s, the VM 0.034 s (107x) and Python 0.045 s; at size 20 the VM takes 0.327 s and Python 0.103 s (1.9 MB against 9.3 MB). `at` over non-ASCII text is O(1) per call through the VM's string cursor (`docs/vm.md` §2.3); the Python twin uses `sum` over the characters and `str.find`.
-- The three real programs, `lists` and `maps` cannot be compared on the VM until the `List`/`Map` library lands (`docs/vm.md` §12.2 item 6b); rerun this page then.
