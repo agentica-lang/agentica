@@ -7,11 +7,13 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define AGC_FORMAT_VERSION 2
+#define AGC_FORMAT_VERSION 3
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
 #define AGC_MAX_MAP_CHUNK 255u
+#define AGC_MAX_TYPES 65535u
+#define AGC_MAX_TYPE_DEPTH 1024u
 #define AGC_SCALAR_TEXT 48
 _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
@@ -90,6 +92,11 @@ typedef struct {
   agc_json_member *members;
 } agc_json;
 
+typedef struct {
+  char *data;
+  size_t len, cap;
+} agc_json_buffer;
+
 typedef enum {
   AGC_JSON_PARSED, AGC_JSON_CONTROL, AGC_JSON_INVALID, AGC_JSON_EMPTY, AGC_JSON_TRAILING, AGC_JSON_NOT_FINITE
 } agc_json_status;
@@ -167,10 +174,20 @@ typedef struct {
   uint32_t *spans;
 } agc_function;
 
+typedef enum {
+  AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT
+} agc_type_kind;
+
+typedef struct {
+  uint32_t kind, arg;
+} agc_type;
+
 typedef struct {
   agc_string *name;
   uint32_t count;
   agc_string **fields;
+  agc_string *json_name;
+  uint32_t *field_types;
 } agc_struct_def;
 
 typedef struct {
@@ -186,11 +203,12 @@ typedef struct {
 
 typedef struct {
   uint32_t source_count, span_count, constant_count, builtin_count, function_count, entry;
-  uint32_t struct_count, enum_count, variant_count, max_fields, max_arity;
+  uint32_t struct_count, type_count, enum_count, variant_count, max_fields, max_arity;
   agc_source *sources;
   agc_span *spans;
   agc_value *constants;
   agc_struct_def *structs;
+  agc_type *types;
   agc_enum_def *enums;
   agc_variant_def *variants;
   const agc_builtin **builtins;
@@ -360,6 +378,17 @@ extern const size_t agc_number_builtin_count;
 
 const char *agc_json_version(void);
 agc_json_status agc_json_parse(const uint8_t *text, size_t len, agc_value *out);
+const char *agc_json_status_message(agc_json_status status);
+agc_string *agc_json_ascii(const char *text, size_t n);
+void *agc_json_grow(void *stack, size_t *capacity, size_t depth, size_t size);
+void agc_json_put(agc_json_buffer *b, const char *text, size_t n);
+agc_value agc_json_leaf(agc_json_kind kind, agc_value scalar);
+agc_value agc_json_object(agc_json_member *members, size_t n);
+agc_value agc_json_array(agc_list *items);
+const agc_json_member *agc_json_find(const agc_json *j, const agc_string *key);
+bool agc_json_to_float(agc_vm *vm, const agc_json *j, double *out);
+agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type);
+agc_value agc_json_schema(agc_vm *vm, uint32_t type);
 agc_string *agc_json_encode(agc_vm *vm, agc_value v, uint32_t span);
 agc_value agc_json_from(agc_vm *vm, agc_value v, uint32_t span);
 extern const agc_builtin agc_json_builtins[];
