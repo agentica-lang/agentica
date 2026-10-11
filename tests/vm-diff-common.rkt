@@ -20,6 +20,8 @@
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
+(define-runtime-path tests-directory ".")
+(define make-lock-wait 900)
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
 (define linux? (eq? (system-type 'os*) 'linux))
 (define vm-file
@@ -44,11 +46,18 @@
   (define (make-vm)
     (define lock (build-path root "build" "vm-diff-make.lock"))
     (make-directory* (build-path root "build"))
-    (call-with-file-lock/timeout
-     lock 'exclusive
-     (lambda () (parameterize ([current-directory root]) (system* make "-s" "vm")))
-     (lambda () (error 'vm-diff "cannot lock ~a" lock))
-     #:max-delay 1))
+    (define deadline (+ (current-inexact-milliseconds) (* 1000 make-lock-wait)))
+    (let retry ()
+      (define result
+        (call-with-file-lock/timeout
+         lock 'exclusive
+         (lambda () (if (parameterize ([current-directory root]) (system* make "-s" "vm")) 'built 'failed))
+         (lambda () 'busy)
+         #:max-delay 0.2))
+      (cond
+        [(eq? result 'built) #t]
+        [(and (eq? result 'busy) (< (current-inexact-milliseconds) deadline)) (retry)]
+        [else #f])))
   (define built?
     (if vm-binary
         (file-exists? vm-file)
@@ -156,41 +165,56 @@
 (define (limit-options limit)
   (if limit (list "--max-steps" (number->string limit)) '()))
 
-(define (start-vm-batch bytecode directory option-lists)
-  (make-directory* directory)
-  (define input (build-path directory "stdin"))
-  (call-with-output-file input (lambda (out) (void (write-bytes (fixture-input) out))))
-  (define tail
-    (string-join (map shell-quote (append (list "--" (path->string bytecode)) (fixture-args)))))
-  (define script (build-path directory "run.sh"))
-  (call-with-output-file script
-    (lambda (out)
-      (for ([options (in-list option-lists)] [index (in-naturals)])
-        (define base (path->string (build-path directory (number->string index))))
-        (write-string
-         (format "~a ~a ~a < ~a > ~a 2> ~a\necho $? > ~a\n"
-                 (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) tail
-                 (shell-quote (path->string input)) (shell-quote (string-append base ".out"))
-                 (shell-quote (string-append base ".err")) (shell-quote (string-append base ".status")))
-         out))))
-  (define-values (process out in err)
-    (subprocess #f #f #f (or (find-executable-path "sh") "/bin/sh") (path->string script)))
-  (close-output-port in)
-  (lambda ()
-    (define stdout (port->string out))
-    (define stderr (port->string err))
-    (close-input-port out)
-    (close-input-port err)
-    (subprocess-wait process)
-    (unless (and (zero? (subprocess-status process)) (equal? stdout "") (equal? stderr ""))
-      (error 'vm-diff "VM batch failed: ~a ~a" stdout stderr))
-    (begin0
-      (for/list ([index (in-range (length option-lists))])
-        (define (part extension) (build-path directory (format "~a~a" index extension)))
-        (list (string->number (string-trim (file->string (part ".status"))))
-              (file->string (part ".out"))
-              (file->string (part ".err"))))
-      (delete-directory/files directory))))
+(define (vm-batch name bytecode directory option-lists during)
+  (define process #f)
+  (define out #f)
+  (define err #f)
+  (dynamic-wind
+    void
+    (lambda ()
+      (make-directory* directory)
+      (define input (build-path directory "stdin"))
+      (call-with-output-file input (lambda (port) (void (write-bytes (fixture-input) port))))
+      (define tail
+        (string-join (map shell-quote (append (list "--" (path->string bytecode)) (fixture-args)))))
+      (define script (build-path directory "run.sh"))
+      (call-with-output-file script
+        (lambda (port)
+          (for ([options (in-list option-lists)] [index (in-naturals)])
+            (define base (path->string (build-path directory (number->string index))))
+            (write-string
+             (format "~a ~a ~a < ~a > ~a 2> ~a\necho $? > ~a\n"
+                     (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) tail
+                     (shell-quote (path->string input)) (shell-quote (string-append base ".out"))
+                     (shell-quote (string-append base ".err")) (shell-quote (string-append base ".status")))
+             port))))
+      (define-values (started stdout-port stdin-port stderr-port)
+        (parameterize ([subprocess-group-enabled #t])
+          (subprocess #f #f #f (or (find-executable-path "sh") "/bin/sh") (path->string script))))
+      (set! process started)
+      (set! out stdout-port)
+      (set! err stderr-port)
+      (close-output-port stdin-port)
+      (define expected (during))
+      (define stdout (port->string out))
+      (define stderr (port->string err))
+      (subprocess-wait process)
+      (unless (and (zero? (subprocess-status process)) (equal? stdout "") (equal? stderr ""))
+        (error 'vm-diff "~a: VM batch failed: ~a ~a" name stdout stderr))
+      (values
+       (for/list ([index (in-range (length option-lists))])
+         (define (part extension) (build-path directory (format "~a~a" index extension)))
+         (list (string->number (string-trim (file->string (part ".status"))))
+               (file->string (part ".out"))
+               (file->string (part ".err"))))
+       expected))
+    (lambda ()
+      (when process
+        (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
+        (subprocess-wait process))
+      (when out (close-input-port out))
+      (when err (close-input-port err))
+      (delete-directory/files directory #:must-exist? #f))))
 
 (define (shard-of name light-index)
   (cond
@@ -249,15 +273,17 @@
                  [fixture-args (sidecar #".args" file->value '())])
     (test-case (format "~a matches the evaluator in every diagnostic format" name)
       (define styles '(plain ai json))
-      (define vm-results (start-vm-batch bytecode runs (map style-options styles)))
-      (define racket-results (for/list ([style (in-list styles)]) (run-racket checked #f style)))
-      (for ([style (in-list styles)] [on-vm (in-list (vm-results))] [expected (in-list racket-results)])
+      (define-values (vm-results racket-results)
+        (vm-batch name bytecode runs (map style-options styles)
+                  (lambda () (for/list ([style (in-list styles)]) (run-racket checked #f style)))))
+      (for ([style (in-list styles)] [on-vm (in-list vm-results)] [expected (in-list racket-results)])
         (check-equal? on-vm expected (format "~a ~a" name style))))
     (test-case (format "~a matches under every --max-steps" name)
       (define limits (sweep-limits (total-steps checked)))
-      (define vm-results (start-vm-batch bytecode runs (map limit-options limits)))
-      (define racket-results (for/list ([limit (in-list limits)]) (run-racket checked limit)))
-      (for ([limit (in-list limits)] [on-vm (in-list (vm-results))] [expected (in-list racket-results)])
+      (define-values (vm-results racket-results)
+        (vm-batch name bytecode runs (map limit-options limits)
+                  (lambda () (for/list ([limit (in-list limits)]) (run-racket checked limit)))))
+      (for ([limit (in-list limits)] [on-vm (in-list vm-results)] [expected (in-list racket-results)])
         (check-equal? on-vm expected (format "~a --max-steps ~a" name limit))))))
 
 (define (run-shard shard)
@@ -274,16 +300,29 @@
       (lambda () (delete-directory/files work)))))
 
 (define (run-extras work assignment)
-  (test-case "every fixture belongs to exactly one shard"
+  (test-case "the shard tables name real fixtures and shards"
     (define names (map (lambda (entry) (path->string (file-name-from-path (car entry)))) assignment))
     (check-equal? (length (remove-duplicates (map car heavy-fixtures))) (length heavy-fixtures))
     (for ([heavy (in-list heavy-fixtures)])
-      (check-not-false (member (car heavy) names) (car heavy)))
-    (for ([entry (in-list assignment)])
-      (check-not-false (<= 1 (cdr entry) shard-count) (path->string (car entry)))))
+      (check-not-false (member (car heavy) names) (car heavy))
+      (check-true (<= 1 (cdr heavy) shard-count) (car heavy)))
+    (for ([shard (in-list light-shards)])
+      (check-true (<= 1 shard shard-count) (format "light shard ~a" shard)))
+    (for ([shard (in-range 1 (add1 shard-count))])
+      (define file (build-path tests-directory (format "vm-diff-~a-test.rkt" shard)))
+      (check-true (file-exists? file) (path->string file))))
   (for ([name (in-list '("calls" "system-args"))])
     (compile-file (build-path fixtures (string-append name ".agc"))
                   (build-path work (string-append name ".agcb"))))
+  (test-case "compile-file writes the same bytes as the CLI compile"
+    (define program (build-path fixtures "imports.agc"))
+    (define in-process (build-path work "imports-in-process.agcb"))
+    (define from-cli (build-path work "imports-cli.agcb"))
+    (compile-file program in-process)
+    (define result (run-process (find-system-path 'exec-file) (path->string main-file)
+                                "compile" (path->string program) "-o" (path->string from-cli)))
+    (check-equal? (first result) 0 (third result))
+    (check-equal? (file->bytes in-process) (file->bytes from-cli)))
   (test-case "the VM CLI checks options and stops parsing at the file"
     (define bytecode (build-path work "calls.agcb"))
     (check-equal? (first (run-vm bytecode #f "--max-steps" "1")) 0)

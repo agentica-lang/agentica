@@ -91,7 +91,11 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   run's stdout, stderr and exit status to files (stdin from a file, arguments
   quoted), since a process start from the Racket parent costs 12-35 ms; the
   evaluator runs while the script does. A new costly fixture may need an
-  entry in `heavy-fixtures` in `tests/vm-diff-common.rkt`. `AGENTICA_VM_BINARY=path` makes it
+  entry in `heavy-fixtures` in `tests/vm-diff-common.rkt`.
+  Fixture stdin comes from a file; pipe stdin is covered by the large-input
+  test and the CLI `--vm` tests. `compile-file` mirrors the `compile`
+  pipeline of `src/main.rkt` and must follow it when that pipeline changes
+  (shard 4 compares its bytes with the CLI `compile`). `AGENTICA_VM_BINARY=path` makes it
   use another binary without running `make` (`make vm-gc-stress` uses it
   for `build/vm/gcstress/agentica-vm`).
   `tests/bytecode-test.rkt` needs no VM binary.
