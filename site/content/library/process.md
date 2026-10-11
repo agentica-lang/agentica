@@ -22,6 +22,7 @@ Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Pr
 ```
 
 Starts a program. The command is found through `PATH`, or given as a path.
+On Windows only `.exe` and `.com` programs can be spawned.
 
 ```agentica {mode="check"}
 def main() -> Void
