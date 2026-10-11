@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs the `Float`, `Time` and `Random` builtins:
+  `Float.from_int`, `Float.to_int` and `to_int!` (also `n.to_f`,
+  `x.to_i`, `x.to_i!`), `Time.now_ms`, `Time.monotonic_ms`,
+  `Random.int` and `Random.float`, with the evaluator's errors and spans.
+  The VM has its own generator (xoshiro256** seeded with splitmix64):
+  `agentica --vm --seed N` (and `agentica-vm --seed N`) repeats its
+  values, but they differ from the evaluator's for the same seed; without
+  `--seed` the seed comes from OS entropy.
+
 - The bytecode VM runs every `String` builtin: `length`, `upcase`,
   `downcase`, `trim`, `split`, `join`, `contains?`, `starts_with?`,
   `ends_with?`, `replace`, `slice`, `index_of`, `at`, `reverse`, `code`,

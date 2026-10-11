@@ -180,6 +180,10 @@ typedef struct {
 } agc_outcome;
 
 typedef struct {
+  uint64_t s[4];
+} agc_random;
+
+typedef struct {
   int fd;
   bool flush_out, pending_eof;
   uint8_t *buf;
@@ -195,6 +199,7 @@ struct agc_vm {
   agc_frame *frames;
   uint32_t frame_capacity, frame_count, depth;
   agc_input in;
+  agc_random random;
   agc_value args;
   const agc_string *cursor;
   size_t cursor_index, cursor_offset;
@@ -299,6 +304,8 @@ agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
 extern const agc_builtin agc_string_builtins[];
 extern const size_t agc_string_builtin_count;
 
+extern const agc_builtin agc_number_builtins[];
+extern const size_t agc_number_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
@@ -310,6 +317,11 @@ _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *mes
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
 void agc_flush(agc_vm *vm);
+
+void agc_random_seed(agc_random *r, uint64_t seed);
+uint64_t agc_random_next(agc_random *r);
+double agc_random_float(agc_random *r);
+bool agc_random_int(agc_random *r, int64_t low, int64_t high, int64_t *out);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 int agc_input_peek(agc_vm *vm);

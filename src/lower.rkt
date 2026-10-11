@@ -79,7 +79,9 @@
                       "String.length" "String.upcase" "String.downcase" "String.trim" "String.split" "String.join"
                       "String.contains?" "String.starts_with?" "String.ends_with?" "String.replace" "String.slice"
                       "String.index_of" "String.at" "String.reverse" "String.code" "String.from_code" "String.from_bytes"
-                      "String.to_int" "String.to_int!" "String.to_float" "String.to_float!"))
+                      "String.to_int" "String.to_int!" "String.to_float" "String.to_float!"
+                      "Float.from_int" "Float.to_int" "Float.to_int!" "Time.now_ms" "Time.monotonic_ms"
+                      "Random.int" "Random.float"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))

@@ -1092,7 +1092,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 - [x] Call-depth limit (10000) and stack layout: growing register and frame arrays per task; resumable native frames for the higher-order `List` builtins.
 - [x] How the CLI runs the VM: `dist/agentica-vm` from 7e; `agentica --vm` in 7i; the release ships both binaries.
 - [x] Dependency policy: C11, dynamic libc; libgc vendored as a pinned git submodule (`vm/third_party/bdwgc`, v8.2.12) and linked statically; libuv for the event loop (also a pinned submodule, added in 7h) and OpenSSL 3 for TLS (7h); HTTP framing and JSON written in C. Linux, macOS and Windows (MSYS2 UCRT64).
-- [x] Seeded `Random`: reproduce Racket's MRG32k3a in C; the seeding port lands in 7e, with a documented fallback.
+- [x] Seeded `Random`: the VM has its own generator (xoshiro256**), so seeded sequences repeat per backend and differ between backends by design (`docs/vm.md` §7.4).
 - [x] Build and CI: `make vm` with `-Werror` and hardening flags, `make vm-test`, a sanitizer job (ASan, UBSan), a GC stress run, a loader fuzz run, and Linux, macOS and Windows jobs.
 
 **Done when:** `docs/vm.md` answers each item above and the open decisions are closed.
@@ -1139,7 +1139,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`, on blocking stdio through one input layer (`vm/input.c`); it moves to libuv resumable builtins with the scheduler in 7h (`docs/vm.md` §12.2 item 6a).
 - [x] `List` and `Map` builtins: `size`, `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`, `reverse`, `sort`; `has_key?`, `keys`, `values`, `size`, `put`, `get` (with and without a default), `delete` on the HAMT (`docs/vm.md` §12.2 item 6b).
 - [x] `String` builtins, with the case and final-sigma data generated from Racket (`docs/vm.md` §2.3, §12.2 item 6b).
-- [ ] `Float`, `Time` and `Random` builtins.
+- [x] `Float`, `Time` and `Random` builtins; the VM's `Random` uses xoshiro256**, so seeded values differ from the evaluator by design, and `agentica --vm` passes `--seed` (`docs/vm.md` §7.4).
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
 - [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
@@ -1151,7 +1151,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7f: Differential tests
 
-- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, seeded `Random` runs, an extreme-Int corpus and a deep-value corpus.
+- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, `Random` fixtures that print only what both backends share (seeded values differ by design), an extreme-Int corpus and a deep-value corpus.
 - [ ] Inputs: `examples/`, `tests/eval/tasks/*` (reference solutions and hidden cases), and a set of rejected-at-runtime programs.
 - [x] Run it in `make test` and CI; a missing VM build fails CI and visibly skips locally (`tests/vm-diff-*-test.rkt`, `AGENTICA_REQUIRE_VM=1`).
 

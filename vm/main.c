@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -99,6 +100,18 @@ static bool os_entropy(uint8_t *out, size_t len) {
 static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, len); }
 #endif
 
+static uint64_t entropy_seed(void) {
+  uint8_t bytes[8];
+  if (!os_entropy(bytes, sizeof bytes)) {
+    struct timespec ts = {0};
+    if (timespec_get(&ts, TIME_UTC) != TIME_UTC) return 0;
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+  }
+  uint64_t seed = 0;
+  for (unsigned k = 0; k < 8; k++) seed |= (uint64_t)bytes[k] << (8 * k);
+  return seed;
+}
+
 static void seed_map_hash(void) {
   uint8_t key[16];
   if (!os_entropy(key, sizeof key)) return;
@@ -134,7 +147,7 @@ static agc_value program_args(int argc, char **argv, int first) {
   return agc_list_value(list);
 }
 
-static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
+static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--ai|--json] -- <file.agcb> [args...]\n";
 
 static int usage_error(void) {
   fputs(usage, stderr);
@@ -162,6 +175,18 @@ static bool parse_steps(const char *text, int64_t *steps) {
   if (clamped) value = INT64_MAX;
   *steps = value;
   return value > 0;
+}
+
+static bool parse_seed(const char *text, uint32_t *seed) {
+  if (!*text) return false;
+  uint64_t value = 0;
+  for (const char *c = text; *c; c++) {
+    if (*c < '0' || *c > '9') return false;
+    value = value * 10 + (uint64_t)(*c - '0');
+    if (value > 2147483647u) return false;
+  }
+  *seed = (uint32_t)value;
+  return true;
 }
 
 static uint8_t *read_file(int index, const char *path, bool driven, size_t *len) {
@@ -197,7 +222,8 @@ static int run(int argc, char **argv) {
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
   int64_t driver = 0;
-  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false;
+  uint32_t seed = 0;
+  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false;
   int i = 1;
   while (i < argc) {
     const char *arg = argv[i];
@@ -224,6 +250,15 @@ static int run(int argc, char **argv) {
       if (!once(&seen_steps, arg)) return 2;
       if (i + 1 >= argc || !parse_steps(argv[i + 1], &max_steps)) {
         fputs("agentica-vm: --max-steps needs a positive integer\n", stderr);
+        return 2;
+      }
+      i += 2;
+      continue;
+    }
+    if (strcmp(arg, "--seed") == 0) {
+      if (!once(&seen_seed, arg)) return 2;
+      if (i + 1 >= argc || !parse_seed(argv[i + 1], &seed)) {
+        fputs("agentica-vm: --seed needs an integer from 0 to 2147483647\n", stderr);
         return 2;
       }
       i += 2;
@@ -267,6 +302,7 @@ static int run(int argc, char **argv) {
   seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  agc_random_seed(&vm->random, seen_seed ? seed : entropy_seed());
   vm->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);

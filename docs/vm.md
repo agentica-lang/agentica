@@ -62,8 +62,10 @@ with or without a default, `delete`; also as methods such as `xs.size` and
 (`length`, `upcase`, `downcase`, `trim`, `split`, `join`, `contains?`,
 `starts_with?`, `ends_with?`, `replace`, `slice`, `index_of`, `at`,
 `reverse`, `code`, `from_code`, `from_int`, `from_float`, `from_bytes`,
-`to_int`, `to_int!`, `to_float`, `to_float!`, 2.3). The other 6b modules
-(`Float`, `Time`, `Random`) follow. Runtime diagnostics come in the plain,
+`to_int`, `to_int!`, `to_float`, `to_float!`, 2.3), and the `Float`,
+`Time` and `Random` builtins (`Float.from_int`, `to_int`, `to_int!`, also
+as `n.to_f`, `x.to_i` and `x.to_i!`; `Time.now_ms`, `monotonic_ms`;
+`Random.int`, `Random.float` with the VM's own seeded generator of 7.4). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -1008,26 +1010,39 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
 
 ### 7.4 Random
 
-The VM reproduces Racket's generator so `--seed` gives the same sequence on
-both backends. Confirmed against Racket 9.3 with
-`pseudo-random-generator->vector`:
+The VM has its own generator, so seeded sequences differ from the
+evaluator's by design: `--seed N` repeats the same values run after run on
+one backend, not across backends. The evaluator keeps Racket's `random`.
+Only the contract is shared: the ranges, `Random.float` in `[0, 1)`, and
+the `RUNTIME-INVALID-RANGE` error at the call.
 
-- State: six MRG32k3a words stored newest first,
-  `#(x1[n] x1[n-1] x1[n-2] x2[n] x2[n-1] x2[n-2])`. A draw is the standard
-  step (`m1 = 4294967087`, `m2 = 4294944443`; multipliers 1403580, 810728,
-  527612, 1370589) giving `z = (p1 - p2) mod m1`.
-- `(random)` is `(double)(z + 1) * (1.0 / (m1 + 1))`, and `(random k)` for
-  `k <= 4294967087` is `z * k / m1` in 64-bit integers: each matched 10,000 of
-  10,000 draws (k = 1000 and k = 4294967087).
-- `random-in-range` (larger ranges) is ported as written, with 128-bit
-  unsigned arithmetic, since `size` reaches 2^64.
-
-Plan: 7e ports `random-seed` (seed to six words) from Racket's source and
-checks the state vector for seeds 0, 1, 2, 3, 12345 and 2147483647, then
-1,000 draws of each kind. Fallback if it cannot be matched: `--seed`
-sequences become backend-specific, `grammar.md` says so before 7i, and seeded
-programs leave the differential corpus. Without `--seed`, the seed comes from
-the OS (`getrandom`, `arc4random_buf`, `BCryptGenRandom`), in `0 .. 2^31-1`.
+- Generator (`vm/random.c`): xoshiro256** (Blackman and Vigna, public
+  domain), its four state words (`agc_random` in `agc_vm`) filled by four
+  splitmix64 outputs from the seed (also public domain).
+- `Random.float` is `(next >> 11) * 2^-53`. It can return exactly 0.0,
+  which the evaluator's `(random)` never does; both stay in `[0, 1)`, so a
+  fixture must not rely on `x > 0.0`.
+- `Random.int(low, high)` (`agc_random_int`): `size = high - low + 1` in
+  unsigned 64-bit arithmetic, where 0 means the full Int range (one draw
+  as is). Otherwise the threshold method rejects draws below
+  `2^64 mod size` (`(0 - size) % size`) and keeps `draw % size`, so the
+  result is unbiased. The result is `low + offset` with wrapping unsigned
+  arithmetic. `low > high` returns false without drawing, and the builtin
+  fails with `RUNTIME-INVALID-RANGE` at the call.
+- Seed: `--seed N` (0 .. 2147483647, the same check and message as
+  `src/main.rkt`) on `agentica-vm`; `agentica --vm --seed N` passes it.
+  Without it, `vm/main.c` takes 8 bytes from the same OS entropy as the
+  map hash key (`getrandom`, then `/dev/urandom`; `rand_s` on Windows); if
+  every source fails it uses the wall clock. `agc_vm_init` seeds with 0, so
+  the C tests and the fuzzer stay deterministic.
+- Tests: `vm/tests/random_test.c` checks that a seed repeats and two seeds
+  differ, the bounds of `Random.float` and of `Random.int` for small,
+  large, single-value and full ranges, a rough uniformity count, and that
+  `low > high` leaves the state unchanged. The `random` fixture prints only
+  what both backends share (counts of values in range, `[0, 1)` floats),
+  and `random-invalid-range` compares the error. The extras shard checks
+  that the VM repeats a seeded run, that two seeds differ, and the
+  `--seed` option errors.
 
 ## 8. Loader safety
 
@@ -1157,9 +1172,8 @@ and cost one predictable branch each.
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv and OpenSSL from 7h).
-- In the slice the VM accepts `--version`, `--max-steps N`, `--ai`, `--json`
-  and `--`. `--seed` joins with `Random` (PR 6b); until then it is an
-  unknown option (exit 2). `--ai` and `--json` may both appear; the last one
+- In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
+  (7.4), `--ai`, `--json` and `--`. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
   exits 1 for every option error it raises itself (a repeated option, an
@@ -1173,7 +1187,7 @@ and cost one predictable branch each.
   runs the front end and `lower`, then writes the bytecode to
   `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
-  runs the VM as `agentica-vm [--max-steps N] [--ai|--json] --driver-pid
+  runs the VM as `agentica-vm [--max-steps N] [--seed N] [--ai|--json] --driver-pid
   PID -- file [args...]`. `--driver-pid` is a hidden VM flag (not in the
   usage text). On Linux the VM first calls `prctl(PR_SET_PDEATHSIG,
   SIGKILL)` and then checks that `getppid()` is `PID`; if not, the driver
@@ -1197,7 +1211,7 @@ and cost one predictable branch each.
   `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
-  `--vm` (exit 1). `--allow-run`, `--seed`, `--steps`, `--dump`,
+  `--vm` (exit 1). `--seed N` is passed to the VM. `--allow-run`, `--steps`, `--dump`,
   `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with
   `--vm does not support X`.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
@@ -1542,7 +1556,8 @@ the platform's OpenSSL package) to each job.
   and the total minus one. The run without a limit compares all three
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
-  step test. Programs using `Random` run with several `--seed` values.
+  step test. `Random` fixtures print only what both backends share, since
+  seeded sequences differ by design (7.4).
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
   (values picked from a 708k-value comparison with Racket, 2.2) and the
   `tests/fixtures/vm/float-text.agc` differential fixture. Write escapes
@@ -1638,8 +1653,8 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      through the input layer of 7.3. `agentica --vm` now passes a non-file
      stdin through. Fixtures with a `.stdin` and an `.args` file next to
      them feed the differential test.
-   - **6b** `String`, `List`, `Map`, `Float`, `Time`, `Random` (with the
-     seeding port). `List` and `Map` are done: plain C builtins (no native
+   - **6b** `String`, `List`, `Map`, `Float`, `Time`, `Random` (done; `Random` with
+     its own seeded generator, 7.4). `List` and `Map` are done: plain C builtins (no native
      frames), the evaluator's messages and spans (`RUNTIME-INDEX-OUT-OF-RANGE`
      for `at`/`set`, `RUNTIME-INVALID-COUNT` for `take`/`drop` and
      `repeat`, at the argument span), `Map.get` as a Result with the
@@ -1656,6 +1671,16 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `vm/tests/string_test.c` (UTF-8 helpers, search, case, number
      parsing edge cases) and the `string-*` fixtures (non-ASCII text,
      empty strings, every runtime code and span).
+     `Float`, `Time` and `Random` are done too
+     (`vm/numbers.c`, its own builtin table): `Float.to_int` fails at
+     the call with `RUNTIME-INVALID-NUMBER` (`cannot convert +nan.0 to
+     Int`, `+inf.0`, `-inf.0`) or `RUNTIME-INTEGER-OVERFLOW`, as an error
+     value without `!`; `Time.now_ms` is `timespec_get` and
+     `monotonic_ms` `CLOCK_MONOTONIC` (`QueryPerformanceCounter` on
+     Windows), both floored to milliseconds; `Random` is the VM's own
+     xoshiro256** generator of 7.4, and `agentica --vm` passes `--seed`. Fixtures:
+     `float-convert`, `float-to-int-*`, `time` (shape only),
+     `random` (black-box) and `random-invalid-range`.
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 
@@ -1677,7 +1702,9 @@ those that need files, processes, tasks or the network by name:
 
 ## 13. Open questions
 
-- **Random seeding**: port planned in PR 6b, fallback in 7.4.
+- **Random seeding**: resolved in PR 6b: the VM uses its own
+  xoshiro256** generator, so seeded sequences differ from the evaluator
+  by design (7.4).
 - **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
   runaway file reaches the out-of-memory exit. Before 7i runs untrusted
   bytecode by default, decide on a cap such as `--max-heap N` through

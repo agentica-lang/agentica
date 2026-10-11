@@ -139,7 +139,7 @@ Split text; an empty separator gives characters.
 | Option | Does |
 |---|---|
 | `--max-steps N` | stops the program after `N` steps (`RUNTIME-STEP-LIMIT`) |
-| `--seed N` | makes `Random` repeat the same numbers |
+| `--seed N` | makes `Random` repeat the same numbers (with `--vm`, other numbers than without it) |
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
 | `--version` | prints the version |

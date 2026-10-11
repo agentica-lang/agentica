@@ -47,6 +47,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   vm->err = err;
   vm->steps_left = max_steps;
   vm->in.fd = -1;
+  agc_random_seed(&vm->random, 0);
   vm->args = agc_list_value(agc_new_list(0));
 }
 
