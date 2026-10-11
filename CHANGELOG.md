@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM has tail calls: `return f(...)` of a user function (local
+  or imported, in any branch, `case` arm or loop body) replaces the current
+  frame, so tail recursion and mutual recursion run at any depth there. Step
+  counts and `--max-steps` behave as before. The evaluator has no tail
+  calls, so a deep tail-recursive program still stops there with
+  `RUNTIME-STACK-OVERFLOW`; this is a documented difference. Non-tail
+  recursion keeps the 10000 call-depth limit on both. The `.agcb` format
+  version does not change.
 - The bytecode VM runs structs, enums and `case`: struct construction (fields
   in any order, evaluated as written), field access, generic and recursive
   enums, nullary variants with or without `()`, struct and enum values in
@@ -19,8 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   evaluator, and deep values print without C recursion. The `.agcb` format
   is now version 2: it carries the struct and enum tables.
 - A documentation website in `site/`, built with Hugo and a small custom
-  theme. It shows the language reference (`docs/grammar.md`), the guide and
-  the library pages from the programming skill without copying them.
+  theme. It has its own user docs: Getting started, a Language tour in short
+  pages, and one Library page per builtin module, each function with a small
+  example and its output. `docs/grammar.md` is published as the language
+  specification. `tests/site-examples-test.rkt` checks and runs every
+  example on the site and compares its output.
   `make site` builds it, `make site-serve` serves it, and
   `.github/workflows/pages.yml` deploys it to GitHub Pages from `master`.
 - A CI workflow, run by hand, fuzzes the VM loader and interpreter with 5 million

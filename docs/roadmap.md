@@ -1116,6 +1116,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Control flow, locals, function calls, returns, call-depth limit (`RUNTIME-STACK-OVERFLOW`), `--max-steps` (`RUNTIME-STEP-LIMIT`).
 - [x] Lists: literals (chunked above 255 elements), `for`, indexing with `RUNTIME-INDEX-OUT-OF-RANGE` at the index span, and their text and debug forms (`docs/vm.md` §12.2 item 5a).
 - [x] Structs, enums (generic too) and `case` with literal, `_` and variant patterns; text and debug forms with the linked display names (`docs/vm.md` §12.2 item 5b).
+- [x] Tail calls: `return f(...)` of a user function lowers to `TAIL_CALL`, which reuses the frame, so tail and mutual recursion do not grow the call depth on the VM; same steps as `CALL` + `RETURN`; a documented difference from the evaluator, which still overflows (`docs/vm.md` §4.3, §6.1).
 - [ ] Maps (insertion order), map indexing errors with their spans.
 - [ ] `Result`, `try`, function values, closures, resumable `List` builtins.
 - [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.

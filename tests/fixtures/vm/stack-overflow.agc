@@ -1,5 +1,5 @@
 def down(n: Int) -> Int
-  return down(n + 1)
+  return down(n + 1) + 1
 end
 
 def main() -> Void

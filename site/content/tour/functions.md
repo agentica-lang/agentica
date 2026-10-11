@@ -1,0 +1,172 @@
+---
+title: Functions
+weight: 6
+description: Define functions, return values, recursion and function values.
+---
+
+## Define a function
+
+`def` defines a function. Every parameter and the result need a type.
+
+```agentica
+def greet(name: String) -> String
+  return "Hello, #{name}!"
+end
+
+def main() -> Void
+  puts(greet("Ana"))
+end
+```
+
+```output
+Hello, Ana!
+```
+
+Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`.
+Arguments are given by position.
+
+## return
+
+A function that gives a value must `return` on every path. The last line is
+not returned on its own.
+
+```agentica
+def max(a: Int, b: Int) -> Int
+  if a > b
+    return a
+  end
+  return b
+end
+
+def main() -> Void
+  puts(max(3, 9))
+end
+```
+
+```output
+9
+```
+
+Forgetting a `return` is a checker error:
+
+```agentica {expect="CHECK-MISSING-RETURN"}
+def double(n: Int) -> Int
+  n * 2
+end
+
+def main() -> Void
+  puts(double(2))
+end
+```
+
+## Void functions
+
+A function that gives nothing returns `Void`. It ends at its last line, or at a
+bare `return`.
+
+```agentica
+def report(count: Int) -> Void
+  if count == 0
+    puts("nothing")
+    return
+  end
+  puts("#{count} items")
+end
+
+def main() -> Void
+  report(0)
+  report(3)
+end
+```
+
+```output
+nothing
+3 items
+```
+
+## Order and recursion
+
+Functions can be called before they are defined, and can call themselves.
+Leave a blank line after the `end` of each function.
+
+```agentica
+def main() -> Void
+  puts(factorial(5))
+end
+
+def factorial(n: Int) -> Int
+  if n <= 1
+    return 1
+  end
+  return n * factorial(n - 1)
+end
+```
+
+```output
+120
+```
+
+## Many results
+
+A function returns one value. To give back several, return a
+[struct](/tour/structs/).
+
+```agentica
+struct MinMax
+  min: Int
+  max: Int
+end
+
+def min_max(xs: List[Int]) -> MinMax
+  sorted = xs.sort
+  return MinMax(min: sorted[0], max: sorted[sorted.size - 1])
+end
+
+def main() -> Void
+  result = min_max([4, 1, 9, 3])
+  puts("#{result.min} to #{result.max}")
+end
+```
+
+```output
+1 to 9
+```
+
+## Function values
+
+`&name` is a function as a value. Its type is `Fn[...]`: the parameter types,
+then the result type. Call it with `.call(...)`.
+
+```agentica
+def double(n: Int) -> Int
+  return n * 2
+end
+
+def apply(f: Fn[Int, Int], value: Int) -> Int
+  return f.call(value)
+end
+
+def main() -> Void
+  f: Fn[Int, Int] = &double
+  puts(f.call(21))
+  puts(apply(&double, 5))
+  puts([1, 2, 3].map(&double))
+end
+```
+
+```output
+42
+10
+[2, 4, 6]
+```
+
+`Fn[Void]` is a function with no parameters that gives nothing. Function values
+can live in lists, maps and struct fields.
+
+[Blocks](/tour/blocks/) are the short way to write a function value at the
+place where you use it.
+
+## No overloading or defaults
+
+A name has one definition. There are no default arguments, no keyword
+arguments and no methods on your own types. Functions are top-level only.
