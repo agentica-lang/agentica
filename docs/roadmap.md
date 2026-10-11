@@ -1274,4 +1274,4 @@ Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
 - [ ] Front-end implementation language: Racket for now; revisit (self-hosting, or Rust) only once the grammar is stable and startup time or binary size call for it ([`future.md` section 18](future.md#18-front-end-implementation-language)).
 
-The remaining items above are outside the current implementation order.
+The open items in this section are outside the current implementation order.
