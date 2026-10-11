@@ -1058,7 +1058,9 @@ CI matrix:
 The Linux jobs run on every pull request that changes more than docs. On
 the self-hosted runner, Racket is installed once into the runner's tool cache
 (`$RUNNER_TOOL_CACHE/racket-cs-9.3`, on its persistent work volume) and
-later jobs only add it to `PATH`. The jobs
+later jobs only add it to `PATH`. The `vm/unicode_data.c` check is skipped
+when a cache entry shows it passed for the same generator, table and
+Makefile. The jobs
 cache `src/compiled` and `tests/compiled` per job and touch every tracked file
 after the restore, so `raco make` checks each source's SHA-1 and recompiles
 only what changed. macOS and Windows minutes cost 10 and 2 times Linux minutes

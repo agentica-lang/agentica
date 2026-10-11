@@ -55,7 +55,13 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: make build && raco make -j 4 tests/*.rkt
       - run: make vm vm-test
-      - run: make vm-unicode && git diff --exit-code vm/unicode_data.c
+      - id: unicode
+        uses: actions/cache@v4
+        with:
+          path: build/unicode-checked
+          key: unicode-checked-9.3-${{ hashFiles('vm/**/gen-unicode.rkt', 'vm/unicode_data.c', 'Makefile') }}
+      - if: steps.unicode.outputs.cache-hit != 'true'
+        run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
       - run: make test
       - run: make test-bdd
       - run: AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/tcp-test.rkt tests/http-test.rkt tests/process-test.rkt tests/modules-test.rkt
