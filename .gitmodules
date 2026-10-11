@@ -1,3 +1,6 @@
 [submodule "vm/third_party/bdwgc"]
 	path = vm/third_party/bdwgc
 	url = https://github.com/ivmai/bdwgc.git
+[submodule "vm/third_party/yyjson"]
+	path = vm/third_party/yyjson
+	url = https://github.com/ibireme/yyjson.git

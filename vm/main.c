@@ -234,9 +234,10 @@ static int run(int argc, char **argv) {
     if (strcmp(arg, "--version") == 0) {
       unsigned gc = agc_gc_version();
       if (gc)
-        printf("agentica-vm %s (libgc %u.%u.%u)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF);
+        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
+               agc_json_version());
       else
-        printf("agentica-vm %s (sanitizer build, no libgc)\n", AGC_VERSION);
+        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s)\n", AGC_VERSION, agc_json_version());
       return fflush(stdout) == 0 ? 0 : 1;
     }
     if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {

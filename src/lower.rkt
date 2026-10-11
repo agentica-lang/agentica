@@ -21,7 +21,7 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String Range))
+(define value-types '(Int Float Bool Nil String Range Json))
 
 (define max-list-chunk 255)
 (define max-map-chunk 255)
@@ -81,7 +81,9 @@
                       "String.index_of" "String.at" "String.reverse" "String.code" "String.from_code" "String.from_bytes"
                       "String.to_int" "String.to_int!" "String.to_float" "String.to_float!"
                       "Float.from_int" "Float.to_int" "Float.to_int!" "Time.now_ms" "Time.monotonic_ms"
-                      "Random.int" "Random.float"))
+                      "Random.int" "Random.float"
+                      "JSON.parse" "JSON.encode" "JSON.from" "JSON.object" "JSON.array" "JSON.null" "JSON.null?"
+                      "JSON.get" "JSON.at" "JSON.string" "JSON.int" "JSON.float" "JSON.bool" "JSON.list"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))
