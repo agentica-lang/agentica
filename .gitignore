@@ -1,6 +1,7 @@
 compiled/
 dist/
 build/
+tools/jscpd/node_modules/
 tests/eval/results/
 __pycache__/
 *.agcb

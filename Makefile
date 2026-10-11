@@ -29,12 +29,16 @@ bench: build vm
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 
-JSCPD ?= npx --yes jscpd@5.3.2
+JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
 
-dup-check:
+tools/jscpd/node_modules: tools/jscpd/package.json tools/jscpd/package-lock.json
+	npm ci --prefix tools/jscpd --ignore-scripts --no-audit --no-fund
+	touch $@
+
+dup-check: tools/jscpd/node_modules
 	$(JSCPD) --baseline .jscpd-baseline.json --fail-on-new-clones
 
-dup-baseline:
+dup-baseline: tools/jscpd/node_modules
 	$(JSCPD) --baseline .jscpd-baseline.json --update-baseline --reporters silent
 
 clean:

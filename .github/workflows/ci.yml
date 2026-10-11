@@ -120,17 +120,14 @@ jobs:
 
   dup-check:
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - id: jscpd
-        run: echo "spec=$(sed -n 's/^JSCPD ?= npx --yes //p' Makefile)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.npm/_npx
-          key: npx-${{ runner.os }}-node24-${{ steps.jscpd.outputs.spec }}
+          cache: npm
+          cache-dependency-path: tools/jscpd/package-lock.json
       - run: make dup-check
 
   test:
