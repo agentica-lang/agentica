@@ -2,3 +2,4 @@
 *.agcb binary
 *.agc linguist-language=Ruby
 tests/fixtures/vm/unwrap-control-error.agc diff
+tests/fixtures/vm/*.stdin binary

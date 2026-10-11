@@ -124,6 +124,16 @@ static bool bind_to_driver(int64_t driver) {
 }
 #endif
 
+static agc_value program_args(int argc, char **argv, int first) {
+  size_t n = first < argc ? (size_t)(argc - first) : 0;
+  agc_list *list = agc_new_list(n);
+  for (size_t k = 0; k < n; k++) {
+    const char *arg = argv[(size_t)first + k];
+    list->items[k] = agc_string_value(agc_utf8_decode((const uint8_t *)arg, strlen(arg), "?", true));
+  }
+  return agc_list_value(list);
+}
+
 static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
 
 static int usage_error(void) {
@@ -257,8 +267,10 @@ static int run(int argc, char **argv) {
   seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  vm->args = program_args(argc, argv, i + 1);
+  agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);
-  if (outcome.kind == AGC_DONE && fflush(stdout) != 0) {
+  if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
     outcome.message = "cannot write to standard output";
@@ -269,6 +281,7 @@ static int run(int argc, char **argv) {
     agc_print_diagnostic(stderr, program, &outcome, style);
     return 1;
   }
+  if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) return (int)outcome.exit_code;
   return 0;
 }
 

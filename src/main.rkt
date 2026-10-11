@@ -2,6 +2,7 @@
 
 (require file/sha1
          json
+         (only-in "ast.rkt" program-span)
          racket/os
          racket/random
          "bdd-runner.rkt"
@@ -58,11 +59,31 @@
       (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm
              (append options (list "--driver-pid" (number->string (getpid)) "--" (path->string bytecode-file))
                      program-args))))
-  (when to-vm (close-output-port to-vm))
+  (define feeder #f)
+  (define read-failed? #f)
+  (define (feed)
+    (define buffer (make-bytes 65536))
+    (define failed?
+      (let loop ()
+        (define count (with-handlers ([exn:fail? (lambda (_) 'failed)]) (read-bytes-avail! buffer stdin)))
+        (cond
+          [(eq? count 'failed) #t]
+          [(exact-positive-integer? count)
+           (and (with-handlers ([exn:fail? (lambda (_) #f)])
+                  (write-bytes buffer to-vm 0 count)
+                  (flush-output to-vm)
+                  #t)
+                (loop))]
+          [else #f])))
+    (when (and failed? (eq? (subprocess-status process) 'running))
+      (set! read-failed? #t)
+      (subprocess-kill process #t))
+    (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
   (and process
        (dynamic-wind
          void
          (lambda ()
+           (parameterize-break #f (when to-vm (set! feeder (thread feed))))
            (define (pump from to)
              (thread (lambda ()
                        (with-handlers ([exn:fail? (lambda (_) (copy-port from (open-output-nowhere)))])
@@ -75,8 +96,10 @@
            (for-each thread-wait readers)
            (flush-output stdout)
            (flush-output stderr)
-           (subprocess-status process))
+           (if read-failed? 'read-failed (subprocess-status process)))
          (lambda ()
+           (when feeder (kill-thread feeder))
+           (when to-vm (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
            (when (eq? (subprocess-status process) 'running)
              (subprocess-kill process #t))))))
 
@@ -260,6 +283,8 @@
                (run-vm-process vm bytecode-file options program-args)
                'no-temporary))
          (lambda () (when created? (delete-temporary bytecode-file)))))
+     (when (eq? status 'read-failed)
+       (fail! (diagnostic 'RUNTIME-INTERNAL "cannot read standard input" (program-span checked))))
      (when (eq? status 'no-temporary)
        (eprintf "agentica: cannot write a temporary file in ~a\n" (find-system-path 'temp-dir))
        (exit 2))

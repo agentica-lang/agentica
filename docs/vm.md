@@ -31,7 +31,8 @@ details and reasons.
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
 and Windows CI, the Lists PR, the structs, enums and `case` PR and the
-Result PR and the Maps PR (12.2 items 1 to 4 and 5a to 5d) are in, and so is the
+Result PR, the Maps PR and the IO and System PR (12.2 items 1 to 4, 5a
+to 5d and 6a) are in, and so is the
 tail-call PR (after the list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
 imported ones included), `Result[T]` of any of them (and `Result[Void]`),
@@ -44,10 +45,12 @@ indexing `xs[i]`, map literals, map indexing `m[key]`, struct construction and f
 `case` with literal, `_`, variant and Result patterns, `ok`/`error`, the
 `Result.*` builtins, `try`, user functions, calls, tail
 calls (`return f(...)` reuses the frame, 6.1), `return`, interpolation,
-`x.to_s` and `x.inspect` of those values, and `puts`/`print`/`IO.puts`/
-`IO.print`/`IO.warn` of any of them. List and Map library functions
+`x.to_s` and `x.inspect` of those values, `puts`/`print`/`IO.puts`/
+`IO.print`/`IO.warn`/`IO.inspect` of any of them, blocking stdin
+(`gets`, `gets!`, `IO.read`, `IO.read_bytes`, `IO.eof?`), `IO.flush`,
+`System.args` and `System.exit`. List and Map library functions
 (`xs.size`, `List.append`, `Map.get`, `Map.keys`, ...) join with the library
-PR (12.2 item 6). Runtime diagnostics come in the plain,
+PR (12.2 item 6b). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -191,10 +194,21 @@ differential tests (section 12) check them.
   the same form (`format "~s"`): one shared C function.
 - Text from stdin is decoded like a Racket port: each byte that does not
   start a complete valid UTF-8 sequence becomes one U+FFFD (`E2 82 63` gives
-  two U+FFFD then `c`). `IO.gets` ends lines at LF, CR or CRLF.
-- `System.args` on Linux and macOS: UTF-8, with `?` for each invalid byte.
-  Under a non-UTF-8 locale Racket decodes differently; that case is outside
-  the contract. Windows console input code pages are outside it too.
+  two U+FFFD then `c`). `IO.gets` ends lines at LF, CR or CRLF; a CR
+  peeks at the next byte for the LF. `IO.read` and `IO.gets` decode only
+  the bytes they consume, so `read_bytes` after `gets` starts right after
+  the line terminator. A peek that finds EOF (`IO.eof?`, the byte after a
+  CR) leaves it pending, as a Racket port does: the next read returns EOF
+  without reading again.
+- `System.args` on Linux and macOS: UTF-8, with `?` for each invalid byte,
+  like Racket in a UTF-8 locale (glibc `iconv`), which also turns an
+  incomplete sequence at the end of an argument into a single `?` (`E2 82`
+  at the end gives one `?`; `E0 80` and `F0 80 80` are invalid starts, so
+  they give one `?` per byte). Under a non-UTF-8 locale Racket decodes
+  differently; that case is outside the contract. This includes the C and
+  POSIX locales, the default in containers and cron jobs, when
+  `agentica-vm` is called directly. Windows console input code pages are
+  outside it too.
 
 The case mapping, final-sigma and write-escape data are generated from
 Racket itself by `vm/tools/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
@@ -226,7 +240,7 @@ fails when the committed file differs from what the generator prints.
   combining mark, an emoji, joiners), also with `a` or a space between
   them; and for one string holding every code point. It stops if Racket
   ever prints something else. The case-mapping tables join with the
-  `String` library (12.2 item 6).
+  `String` library (12.2 item 6b).
 
 ### 2.4 Printing values (`value->text`, `value->debug-string`)
 
@@ -418,11 +432,14 @@ any depth; `Result[Void]` too) is rejected, except a Void call or `try`
 used as a statement or returned. A struct or
 enum type is accepted whatever its fields or payloads hold: a value of an
 unsupported type can only come from an expression the lowerer rejects. The only builtins a program may call are `puts`,
-`IO.print`, `IO.warn`, `String.from_int`, `String.from_float`, `ok`,
+`IO.print`, `IO.warn`, `IO.inspect`, `IO.gets`, `IO.gets!`, `IO.read`,
+`IO.read_bytes`, `IO.flush`, `IO.eof?`, `System.args`, `System.exit`,
+`String.from_int`, `String.from_float`, `ok`,
 `error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or` and
 `Result.message` (their implementation keys; `print` and `IO.puts` map to
-the first two). The last
-two exist because the checker resolves `x.to_s` on Int and Float to them.
+the first two, `gets` and `gets!` to `IO.gets` and `IO.gets!`).
+`String.from_int` and `String.from_float` are there because the checker
+resolves `x.to_s` on Int and Float to them.
 `List.concat` and `Map.put` are in the C table too, but only the lowerer
 emits them, for long literals (3.3); a written call to either stays
 `LOWER-UNSUPPORTED` until the library PR. No core form turns into a `List` library call: `for`,
@@ -659,7 +676,7 @@ typedef struct {
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
-| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (12 levels of 5 hash bits and a 13th of 4 bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing (and later `Map.keys`/`values`) walks the list once into an array, oldest first, then looks each value up: O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (12.2 item 6) will copy the list without its key, O(n) like `remove` in the evaluator. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3, the value tag compressed as a leading 64-bit word before the bytes, so an Int and a String with the same bytes hash apart. The SipHash key is seeded once per run in `vm/main.c` from OS entropy, independent of `--seed`: on Linux `getrandom` (retried on `EINTR` and short reads), then `/dev/urandom` if `getrandom` fails (for example `ENOSYS` or `EPERM` under seccomp); `/dev/urandom` on other Unix systems and `rand_s` on Windows. If every source fails, the fixed default key stays. That is acceptable as a last resort: the hash is still 64 bits and a HAMT only degrades on full 64-bit collisions (a collision node is searched linearly), and forcing those still costs about 2^32 work per pair even with a known key. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. Later, with the Map library (12.2 item 6): `MAP` can build its fresh literal with a transient in-place put instead of a persistent copy per pair, and a node can split child and leaf slots to use less memory. |
+| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (12 levels of 5 hash bits and a 13th of 4 bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing (and later `Map.keys`/`values`) walks the list once into an array, oldest first, then looks each value up: O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (12.2 item 6b) will copy the list without its key, O(n) like `remove` in the evaluator. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3, the value tag compressed as a leading 64-bit word before the bytes, so an Int and a String with the same bytes hash apart. The SipHash key is seeded once per run in `vm/main.c` from OS entropy, independent of `--seed`: on Linux `getrandom` (retried on `EINTR` and short reads), then `/dev/urandom` if `getrandom` fails (for example `ENOSYS` or `EPERM` under seccomp); `/dev/urandom` on other Unix systems and `rand_s` on Windows. If every source fails, the fixed default key stays. That is acceptable as a last resort: the hash is still 64 bits and a HAMT only degrades on full 64-bit collisions (a collision node is searched linearly), and forcing those still costs about 2^32 work per pair even with a known key. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. Later, with the Map library (12.2 item 6b): `MAP` can build its fresh literal with a transient in-place put instead of a persistent copy per pair, and a node can split child and leaf slots to use less memory. |
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
@@ -766,7 +783,9 @@ handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
 line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
 GC error`) and call `_Exit(70)` (no atexit handlers, no stdio flush, so
 buffered stdout is lost). Racket has no matching diagnostic, so this is a
-documented difference.
+documented difference. It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
+so libgc warnings (such as `Repeated allocation of very large block`) never
+reach the program's stderr.
 
 ## 7. Builtins in C
 
@@ -807,7 +826,32 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
   `order<?`: strings by code point (UTF-8 byte order), numbers by `<`, NaN
   last.
 - **Streams.** In 7e, stdin is one buffered reader over `read(0)`, shared by
-  `gets`, `read`, `read_bytes` and `eof?`, like the single Racket port.
+  `gets`, `read`, `read_bytes` and `eof?`, like the single Racket port. It
+  lives in `vm/input.c` (`agc_input_*`), the only code that reads stdin:
+  one growing buffer (64 KiB first, doubled through `agc_size_mul`, so a
+  long line or `IO.read` is bounded only by memory, and ends in the
+  out-of-memory exit like any other growth; a buffer above 1 MiB is
+  dropped for a fresh 64 KiB one once it is empty, so one huge line does
+  not keep its memory for the rest of the run), blocking `read` with `EINTR`
+  retried and, on Linux, `poll` when the descriptor is non-blocking. The
+  builtins only call it, so 7h can replace it with libuv reads that park
+  the task (10.2) without changing what the builtins return. A failed read
+  is `RUNTIME-INTERNAL` for `gets`, `read` and `eof?` and the error value
+  `"input read failed"` for `read_bytes`, as in the evaluator. The
+  message differs (the evaluator shows Racket's port error, the VM says
+  "cannot read standard input"), but the span is the same: the evaluator
+  reports any Racket failure at the whole-program span, and the VM passes
+  span 0, which maps to that span. When stdout is a terminal, `vm/main.c`
+  opens stdin with `agc_input_open(vm, 0, isatty(1))`, so stdout is flushed
+  before each blocking stdin read; a prompt written before `gets` shows
+  up first, as it does with the evaluator on a terminal. Reading
+  charges no steps: work inside builtins is free (2.1), so `--max-steps`
+  does not bound a single read; only memory does (see the heap cap in
+  13). `IO.flush` flushes
+  stdout and fails like a write. `System.exit` records the code in the
+  outcome (`AGC_EXITED`) and `longjmp`s like a diagnostic; `vm/main.c`
+  flushes stdout and exits (2.5). A VM run without `vm/main.c` (the C
+  tests, the fuzzer) has an empty stdin and no arguments.
   Output uses C stdio; on Windows all three streams are in binary mode
   (`_setmode`), because Racket does not translate `\n`.
 
@@ -946,7 +990,7 @@ and cost one predictable branch each.
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv and OpenSSL from 7h).
 - In the slice the VM accepts `--version`, `--max-steps N`, `--ai`, `--json`
-  and `--`. `--seed` joins with `Random` (PR 6); until then it is an
+  and `--`. `--seed` joins with `Random` (PR 6b); until then it is an
   unknown option (exit 2). `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
@@ -955,8 +999,7 @@ and cost one predictable branch each.
   the 7i driver parses the user's options itself. Value errors that
   `src/main.rkt` checks (`--max-steps needs a positive integer`) exit 2 on
   both.
-  Arguments after the file are accepted and unused until `System.args`
-  lands.
+  Arguments after the file are the program's `System.args`.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
 - `agentica --vm file.agc [args...]` (7i, landed for Linux). `src/main.rkt`
   runs the front end and `lower`, then writes the bytecode to
@@ -978,8 +1021,13 @@ and cost one predictable branch each.
   opened (same device and inode). The driver deletes the file too, when the
   VM never ran or failed before loading, and on a break. When a driver
   output port is not a file stream (rackunit, captured output) it copies
-  that stream through a pipe; a non-file stdin is closed at once, because
-  the VM reads no input yet. Otherwise it passes the real stdin, stdout
+  that stream through a pipe, and a non-file stdin is copied into the VM's
+  stdin by a thread that stops when the VM exits. The thread reads ahead
+  of what the program consumes, so on a non-file stdin shared with other
+  code the driver may take bytes the program never read. If reading the
+  driver's stdin fails, the thread kills the VM and the driver reports
+  `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
+  a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
   `--vm` (exit 1). `--allow-run`, `--seed`, `--steps`, `--dump`,
   `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with
@@ -1378,7 +1426,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `RUNTIME-INDEX-OUT-OF-RANGE` at the index span, and the text and debug
      forms `[a, b]` for every value type the VM has, through `puts`,
      interpolation, `to_s` and `inspect`. The checker rejects `==` on lists,
-     so there is no list equality. List library functions stay in item 6.
+     so there is no list equality. List library functions stay in item 6b.
    - **5b Structs, enums, `case`** (done). User structs and enums (generic
      and recursive too, imported ones with their linked display names),
      construction, field access, `case` with literal, `_` and variant
@@ -1400,12 +1448,21 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      collisions, keys that share 60 hash bits, and a depth-1,000,000
      nested map printed. No format bump: `MAP` and `MAP_GET` are appended.
      There is no `for` over a map (the checker rejects it); Map library
-     functions stay in item 6.
+     functions stay in item 6b.
    - **5e** Closures (`block-lit`), `&name`, `.call`, the resumable `List`
      builtins (`map`, `filter`, `reduce`, `sort_by`, `each`, `any?`,
      `all?`).
-6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
-   `Random` (with the seeding port).
+6. **Library.** Two PRs:
+   - **6a IO and System** (done). Blocking stdio; it moves to libuv
+     resumable builtins with the scheduler (7h). `IO.inspect`, `IO.gets`
+     (and `gets`), `IO.gets!` (and `gets!`, `RUNTIME-END-OF-INPUT` at the
+     call span), `IO.read`, `IO.read_bytes` (0..1 MiB, else an error
+     value), `IO.flush`, `IO.eof?`, `System.args` and `System.exit`, all
+     through the input layer of 7.3. `agentica --vm` now passes a non-file
+     stdin through. Fixtures with a `.stdin` and an `.args` file next to
+     them feed the differential test.
+   - **6b** `String`, `List`, `Map`, `Float`, `Time`, `Random` (with the
+     seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 
@@ -1421,7 +1478,7 @@ those that need files, processes, tasks or the network by name:
 
 ## 13. Open questions
 
-- **Random seeding**: port planned in PR 6, fallback in 7.4.
+- **Random seeding**: port planned in PR 6b, fallback in 7.4.
 - **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
   runaway file reaches the out-of-memory exit. Before 7i runs untrusted
   bytecode by default, decide on a cap such as `--max-heap N` through
