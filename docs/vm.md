@@ -1320,7 +1320,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
    `Random` (with the seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
-   For `JSON.kind` (`future.md` §15.2), the parser must keep integers outside int64 as exact decimal text (for example yyjson's `BIGNUM_AS_RAW`), and still reject non-finite reals such as `1e400` with `JSON number is not finite`.
+   For `JSON.kind` (`future.md` §15.2), integers outside int64 stay exact decimal text: yyjson gives `2^63 .. 2^64-1` as uint64, so the VM layer turns values above `INT64_MAX` into decimal text, and larger ones come as raw text (for example yyjson's `BIGNUM_AS_RAW`). With the raw flag, `1e400` comes back as raw text and must still be rejected with `JSON number is not finite`. Planned differential fixtures: `9223372036854775808` and `1e400`.
 
 Outside this list, the **tail-call** PR (done) added `TAIL_CALL`: a
 `return f(...)` of a user function reuses the frame (3.3, 4.2, 4.3, 6.1),

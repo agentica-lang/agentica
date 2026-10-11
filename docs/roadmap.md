@@ -12,12 +12,15 @@ Float and Strings PRs, the macOS and Windows CI, the Lists PR and the
 structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
 done; the rest of item 5 (5c to 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
-ranges may start once the VM has closures (5e), in parallel with the rest of
-phase 7; queues also need only 5e, and sets need the VM maps (5d). Real
+ranges may start once the VM has closures (7e PR 5e), in parallel with the rest of
+phase 7; queues also need only 7e PR 5e, and sets need the VM maps (5d). Real
 applications follow, then MCP. Adapters and JSON inspection (phase 10) come
 after MCP: they are small language items, so they go before shared tables,
-which wait for a real program. 10a needs `.call` on the VM (5e); 10b and 10d
-need the VM JSON PR (`docs/vm.md` §12.2 item 7). Shared tables (phase 9) are
+which wait for a real program. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d
+need the VM JSON PR (`docs/vm.md` §12.2 item 7). The VM differential check of
+phase 10 covers the read-only memory backend and the JSON walker; the disk
+backend is checked on the evaluator until files reach the VM (7h), and on both
+backends after that. Shared tables (phase 9) are
 on demand: they need tasks on the VM (7h) and start only when a real program
 needs them. Real applications and MCP keep running on the Racket evaluator
 meanwhile, and their findings feed the VM's differential tests. Historical
@@ -1202,14 +1205,14 @@ Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs 
 
 ## Phase 10: Adapters and JSON inspection
 
-Specified in [`future.md` section 15](future.md#15-adapters-and-json-inspection). Each item lands in the evaluator and the VM in one PR, with `grammar.md`, the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d need the VM JSON PR (`docs/vm.md` §12.2 item 7).
+Specified in [`future.md` section 15](future.md#15-adapters-and-json-inspection). Each item lands in the evaluator and the VM in one PR, with `grammar.md`, the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d need the VM JSON PR (`docs/vm.md` §12.2 item 7). The VM differential check covers the read-only memory backend and the JSON walker; the disk backend is checked on the evaluator until files reach the VM (7h), and on both backends after that.
 
-- [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the ".put.call(...)" help. Update the `grammar.md` sentence "structs and enums have no methods" and the skill's `.call` line. Show the adapter pattern in an example.
-- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Numbers: `JsonInt(n)` exactly when `JSON.int(j)` is `ok(n)`; `JsonBigInt(text)` for other integers without a fraction or exponent; `JsonFloat` for numbers with a fraction or exponent. `JsonObject` keys use the same sorted order as `JSON.decode` into a `Map`, so `JSON.parse` does not change. The VM parser must keep integers outside int64 as exact decimal text (for example yyjson's `BIGNUM_AS_RAW`), and still reject non-finite reals such as `1e400` with `JSON number is not finite`. The only breaking change: `JsonValue` becomes a reserved name (say so in the changelog).
-- [ ] 10c Generic structs (`struct Box[T]`): inference at construction, substituted field types, the generic enum diagnostics; a type parameter used as a `Map` key is `CHECK-MAP-KEY-TYPE` at the declaration; `printable-type?` is checked after substitution. `JSON.encode` works; `JSON.decode` and `JSON.schema` reject any generic instance, struct or enum, anywhere in the target (`CHECK-NOT-DECODABLE`). Add a note to the programming skill's diagnostics reference that `CHECK-ENUM-TYPE-INFERENCE` also covers structs. Update the `grammar.md` sentence "generic structs are not supported".
-- [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`, for non-generic enums only. The schema uses `prefixItems` plus `"items": false` (JSON Schema 2020-12).
+- [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the ".put.call(...)" help. A block without parentheses (`s.run do |x| ... end`) is a call with the block as its only argument; a bare `s.run` stays the field value. Update the `grammar.md` sentence "structs and enums have no methods" and the skill's `.call` line. Show the adapter pattern in an example.
+- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Numbers: `JsonInt(n)` exactly when `JSON.int(j)` is `ok(n)`; `JsonBigInt(text)` for other integers without a fraction or exponent; `JsonFloat` for numbers with a fraction or exponent. `JsonObject` keys use the same sorted order as `JSON.decode` into a `Map`, so `JSON.parse` does not change. The VM must keep integers outside int64 as exact decimal text: yyjson gives `2^63 .. 2^64-1` as uint64, so values above `INT64_MAX` become decimal text, and larger ones come as raw text (for example yyjson's `BIGNUM_AS_RAW`). With the raw flag, `1e400` comes back as raw text and must still be rejected with `JSON number is not finite`. Differential fixtures: `9223372036854775808` and `1e400`. `JsonValue` is the first builtin enum: it needs a path in the checker's enum table and in the evaluator. The only breaking change: `JsonValue` becomes a reserved name (say so in the changelog).
+- [ ] 10c Generic structs (`struct Box[T]`): inference at construction, substituted field types, the generic enum diagnostics; a type parameter used as a `Map` key is `CHECK-MAP-KEY-TYPE` at the declaration; `printable-type?` is checked after substitution. `JSON.encode` and `JSON.from` work on generic instances, struct or enum, since encoding needs no `$defs`; only `JSON.decode` and `JSON.schema` reject a generic instance anywhere in the target (`CHECK-NOT-DECODABLE`). A bare generic target with no type arguments (`JSON.decode(text, Box)`, `JSON.schema(Option)`) is `CHECK-UNKNOWN-TYPE`, as today. Add a note to the programming skill's diagnostics reference that `CHECK-ENUM-TYPE-INFERENCE` also covers structs. Update the `grammar.md` sentence "generic structs are not supported".
+- [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`. Encode works on generic enum instances too; decode and schema take non-generic enums only. The schema is valid in every JSON Schema draft: `values` has its length fixed with `minItems` and `maxItems`; `prefixItems` only when the variant has payloads; no `"items": false`; a nullary variant gets `"values": {"type": "array", "maxItems": 0}` and `values` is not in its `required`. The root gets no `$schema`, as today. `JSON.encode` text puts `tag` before `values`.
 
-**Done when:** an example with a `Storage` adapter, a disk backend (in a temporary directory that the Racket test creates and passes to the program as an argument, read with `System.args`) and a read-only memory backend, both used by the same function, and a walker over unknown JSON runs on both backends with the same output.
+**Done when:** an example with a `Storage` adapter, a disk backend (in a temporary directory that the Racket test creates and passes to the program as an argument, read with `System.args`) and a read-only memory backend, both used by the same function, and a walker over unknown JSON runs. The memory backend and the walker run on both backends with the same output (VM differential check). The disk backend is checked on the evaluator until files reach the VM (7h), and on both backends after that.
 
 ## Later extensions
 
