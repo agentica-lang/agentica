@@ -9,7 +9,7 @@ Planned syntax is in
 [`docs/future.md`](docs/future.md), and the phased plan is in
 [`docs/roadmap.md`](docs/roadmap.md).
 
-The same reference is published as a website at
+User documentation (a guide, a language tour and the library) is published at
 <https://sonic182.github.io/agentica/> (source in `site/`; build it with
 `make site`, preview it with `make site-serve`).
 

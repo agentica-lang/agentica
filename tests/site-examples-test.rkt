@@ -80,7 +80,7 @@
             (check-true (and previous #t) (format "~a: ~a block without a program before it" where (block-lang b)))
             (loop (cdr rest) previous)]
            [(and (program? b) (hash-ref attributes "file" #f))
-            (set-box! (car counts) (add1 (unbox (car counts))))
+            (hash-update! counts 'module add1 0)
             (loop (cdr rest) #f)]
            [(program? b)
             (for ([key (in-hash-keys attributes)])
@@ -103,13 +103,14 @@
             (define checked (pipeline file (block-text b)))
             (cond
               [(and (diagnostic? checked) expect)
-               (check-equal? (diagnostic-code checked) (string->symbol expect) where)]
+               (check-equal? (diagnostic-code checked) (string->symbol expect) where)
+               (hash-update! counts 'rejected add1 0)]
               [(diagnostic? checked)
                (fail (format "~a: ~a" where (diagnostic-text checked)))]
               [(equal? mode "check")
                (check-false expect (format "~a: expected ~a, but the program checks" where expect))
                (check-false (hash-ref following "output" #f) (format "~a: a check-only block has an output block" where))
-               (set-box! (cadr counts) (add1 (unbox (cadr counts))))]
+               (hash-update! counts 'check add1 0)]
               [else
                (define-values (result output) (run-program checked (hash-ref following "input" "")))
                (cond
@@ -122,7 +123,7 @@
                            (format "~a: a run block needs an output block" where))
                (when (or (not expect) (hash-has-key? following "output"))
                  (check-equal? output (hash-ref following "output" "") where))
-               (set-box! (caddr counts) (add1 (unbox (caddr counts))))])
+               (hash-update! counts 'run add1 0)])
             (loop (cdr rest) b)]
            [(equal? (block-lang b) "sh") (loop (cdr rest) previous)]
            [else (loop (cdr rest) #f)]))))
@@ -134,10 +135,11 @@
                      #:when (regexp-match? #px"\\.md$" (path->string path)))
             path)
           string<? #:key path->string))
-  (define counts (list (box 0) (box 0) (box 0)))
+  (define counts (make-hasheq))
   (for ([page (in-list pages)])
     (test-case (path->string page)
       (check-page page counts)))
-  (check-true (> (unbox (caddr counts)) 100) "the site should have many run examples")
-  (printf "site examples: ~a run, ~a checked only, ~a module files\n"
-          (unbox (caddr counts)) (unbox (cadr counts)) (unbox (car counts))))
+  (check-true (> (hash-ref counts 'run 0) 100) "the site should have many run examples")
+  (printf "site examples: ~a run, ~a checked only, ~a rejected by the checker, ~a module files\n"
+          (hash-ref counts 'run 0) (hash-ref counts 'check 0) (hash-ref counts 'rejected 0)
+          (hash-ref counts 'module 0)))
