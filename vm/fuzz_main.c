@@ -79,7 +79,7 @@ static size_t mutate_once(uint8_t *data, size_t len) {
 }
 
 #ifdef AGC_FUZZ_DEATH
-void __sanitizer_set_death_callback(void (*callback)(void));
+void __sanitizer_set_death_callback(void (*callback)(void)); // NOLINT(readability-identifier-naming)
 
 static void save_crash(void) {
   if (!current) return;

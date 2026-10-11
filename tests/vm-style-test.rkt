@@ -8,7 +8,7 @@
 (define skipped '("unicode_data.c"))
 
 (define pending-84
-  '("builtins.c" "json.c" "main.c" "strings.c" "text.c" "value.c" "tests/json_test.c"))
+  '("builtins.c" "json.c" "main.c" "strings.c" "text.c" "tests/json_test.c"))
 
 (define (vm-files)
   (define (in dir prefix)
@@ -36,6 +36,12 @@
            [(>= j n) (loop j line depth header start #t)]
            [(and (char=? (char-at j) #\\) (char=? (char-at (add1 j)) #\newline))
             (skip (+ j 2) (add1 line))]
+           [(and (char=? (char-at j) #\/) (char=? (char-at (add1 j)) #\*))
+            (let comment ([k (+ j 2)] [line line])
+              (cond
+                [(>= k n) (skip k line)]
+                [(and (char=? (char-at k) #\*) (char=? (char-at (add1 k)) #\/)) (skip (+ k 2) line)]
+                [else (comment (add1 k) (if (char=? (char-at k) #\newline) (add1 line) line))]))]
            [(char=? (char-at j) #\newline) (loop (add1 j) (add1 line) depth header start #t)]
            [else (skip (add1 j) line)]))]
       [(and (char=? c #\/) (char=? (char-at (add1 i)) #\/))
@@ -72,8 +78,8 @@
   (cond
     [(regexp-match? #px"^typedef\\b" h) 'type]
     [(regexp-match? #px"=" h) 'data]
-    [(regexp-match? #px"^((static|const|extern)\\s+)*(struct|union|enum)\\b" h) 'type]
     [(regexp-match? #px"\\(" h) 'function]
+    [(regexp-match? #px"^((static|const|extern)\\s+)*(struct|union|enum)\\b" h) 'type]
     [else 'other]))
 
 (define (late-types file)
@@ -90,16 +96,17 @@
 (test-case "scanner finds functions and late type definitions"
   (define headers
     (top-level-headers
-     (string-append "#define M(x) \\\n  { x }\n"
+     (string-append "#define M(x) /* {\n  } */ \\\n  { x }\n"
                     "typedef struct { int a; } t;\n"
                     "static const char *s = \"{\";\n"
                     "struct p *f(struct p *q);\n"
                     "static int g(void) {\n  struct p *x = 0;\n  return '}';\n}\n"
                     "static const int k[] = {1};\n"
+                    "static struct p *h(void) { return 0; }\n"
                     "struct late {\n  int b;\n};\n"
                     "typedef struct late late_t;\n")))
-  (check-equal? (map car headers) '(3 6 10 11 14))
-  (check-equal? (map (compose header-kind cdr) headers) '(type function data type type)))
+  (check-equal? (map car headers) '(4 7 11 12 13 16))
+  (check-equal? (map (compose header-kind cdr) headers) '(type function data function type type)))
 
 (test-case "no type definition after the first function in vm/*.c"
   (define files (vm-files))

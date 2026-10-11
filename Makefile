@@ -53,6 +53,7 @@ site-serve: site-sass
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
+# make vm-lint            clang-tidy (18 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
 VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/interp.c vm/diag.c
@@ -147,9 +148,12 @@ vm-unicode:
 
 CLANG_TIDY ?= clang-tidy
 VM_LINT_SKIP := vm/unicode_data.c
-VM_LINT_PENDING := vm/builtins.c vm/json.c vm/main.c vm/strings.c vm/text.c vm/value.c
-VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP) $(VM_LINT_PENDING),$(wildcard vm/*.c))
+VM_LINT_PENDING := vm/json.c vm/tests/json_test.c
+VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP) $(VM_LINT_PENDING),$(wildcard vm/*.c vm/tests/*.c))
+VM_LINT_SAN_PENDING := vm/value.c
 
 .PHONY: vm-lint
 vm-lint: $(GC_DIR)/extra/gc.c
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include
+	$(CLANG_TIDY) --quiet $(filter-out $(VM_LINT_SAN_PENDING),$(VM_LINT_SRC)) -- $(VM_WARN) -DAGC_NO_GC -fsanitize=address,undefined
+	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS

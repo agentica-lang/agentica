@@ -224,7 +224,14 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: clang --version
       - run: command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
-      - run: clang-tidy --version && make vm-lint
+      - run: |
+          clang-tidy --version
+          major=$(clang-tidy --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -n 1)
+          if [ -z "$major" ] || [ "$major" -lt 18 ]; then
+            echo "clang-tidy ${major:-unknown} is too old: misc-use-internal-linkage needs clang-tidy 18 or newer" >&2
+            exit 1
+          fi
+          make vm-lint
       - run: make vm vm-test
       - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
       - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt

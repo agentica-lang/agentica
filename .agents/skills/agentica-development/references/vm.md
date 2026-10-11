@@ -54,7 +54,7 @@ make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (callo
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
-make vm-lint CLANG_TIDY=path        # clang-tidy over vm/*.c with .clang-tidy; any warning fails
+make vm-lint CLANG_TIDY=path        # clang-tidy 18+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
@@ -243,8 +243,9 @@ instructions. A file that loads may still compute wrong values or end with
 - No code comments, except a legal header if one is ever needed.
 - Only `value.c` reads the value union. Immediates write the full word.
 
-`make vm-lint` skips `vm/unicode_data.c` (generated);
-`VM_LINT_PENDING` in the Makefile and `pending-84` in the style test list
+`make vm-lint` (clang-tidy 18 or newer, for `misc-use-internal-linkage`)
+skips `vm/unicode_data.c` (generated). `VM_LINT_PENDING` and
+`VM_LINT_SAN_PENDING` in the Makefile and `pending-84` in the style test list
 files left out until PR #84 merges and they are fixed.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
