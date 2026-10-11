@@ -14,6 +14,11 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 
 static const char oom_line[] = "agentica-vm: out of memory\n";
 
+#ifdef AGC_NO_GC
+static void **owned;
+static size_t owned_count, owned_cap;
+#endif
+
 void agc_out_of_memory(void) {
   ssize_t ignored = write(2, oom_line, sizeof oom_line - 1);
   (void)ignored;
@@ -57,6 +62,28 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+#ifdef AGC_NO_GC
+static void *own(void *p) {
+  if (!p) agc_out_of_memory();
+  if (owned_count == owned_cap) {
+    size_t cap = owned_cap ? owned_cap * 2 : 1024;
+    void **bigger = realloc(owned, cap * sizeof *owned);
+    if (!bigger) agc_out_of_memory();
+    owned = bigger;
+    owned_cap = cap;
+  }
+  owned[owned_count++] = p;
+  return p;
+}
+#endif
+
+void agc_release_all(void) {
+#ifdef AGC_NO_GC
+  for (size_t i = 0; i < owned_count; i++) free(owned[i]);
+  owned_count = 0;
+#endif
+}
+
 #ifdef AGC_GC_STRESS
 static void stress(void) {
   static unsigned count;
@@ -69,7 +96,7 @@ static void stress(void) {}
 void *agc_alloc(size_t size) {
   stress();
 #ifdef AGC_NO_GC
-  void *p = calloc(1, size ? size : 1);
+  void *p = own(calloc(1, size ? size : 1));
 #else
   void *p = GC_MALLOC(size ? size : 1);
 #endif
@@ -80,7 +107,7 @@ void *agc_alloc(size_t size) {
 void *agc_alloc_atomic(size_t size) {
   stress();
 #ifdef AGC_NO_GC
-  void *p = calloc(1, size ? size : 1);
+  void *p = own(calloc(1, size ? size : 1));
 #else
   void *p = GC_MALLOC_ATOMIC(size ? size : 1);
 #endif

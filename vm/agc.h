@@ -246,6 +246,7 @@ struct agc_vm {
 };
 
 void agc_init(void);
+void agc_release_all(void);
 void *agc_alloc(size_t size);
 void *agc_alloc_atomic(size_t size);
 size_t agc_size_add(size_t a, size_t b);

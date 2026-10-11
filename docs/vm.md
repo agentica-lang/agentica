@@ -1560,7 +1560,10 @@ written `size > limit - total`. A hermetic test sends over-long values.
   errors.
 - Fuzzing: `agc_fuzz_one(data, len)` (`vm/fuzz.c`) loads one file and, if
   accepted, runs it with `--max-steps 10000` and prints any diagnostic, all
-  to `/dev/null`, so the diagnostic printer is fuzzed too. It is linked only
+  to `/dev/null`, so the diagnostic printer is fuzzed too. Under `AGC_NO_GC` it
+  then frees every block of that mutant (`agc_release_all`, a no-op with libgc),
+  so the fuzzer's peak memory is that of one mutant plus ASan's quarantine,
+  which still catches a use after free across mutants. It is linked only
   into the fuzz and test binaries. The plain C driver (`vm/fuzz_main.c`,
   `make vm-fuzz`) applies 1 to 4 mutations per run (byte deletion and
   insertion, bit flips, random bytes, small or maximal 16-bit operands) to a

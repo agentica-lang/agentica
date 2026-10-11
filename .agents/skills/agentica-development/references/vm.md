@@ -280,6 +280,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   expose an unfilled tail), or `load_alloc` in the loader. They switch to
   `calloc` under `AGC_NO_GC` and route out-of-memory to the handler. Only
   `value.c` calls `GC_*` or includes `gc.h`.
+- Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant
+  (`agc_release_all`), so never cache an `agc_alloc` pointer in a static.
 - Never keep a GC pointer in `malloc` memory, an atomic object or a
   `_Thread_local`; never tag pointers. Frames hold register offsets, not
   pointers, because the register array moves when it grows.
