@@ -409,7 +409,7 @@ end
 
 - `Table[K, V]` is a builtin opaque generic, like `Task[T]`. A table value is a handle: assigning or passing it shares the same table, it does not copy it. This is the one place where data values are shared and mutable, so the name and the type say so.
 - **Nesting:** a `Table` may be a struct field, a list element, a `Map` value, or a `Task.spawn` argument or result. It may not be stored inside a table (next rule).
-- **Keys and values:** keys are `Int` or `String`. The rule on `V` is deep: no `Fn`, `Task`, `Table` or resource (ports, processes, sockets, listeners) anywhere inside it, including struct fields, list elements, enum payloads, `Map` values and `Result`. The checker enforces it wherever a `Table[K, V]` type is written or inferred, with `CHECK-TABLE-VALUE` (span on the type, or on `Table.new()` when inferred).
+- **Keys and values:** keys are `Int` or `String`; any other key type is `CHECK-TYPE-MISMATCH`, as for `Map` keys. `V` may not be `Void` or `Nil`, and the rule on `V` is deep: no `Fn`, `Task`, `Table` or opaque resource handle anywhere inside it, including struct fields, list elements, enum payloads, `Map` values and `Result`. The handles today are `FileHandle`, `Process`, `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody` and `HttpWriter`; the rule also covers any handle added later. The checker enforces all of this wherever a `Table[K, V]` type is written or inferred, with `CHECK-TABLE-VALUE` (span on the type, or on `Table.new()` when inferred).
 - **Sharing values:** values are immutable, so storing one shares it safely. Each call is atomic, so a reader sees either the old value or the new one.
 - Functions (also methods, with the table first):
 
@@ -427,7 +427,9 @@ end
 - **Costs:** `get`, `put`, `put_new`, `has_key?`, `delete`, `add` and `size` take at most O(log n) in the table size (unlike `Map.delete`, which is O(n)). `keys` and `to_map` are O(n) and hold the lock for that time.
 - **Atomicity:** each call is atomic on its own. There are no transactions over several keys and no user code runs while the table is locked (no `update` with a block), so a call cannot deadlock or re-enter the table. A read-modify-write on a non-counter value uses `put_new` or a single owner task.
 - **Lifetime:** a table lives while some value refers to it; the garbage collector frees it. There is no owner process and no named global table, unlike ETS: a task reaches a table only through a handle it was given. A table does not outlive the evaluation. A handle used in another evaluation, such as a BDD handler run or a nested evaluation, halts with `RUNTIME-TABLE-CONTEXT`, like `RUNTIME-TASK-CONTEXT` for tasks.
-- **No `==`, no JSON, text form `<Table>`.** `IO.inspect` does not print the contents; use `to_map`.
+- **No `==`, no JSON, no `to_s`.** As for `Task`, `puts`, `print` and interpolation of a table give `CHECK-TYPE-MISMATCH`, and `.to_s` gives `CHECK-UNKNOWN-METHOD`. `IO.inspect` shows `<Table>` without the contents; use `to_map` to see them.
 - **Not in the first version:** ordered tables (`ordered_set`), duplicate keys (`bag`), match specifications, and tables shared between OS processes. Each waits for a real program.
-- **Effects:** `Table.put`, `put_new`, `delete` and `add` are effects with a new label, `table`, so ignoring their result never gives `CHECK-UNUSED-VALUE`.
+- **Effects:** `Table.put`, `put_new`, `delete` and `add` are effects with a new label, `table`, so ignoring their result never gives `CHECK-UNUSED-VALUE` (`put_new` and `add` return values that may be ignored).
 - **Backends:** the contract is only that each call is atomic; the implementation PR picks the mechanism (a lock per table is one possible way). The evaluator and the VM land in the same PR.
+  - The evaluator's critical section must stay safe when a task is killed while it holds the table, for example a semaphore taken with breaks disabled.
+  - O(log n) `delete` with insertion order needs its own layout, such as a hash from key to (sequence, value) plus an ordered sequence index, not the `Map` layout.
