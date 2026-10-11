@@ -180,7 +180,7 @@ typedef struct {
 } agc_outcome;
 
 typedef struct {
-  double x10, x11, x12, x20, x21, x22;
+  uint64_t s[4];
 } agc_random;
 
 typedef struct {
@@ -291,10 +291,10 @@ _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
 void agc_flush(agc_vm *vm);
 
-void agc_random_seed(agc_random *r, uint32_t seed);
+void agc_random_seed(agc_random *r, uint64_t seed);
+uint64_t agc_random_next(agc_random *r);
 double agc_random_float(agc_random *r);
-uint64_t agc_random_below(agc_random *r, uint64_t n);
-int64_t agc_random_int(agc_random *r, int64_t low, int64_t high);
+bool agc_random_int(agc_random *r, int64_t low, int64_t high, int64_t *out);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 int agc_input_peek(agc_vm *vm);

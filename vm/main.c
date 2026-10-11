@@ -100,14 +100,16 @@ static bool os_entropy(uint8_t *out, size_t len) {
 static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, len); }
 #endif
 
-static uint32_t entropy_seed(void) {
-  uint8_t bytes[4];
+static uint64_t entropy_seed(void) {
+  uint8_t bytes[8];
   if (!os_entropy(bytes, sizeof bytes)) {
-    struct timespec ts;
-    timespec_get(&ts, TIME_UTC);
-    return ((uint32_t)ts.tv_sec * 1000003u ^ (uint32_t)ts.tv_nsec) & 0x7FFFFFFF;
+    struct timespec ts = {0};
+    if (timespec_get(&ts, TIME_UTC) != TIME_UTC) return 0;
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
   }
-  return ((uint32_t)bytes[0] | (uint32_t)bytes[1] << 8 | (uint32_t)bytes[2] << 16 | (uint32_t)bytes[3] << 24) & 0x7FFFFFFF;
+  uint64_t seed = 0;
+  for (unsigned k = 0; k < 8; k++) seed |= (uint64_t)bytes[k] << (8 * k);
+  return seed;
 }
 
 static void seed_map_hash(void) {

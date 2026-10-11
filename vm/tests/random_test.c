@@ -1,93 +1,49 @@
 #include "../agc.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
-static const uint32_t seeds[] = {0, 1, 2, 3, 65535, 65536, 12345, 2147483647};
-static const uint64_t kinds[] = {0ull, 1ull, 2ull, 6ull, 1000ull, 65536ull, 2147483648ull, 3000000000ull, 4294967087ull};
-static const double states[][6] = {
-  {1062452524.0, 2961816100.0, 342112271.0, 2854655039.0, 3321940838.0, 3542344109.0},
-  {1062548963.0, 3277545079.0, 2090361527.0, 425841545.0, 3898224349.0, 3311904376.0},
-  {1062645402.0, 3593208522.0, 3838676319.0, 2291995347.0, 179540564.0, 3081399108.0},
-  {1062676305.0, 3909003037.0, 1291958280.0, 4158149150.0, 755758539.0, 2850959376.0},
-  {1062421621.0, 376383650.0, 1350727067.0, 1704182831.0, 3807545928.0, 1146556196.0},
-  {1062548963.0, 3277545079.0, 2090361527.0, 425841545.0, 3898224349.0, 3311904376.0},
-  {1871506923.0, 667935786.0, 653019928.0, 2253562028.0, 666781533.0, 1724575874.0},
-  {3209841598.0, 3220835767.0, 980844300.0, 2343419010.0, 1614657533.0, 63914873.0},
-};
-static const uint64_t draws[][36] = {
-  {4605895802077396074ull, 0ull, 0ull, 2ull, 896ull, 29526ull, 1651205883ull, 1149373624ull, 2674638551ull, 4602705450768772616ull, 0ull, 1ull, 4ull, 237ull, 46232ull, 797581408ull, 1245017087ull, 2148876968ull, 4590239977825641334ull, 0ull, 1ull, 0ull, 755ull, 38821ull, 2077707548ull, 78530402ull, 2574128265ull, 4602256547056710840ull, 0ull, 0ull, 1ull, 755ull, 64693ull, 742090898ull, 2173461823ull, 1921153009ull},
-  {4602739445644184834ull, 0ull, 0ull, 5ull, 941ull, 57924ull, 1850831701ull, 1769615072ull, 2718636975ull, 4602699323959879422ull, 0ull, 1ull, 3ull, 679ull, 14616ull, 283438298ull, 2030700787ull, 2793659784ull, 4580835278321772132ull, 0ull, 0ull, 4ull, 173ull, 36655ull, 1436776738ull, 247124857ull, 968642909ull, 4596966993990724111ull, 0ull, 1ull, 0ull, 369ull, 36428ull, 1349637129ull, 2891766689ull, 504357267ull},
-  {4604011464938276641ull, 0ull, 0ull, 2ull, 619ull, 26451ull, 1614529950ull, 1005213714ull, 3524846122ull, 4605443349373707193ull, 0ull, 0ull, 4ull, 799ull, 61641ull, 2055668514ull, 505269419ull, 1873130443ull, 4604579526215503376ull, 0ull, 1ull, 5ull, 107ull, 3754ull, 489070931ull, 386493271ull, 3896283032ull, 4580717761702629170ull, 0ull, 1ull, 5ull, 853ull, 54447ull, 980988680ull, 2909191760ull, 140109392ull},
-  {4606700921554743504ull, 0ull, 0ull, 3ull, 784ull, 26945ull, 1503146688ull, 1400463933ull, 3159045682ull, 4606150873599818124ull, 0ull, 1ull, 0ull, 45ull, 41351ull, 2110682238ull, 1129316454ull, 3296169159ull, 4602689762496091700ull, 0ull, 1ull, 4ull, 361ull, 41233ull, 1812510332ull, 2685357286ull, 1196395521ull, 4599308286633003994ull, 0ull, 1ull, 4ull, 296ull, 6434ull, 441990677ull, 920485525ull, 710315447ull},
-  {4604060714972032000ull, 0ull, 0ull, 5ull, 142ull, 11786ull, 977947875ull, 1871335229ull, 1265580417ull, 4606151114745046826ull, 0ull, 1ull, 3ull, 612ull, 47994ull, 1014475458ull, 2720269230ull, 905148421ull, 4600832460994616162ull, 0ull, 0ull, 0ull, 715ull, 50345ull, 1481341726ull, 835203210ull, 1095691373ull, 4605915728644142598ull, 0ull, 1ull, 0ull, 267ull, 46072ull, 1277458605ull, 2632651666ull, 3464629112ull},
-  {4602739445644184834ull, 0ull, 0ull, 5ull, 941ull, 57924ull, 1850831701ull, 1769615072ull, 2718636975ull, 4602699323959879422ull, 0ull, 1ull, 3ull, 679ull, 14616ull, 283438298ull, 2030700787ull, 2793659784ull, 4580835278321772132ull, 0ull, 0ull, 4ull, 173ull, 36655ull, 1436776738ull, 247124857ull, 968642909ull, 4596966993990724111ull, 0ull, 1ull, 0ull, 369ull, 36428ull, 1349637129ull, 2891766689ull, 504357267ull},
-  {4587755799541738313ull, 0ull, 0ull, 2ull, 180ull, 53890ull, 850455505ull, 71712372ull, 1445867999ull, 4605635154288353382ull, 0ull, 1ull, 2ull, 559ull, 28973ull, 129016483ull, 806470866ull, 2178118450ull, 4603511707280046470ull, 0ull, 0ull, 4ull, 313ull, 17968ull, 1709616133ull, 1884253470ull, 1201237240ull, 4585112018939986524ull, 0ull, 1ull, 1ull, 787ull, 44273ull, 278485830ull, 2850331109ull, 1998336320ull},
-  {4602471440038936852ull, 0ull, 0ull, 5ull, 493ull, 11395ull, 1561614735ull, 1085891245ull, 3908758706ull, 4583703914967873648ull, 0ull, 0ull, 4ull, 942ull, 27965ull, 53931598ull, 1624363440ull, 1199720080ull, 4604018993393456979ull, 0ull, 1ull, 2ull, 246ull, 51936ull, 1158813677ull, 577912695ull, 2355499838ull, 4605477834863173507ull, 0ull, 0ull, 2ull, 845ull, 56965ull, 1071522220ull, 905614696ull, 3106524268ull},
-};
-static const uint64_t sums[][9] = {
-  {4154485853718206041ull, 0ull, 49919ull, 250547ull, 49955192ull, 3283143871ull, 107134196164809ull, 150053974581981ull, 215267967155222ull},
-  {17152481835647973780ull, 0ull, 49946ull, 249293ull, 49928995ull, 3288909035ull, 107297336810298ull, 149774162952304ull, 214716234072554ull},
-  {18211594542857706437ull, 0ull, 50023ull, 250676ull, 50017091ull, 3274677569ull, 107174481118192ull, 149487194019234ull, 213910988583873ull},
-  {18083892912295961931ull, 0ull, 49920ull, 250639ull, 50018460ull, 3279914051ull, 107662188944086ull, 150146344291746ull, 214310574215362ull},
-  {1655749994714849577ull, 0ull, 49906ull, 250862ull, 49857040ull, 3272625175ull, 107490035604536ull, 149821989487804ull, 213875041017032ull},
-  {17152481835647973780ull, 0ull, 49946ull, 249293ull, 49928995ull, 3288909035ull, 107297336810298ull, 149774162952304ull, 214716234072554ull},
-  {18035147066210349781ull, 0ull, 49948ull, 250763ull, 49753050ull, 3276461448ull, 107382167248252ull, 149315012934719ull, 214374750896624ull},
-  {14593851334432277061ull, 0ull, 49967ull, 251336ull, 49874596ull, 3274576581ull, 107154786626823ull, 149638916767328ull, 214656301875934ull},
-};
-static const int64_t ranges[][2] = {
-  {INT64_MIN, 9223372036854775807ll},
-  {0ll, 4294967087ll},
-  {-5ll, 5ll},
-  {1ll, 1000000000000000000ll},
-  {INT64_MIN, -1ll},
-  {7ll, 7ll},
-};
-static const int64_t range_draws[][8] = {
-  {-7870015377968708840ll, -5287836638226752727ll, 6762737993260920074ll, 347330958816148628ll, -6864574256516426828ll, 2525765128480505694ll, -2354478156881609936ll, -9170552400444880528ll},
-  {1038271272ll, 1550826089ll, 378170698ll, 2656374388ll, 182966964ll, 267996014ll, 3074708592ll, 2312658640ll},
-  {-5ll, -5ll, 5ll, -3ll, -3ll, 4ll, 5ll, 4ll},
-  {353356658886066969ll, 935535398628023082ll, 986110030115695883ll, 570702995670924437ll, 358797780338348981ll, 749137165335281503ll, 868893879973165873ll, 52819636409895281ll},
-  {-7870015377968708840ll, -5287836638226752727ll, -2460634043593855734ll, -8876041078038627180ll, -6864574256516426828ll, -6697606908374270114ll, -2354478156881609936ll, -9170552400444880528ll},
-  {7ll, 7ll, 7ll, 7ll, 7ll, 7ll, 7ll, 7ll},
-};
-
-#define COUNT(a) (sizeof(a) / sizeof((a)[0]))
-
-static uint64_t draw(agc_random *r, uint64_t kind) {
-  if (kind) return agc_random_below(r, kind);
-  double x = agc_random_float(r);
-  uint64_t bits;
-  memcpy(&bits, &x, sizeof bits);
-  return bits;
-}
-
 int main(void) {
-  for (size_t s = 0; s < COUNT(seeds); s++) {
-    agc_random r;
-    agc_random_seed(&r, seeds[s]);
-    const double got[6] = {r.x10, r.x11, r.x12, r.x20, r.x21, r.x22};
-    assert(memcmp(got, states[s], sizeof got) == 0);
-    for (size_t i = 0; i < COUNT(draws[s]); i++) assert(draw(&r, kinds[i % COUNT(kinds)]) == draws[s][i]);
-    agc_random_seed(&r, seeds[s]);
-    for (size_t k = 0; k < COUNT(kinds); k++) {
-      uint64_t sum = 0;
-      for (int i = 0; i < 100000; i++) sum += draw(&r, kinds[k]);
-      assert(sum == sums[s][k]);
+  agc_random a, b;
+  agc_random_seed(&a, 7);
+  agc_random_seed(&b, 7);
+  for (int i = 0; i < 1000; i++) assert(agc_random_next(&a) == agc_random_next(&b));
+  agc_random_seed(&b, 8);
+  assert(agc_random_next(&a) != agc_random_next(&b));
+
+  agc_random_seed(&a, 0);
+  assert(a.s[0] | a.s[1] | a.s[2] | a.s[3]);
+  for (int i = 0; i < 1000000; i++) {
+    double x = agc_random_float(&a);
+    assert(x >= 0.0 && x < 1.0);
+  }
+
+  static const int64_t ranges[][2] = {
+    {1, 6}, {-5, 5}, {0, 4294967087}, {1, 1000000000000000000}, {INT64_MIN, -1}, {INT64_MIN, INT64_MAX}, {7, 7},
+    {INT64_MAX, INT64_MAX}, {INT64_MIN, INT64_MIN}, {-1, INT64_MAX},
+  };
+  for (size_t i = 0; i < sizeof ranges / sizeof ranges[0]; i++) {
+    for (int k = 0; k < 10000; k++) {
+      int64_t value;
+      assert(agc_random_int(&a, ranges[i][0], ranges[i][1], &value));
+      assert(value >= ranges[i][0] && value <= ranges[i][1]);
     }
   }
-  for (size_t i = 0; i < COUNT(ranges); i++) {
-    agc_random r;
-    agc_random_seed(&r, 42);
-    for (size_t k = 0; k < COUNT(range_draws[i]); k++)
-      assert(agc_random_int(&r, ranges[i][0], ranges[i][1]) == range_draws[i][k]);
+
+  int counts[3] = {0, 0, 0};
+  for (int k = 0; k < 30000; k++) {
+    int64_t value;
+    assert(agc_random_int(&a, 0, 2, &value));
+    counts[value]++;
   }
-  agc_random r;
-  agc_random_seed(&r, 7);
-  for (int i = 0; i < 1000000; i++) {
-    double x = agc_random_float(&r);
-    assert(x > 0.0 && x < 1.0);
-  }
+  for (int k = 0; k < 3; k++) assert(counts[k] > 9000 && counts[k] < 11000);
+
+  agc_random before = a;
+  int64_t unused = 0;
+  assert(!agc_random_int(&a, 1, 0, &unused) && unused == 0);
+  assert(!agc_random_int(&a, INT64_MAX, INT64_MIN, &unused));
+  assert(memcmp(&before, &a, sizeof a) == 0);
   puts("random tests passed");
   return 0;
 }

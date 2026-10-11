@@ -13,10 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Float.from_int`, `Float.to_int` and `to_int!` (also `n.to_f`,
   `x.to_i`, `x.to_i!`), `Time.now_ms`, `Time.monotonic_ms`,
   `Random.int` and `Random.float`, with the evaluator's errors and spans.
-  The VM ports Racket CS's MRG32k3a generator and its seeding bit for bit,
-  so `agentica --vm --seed N` (and `agentica-vm --seed N`) prints the same
-  `Random` values as the evaluator; without `--seed` the seed comes from
-  OS entropy.
+  The VM has its own generator (xoshiro256** seeded with splitmix64):
+  `agentica --vm --seed N` (and `agentica-vm --seed N`) repeats its
+  values, but they differ from the evaluator's for the same seed; without
+  `--seed` the seed comes from OS entropy.
 
 - The bytecode VM runs the `List` and `Map` library: `List.size`,
   `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`, `reverse` and

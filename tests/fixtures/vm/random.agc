@@ -1,24 +1,36 @@
+def in_range(low: Int, high: Int, count: Int) -> Int
+  inside = 0
+  for _ in 1..count
+    x = Random.int(low, high)
+    if x >= low && x <= high
+      inside = inside + 1
+    end
+  end
+  return inside
+end
+
 def main() -> Void
-  puts(Random.int(1, 6))
-  puts(Random.int(-1000000, 1000000))
-  puts(Random.int(0, 4294967086))
-  puts(Random.int(0, 4294967087))
-  puts(Random.int(-9223372036854775807 - 1, 9223372036854775807))
-  puts(Random.int(1, 1000000000000000000))
-  puts(Random.int(-9223372036854775807 - 1, -1))
+  min = -9223372036854775807 - 1
+  max = 9223372036854775807
+  puts(in_range(1, 6, 50))
+  puts(in_range(-1000000, 1000000, 20))
+  puts(in_range(0, 4294967087, 20))
+  puts(in_range(min, max, 20))
+  puts(in_range(min, -1, 20))
+  puts(in_range(1, 1000000000000000000, 20))
   puts(Random.int(7, 7))
-  puts(Random.float())
-  puts(Random.float)
-  total = 0
-  for i in 1..200
-    total = total + Random.int(0, i)
+  puts(Random.int(max, max))
+  floats = 0
+  for _ in 1..50
+    f = Random.float()
+    if f >= 0.0 && f < 1.0
+      floats = floats + 1
+    end
   end
-  puts(total)
-  sum = 0.0
-  for _ in 1..100
-    sum = sum + Random.float
+  puts(floats)
+  seen = [false, false, false]
+  for _ in 1..200
+    seen = seen.set(Random.int(0, 2), true)
   end
-  puts(sum)
-  rolls = [Random.int(1, 6), Random.int(1, 6), Random.int(1, 6)]
-  puts(rolls)
+  puts(seen)
 end

@@ -61,7 +61,7 @@ with or without a default, `delete`; also as methods such as `xs.size` and
 `m.keys`; 12.2 item 6b), and the `Float`, `Time` and `Random` builtins
 (`Float.from_int`, `to_int`, `to_int!`, also as `n.to_f`, `x.to_i` and
 `x.to_i!`; `Time.now_ms`, `monotonic_ms`; `Random.int`, `Random.float`
-with the seeding port of 7.4). The last 6b module (`String`) follows. Runtime diagnostics come in the plain,
+with the VM's own seeded generator of 7.4). The last 6b module (`String`) follows. Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -941,51 +941,37 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
 
 ### 7.4 Random
 
-The VM reproduces Racket CS's generator bit for bit, so `--seed N` gives
-the same `Random.int` and `Random.float` values on both backends
-(`vm/numbers.c`, ported from `racket/src/ChezScheme/c/random.c` of Racket
-9.3, which `random` and `random-seed` call through
-`pseudo-random-generator-next!` and `pseudo-random-generator-seed!` in
-`s/5_3.ss`):
+The VM has its own generator, so seeded sequences differ from the
+evaluator's by design: `--seed N` repeats the same values run after run on
+one backend, not across backends. The evaluator keeps Racket's `random`.
+Only the contract is shared: the ranges, `Random.float` in `[0, 1)`, and
+the `RUNTIME-INVALID-RANGE` error at the call.
 
-- State: six doubles `x10 x11 x12 x20 x21 x22` (`agc_random` in
-  `agc_vm`), the MRG32k3a step in double arithmetic as in `random.c`
-  (`m1 = 4294967087`, `m2 = 4294944443`; multipliers 1403580, 810728,
-  527612, 1370589), giving `y` in `0 .. m1-1`. Every product and difference
-  is an integer below 2^53, so they are exact; the only rounding is the one
-  correctly rounded division, so any IEEE 754 C compiler gives the same
-  words (with or without FMA contraction).
-- Seeding (`agc_random_seed`, `S_random_state_init`): start from Egner's
-  fixed six words, then mix the low and the high 16 bits of the seed in
-  turn (`sch_srand_half`) with the 32-bit multiply-with-carry
-  `x = 30903 * (x & 0xFFFF) + (x >> 16)`, two outputs per word (the first
-  one the high half), each reduced modulo the component's modulus and added
-  in 32-bit unsigned arithmetic. Seeds whose halves are swapped and one half
-  is 0 (1 and 65536) give the same state, as in Racket.
-- `(random)` (`Random.float`) is `(y + 1.0) * 2.328306549295728e-10`.
-- `(random k)` for `k <= 4294967087` (`agc_random_below`) is the rejection
-  method of `S_random_state_next_integer`: `q = trunc(m1 / k)`, draw until
-  `y < q * k`, return `trunc(y / q)`.
-- `Random.int` is the evaluator's `random-in-range` ported as written
-  (`agc_random_int`): `low + (random size)` when `size <= 4294967087`,
-  otherwise four `(random 65536)` draws make a 64-bit number, rejected
-  above the largest multiple of `size`, in 128-bit unsigned arithmetic
-  since `size` reaches 2^64. `min > max` is `RUNTIME-INVALID-RANGE` at the
-  call before any draw. `min == max` still draws once.
+- Generator (`vm/random.c`): xoshiro256** (Blackman and Vigna, public
+  domain), its four state words (`agc_random` in `agc_vm`) filled by four
+  splitmix64 outputs from the seed (also public domain).
+- `Random.float` is `(next >> 11) * 2^-53`.
+- `Random.int(low, high)` (`agc_random_int`): `size = high - low + 1` in
+  unsigned 64-bit arithmetic, where 0 means the full Int range (one draw
+  as is). Otherwise the threshold method rejects draws below
+  `2^64 mod size` (`(0 - size) % size`) and keeps `draw % size`, so the
+  result is unbiased. The result is `low + offset` with wrapping unsigned
+  arithmetic. `low > high` returns false without drawing, and the builtin
+  fails with `RUNTIME-INVALID-RANGE` at the call.
 - Seed: `--seed N` (0 .. 2147483647, the same check and message as
   `src/main.rkt`) on `agentica-vm`; `agentica --vm --seed N` passes it.
-  Without it, `vm/main.c` takes 4 bytes from the same OS entropy as the map
-  hash key (`getrandom`, then `/dev/urandom`; `rand_s` on Windows) and
-  keeps 31 bits, like the evaluator's `crypto-random-bytes` seed; if every
-  source fails it mixes the wall clock. `agc_vm_init` seeds with 0, so the
-  C tests and the fuzzer stay deterministic.
-- Tests: `vm/tests/random_test.c` checks, for seeds 0, 1, 2, 3, 65535,
-  65536, 12345 and 2147483647, the state vector after seeding
-  (`pseudo-random-generator->vector`), 36 interleaved draws of `(random)`
-  and `(random k)` for k = 1, 2, 6, 1000, 65536, 2^31, 3e9 and 4294967087,
-  and the sums of 100,000 draws of each kind, all captured from Racket
-  9.3; and `random-in-range` for six ranges up to the full Int range. The
-  `random` fixture runs with the seeds of its `random.seeds` sidecar.
+  Without it, `vm/main.c` takes 8 bytes from the same OS entropy as the
+  map hash key (`getrandom`, then `/dev/urandom`; `rand_s` on Windows); if
+  every source fails it uses the wall clock. `agc_vm_init` seeds with 0, so
+  the C tests and the fuzzer stay deterministic.
+- Tests: `vm/tests/random_test.c` checks that a seed repeats and two seeds
+  differ, the bounds of `Random.float` and of `Random.int` for small,
+  large, single-value and full ranges, a rough uniformity count, and that
+  `low > high` leaves the state unchanged. The `random` fixture prints only
+  what both backends share (counts of values in range, `[0, 1)` floats),
+  and `random-invalid-range` compares the error. The extras shard checks
+  that the VM repeats a seeded run, that two seeds differ, and the
+  `--seed` option errors.
 
 ## 8. Loader safety
 
@@ -1499,9 +1485,8 @@ the platform's OpenSSL package) to each job.
   and the total minus one. The run without a limit compares all three
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
-  step test. Programs using `Random` run with several `--seed` values: a
-  fixture's `name.seeds` sidecar (a Racket list) runs the format comparison
-  once per seed and the step sweep with the first.
+  step test. `Random` fixtures print only what both backends share, since
+  seeded sequences differ by design (7.4).
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
   (values picked from a 708k-value comparison with Racket, 2.2) and the
   `tests/fixtures/vm/float-text.agc` differential fixture. Write escapes
@@ -1615,10 +1600,10 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      Int`, `+inf.0`, `-inf.0`) or `RUNTIME-INTEGER-OVERFLOW`, as an error
      value without `!`; `Time.now_ms` is `timespec_get` and
      `monotonic_ms` `CLOCK_MONOTONIC` (`QueryPerformanceCounter` on
-     Windows), both floored to milliseconds; `Random` is the bit-exact
-     port of 7.4, and `agentica --vm` passes `--seed`. Fixtures:
+     Windows), both floored to milliseconds; `Random` is the VM's own
+     xoshiro256** generator of 7.4, and `agentica --vm` passes `--seed`. Fixtures:
      `float-convert`, `float-to-int-*`, `time` (shape only),
-     `random` (with `random.seeds`) and `random-invalid-range`.
+     `random` (black-box) and `random-invalid-range`.
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 
@@ -1640,8 +1625,9 @@ those that need files, processes, tasks or the network by name:
 
 ## 13. Open questions
 
-- **Random seeding**: resolved in PR 6b: the VM ports Racket CS's
-  generator and seeding bit for bit (7.4).
+- **Random seeding**: resolved in PR 6b: the VM uses its own
+  xoshiro256** generator, so seeded sequences differ from the evaluator
+  by design (7.4).
 - **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
   runaway file reaches the out-of-memory exit. Before 7i runs untrusted
   bytecode by default, decide on a cap such as `--max-heap N` through

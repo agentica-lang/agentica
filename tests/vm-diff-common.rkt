@@ -38,7 +38,6 @@
 (define extras-shard 4)
 (define fixture-input (make-parameter #""))
 (define fixture-args (make-parameter '()))
-(define fixture-seed (make-parameter #f))
 
 (define (exit-status code)
   (if (and (exact-integer? code) (<= 1 code 255)) code 0))
@@ -82,7 +81,7 @@
   (define out (open-output-string))
   (define err (open-output-string))
   (define result (evaluate checked #:out out #:err err #:in (open-input-bytes (fixture-input))
-                           #:args (fixture-args) #:max-steps limit #:seed (fixture-seed)))
+                           #:args (fixture-args) #:max-steps limit))
   (define text
     (cond
       [(not (diagnostic? result)) ""]
@@ -112,7 +111,6 @@
 (define (run-vm bytecode limit #:style [style 'plain] . extra)
   (apply run-process vm-file #:input (fixture-input)
          (append (limit-options limit)
-                 (seed-options)
                  (style-options style)
                  (list "--" (path->string bytecode))
                  (map string->bytes/utf-8 (fixture-args))
@@ -152,9 +150,6 @@
 (define (style-options style)
   (case style [(ai) '("--ai")] [(json) '("--json")] [else '()]))
 
-(define (seed-options)
-  (if (fixture-seed) (list "--seed" (number->string (fixture-seed))) '()))
-
 (define (limit-options limit)
   (if limit (list "--max-steps" (number->string limit)) '()))
 
@@ -169,7 +164,7 @@
       (define input (build-path directory "stdin"))
       (call-with-output-file input (lambda (port) (void (write-bytes (fixture-input) port))))
       (define tail
-        (string-join (map shell-quote (append (seed-options) (list "--" (path->string bytecode)) (fixture-args)))))
+        (string-join (map shell-quote (append (list "--" (path->string bytecode)) (fixture-args)))))
       (define script (build-path directory "run.sh"))
       (call-with-output-file script
         (lambda (port)
@@ -263,19 +258,15 @@
   (define (sidecar extension read-it default)
     (define file (path-replace-extension program extension))
     (if (file-exists? file) (read-it file) default))
-  (define seeds (sidecar #".seeds" file->value '(#f)))
   (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
-                 [fixture-args (sidecar #".args" file->value '())]
-                 [fixture-seed (first seeds)])
-    (for ([seed (in-list seeds)])
-      (parameterize ([fixture-seed seed])
-        (test-case (format "~a matches the evaluator in every diagnostic format (seed ~a)" name seed)
-          (define styles '(plain ai json))
-          (define-values (vm-results racket-results)
-            (vm-batch name bytecode runs (map style-options styles)
-                      (lambda () (for/list ([style (in-list styles)]) (run-racket checked #f style)))))
-          (for ([style (in-list styles)] [on-vm (in-list vm-results)] [expected (in-list racket-results)])
-            (check-equal? on-vm expected (format "~a ~a" name style))))))
+                 [fixture-args (sidecar #".args" file->value '())])
+    (test-case (format "~a matches the evaluator in every diagnostic format" name)
+      (define styles '(plain ai json))
+      (define-values (vm-results racket-results)
+        (vm-batch name bytecode runs (map style-options styles)
+                  (lambda () (for/list ([style (in-list styles)]) (run-racket checked #f style)))))
+      (for ([style (in-list styles)] [on-vm (in-list vm-results)] [expected (in-list racket-results)])
+        (check-equal? on-vm expected (format "~a ~a" name style))))
     (test-case (format "~a matches under every --max-steps" name)
       (define limits (sweep-limits (total-steps checked)))
       (define-values (vm-results racket-results)
@@ -355,7 +346,14 @@
       (check-equal? (first rejected) 2 seed)
       (check-equal? (third rejected) "agentica-vm: --seed needs an integer from 0 to 2147483647\n" seed))
     (check-equal? (first (run-process vm-file "--seed" "1" "--seed" "1" "--" (path->string bytecode))) 2)
-    (check-equal? (first (run-process vm-file "--seed" "0002147483647" "--" (path->string bytecode))) 0)
+    (define draws (build-path work "random-draws.agc"))
+    (display-to-file "def main() -> Void\n  puts(Random.int(0, 1000000000))\n  puts(Random.float)\nend\n" draws #:exists 'replace)
+    (define draws-bytecode (build-path work "random-draws.agcb"))
+    (compile-file draws draws-bytecode)
+    (define (seeded seed) (run-process vm-file "--seed" seed "--" (path->string draws-bytecode)))
+    (check-equal? (first (seeded "0002147483647")) 0)
+    (check-equal? (seeded "7") (seeded "7"))
+    (check-not-equal? (second (seeded "7")) (second (seeded "8")))
     (define limited (run-process vm-file "--max-steps" "1" "--ai" "--json" "--" (path->string bytecode)))
     (check-equal? (first limited) 1)
     (check-equal? (hash-ref (string->jsexpr (third limited)) 'code) "RUNTIME-STEP-LIMIT")
