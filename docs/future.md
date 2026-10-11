@@ -297,7 +297,7 @@ Implemented: the hints are listed in `grammar.md`, section 7.
 
 Today the language has `List[T]`, `Map[K, V]`, `Result[T]`, user structs and enums (a user `Option[T]` is a generic enum), and `std/queue`, a FIFO of Strings whose `push` copies the list. There are no user generic functions, so a generic structure cannot be written in Agentica: it must be a builtin, like `Map`. Each one lands in the evaluator and the VM in the same PR, with the grammar, the programming skill and the site docs.
 
-Order: ranges first (12.1), then `Set[T]` (12.2), then `Queue[T]` (12.3). The rest is later (12.4).
+Order: ranges first (12.1), then `Set[T]` (12.2), then `Queue[T]` (12.3). The rest is later (12.4). `Range`, `Set` and `Queue` join the reserved type and module names: a user `struct Set`, `enum Range` or `import ... as Queue` becomes `CHECK-REDEFINED-NAME`.
 
 ### 12.1 Ranges
 
@@ -330,10 +330,14 @@ end
 ```
 
 - `a..b` includes `b`; `a...b` excludes it, as in Ruby. Both operands are `Int`; anything else is a type error, like other operators. The result has the builtin type `Range`.
-- Precedence: lowest, below `or`/`||`, and not associative, so `0...n + 1` is `0...(n + 1)` and `1..2..3` is a parse error. Calling a method needs parentheses: `(1..5).to_a`.
+- Precedence: lowest, below `or`/`||`, and not associative, so `0...n + 1` is `0...(n + 1)` and `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator. Calling a method needs parentheses: `(1..5).to_a`.
 - `for x in range` yields each `Int` in order, without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `List.reverse` on `to_a`). Each iteration costs steps like `for` over a list. Iteration up to the largest `Int` must not overflow.
-- `Range` methods (and module functions `Range.name(r, ...)`): `to_a -> List[Int]`, `size -> Int`, `include?(x: Int) -> Bool`, `each(Fn[Int, Void])`, `first`, `last` (the last included value; a `Result` error for an empty range).
-- `Int` methods for loops: `n.times(Fn[Int, Void])` calls the block with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, Fn[Int, Void])` with `a` to `b`; `a.downto(b, Fn[Int, Void])` with `a` down to `b`.
+- `Range` methods (and module functions `Range.name(r, ...)`):
+  - `size -> Int`: the number of values; `RUNTIME-INTEGER-OVERFLOW` when it does not fit in `Int` (for example `(0..9223372036854775807).size`).
+  - `to_a -> List[Int]`: capped at 1,048,576 values like `List.repeat`; above that, `RUNTIME-INVALID-COUNT`.
+  - `include?(x: Int) -> Bool`, `each(Fn[Int, Void]) -> Void`.
+  - `first -> Result[Int]` and `last -> Result[Int]`: the first and last included values, an error for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)`, not `5`.
+- `Int` methods for loops, all returning `Void`: `n.times(Fn[Int, Void])` calls the block with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, Fn[Int, Void])` with `a` to `b` (nothing when `b < a`); `a.downto(b, Fn[Int, Void])` with `a` down to `b` (nothing when `b > a`).
 - Text form: `1..5` and `1...5`, as Ruby's `inspect`. Ranges compare with `==` (same start, end and kind).
 - VM: `for` over a range literal lowers to a counter loop with no allocation; a `Range` value is a small immutable object.
 - Open: `step` (`(0..10).step(2)`), and ranges of `String` or `Float`. Not planned until a real program needs them.
@@ -348,15 +352,28 @@ puts(seen.size)            # 3
 ```
 
 - `Set[T]` is a builtin generic, immutable like `Map`. Elements use the same types and equality as `Map` keys. Iteration and `to_a` follow first-insertion order, like `Map.keys`.
-- Functions (also methods): `Set.new() -> Set[T]` (needs an expected type, like an empty map), `Set.new(List[T])`, `add`, `delete`, `include?`, `size`, `empty?`, `to_a`, `union`, `intersection`, `difference`, `subset?`. `for x in set` iterates in order.
-- Text form: `#<Set: {1, 2}>`, as Ruby. `==` compares elements regardless of order. Sets are not JSON-encodable at first.
+- Functions (also methods, with the set first):
+
+  | Function | Result |
+  |---|---|
+  | `Set.new() -> Set[T]` | empty; needs an expected type, like an empty map |
+  | `Set.new(items: List[T]) -> Set[T]` | duplicates dropped, first one kept |
+  | `Set.add(s: Set[T], x: T) -> Set[T]`, `Set.delete(s: Set[T], x: T) -> Set[T]` | a new set; the input is unchanged |
+  | `Set.include?(s: Set[T], x: T) -> Bool`, `Set.size(s) -> Int`, `Set.empty?(s) -> Bool` | |
+  | `Set.to_a(s: Set[T]) -> List[T]` | first-insertion order |
+  | `Set.union(a, b)`, `Set.intersection(a, b)`, `Set.difference(a, b) -> Set[T]` | order: `a` first, then new elements of `b` |
+  | `Set.subset?(a: Set[T], b: Set[T]) -> Bool` | every element of `a` is in `b` |
+
+- `for x in set` iterates in order.
+- Text form: `Set[1, 2]`. `==` compares elements regardless of order. Sets are not JSON-encodable at first.
 - VM: built on the HAMT of 7e PR 5d, so it comes after maps.
 
 ### 12.3 Queues
 
-- `Queue[T]` is a builtin generic, persistent FIFO (two lists): `Queue.new()`, `push(q, x) -> Queue[T]`, `peek(q) -> Result[T]`, `drop(q) -> Queue[T]` (an empty queue stays empty), `size`, `empty?`, `to_a`. Used linearly, each operation is O(1) amortized; reusing an old version can cost O(n) once.
+- `Queue[T]` is a builtin generic, persistent FIFO (two lists): `Queue.new() -> Queue[T]` (needs an expected type), `Queue.push(q, x: T) -> Queue[T]` (at the back), `Queue.peek(q) -> Result[T]` (the front), `Queue.drop(q) -> Queue[T]` (without the front; an empty queue stays empty), `Queue.size(q) -> Int`, `Queue.empty?(q) -> Bool`, `Queue.to_a(q) -> List[T]` (front to back). Also as methods. Used linearly, each operation is O(1) amortized; reusing an old version can cost O(n) once.
+- `for x in queue` iterates front to back. Text form: `Queue[1, 2]`, front first. `==` compares the elements in order. Not JSON-encodable at first.
 - `pop` returning both the value and the rest waits for tuples (12.4). Until then, `peek` then `drop`.
-- `std/queue` stays for compatibility and points to `Queue[T]`.
+- `std/queue` is removed in the same PR: `Queue` becomes a reserved name, so `import "std/queue.agc" as Queue` would fail with `CHECK-REDEFINED-NAME`, and its String-only API (`pop` returning `Popped`) would confuse agents next to the builtin. That PR updates `README.md`, `examples/queue.agc`, `docs/grammar.md`, the programming skill's modules reference, `tests/modules-test.rkt` and `tests/stdlib-distribution-test.rkt` (which need another embedded module for the `std/` coverage) and notes the break in the changelog.
 
 ### 12.4 Later
 
