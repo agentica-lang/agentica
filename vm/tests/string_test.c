@@ -79,9 +79,35 @@ int main(void) {
 
   agc_string *mixed = text("a\xc3\xa9\xf0\x9f\x98\x80z");
   assert(mixed->chars == 4);
-  assert(agc_utf8_offset(mixed, 0) == 0 && agc_utf8_offset(mixed, 1) == 1 && agc_utf8_offset(mixed, 2) == 3);
-  assert(agc_utf8_offset(mixed, 3) == 7 && agc_utf8_offset(mixed, 4) == 8);
-  assert(agc_utf8_offset(text("abc"), 2) == 2);
+  agc_vm vm;
+  memset(&vm, 0, sizeof vm);
+  assert(agc_utf8_offset(&vm, mixed, 0) == 0 && agc_utf8_offset(&vm, mixed, 1) == 1);
+  assert(agc_utf8_offset(&vm, mixed, 2) == 3 && agc_utf8_offset(&vm, mixed, 3) == 7);
+  assert(agc_utf8_offset(&vm, mixed, 4) == 8 && agc_utf8_offset(&vm, mixed, 1) == 1);
+  assert(agc_utf8_offset(&vm, text("abc"), 2) == 2);
+  static const char *pieces[] = {"a", "\xc3\xa9", "\xe2\x82\xac", "\xf0\x9f\x98\x80"};
+  size_t count = 5000, offsets[5001], bytes = 0;
+  char *built = malloc(count * 4 + 1);
+  assert(built);
+  unsigned seed = 7;
+  for (size_t k = 0; k < count; k++) {
+    seed = seed * 1103515245u + 12345u;
+    const char *p = pieces[(seed >> 16) % 4];
+    offsets[k] = bytes;
+    memcpy(built + bytes, p, strlen(p));
+    bytes += strlen(p);
+  }
+  offsets[count] = bytes;
+  built[bytes] = '\0';
+  agc_string *wide = text(built);
+  agc_string *other = text("x\xc3\xa9y\xc3\xa9");
+  for (size_t k = 0; k < 20000; k++) {
+    seed = seed * 1103515245u + 12345u;
+    size_t index = k % 3 == 0 ? (seed >> 8) % (count + 1) : (k * 7) % (count + 1);
+    assert(agc_utf8_offset(&vm, wide, index) == offsets[index]);
+    if (k % 97 == 0) assert(agc_utf8_offset(&vm, other, 3) == 4);
+  }
+  free(built);
 
   find_is("aaab", "aab", 0, 1);
   find_is("abababc", "ababc", 0, 2);

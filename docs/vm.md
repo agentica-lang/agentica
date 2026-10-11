@@ -277,7 +277,15 @@ fails when the committed file differs from what the generator prints.
   in both orders; it stops on any difference.
 - `String` library in C (`vm/strings.c`): lengths and indexes count code
   points (`agc_string` keeps both the byte and the code point count, and
-  ASCII-only strings index bytes directly); every function is one or two
+  ASCII-only strings, whose two counts are equal, index bytes directly).
+  For other strings `at` and `slice` find the byte offset through a
+  one-entry cursor on the VM (`vm->cursor`: the string, a code point index
+  and its byte offset, in the GC-scanned `agc_vm`, so the string stays
+  reachable): the walk starts from whichever of the start, the end or the
+  cursor is closest, and the cursor moves to just after the result. So a
+  loop `s.at(j)` over `j` from 0 or down from the end costs O(1) per call,
+  like the evaluator's O(1) `string-ref`; jumping around a long non-ASCII
+  string costs O(distance). Every function is one or two
   O(n) passes that size the result first, then fill it; substring search
   is byte-wise Knuth-Morris-Pratt (a valid UTF-8 match always starts on a
   code point), so `split`, `replace`, `contains?` and `index_of` stay

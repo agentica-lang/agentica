@@ -196,6 +196,8 @@ struct agc_vm {
   uint32_t frame_capacity, frame_count, depth;
   agc_input in;
   agc_value args;
+  const agc_string *cursor;
+  size_t cursor_index, cursor_offset;
   agc_outcome outcome;
   jmp_buf fail;
 };
@@ -237,6 +239,7 @@ bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
+uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
@@ -283,7 +286,7 @@ typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_numb
 
 size_t agc_utf8_encode(uint32_t cp, char out[4]);
 size_t agc_utf8_count(const uint8_t *s, size_t len);
-size_t agc_utf8_offset(const agc_string *s, size_t index);
+size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index);
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
 agc_string *agc_change_case(const agc_string *s, bool up);
 agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);

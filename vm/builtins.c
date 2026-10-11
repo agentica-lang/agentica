@@ -265,16 +265,22 @@ static const agc_builtin table[] = {
   {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO},
 };
 
-static const agc_builtin *find_in(const agc_builtin *entries, size_t count, const uint8_t *name, size_t len,
-                                  uint32_t arity) {
-  for (size_t i = 0; i < count; i++) {
-    if (entries[i].arity == arity && strlen(entries[i].name) == len && memcmp(entries[i].name, name, len) == 0)
-      return &entries[i];
-  }
-  return NULL;
-}
+static const size_t table_count = sizeof table / sizeof table[0];
+
+static const struct {
+  const agc_builtin *entries;
+  const size_t *count;
+} tables[] = {
+  {table, &table_count},
+  {agc_string_builtins, &agc_string_builtin_count},
+};
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {
-  const agc_builtin *found = find_in(table, sizeof table / sizeof table[0], name, len, arity);
-  return found ? found : find_in(agc_string_builtins, agc_string_builtin_count, name, len, arity);
+  for (size_t t = 0; t < sizeof tables / sizeof tables[0]; t++) {
+    for (size_t i = 0; i < *tables[t].count; i++) {
+      const agc_builtin *b = &tables[t].entries[i];
+      if (b->arity == arity && strlen(b->name) == len && memcmp(b->name, name, len) == 0) return b;
+    }
+  }
+  return NULL;
 }

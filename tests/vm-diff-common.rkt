@@ -459,6 +459,23 @@
     (check-equal? (first racket) 1)
     (check-true (string-contains? (third racket) "error[RUNTIME-STACK-OVERFLOW]")))
 
+  (test-case "String.at and slice over a long non-ASCII string stay linear on the VM"
+    (define program (build-path work "string-cursor.agc"))
+    (display-to-file
+     (string-append
+      "def main() -> Void\n  s = \"é😀\"\n  i = 0\n  while i < 15\n    s = s + s\n    i += 1\n  end\n"
+      "  n = s.length\n  total = 0\n  j = 0\n  while j < n\n    total += s.at(j).code\n    j += 1\n  end\n"
+      "  j = n - 1\n  while j >= 0\n    total += s.slice(j, 1).code\n    j -= 1\n  end\n"
+      "  puts(\"#{n} #{total}\")\nend\n")
+     program)
+    (define bytecode (build-path work "string-cursor.agcb"))
+    (compile-file program bytecode)
+    (define start (current-inexact-milliseconds))
+    (define result (run-vm bytecode #f))
+    (define elapsed (- (current-inexact-milliseconds) start))
+    (check-equal? result (list 0 (format "65536 ~a\n" (* 2 32768 (+ 233 128512))) ""))
+    (check-true (< elapsed 3000) (format "took ~a ms" elapsed)))
+
   (test-case "large generated input splits lines like the evaluator across buffer boundaries"
     (define program (build-path work "large-input.agc"))
     (display-to-file

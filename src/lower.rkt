@@ -72,13 +72,11 @@
                       "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"
                       "List.map" "List.filter" "List.reduce" "List.each" "List.any?" "List.all?" "List.sort_by"
                       "Range.size" "Range.to_a" "Range.include?" "Range.each" "Range.first" "Range.last"
-                      "Int.times" "Int.upto" "Int.downto"))
-
-(define vm-string-builtins
-  '("String.length" "String.upcase" "String.downcase" "String.trim" "String.split" "String.join"
-    "String.contains?" "String.starts_with?" "String.ends_with?" "String.replace" "String.slice"
-    "String.index_of" "String.at" "String.reverse" "String.code" "String.from_code" "String.from_bytes"
-    "String.to_int" "String.to_int!" "String.to_float" "String.to_float!"))
+                      "Int.times" "Int.upto" "Int.downto"
+                      "String.length" "String.upcase" "String.downcase" "String.trim" "String.split" "String.join"
+                      "String.contains?" "String.starts_with?" "String.ends_with?" "String.replace" "String.slice"
+                      "String.index_of" "String.at" "String.reverse" "String.code" "String.from_code" "String.from_bytes"
+                      "String.to_int" "String.to_int!" "String.to_float" "String.to_float!"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))
@@ -536,7 +534,7 @@
     (define span (call-span expression))
     (define entry (builtin-ref name (length arguments)))
     (define key (and entry (builtin-implementation entry)))
-    (define builtin? (and key (or (member key vm-builtins) (member key vm-string-builtins)) #t))
+    (define builtin? (and key (member key vm-builtins) #t))
     (when (and entry (not builtin?))
       (unsupported (format "the builtin ~a" name) span))
     (unless (or builtin? (hash-has-key? function-index name))

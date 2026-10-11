@@ -11,16 +11,6 @@
 
 static agc_string empty_text = {0, 0};
 
-static uint32_t next_code_point(const uint8_t *s, size_t len, size_t *at) {
-  static const uint8_t lead_mask[] = {0, 0x7F, 0x1F, 0x0F, 0x07};
-  size_t width = agc_utf8_width(s[*at]);
-  if (width > len - *at) width = len - *at;
-  uint32_t cp = s[*at] & lead_mask[width];
-  for (size_t k = 1; k < width; k++) cp = (cp << 6) | (s[*at + k] & 0x3Fu);
-  *at += width;
-  return cp;
-}
-
 size_t agc_utf8_encode(uint32_t cp, char out[4]) {
   if (cp < 0x80) {
     out[0] = (char)cp;
@@ -50,12 +40,41 @@ size_t agc_utf8_count(const uint8_t *s, size_t len) {
   return count;
 }
 
-size_t agc_utf8_offset(const agc_string *s, size_t index) {
-  if (s->bytes == s->chars) return index;
+static size_t walk(const agc_string *s, size_t index, size_t from_index, size_t offset) {
   const uint8_t *data = (const uint8_t *)s->data;
-  size_t at = 0;
-  for (size_t k = 0; k < index && at < s->bytes; k++) next_code_point(data, s->bytes, &at);
-  return at;
+  for (; from_index < index && offset < s->bytes; from_index++) agc_utf8_next(data, s->bytes, &offset);
+  for (; from_index > index && offset > 0; from_index--) {
+    do offset--;
+    while (offset > 0 && (data[offset] & 0xC0) == 0x80);
+  }
+  return offset;
+}
+
+static void remember(agc_vm *vm, const agc_string *s, size_t index, size_t offset) {
+  vm->cursor = s;
+  vm->cursor_index = index;
+  vm->cursor_offset = offset;
+}
+
+size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index) {
+  if (s->bytes == s->chars) return index;
+  size_t from_index = 0, offset = 0, cost = index;
+  if (s->chars - index < cost) {
+    from_index = s->chars;
+    offset = s->bytes;
+    cost = s->chars - index;
+  }
+  if (vm->cursor == s) {
+    size_t ci = vm->cursor_index;
+    size_t gap = ci > index ? ci - index : index - ci;
+    if (gap < cost) {
+      from_index = ci;
+      offset = vm->cursor_offset;
+    }
+  }
+  offset = walk(s, index, from_index, offset);
+  remember(vm, s, index, offset);
+  return offset;
 }
 
 typedef struct {
@@ -95,6 +114,7 @@ static size_t find(const finder *f, const agc_string *text, size_t from) {
 }
 
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from) {
+  if (part->bytes > text->bytes) return NOT_FOUND;
   finder f = make_finder(part);
   return find(&f, text, from);
 }
@@ -152,7 +172,7 @@ static bool case_ignorable(uint32_t cp) {
 
 static bool cased_after(const uint8_t *s, size_t len, size_t at) {
   while (at < len) {
-    uint32_t cp = next_code_point(s, len, &at);
+    uint32_t cp = agc_utf8_next(s, len, &at);
     if (cased(cp)) return true;
     if (!case_ignorable(cp)) return false;
   }
@@ -166,7 +186,7 @@ agc_string *agc_change_case(const agc_string *s, bool up) {
   uint32_t out[3];
   char buf[4];
   for (size_t at = 0; at < s->bytes;) {
-    uint32_t cp = next_code_point(data, s->bytes, &at);
+    uint32_t cp = agc_utf8_next(data, s->bytes, &at);
     sigma = sigma || cp == SIGMA;
     size_t n = mapped(up, cp, out);
     chars = agc_size_add(chars, n);
@@ -176,7 +196,7 @@ agc_string *agc_change_case(const agc_string *s, bool up) {
   bool before = false;
   size_t w = 0;
   for (size_t at = 0; at < s->bytes;) {
-    uint32_t cp = next_code_point(data, s->bytes, &at);
+    uint32_t cp = agc_utf8_next(data, s->bytes, &at);
     size_t n = mapped(up, cp, out);
     if (!up && cp == SIGMA && before && !cased_after(data, s->bytes, at)) out[0] = FINAL_SIGMA;
     if (!up && sigma) before = cased(cp) || (before && case_ignorable(cp));
@@ -278,9 +298,14 @@ static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
     size_t at = 0;
     for (size_t k = 0; k < s->chars; k++) {
       size_t start = at;
-      next_code_point((const uint8_t *)s->data, s->bytes, &at);
+      agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
       l->items[k] = agc_string_value(agc_make_string(s->data + start, at - start, 1));
     }
+    return agc_list_value(l);
+  }
+  if (sep->bytes > s->bytes) {
+    l = agc_new_list(1);
+    l->items[0] = args[0];
     return agc_list_value(l);
   }
   finder f = make_finder(sep);
@@ -351,12 +376,13 @@ static agc_value builtin_replace(agc_vm *vm, agc_value *args, uint32_t span) {
       w += to->bytes;
       if (at == s->bytes) break;
       size_t start = at;
-      next_code_point((const uint8_t *)s->data, s->bytes, &at);
+      agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
       memcpy(result->data + w, s->data + start, at - start);
       w += at - start;
     }
     return agc_string_value(result);
   }
+  if (from->bytes > s->bytes) return args[0];
   finder f = make_finder(from);
   size_t count = count_matches(&f, s);
   if (count == 0) return args[0];
@@ -384,12 +410,11 @@ static agc_value builtin_slice(agc_vm *vm, agc_value *args, uint32_t span) {
              s->chars);
     agc_fail_text(vm, "RUNTIME-INDEX-OUT-OF-RANGE", ascii(text), span);
   }
-  size_t from = agc_utf8_offset(s, (size_t)start);
-  size_t at = from;
-  if (s->bytes == s->chars) {
-    at += (size_t)length;
-  } else {
-    for (int64_t k = 0; k < length; k++) next_code_point((const uint8_t *)s->data, s->bytes, &at);
+  size_t from = agc_utf8_offset(vm, s, (size_t)start);
+  size_t at = from + (size_t)length;
+  if (s->bytes != s->chars) {
+    at = walk(s, (size_t)start + (size_t)length, (size_t)start, from);
+    remember(vm, s, (size_t)start + (size_t)length, at);
   }
   return agc_string_value(agc_make_string(s->data + from, at - from, (size_t)length));
 }
@@ -407,8 +432,9 @@ static agc_value builtin_at(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t index = agc_as_int(vm, args[1]);
   if (index < 0 || (uint64_t)index >= s->chars)
     agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "string index is out of range", span + 2);
-  size_t from = agc_utf8_offset(s, (size_t)index), at = from;
-  next_code_point((const uint8_t *)s->data, s->bytes, &at);
+  size_t from = agc_utf8_offset(vm, s, (size_t)index), at = from;
+  agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
+  if (s->bytes != s->chars) remember(vm, s, (size_t)index + 1, at);
   return agc_string_value(agc_make_string(s->data + from, at - from, 1));
 }
 
@@ -418,7 +444,7 @@ static agc_value builtin_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_string *result = agc_new_string(s->bytes, s->chars);
   for (size_t at = 0; at < s->bytes;) {
     size_t start = at;
-    next_code_point((const uint8_t *)s->data, s->bytes, &at);
+    agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
     memcpy(result->data + (s->bytes - at), s->data + start, at - start);
   }
   return agc_string_value(result);
@@ -429,7 +455,7 @@ static agc_value builtin_code(agc_vm *vm, agc_value *args, uint32_t span) {
   if (s->chars != 1)
     agc_fail(vm, "RUNTIME-INVALID-CHARACTER", "String.code needs exactly one character", span + 1);
   size_t at = 0;
-  return agc_int(next_code_point((const uint8_t *)s->data, s->bytes, &at));
+  return agc_int(agc_utf8_next((const uint8_t *)s->data, s->bytes, &at));
 }
 
 static agc_value builtin_from_code(agc_vm *vm, agc_value *args, uint32_t span) {

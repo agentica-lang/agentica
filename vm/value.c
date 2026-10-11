@@ -312,6 +312,16 @@ agc_range *agc_as_range(agc_vm *vm, agc_value v) {
 
 size_t agc_utf8_width(uint8_t lead) { return lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4; }
 
+uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at) {
+  static const uint8_t lead_mask[] = {0, 0x7F, 0x1F, 0x0F, 0x07};
+  size_t width = agc_utf8_width(s[*at]);
+  if (width > len - *at) width = len - *at;
+  uint32_t cp = s[*at] & lead_mask[width];
+  for (size_t k = 1; k < width; k++) cp = (cp << 6) | (s[*at + k] & 0x3Fu);
+  *at += width;
+  return cp;
+}
+
 size_t agc_utf8_valid(const uint8_t *s, size_t len) {
   if (len == 0) return 0;
   uint8_t c = s[0];
