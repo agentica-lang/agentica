@@ -11,15 +11,29 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#ifdef __linux__
+#include <sys/prctl.h>
+#include <sys/random.h>
+#endif
+
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
 
-typedef struct _stat64 file_info;
 #define file_stat _fstat64
 
-static wchar_t **wide_args;
+typedef struct _stat64 file_info;
 
+static wchar_t **wide_args;
+#else
+#include <unistd.h>
+
+#define file_stat fstat
+
+typedef struct stat file_info;
+#endif
+
+#ifdef _WIN32
 static int open_input(int index, const char *path, bool driven) {
   (void)path;
   (void)driven;
@@ -37,11 +51,6 @@ static void remove_input(int index, const char *path, const file_info *info) {
   _wunlink(wide_args[index]);
 }
 #else
-#include <unistd.h>
-
-typedef struct stat file_info;
-#define file_stat fstat
-
 static int open_input(int index, const char *path, bool driven) {
   (void)index;
   return open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | (driven ? O_NOFOLLOW : 0));
@@ -75,8 +84,6 @@ static bool urandom_entropy(uint8_t *out, size_t len) {
 #endif
 
 #ifdef __linux__
-#include <sys/random.h>
-
 static bool os_entropy(uint8_t *out, size_t len) {
   size_t done = 0;
   while (done < len) {
@@ -124,8 +131,6 @@ static void seed_map_hash(void) {
 }
 
 #ifdef __linux__
-#include <sys/prctl.h>
-
 static bool bind_to_driver(int64_t driver) {
   if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) return false;
   return (int64_t)getppid() == driver;

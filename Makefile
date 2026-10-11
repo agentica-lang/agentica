@@ -161,12 +161,10 @@ vm-unicode:
 
 CLANG_TIDY ?= clang-tidy
 VM_LINT_SKIP := vm/unicode_data.c
-VM_LINT_PENDING := vm/json.c vm/tests/json_test.c
-VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP) $(VM_LINT_PENDING),$(wildcard vm/*.c vm/tests/*.c))
-VM_LINT_SAN_PENDING := vm/value.c
+VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 
 .PHONY: vm-lint
 vm-lint: $(GC_DIR)/extra/gc.c
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include
-	$(CLANG_TIDY) --quiet $(filter-out $(VM_LINT_SAN_PENDING),$(VM_LINT_SRC)) -- $(VM_WARN) -DAGC_NO_GC -fsanitize=address,undefined
+	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -DAGC_NO_GC -fsanitize=address,undefined
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS

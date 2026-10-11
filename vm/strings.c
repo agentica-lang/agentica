@@ -8,6 +8,12 @@
 #define SMALL_SIGMA 0x3C3u
 #define FINAL_SIGMA 0x3C2u
 
+typedef struct {
+  const uint8_t *p;
+  size_t m;
+  size_t *fail;
+} finder;
+
 static agc_string empty_text = {0, 0};
 
 size_t agc_utf8_encode(uint32_t cp, char out[4]) {
@@ -75,12 +81,6 @@ size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index) {
   remember(vm, s, index, offset);
   return offset;
 }
-
-typedef struct {
-  const uint8_t *p;
-  size_t m;
-  size_t *fail;
-} finder;
 
 static finder make_finder(const agc_string *part) {
   finder f = {(const uint8_t *)part->data, part->bytes, NULL};

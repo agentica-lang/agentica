@@ -254,9 +254,8 @@ instructions. A file that loads may still compute wrong values or end with
 - Only `value.c` reads the value union. Immediates write the full word.
 
 `make vm-lint` (clang-tidy 18 or newer, for `misc-use-internal-linkage`)
-skips `vm/unicode_data.c` (generated). `VM_LINT_PENDING` and
-`VM_LINT_SAN_PENDING` in the Makefile and `pending-84` in the style test list
-files left out until PR #84 merges and they are fixed.
+skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
+(`__asan_default_options`) takes an exact `NOLINT(check,...)`.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C

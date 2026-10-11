@@ -7,15 +7,12 @@
 
 (define skipped '("unicode_data.c"))
 
-(define pending-84
-  '("builtins.c" "json.c" "main.c" "strings.c" "text.c" "tests/json_test.c"))
-
 (define (vm-files)
   (define (in dir prefix)
     (for/list ([p (directory-list (build-path vm-dir dir))]
                #:when (regexp-match? #rx"[.]c$" (path->string p)))
       (string-append prefix (path->string p))))
-  (sort (filter (lambda (f) (not (member f (append skipped pending-84))))
+  (sort (filter (lambda (f) (not (member f skipped)))
                 (append (in "." "") (in "tests" "tests/")))
         string<?))
 
