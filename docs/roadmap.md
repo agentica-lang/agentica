@@ -1186,7 +1186,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Package the VM in `dist/` and the release workflow.
 - [ ] Single-file Linux release: `raco exe --orig-exe` with the VM embedded, older glibc baseline ([`future.md` section 18](future.md#18-front-end-implementation-language)).
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
-- [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.
+- [ ] Remove the Racket evaluator once the VM runs every program (6b, JSON and 7h done) and the flag release is out. The front end (lexer, parser, checker, lowering) stays. The VM differential tests become golden-output tests (program plus expected stdout, stderr and exit code). Until then the evaluator runs what the VM cannot and stays the reference.
 
 **Done when:** a release ships with the VM as the default backend.
 
