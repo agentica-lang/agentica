@@ -255,7 +255,7 @@ static agc_string *ascii(const char *text) {
   return agc_make_string(text, n, n);
 }
 
-static agc_string *around(const char *before, const agc_string *part, const char *after) {
+agc_string *agc_around(const char *before, const agc_string *part, const char *after) {
   size_t chars;
   size_t form = agc_write_form(part, NULL, &chars);
   size_t b = strlen(before), a = strlen(after);
@@ -427,7 +427,7 @@ static agc_value builtin_index_of(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]), *part = agc_as_string(vm, args[1]);
   size_t at = agc_text_find(s, part, 0);
-  if (at == AGC_NOT_FOUND) return failure(around("", part, " not found"));
+  if (at == AGC_NOT_FOUND) return failure(agc_around("", part, " not found"));
   return agc_result_value(true, agc_int((int64_t)agc_utf8_count((const uint8_t *)s->data, at)));
 }
 
@@ -492,7 +492,7 @@ static agc_value to_int(agc_vm *vm, agc_value *args, uint32_t span, bool bang) {
   if (status == AGC_NUMBER_OK) return bang ? agc_int(n) : agc_result_value(true, agc_int(n));
   bool invalid = status == AGC_NUMBER_INVALID;
   agc_string *message =
-    invalid ? around("cannot convert ", s, " to Int") : ascii("Int result is outside the 64-bit range");
+    invalid ? agc_around("cannot convert ", s, " to Int") : ascii("Int result is outside the 64-bit range");
   if (bang) agc_fail_text(vm, invalid ? "RUNTIME-INVALID-NUMBER" : "RUNTIME-INTEGER-OVERFLOW", message, span);
   return failure(message);
 }
@@ -508,7 +508,7 @@ static agc_value to_float(agc_vm *vm, agc_value *args, uint32_t span, bool bang)
   double x;
   if (agc_parse_float((const uint8_t *)s->data, s->bytes, &x) == AGC_NUMBER_OK)
     return bang ? agc_float(x) : agc_result_value(true, agc_float(x));
-  agc_string *message = around("cannot convert ", s, " to Float");
+  agc_string *message = agc_around("cannot convert ", s, " to Float");
   if (bang) agc_fail_text(vm, "RUNTIME-INVALID-NUMBER", message, span);
   return failure(message);
 }

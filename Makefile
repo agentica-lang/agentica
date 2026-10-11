@@ -56,7 +56,9 @@ site-serve: site-sass
 # make vm-lint            clang-tidy (18 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/interp.c vm/diag.c
+YY_DIR := vm/third_party/yyjson
+YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/interp.c vm/diag.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
 EXE :=
@@ -79,13 +81,14 @@ else ifeq ($(shell uname -s),Darwin)
 VM_PIE :=
 VM_HARDEN_LDFLAGS :=
 endif
-VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"'
+VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS)
 ifeq ($(SANITIZE),1)
 VM_CC := clang
 VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
 VM_LDFLAGS := -fsanitize=address,undefined
 VM_GC :=
 VM_BUILD := build/vm/sanitize
+YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 FUZZ_RUNS ?= 30000
 else ifeq ($(GC_STRESS),1)
 VM_CC := $(CC)
@@ -93,15 +96,18 @@ VM_CFLAGS := $(VM_WARN) -O1 -g -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS $
 VM_LDFLAGS := $(VM_PIE) $(VM_LIBS)
 VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/gcstress
+YY_CFLAGS := -O1 -g $(VM_PIC)
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 VM_LDFLAGS := $(VM_HARDEN_LDFLAGS) $(VM_LIBS)
 VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/release
+YY_CFLAGS := -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 FUZZ_RUNS ?= 100000
 endif
 VM_STAMP := build/vm/flags
+VM_YY := $(VM_BUILD)/yyjson.o
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
@@ -114,30 +120,37 @@ build/vm/gc.o: $(GC_DIR)/extra/gc.c $(GC_SRC) Makefile
 	@mkdir -p build/vm
 	$(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -I $(GC_DIR)/include -c $< -o $@
 
-dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
+$(YY_DIR)/src/yyjson.c:
+	@echo "missing $(YY_DIR): run git submodule update --init" >&2; exit 1
+
+$(VM_YY): $(YY_DIR)/src/yyjson.c $(YY_DIR)/src/yyjson.h Makefile $(VM_STAMP)
+	@mkdir -p $(VM_BUILD)
+	$(VM_CC) -std=c11 $(YY_CFLAGS) $(YY_DEFS) -c $< -o $@
+
+dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_STAMP)
 	@mkdir -p dist
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_LDFLAGS) $(VM_ENTRY)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_LDFLAGS) $(VM_ENTRY)
 
 vm: dist/agentica-vm$(EXE)
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 
-$(VM_BUILD)/%-test$(EXE): vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_LDFLAGS)
+$(VM_BUILD)/%-test$(EXE): vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_YY) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_YY) $(VM_LDFLAGS)
 
 vm-test: $(VM_TESTS)
 	for t in $(VM_TESTS); do $$t || exit 1; done
 
-$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_LDFLAGS)
+$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_LDFLAGS)
 
 vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	@mkdir -p $(VM_BUILD)/corpus
 	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
-$(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_LDFLAGS) $(VM_ENTRY)
+$(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_LDFLAGS) $(VM_ENTRY)
 
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0

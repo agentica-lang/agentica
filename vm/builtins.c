@@ -423,6 +423,7 @@ static const struct {
   {table, &table_count},
   {agc_string_builtins, &agc_string_builtin_count},
   {agc_number_builtins, &agc_number_builtin_count},
+  {agc_json_builtins, &agc_json_builtin_count},
 };
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {

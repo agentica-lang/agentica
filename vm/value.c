@@ -198,6 +198,13 @@ agc_value agc_range_value(int64_t start, int64_t end, bool exclusive) {
   return v;
 }
 
+agc_value agc_json_value(agc_json *j) {
+  agc_value v;
+  v.tag = AGC_T_JSON;
+  v.as.p = j;
+  return v;
+}
+
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last) {
   *first = r->start;
   *last = r->end;
@@ -307,6 +314,11 @@ agc_fn *agc_as_fn(agc_vm *vm, agc_value v) {
 
 agc_range *agc_as_range(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_RANGE) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_json *agc_as_json(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_JSON) wrong_tag(vm);
   return v.as.p;
 }
 

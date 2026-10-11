@@ -90,6 +90,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
   if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);
   if (agc_is(v, AGC_T_FN)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Fn>");
+  if (agc_is(v, AGC_T_JSON)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Json>");
   if (agc_is(v, AGC_T_RANGE)) {
     const agc_range *r = agc_as_range(vm, v);
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
@@ -153,7 +154,7 @@ typedef struct {
   agc_value *keys;
 } debug_frame;
 
-static const agc_struct_def *struct_def(agc_vm *vm, const agc_struct *st) {
+const agc_struct_def *agc_struct_def_of(agc_vm *vm, const agc_struct *st) {
   const agc_program *p = vm->program;
   if (!p || st->type >= p->struct_count || p->structs[st->type].count != st->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown struct type", 0);
@@ -195,7 +196,7 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
     return true;
   }
   if (agc_is(v, AGC_T_STRUCT)) {
-    append_string(b, struct_def(vm, agc_as_struct(vm, v))->name);
+    append_string(b, agc_struct_def_of(vm, agc_as_struct(vm, v))->name);
     append(b, "(", 1);
     return true;
   }
@@ -250,7 +251,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
     debug_frame *top = &stack[depth - 1];
     if (top->next) append(&b, ", ", 2);
     if (agc_is(top->value, AGC_T_STRUCT)) {
-      append_string(&b, struct_def(vm, agc_as_struct(vm, top->value))->fields[top->next]);
+      append_string(&b, agc_struct_def_of(vm, agc_as_struct(vm, top->value))->fields[top->next]);
       append(&b, ": ", 2);
     }
     if (agc_is(top->value, AGC_T_MAP)) {
@@ -267,6 +268,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
 
 agc_string *agc_text(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_STRING)) return agc_as_string(vm, v);
+  if (agc_is(v, AGC_T_JSON)) return agc_json_encode(vm, v, 0);
   return agc_debug(vm, v);
 }
 
