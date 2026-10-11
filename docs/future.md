@@ -390,7 +390,9 @@ Each needs a real program first.
 
 ## 13. Shared tables (ATS)
 
-ATS (Agentica Table Storage) plays the role of Erlang's ETS. Values are immutable and tasks share nothing but the argument they start with and the result they return. A cache, a counter or a large lookup table that many tasks read must today travel through `Task.spawn` and `Task.await`, copied or rebuilt each time. A table is one mutable place that tasks share through a handle.
+ATS (Agentica Table Storage) plays the role of Erlang's ETS. Values are immutable, so passing one to a task shares it without a copy. What is missing is shared mutable state: a counter, or a cache that fills while tasks run. Today a task can only hand back a new value through `Task.await`. A table is one mutable place that tasks share through a handle.
+
+A `Channel[T]` (§8) passes messages between tasks; a table is state that many tasks read and update. Each one waits for a program that needs it. `Table` becomes a reserved type and module name, a breaking change: a user `struct Table`, `enum Table` or `import ... as Table` becomes `CHECK-REDEFINED-NAME`, as §12 says for `Range`, `Set` and `Queue`.
 
 ```agentica
 def count_visit(hits: Table[String, Int]) -> Void
@@ -409,7 +411,7 @@ end
 
 - `Table[K, V]` is a builtin opaque generic, like `Task[T]`. A table value is a handle: assigning or passing it shares the same table, it does not copy it. This is the one place where data values are shared and mutable, so the name and the type say so.
 - **Nesting:** a `Table` may be a struct field, a list element, a `Map` value, or a `Task.spawn` argument or result. It may not be stored inside a table (next rule).
-- **Keys and values:** keys are `Int` or `String`; any other key type is `CHECK-TYPE-MISMATCH`, as for `Map` keys. `V` may not be `Void` or `Nil`, and the rule on `V` is deep: no `Fn`, `Task`, `Table` or opaque resource handle anywhere inside it, including struct fields, list elements, enum payloads, `Map` values and `Result`. The handles today are `FileHandle`, `Process`, `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody` and `HttpWriter`; the rule also covers any handle added later. The checker enforces all of this wherever a `Table[K, V]` type is written or inferred, with `CHECK-TABLE-VALUE` (span on the type, or on `Table.new()` when inferred).
+- **Keys and values:** keys are `Int` or `String`; any other key type is `CHECK-TYPE-MISMATCH`, as for `Map` keys. `V` may not be `Void` or `Nil`, and the rule on `V` is deep: no `Task`, `Table` or opaque resource handle anywhere inside it, including struct fields, list elements, enum payloads, `Map` values and `Result`. The handles today are `FileHandle`, `Process`, `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody` and `HttpWriter`; the rule also covers any handle added later. `Fn` values are allowed: blocks are immutable and `Task.spawn` already shares them. The checker enforces all of this wherever a `Table[K, V]` type is written or inferred, with `CHECK-TABLE-VALUE` (span on the type, or on `Table.new()` when inferred).
 - **Sharing values:** values are immutable, so storing one shares it safely. Each call is atomic, so a reader sees either the old value or the new one.
 - Functions (also methods, with the table first):
 
@@ -420,16 +422,17 @@ end
   | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent; `false` leaves the table unchanged (ETS `insert_new`) |
   | `Table.get(t, k: K) -> Result[V]`, `Table.has_key?(t, k: K) -> Bool` | |
   | `Table.delete(t, k: K) -> Void` | absent keys are ignored |
-  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent counts as 0) and returns the new value, atomically (ETS `update_counter`); overflow halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the table unchanged |
+  | `Table.add(t, k: K, n: Int) -> Int` | `Table[K, Int]` only: adds `n` (absent counts as 0) and returns the new value, atomically (ETS `update_counter`); overflow halts with `RUNTIME-INTEGER-OVERFLOW` and leaves the table unchanged; on a table whose values are not `Int`, `CHECK-TYPE-MISMATCH` |
   | `Table.size(t) -> Int`, `Table.keys(t) -> List[K]`, `Table.to_map(t) -> Map[K, V]` | snapshots, in first-insertion order; a key deleted and then put again goes to the end, as in `Map` |
 
 - **Left out on purpose:** `get` with a default and `values`, which `Map` has. Use `Result.unwrap_or` and `to_map`.
-- **Costs:** `get`, `put`, `put_new`, `has_key?`, `delete`, `add` and `size` take at most O(log n) in the table size (unlike `Map.delete`, which is O(n)). `keys` and `to_map` are O(n) and hold the lock for that time.
-- **Atomicity:** each call is atomic on its own. There are no transactions over several keys and no user code runs while the table is locked (no `update` with a block), so a call cannot deadlock or re-enter the table. A read-modify-write on a non-counter value uses `put_new` or a single owner task.
-- **Lifetime:** a table lives while some value refers to it; the garbage collector frees it. There is no owner process and no named global table, unlike ETS: a task reaches a table only through a handle it was given. A table does not outlive the evaluation. A handle used in another evaluation, such as a BDD handler run or a nested evaluation, halts with `RUNTIME-TABLE-CONTEXT`, like `RUNTIME-TASK-CONTEXT` for tasks.
+- **Costs:** `get`, `put`, `put_new`, `has_key?`, `delete`, `add` and `size` take at most O(log n) in the table size (unlike `Map.delete`, which is O(n)). `keys` and `to_map` are O(n) and stay atomic for that time.
+- **Atomicity:** each call is atomic on its own. There are no transactions over several keys and no user code runs inside a call (no `update` with a block), so a call cannot deadlock or re-enter the table. A read-modify-write on a non-counter value uses `put_new` or a single owner task.
+- **Lifetime:** a table lives while some value refers to it; the garbage collector frees it. A table holds only memory and has no custodian, so it may be shared between BDD steps and scenarios. There is no owner process and no named global table, unlike ETS: a task reaches a table only through a handle it was given.
 - **No `==`, no JSON, no `to_s`.** As for `Task`, `puts`, `print` and interpolation of a table give `CHECK-TYPE-MISMATCH`, and `.to_s` gives `CHECK-UNKNOWN-METHOD`. `IO.inspect` shows `<Table>` without the contents; use `to_map` to see them.
 - **Not in the first version:** ordered tables (`ordered_set`), duplicate keys (`bag`), match specifications, and tables shared between OS processes. Each waits for a real program.
-- **Effects:** `Table.put`, `put_new`, `delete` and `add` are effects with a new label, `table`, so ignoring their result never gives `CHECK-UNUSED-VALUE` (`put_new` and `add` return values that may be ignored).
-- **Backends:** the contract is only that each call is atomic; the implementation PR picks the mechanism (a lock per table is one possible way). The evaluator and the VM land in the same PR.
-  - The evaluator's critical section must stay safe when a task is killed while it holds the table, for example a semaphore taken with breaks disabled.
+- **Effects:** `Table.put`, `put_new`, `delete` and `add` carry the existing `concurrency` effect label, like `Task.spawn`, so ignoring their result never gives `CHECK-UNUSED-VALUE` (`put_new` and `add` return values that may be ignored).
+- **Backends:** the contract is only that each call is atomic. The evaluator and the VM land in the same PR.
+  - Evaluator: tasks are Racket threads, stopped with `custodian-shutdown-all`, which kills them; breaks do not protect against a kill, so a lock could stay held. Each call instead runs as one short atomic section (`start-atomic`/`end-atomic` from `ffi/unsafe/atomic`). This is safe because no user code runs inside the call, and a thread is not killed in the middle of an atomic section.
+  - VM: one OS thread runs the scheduler (`docs/vm.md` §10.2), and a table call does not yield, so it is atomic.
   - O(log n) `delete` with insertion order needs its own layout, such as a hash from key to (sequence, value) plus an ordered sequence index, not the `Map` layout.
