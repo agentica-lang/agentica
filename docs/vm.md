@@ -1072,8 +1072,8 @@ written `size > limit - total`. A hermetic test sends over-long values.
   short run (30,000 mutants in the sanitizer job, about 12 s) is
   reproducible; `FUZZ_SEED=N` picks another sequence and is printed on
   stderr. In a sanitizer build a crash prints the mutant's index and saves
-  it to `fuzz-crash.agcb`. The weekly workflow (`.github/workflows/fuzz.yml`,
-  also run by hand) builds the sanitizer VM, runs 5 million mutants with a
+  it to `fuzz-crash.agcb`. The fuzz workflow (`.github/workflows/fuzz.yml`,
+  run by hand) builds the sanitizer VM, runs 5 million mutants with a
   random `FUZZ_SEED`, prints the commit and seed first, and uploads
   `fuzz-crash.agcb` as an artifact on failure; `agentica-vm --` on that
   file, or the same commit, seed and at least as many runs, reproduces it. A clang
