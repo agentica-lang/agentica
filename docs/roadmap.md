@@ -14,11 +14,11 @@ done; the rest of item 5 (5c to 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (5e), in parallel with the rest of
 phase 7; queues also need only 5e, and sets need the VM maps (5d). Real
-applications follow, then shared tables (phase 9), which need tasks on the VM
-(7h) and start when a real program needs them; MCP comes last;
-they keep running on the Racket evaluator meanwhile, and their findings feed
-the VM's differential tests. Historical phase numbers below remain stable; this
-order governs pending work rather than their numeric order.
+applications follow, then MCP. Shared tables (phase 9) are on demand: they
+need tasks on the VM (7h) and start only when a real program needs them, so
+MCP does not wait for them. Real applications and MCP keep running on the
+Racket evaluator meanwhile, and their findings feed the VM's differential
+tests. Historical phase numbers below remain stable; this order governs pending work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
@@ -32,9 +32,10 @@ order governs pending work rather than their numeric order.
 | 8 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
 | 9 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
-After steps 1–2, target everyday scripts and automation. After steps 7–9,
-target larger general-purpose programs. Keep diagnostics, behavior tests,
-grammar, and the self-contained programming reference part of every phase.
+After steps 1–2, target everyday scripts and automation. After steps 7 and 9
+(step 8 only when a program needs it), target larger general-purpose programs.
+Keep diagnostics, behavior tests, grammar, and the self-contained programming
+reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
 grammar only when they land. Detailed pending work appears after the completed
 foundations below.
@@ -1188,8 +1189,8 @@ Specified in [`future.md` section 12](future.md#12-data-structures). Each item l
 
 Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs lightweight tasks on the VM (7h) and starts when a real program needs it, for example an HTTP server with a shared cache or counters. It lands in both backends in one PR, with `grammar.md`, the programming skill, the site docs and tests.
 
-- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `CHECK-TABLE-VALUE`, `RUNTIME-TABLE-CONTEXT`; the mutating calls reuse the `concurrency` effect label. `Table` becomes a reserved type and module name (say so in the changelog). The programming skill must tell `Table` apart from BDD data tables (`BDD.table`). `grammar.md` gets a `Table` exception to its "values are immutable" rule; its sentence that effects describe I/O only stays, since `concurrency` already covers `Task.spawn`. If the Table docs get their own `references/*.md` file, it needs a `[[cascade]]` entry in `site/hugo.toml`.
-- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; no leak in a stress loop that creates and drops many tables; a table used from a later BDD scenario halts with `RUNTIME-TABLE-CONTEXT`.
+- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `CHECK-TABLE-VALUE`, `RUNTIME-TABLE-CONTEXT`; `IO.inspect` prints `<Table>` (add it next to `<Task>` in the inspect strings of `docs/vm.md` §2.4); the mutating calls reuse the `concurrency` effect label. `Table` becomes a reserved type and module name (say so in the changelog). The programming skill must tell `Table` apart from BDD data tables (`BDD.table`). `grammar.md` gets a `Table` exception to its "values are immutable" rule; its sentence that effects describe I/O only stays, since `concurrency` already covers `Task.spawn`. If the Table docs get their own `references/*.md` file, it needs a `[[cascade]]` entry in `site/hugo.toml`.
+- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; no leak in a stress loop that creates and drops many tables; a table created at BDD registration and used in a step halts with `RUNTIME-TABLE-CONTEXT`.
 - [ ] Later, each after a real program needs it: ordered tables, duplicate keys, a block-based `update`.
 
 **Done when:** an example with several tasks sharing a cache and a counter runs on both backends with the same output.
