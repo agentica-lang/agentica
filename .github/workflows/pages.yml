@@ -24,6 +24,8 @@ jobs:
     env:
       HUGO_VERSION: 0.167.0
       HUGO_SHA256: 0163f5c3deddac1f494a1629ddc40c65d18de9d5794facd98f7f96ac2c7d8957
+      DART_SASS_VERSION: 1.105.1
+      DART_SASS_SHA256: 9046fdd4a31a524a0020298c55d9e155d4c22363ef268e8992574335a72c6a6f
     steps:
       - uses: actions/checkout@v4
       - name: Install Hugo
@@ -33,6 +35,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/hugo"
           tar -xzf "$RUNNER_TEMP/hugo.tar.gz" -C "$RUNNER_TEMP/hugo" hugo
           echo "$RUNNER_TEMP/hugo" >> "$GITHUB_PATH"
+      - name: Install Dart Sass
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/dart-sass.tar.gz" "https://github.com/sass/dart-sass/releases/download/${DART_SASS_VERSION}/dart-sass-${DART_SASS_VERSION}-linux-x64.tar.gz"
+          echo "${DART_SASS_SHA256}  $RUNNER_TEMP/dart-sass.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/dart-sass.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/dart-sass" >> "$GITHUB_PATH"
       - id: pages
         uses: actions/configure-pages@v5
       - run: make site HUGO_FLAGS="--baseURL ${{ steps.pages.outputs.base_url }}/"
