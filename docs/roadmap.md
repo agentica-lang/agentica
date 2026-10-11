@@ -1205,11 +1205,11 @@ Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs 
 Specified in [`future.md` section 15](future.md#15-adapters-and-json-inspection). Each item lands in the evaluator and the VM in one PR, with `grammar.md`, the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d need the VM JSON PR (`docs/vm.md` §12.2 item 7).
 
 - [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the ".put.call(...)" help. Update the `grammar.md` sentence "structs and enums have no methods" and the skill's `.call` line. Show the adapter pattern in an example.
-- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Whole numbers follow `JSON.int`: integer form in `Int` range is `JsonInt`, anything else `JsonFloat`. `JSON.parse` keeps object key order and rejects integers too large for a finite `Float`. `JsonValue` becomes a reserved name (breaking change; say so in the changelog).
+- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Numbers: `JsonInt(n)` exactly when `JSON.int(j)` is `ok(n)`; `JsonBigInt(text)` for other integers without a fraction or exponent; `JsonFloat` for numbers with a fraction or exponent. `JSON.parse` accepts the same input as today and keeps object key order; `JSON.decode` into a `Map` keeps sorted order. The VM JSON parser must keep object key order and keep big integers as exact text (yyjson's `BIGNUM_AS_RAW`). The only breaking change: `JsonValue` becomes a reserved name (say so in the changelog).
 - [ ] 10c Generic structs (`struct Box[T]`): inference at construction, substituted field types, the generic enum diagnostics; `JSON.encode` works, `JSON.decode` and `JSON.schema` reject generic structs (`CHECK-NOT-DECODABLE`). Update the `grammar.md` sentence "generic structs are not supported".
 - [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`.
 
-**Done when:** an example with a `Storage` adapter (disk and memory backends) and a walker over unknown JSON runs on both backends with the same output.
+**Done when:** an example with a `Storage` adapter, a disk backend (tested in a temporary directory) and a read-only memory backend, both used by the same function, and a walker over unknown JSON runs on both backends with the same output.
 
 ## Later extensions
 
