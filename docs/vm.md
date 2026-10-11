@@ -867,8 +867,9 @@ after Structs: the type data that `JSON.decode` and `JSON.schema` need. List
 and Map entries point to smaller indexes, so only struct entries make
 cycles, and those go through the decodable struct records. `src/bytecode.rkt`
 interns each distinct type once (children first) and writes a record for
-every struct whose `ir-struct-types` is set; a program without them writes
-two zero counts.
+every struct whose `ir-struct-types` is set. The lowerer sets them only
+when the program has a JSON type argument (`JSON.decode` or `JSON.schema`);
+any other program writes two zero counts and never meets the Types limits.
 All seven constant kinds are in use; Float constants are the literal's IEEE
 bits.
 

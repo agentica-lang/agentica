@@ -76,9 +76,23 @@
         (values name types)))
     (if (= (hash-count kept) (hash-count table)) kept (loop kept))))
 
+(define (has-type-expression? node)
+  (define seen (make-hasheq))
+  (let walk ([node node])
+    (cond
+      [(type-expression? node) #t]
+      [(pair? node) (or (walk (car node)) (walk (cdr node)))]
+      [(and (struct? node) (not (hash-ref seen node #f)))
+       (hash-set! seen node #t)
+       (for/or ([field (in-vector (struct->vector node) 1)]) (walk field))]
+      [else #f])))
+
 (define (user-tables declarations)
   (define struct-decls (filter struct-decl? declarations))
-  (define decodable (decodable-structs struct-decls))
+  (define decodable
+    (if (has-type-expression? (filter function-decl? declarations))
+        (decodable-structs struct-decls)
+        (hash)))
   (values
    (for/list ([declaration (in-list struct-decls)])
      (ir-struct (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration))
