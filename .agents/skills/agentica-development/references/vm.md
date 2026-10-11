@@ -236,14 +236,14 @@ instructions. A file that loads may still compute wrong values or end with
   upper case.
 - File-local helpers and data are `static` (*checked*).
 - No value-driven C recursion (`docs/vm.md` §7.3; *checked*). Depth bounded
-  by a constant or `log n` is allowed; `vm/map.c` (HAMT levels) is left out
-  of the lint for that.
+  by a constant or `log n` (HAMT levels) is allowed with
+  `// NOLINT(misc-no-recursion)` on the function line.
 - Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
   index and size sums use `uint64_t`.
 - No code comments, except a legal header if one is ever needed.
 - Only `value.c` reads the value union. Immediates write the full word.
 
-`make vm-lint` skips `vm/unicode_data.c` (generated) and `vm/map.c`;
+`make vm-lint` skips `vm/unicode_data.c` (generated);
 `VM_LINT_PENDING` in the Makefile and `pending-84` in the style test list
 files left out until PR #84 merges and they are fixed.
 

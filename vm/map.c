@@ -98,7 +98,7 @@ static uint32_t slot_of(uint64_t hash, unsigned shift) { return (uint32_t)(hash 
 
 static uint32_t index_of(uint32_t bitmap, uint32_t bit) { return (uint32_t)__builtin_popcount(bitmap & (bit - 1)); }
 
-static agc_hamt *pair_node(unsigned shift, const hamt_entry *a, const hamt_entry *b) {
+static agc_hamt *pair_node(unsigned shift, const hamt_entry *a, const hamt_entry *b) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     agc_hamt *node = new_node(0, 2);
     node->entries[0] = *a;
@@ -131,7 +131,7 @@ static agc_hamt *insert_at(const agc_hamt *node, uint32_t bitmap, uint32_t at, c
   return copy;
 }
 
-static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const hamt_entry *leaf, bool *added) {
+static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const hamt_entry *leaf, bool *added) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     for (uint32_t k = 0; k < node->n; k++) {
       if (key_equal(vm, node->entries[k].key, leaf->key)) {
@@ -242,7 +242,7 @@ static agc_hamt *remove_at(const agc_hamt *node, uint32_t bitmap, uint32_t at) {
   return copy;
 }
 
-static agc_hamt *take(agc_vm *vm, agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed) {
+static agc_hamt *take(agc_vm *vm, agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     for (uint32_t k = 0; k < node->n; k++) {
       if (key_equal(vm, node->entries[k].key, key)) {
