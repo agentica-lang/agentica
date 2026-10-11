@@ -711,8 +711,10 @@ typedef struct {
   runtime diagnostic carries one span and no stack trace, so the replaced
   frames are not visible. Non-tail recursion keeps the limit and its span.
   The evaluator is not changed: it goes away in 7i.
-- `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. `STEP`
-  is one compare and one subtraction. All tasks share it.
+- `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. All
+  tasks share it. `STEP` is one compare and one subtraction on a "next stop"
+  counter; before 7h it is just `steps_left`, and from 7h it also covers the
+  turn budget (10.2.1).
 
 ### 6.2 Failure, exit and cleanup
 
@@ -973,11 +975,10 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 
 - One OS thread runs the interpreter and the loop. Tasks are VM stacks. A
   blocking builtin starts a libuv request, parks its task, and the scheduler
-  runs another ready task or `uv_run(UV_RUN_ONCE)`. Only the scheduler calls
-  `uv_run`. libuv and OpenSSL callbacks only copy results and mark tasks
-  ready.
-- Racket threads are preemptive, so the scheduler also switches after a fixed
-  number of instructions. Cross-task output order is not compared.
+  runs another ready task (10.2.1). Only the scheduler calls `uv_run`. libuv
+  and OpenSSL callbacks only copy results and mark tasks ready.
+- Racket threads are preemptive, so the scheduler also switches tasks that do
+  not block, by reductions (10.2.1). Cross-task output order is not compared.
 - Builtins that take a function (`Task.spawn`, `HTTP.listen` and
   `HTTP.listen_tls` handlers, `HTTP.request_stream`'s producer, `BDD.step`)
   run it as a new VM task; the ones that need its result await it.
@@ -995,6 +996,73 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   while registered. `CRYPTO_set_mem_functions` is never routed to the GC.
 - All VM file descriptors and handles are created non-inheritable
   (`O_CLOEXEC`, no handle inheritance on Windows).
+
+#### 10.2.1 Scheduler
+
+- **libuv does I/O only.** It gives readiness, timers, processes, DNS, and
+  the thread pool for file I/O, which epoll cannot poll. It never decides
+  which task runs; the scheduler is ours. Raw epoll or io_uring would make us
+  rewrite the file thread pool, processes, signals and DNS ourselves, on each
+  platform.
+- **Run queue.** Ready tasks wait in one FIFO queue. A new task, a task whose
+  turn ended, and a task woken by a libuv callback all go to the back.
+- **Reductions, as in BEAM.** Each turn has a budget of steps, counted by
+  `STEP` like `--max-steps` (`STEP n` counts n). It starts at 2000 and is
+  tuned by measurement in 7h; 7g gives the cost of `STEP` with one task. When
+  a `STEP` spends the turn's budget, the task goes to the back of the run
+  queue and the next one runs. A merged `STEP n` that crosses the turn
+  budget charges all n, then yields at the next instruction; the extra is not
+  carried over to the next turn. If it crosses `--max-steps`, the task fails
+  at the span of 4.2 instead (see "One counter for both budgets"). To the
+  program the scheduler is preemptive; inside the VM it switches only at a
+  `STEP`, a safe point. Every loop passes a `STEP`: backward jumps land on
+  one, and every function that calls starts with one (8), so a `TAIL_CALL`
+  loop passes it too. A task also leaves its turn when it blocks.
+- **Builtins.** No builtin's C code is stopped halfway. A resumable builtin
+  (4.3: `map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) can be
+  switched out only between its callbacks, at their `STEP`s. Any other
+  builtin finishes in its turn: `List.sort` on a big list, or the sort inside
+  `sort_by` after its keys are collected, runs to the end without a switch.
+  A callback short enough to skip its leading `STEP` (8) charges nothing, so
+  a resumable builtin can run a whole list with it without a switch. This
+  work is still bounded by the list length, so it is accepted. Counting
+  builtin iterations toward the turn would change step counts, so it is not
+  done.
+- **One counter for both budgets.** `STEP` counts down one "next stop"
+  counter, set to `min(turn_left, steps_left)` when a turn starts. The fast
+  path runs while `counter > n` for `STEP n`: one compare and one
+  subtraction. Otherwise the slow path first moves the steps spent so far
+  out of both budgets. Then, if `steps_left < n`, the task fails with
+  `RUNTIME-STEP-LIMIT` at span `s + steps_left` (4.2), and nothing more is
+  charged. If not, all n is charged to both budgets, and the task yields if
+  `turn_left <= 0`; it resumes at the next instruction.
+- **Fairness with I/O.** After each turn (or every N turns, if measurement
+  asks for it) the scheduler calls `uv_run(UV_RUN_NOWAIT)`, so ready I/O wakes
+  its tasks even while other tasks keep computing. Timers (`Task.sleep`) wake
+  the same way, inside `uv_run`. Tasks woken during a `NOWAIT` go behind the
+  tasks already queued. The scheduler blocks in `uv_run(UV_RUN_ONCE)` only
+  when the run queue is empty. Without channels, a parked task waits on I/O,
+  a timer, or another live task, so either `uv_run` has an active handle or
+  the queue is not empty. If `uv_run` reports no active handles while tasks
+  are still parked, the VM fails with `RUNTIME-INTERNAL` and does not spin.
+- **Quotas.**
+  - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
+    6.1), as today. Preemption never changes what is charged. With one task,
+    counts and failing spans match the evaluator (2.1). With several tasks,
+    which task fails at the limit depends on the interleaving, so, like
+    cross-task output order, it is not compared.
+  - Per-task step quotas could later use the same counter. They are not in
+    7h.
+  - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
+    BEAM's per-process heaps. Only a global heap limit is possible (13).
+- **One OS thread in 7h.** Multicore (M:N, one scheduler per core with work
+  stealing) is later work, done only if measurements of the 7h scheduler
+  justify it. Immutable values make sharing safe, and the shared tables plan
+  avoids locks. The costs: Boehm stops the world for each collection once
+  there are threads, the interpreter state must become per-thread, and
+  builtins that rely on the single thread (table calls, the resource
+  registry) need atomics. `future.md` §13 relies on the single-thread rule for atomic table
+  calls on the VM, so it must be revisited if multicore lands.
 
 ### 10.3 TLS
 
