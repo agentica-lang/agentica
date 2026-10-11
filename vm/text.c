@@ -181,11 +181,7 @@ static size_t item_count(agc_vm *vm, agc_value v) {
 static agc_value item_at(agc_vm *vm, agc_value v, size_t k) {
   if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->items[k];
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->fields[k];
-  if (agc_is(v, AGC_T_RESULT)) {
-    const agc_result *r = agc_as_result(vm, v);
-    if (!r->ok) return agc_string_value(agc_as_string(vm, r->value));
-    return r->value;
-  }
+  if (agc_is(v, AGC_T_RESULT)) return agc_as_result(vm, v)->value;
   return agc_as_enum(vm, v)->payload[k];
 }
 

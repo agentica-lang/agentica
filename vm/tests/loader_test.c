@@ -819,7 +819,8 @@ int main(void) {
   s.code_spans = try_error_spans;
   s.count = 6;
   s.registers = 2;
-  assert(run_spec(s, stdout).kind == AGC_DONE);
+  agc_outcome emptied = run_spec(s, stdout);
+  assert(emptied.kind == AGC_FAILED && strcmp(emptied.code, "RUNTIME-INTERNAL") == 0);
 
   puts("loader tests passed");
   return 0;

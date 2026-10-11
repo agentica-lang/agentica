@@ -131,6 +131,7 @@ typedef struct {
   agc_outcome_kind kind;
   const char *code;
   const char *message;
+  const agc_string *text;
   size_t message_len;
   uint32_t span;
 } agc_outcome;

@@ -3,6 +3,10 @@ struct Pair
   right: Result[String]
 end
 
+struct Deep
+  inner: Result[Result[Int]]
+end
+
 enum Wrap
   Held(Result[Bool])
   Empty
@@ -58,6 +62,52 @@ def first(r: Result[List[Int]]) -> Int
     error(_) -> return -1
     _ -> return Result.unwrap!(r)[0]
   end
+end
+
+def sum_halves(xs: List[Int]) -> Result[Int]
+  total = 0
+  for x in xs
+    total = total + try half(x)
+  end
+  return ok(total)
+end
+
+def halve_from(start: Int) -> Result[Int]
+  i = start
+  total = 0
+  while i < 7
+    total = total + try half(i)
+    i = i + 2
+  end
+  return ok(total)
+end
+
+def via_case(r: Result[Int]) -> Result[String]
+  case r
+    ok(v) ->
+      w = try half(v)
+      return ok("half #{w}")
+    error(m) ->
+      try half(1)
+      return ok("never #{m}")
+  end
+end
+
+def nest(n: Int) -> Result[Result[Int]]
+  if n == 0
+    return error("outer")
+  end
+  if n == 1
+    return ok(error("inner"))
+  end
+  return ok(ok(n))
+end
+
+def peel_after(n: Int, at: Int) -> Result[Int]
+  if n == 0
+    return try nest(at)
+  end
+  return peel_after(n - 1, at)
 end
 
 def main() -> Void
@@ -129,4 +179,32 @@ def main() -> Void
       puts(text)
     error(_) -> puts("unreachable")
   end
+  puts(sum_halves([2, 4, 6]))
+  puts(sum_halves([2, 3, 6]))
+  puts(halve_from(2))
+  puts(halve_from(1))
+  puts(via_case(ok(4)))
+  puts(via_case(ok(6)))
+  puts(via_case(error("e")))
+  for k in [0, 1, 2]
+    puts(peel_after(3, k))
+    case nest(k)
+      ok(inner) ->
+        case inner
+          ok(v) -> puts("inner ok #{v}")
+          error(m) -> puts("inner error #{m}")
+        end
+      error(m) -> puts("outer error #{m}")
+    end
+  end
+  case half(6)
+    ok(v) -> puts("called #{v}")
+    error(m) -> puts(m)
+  end
+  z: Result[Int] = error("")
+  puts(z)
+  puts(z.inspect)
+  puts(z.message)
+  puts([Deep(inner: ok(error("in"))), Deep(inner: ok(ok(1))), Deep(inner: error("out"))])
+  puts([Deep(inner: ok(error("q\"")))].inspect)
 end

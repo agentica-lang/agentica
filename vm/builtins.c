@@ -65,7 +65,8 @@ static agc_value builtin_ok_void(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_error(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_result_value(false, agc_string_value(agc_as_string(vm, args[0])));
+  agc_as_string(vm, args[0]);
+  return agc_result_value(false, args[0]);
 }
 
 static agc_value builtin_result_ok(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -85,11 +86,13 @@ static agc_value builtin_result_unwrap_or(agc_vm *vm, agc_value *args, uint32_t 
   return r->ok ? r->value : args[1];
 }
 
+static agc_string empty_string = {0, 0};
+
 static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_result *r = agc_as_result(vm, args[0]);
-  if (r->ok) return agc_string_value(agc_make_string("", 0, 0));
-  return agc_string_value(agc_as_string(vm, r->value));
+  if (r->ok) return agc_string_value(&empty_string);
+  return r->value;
 }
 
 static const agc_builtin table[] = {

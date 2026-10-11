@@ -532,9 +532,10 @@ id from another enum (only in a hand-made file) is simply false.
 `FIELD` and `PAYLOAD` read item `c` of the value's own `n`; past it is
 `RUNTIME-INTERNAL`. `TRY`, `IS_OK` and `RESULT_VALUE` read a Result
 through its checked accessor (any other tag is `RUNTIME-INTERNAL`). An
-error in `TRY` leaves the frame exactly as `RETURN` does, so a `TRY` in
-`main` (only in a hand-made file; the checker allows `try` only in
-functions that return Result) ends the run. Results have no equality
+error in `TRY` leaves the frame exactly as `RETURN` does, but it never
+empties the call stack: an error in a `TRY` of the entry function (only in a
+hand-made file; the checker allows `try` only in functions that return
+Result) is `RUNTIME-INTERNAL`. Results have no equality
 (`CHECK-TYPE-MISMATCH`), so `EQ` and `SAME` never see one; given one, they
 are `RUNTIME-INTERNAL`.
 
@@ -899,7 +900,7 @@ The loader validates the whole file before running anything. Failures print
   `TAIL_CALL` and `CALL_BUILTIN` windows, a `TAIL_CALL` to a function out of
   range, the registers of `TRY`, `IS_OK` and `RESULT_VALUE` (and, at run
   time, that they fail on a non-Result and that a `TRY` error in `main`
-  ends the run), `STEP 0`, a backward jump that misses a `STEP`,
+  is `RUNTIME-INTERNAL`), `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one (one is just `TAIL_CALL`, `RETURN`), an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
 - **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
