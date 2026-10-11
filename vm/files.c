@@ -201,19 +201,16 @@ static const agc_string *cwd_of(agc_vm *vm) {
 
 static char *host_path(agc_vm *vm, const agc_string *s) {
   const agc_string *cwd = s->data[0] == '/' ? NULL : cwd_of(vm);
-  size_t total = agc_size_add(cwd ? cwd->bytes : 0, s->bytes);
-  char *path = malloc(agc_size_add(total, 1));
-  if (!path) agc_out_of_memory();
-  size_t n = 0;
+  text t = {0};
   for (size_t part = 0; part < 2; part++) {
     const agc_string *from = part == 0 ? cwd : s;
     for (size_t k = 0; from && k < from->bytes; k++) {
-      char c = from->data[k];
-      if (c == '/' && n > 0 && path[n - 1] == '/') continue;
-      path[n++] = c;
+      if (from->data[k] == '/' && t.len > 0 && t.data[t.len - 1] == '/') continue;
+      put(&t, from->data + k, 1);
     }
   }
-  path[n] = '\0';
+  char *path = agc_cstr(agc_make_string(t.data, t.len, 0));
+  if (!path) agc_fail(vm, "RUNTIME-INTERNAL", "a path contains NUL", 0);
   return path;
 }
 

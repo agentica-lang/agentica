@@ -33,6 +33,8 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/random.c` | xoshiro256** seeded with splitmix64, both public domain (`agc_random_seed`, `agc_random_next`, `agc_random_float`, `agc_random_int`; `docs/vm.md` §7.4) |
 | `vm/json.c` | `Json` (`agc_json` nodes, 5.1) and the `JSON` builtins (`agc_json_builtins`): `agc_json_parse` (the Racket control-character pass, top-level numbers and literals by hand, strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack; `docs/vm.md` §2.6), `agc_json_encode` (the one `write-json` writer, for `JSON.encode` and the text form of a Json) and `agc_json_from` (builders), both over one explicit stack |
 | `vm/json_typed.c` | `agc_json_decode` and `agc_json_schema` (`docs/vm.md` §2.7): one explicit frame stack over the Json tree and the type table, the error path built from the frames only on failure; schema marks the types and structs reachable from the target with a queue, then builds their schemas in index order. The buffer, stack growth and ASCII helpers are `agc_json_put`, `agc_json_grow` and `agc_json_ascii` from `vm/json.c`. The builtins in `vm/json.c` find the struct by its linked name (`json_name`) |
+| `vm/loop.c` | the event loop and the resource registry (`docs/vm.md` §10.2.2), the only file that includes `uv.h`: `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc` memory), `agc_io_start` (one `uv_queue_work` job plus a timeout timer per blocking call, `vm->parked`), `agc_io_park` (the scheduler: `uv_run(UV_RUN_ONCE)` until the job or the timer is done, then the request's `done` or `expired` half into the result register), `agc_io_close` (end of run: close handles and timers, free the loop); non-Linux builds get stubs |
+| `vm/files.c` | the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only; `docs/vm.md` §2.8): argument checks in the evaluator's order, host paths (cwd + `/` collapsing), `malloc`'d `op` requests whose `work` half runs in the libuv pool, Racket's messages (contract forms cut at 256 characters, `strerror_l` in the message locale, the byte string form for invalid UTF-8), `FileHandle` state with its read buffer, `Path.join` and `Path.resolve` as pure string code |
 | `vm/input.c` | the only stdin reader (`agc_input_*`): one growing buffer shared by `gets`, `read`, `read_bytes` and `eof?`, blocking `read` (Linux `poll` on `EAGAIN`), U+FFFD decoding of consumed bytes, a pending EOF after a peek; 7h replaces it with libuv reads |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, byte-for-byte like `src/diagnostic.rkt` |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
@@ -44,6 +46,8 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/json_test.c` | the sign of zero (`-0.0`, `-1e-500`), escapes, key order and dedupe on 5,000 keys, depth-1,000,000 arrays and objects parsed and encoded, a deep list through `JSON.from` (100,000 under ASan's `AGC_NO_GC`, 1,000 under `AGC_GC_STRESS`); parse statuses and number edge cases live in the `json-*` fixtures |
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
+| `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop |
+| `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
 | `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator, split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`) |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
@@ -51,7 +55,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 ## Commands
 
 ```sh
-git submodule update --init          # fetch bdwgc and yyjson after a clone or a bump
+git submodule update --init          # fetch bdwgc, yyjson and libuv after a clone or a bump
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
@@ -121,7 +125,14 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the
   `YY_DEFS` that turn off everything but the reader; `vm/*.c` see the same
   `YY_DEFS` and `-I vm/third_party/yyjson/src`, and only `vm/json.c`
-  includes `yyjson.h`.
+  includes `yyjson.h`. libuv (Linux only, `UV_NAMES` in the Makefile, the
+  Linux list of its `CMakeLists.txt`) builds per mode into
+  `$(VM_BUILD)/uv/*.o` with `-std=gnu11`, its own `UV_DEFS` and the mode's
+  `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`;
+  `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`
+  includes `uv.h`. Bumping libuv: check out the new tag inside
+  `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
+  `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
 - Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
   Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
@@ -179,7 +190,10 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
    `Random.int` and `Random.float`, and every `JSON.*` builtin (the type
    argument of `JSON.decode` and `JSON.schema` lowers to a String constant
    with the struct's linked name; a struct without JSON field types, such
-   as `Header` or a struct that contains one, is `LOWER-UNSUPPORTED`) are
+   as `Header` or a struct that contains one, is `LOWER-UNSUPPORTED`), and
+   every `File.*`, `Dir.*` and `Path.*` builtin (with `FileHandle` in
+   `value-types` and `FileInfo` appended to the struct table when a checked
+   type mentions it) are
    accepted; everything else is
    `LOWER-UNSUPPORTED`; the lowerer also emits `List.concat` and `Map.put`
    for list and map literals above 255 elements; the loader rejects `MAP`
@@ -195,6 +209,18 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
    `name.args` (a Racket list of strings, read with `file->value`) as its
    program arguments when they exist; the diff test feeds both to the
    evaluator and the VM, in every format and in the `--max-steps` sweep.
+   An `.args` entry `@tmp` becomes a fresh empty directory per run (both
+   backends, same name length), and that path is turned back into `@tmp`
+   in the output before the comparison; file fixtures (`files-*`) use it
+   and long timeouts, and never touch paths outside it.
+4. A blocking builtin (7h) checks its arguments, fills a `malloc`'d
+   request (no GC pointers; strings through `agc_cstr` or a `malloc`'d
+   copy), and calls `agc_io_start` with an `agc_io_kind`: `work` runs in
+   the libuv pool and may only do system calls on that request; `done`
+   and `expired` run on the interpreter thread and return the value;
+   `drop` frees a request whose timeout already fired. It returns any
+   value; `CALL_BUILTIN` then parks (`agc_io_park`). Check `vm->no_files`
+   first in file builtins, so the fuzzer never touches the disk.
 
 Rules for the C code:
 
@@ -206,9 +232,9 @@ Rules for the C code:
   argument `i`) with the evaluator's message text, copied verbatim.
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
-- Strings reach the OS or a library only through `agc_cstr` (copy, NUL
-  terminate, fail on embedded NUL; add it with the first builtin that needs
-  it). Every String constructor validates UTF-8
+- Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d
+  copy, NUL terminated, NULL on an embedded NUL so the caller returns the
+  evaluator's message; the caller frees it, usually with its request). Every String constructor validates UTF-8
   or decodes with U+FFFD. Build a String with `agc_make_string` (copies) or
   `agc_new_string` and fill every byte before it is stored anywhere.
 - Debug text of a String (`inspect`, and later map-key, `index_of` and
@@ -292,13 +318,15 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 
 ## Later phases (read `docs/vm.md` §10 before starting them)
 
-- **libuv (7h)**: added then as a pinned submodule, built from source like
-  bdwgc. One OS thread runs the interpreter and the loop; only the scheduler
-  calls `uv_run`; libuv and OpenSSL callbacks only copy results and mark tasks
-  ready. Handles and requests are `malloc`'d; the GC object that owns one
-  stays in the run's resource registry until its `uv_close` callback, and
-  `uv_write`/`uv_fs` buffers stay reachable until their callback. All handles
-  and descriptors are non-inheritable.
+- **libuv (7h, in: loop and files)**: `docs/vm.md` §10.2.2 describes the
+  one-task loop that exists. One OS thread runs the interpreter and the
+  loop; only the scheduler (`agc_io_park`) calls `uv_run`; libuv callbacks
+  only set flags (tasks will also queue the task). Handles and requests are
+  `malloc`'d; the GC object that owns one stays in the run's resource
+  registry until its `uv_close` callback, and request buffers stay owned
+  by the request until its callback. All handles and descriptors are
+  non-inheritable. Tasks turn `agc_io_park` into a switch point and add a
+  per-handle lock.
 - **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
   system trust from the Windows ROOT store or the macOS Keychain (never
   `set_default_verify_paths` there); a non-empty `ca_file` replaces system

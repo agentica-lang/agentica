@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs every `File`, `Dir` and `Path` builtin on Linux
+  (`File.open`, `read_bytes`, `read_line`, `write`, `write_bytes`, `flush`,
+  `close`, `read_text`, `write_text`, `append_text`, `stat`; `Dir.list`,
+  `mkdir`; `Path.cwd`, `join`, `resolve`), with `FileHandle` values, the
+  `FileInfo` record, timeouts, and the evaluator's error values, Racket
+  messages included. `examples/file-summary.agc` now runs on the VM. Its
+  blocking work runs on libuv (MIT), vendored as the git submodule
+  `vm/third_party/libuv` at tag v1.53.0, built from source by the Makefile
+  and linked statically; `agentica-vm --version` names it. A resource
+  registry owns open handles and pending requests until libuv is done with
+  them, thread-pool threads never touch GC memory, and descriptors are
+  close-on-exec. The VM writes each `File.write` through at once, while the
+  evaluator buffers up to 4 KiB until `File.flush` or `File.close`.
+
 - The bytecode VM runs `JSON.decode` and `JSON.schema` for user structs,
   with the evaluator's error values and paths and byte-identical schemas
   (imported structs keep their linked `$defs` names). Deep and recursive

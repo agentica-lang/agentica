@@ -57,11 +57,13 @@ src/
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
+  loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
   fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
+  third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
 tests/
   <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
   diagnostic-test.rkt   # excerpt and caret format
