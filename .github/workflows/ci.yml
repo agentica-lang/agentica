@@ -118,6 +118,16 @@ jobs:
       - if: steps.unicode.outputs.cache-hit != 'true'
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
 
+  dup-check:
+    if: github.event_name != 'push'
+    runs-on: [self-hosted, linux, docker-runner]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: make dup-check
+
   test:
     if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
@@ -130,7 +140,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: make dup-check
       - id: racket
         run: |
           dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"

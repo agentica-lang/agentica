@@ -3,7 +3,7 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd bench version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check FORCE
+.PHONY: build test exe clean test-bdd bench version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -33,6 +33,9 @@ JSCPD ?= npx --yes jscpd@5.3.2
 
 dup-check:
 	$(JSCPD) --baseline .jscpd-baseline.json --fail-on-new-clones
+
+dup-baseline:
+	$(JSCPD) --baseline .jscpd-baseline.json --update-baseline --reporters silent
 
 clean:
 	find . -name compiled -type d -prune -exec rm -rf {} +
