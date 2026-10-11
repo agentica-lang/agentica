@@ -1049,11 +1049,24 @@ CI matrix:
 
 | Job | Runner | Runs | Added in |
 |---|---|---|---|
-| Linux | `ubuntu-24.04`, submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests | first VM PR |
-| Linux sanitizers | same, clang | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run | first VM PR (GC stress in PR 3) |
-| macOS | `macos-15` (Apple clang, arm64), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
-| Windows | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
-| Weekly fuzz | `ubuntu-24.04`, clang, every Monday and by hand | sanitizer build, 5 million mutants, random `FUZZ_SEED` | after PR 5a |
+| Linux | self-hosted runner (`docker-runner`, Debian), submodules | `make vm vm-test`, `make test` (with the differential tests), smoke tests | first VM PR |
+| Linux sanitizers | same, clang and `libclang-rt-dev` from the runner image | sanitizer build, `vm-test`, differential and bytecode tests, fuzz run, GC stress run | first VM PR (GC stress in PR 3) |
+| macOS (by hand, `platforms.yml`) | `macos-15` (Apple clang, arm64), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
+| Windows (by hand, `platforms.yml`) | `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc, make), submodules | `make vm vm-test`, differential and bytecode tests | PR 4 |
+| Fuzz (by hand, `fuzz.yml`) | self-hosted runner, clang | sanitizer build, 5 million mutants, random `FUZZ_SEED` | after PR 5a |
+
+The Linux jobs run on every pull request that changes more than docs. On
+the self-hosted runner, Racket is installed once into the runner's tool cache
+(`$RUNNER_TOOL_CACHE/racket-cs-9.3`, on its persistent work volume) and
+later jobs only add it to `PATH`. The `vm/unicode_data.c` check is skipped
+when a cache entry shows it passed for the same generator, table and
+Makefile. The jobs
+cache `src/compiled` and `tests/compiled` per job and touch every tracked file
+after the restore, so `raco make` checks each source's SHA-1 and recompiles
+only what changed. macOS and Windows minutes cost 10 and 2 times Linux minutes
+on a private repository, so `platforms.yml` and `fuzz.yml` run by hand: run
+`platforms.yml` before merging a change to platform code (`vm/main.c`, the
+Makefile, files, processes, text output).
 
 Racket comes from `Bogdanp/setup-racket` everywhere, since the tests compile
 with the front end. The macOS and Windows jobs do not run the whole `make
