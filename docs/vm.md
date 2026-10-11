@@ -1777,7 +1777,10 @@ The **linked programs** PR (done) needed no new code: `compile` and
 already held every file. It added the `linked` fixture (nested relative
 imports, a `pkg/` module from `tests/fixtures/vm/agc_libs/`, imported
 structs, enums and blocks, and `RUNTIME-INDEX-OUT-OF-RANGE` raised inside
-`lib/stock.agc`), the `std-queue` fixture, a `--vm` CLI run of `linked`,
+`lib/stock.agc`), the `std-queue` fixture, the `same-basename` fixture
+(`lib/a/m.agc` and `lib/b/m.agc` with blocks at the same line and column,
+so two functions are named `block@m.agc:2:17`), `--vm` CLI runs of
+`linked` in the three formats,
 and loader asserts for spans in a second source. No format bump.
 
 7e is done when every example runs on the VM with the same results, except

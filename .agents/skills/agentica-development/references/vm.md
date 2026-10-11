@@ -143,7 +143,8 @@ entry file first), and `vm/diag.c` prints `p->sources[span->source]`, so a
 diagnostic in imported code shows that file as the evaluator does (full
 path, or `std/queue.agc` for an embedded module). Block function names use
 only the file's base name, so two imported files may give equal
-`block@m.agc:2:17` names; nothing looks functions up by name. A std module
+`block@m.agc:2:17` names (the `same-basename` fixture); nothing looks
+functions up by name. A std module
 that needs a builtin the VM lacks fails with `LOWER-UNSUPPORTED` at that
 call in the module's file.
 
