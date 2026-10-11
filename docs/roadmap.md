@@ -29,7 +29,7 @@ order governs pending work rather than their numeric order.
 | 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7): the vertical slice is in; widen it PR by PR (`docs/vm.md` §12.2) | Run checked programs much faster, with the same output and diagnostics |
 | 6 | Core data structures (phase 8): ranges first (may start after 7e PR 5e), then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
 | 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 8 | Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
+| 8 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
 | 9 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
 
 After steps 1–2, target everyday scripts and automation. After steps 7–9,
@@ -1188,8 +1188,8 @@ Specified in [`future.md` section 12](future.md#12-data-structures). Each item l
 
 Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs lightweight tasks on the VM (7h) and starts when a real program needs it, for example an HTTP server with a shared cache or counters. It lands in both backends in one PR, with `grammar.md`, the programming skill, the site docs and tests.
 
-- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `CHECK-TABLE-VALUE`; the mutating calls reuse the `concurrency` effect label. `Table` becomes a reserved type and module name (say so in the changelog). The programming skill must tell `Table` apart from BDD data tables (`BDD.table`). `grammar.md` gets a `Table` exception to its "values are immutable" rule; its sentence that effects describe I/O only stays, since `concurrency` already covers `Task.spawn`. If the Table docs get their own `references/*.md` file, it needs a `[[cascade]]` entry in `site/hugo.toml`.
-- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; no leak in a stress loop that creates and drops many tables.
+- [ ] 9a `Table[K, V]`: `new`, `put`, `put_new`, `get`, `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`; `CHECK-TABLE-VALUE`, `RUNTIME-TABLE-CONTEXT`; the mutating calls reuse the `concurrency` effect label. `Table` becomes a reserved type and module name (say so in the changelog). The programming skill must tell `Table` apart from BDD data tables (`BDD.table`). `grammar.md` gets a `Table` exception to its "values are immutable" rule; its sentence that effects describe I/O only stays, since `concurrency` already covers `Task.spawn`. If the Table docs get their own `references/*.md` file, it needs a `[[cascade]]` entry in `site/hugo.toml`.
+- [ ] 9b Concurrency tests: many tasks calling `Table.add` and `put_new` on one table give the exact total on both backends; no leak in a stress loop that creates and drops many tables; a table used from a later BDD scenario halts with `RUNTIME-TABLE-CONTEXT`.
 - [ ] Later, each after a real program needs it: ordered tables, duplicate keys, a block-based `update`.
 
 **Done when:** an example with several tasks sharing a cache and a counter runs on both backends with the same output.
