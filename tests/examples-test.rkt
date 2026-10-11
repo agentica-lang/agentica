@@ -44,6 +44,21 @@
   (if (diagnostic? result) (diagnostic-code result) result))
 
 (define (cli . arguments)
+  (define out (open-output-string))
+  (define err (open-output-string))
+  (define status
+    (let/ec escape
+      (parameterize ([current-namespace (make-base-namespace)]
+                     [current-command-line-arguments (list->vector arguments)]
+                     [current-input-port (open-input-bytes #"")]
+                     [current-output-port out]
+                     [current-error-port err]
+                     [exit-handler escape])
+        (dynamic-require `(submod ,main-file main) #f)
+        0)))
+  (list status (get-output-string out) (get-output-string err)))
+
+(define (cli-process . arguments)
   (define-values (process out in err)
     (apply subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) arguments))
   (close-output-port in)
@@ -342,6 +357,7 @@
 
   (test-case "CLI exit codes"
     (define hello (path->string (build-path examples-dir "hello.agc")))
+    (check-equal? (cli-process hello) '(0 "hello\n" ""))
     (check-equal? (cli hello) '(0 "hello\n" ""))
     (check-equal? (car (cli "no-such-file.agc")) 2)
     (check-equal? (cli "check" hello) '(0 "check ok\n" ""))
@@ -368,6 +384,7 @@
     (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))
     (define exit-file (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Void\n  System.exit(3)\nend\n\n" exit-file #:exists 'truncate)
+    (check-equal? (car (cli-process (path->string exit-file))) 3)
     (check-equal? (car (cli (path->string exit-file))) 3)
     (delete-file exit-file)
     (define args-file (make-temporary-file "agentica~a.agc"))
