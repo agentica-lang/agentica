@@ -2,7 +2,7 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 
-.PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve FORCE
+.PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -27,10 +27,17 @@ clean:
 	find . -name compiled -type d -prune -exec rm -rf {} +
 	rm -rf dist build site/public site/resources
 
-site:
-	hugo --minify --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
+DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
-site-serve:
+site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
+
+site-sass:
+	@command -v sass >/dev/null || { echo "The site needs Dart Sass: put its sass on PATH or in $(DART_SASS) (pinned version in .github/workflows/pages.yml)" >&2; exit 1; }
+
+site: site-sass
+	hugo --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
+
+site-serve: site-sass
 	hugo server --source site
 
 # The C VM (docs/vm.md section 11). libgc is built from the pinned submodule.
@@ -42,7 +49,7 @@ site-serve:
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/interp.c vm/diag.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/input.c vm/interp.c vm/diag.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
 EXE :=

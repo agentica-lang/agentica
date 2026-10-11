@@ -31,6 +31,77 @@ static agc_value builtin_warn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static agc_value builtin_inspect(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_value v = args[0];
+  agc_string *s = agc_debug(vm, v);
+  agc_write(vm, vm->out, s->data, s->bytes);
+  agc_write(vm, vm->out, "\n", 1);
+  return v;
+}
+
+static const char end_of_input[] = "IO.gets reached the end of input";
+
+static agc_value builtin_gets(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  agc_string *line = agc_input_line(vm);
+  if (line) return agc_result_value(true, agc_string_value(line));
+  size_t n = sizeof end_of_input - 1;
+  return agc_result_value(false, agc_string_value(agc_make_string(end_of_input, n, n)));
+}
+
+static agc_value builtin_gets_bang(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  agc_string *line = agc_input_line(vm);
+  if (!line) agc_fail(vm, "RUNTIME-END-OF-INPUT", end_of_input, span);
+  return agc_string_value(line);
+}
+
+static agc_value builtin_read(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return agc_string_value(agc_input_all(vm));
+}
+
+static agc_value text_error(const char *text) {
+  size_t n = strlen(text);
+  return agc_result_value(false, agc_string_value(agc_make_string(text, n, n)));
+}
+
+static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t count = agc_as_int(vm, args[0]);
+  if (count < 0 || count > AGC_MAX_READ_BYTES) return text_error("byte count must be between 0 and 1048576");
+  agc_list *bytes;
+  if (!agc_input_bytes(vm, (size_t)count, &bytes)) return text_error("input read failed");
+  return agc_result_value(true, agc_list_value(bytes));
+}
+
+static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  agc_flush(vm);
+  return agc_void();
+}
+
+static agc_value builtin_eof(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return agc_bool(agc_input_peek(vm) < 0);
+}
+
+static agc_value builtin_args(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return vm->args;
+}
+
+static agc_value builtin_exit(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_exit(vm, agc_as_int(vm, args[0]));
+}
+
 static agc_value builtin_from_int(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_string_value(agc_text(vm, agc_int(agc_as_int(vm, args[0]))));
@@ -104,6 +175,15 @@ static const agc_builtin table[] = {
   {"puts", 1, builtin_puts},
   {"IO.print", 1, builtin_print},
   {"IO.warn", 1, builtin_warn},
+  {"IO.inspect", 1, builtin_inspect},
+  {"IO.gets", 0, builtin_gets},
+  {"IO.gets!", 0, builtin_gets_bang},
+  {"IO.read", 0, builtin_read},
+  {"IO.read_bytes", 1, builtin_read_bytes},
+  {"IO.flush", 0, builtin_flush},
+  {"IO.eof?", 0, builtin_eof},
+  {"System.args", 0, builtin_args},
+  {"System.exit", 1, builtin_exit},
   {"String.from_int", 1, builtin_from_int},
   {"String.from_float", 1, builtin_from_float},
   {"List.concat", 2, builtin_list_concat},

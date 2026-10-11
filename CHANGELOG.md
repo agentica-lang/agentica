@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs the `IO` and `System` builtins: `IO.inspect`,
+  `gets`/`IO.gets` (EOF is an error value), `gets!`/`IO.gets!`
+  (`RUNTIME-END-OF-INPUT` at the call span), `IO.read`, `IO.read_bytes`
+  (0..1048576 bytes, else an error value), `IO.flush`, `IO.eof?`,
+  `System.args` and `System.exit`, with the evaluator's line endings (LF,
+  CR, CRLF), U+FFFD for invalid UTF-8 input and exit-code rules. Stdin is
+  read with blocking reads through one buffered input layer; it moves to
+  libuv with the scheduler. `agentica --vm` now passes stdin through when
+  it is not a file stream.
 - The bytecode VM runs `Map[K, V]` values: map literals (an empty one with
   a known type too; a repeated key keeps its first position and takes the
   last value), `m[key]` with `RUNTIME-KEY-NOT-FOUND` at the index span, and
@@ -26,8 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (tested on Linux only). It compiles to a temporary bytecode file (random
   name, mode 0600, in the system temp directory), runs `agentica-vm` from
   next to the executable (or `dist/` in a checkout; `AGENTICA_VM` overrides
-  it), and passes `--max-steps`, `--ai`, `--json`, program arguments (unused
-  until `System.args`), the VM's stdout, stderr and exit code through. The
+  it), and passes `--max-steps`, `--ai`, `--json`, program arguments, the VM's stdout, stderr and exit code through. The
   evaluator stays the default. Options the VM does not support yet exit 2 with `--vm`.
 - The bytecode VM has tail calls: `return f(...)` of a user function (local
   or imported, in any branch, `case` arm or loop body) replaces the current
@@ -190,6 +198,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missing-return signatures) name imported types and functions the same
   way, and did-you-mean never suggests an internal name. Types with the same name from different modules print
   the same; `JSON.schema` keeps unique internal `$defs` keys.
+
+### Security
+
+- `Process.spawn` on Windows runs only `.exe` and `.com` programs
+  (any case). Anything else is refused: `.bat`, `.cmd`, `.ps1`, no
+  extension, names ending in a dot or space (`x.exe.`, `x.com `), and
+  stream names (`x.bat::$DATA`). Before, only lowercase `.bat` and `.cmd`
+  were refused, so `x.BAT` or `x.bat.` ran through `cmd.exe` and reopened
+  argument injection (BatBadBut, CVE-2024-24576). The check uses the
+  resolved path.
 
 ## [0.1.0] - 2026-10-04
 

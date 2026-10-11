@@ -63,8 +63,9 @@
 
 (define string-ops (hasheq 'plus 'concat))
 
-(define vm-builtins '("puts" "IO.print" "IO.warn" "String.from_int" "String.from_float"
-                      "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"))
+(define vm-builtins '("puts" "IO.print" "IO.warn" "IO.inspect" "IO.gets" "IO.gets!" "IO.read"
+                      "IO.read_bytes" "IO.flush" "IO.eof?" "System.args" "System.exit"
+                      "String.from_int" "String.from_float" "ok" "error" "Result.ok?" "Result.unwrap!" "Result.unwrap_or" "Result.message"))
 
 (define (lower program types)
   (let/ec return

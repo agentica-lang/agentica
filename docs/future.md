@@ -4,7 +4,7 @@ Status: proposals only. This document is not normative; implemented language beh
 
 Working rule: when a phase of the [`roadmap.md`](roadmap.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-Section 14 records ideas that were decided or rejected, so they are not proposed again.
+Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred.
 
 ## 2. Landed: enums and pattern matching
 
@@ -990,3 +990,31 @@ name: set to Ana
   - once 10c lands: `JSON.encode` and `JSON.from` of a `Box[JsonField[Int]]` with `Absent`, `Null` and `Value`, `CHECK-NOT-DECODABLE` for `Box[JsonField[Int]]` in a decode and a schema target, and `CHECK-JSON-FIELD-PLACE` for `Box[T]` with `items: List[T]` used as `Box[JsonField[Int]]`;
   - `JsonField` used in an imported module (a struct field of type `JsonField[...]` in the imported module, field types, patterns, `JsonField.Value(x)`, bare `JsonField.Absent` and `JsonField.Null`), checked and run through an `import`;
   - evaluator against VM (`tests/vm-diff-test.rkt`) once the VM has JSON.
+
+## 18. Front-end implementation language
+
+**Today:** the front-end (lexer, parser, linker, checker, lowering, bytecode) and the reference evaluator are written in Racket; the VM is C. This stays while the language still changes: Phase 8 and the open JSON work (adapters, optional JSON fields, CBOR; sections 15–17).
+
+**Why not now:**
+
+- Two front-ends would double the work of every language change.
+- The Racket evaluator stays anyway, as the parity reference for the VM (`tests/vm-diff-test.rkt`).
+
+**The goal is distribution: one binary to download.** Measured on Linux x86_64 with Racket CS 9.3:
+
+- `raco exe --orig-exe` on `src/main.rkt` gives one self-contained ELF file (about 68 MB, about 14 MB as `.tar.xz`). It runs in a clean `debian:trixie-slim` container without Racket. Plain `raco exe` (today's `make exe`) is only a 17 MB starter that needs an installed Racket. `raco distribute` (today's `release.yml`) is 66 MB in 3 files and ships no VM.
+- The C VM is 207 KB with libgc linked statically and needs only libc. Built on trixie it needs `GLIBC_2.38` (`__isoc23_strtol`), so release builds need an older glibc baseline or must avoid the C23 `strtol` variants. musl (Alpine) needs a separate build.
+- A proof embedded the VM bytes in the Racket executable and wrote them to `~/.cache/agentica/<hash>/agentica-vm` on the first `--vm` run: one file, +144 KB, and it worked in the clean container. A later step could use `memfd_create` (Linux) to avoid writing to disk and to work with `noexec` home directories. Loading the VM as a shared library through the FFI was judged too risky (two garbage collectors, clashes over `exit` and stdio).
+- Startup is about 570–630 ms in every mode (`check`, run, `--vm`); Racket boot dominates.
+
+**Near-term path, without a rewrite:** release one Linux file built with `raco exe --orig-exe`, with the VM embedded, on an older glibc baseline. `compile` plus `agentica-vm` already avoid Racket at run time. What is missing is that `--vm` compiles to a new temporary file on each run (`src/main.rkt`); it should reuse a cached `.agcb` keyed by the source and the compiler version.
+
+**When to look again:** a single file does not need a rewrite. The remaining reasons to change the front-end language are startup time and binary size. Look again once the grammar is stable, and only if those measurements still hurt.
+
+**Options then:**
+
+- Preferred: self-host the compiler in Agentica (dogfooding), once the VM is fast enough.
+- Alternative to evaluate at that moment: Rust. Its enums and `match` fit the AST and the checker, close to Racket's `match`.
+- Less suited: Go, which has no sum types.
+
+No rewrite decision is taken now.
