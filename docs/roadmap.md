@@ -1174,7 +1174,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Processes, behind the VM's own `--allow-run` flag; before this, decide in `grammar.md` whether the current directory is searched.
 - [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
 - [ ] HTTP/1.1 clients and servers.
-- [ ] BDD: decide whether handlers keep using the Racket evaluator or move to the VM.
+- [ ] BDD: handlers move to the VM (the evaluator goes away in 7i).
 - [ ] Extend the differential tests and the independent network/process fixtures to the VM.
 
 **Done when:** every example and every CI smoke test runs on the VM with the same results.
@@ -1186,7 +1186,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [ ] Package the VM in `dist/` and the release workflow.
 - [ ] Single-file Linux release: `raco exe --orig-exe` with the VM embedded, older glibc baseline ([`future.md` section 18](future.md#18-front-end-implementation-language)).
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
-- [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.
+- [ ] Remove the Racket evaluator once these are done: `docs/vm.md` §12.2 items 6b and 7 (JSON), every open 7e item, 7h including BDD on the VM, every Phase 8 item already in the evaluator also running on the VM, and one release with the evaluator behind a flag (item above). The front end (lexer, parser, checker, lowering) stays. The VM differential tests become golden-output tests: the expected stdout, stderr, exit code and diagnostic code and span are generated from the evaluator before it goes, except for every case `docs/vm.md` marks as a documented difference (for example §2.5, §3.5, §6.1, §6.3, §7.3), whose goldens come from the VM; the `--max-steps` sweep, seeded runs and the extreme-Int and deep-value corpora are kept. After removal, new fixtures get hand-checked expected output, and regenerating goldens from the VM needs a reviewed diff; items that say "evaluator and VM" land on the VM only. The same PR updates `docs/vm.md`, this roadmap's phase 7 rules, the `ci.yml` path list, AGENTS.md (layout and test notes, `make vm-gc-stress`), the development skill, `README.md`, `docs/grammar.md`, the programming skill, and `benchmarks/` with `docs/vm-benchmarks.md`; every test or tool that loads `src/evaluator.rkt` (site examples, examples, BDD, file, process, task and network tests) moves to the VM, so no file still requires it. Until then the evaluator runs what the VM cannot and stays the reference.
 
 **Done when:** a release ships with the VM as the default backend.
 
