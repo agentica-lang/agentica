@@ -34,8 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   evaluator, and deep values print without C recursion. The `.agcb` format
   is now version 2: it carries the struct and enum tables.
 - A documentation website in `site/`, built with Hugo and a small custom
-  theme. It shows the language reference (`docs/grammar.md`), the guide and
-  the library pages from the programming skill without copying them.
+  theme. It has its own user docs: Getting started, a Language tour in short
+  pages, and one Library page per builtin module, each function with a small
+  example and its output. `docs/grammar.md` is published as the language
+  specification. `tests/site-examples-test.rkt` checks and runs every
+  example on the site and compares its output.
   `make site` builds it, `make site-serve` serves it, and
   `.github/workflows/pages.yml` deploys it to GitHub Pages from `master`.
 - A CI workflow, run by hand, fuzzes the VM loader and interpreter with 5 million
@@ -118,6 +121,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `String.split` keeps every empty part. Before, it dropped empty parts at
+  the ends (`"a\n".split("\n")` gave `["a"]`) but kept them in the middle;
+  now it gives `["a", ""]`, and `join` after `split` gives back the text.
 - `vm/gen-unicode.rkt` moved to `vm/tools/gen-unicode.rkt`; `make vm-unicode`
   runs it from there and writes the same `vm/unicode_data.c`.
 - CI runs on pull requests only, and only on Linux; pull requests that

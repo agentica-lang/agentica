@@ -660,7 +660,7 @@
          (define separator (cadr arguments))
          (if (string=? separator "")
              (map string (string->list text))
-             (string-split text separator))]
+             (regexp-split (regexp (regexp-quote separator)) text))]
         [("String.join") (string-join (car arguments) (cadr arguments))]
         [("String.contains?") (string-contains? (car arguments) (cadr arguments))]
         [("String.starts_with?") (string-prefix? (car arguments) (cadr arguments))]

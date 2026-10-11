@@ -33,7 +33,7 @@ String.length(s: String) -> Int                # counts Unicode characters
 String.upcase(s: String) -> String
 String.downcase(s: String) -> String
 String.trim(s: String) -> String
-String.split(s: String, separator: String) -> List[String]
+String.split(s: String, separator: String) -> List[String]  # keeps empty parts: "a,,b,".split(",") is ["a", "", "b", ""]
 String.join(parts: List[String], separator: String) -> String
 String.contains?(s: String, part: String) -> Bool
 String.starts_with?(s: String, prefix: String) -> Bool

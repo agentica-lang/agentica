@@ -397,6 +397,18 @@
     (check-equal? err "")
     (check-equal? out "false\nfalse\nfalse\nhello\nok([120, 121])\nfalse\nz\nok([])\nok([])\n"))
 
+  (test-case "String.split keeps every empty part and round-trips through String.join"
+    (check-equal?
+     (output-of (main-with (string-append
+                            "  IO.inspect(String.split(\"one\\ntwo\\n\", \"\\n\"))\n"
+                            "  IO.inspect(String.split(\" a b  c \", \" \"))\n"
+                            "  IO.inspect(String.split(\"\", \",\"))\n"
+                            "  IO.inspect(String.split(\"a.b.c\", \".\"))\n"
+                            "  IO.inspect(String.split(\"aaa\", \"aa\"))\n"
+                            "  IO.inspect(String.split(\",,a,,\", \",\"))\n"
+                            "  IO.inspect(String.join(String.split(\",a,,b,\", \",\"), \",\"))")))
+     "[\"one\", \"two\", \"\"]\n[\"\", \"a\", \"b\", \"\", \"c\", \"\"]\n[\"\"]\n[\"a\", \"b\", \"c\"]\n[\"\", \"a\"]\n[\"\", \"\", \"a\", \"\", \"\"]\n\",a,,b,\"\n"))
+
   (test-case "String.from_bytes validates byte values and decodes UTF-8 strictly"
     (for ([data '("[-1]" "[256]" "[9223372036854775807]" "[195]" "[128]"
                   "[192, 175]" "[237, 160, 128]" "[244, 144, 128, 128]" "[255]")])

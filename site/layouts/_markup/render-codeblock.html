@@ -1,3 +1,7 @@
 {{- $lang := .Type -}}
+{{- if in (slice "output" "input") $lang -}}
+<div class="sample sample-{{ $lang }}"><span class="sample-label">{{ cond (eq $lang "input") "Input" "Output" }}</span><pre><code>{{ .Inner }}</code></pre></div>
+{{- else -}}
 {{- if in (slice "agentica" "agc") $lang }}{{ $lang = "ruby" }}{{ end -}}
 {{- transform.Highlight .Inner $lang .Options -}}
+{{- end -}}
