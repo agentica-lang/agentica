@@ -4,12 +4,17 @@ struct Point
   x: Int
 end
 
+def home(p: Geo.Point) -> Geo.Shape[String]
+  return Geo.tag("home", p)
+end
+
 def main() -> Void
   here = Geo.Point(x: 1, y: 2)
   mine = Point(x: 3)
   puts(here)
   puts(mine)
   puts(Geo.origin())
+  puts(home(here))
   shapes: List[Geo.Shape[String]] = [Geo.Shape.Dot(here), Geo.tag("home", here), Geo.Shape.Nothing, Geo.Shape.Nothing()]
   puts(shapes)
   for s in shapes

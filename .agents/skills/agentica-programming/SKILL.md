@@ -116,7 +116,7 @@ Leave a blank line after the `end` of every `def`, `struct` and `enum` before th
 
 - Every parameter and the return type need an annotation.
 - Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no user methods, nested functions, default arguments, or overloading; closures are written as blocks (see "Blocks and closures").
-- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); on the VM, tail calls (`return f(...)`) do not count toward the depth limit.
+- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); on the VM, tail calls (`return f(...)`) do not count toward the depth limit, but the default evaluator still counts them, so do not rely on deep tail recursion.
 - A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
 - `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
 

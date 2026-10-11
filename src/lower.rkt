@@ -389,6 +389,8 @@
       [builtin?
        (apply emit! 'call-builtin (list base key (length arguments)) span (map node-span arguments))]
       [else (emit! (if tail? 'tail-call 'call) (list base (hash-ref function-index name)) span)])
+    (when (and tail? builtin?)
+      (emit! 'return (list base) span))
     (cond
       [want (emit! 'move (list want base) span)
             (set! next saved)
