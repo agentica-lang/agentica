@@ -790,6 +790,37 @@ int main(void) {
     assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
   }
 
+  static const agc_instr bad_try[] = {{AGC_OP_TRY, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_try, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_is_ok[] = {{AGC_OP_IS_OK, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_is_ok, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_result_value[] = {{AGC_OP_RESULT_VALUE, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_result_value, two_spans, 2, 4, "register out of range"));
+  static const agc_instr try_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_TRY, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr is_ok_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_IS_OK, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr value_of_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_RESULT_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const agc_instr *not_results[] = {try_int, is_ok_int, value_of_int};
+  for (int k = 0; k < 3; k++) {
+    agc_outcome bad = run_with_tables(not_results[k], confused_spans, 4, stdout);
+    assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
+  }
+  static const agc_instr try_error_in_main[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+    {AGC_OP_TRY, 1, 0, 0},  {AGC_OP_NOT, 0, 0, 0},   {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t try_error_spans[] = {1, 0, 1, 0, 0, 0};
+  s = base();
+  s.builtin = "error";
+  s.extra_kind = 6;
+  s.extra_string = "e";
+  s.code = try_error_in_main;
+  s.code_spans = try_error_spans;
+  s.count = 6;
+  s.registers = 2;
+  assert(run_spec(s, stdout).kind == AGC_DONE);
+
   puts("loader tests passed");
   return 0;
 }

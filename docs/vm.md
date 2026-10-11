@@ -30,16 +30,18 @@ details and reasons.
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
-and Windows CI, the Lists PR and the structs, enums and `case` PR (12.2
-items 1 to 4, 5a and 5b) are in, and so is the tail-call PR (after the
-list in 12.2). The VM covers Int, Float, Bool, Nil and
+and Windows CI, the Lists PR, the structs, enums and `case` PR and the
+Result PR (12.2 items 1 to 4, 5a, 5b and 5c) are in, and so is the
+tail-call PR (after the list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
-imported ones included), and `List[T]` of any of them (lists of lists too),
+imported ones included), `Result[T]` of any of them (and `Result[Void]`),
+and `List[T]` of any of them (lists of lists too),
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
 `break` and `next`, `for x in xs` with `break` and `next`, list literals,
 indexing `xs[i]`, struct construction and field access, enum constructors,
-`case` with literal, `_` and variant patterns, user functions, calls, tail
+`case` with literal, `_`, variant and Result patterns, `ok`/`error`, the
+`Result.*` builtins, `try`, user functions, calls, tail
 calls (`return f(...)` reuses the frame, 6.1), `return`, interpolation,
 `x.to_s` and `x.inspect` of those values, and `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn` of any of them. List library functions (`xs.size`,
@@ -253,6 +255,9 @@ fails when the committed file differs from what the generator prints.
 
 - Runtime diagnostics carry only code, message and span. Messages are copied
   verbatim from the Racket sources.
+  `RUNTIME-UNWRAP-ERROR` uses the error's own String as its message, so the
+  VM's outcome carries the message with its byte length (`agc_fail_text`)
+  and prints it as raw bytes, like any other String.
 - `--ai` prints `check failed: 1 error`, a blank line, `[CODE]`, then
   `  message: `, `  at: file:line:column` and `  source: ` with the span's
   first source line trimmed by `string-trim`, which removes only ASCII
@@ -364,15 +369,15 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Enums | `step` (constructor span), payload slots in order, then `enum` with a global variant id; a nullary variant is `enum dst dst v`. |
 | Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. An empty literal is `list dst dst 0`. |
 | Indexing | `list-get` or `map-get` from the type table. `step` (index node), target, index, then `list-get` at the index expression's span, which is where `RUNTIME-INDEX-OUT-OF-RANGE` ("index -1 is outside a list of length 3") points. |
-| `case` | Scrutinee once (a local is read in place: tests and payload reads all come before any body runs); per arm a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), body in its own scope through `lower-statement`, jump to the end. Patterns charge no steps. `_` has no test. An Int literal pattern outside 64 bits (the checker accepts `9223372036854775808 ->`) can never match, so its test is a plain `jump` to the next arm. Result patterns join with 5c. Until then nothing in `case` checks for them: the scrutinee goes through the type check of every expression, which rejects a Result value with `LOWER-UNSUPPORTED` at the scrutinee, so no Result pattern is ever reached. |
-| `try` | `try dst src`: on error, return it from the current function or block. |
-| `ok`, `error`, `Result.*` | Builtin calls. |
+| `case` | Scrutinee once (a local is read in place: tests and payload reads all come before any body runs); per arm a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), body in its own scope through `lower-statement`, jump to the end. Patterns charge no steps. `_` has no test. An Int literal pattern outside 64 bits (the checker accepts `9223372036854775808 ->`) can never match, so its test is a plain `jump` to the next arm. A Result pattern (`ok(v)`, `error(m)`, `Result.Ok(v)`, `Result.Err(m)`; the scrutinee's checked type is `Result`) tests `is-ok`, then `jump-if-false` for `ok` or `jump-if-true` for `error`, and its binding reads `result-value` (the success value or the message). |
+| `try` | `step` (the `try` span), the operand, then `try dst src`: on an error, return that Result from the current function (from the block once closures land); else its value goes to `dst`. A `try` of a `Result[Void]` may be a statement. `return try f(...)` is not a tail call. |
+| `ok`, `error`, `Result.*` | Builtin calls: keys `ok` (arity 1, and arity 0 for `ok()`), `error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`, `Result.message`. `Result.Ok(x)` and `Result.Err(m)` are already `ok`/`error` calls after parsing, and method forms (`r.ok?`, `r.unwrap!`) are resolved calls. |
 | Interpolation | `step`, then the first part straight into the target; each later part into the next free slot, then `concat target target slot`. A string part is a `const`; an expression part is lowered as usual and followed by `to-text slot slot` unless it is a String. String parts charge no step. |
 | `.inspect` | `inspect`. `.to_s` follows what the checker resolved: the receiver itself for String, `String.from_int`/`from_float` for Int/Float, a one-part interpolation for other types. A `method-call` or `field-access` with `resolved` set lowers its resolved node without a step, and a `typed-target` lowers its expression, as `eval-expression` does. |
 | `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's display name, as `type-expression` evaluates to its name. |
 | `&name` | `closure` with no captures. |
 | `f.call(...)` | `call-value` at the invoke span. |
-| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls and calls inside a larger expression (`return 1 + f(n)`) are not tail calls; neither will `return try f(...)` and `.call` be, once the VM lowers them. |
+| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls, calls inside a larger expression (`return 1 + f(n)`) and `return try f(...)` are not tail calls; neither will `.call` be, once the VM lowers it. |
 | Assignment to an existing local | Value into a temporary, then `move`. `and`/`or` write their target before the right side runs, so lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
 
 ### 3.4 Closure conversion
@@ -406,12 +411,15 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
 exit 1. Today a value outside Int, Float, Bool, Nil, String, structs and
-enums declared in the program, and `List` of those (nested to any depth) is
-rejected, except a Void call used as a statement or returned. A struct or
+enums declared in the program, and `List` and `Result` of those (nested to
+any depth; `Result[Void]` too) is rejected, except a Void call or `try`
+used as a statement or returned. A struct or
 enum type is accepted whatever its fields or payloads hold: a value of an
 unsupported type can only come from an expression the lowerer rejects. The only builtins a program may call are `puts`,
-`IO.print`, `IO.warn`, `String.from_int` and `String.from_float` (their
-implementation keys; `print` and `IO.puts` map to the first two). The last
+`IO.print`, `IO.warn`, `String.from_int`, `String.from_float`, `ok`,
+`error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or` and
+`Result.message` (their implementation keys; `print` and `IO.puts` map to
+the first two). The last
 two exist because the checker resolves `x.to_s` on Int and Float to them.
 `List.concat` is in the C table too, but only the lowerer emits it, for
 long literals (3.3); a written call to it stays `LOWER-UNSUPPORTED` until
@@ -500,7 +508,8 @@ LT_I LE_I EQ NE JUMP JUMP_IF_FALSE JUMP_IF_TRUE CALL CALL_BUILTIN RETURN`
 LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30); the Lists
 PR appended `LIST LIST_LEN LIST_GET` (33); the structs, enums and `case` PR
 appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39); the tail-call PR
-appended `TAIL_CALL` (40). `EQ`/`NE`
+appended `TAIL_CALL` (40); the Result PR appended `TRY IS_OK RESULT_VALUE`
+(43). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
@@ -521,7 +530,13 @@ loader. `IS_VARIANT` compares the global variant id, which is unique per
 enum declaration, as the evaluator compares the enum and variant names; an
 id from another enum (only in a hand-made file) is simply false.
 `FIELD` and `PAYLOAD` read item `c` of the value's own `n`; past it is
-`RUNTIME-INTERNAL`.
+`RUNTIME-INTERNAL`. `TRY`, `IS_OK` and `RESULT_VALUE` read a Result
+through its checked accessor (any other tag is `RUNTIME-INTERNAL`). An
+error in `TRY` leaves the frame exactly as `RETURN` does, so a `TRY` in
+`main` (only in a hand-made file; the checker allows `try` only in
+functions that return Result) ends the run. Results have no equality
+(`CHECK-TYPE-MISMATCH`), so `EQ` and `SAME` never see one; given one, they
+are `RUNTIME-INTERNAL`.
 
 ### 4.3 Calls, call windows and resumable builtins
 
@@ -631,14 +646,14 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has Void, Nil, Bool, Int, Float, String and List, in the order above. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has Void, Nil, Bool, Int, Float, String, List, Struct, Enum and Result (Map waits for 5d, so the numbers are not those above). |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
 | Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }`: a persistent 32-way HAMT plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. Keys are Int or String, hashed with SipHash-1-3 under a per-run key from OS entropy (independent of `--seed`). |
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
-| Result | `{ bool ok; agc_value value; }`; an error holds its String message; `ok()` holds Void. |
+| Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
 | Function value | `{ uint32_t function, n; agc_value captured[]; }`. |
 | Json | Tree: null, bool, int64, big integer as decimal text (parsed integers may exceed Int until extracted), double, string, array, object. Objects are built by collecting pairs, then one sort and dedupe with the last value winning, which is the order `write-json` prints. |
 | Handle (7h) | `{ uint32_t kind; void *resource; }` for Task, Socket, Listener, HTTP values, FileHandle, Process. |
@@ -864,7 +879,8 @@ The loader validates the whole file before running anything. Failures print
   arity (`b` itself when it is 0); `IS_VARIANT` checks two registers and the
   variant id; `FIELD` and `PAYLOAD` check two registers and `c` below the
   largest field count or arity (the run time checks the value's own `n`);
-  `SAME` checks three registers. Builtin record layouts are not checked
+  `SAME` checks three registers; `TRY`, `IS_OK` and `RESULT_VALUE` two.
+  Builtin record layouts are not checked
   yet: the lowerer rejects builtin record types, and the check joins with
   the first library PR that reads one. `CONCAT`
   checks three registers, `TO_TEXT` and `INSPECT` two. `LIST` checks `a`
@@ -881,7 +897,9 @@ The loader validates the whole file before running anything. Failures print
   `LIST`, `STRUCT` and `ENUM` windows), every struct and enum table rule
   above (and that 65535 nullary variants and 65535 fields load), `CALL`,
   `TAIL_CALL` and `CALL_BUILTIN` windows, a `TAIL_CALL` to a function out of
-  range, `STEP 0`, a backward jump that misses a `STEP`,
+  range, the registers of `TRY`, `IS_OK` and `RESULT_VALUE` (and, at run
+  time, that they fail on a non-Result and that a `TRY` error in `main`
+  ends the run), `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one (one is just `TAIL_CALL`, `RETURN`), an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
 - **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
@@ -1349,7 +1367,12 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      patterns, their text and debug forms, and format version 2 with the
      struct and enum tables. The checker rejects `==` on them, so
      there is no struct or enum equality. Result patterns stay in 5c.
-   - **5c** Result, `ok`/`error`/`Result.*`, `try`.
+   - **5c Result values, `try`** (done). `Result[T]` values, `ok(...)`,
+     `ok()` and `error(...)`, the `Result.*` builtins (`ok?`, `unwrap!`
+     with `RUNTIME-UNWRAP-ERROR` at the call span, `unwrap_or`,
+     `message`), `try` (`TRY`), Result patterns in `case` (`IS_OK`,
+     `RESULT_VALUE`), and the text and debug forms `ok(v)`, `ok()` and
+     `error("msg")`. No format bump: the three opcodes are appended.
    - **5d** Maps (HAMT, 5.1), map literals and indexing.
    - **5e** Closures (`block-lit`), `&name`, `.call`, the resumable `List`
      builtins (`map`, `filter`, `reduce`, `sort_by`, `each`, `any?`,

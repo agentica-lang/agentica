@@ -55,6 +55,20 @@
     (check-equal? (ops 1) '(call-builtin return return))
     (check-equal? (ops 2) '(call call-builtin return)))
 
+  (test-case "a returned try is not a tail call"
+    (define program
+      (ir->bytecode
+       (lower-text (string-append
+                    "def h(n: Int) -> Result[Result[Int]]\n  return ok(ok(n))\nend\n\n"
+                    "def g(n: Int) -> Result[Int]\n  return try h(n)\nend\n\n"
+                    "def main() -> Void\n  puts(g(2))\nend\n"))))
+    (define g (list-ref (bc-program-functions program) 1))
+    (check-equal? (for/list ([instr (in-vector (bc-function-code g))]
+                             #:when (memv (first instr) (map (lambda (op) (index-of opcodes op))
+                                                             '(call tail-call try return))))
+                    (list-ref opcodes (first instr)))
+                  '(call try return return)))
+
   (test-case "opcode numbers match vm/agc.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)
@@ -85,7 +99,7 @@
     (check-equal? (unsupported-at "def main() -> Void\n  h = Header(name: \"a\", value: \"b\")\nend\n") '(2 7))
     (check-equal? (unsupported-at "struct S\n  m: Map[String, Int]\nend\n\ndef main() -> Void\n  s = S(m: {\"a\": 1})\nend\n")
                   '(6 12))
-    (check-equal? (unsupported-at "def f(r: Result[Int]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
+    (check-equal? (unsupported-at "def f(r: Result[Map[String, Int]]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
                   '(2 8)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"

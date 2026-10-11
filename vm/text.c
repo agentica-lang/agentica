@@ -146,7 +146,7 @@ static void append_string(builder *b, const agc_string *s) {
 }
 
 static bool compound(agc_value v) {
-  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM);
+  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM) || agc_is(v, AGC_T_RESULT);
 }
 
 typedef struct {
@@ -171,12 +171,21 @@ static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
 static size_t item_count(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->len;
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->n;
+  if (agc_is(v, AGC_T_RESULT)) {
+    const agc_result *r = agc_as_result(vm, v);
+    return r->ok && agc_is(r->value, AGC_T_VOID) ? 0 : 1;
+  }
   return agc_as_enum(vm, v)->n;
 }
 
 static agc_value item_at(agc_vm *vm, agc_value v, size_t k) {
   if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->items[k];
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->fields[k];
+  if (agc_is(v, AGC_T_RESULT)) {
+    const agc_result *r = agc_as_result(vm, v);
+    if (!r->ok) return agc_string_value(agc_as_string(vm, r->value));
+    return r->value;
+  }
   return agc_as_enum(vm, v)->payload[k];
 }
 
@@ -188,6 +197,13 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   if (agc_is(v, AGC_T_STRUCT)) {
     append_string(b, struct_def(vm, agc_as_struct(vm, v))->name);
     append(b, "(", 1);
+    return true;
+  }
+  if (agc_is(v, AGC_T_RESULT)) {
+    if (agc_as_result(vm, v)->ok)
+      append(b, "ok(", 3);
+    else
+      append(b, "error(", 6);
     return true;
   }
   const agc_enum *e = agc_as_enum(vm, v);

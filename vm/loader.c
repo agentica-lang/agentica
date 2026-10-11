@@ -149,6 +149,9 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
       case AGC_OP_TO_TEXT:
       case AGC_OP_INSPECT:
       case AGC_OP_LIST_LEN:
+      case AGC_OP_TRY:
+      case AGC_OP_IS_OK:
+      case AGC_OP_RESULT_VALUE:
         check_register(r, in.a, f);
         check_register(r, in.b, f);
         break;

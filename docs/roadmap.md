@@ -8,9 +8,9 @@ The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The next priority is the bytecode VM
 (phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice, the
-Float and Strings PRs, the macOS and Windows CI, the Lists PR and the
-structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
-done; the rest of item 5 (7e PRs 5c to 5e) and the
+Float and Strings PRs, the macOS and Windows CI, the Lists PR, the
+structs, enums and `case` PR and the Result PR (`docs/vm.md` §12.2 items 1 to
+4, 5a, 5b and 5c) are done; the rest of item 5 (7e PRs 5d and 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (7e PR 5e), in parallel with the rest of
 phase 7; queues also need only 7e PR 5e, and sets need the VM maps (7e PR 5d). Real
@@ -1131,7 +1131,8 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Structs, enums (generic too) and `case` with literal, `_` and variant patterns; text and debug forms with the linked display names (`docs/vm.md` §12.2 item 5b).
 - [x] Tail calls: `return f(...)` of a user function lowers to `TAIL_CALL`, which reuses the frame, so tail and mutual recursion do not grow the call depth on the VM; same steps as `CALL` + `RETURN`; a documented difference from the evaluator, which still overflows (`docs/vm.md` §4.3, §6.1).
 - [ ] Maps (insertion order), map indexing errors with their spans.
-- [ ] `Result`, `try`, function values, closures, resumable `List` builtins.
+- [x] `Result` values, `ok`/`error`, the `Result.*` builtins (`RUNTIME-UNWRAP-ERROR` at the call span), `try`, Result patterns in `case`, and their text and debug forms (`docs/vm.md` §12.2 item 5c).
+- [ ] Function values, closures, resumable `List` builtins.
 - [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.
 - [ ] `String`, `List`, `Map`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).

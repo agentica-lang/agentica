@@ -56,7 +56,7 @@ static void print_json(FILE *err, const agc_program *p, const agc_outcome *outco
   fputs(",\"file\":", err);
   put_json(err, name->data, name->bytes);
   fputs(",\"message\":", err);
-  put_json(err, outcome->message, strlen(outcome->message));
+  put_json(err, outcome->message, outcome->message_len);
   fprintf(err, ",\"range\":{\"end\":{\"column\":%u,\"line\":%u},\"start\":{\"column\":%u,\"line\":%u}}}\n",
           (unsigned)span->end_column, (unsigned)span->end_line, (unsigned)span->start_column,
           (unsigned)span->start_line);
@@ -68,7 +68,9 @@ static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome
   source_line l = line_of(source, span->start_line);
   while (l.start < l.end && trimmed(l.text[l.start])) l.start++;
   while (l.end > l.start && trimmed(l.text[l.end - 1])) l.end--;
-  fprintf(err, "check failed: 1 error\n\n[%s]\n  message: %s\n  at: ", outcome->code, outcome->message);
+  fprintf(err, "check failed: 1 error\n\n[%s]\n  message: ", outcome->code);
+  put_text(err, outcome->message, outcome->message_len);
+  fputs("\n  at: ", err);
   put_text(err, source->name->data, source->name->bytes);
   fprintf(err, ":%u:%u\n  source: ", (unsigned)span->start_line, (unsigned)span->start_column);
   put_text(err, l.text + l.start, l.end - l.start);
@@ -88,8 +90,9 @@ static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outc
   int gutter = snprintf(NULL, 0, "%u", (unsigned)line);
 
   put_text(err, source->name->data, source->name->bytes);
-  fprintf(err, ":%u:%u error[%s]\n%s\n\n%u | ", (unsigned)line, (unsigned)column, outcome->code,
-          outcome->message, (unsigned)line);
+  fprintf(err, ":%u:%u error[%s]\n", (unsigned)line, (unsigned)column, outcome->code);
+  put_text(err, outcome->message, outcome->message_len);
+  fprintf(err, "\n\n%u | ", (unsigned)line);
   put_text(err, l.text + l.start, l.end - l.start);
   fprintf(err, "\n%*s | ", gutter, "");
   size_t at = l.start;
