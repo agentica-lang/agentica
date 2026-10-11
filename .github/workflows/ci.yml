@@ -11,6 +11,17 @@ on:
       - '.github/workflows/platforms.yml'
       - '.github/workflows/release.yml'
       - '.github/workflows/site-examples.yml'
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'docs/**'
+      - 'site/**'
+      - '**/*.md'
+      - '.github/workflows/fuzz.yml'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/platforms.yml'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/site-examples.yml'
   workflow_dispatch:
 
 concurrency:
@@ -22,6 +33,7 @@ permissions:
 
 jobs:
   changes:
+    if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
     outputs:
       vm: ${{ steps.vm.outputs.vm }}
@@ -49,7 +61,45 @@ jobs:
           echo "vm=$vm"
           echo "vm=$vm" >> "$GITHUB_OUTPUT"
 
+  warm-cache:
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, linux, docker-runner]
+    steps:
+      - uses: actions/checkout@v4
+      - id: racket
+        run: |
+          dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          if "$dir/bin/racket" -e '(exit (if (equal? (version) "9.3") 0 1))' 2>/dev/null; then
+            echo "$dir/bin" >> "$GITHUB_PATH"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.racket.outputs.found != 'true'
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          variant: CS
+          version: '9.3'
+          dest: ${{ steps.racket.outputs.dir }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            src/compiled
+            tests/compiled
+          key: racket-zo-test-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
+          restore-keys: racket-zo-test-9.3-
+      - run: git ls-files -z | xargs -0 touch
+      - run: make build && raco make -j 4 tests/*.rkt
+      - run: mkdir -p build && sed -n '/^vm-unicode:/,/^$/p' Makefile > build/vm-unicode.mk
+      - id: unicode
+        uses: actions/cache@v4
+        with:
+          path: build/unicode-checked
+          key: unicode-checked-9.3-${{ hashFiles('vm/tools/gen-unicode.rkt', 'vm/unicode_data.c', 'build/vm-unicode.mk') }}
+      - if: steps.unicode.outputs.cache-hit != 'true'
+        run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
+
   test:
+    if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
     env:
       AGENTICA_REQUIRE_VM: '1'
@@ -84,11 +134,12 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: make build && raco make -j 4 tests/*.rkt
       - run: make vm vm-test
+      - run: mkdir -p build && sed -n '/^vm-unicode:/,/^$/p' Makefile > build/vm-unicode.mk
       - id: unicode
         uses: actions/cache@v4
         with:
           path: build/unicode-checked
-          key: unicode-checked-9.3-${{ hashFiles('vm/**/gen-unicode.rkt', 'vm/unicode_data.c', 'Makefile') }}
+          key: unicode-checked-9.3-${{ hashFiles('vm/tools/gen-unicode.rkt', 'vm/unicode_data.c', 'build/vm-unicode.mk') }}
       - if: steps.unicode.outputs.cache-hit != 'true'
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
       - run: make test
@@ -117,7 +168,7 @@ jobs:
 
   vm-sanitizers:
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.vm != 'false' }}
+    if: ${{ !cancelled() && github.event_name != 'push' && needs.changes.outputs.vm != 'false' }}
     runs-on: [self-hosted, linux, docker-runner]
     env:
       AGENTICA_REQUIRE_VM: '1'
@@ -146,7 +197,10 @@ jobs:
             src/compiled
             tests/compiled
           key: racket-zo-${{ github.job }}-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
-          restore-keys: racket-zo-${{ github.job }}-9.3-
+          restore-keys: |
+            racket-zo-test-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
+            racket-zo-${{ github.job }}-9.3-
+            racket-zo-test-9.3-
       - run: git ls-files -z | xargs -0 touch
       - run: clang --version
       - run: make vm vm-test
