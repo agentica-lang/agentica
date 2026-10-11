@@ -124,4 +124,6 @@ true
 ```
 
 Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the
-same numbers every time. Do not use `Random` for secrets.
+same numbers every time. The bytecode VM (`agentica --vm`) also repeats a
+seeded run, but its numbers differ from the evaluator's for the same seed.
+Do not use `Random` for secrets.

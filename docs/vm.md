@@ -1019,7 +1019,9 @@ the `RUNTIME-INVALID-RANGE` error at the call.
 - Generator (`vm/random.c`): xoshiro256** (Blackman and Vigna, public
   domain), its four state words (`agc_random` in `agc_vm`) filled by four
   splitmix64 outputs from the seed (also public domain).
-- `Random.float` is `(next >> 11) * 2^-53`.
+- `Random.float` is `(next >> 11) * 2^-53`. It can return exactly 0.0,
+  which the evaluator's `(random)` never does; both stay in `[0, 1)`, so a
+  fixture must not rely on `x > 0.0`.
 - `Random.int(low, high)` (`agc_random_int`): `size = high - low + 1` in
   unsigned 64-bit arithmetic, where 0 means the full Int range (one draw
   as is). Otherwise the threshold method rejects draws below

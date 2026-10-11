@@ -1151,7 +1151,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7f: Differential tests
 
-- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, seeded `Random` runs, an extreme-Int corpus and a deep-value corpus.
+- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, `Random` fixtures that print only what both backends share (seeded values differ by design), an extreme-Int corpus and a deep-value corpus.
 - [ ] Inputs: `examples/`, `tests/eval/tasks/*` (reference solutions and hidden cases), and a set of rejected-at-runtime programs.
 - [x] Run it in `make test` and CI; a missing VM build fails CI and visibly skips locally (`tests/vm-diff-*-test.rkt`, `AGENTICA_REQUIRE_VM=1`).
 
