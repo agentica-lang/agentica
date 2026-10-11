@@ -90,6 +90,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
   if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);
   if (agc_is(v, AGC_T_FN)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Fn>");
+  if (agc_is(v, AGC_T_JSON)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Json>");
   if (agc_is(v, AGC_T_RANGE)) {
     const agc_range *r = agc_as_range(vm, v);
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
@@ -267,6 +268,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
 
 agc_string *agc_text(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_STRING)) return agc_as_string(vm, v);
+  if (agc_is(v, AGC_T_JSON)) return agc_json_encode(vm, v, 0);
   return agc_debug(vm, v);
 }
 

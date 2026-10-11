@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs `Json` values and the `JSON` builtins that need no
+  type table: `JSON.parse`, `encode`, `from`, `object`, `array`, `null`,
+  `null?`, `get`, `at`, `string`, `int`, `float`, `bool` and `list`, with
+  the evaluator's messages, key order, escapes and Float text. Integers
+  outside 64 bits stay exact through parse and encode, and `JSON.float`
+  converts them like the evaluator. Parsing uses the yyjson reader (MIT),
+  vendored as the git submodule `vm/third_party/yyjson` at tag 0.13.0, so
+  a VM build needs `git submodule update --init`. `JSON.decode` and
+  `JSON.schema` still report `LOWER-UNSUPPORTED`.
+
 - The bytecode VM runs the `Float`, `Time` and `Random` builtins:
   `Float.from_int`, `Float.to_int` and `to_int!` (also `n.to_f`,
   `x.to_i`, `x.to_i!`), `Time.now_ms`, `Time.monotonic_ms`,

@@ -18,7 +18,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON
 } agc_tag;
 
 typedef struct {
@@ -73,6 +73,26 @@ typedef struct {
   int64_t start, end;
   bool exclusive;
 } agc_range;
+
+typedef enum {
+  AGC_JSON_NULL, AGC_JSON_BOOL, AGC_JSON_INT, AGC_JSON_BIG, AGC_JSON_FLOAT, AGC_JSON_STRING, AGC_JSON_ARRAY, AGC_JSON_OBJECT
+} agc_json_kind;
+
+typedef struct {
+  agc_string *key;
+  agc_value value;
+} agc_json_member;
+
+typedef struct {
+  agc_json_kind kind;
+  agc_value scalar;
+  size_t count;
+  agc_json_member *members;
+} agc_json;
+
+typedef enum {
+  AGC_JSON_PARSED, AGC_JSON_CONTROL, AGC_JSON_INVALID, AGC_JSON_EMPTY, AGC_JSON_TRAILING, AGC_JSON_NOT_FINITE
+} agc_json_status;
 
 typedef enum {
   AGC_OP_MOVE, AGC_OP_CONST, AGC_OP_STEP,
@@ -228,6 +248,7 @@ agc_value agc_enum_value(agc_enum *e);
 agc_value agc_result_value(bool ok, agc_value value);
 agc_value agc_fn_value(agc_fn *f);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
+agc_value agc_json_value(agc_json *j);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -239,6 +260,7 @@ agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
 agc_result *agc_as_result(agc_vm *vm, agc_value v);
 agc_fn *agc_as_fn(agc_vm *vm, agc_value v);
 agc_range *agc_as_range(agc_vm *vm, agc_value v);
+agc_json *agc_as_json(agc_vm *vm, agc_value v);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 bool agc_is(agc_value v, agc_tag tag);
 
@@ -301,11 +323,19 @@ size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from
 agc_string *agc_change_case(const agc_string *s, bool up);
 agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
 agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
+agc_string *agc_around(const char *before, const agc_string *part, const char *after);
 extern const agc_builtin agc_string_builtins[];
 extern const size_t agc_string_builtin_count;
 
 extern const agc_builtin agc_number_builtins[];
 extern const size_t agc_number_builtin_count;
+
+const char *agc_json_version(void);
+agc_json_status agc_json_parse(const uint8_t *text, size_t len, agc_value *out);
+agc_string *agc_json_encode(agc_vm *vm, agc_value v, uint32_t span);
+agc_value agc_json_from(agc_vm *vm, agc_value v, uint32_t span);
+extern const agc_builtin agc_json_builtins[];
+extern const size_t agc_json_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);

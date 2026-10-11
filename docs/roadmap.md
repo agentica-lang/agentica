@@ -1091,7 +1091,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 - [x] Execution limits: one step per former AST entry through `STEP` instructions; counts and spans match the evaluator.
 - [x] Call-depth limit (10000) and stack layout: growing register and frame arrays per task; resumable native frames for the higher-order `List` builtins.
 - [x] How the CLI runs the VM: `dist/agentica-vm` from 7e; `agentica --vm` in 7i; the release ships both binaries.
-- [x] Dependency policy: C11, dynamic libc; libgc vendored as a pinned git submodule (`vm/third_party/bdwgc`, v8.2.12) and linked statically; libuv for the event loop (also a pinned submodule, added in 7h) and OpenSSL 3 for TLS (7h); HTTP framing and JSON written in C. Linux, macOS and Windows (MSYS2 UCRT64).
+- [x] Dependency policy: C11, dynamic libc; libgc vendored as a pinned git submodule (`vm/third_party/bdwgc`, v8.2.12) and linked statically; libuv for the event loop (also a pinned submodule, added in 7h) and OpenSSL 3 for TLS (7h); HTTP framing and the JSON encoder written in C; JSON parsing on the yyjson reader (MIT, a pinned submodule `vm/third_party/yyjson`, added with the JSON PR). Linux, macOS and Windows (MSYS2 UCRT64).
 - [x] Seeded `Random`: the VM has its own generator (xoshiro256**), so seeded sequences repeat per backend and differ between backends by design (`docs/vm.md` §7.4).
 - [x] Build and CI: `make vm` with `-Werror` and hardening flags, `make vm-test`, a sanitizer job (ASan, UBSan), a GC stress run, a loader fuzz run, and Linux, macOS and Windows jobs.
 
@@ -1140,7 +1140,8 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] `List` and `Map` builtins: `size`, `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`, `reverse`, `sort`; `has_key?`, `keys`, `values`, `size`, `put`, `get` (with and without a default), `delete` on the HAMT (`docs/vm.md` §12.2 item 6b).
 - [x] `String` builtins, with the case and final-sigma data generated from Racket (`docs/vm.md` §2.3, §12.2 item 6b).
 - [x] `Float`, `Time` and `Random` builtins; the VM's `Random` uses xoshiro256**, so seeded values differ from the evaluator by design, and `agentica --vm` passes `--seed` (`docs/vm.md` §7.4).
-- [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
+- [x] JSON part 1: parse (the yyjson reader, a pinned submodule), extract, encode and builders, with the big-integer node and the number rules of `docs/future.md` §15.2 (`docs/vm.md` §12.2 item 7).
+- [ ] JSON part 2: typed decode and schema (pure C, no event loop).
 - [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
 - [x] Runtime diagnostics in the `--ai` and `--json` formats.

@@ -53,7 +53,7 @@ jobs:
           else
             while IFS= read -r f; do
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"

@@ -31,12 +31,13 @@ details and reasons.
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
 and Windows CI, the Lists PR, the structs, enums and `case` PR and the
-Result PR, the Maps PR, the closures PR and the IO and System PR (12.2
-items 1 to 4, 5a to 5e and 6a) are in, and so is the
+Result PR, the Maps PR, the closures PR, the IO and System PR, the
+library PR and part 1 of the JSON PR (12.2 items 1 to 4, 5a to 5e, 6a, 6b
+and 7 without typed decode and schema) are in, and so is the
 tail-call PR (after the list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
 imported ones included), `Result[T]` of any of them (and `Result[Void]`),
-`List[T]` of any of them (lists of lists too), and `Map[K, V]` with Int or
+`Json` values, `List[T]` of any of them (lists of lists too), and `Map[K, V]` with Int or
 String keys and any of them as values, function values `Fn[...]` of them
 (blocks `do |x| ... end` with their captures, `&name` of local and imported
 functions, `f.call(...)`),
@@ -65,7 +66,12 @@ with or without a default, `delete`; also as methods such as `xs.size` and
 `to_int`, `to_int!`, `to_float`, `to_float!`, 2.3), and the `Float`,
 `Time` and `Random` builtins (`Float.from_int`, `to_int`, `to_int!`, also
 as `n.to_f`, `x.to_i` and `x.to_i!`; `Time.now_ms`, `monotonic_ms`;
-`Random.int`, `Random.float` with the VM's own seeded generator of 7.4). Runtime diagnostics come in the plain,
+`Random.int`, `Random.float` with the VM's own seeded generator of 7.4),
+and the `JSON` builtins that need no type table (`JSON.parse`, `encode`,
+`from`, `object`, `array`, `null`, `null?`, `get`, `at`, `string`, `int`,
+`float`, `bool`, `list`, also as methods such as `j.get("a")`; 2.4, 2.6,
+5.1). `JSON.decode` and `JSON.schema` stay `LOWER-UNSUPPORTED` until
+part 2 adds a type table. Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -354,7 +360,15 @@ fails when the committed file differs from what the generator prints.
   `Enum.Variant()`).
 - JSON text (`write-json`): object keys sorted; strings escape `"`, `\`,
   control characters and DEL, with short forms such as `\n` and lowercase
-  `\u007f` otherwise; non-ASCII stays raw; floats use 2.2.
+  `\u007f` otherwise; non-ASCII stays raw; floats use 2.2; a big integer is
+  its decimal text. `JSON.encode` of a non-Json value keeps a struct's
+  declaration order and a map's insertion order (only a `Json` inside is
+  sorted); `JSON.from`, `JSON.object` and `JSON.array` build a `Json`, so
+  their text is sorted. A non-finite Float in either is
+  `RUNTIME-JSON-ENCODE` at the call span. `JSON.float` of a big integer is
+  `strtod` of its text (correctly rounded like `exact->inexact`), an error
+  value when that is infinite. The VM writes this text with its own
+  encoder in `vm/json.c` (one explicit stack for values and Json nodes).
 
 ### 2.5 Diagnostics, streams and exit codes
 
@@ -406,6 +420,34 @@ fails when the committed file differs from what the generator prints.
   that is not finite is `JSON number is not finite`.
 - Every message has the `JSON.parse: ` prefix. Numbers with a fraction or an
   exponent are Float (`1e2` is `100.0`); others are integers of any size.
+- The order of the checks: the control-character pass over the whole text
+  first, then the syntax, then the trailing content, and only then the
+  finite check, so `1e400 x` is `unexpected content after the JSON value`.
+- `read-json` stops early on a top-level number or literal: a number ends
+  at the first byte its grammar does not take, so `01` is the value `0`
+  followed by `unexpected content`, and `[01]` is `invalid JSON`; a
+  literal followed by `[A-Za-z0-9_]` (`truex`) is `invalid JSON`, while
+  `true-` is `unexpected content`. Whitespace is space, tab, CR and LF;
+  any other whitespace before the value (`\f`, NBSP) is `invalid JSON`,
+  after it `unexpected content`.
+- A Float is the exact decimal rounded to nearest (ties to even), except
+  that a mantissa of only zeros gives `0.0` whatever its sign or exponent
+  (`-0.0` and `-0e5` are `0.0`); a non-zero negative value that rounds to
+  zero is `-0.0` (`-1e-500`). `-0` is the integer 0.
+- A repeated object key keeps the last value.
+- In the VM (`vm/json.c`), the control pass, the leading whitespace, the
+  empty input and top-level numbers and literals are its own code; a
+  top-level string, array or object goes to the yyjson reader (10) with
+  `YYJSON_READ_STOP_WHEN_DONE` and `YYJSON_READ_NUMBER_AS_RAW`, and any
+  yyjson error is `invalid JSON` (its allocation failure is the
+  out-of-memory exit). Every number reaches the VM as its text: an integer
+  that fits int64 is an Int node, any other integer the big-integer node
+  holding the text as written (JSON integers have no leading zeros, so the
+  text is canonical), and a Float is `strtod` of the text with the zero
+  rule above. The yyjson tree is then copied into GC nodes with an
+  explicit stack (7.3) and freed; objects are sorted by key bytes
+  (`symbol<?` on the UTF-8 text) with a stable merge sort, and the last of
+  equal keys is kept.
 
 ## 3. IR (7c)
 
@@ -819,7 +861,7 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Fn, in that order, then `AGC_T_RANGE` (Phase 8a); Json and Handle join with their PRs. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Fn, in that order, then `AGC_T_RANGE` (Phase 8a) and `AGC_T_JSON` (12.2 item 7); Handle joins with its PR. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
@@ -829,7 +871,7 @@ typedef struct {
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
 | Range | `agc_range { int64_t start, end; bool exclusive; }` (`GC_MALLOC_ATOMIC`), tag `AGC_T_RANGE`, immutable. Text and debug form `1..5` or `1...5` (`agc_scalar_text`; the longest form is 43 bytes, so `AGC_SCALAR_TEXT` is 48). `agc_range_bounds` gives the first and last included values and whether the range is non-empty, with no overflow for `...` (the end is above the start). `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW` and `Range.to_a` above 1048576 values with `RUNTIME-INVALID-COUNT`, both at the receiver's span (`span + 1`), as the evaluator does; `first` and `last` of an empty range give `error("the range is empty")`. |
 | Function value | `agc_fn { uint32_t function, n; agc_value captured[]; }` (`GC_MALLOC`), tag `AGC_T_FN`. `&name` is a value with `n = 0`. Text and debug form `<Fn>` (the checker never lets a program print one). |
-| Json | Tree: null, bool, int64, big integer as decimal text (parsed integers may exceed Int until extracted), double, string, array, object. Objects are built by collecting pairs, then one sort and dedupe with the last value winning, which is the order `write-json` prints. |
+| Json | `agc_json { kind; agc_value scalar; size_t count; agc_json_member *members; }` (`GC_MALLOC`), tag `AGC_T_JSON`: null, bool, int64, big integer (a String with its decimal text; parsed integers may exceed Int until extracted), double, string, array (`scalar` is a List of Json values, which `JSON.list` returns without a copy), object (`members`, `{ agc_string *key; agc_value value; }` sorted by key bytes). Objects are built by collecting pairs, then one stable sort and dedupe with the last value winning, which is the order `write-json` prints; `JSON.get` is a binary search. Text form: the JSON text; debug form `<Json>`. |
 | Handle (7h) | `{ uint32_t kind; void *resource; }` for Task, Socket, Listener, HTTP values, FileHandle, Process. |
 
 ### 5.2 Safety rules for values
@@ -1253,6 +1295,7 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | C compiler | 7e | C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile. |
 | libc | 7e | Dynamic (static glibc breaks NSS; macOS forbids static libc). |
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
+| yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: a git submodule from `https://github.com/libuv/libuv` pinned to a recent release tag, added in 7h when it is first needed, built from source and linked statically. No system package. |
 | OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
 
@@ -1437,6 +1480,8 @@ written `size > limit - total`. A hermetic test sends over-long values.
   -I vm/third_party/bdwgc/include -c vm/third_party/bdwgc/extra/gc.c`, about
   3 s) into `build/vm/gc.o` and linked with `-lpthread` (not on Windows).
   The two defines are what bdwgc's configure and CMake builds set.
+  yyjson's `src/yyjson.c` is compiled per build mode into
+  `$(VM_BUILD)/yyjson.o` with only its reader enabled (10).
   `NO_EXECUTE_PERMISSION` maps the heap without execute permission: macOS on
   arm64 refuses writable and executable pages (`Cannot allocate executable
   pages` once the heap grows), and Linux no longer gets RWX heap pages.
@@ -1491,12 +1536,12 @@ written `size > limit - total`. A hermetic test sends over-long values.
   out) and fail in CI (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
   `make vm` reads `SANITIZE` from the environment, so the sanitizer job sets
   `SANITIZE=1` once and the tests rebuild the sanitized VM.
-- Supply chain: pinned runner images; libgc (and libuv from 7h) are git
+- Supply chain: pinned runner images; libgc, yyjson (and libuv from 7h) are git
   submodules pinned to a release tag, upgraded only by bumping the submodule
   in a reviewed PR; CI checks out with `submodules: true`. `agentica-vm
-  --version` and the release notes list the libgc, libuv and OpenSSL
+  --version` and the release notes list the libgc, yyjson, libuv and OpenSSL
   versions; the release checklist says to rebuild and release after any High
-  or Critical advisory for libgc, libuv or OpenSSL.
+  or Critical advisory for libgc, yyjson, libuv or OpenSSL.
 
 CI matrix:
 
@@ -1572,7 +1617,9 @@ the platform's OpenSSL package) to each job.
   `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
   every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
-  enum chain and nested JSON array, printed and encoded. A program's lists
+  enum chain and nested JSON array, printed and encoded
+  (`vm/tests/json_test.c` parses and encodes depth-1,000,000 arrays and
+  objects). A program's lists
   are only as deep as their types, which are written in the source (there
   are no user generics), whether built by one literal (capped near 65,000
   levels by registers, 3.5) or by chained bindings, so
@@ -1683,6 +1730,22 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `random` (black-box) and `random-invalid-range`.
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
+   Two PRs:
+   - **Part 1** (done). `JSON.parse` over the yyjson reader (2.6, 10),
+     the extractors (`get`, `at`, `string`, `int`, `float`, `bool`,
+     `list`, `null?`), `JSON.encode` and the builders (`from`, `object`,
+     `array`, `null`) in `vm/json.c`, the `Json` value (5.1) with its text
+     and debug forms, and `Json` in `vm-type?`. No format bump.
+     `vm/tests/json_test.c` checks the number rules, the parse statuses,
+     escapes, key order and dedupe on 5,000 keys, and depth-1,000,000
+     arrays and objects parsed and encoded (and a list as deep through
+     `JSON.from`); the `json-*` fixtures cover round trips, every parse
+     message, the number fixtures of future.md §15.2, the builders,
+     extract errors, `RUNTIME-JSON-ENCODE` from `encode` and `from`,
+     `RUNTIME-UNWRAP-ERROR` on a missing key, and an 8,192-deep array and a
+     4,096-deep object (kept small for the GC stress run).
+   - **Part 2.** `JSON.decode` and `JSON.schema`, which need a type table
+     in the bytecode and a format bump.
 
 Phase 8a (ranges, done) added the `Range` value (5.1), `RANGE` and
 `RANGE_BOUNDS` (4.2), the counter loops of 3.3, the `Range` builtins and

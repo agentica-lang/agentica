@@ -31,6 +31,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/builtins.c` | builtin table matched by implementation key and arity from the import table; `tables[]` chains each library's own table |
 | `vm/numbers.c` | `Float`, `Time` and `Random` builtins (`agc_number_builtins`) |
 | `vm/random.c` | xoshiro256** seeded with splitmix64, both public domain (`agc_random_seed`, `agc_random_next`, `agc_random_float`, `agc_random_int`; `docs/vm.md` §7.4) |
+| `vm/json.c` | `Json` (`agc_json` nodes, 5.1) and the `JSON` builtins (`agc_json_builtins`): `agc_json_parse` (the Racket control-character pass, top-level numbers and literals by hand, strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack; `docs/vm.md` §2.6), `agc_json_encode` (the one `write-json` writer, for `JSON.encode` and the text form of a Json) and `agc_json_from` (builders), both over one explicit stack |
 | `vm/input.c` | the only stdin reader (`agc_input_*`): one growing buffer shared by `gets`, `read`, `read_bytes` and `eof?`, blocking `read` (Linux `poll` on `EAGAIN`), U+FFFD decoding of consumed bytes, a pending EOF after a peek; 7h replaces it with libuv reads |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, byte-for-byte like `src/diagnostic.rkt` |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
@@ -39,15 +40,17 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/random_test.c` | the generator: a seed repeats, seeds differ, `Random.float` and `Random.int` bounds (full Int range too), rough uniformity, `low > high` |
 | `vm/tests/float_text_test.c` | Float text against values printed by Racket (`docs/vm.md` §2.2) |
 | `vm/tests/string_test.c` | UTF-8 helpers over every code point, case mapping (special cases, final sigma), KMP search on repetitive text, Int and Float parsing edge cases with the bits Racket gives |
+| `vm/tests/json_test.c` | parse statuses and number rules (`-0`, `-0.0`, `-1e-500`, int64 limits, big integers), escapes, key order and dedupe on 5,000 keys, depth-1,000,000 arrays and objects parsed and encoded, a deep list through `JSON.from` (1,000 under `AGC_GC_STRESS`) |
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
+| `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
 | `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator, split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`) |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
 
 ```sh
-git submodule update --init          # fetch bdwgc after a clone or a bump
+git submodule update --init          # fetch bdwgc and yyjson after a clone or a bump
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
@@ -65,7 +68,7 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
   in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
   bytecode, `src/version.rkt`, their tests and fixtures, the Makefile,
-  `ci.yml`). A new VM source or test file outside those paths must be added
+  `.gitmodules`, `ci.yml`). A new VM source or test file outside those paths must be added
   there.
 - `agentica --vm` (Linux only for now, `docs/vm.md` §9): `src/main.rkt`
   writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
@@ -112,7 +115,11 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
   -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when the Makefile
-  changes).
+  changes). `yyjson.c` is built per mode into `$(VM_BUILD)/yyjson.o`
+  with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the
+  `YY_DEFS` that turn off everything but the reader; `vm/*.c` see the same
+  `YY_DEFS` and `-I vm/third_party/yyjson/src`, and only `vm/json.c`
+  includes `yyjson.h`.
 - Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
   Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
@@ -133,7 +140,7 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
    scalars, `(Struct name)` and `(Enum name ...)` declared in the program,
-   `List` and `Map` of accepted types, `Result` of accepted types or Void, and
+   `Json`, `List` and `Map` of accepted types, `Result` of accepted types or Void, and
    `Fn` over accepted types with an accepted or Void result); a new
    value type widens it.
 3. New opcode: append it to `opcodes` in `src/bytecode.rkt` and to
@@ -167,7 +174,9 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
    `Map.has_key?`, `keys`, `size`, `put`, `get` at arities 2 and 3,
    `delete`, `values`), every `String.*` builtin, and `Float.from_int`,
    `Float.to_int`, `Float.to_int!`, `Time.now_ms`, `Time.monotonic_ms`,
-   `Random.int` and `Random.float` are accepted; everything else is
+   `Random.int` and `Random.float`, and every `JSON.*` builtin except
+   `JSON.decode` and `JSON.schema` (they wait for a type table) are
+   accepted; everything else is
    `LOWER-UNSUPPORTED`; the lowerer also emits `List.concat` and `Map.put`
    for list and map literals above 255 elements; the loader rejects `MAP`
    with more than 255 pairs) and emit `call-builtin` with the catalog's
@@ -274,6 +283,17 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   sources.
 
 ## Gotchas
+
+- JSON parsing must match `read-json` plus the checks in `src/json.rkt`,
+  not RFC 8259 alone: the control-character pass runs first over the whole
+  text, a top-level number or literal stops early (`01` is unexpected
+  content, `truex` invalid), the finite check comes after the trailing
+  check, a mantissa of zeros is `0.0` whatever its sign, and duplicate
+  keys keep the last value (`docs/vm.md` §2.6). yyjson reads numbers as
+  raw text so the VM converts them itself; never turn on its `ALLOW_*`
+  flags or its writer. Bumping yyjson: check out the new tag inside
+  `vm/third_party/yyjson`, `git add vm/third_party/yyjson`, and rerun the
+  sanitizer and diff tests.
 
 - `Random` differs from the evaluator by design: the VM uses xoshiro256**
   and the evaluator Racket's `random`, so seeded sequences differ between
