@@ -112,7 +112,7 @@ Besides remaining List operations, these gaps remain. Check each against a real 
 - **Math:** `abs`, `min`, `max`, `pow`, `sqrt`, `floor`, `ceil`, `gcd`.
 - **Ranges, sets and queues:** planned in [section 12](#12-data-structures). Meanwhile use `while` with a counter, `Map[T, Bool]` and `std/queue`.
 - **Input:** a helper for lines of integers; IO.gets/IO.gets!, Result, and try already handle line reads and EOF.
-- **Structures:** tuples or pairs ([section 12.4](#124-later)). Nested lists and matrices are exercised by the traveling-salesman example.
+- **Structures:** tuples or pairs ([section 12.5](#125-later)). Nested lists and matrices are exercised by the traveling-salesman example.
 - **Performance:** `List.append` copies the list, so repeated appends are O(n²); a persistent vector remains a possible later optimization. Maps already use Racket immutable hashes with structural sharing ("Faster maps" in the roadmap).
 - **Bounds:** Int is signed 64-bit and recursion has a 10000-call limit. Large challenge workloads still need practical runtime measurements.
 - **Outside the language:** online judges do not accept Agentica, so challenges run locally against hidden cases, as in `tests/eval/`. The interpreter is a tree walker on Racket, so judge time limits are tight.
@@ -330,7 +330,7 @@ end
 ```
 
 - `a..b` includes `b`; `a...b` excludes it, as in Ruby. Both operands are `Int`; anything else is a type error, like other operators. The result has the builtin type `Range`.
-- Precedence: lowest, below `or`/`||`, and not associative, so `0...n + 1` is `0...(n + 1)` and `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator. Calling a method needs parentheses: `(1..5).to_a`.
+- Precedence: lowest, below `or`/`||`, and not associative, so `0...n + 1` is `0...(n + 1)` and `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator. `x = 0...n` and `f(0..n)` need no parentheses. A line that ends in `..` or `...` does not continue on the next line, like other binary operators. Calling a method needs parentheses: `(1..5).to_a`.
 - `for x in range` yields each `Int` in order, without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `List.reverse` on `to_a`). Each iteration costs steps like `for` over a list. Iteration up to the largest `Int` must not overflow.
 - `Range` methods (and module functions `Range.name(r, ...)`):
   - `size -> Int`: the number of values; `RUNTIME-INTEGER-OVERFLOW` when it does not fit in `Int` (for example `(0..9223372036854775807).size`).
@@ -338,8 +338,8 @@ end
   - `include?(x: Int) -> Bool`, `each(Fn[Int, Void]) -> Void`.
   - `first -> Result[Int]` and `last -> Result[Int]`: the first and last included values, an error for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)`, not `5`.
 - `Int` methods for loops, all returning `Void`: `n.times(Fn[Int, Void])` calls the block with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, Fn[Int, Void])` with `a` to `b` (nothing when `b < a`); `a.downto(b, Fn[Int, Void])` with `a` down to `b` (nothing when `b > a`).
-- Text form: `1..5` and `1...5`, as Ruby's `inspect`. Ranges compare with `==` (same start, end and kind).
-- VM: `for` over a range literal lowers to a counter loop with no allocation; a `Range` value is a small immutable object.
+- Text form: `1..5` and `1...5`, as Ruby's `inspect`. Ranges compare with `==` (same start, end and kind); they hold only `Int`s, so this needs no new equality rule.
+- VM: a `Range` value is a small immutable object (start, end, kind). `for` over a literal lowers to a counter loop with no allocation; `for` over a `Range` variable reads its start and end once and runs the same counter loop, never `to_a` (so the `to_a` cap does not apply).
 - Open: `step` (`(0..10).step(2)`), and ranges of `String` or `Float`. Not planned until a real program needs them.
 
 ### 12.2 Sets
@@ -351,13 +351,12 @@ puts(seen.include?("a"))   # true
 puts(seen.size)            # 3
 ```
 
-- `Set[T]` is a builtin generic, immutable like `Map`. Elements use the same types and equality as `Map` keys. Iteration and `to_a` follow first-insertion order, like `Map.keys`.
+- `Set[T]` is a builtin generic, immutable like `Map`. Elements are `Int` or `String`, like `Map` keys. Iteration and `to_a` follow first-insertion order, like `Map.keys`.
 - Functions (also methods, with the set first):
 
   | Function | Result |
   |---|---|
-  | `Set.new() -> Set[T]` | empty; needs an expected type, like an empty map |
-  | `Set.new(items: List[T]) -> Set[T]` | duplicates dropped, first one kept |
+  | `Set.new(items: List[T]) -> Set[T]` | duplicates dropped, first one kept; `Set.new([])` needs an expected type, like an empty list. One arity, so the builtins catalog needs no overloads. |
   | `Set.add(s: Set[T], x: T) -> Set[T]`, `Set.delete(s: Set[T], x: T) -> Set[T]` | a new set; the input is unchanged |
   | `Set.include?(s: Set[T], x: T) -> Bool`, `Set.size(s) -> Int`, `Set.empty?(s) -> Bool` | |
   | `Set.to_a(s: Set[T]) -> List[T]` | first-insertion order |
@@ -365,17 +364,21 @@ puts(seen.size)            # 3
   | `Set.subset?(a: Set[T], b: Set[T]) -> Bool` | every element of `a` is in `b` |
 
 - `for x in set` iterates in order.
-- Text form: `Set[1, 2]`. `==` compares elements regardless of order. Sets are not JSON-encodable at first.
+- Text form: `Set[1, 2]`. No `==` at first, like `List` and `Map` (`grammar.md` §6 allows `==` on primitive values only). Sets are not JSON-encodable at first.
 - VM: built on the HAMT of 7e PR 5d, so it comes after maps.
 
 ### 12.3 Queues
 
-- `Queue[T]` is a builtin generic, persistent FIFO (two lists): `Queue.new() -> Queue[T]` (needs an expected type), `Queue.push(q, x: T) -> Queue[T]` (at the back), `Queue.peek(q) -> Result[T]` (the front), `Queue.drop(q) -> Queue[T]` (without the front; an empty queue stays empty), `Queue.size(q) -> Int`, `Queue.empty?(q) -> Bool`, `Queue.to_a(q) -> List[T]` (front to back). Also as methods. Used linearly, each operation is O(1) amortized; reusing an old version can cost O(n) once.
-- `for x in queue` iterates front to back. Text form: `Queue[1, 2]`, front first. `==` compares the elements in order. Not JSON-encodable at first.
+- `Queue[T]` is a builtin generic, persistent FIFO (two lists): `Queue.new(items: List[T]) -> Queue[T]` (front first; `Queue.new([])` needs an expected type), `Queue.push(q, x: T) -> Queue[T]` (at the back), `Queue.peek(q) -> Result[T]` (the front), `Queue.drop(q) -> Queue[T]` (without the front; an empty queue stays empty), `Queue.size(q) -> Int`, `Queue.empty?(q) -> Bool`, `Queue.to_a(q) -> List[T]` (front to back). Also as methods. Used linearly, each operation is O(1) amortized; reusing an old version can cost O(n) once.
+- `for x in queue` iterates front to back. Text form: `Queue[1, 2]`, front first. No `==`, like `List`. Not JSON-encodable at first.
 - `pop` returning both the value and the rest waits for tuples (12.4). Until then, `peek` then `drop`.
-- `std/queue` is removed in the same PR: `Queue` becomes a reserved name, so `import "std/queue.agc" as Queue` would fail with `CHECK-REDEFINED-NAME`, and its String-only API (`pop` returning `Popped`) would confuse agents next to the builtin. That PR updates `README.md`, `examples/queue.agc`, `docs/grammar.md`, the programming skill's modules reference, `tests/modules-test.rkt` and `tests/stdlib-distribution-test.rkt` (which need another embedded module for the `std/` coverage) and notes the break in the changelog.
+- `std/queue` stays, deprecated: `Queue` becomes a reserved name, so `import "std/queue.agc" as Queue` would fail with `CHECK-REDEFINED-NAME`. 8c renames the documented alias to `StringQueue` in `README.md`, `examples/queue.agc`, `docs/grammar.md`, the programming skill's modules reference, `tests/modules-test.rkt` and `tests/stdlib-distribution-test.rkt`, keeps `stdlib/queue.agc` and its entry in `src/stdlib.rkt` (the only embedded module, so the `std/` path and its tests keep their coverage), keeps the `examples/queue.agc` smoke runs in `.github/workflows/ci.yml` and `release.yml` working, and notes the break in the changelog. `std/queue` is removed once another `std/` module exists.
 
-### 12.4 Later
+### 12.4 Faster lists
+
+Not a new type: `List` keeps its API and meaning, and only its representation changes. Today `List.append` copies the list (O(n)), and indexing is O(n) in the evaluator. A persistent vector (a 32-way trie with a tail buffer, as in Clojure and Scala) makes `append`, `set` and indexing O(log32 n), near constant, and keeps old versions unchanged. Both backends change in the same PR; output, step counts and diagnostics stay the same. Measure with `benchmarks/` before and after.
+
+### 12.5 Later
 
 Each needs a real program first.
 

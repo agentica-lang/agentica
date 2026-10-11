@@ -13,7 +13,7 @@ structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
 done; the rest of item 5 (5c to 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) follow:
 ranges may start once the VM has closures (5e), in parallel with the rest of
-phase 7; sets and queues come after the VM maps (5d). Real applications and
+phase 7; queues also need only 5e, and sets need the VM maps (5d). Real applications and
 MCP follow;
 they keep running on the Racket evaluator meanwhile, and their findings feed
 the VM's differential tests. Historical phase numbers below remain stable; this
@@ -984,7 +984,7 @@ without a specification.
 - [x] Verify queue behavior, precedence, compiled CLI and relocated release bundles.
 - [x] Document imports/API in the grammar and programming reference together.
 
-### 6. Real applications
+### 7. Real applications
 
 Use complete programs to expose missing APIs before broadening the language.
 
@@ -996,7 +996,7 @@ Use complete programs to expose missing APIs before broadening the language.
 **Milestone:** practical larger general-purpose programs, demonstrated by
 these applications rather than a feature checklist alone.
 
-### 7. MCP examples (phase 5m), then Streamable HTTP
+### 8. MCP examples (phase 5m), then Streamable HTTP
 
 Build stdio examples first on the file/process/JSON/module foundations. A
 minimal protocol scaffold lives at `examples/mcp/stdio.agc`; it handles
@@ -1171,12 +1171,13 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ## Phase 8: Core data structures
 
-Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges can start as soon as the VM covers closures (7e PR 5e, for the block forms); sets need the VM maps (PR 5d).
+Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges and queues can start as soon as the VM covers closures (7e PR 5e, for the block forms); sets need the VM maps (PR 5d).
 
 - [ ] 8a Ranges: `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
 - [ ] 8b `Set[T]`.
-- [ ] 8c `Queue[T]`; remove `std/queue` and update its users (breaking change).
-- [ ] Later, each after a real program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map or set, a deque.
+- [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue` (breaking change for `as Queue`).
+- [ ] 8d Faster lists: a persistent vector behind `List` in both backends, no language change (`future.md` §12.4).
+- [ ] Later (`future.md` §12.5), each after a real program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map or set, a deque.
 
 **Done when:** the three structures run on both backends, and an evaluation round shows agents use ranges without `while` workarounds.
 
