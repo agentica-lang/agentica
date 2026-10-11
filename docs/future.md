@@ -510,10 +510,10 @@ end
 - `s.put` without parentheses is still the field value, so it can be passed on or stored.
 - A block is allowed: `s.put(a) do |x| ... end` passes the block as the last argument, the same as `s.put.call(a) do |x| ... end`.
 - A block without parentheses is a call too: `s.run do |x| ... end`, where `run` is a `Fn` field, calls it with the block as its only argument, like `xs.each do ... end`. A bare `s.run` with no block and no parentheses is still the field value.
-- Structs have no methods, so there is no ambiguity. A struct with a `Fn` field has no `to_s` or `inspect` either, because a `Fn` is not printable. Today `s.put(a, b)` is `CHECK-UNKNOWN-METHOD` (with the help "put is a function field; call it with .put.call(...)"), so no valid program changes meaning.
+- Structs have no methods, so there is no ambiguity. If methods on user types ever land (§3, §7), that feature must decide the precedence, and a `Fn` field wins, as a field named `to_s` does today. A struct with a `Fn` field has no `to_s` or `inspect` either, because a `Fn` is not printable. Today `s.put(a, b)` is `CHECK-UNKNOWN-METHOD` (with the help "put is a function field; call it with .put.call(...)"), so no valid program changes meaning.
 - On a generic struct (15.3) the rule applies after substitution: for `b: Box[Fn[Int, Int]]`, `b.value(1)` calls the field.
 - Arity and type errors are the same as for `.call`: a wrong number of arguments is `CHECK-ARITY`, a wrong argument type is `CHECK-TYPE-MISMATCH`. A name that is not a field, or a field that is not a `Fn`, stays `CHECK-UNKNOWN-METHOD` with today's help.
-- **Adapter pattern:** a struct of `Fn` fields is the interface; a function such as `disk_storage(dir)` is one implementation, and its blocks capture `dir`. Code like `save_note` takes `Storage` and does not know the backend. The disk backend writes files under a directory; its tests use a temporary directory. The memory backend is read-only: its map is fixed when it is created, `get` reads it, and `put` returns `error("read-only")`. A test can pass the memory backend to code that only reads, and the program passes the disk one. A block can only be written as the last argument of a call, so each block goes through a small function that returns it (`getter`, `putter` above); standalone lambdas stay open (§3).
+- **Adapter pattern:** a struct of `Fn` fields is the interface; a function such as `disk_storage(dir)` is one implementation, and its blocks capture `dir`. Code like `save_note` takes `Storage` and does not know the backend. The disk backend writes files under a directory; its tests use a temporary directory. The memory backend is read-only: its map is fixed when it is created, `get` reads it, and `put` returns `error("read-only")`. A test can pass the memory backend to code that only reads, and the program passes the disk one. The two backends live in separate programs for the VM check: lowering rejects a whole program that uses any unsupported builtin, so the VM program (memory backend and JSON walker) uses no `File.*` and no `System.args`, and the disk program runs only on the evaluator until files reach the VM (7h). A block can only be written as the last argument of a call, so each block goes through a small function that returns it (`getter`, `putter` above); standalone lambdas stay open (§3).
 - **Facade pattern:** a file module that exports a few functions and hides the rest. It needs no new syntax:
 
   ```agentica
@@ -584,13 +584,13 @@ end
 
   So `kind` stays total.
 - **Object order:** the keys of `JsonObject` use the same sorted order as `JSON.decode` into a `Map`. The text order is not kept, so `JSON.parse` does not change. Text order may come later if a real program needs it; it would need an ordered object representation in the evaluator.
-- It works with the existing `case`, the branch check and bindings, with no grammar change. Variants are qualified like any enum (`JsonValue.JsonInt(n)`). `JsonValue` values are for reading: they have `to_s` and `inspect` like other enums, but no JSON encoding (`CHECK-NOT-ENCODABLE`); build Json with the builders.
+- It works with the existing `case`, the branch check and bindings, with no grammar change. Variants are qualified like any enum (`JsonValue.JsonInt(n)`). `JsonValue` values are for reading: they have `to_s` and `inspect` like other enums. `JsonValue` stays out of all four JSON type functions: `JSON.encode` and `JSON.from` reject it with `CHECK-NOT-ENCODABLE`, and `JSON.decode` and `JSON.schema` with `CHECK-NOT-DECODABLE`; build Json with the builders, and use `Json` for free-form data.
 - `JsonValue` becomes a reserved name: a user `struct JsonValue`, `enum JsonValue` or `import ... as JsonValue` is `CHECK-REDEFINED-NAME`. This is a breaking change; say so in the changelog.
 - The recommended path is still `JSON.decode` into typed structs. `kind` is the low-level tool for unknown shapes: a generic pretty printer, a config with free-form values, or a reply whose shape depends on a field.
 - Unlike Ruby's `case x when String`, a general `typeof` or a type-pattern `case` is not planned. Static types make the answer constant for every other value; `Json` is the only dynamic value, and `kind` covers it.
 - Diagnostics: none new. A non-`Json` argument is `CHECK-TYPE-MISMATCH`; a missing variant is `CHECK-NON-EXHAUSTIVE-CASE`.
 - Evaluator: `JsonValue` is the first builtin enum, so it needs a path in the checker's enum table and in the evaluator.
-- VM: needs the JSON PR (`docs/vm.md` §12.2 item 7). `JsonValue` is a builtin entry of the enum table with this fixed variant order, so `case` lowers as for user enums. Numbers in the VM:
+- VM: needs the JSON PR (`docs/vm.md` §12.2 item 7). `JsonValue` is a builtin entry of the enum table with this fixed variant order, so `case` lowers as for user enums. The entry rides on the JSON PR's planned format bump (`docs/vm.md` §4), so it needs no bump of its own. Numbers in the VM:
   - yyjson gives integers in `2^63 .. 2^64-1` as uint64, so the VM layer turns a value above `INT64_MAX` into its decimal text (`JsonBigInt`).
   - Larger integers come as raw text with the raw flag (for example yyjson's `BIGNUM_AS_RAW`) and stay exact decimal text.
   - With the raw flag, `1e400` also comes back as raw text; the VM must still reject it with `JSON number is not finite`.
@@ -648,11 +648,11 @@ end
 ```
 
 - A variant is an object with `tag` (the variant name, without the enum name) and `values` (the payloads in order). `JSON.encode` and `JSON.from` always write both keys; `JSON.encode` text puts `tag` first. `JSON.decode` accepts a missing `values` for a nullary variant and ignores extra keys, as for structs.
-- `JSON.encode` and `JSON.from` work on any enum whose payloads are encodable, generic instances included (`Option[Int]`), because encoding needs no `$defs`.
-- Only non-generic enums are decodable, and only when their payload types are. A generic enum instance such as `Option[Int]` anywhere in a decode or schema target is `CHECK-NOT-DECODABLE` (15.3 gives the reason); a bare `Option` is `CHECK-UNKNOWN-TYPE`. `Result` stays out. `JsonValue` (15.2) stays out too; use `Json` for free-form data.
+- `JSON.encode` and `JSON.from` work on any user enum (not `JsonValue`) whose payloads are encodable, generic instances included (`Option[Int]`), because encoding needs no `$defs`.
+- Only non-generic enums are decodable, and only when their payload types are. A generic enum instance such as `Option[Int]` anywhere in a decode or schema target is `CHECK-NOT-DECODABLE` (15.3 gives the reason); a bare `Option` is `CHECK-UNKNOWN-TYPE`. `Result` stays out. `JsonValue` stays out of all four functions (15.2).
 - The decode target may be a non-generic enum: `JSON.decode(text, Shape)`.
 - Errors return `error(...)` with the same paths as struct fields (`shapes[0].values[1]`): an unknown tag, a missing `tag`, a wrong number of values, or a wrong value type. No new code: an enum with a non-decodable payload is `CHECK-NOT-DECODABLE`.
-- `JSON.schema(Shape)` accepts the same enums as decode and describes the tagged-object form. It writes a `oneOf` with one object per variant and its `tag` as a `const`. The schema must be valid in every JSON Schema draft:
+- `JSON.schema(Shape)` accepts the same enums as decode and describes the tagged-object form. It writes a `oneOf` with one object per variant and its `tag` as a one-value `enum` (`{"enum": ["Rect"]}`), which also works in draft-04. The schema is accepted by every draft; per-payload types are checked from 2020-12 (`prefixItems`):
   - `values` is an array whose length is fixed with `minItems` and `maxItems` (the number of payloads).
   - `prefixItems`, with one schema per payload, is added only when the variant has payloads. There is no `"items": false`.
   - A nullary variant gets `"values": {"type": "array", "maxItems": 0}`, and `values` is not in its `required`, since decode accepts a missing `values`.
@@ -662,12 +662,12 @@ end
 
   ```json
   {"type": "object",
-   "properties": {"tag": {"const": "Rect"},
+   "properties": {"tag": {"enum": ["Rect"]},
                   "values": {"type": "array", "minItems": 2, "maxItems": 2,
                              "prefixItems": [{"type": "number"}, {"type": "number"}]}},
    "required": ["tag", "values"]}
   {"type": "object",
-   "properties": {"tag": {"const": "Empty"},
+   "properties": {"tag": {"enum": ["Empty"]},
                   "values": {"type": "array", "maxItems": 0}},
    "required": ["tag"]}
   ```
