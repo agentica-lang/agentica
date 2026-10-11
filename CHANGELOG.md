@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs linked programs: relative, `std/` (such as
+  `std/queue.agc`) and `pkg/` imports, linked by the front end into one
+  bytecode file. A runtime error inside an imported file reports that
+  file's path, line and column, as the evaluator does.
+
 - The bytecode VM runs `Json` values and the `JSON` builtins that need no
   type table: `JSON.parse`, `encode`, `from`, `object`, `array`, `null`,
   `null?`, `get`, `at`, `string`, `int`, `float`, `bool` and `list`, with

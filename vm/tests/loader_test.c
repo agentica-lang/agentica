@@ -32,6 +32,7 @@ typedef struct {
   const buffer *tables;
   double extra_float, second_float;
   uint32_t captures, helper_captures;
+  const char *second_source;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -86,7 +87,7 @@ static void function(buffer *b, const char *name, uint32_t params, uint32_t capt
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL};
   return s;
 }
 
@@ -99,9 +100,13 @@ static buffer build(spec s) {
   b.len = 4;
   u32(&b, s.version);
   str(&b, s.agentica);
-  u32(&b, 1);
+  u32(&b, s.second_source ? 2 : 1);
   str(&b, s.name);
   str(&b, "def main() -> Void\n  puts(1)\nend\n");
+  if (s.second_source) {
+    str(&b, "lib/m.agc");
+    str(&b, s.second_source);
+  }
   u32(&b, 3);
   for (int i = 0; i < 3; i++)
     for (int k = 0; k < 5; k++) u32(&b, s.spans[i][k]);
@@ -312,6 +317,21 @@ int main(void) {
   s = base();
   s.spans[2][4] = 3;
   assert(!loads(s, "starts after it ends"));
+  s = base();
+  s.spans[2][0] = 1;
+  assert(!loads(s, "span source out of range"));
+  s.second_source = "abc";
+  assert(!loads(s, "line out of range"));
+  s.spans[2][1] = 1;
+  s.spans[2][2] = 2;
+  s.spans[2][3] = 1;
+  s.spans[2][4] = 4;
+  assert(loads(s, NULL));
+  s.spans[2][4] = 5;
+  assert(!loads(s, "column out of range"));
+  s.spans[2][4] = 4;
+  s.spans[2][0] = 2;
+  assert(!loads(s, "span source out of range"));
 
   s = base();
   s.params = 2;

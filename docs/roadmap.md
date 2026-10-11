@@ -1142,7 +1142,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] `Float`, `Time` and `Random` builtins; the VM's `Random` uses xoshiro256**, so seeded values differ from the evaluator by design, and `agentica --vm` passes `--seed` (`docs/vm.md` §7.4).
 - [x] JSON part 1: parse (the yyjson reader, a pinned submodule), extract, encode and builders, with the big-integer node and the number rules of `docs/future.md` §15.2 (`docs/vm.md` §12.2 item 7).
 - [ ] JSON part 2: typed decode and schema (pure C, no event loop).
-- [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
+- [x] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end (`docs/vm.md` §4.6).
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
 - [x] Runtime diagnostics in the `--ai` and `--json` formats.
 - [x] CI: Linux and sanitizer jobs.
