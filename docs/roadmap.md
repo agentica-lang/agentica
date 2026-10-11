@@ -11,7 +11,7 @@ Ruby-style ergonomics are implemented. The next priority is the bytecode VM
 Float and Strings PRs, the macOS and Windows CI, the Lists PR and the
 structs, enums and `case` PR (`docs/vm.md` §12.2 items 1 to 4, 5a and 5b) are
 done; the rest of item 5 (5c to 5e) and the
-other widening PRs of §12.2 come next. Core data structures (phase 8) follow:
+other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (5e), in parallel with the rest of
 phase 7; queues also need only 5e, and sets need the VM maps (5d). Real applications and
 MCP follow;
@@ -1173,13 +1173,13 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges and queues can start as soon as the VM covers closures (7e PR 5e, for the block forms); sets need the VM maps (PR 5d).
 
-- [ ] 8a Ranges: `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
+- [ ] 8a Ranges (reserving `Range` breaks a user type of that name; say so in the changelog, as for `Set` in 8b): `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
 - [ ] 8b `Set[T]`.
 - [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue` (breaking change for `as Queue`).
 - [ ] 8d Faster lists: a persistent vector behind `List` in both backends, no language change (`future.md` §12.4).
 - [ ] Later (`future.md` §12.5), each after a real program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map or set, a deque.
 
-**Done when:** the three structures run on both backends, and an evaluation round shows agents use ranges without `while` workarounds.
+**Done when:** ranges, sets, queues and the faster lists run on both backends, and an evaluation round shows agents use ranges without `while` workarounds.
 
 ## Later extensions
 
