@@ -956,8 +956,8 @@ typedef struct {
   one exception is `handle->data` and `SSL_set_app_data` in 7h, which may
   point to a GC object only while the resource registry also roots it (10.2).
 - No GC finalizers for OS resources; closing is explicit (10.2).
-- Roots (VM state, program, tasks) live in static storage or GC objects
-  reachable from it.
+- Roots (runtime, schedulers, program, tasks) live in GC objects reachable
+  from the runtime struct, never in mutable static storage (10.2.2).
 
 ## 6. Execution
 
@@ -996,7 +996,8 @@ typedef struct {
 - `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. All
   tasks share it. `STEP` is one compare and one subtraction on a "next stop"
   counter; before 7h it is just `steps_left`, and from 7h it also covers the
-  turn budget (10.2.1).
+  turn budget (10.2.1). With N schedulers, `steps_left` is one atomic
+  counter that each scheduler takes from in batches (10.2.1, Quotas).
 
 ### 6.2 Failure, exit and cleanup
 
@@ -1374,12 +1375,23 @@ path: most of what libuv is, and the hardest platform code to get right. So
 the gap blocks `Process`, stdin and `File` on Windows, and the choice is
 libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 
+libuv also stays for multicore (10.2.2); we do not replace it with raw
+epoll or io_uring. libuv works with one loop per thread, which is what
+one loop per scheduler needs. It gives the thread pool for files (epoll
+cannot poll regular files), process spawn, signals and DNS, which we would
+otherwise write ourselves on each platform. libuv types stay inside the I/O
+layer (`vm/loop.c`, added in 7h, and the builtin files that use it), so a later swap to
+raw epoll or io_uring stays local if measurements ever ask for it.
+
 ### 10.2 Rules for 7h
 
-- One OS thread runs the interpreter and the loop. Tasks are VM stacks. A
-  blocking builtin starts a libuv request, parks its task, and the scheduler
-  runs another ready task (10.2.1). Only the scheduler calls `uv_run`. libuv
-  and OpenSSL callbacks only copy results and mark tasks ready.
+- The target is multicore: N scheduler threads (M:N, as in BEAM, 10.2.2),
+  each running the interpreter and its own libuv loop. The first tasks PR
+  of 7h runs N=1, but on the structures built for N schedulers. Tasks are
+  VM stacks. A blocking builtin starts a libuv request, parks its task, and
+  the scheduler runs another ready task (10.2.1). Only the scheduler that
+  owns a loop calls `uv_run` on it. libuv and OpenSSL callbacks only copy
+  results and mark tasks ready.
 - Racket threads are preemptive, so the scheduler also switches tasks that do
   not block, by reductions (10.2.1). Cross-task output order is not compared.
 - Builtins that take a function (`Task.spawn`, `HTTP.listen` and
@@ -1391,7 +1403,7 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 - Files open with `O_NONBLOCK`, then `fstat` checks the kind. The libuv thread
   pool keeps its default size (4, `UV_THREADPOOL_SIZE`); this is documented.
 - Thread-pool threads never touch GC memory. Requests and handles are
-  `malloc`'d, and `uv_fs` buffers are `malloc`'d copies. The GC object that owns a handle sits in the run's resource
+  `malloc`'d, and `uv_fs` buffers are `malloc`'d copies. The GC object that owns a handle sits in the owning scheduler's resource
   registry (a GC object, like the registries in `src/process.rkt` and
   `src/filesystem.rkt`) until its `uv_close` callback; only then does it leave.
   `uv_write` and `uv_fs` buffers stay reachable from the registry until their
@@ -1407,8 +1419,10 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   which task runs; the scheduler is ours. Raw epoll or io_uring would make us
   rewrite the file thread pool, processes, signals and DNS ourselves, on each
   platform.
-- **Run queue.** Ready tasks wait in one FIFO queue. A new task, a task whose
-  turn ended, and a task woken by a libuv callback all go to the back.
+- **Run queue.** Each scheduler has its own FIFO run queue of ready tasks. A
+  new task, a task whose turn ended, and a task woken by a libuv callback
+  all go to the back of their scheduler's queue. With N>1, an idle scheduler
+  steals ready tasks from other queues (10.2.2).
 - **Reductions, as in BEAM.** Each turn has a budget of steps, counted by
   `STEP` like `--max-steps` (`STEP n` counts n). It starts at 2000 and is
   tuned by measurement in 7h; 7g gives the cost of `STEP` with one task. When
@@ -1446,28 +1460,89 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   its tasks even while other tasks keep computing. Timers (`Task.sleep`) wake
   the same way, inside `uv_run`. Tasks woken during a `NOWAIT` go behind the
   tasks already queued. The scheduler blocks in `uv_run(UV_RUN_ONCE)` only
-  when the run queue is empty. Without channels, a parked task waits on I/O,
-  a timer, or another live task, so either `uv_run` has an active handle or
-  the queue is not empty. If `uv_run` reports no active handles while tasks
-  are still parked, the VM fails with `RUNTIME-INTERNAL` and does not spin.
+  when its run queue is empty and, with N>1, it found nothing to steal.
+  Without channels, a parked task waits on I/O, a timer, or another live
+  task, so either some loop has an active handle or some queue is not empty.
+  If every scheduler is idle, no loop has an active handle, and tasks are
+  still parked, the VM fails with `RUNTIME-INTERNAL` and does not spin. With
+  N=1 this is the plain check that `uv_run` reports no active handles.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
     6.1), as today. Preemption never changes what is charged. With one task,
     counts and failing spans match the evaluator (2.1). With several tasks,
     which task fails at the limit depends on the interleaving, so, like
     cross-task output order, it is not compared.
+  - With N schedulers, `steps_left` is one atomic counter. A scheduler takes
+    a batch from it when a turn starts (one turn's budget, or what is left
+    if less) and gives the unspent part back when the turn ends. The "next
+    stop" counter is set from the batch, so the fast path stays one compare
+    and one subtraction and touches no atomic. A task fails with
+    `RUNTIME-STEP-LIMIT` only when its batch is spent and the shared counter
+    is empty. With N=1 this is the same as one plain counter, so counts and
+    spans still match the evaluator exactly. With N>1, which task hits the
+    limit is not compared, as cross-task output order is not compared.
   - Per-task step quotas could later use the same counter. They are not in
     7h.
   - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
     BEAM's per-process heaps. Only a global heap limit is possible (13).
-- **One OS thread in 7h.** Multicore (M:N, one scheduler per core with work
-  stealing) is later work, done only if measurements of the 7h scheduler
-  justify it. Immutable values make sharing safe, and the shared tables plan
-  avoids locks. The costs: Boehm stops the world for each collection once
-  there are threads, the interpreter state must become per-thread, and
-  builtins that rely on the single thread (table calls, the resource
-  registry) need atomics. `future.md` §13 relies on the single-thread rule for atomic table
-  calls on the VM, so it must be revisited if multicore lands.
+- **N=1 first.** The first tasks PR of 7h runs one scheduler, but on the
+  split structures of 10.2.2, so going to N>1 later adds threads, stealing
+  and the I/O hand-off without a rewrite.
+
+#### 10.2.2 Multicore: M:N schedulers
+
+The VM must use all CPU cores (parallelism), not only run tasks
+concurrently. The design follows BEAM.
+
+- **Schedulers.** N scheduler threads. The default is the number of cores;
+  `--schedulers N` sets it, and `--schedulers 1` gives deterministic runs.
+  Each scheduler has its own run queue, its own `uv_loop_t` (libuv loops are
+  per thread) and its own resource registry. Tasks are green VM stacks, as
+  in 10.2.1, and reductions and turns stay as they are there.
+- **Work stealing.** A scheduler whose queue is empty steals from the queues
+  of others. It takes only ready tasks; a parked task stays with the
+  scheduler that owns what it waits on. An idle scheduler that is blocked in
+  `uv_run` is woken with `uv_async_send` when work appears.
+- **State split.**
+  - Shared and read-only after start-up (the runtime): the program,
+    constants and config. The shared atomic `steps_left` (10.2.1, Quotas)
+    and the run's outcome also hang here.
+  - Per scheduler: the loop, the run queue, the resource registry and the
+    turn counter.
+  - Per task: the stack, the registers and the current frame.
+  - A runtime diagnostic or `System.exit` on any scheduler ends the run
+    (6.2): that scheduler records the outcome once, and the others stop at
+    their next `STEP` or loop wake-up, then cleanup runs.
+- **I/O ownership.** A libuv handle belongs to the loop that created it. A
+  task parked on I/O wakes on the scheduler that owns that loop. If a task
+  that was stolen to another scheduler uses a handle owned elsewhere, the
+  operation is sent to the owner loop (an MPSC queue plus `uv_async_send`),
+  and the task parks until the reply. Thread-pool threads still never touch
+  GC memory (10.2).
+- **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
+  `THREAD_LOCAL_ALLOC`. Scheduler threads are created with
+  `GC_pthread_create` or register with `GC_register_my_thread`. Collections
+  stop the world; that cost is accepted and measured (round 2 benchmarks).
+- **No mutable global state in `vm/`.** Every mutable `static` or global
+  variable goes into the runtime, scheduler or task struct. Lazy one-time
+  init uses `pthread_once` or happens at start-up. The only exception is the
+  sanitizer-only allocation tracking (`AGC_NO_GC`), which stays
+  single-threaded. The tasks PR moves the ones left today (for example the
+  SipHash keys in `vm/map.c`) into those structs or makes them `const`. A
+  follow-up PR enforces this with clang-tidy's
+  `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`.
+- **Values are immutable**, so tasks on different schedulers share them
+  without locks. Future mutable structures (for example mutable vectors)
+  and the shared tables of `future.md` §13 must use an owner scheduler or
+  locks and atomics. A table call does not yield, so it is atomic with N=1;
+  once N>1, each table call needs a lock or an owner scheduler.
+- **Order of work.** First the tasks PR on these split structures with N=1;
+  then the multicore schedulers item (N>1, work stealing, Boehm threads, the
+  I/O hand-off, and a stress test of the task fixtures with
+  `--schedulers 4`, under TSan when available); then round 2 of the
+  benchmarks covers multicore (roadmap phase 12). Multicore does not block
+  7i: the evaluator cannot run in parallel anyway. The parity rule stays:
+  with N=1, output, counts and spans match the evaluator.
 
 ### 10.3 TLS
 

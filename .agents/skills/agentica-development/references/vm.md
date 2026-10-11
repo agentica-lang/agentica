@@ -310,10 +310,16 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 ## Later phases (read `docs/vm.md` §10 before starting them)
 
 - **libuv (7h)**: added then as a pinned submodule, built from source like
-  bdwgc. One OS thread runs the interpreter and the loop; only the scheduler
-  calls `uv_run`; libuv and OpenSSL callbacks only copy results and mark tasks
-  ready. Handles and requests are `malloc`'d; the GC object that owns one
-  stays in the run's resource registry until its `uv_close` callback, and
+  bdwgc. The target is N scheduler threads (M:N, `docs/vm.md` §10.2.2); the
+  first tasks PR runs N=1 on the split structures (shared read-only runtime;
+  per-scheduler loop, run queue, registry and turn counter; per-task stack,
+  registers and frame). Only the scheduler that owns a loop calls `uv_run`
+  on it; libuv and OpenSSL callbacks only copy results and mark tasks
+  ready. New code adds no mutable `static` or global variable in `vm/` (only
+  the `AGC_NO_GC` allocation tracking may); state goes in the runtime,
+  scheduler or task struct, and lazy init uses `pthread_once` or runs at
+  start-up. Handles and requests are `malloc`'d; the GC object that owns one
+  stays in its scheduler's resource registry until its `uv_close` callback, and
   `uv_write`/`uv_fs` buffers stay reachable until their callback. All handles
   and descriptors are non-inheritable.
 - **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
