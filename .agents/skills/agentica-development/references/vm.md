@@ -15,6 +15,7 @@ lower         (src/lower.rkt)     checked program -> IR, or LOWER-UNSUPPORTED / 
 ir->bytecode  (src/bytecode.rkt)  IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL
 write-bytecode                    the versioned .agcb file (magic, format version, Agentica version)
 vm/main.c     dist/agentica-vm [--max-steps N] [--ai|--json] -- file.agcb [args...]
+src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file, then the VM
 ```
 
 | Path | Owns |
@@ -49,7 +50,24 @@ make vm-unicode                      # regenerate vm/unicode_data.c with vm/tool
 AGENTICA_REQUIRE_VM=1 raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
 racket src/main.rkt --dump-ir prog.agc
+racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=path picks the binary
 ```
+
+- `agentica --vm` (Linux only for now, `docs/vm.md` §9): `src/main.rkt`
+  writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
+  in the temp directory and runs the VM with the hidden `--driver-pid PID`
+  flag. The VM then deletes its input right after reading it; on Linux it
+  first sets `PR_SET_PDEATHSIG` and exits 2 when `getppid()` is not `PID`.
+  The driver deletes the file too (VM never ran, failed early, break), and
+  copies stdin/stdout/stderr through pipes only when they are not file
+  streams. The VM is found by `AGENTICA_VM`, else `dist/` of the checkout
+  (module source path), else next to a `raco exe` executable; no
+  `define-runtime-path`, since `raco distribute` would copy the VM. Options
+  the VM lacks (`--allow-run`, `--seed`, ...) exit 2 with `--vm`; add them
+  to the pass-through list in `src/main.rkt` as the VM gains them.
+  `tests/vm-diff-test.rkt` compares `--vm` with the evaluator CLI (with
+  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), runs it
+  once in-process to cover the pipe path, and checks `--driver-pid`.
 
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or

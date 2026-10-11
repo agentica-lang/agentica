@@ -887,16 +887,38 @@ and cost one predictable branch each.
   Arguments after the file are accepted and unused until `System.args`
   lands.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
-- `agentica --vm file.agc` lands in 7i. It writes the bytecode to a temporary
-  file with a random name, created exclusively with mode 0600
-  (`#:exists 'error #:permissions #o600`); passes a hidden VM flag that
-  deletes the input right after loading; under that flag the VM itself calls
-  `prctl(PR_SET_PDEATHSIG, SIGKILL)` on Linux and then checks `getppid()` to
-  close the race (Racket's `subprocess` cannot run code between fork and
-  exec), and uses a kill-on-close job object on Windows; when the driver's
-  ports are not file streams it copies them through pipes; and finds the VM relative to the
-  installation (`define-runtime-path`, next to the executable), never in the
-  current directory. `AGENTICA_VM` overrides it and is documented.
+- `agentica --vm file.agc [args...]` (7i, landed for Linux). `src/main.rkt`
+  runs the front end and `lower`, then writes the bytecode to
+  `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
+  exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
+  runs the VM as `agentica-vm [--max-steps N] [--ai|--json] --driver-pid
+  PID -- file [args...]`. `--driver-pid` is a hidden VM flag (not in the
+  usage text): the VM deletes its input right after reading it, and on
+  Linux it first calls `prctl(PR_SET_PDEATHSIG, SIGKILL)` and then checks
+  that `getppid()` is `PID`; if not, the driver is already gone, so it
+  deletes the input and exits 2 (Racket's `subprocess` cannot run code
+  between fork and exec, so the check closes that race). The driver also
+  deletes the file when the VM never ran or failed before loading, and on
+  a break. When a driver port is not a file stream (rackunit, captured
+  output) it copies that stream through a pipe; otherwise it passes the
+  real stdin, stdout and stderr, so the VM's output and exit code reach
+  the user unchanged. Front-end and `LOWER-` diagnostics print as without
+  `--vm` (exit 1). `--allow-run`, `--seed`, `--steps`, `--dump`,
+  `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with
+  `--vm does not support X`.
+- Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
+  under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
+  (from the module's own source path); in a `raco exe` build it is
+  `agentica-vm` next to the executable (`run-file`). A missing VM prints
+  `agentica: cannot find the VM at PATH` and exits 2. It does not use
+  `define-runtime-path`: `raco distribute` would then copy the VM into
+  `lib/` and fail when it is not built. Packaging the VM in `bin/` of the
+  release is a later 7i item.
+- Future work: Windows (a kill-on-close job object instead of
+  `PR_SET_PDEATHSIG`) and macOS (no parent-death signal; the closest safe
+  thing is the delete-after-load flag alone, or a pipe the VM watches).
+  Today the flag only deletes the input there, and `--vm` is tested on
+  Linux only.
 - `check`, `help` and `test` stay on Racket; 7h decides where BDD handlers
   run. `make vm` builds `dist/agentica-vm` (`.exe` on Windows); in 7i the
   release archive ships it in `bin/` next to `agentica`.
