@@ -481,11 +481,18 @@ def putter(f: Fn[String, String, Result[Void]]) -> Fn[String, String, Result[Voi
   return f
 end
 
+# valid_name? is the allow-list helper of the facade example below
 def disk_storage(dir: String) -> Storage
   get = getter() do |key|
+    if !valid_name?(key)
+      return error("bad key")
+    end
     File.read_text("#{dir}/#{key}", 1000)
   end
   put = putter() do |key, text|
+    if !valid_name?(key)
+      return error("bad key")
+    end
     File.write_text("#{dir}/#{key}", text, 1000)
   end
   return Storage(get: get, put: put)
@@ -513,7 +520,7 @@ end
 - Structs have no user methods, so there is no ambiguity with them. If methods on user types ever land (§3, §7), that feature must decide the precedence; this plan does not. The only methods a struct has today are the builtin `to_s` and `inspect` of printable structs. Today `s.to_s` without parentheses reads a field named `to_s` if there is one, but `s.to_s()` with parentheses goes to method checking and calls the builtin. The new rule only adds a case: `s.name(...)` calls the field when `name` is a `Fn` field. A `Fn` field named `to_s` or `inspect` cannot clash with the builtin, because a struct with a `Fn` field has no `to_s` or `inspect` either, because a `Fn` is not printable. Today `s.put(a, b)` is `CHECK-UNKNOWN-METHOD` (with the help "put is a function field; call it with .put.call(...)"), so no valid program changes meaning.
 - On a generic struct (15.3) the rule applies after substitution: for `b: Box[Fn[Int, Int]]`, `b.value(1)` calls the field.
 - Arity and type errors are the same as for `.call`: a wrong number of arguments is `CHECK-ARITY`, a wrong argument type is `CHECK-TYPE-MISMATCH`. A name that is not a field, or a field that is not a `Fn`, stays `CHECK-UNKNOWN-METHOD` with today's help.
-- **Adapter pattern:** a struct of `Fn` fields is the interface; a function such as `disk_storage(dir)` is one implementation, and its blocks capture `dir`. Code like `save_note` takes `Storage` and does not know the backend. The disk backend writes files under a directory; its tests use a temporary directory. The memory backend is read-only: its map is fixed when it is created, `get` reads it, and `put` returns `error("read-only")`. A test can pass the memory backend to code that only reads, and the program passes the disk one. The two backends live in separate programs for the VM check: lowering rejects a whole program that uses any unsupported builtin, so the VM program (memory backend and JSON walker) uses no `File.*` and no `System.args` (it also needs the library builtins of `docs/vm.md` §12.2 item 6: `Map.get`, `Map.keys`), and the disk program runs only on the evaluator until files reach the VM (7h). A block can only be written as the last argument of a call, so each block goes through a small function that returns it (`getter`, `putter` above); standalone lambdas stay open (§3).
+- **Adapter pattern:** a struct of `Fn` fields is the interface; a function such as `disk_storage(dir)` is one implementation, and its blocks capture `dir`. Code like `save_note` takes `Storage` and does not know the backend. The disk backend writes files under a directory and checks each key with the facade's allow-list helper `valid_name?` before it builds a path (`error("bad key")` otherwise); its tests use a temporary directory. The memory backend is read-only: its map is fixed when it is created, `get` reads it, and `put` returns `error("read-only")`. A test can pass the memory backend to code that only reads, and the program passes the disk one. The two backends live in separate programs for the VM check: lowering rejects a whole program that uses any unsupported builtin, so the VM program (memory backend and JSON walker) uses no `File.*` and no `System.args` (it also needs the library builtins of `docs/vm.md` §12.2 item 6: `Map.get`, `Map.keys`), and the disk program runs only on the evaluator until files reach the VM (7h). A block can only be written as the last argument of a call, so each block goes through a small function that returns it (`getter`, `putter` above); standalone lambdas stay open (§3).
 - **Facade pattern:** a file module that exports a few functions and hides the rest. It needs no new syntax:
 
   ```agentica
@@ -546,7 +553,7 @@ end
   end
   ```
 
-  Callers write `import "users.agc" as Users` and call `Users.load_user(dir, "ana")`; `valid_name?` stays hidden. A facade must check a name with an allow-list before it uses it in a path, as `valid_name?` does: the name is not empty and has only ASCII letters, digits, `-` and `_`. Otherwise it returns `error(...)`.
+  Callers write `import "users.agc" as Users` and call `Users.load_user(dir, "ana")`; `valid_name?` stays hidden. A facade or adapter must check a name with an allow-list before it uses it in a path, as `valid_name?` does: the name is not empty and has only ASCII letters, digits, `-` and `_`. Otherwise it returns `error(...)`.
 - **Limit:** values are immutable and blocks capture by value, so an in-memory adapter cannot change its own data. A memory adapter that writes needs a new struct per write (its `put` returns one, for example `Fn[String, String, MemoryStorage]`), or, later, blocks that capture a shared table (§13).
 - Evaluator: it resolves a struct method call to the field call in the same checker-filled `resolved` slot it uses for builtin methods.
 - VM: no new opcode. The checker records the call as an invoke of the field value, so lowering emits a field read and `call-value`, as for `.call`. It needs `.call` on the VM (7e PR 5e).
@@ -610,8 +617,8 @@ end
   - The VM Json tree already has a big-integer node kept as decimal text (`docs/vm.md` §5, Json row). An integer written without a fraction or exponent that is outside int64 is that node, and `JSON.kind` maps it to `JsonBigInt` with its exact decimal text.
   - A number with a fraction or exponent is a double (`JsonFloat`). A non-finite one, such as `1e400`, is the existing `JSON number is not finite` error.
   - The rule holds for every JSON builtin that reads the tree, not only `kind`: `JSON.float` on a big integer gives the same float as the evaluator (`exact->inexact`, and the same error when the result is not finite); `JSON.encode` writes it back as its exact decimal text; typed decode treats it as the evaluator does (an `Int` target fails, a `Float` target takes `exact->inexact` of it when that is finite).
-  - `-0` is read as exact 0 by the evaluator, so it is `JsonInt(0)`; the VM must match.
-  - Planned differential fixtures: `9223372036854775808` and `-9223372036854775809` (both `JsonBigInt`), `-0` (`JsonInt(0)`) and `1e400` (the error).
+  - `-0` is read as exact 0 by the evaluator, so it is `JsonInt(0)`. `-0.0` has a fraction, so it is a double, but Racket's `read-json` (Racket CS 9.3) drops the sign and reads it as `0.0`, so it is `JsonFloat(0.0)`. The VM must match both.
+  - Planned differential fixtures: `9223372036854775808` and `-9223372036854775809` (both `JsonBigInt`), `-0` (`JsonInt(0)`), `-0.0` (`JsonFloat(0.0)`) and `1e400` (the error).
 
   `JSON.kind` is a builtin that builds the variant from the parsed node; lists and maps hold the child nodes as `Json` values without copying them.
 
@@ -644,7 +651,7 @@ end
 - JSON: `JSON.encode` and `JSON.from` work on any generic instance, struct or enum (with 15.4), whose fields or payloads are encodable after substitution, because encoding needs no `$defs`. Only `JSON.decode` and `JSON.schema` reject a generic instance, struct or enum, anywhere in the target, with `CHECK-NOT-DECODABLE`, until a real program needs it. The reason: `$defs` is keyed by the bare type name, so `Box[Int]` and `Box[String]` would collide. A direct target would also need type arguments in expression position (`Box[Int]` reads as indexing). A bare generic target with no type arguments, such as `JSON.decode(text, Box)` or `JSON.schema(Option)`, is `CHECK-UNKNOWN-TYPE`, as type resolution gives today.
 - VM: no change. Type parameters exist only in the checker, as for generic enums; the struct table keeps field names and order.
 
-### 15.4 `JSON.decode` into enums
+### 15.4 JSON for enums
 
 Today `JSON.decode` and `JSON.schema` take named structs only, and a struct with an enum field is `CHECK-NOT-DECODABLE`; `JSON.encode` rejects enums too (`CHECK-NOT-ENCODABLE`). Enums are the way to model "one of these shapes", so they need a JSON form. It uses tagged objects:
 
