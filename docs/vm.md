@@ -1338,7 +1338,7 @@ written `size > limit - total`. A hermetic test sends over-long values.
   `agc_alloc_atomic` call `GC_gcollect()` every 64 allocations, and
   `GC_DEBUG` adds the debug headers whose smashed-object report on stderr
   would fail the comparison. It runs `make vm-test` with those flags and
-  `tests/vm-diff-test.rkt` on that binary (`AGENTICA_VM_BINARY` points the
+  the `tests/vm-diff-*-test.rkt` shards on that binary (`AGENTICA_VM_BINARY` points the
   test at it; `dist/agentica-vm` is left alone). The Linux sanitizers job
   runs it. No Valgrind: conservative scanning makes it report many false
   errors.
@@ -1415,10 +1415,11 @@ the platform's OpenSSL package) to each job.
   `tests/bytecode-test.rkt` checks step merging, that the opcode list matches
   `vm/agc.h`, that an out-of-subset program gets `LOWER-UNSUPPORTED`, and the
   `compile` exit codes; `tests/lower-test.rkt` comes with the wider lowering.
-- `tests/vm-diff-test.rkt` (from the first VM PR, completed in 7f) runs each
+- `tests/vm-diff-*-test.rkt` (from the first VM PR, completed in 7f; four
+  shards of `tests/vm-diff-common.rkt`) run each
   program on the evaluator in-process (as `tests/examples-test.rkt` does,
   formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm`, and
-  compares stdout, stderr, exit code, and diagnostic code and span in all
+  compare stdout, stderr, exit code, and diagnostic code and span in all
   three formats. Inputs: `examples/`, `tests/eval/tasks/*` reference
   solutions and hidden cases, and `tests/fixtures/vm/` with one program per
   runtime code and error span.
@@ -1470,7 +1471,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
    `break`/`next`, functions, calls, returns, steps and `puts` of plain
    strings and Ints; the loader with full validation and the fuzz driver;
    `--dump-ir`, `agentica compile`; `make vm`, the Linux and sanitizer CI
-   jobs, `tests/vm-diff-test.rkt`.
+   jobs, the VM differential test (now `tests/vm-diff-*-test.rkt`).
 2. **Float** (done). Float ops, comparisons and Float text (2.2), Nil, and
    `puts`/`print` of Float, Bool and Nil.
 3. **Strings and printing** (done). Strings, interpolation, debug forms, the
