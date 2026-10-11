@@ -344,14 +344,19 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 ## Later phases (read `docs/vm.md` §10 before starting them)
 
 - **libuv (7h, in: loop and files)**: `docs/vm.md` §10.2.2 describes the
-  one-task loop that exists. One OS thread runs the interpreter and the
-  loop; only the scheduler (`agc_io_park`) calls `uv_run`; libuv callbacks
-  only set flags (tasks will also queue the task). Handles and requests are
-  `malloc`'d; the GC object that owns one stays in the run's resource
-  registry until its `uv_close` callback, and request buffers stay owned
-  by the request until its callback. All handles and descriptors are
-  non-inheritable. Tasks turn `agc_io_park` into a switch point and add a
-  per-handle lock.
+  one-task loop that exists; only the scheduler (`agc_io_park`) calls
+  `uv_run`, and libuv callbacks only set flags (tasks will also queue the
+  task). N=1 today; the target is N scheduler threads (M:N, `docs/vm.md`
+  §10.2.3), built on split structures (read-only runtime; per-scheduler
+  loop, run queue, registry and turn counter; per-task stack, registers and
+  frame). Only the scheduler that owns a loop calls `uv_run` on it. New code
+  adds no mutable `static` or global variable in `vm/` (the exceptions are
+  listed in `docs/vm.md` §10.2.3); state goes in the runtime, scheduler or
+  task struct, and lazy init uses `pthread_once` or runs at start-up.
+  Handles and requests are `malloc`'d; the GC object that owns one stays in
+  its scheduler's resource registry until its `uv_close` callback, and
+  request buffers stay owned by the request until its callback. All
+  handles and descriptors are non-inheritable.
 - **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
   system trust from the Windows ROOT store or the macOS Keychain (never
   `set_default_verify_paths` there); a non-empty `ca_file` replaces system

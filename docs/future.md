@@ -198,7 +198,7 @@ Lightweight I/O tasks are implemented before networking in phase 5j2. Their norm
 | Places, `place-channel` | `racket/place` | Real multicore | One VM per place; messages serialized; heavy |
 | Futures | `racket/future` | Limited | Parallel only for a safe value subset; finicky performance; not proposed |
 
-The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). Add CPU parallelism only after measuring a concrete workload and reviewing shared state.
+The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). In the evaluator, add CPU parallelism only after measuring a concrete workload and reviewing shared state. The VM is designed for multicore from its first tasks PR (`docs/vm.md` §10.2.3).
 
 ### Shape: builtin modules, no grammar change
 
@@ -441,7 +441,7 @@ end
 - **Effects:** `Table.put`, `put_new`, `delete` and `add` carry the existing `concurrency` effect label, like `Task.spawn`. The label matters for `put_new` and `add`: their results may be ignored, so it keeps `CHECK-UNUSED-VALUE` away. `put` and `delete` return `Void`; they carry it so `help --json` shows the effect.
 - **Backends:** the contract is only that each call is atomic. The evaluator and the VM land in the same PR.
   - Evaluator: each table is a box holding an immutable persistent structure. A write computes the new structure outside any lock and installs it with `box-cas!`, retrying if another task won; no user code runs in a call, so the retry is safe. Tasks are Racket threads that may be killed (`custodian-shutdown-all`), and a task killed mid-call leaves the box at either the old or the new version. Snapshots (`keys`, `to_map`, `size`) read the box once, so taking one is O(1) and never blocks other tasks. `Table.add` computes the sum first: on overflow it halts with `RUNTIME-INTEGER-OVERFLOW` and installs nothing.
-  - VM: one OS thread runs the scheduler (`docs/vm.md` §10.2), and a table call does not yield, so it is atomic.
+  - VM: a table call does not yield, so with one scheduler (`--schedulers 1`, and the first tasks PR of 7h) it is atomic. Once N schedulers run in parallel (`docs/vm.md` §10.2.3), each table call needs a lock, an owner scheduler, or a persistent structure installed with compare-and-swap, as the evaluator does.
   - Layout: O(log n) `delete` with insertion order needs its own layout, not the `Map` layout. 9a builds a persistent ordered map for it in both backends, for example a balanced tree: a persistent hash from key to (sequence, value), plus a persistent sorted map from sequence to key.
 
 ## 14. Decided: no shadowing
