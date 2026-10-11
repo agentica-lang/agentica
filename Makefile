@@ -1,6 +1,7 @@
 RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
+VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
 .PHONY: build test exe clean test-bdd version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass FORCE
 
@@ -134,7 +135,7 @@ $(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_STAMP)
 
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
-	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 $(RACO) test tests/vm-diff-test.rkt
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 $(RACO) test -j 4 $(VM_DIFF_TESTS)
 
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c

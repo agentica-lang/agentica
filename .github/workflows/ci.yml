@@ -53,7 +53,7 @@ jobs:
           else
             while IFS= read -r f; do
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-test.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"
@@ -204,7 +204,7 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: clang --version
       - run: make vm vm-test
-      - run: make build && raco make -j 4 tests/vm-diff-test.rkt tests/bytecode-test.rkt
-      - run: raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
+      - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
+      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
       - run: make vm-fuzz
       - run: make vm-gc-stress

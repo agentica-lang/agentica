@@ -36,7 +36,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/float_text_test.c` | Float text against values printed by Racket (`docs/vm.md` §2.2) |
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
-| `tests/vm-diff-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator; every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`) |
+| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator, split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`) |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
@@ -50,7 +50,7 @@ make vm-fuzz                         # compile fixtures, mutate, run accepted mu
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~40 s; CI checks it is committed)
-AGENTICA_REQUIRE_VM=1 raco test tests/vm-diff-test.rkt tests/bytecode-test.rkt
+AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
 racket src/main.rkt --dump-ir prog.agc
 racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=path picks the binary
@@ -74,17 +74,32 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   `define-runtime-path`, since `raco distribute` would copy the VM. Options
   the VM lacks (`--allow-run`, `--seed`, ...) exit 2 with `--vm`; add them
   to the pass-through list in `src/main.rkt` as the VM gains them.
-  `tests/vm-diff-test.rkt` compares `--vm` with the evaluator CLI (with
+  `tests/vm-diff-4-test.rkt` compares `--vm` with the evaluator CLI (with
   `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), runs it
   once in-process to cover the pipe path, and checks `--driver-pid`.
 
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
-- `tests/vm-diff-test.rkt` runs `make -s vm` first, prints `SKIP` locally
-  when the VM cannot be built, and fails in CI (`AGENTICA_REQUIRE_VM=1`).
-  It compares each fixture in the plain, `--ai` and `--json` formats, and
-  sweeps `--max-steps` in the plain format. `AGENTICA_VM_BINARY=path` makes it
+- The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
+  file lock in `build/`, since they run in parallel), print `SKIP` locally
+  when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
+  They compare each fixture in the plain, `--ai` and `--json` formats, and
+  sweep `--max-steps` in the plain format. Fixtures are compiled in-process
+  (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
+  The VM runs of one fixture go through one `/bin/sh` script that writes each
+  run's stdout, stderr and exit status to files (stdin from a file, arguments
+  quoted), since a process start from the Racket parent costs 12-35 ms; the
+  evaluator runs while the script does. A new costly fixture may need an
+  entry in `heavy-fixtures` in `tests/vm-diff-common.rkt`.
+  Fixture stdin comes from a file; pipe stdin is covered by the large-input
+  test and the CLI `--vm` tests. `compile-file` mirrors the `compile`
+  pipeline of `src/main.rkt` and must follow it when that pipeline changes
+  (shard 4 compares its bytes with the CLI `compile`).
+  The batch script needs an `sh` on PATH (MSYS2 on Windows; untested while
+  the macOS and Windows runs are paused). It starts with `exec 2>/dev/null`,
+  so a VM crash shows up in that run's `.status` (128 + signal) and fails
+  only that comparison. `AGENTICA_VM_BINARY=path` makes it
   use another binary without running `make` (`make vm-gc-stress` uses it
   for `build/vm/gcstress/agentica-vm`).
   `tests/bytecode-test.rkt` needs no VM binary.
@@ -284,7 +299,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   (documented in `docs/vm.md` §6.1). Fixtures that must overflow need a
   non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); a
   fixture that tail-recurses past 10000 differs from the evaluator, so the
-  deep case lives in the VM-only test in `tests/vm-diff-test.rkt`. The loader
+  deep case lives in the VM-only test in `tests/vm-diff-common.rkt`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
 - Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves
   the input closed (`fd = -1`, always EOF) and `System.args` empty, and
