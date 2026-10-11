@@ -135,8 +135,11 @@ typedef struct agc_vm agc_vm;
 
 typedef void (*agc_release_fn)(void *native);
 
+typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
+
 typedef struct {
   size_t slot;
+  agc_resource_kind kind;
   void *native;
   agc_release_fn release;
   agc_value context;
@@ -148,7 +151,7 @@ typedef struct agc_loop agc_loop;
 typedef struct {
   void (*work)(void *data);
   agc_value (*done)(agc_vm *vm, void *data, agc_value context);
-  agc_value (*expired)(agc_vm *vm, agc_value context);
+  agc_value (*expired)(agc_vm *vm, void *data, agc_value context);
   void (*drop)(void *data);
 } agc_io_kind;
 
@@ -402,7 +405,7 @@ void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
 void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_park(agc_vm *vm, size_t reg);
-void agc_io_close(agc_vm *vm);
+bool agc_io_close(agc_vm *vm);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 

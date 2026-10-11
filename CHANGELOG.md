@@ -20,7 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and linked statically; `agentica-vm --version` names it. A resource
   registry owns open handles and pending requests until libuv is done with
   them, thread-pool threads never touch GC memory, and descriptors are
-  close-on-exec.
+  close-on-exec. Output is buffered 4096 bytes per handle, as Racket's
+  file ports do. A job stuck in the OS (a read on a silent FIFO) does not
+  hold the VM at exit. FIFOs and devices are not compared with the
+  evaluator: with no peer the VM can give EOF or `ENXIO` where the
+  evaluator times out, and four stuck calls fill libuv's thread pool so
+  later file calls time out.
 
 - The bytecode VM runs linked programs: relative, `std/` (such as
   `std/queue.agc`) and `pkg/` imports, linked by the front end into one
@@ -281,6 +286,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A file handle closed by a timeout no longer holds its lock in the
+  evaluator: later operations give `filesystem: file handle is closed` at
+  once and `File.close` gives `ok()`, instead of each waiting for its own
+  timeout.
 - The bytecode VM no longer does pointer arithmetic on a NULL buffer when
   `IO.read` reads an empty stdin (`agc_input_all`).
 - A struct or enum declared in an imported module prints its declared name

@@ -42,6 +42,7 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
     reg->cap = cap;
   }
   agc_resource *r = agc_alloc(sizeof(agc_resource));
+  r->kind = AGC_RESOURCE_NATIVE;
   r->native = native;
   r->release = release;
   r->context = agc_void();
@@ -77,8 +78,6 @@ static void timer_fired(uv_timer_t *timer) { timer_job((uv_handle_t *)timer)->ti
 
 static void timer_closed(uv_handle_t *handle) { timer_job(handle)->timer_closed = true; }
 
-static void release_job(void *native) { (void)native; }
-
 static void close_timer(job *j) {
   if (j->timer_closing) return;
   j->timer_closing = true;
@@ -90,7 +89,7 @@ static void sweep(agc_vm *vm) {
   agc_registry *reg = vm->registry;
   for (size_t k = reg ? reg->count : 0; k-- > 0;) {
     agc_resource *r = reg->items[k];
-    if (r->release != release_job) continue;
+    if (r->kind != AGC_RESOURCE_JOB) continue;
     job *j = r->native;
     if (!j->consumed || !j->work_done) continue;
     if (j->data) {
@@ -108,6 +107,7 @@ static agc_loop *loop_of(agc_vm *vm) {
   if (vm->loop) return vm->loop;
   agc_loop *loop = malloc(sizeof(agc_loop));
   if (!loop) agc_out_of_memory();
+  setenv("UV_USE_IO_URING", "0", 0);
   if (uv_loop_init(&loop->uv) != 0) {
     free(loop);
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot start the event loop", 0);
@@ -124,7 +124,8 @@ void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value con
   if (!j) agc_out_of_memory();
   j->kind = kind;
   j->data = data;
-  agc_resource *r = agc_register(vm, j, release_job);
+  agc_resource *r = agc_register(vm, j, NULL);
+  r->kind = AGC_RESOURCE_JOB;
   r->context = context;
   uv_update_time(&loop->uv);
   uv_timer_init(&loop->uv, &j->timer);
@@ -155,17 +156,17 @@ void agc_io_park(agc_vm *vm, size_t reg) {
     j->data = NULL;
     result = j->kind->done(vm, data, context);
   } else {
-    result = j->kind->expired(vm, context);
+    result = j->kind->expired(vm, j->data, context);
   }
   sweep(vm);
   vm->regs[reg] = result;
 }
 
-void agc_io_close(agc_vm *vm) {
+bool agc_io_close(agc_vm *vm) {
   agc_registry *reg = vm->registry;
   for (size_t k = reg ? reg->count : 0; k-- > 0;) {
     agc_resource *r = reg->items[k];
-    if (r->release == release_job) {
+    if (r->kind == AGC_RESOURCE_JOB) {
       job *j = r->native;
       j->consumed = true;
       close_timer(j);
@@ -175,14 +176,14 @@ void agc_io_close(agc_vm *vm) {
     r->native = NULL;
     agc_unregister(vm, r);
   }
-  if (!vm->loop) return;
+  if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
   sweep(vm);
-  if (vm->registry && vm->registry->count) return;
-  if (uv_loop_close(&vm->loop->uv) == 0) {
-    free(vm->loop);
-    vm->loop = NULL;
-  }
+  if (vm->registry && vm->registry->count) return false;
+  if (uv_loop_close(&vm->loop->uv) != 0) return false;
+  free(vm->loop);
+  vm->loop = NULL;
+  return true;
 }
 #else
 const char *agc_uv_version(void) { return NULL; }
@@ -200,5 +201,8 @@ void agc_io_park(agc_vm *vm, size_t reg) {
   agc_fail(vm, "RUNTIME-INTERNAL", "file access needs Linux", 0);
 }
 
-void agc_io_close(agc_vm *vm) { (void)vm; }
+bool agc_io_close(agc_vm *vm) {
+  (void)vm;
+  return true;
+}
 #endif

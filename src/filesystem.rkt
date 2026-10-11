@@ -52,15 +52,20 @@
                                #:allow-closed? [allow-closed? #f])
   (check-owner handle)
   (define active? (box #f))
+  (define (closed)
+    (unless allow-closed? (error 'filesystem "file handle is closed")))
   (network-timed timeout
     (lambda ()
-      (call-with-semaphore
-       (file-handle-lock handle)
-       (lambda ()
-         (when (and (file-handle-closed? handle) (not allow-closed?))
-           (error 'filesystem "file handle is closed"))
-         (set-box! active? #t)
-         (thunk))))
+      (if (file-handle-closed? handle)
+          (closed)
+          (call-with-semaphore
+           (file-handle-lock handle)
+           (lambda ()
+             (cond
+               [(file-handle-closed? handle) (closed)]
+               [else
+                (set-box! active? #t)
+                (thunk)])))))
     #:abort (lambda ()
               (when (and close-on-timeout? (unbox active?))
                 (close-handle handle)))))
@@ -135,7 +140,7 @@
    lock
    (lambda ()
      (set-box! closing? #t)
-     (for ([handle (in-list (hash-keys handles))])
+     (for ([handle (in-list (hash-keys handles))] #:unless (file-handle-closed? handle))
        ;; Give a task that is mid-operation a bounded chance to release the
        ;; handle lock so its buffered output is flushed before the port closes.
        (when (sync/timeout (/ close-wait-ms 1000) (file-handle-lock handle))

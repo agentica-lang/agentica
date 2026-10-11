@@ -34,8 +34,13 @@ for EOF before any line or invalid UTF-8. Byte values are 0..255. Close
 flushes output and is idempotent. Explicit flush and close return Results.
 
 Timeouts are positive milliseconds and include the serialized handle lock
-wait. Timing out active I/O closes that handle; timing out while waiting for
-its lock leaves it open. Errors are Results. `File.stat` follows symlinks and
+wait. Timing out active I/O closes that handle (later calls say the handle is
+closed); timing out while waiting for its lock leaves it open. Output is
+buffered (4096 bytes per handle) until it overflows, `File.flush`,
+`File.close` or the end of the run, so a write error may show there. FIFOs
+and devices count as files, but the VM reads and writes them with blocking
+calls: a FIFO with no peer may give EOF or an error instead of a timeout,
+and a stuck call keeps one of libuv's 4 pool threads. Errors are Results. `File.stat` follows symlinks and
 returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`;
 directory sizes are zero. `Dir.list` returns immediate entry names sorted by
 name. `Dir.mkdir` creates parents and succeeds when the directory exists.

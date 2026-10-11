@@ -487,6 +487,55 @@
       (delete-file copy)))
 
   (when linux?
+    (test-case "a read stuck on a FIFO times out, closes the handle and does not hold the VM at exit"
+      (define program (build-path work "fifo-stuck.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  input = Result.unwrap!(File.open(System.args()[0], \"read\", 60000))\n"
+        "  IO.inspect(File.read_bytes(input, 4, 300))\n  IO.inspect(File.read_line(input, 300))\n"
+        "  IO.inspect(File.close(input, 300))\n  puts(\"done\")\nend\n")
+       program)
+      (define bytecode (build-path work "fifo-stuck.agcb"))
+      (compile-file program bytecode)
+      (define fifo (build-path work "stuck-fifo"))
+      (check-true (system* (find-executable-path "mkfifo") (path->string fifo)))
+      (define-values (held-in held-out) (open-input-output-file fifo #:exists 'update))
+      (define (release)
+        (close-input-port held-in)
+        (close-output-port held-out))
+      (define watchdog (thread (lambda () (sleep 30) (release))))
+      (dynamic-wind
+        void
+        (lambda ()
+          (parameterize ([fixture-args (list (path->string fifo))])
+            (define expected
+              (list 0 "error(\"filesystem: operation timed out\")\nerror(\"filesystem: file handle is closed\")\nok()\ndone\n" ""))
+            (check-equal? (run-racket (front-end program) #f) expected)
+            (define start (current-inexact-milliseconds))
+            (check-equal? (run-vm bytecode #f) expected)
+            (check-true (< (- (current-inexact-milliseconds) start) 20000))))
+        (lambda ()
+          (kill-thread watchdog)
+          (release)
+          (delete-file fifo))))
+
+    (test-case "relative file paths use the raw bytes of a non-UTF-8 working directory"
+      (define program (build-path work "raw-cwd.agc"))
+      (display-to-file
+       "def main() -> Void\n  IO.inspect(File.write_text(\"a.txt\", \"hi\", 60000))\n  IO.inspect(File.read_text(\"a.txt\", 60000))\nend\n"
+       program)
+      (define bytecode (build-path work "raw-cwd.agcb"))
+      (compile-file program bytecode)
+      (define folder (build-path work (bytes->path #"raw-\377")))
+      (make-directory folder)
+      (define expected (list 0 "ok()\nok(\"hi\")\n" ""))
+      (parameterize ([current-directory folder])
+        (check-equal? (run-racket (front-end program) #f) expected)
+        (delete-file "a.txt")
+        (check-equal? (run-vm bytecode #f) expected))
+      (check-equal? (file->string (build-path folder "a.txt")) "hi")
+      (delete-directory/files folder))
+
     (test-case "the VM decodes invalid UTF-8 arguments like the evaluator in a UTF-8 locale"
       (define program (build-path fixtures "system-args.agc"))
       (define bytecode (build-path work "system-args.agcb"))

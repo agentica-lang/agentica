@@ -501,8 +501,7 @@ The checks run in this order:
   of 1..1048576. Then the timeout (`network: timeout must be positive
   milliseconds`). `File.open` then checks the mode. A handle operation then
   checks that the handle is open (`filesystem: file handle is closed`) and
-  readable or writable. `File.close` of a closed handle and `File.flush` do
-  no I/O.
+  readable or writable. `File.close` of a closed handle does no I/O.
 - A path must be a nonempty String without NUL, else `NAME: contract
   violation\n  expected: E\n  given: FORM` with `path->complete-path` (and
   `(or/c path-string? path-for-some-system?)`) for `File.*` and
@@ -510,10 +509,20 @@ The checks run in this order:
   for `Dir.*`, and `build-path` for `Path.join`. FORM is the String's
   `write` form (2.3); above 256 characters it keeps the first 253 and adds
   `...` (Racket's `error-print-width`).
-- A relative path is completed with the current directory (`getcwd` once,
-  with a trailing `/`, which `Path.cwd` returns), and runs of `/` collapse,
+- A relative path is completed with the current directory (the raw
+  `getcwd` bytes, read once, with a trailing `/`), and runs of `/` collapse,
   as Racket's host paths do. That path is what the OS gets and what
-  messages show after `path: `.
+  messages show after `path: `. `Path.cwd` and `Path.resolve` return the
+  directory decoded with U+FFFD for invalid UTF-8.
+- Output is buffered as Racket's file ports do, 4096 bytes per handle: a
+  `File.write` or `File.write_bytes` whose bytes fit with what is pending
+  (pending + n <= 4096) is only appended to the buffer, with no I/O;
+  otherwise the pending and the new bytes are written together and the
+  buffer is empty again. `File.flush` and `File.close` write the buffer
+  (`File.flush` with nothing pending does no I/O), and so does the end of
+  the run for handles left open. A write error therefore shows at the call
+  that writes the buffer. A handle closed by a timeout drops its buffer,
+  as the evaluator's custodian shutdown does.
 - Kinds follow `stat` (symlinks followed): a directory is `directory`,
   anything else `file`; a failed `stat` is no kind, except `ELOOP`, a link
   loop. Reads need a file (`filesystem: path does not refer to a regular
@@ -548,14 +557,20 @@ The checks run in this order:
   completes the path, drops `.`, pops `..` (never above `/`) and collapses
   `/`; the result ends in `/` when the input did or ended in `.` or `..`.
 
-Documented differences: the evaluator's output ports buffer up to 4096
-bytes until `File.flush` or `File.close`, while the VM writes each
-`File.write` through at once, so a program that reads a file it is still
-writing without flushing may see more on the VM. Read and write errors
-after a successful open (`EIO`, `ENOSPC`) say `error reading from stream
-port` or `error writing to stream port` with the OS error, not Racket's port
-text. FIFOs and devices count as files on both backends, but blocking on
-them is not compared. `JSON.decode` and `JSON.schema` of `FileInfo` stay
+After a timeout on an active handle operation both backends close the
+handle: later operations give `filesystem: file handle is closed` and
+`File.close` gives `ok()`.
+
+Documented differences: read and write errors after a successful open
+(`EIO`, `ENOSPC`) say `error reading from stream port` or `error writing to
+stream port` with the OS error, not Racket's port text. FIFOs and devices
+count as files on both backends, but they are not compared beyond a timed
+out read: the evaluator waits on them with Racket's nonblocking ports, while
+the VM does a blocking read or write on a thread-pool thread. So a FIFO with
+no peer can give `ok("")`, `ok([])`, end of file or an `ENXIO` error on the
+VM where the evaluator times out. A timed-out VM job keeps its pool thread
+until the OS call returns, and libuv's pool has 4 threads, so four calls
+stuck on FIFOs or devices make every later file call in the run time out. `JSON.decode` and `JSON.schema` of `FileInfo` stay
 `LOWER-UNSUPPORTED`.
 
 ## 3. IR (7c)
@@ -1580,19 +1595,26 @@ The first 7h PR has one task, so it has no run queue yet. What it has:
   half on the interpreter thread, which turns the `malloc`'d result into
   GC values and frees the request; on timeout it calls `expired`, which
   gives `filesystem: operation timed out` and, for a handle operation,
-  closes the handle as the evaluator does. The result goes into the call's
-  result register. A timed-out job stays registered until its work ends;
-  then its `drop` half frees it and closes any descriptor it owned.
+  closes the handle as the evaluator does (the stuck request then owns the
+  file state). The result goes into the call's result register. A
+  timed-out job stays registered until its work ends; then its `drop` half
+  frees it and the file state it owns, which closes the descriptor.
 - **Thread-pool threads** only run the `work` half: system calls on
   `malloc` memory. The libuv pool keeps its default size (4,
-  `UV_THREADPOOL_SIZE`). Boehm is built without thread support and never
+  `UV_THREADPOOL_SIZE`). `UV_USE_IO_URING` is set to `0` (unless already
+  set) before the loop is created, so libuv uses its plain thread pool and
+  epoll. Boehm is built without thread support and never
   sees these threads.
 - **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
   check, then blocking for reads and writes in the pool).
 - **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
   it ended: open handles are closed (the evaluator's cleanup), timers are
   closed, the loop runs once without waiting, and the loop is freed when no
-  job is left. A job stuck in the OS is left to process exit.
+  job is left. Closing a handle writes its pending output. `agc_io_close`
+  returns false when a job is still stuck in the OS (a read on a silent
+  FIFO, say); `vm/main.c` then flushes stdout and stderr and ends with
+  `_exit`, because a normal exit would run libuv's destructor, which joins
+  the pool threads and would wait for that read.
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
   never touch the file system; a file builtin then ends the run with
   `RUNTIME-INTERNAL`.

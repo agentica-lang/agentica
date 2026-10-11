@@ -13,6 +13,7 @@
 #define LIMIT ((size_t)1048576)
 #define FORM_WIDTH 256
 #define CHUNK ((size_t)65536)
+#define WRITE_BUFFER ((size_t)4096)
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
@@ -41,7 +42,7 @@ typedef struct {
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
   int err;
-  bool dir;
+  bool dir, owns_st;
   int64_t size, mtime;
 } op;
 
@@ -74,9 +75,11 @@ static void put(text *t, const char *data, size_t len) {
 
 static void puts_text(text *t, const char *s) { put(t, s, strlen(s)); }
 
-static agc_value error_text(const text *t) {
-  return agc_result_value(false, agc_string_value(agc_utf8_decode((const uint8_t *)t->data, t->len, "\xEF\xBF\xBD", false)));
+static agc_string *lossy(const void *data, size_t len) {
+  return agc_utf8_decode((const uint8_t *)data, len, "\xEF\xBF\xBD", false);
 }
+
+static agc_value error_text(const text *t) { return agc_result_value(false, agc_string_value(lossy(t->data, t->len))); }
 
 static agc_value error_of(const char *message) {
   text t = {0};
@@ -87,19 +90,23 @@ static agc_value error_of(const char *message) {
 static const char *os_message(int err) {
   if (!messages_tried) {
     messages_tried = true;
-    messages_locale = newlocale(LC_MESSAGES_MASK, "", (locale_t)0);
+    messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
   }
   return messages_locale ? strerror_l(err, messages_locale) : strerror(err);
 }
 
-static void put_os_error(text *t, const char *path, size_t path_len, int err) {
+static void put_system_error(text *t, int err) {
   char number[32];
-  puts_text(t, "\n  path: ");
-  put(t, path, path_len);
   puts_text(t, "\n  system error: ");
   puts_text(t, os_message(err));
   int n = snprintf(number, sizeof number, "; errno=%d", err);
   put(t, number, (size_t)n);
+}
+
+static void put_os_error(text *t, const char *path, size_t path_len, int err) {
+  puts_text(t, "\n  path: ");
+  put(t, path, path_len);
+  put_system_error(t, err);
 }
 
 static agc_value os_error(const char *what, const char *path, size_t path_len, int err) {
@@ -179,6 +186,10 @@ static agc_value utf8_error(const uint8_t *data, size_t len) {
   return error_text(&t);
 }
 
+static bool same_text(const char *data, size_t len, const char *word) {
+  return len == strlen(word) && memcmp(data, word, len) == 0;
+}
+
 static bool path_string(const agc_string *s) { return s->bytes > 0 && !memchr(s->data, 0, s->bytes); }
 
 static const agc_string *cwd_of(agc_vm *vm) {
@@ -195,7 +206,7 @@ static const agc_string *cwd_of(agc_vm *vm) {
   text t = {0};
   put(&t, buf, len);
   if (len == 0 || buf[len - 1] != '/') puts_text(&t, "/");
-  vm->cwd = agc_utf8_decode((const uint8_t *)t.data, t.len, "\xEF\xBF\xBD", false);
+  vm->cwd = agc_make_string(t.data, t.len, 0);
   return vm->cwd;
 }
 
@@ -236,8 +247,6 @@ static void free_state(file_state *st) {
   free(st->buf);
   free(st);
 }
-
-static void release_state(void *native) { free_state(native); }
 
 static void free_op(op *o) {
   free(o->path);
@@ -280,6 +289,13 @@ static bool write_all(int fd, const uint8_t *data, size_t len, int *err) {
     done += (size_t)n;
   }
   return true;
+}
+
+static void release_state(void *native) {
+  file_state *st = native;
+  int err;
+  if (st->writable && st->end) write_all(st->fd, st->buf, st->end, &err);
+  free_state(st);
 }
 
 static void fail_op(op *o, fs_status status, int err) {
@@ -551,8 +567,11 @@ static void work_write(op *o) {
 }
 
 static void work_close(op *o) {
-  close(o->st->fd);
-  o->st->fd = -1;
+  file_state *st = o->st;
+  if (st->writable && st->end && !write_all(st->fd, st->buf, st->end, &o->err)) o->status = FS_WRITE;
+  st->end = 0;
+  close(st->fd);
+  st->fd = -1;
 }
 
 static void work(void *data) {
@@ -574,13 +593,9 @@ static void work(void *data) {
   }
 }
 
-static bool owns_state(op_kind kind) {
-  return kind == OP_OPEN_READ || kind == OP_OPEN_WRITE || kind == OP_OPEN_APPEND || kind == OP_CLOSE;
-}
-
 static void drop(void *data) {
   op *o = data;
-  free_state(o->st);
+  if (o->owns_st) free_state(o->st);
   free_op(o);
 }
 
@@ -589,11 +604,7 @@ static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 static agc_value io_error(const op *o) {
   text t = {0};
   puts_text(&t, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port");
-  puts_text(&t, "\n  system error: ");
-  puts_text(&t, os_message(o->err));
-  char number[32];
-  int n = snprintf(number, sizeof number, "; errno=%d", o->err);
-  put(&t, number, (size_t)n);
+  put_system_error(&t, o->err);
   return error_text(&t);
 }
 
@@ -658,7 +669,7 @@ static agc_value list_result(agc_vm *vm, const op *o) {
   size_t at = 0;
   for (size_t k = 0; k < o->count; k++) {
     size_t len = strlen((const char *)o->out + at);
-    names->items[k] = agc_string_value(agc_utf8_decode(o->out + at, len, "\xEF\xBF\xBD", false));
+    names->items[k] = agc_string_value(lossy(o->out + at, len));
     at += len + 1;
   }
   return agc_result_value(true, agc_sort_by_keys(vm, names, names));
@@ -673,6 +684,11 @@ static agc_value bytes_result(const op *o) {
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   op *o = data;
+  if (o->kind == OP_STAT && o->status == FS_OK) {
+    op info = *o;
+    free_op(o);
+    return stat_result(vm, &info);
+  }
   agc_value result;
   if (o->status != FS_OK) {
     result = common_error(o);
@@ -680,7 +696,6 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
     switch (o->kind) {
       case OP_READ_TEXT:
       case OP_READ_LINE: result = text_result(o); break;
-      case OP_STAT: result = stat_result(vm, o); break;
       case OP_LIST: result = list_result(vm, o); break;
       case OP_READ_BYTES: result = bytes_result(o); break;
       case OP_OPEN_READ:
@@ -694,13 +709,14 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       default: result = ok_void(); break;
     }
   }
-  if (owns_state(o->kind)) free_state(o->st);
-  free_op(o);
+  drop(o);
   return result;
 }
 
-static agc_value expired(agc_vm *vm, agc_value context) {
+static agc_value expired(agc_vm *vm, void *data, agc_value context) {
+  op *o = data;
   if (agc_is(context, AGC_T_HANDLE)) {
+    o->owns_st = true;
     agc_resource *r = agc_as_handle(vm, context);
     r->native = NULL;
     agc_unregister(vm, r);
@@ -775,10 +791,6 @@ static agc_value builtin_dir_mkdir(agc_vm *vm, agc_value *args, uint32_t span) {
                  "path-string?");
 }
 
-static bool text_is(const agc_string *s, const char *word) {
-  return s->bytes == strlen(word) && memcmp(s->data, word, s->bytes) == 0;
-}
-
 static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   const agc_string *path = agc_as_string(vm, args[0]);
@@ -786,11 +798,11 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[2]);
   if (timeout <= 0) return error_of(bad_timeout);
   op_kind kind;
-  if (text_is(mode, "read")) {
+  if (same_text(mode->data, mode->bytes, "read")) {
     kind = OP_OPEN_READ;
-  } else if (text_is(mode, "write")) {
+  } else if (same_text(mode->data, mode->bytes, "write")) {
     kind = OP_OPEN_WRITE;
-  } else if (text_is(mode, "append")) {
+  } else if (same_text(mode->data, mode->bytes, "append")) {
     kind = OP_OPEN_APPEND;
   } else {
     return error_of("filesystem: mode must be read, write, or append");
@@ -799,6 +811,7 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   op *o = new_op(kind);
   o->path = host_path(vm, path);
   o->st = new_state(kind == OP_OPEN_READ, kind != OP_OPEN_READ);
+  o->owns_st = true;
   return start(vm, o, agc_void(), timeout);
 }
 
@@ -818,10 +831,6 @@ static file_state *usable(agc_vm *vm, agc_value handle, int64_t timeout, bool re
   return NULL;
 }
 
-static agc_value handle_op(agc_vm *vm, op *o, agc_value handle, int64_t timeout) {
-  return start(vm, o, handle, timeout);
-}
-
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   int64_t count = agc_as_int(vm, args[1]);
@@ -833,7 +842,7 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   op *o = new_op(OP_READ_BYTES);
   o->st = st;
   o->count = (size_t)count;
-  return handle_op(vm, o, args[0], timeout);
+  return start(vm, o, args[0], timeout);
 }
 
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -844,20 +853,35 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!st) return failure;
   op *o = new_op(OP_READ_LINE);
   o->st = st;
-  return handle_op(vm, o, args[0], timeout);
+  return start(vm, o, args[0], timeout);
+}
+
+static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const uint8_t *data, size_t len,
+                           int64_t timeout) {
+  op *o = new_op(OP_WRITE);
+  o->st = st;
+  o->in_len = st->end + len;
+  o->in = malloc(o->in_len ? o->in_len : 1);
+  if (!o->in) agc_out_of_memory();
+  if (st->end) memcpy(o->in, st->buf, st->end);
+  if (len) memcpy(o->in + st->end, data, len);
+  st->end = 0;
+  return start(vm, o, handle, timeout);
 }
 
 static agc_value write_bytes(agc_vm *vm, agc_value handle, const uint8_t *data, size_t len, int64_t timeout) {
   agc_value failure;
   file_state *st = usable(vm, handle, timeout, false, &failure);
   if (!st) return failure;
-  op *o = new_op(OP_WRITE);
-  o->st = st;
-  o->in = malloc(len ? len : 1);
-  if (!o->in) agc_out_of_memory();
-  if (len) memcpy(o->in, data, len);
-  o->in_len = len;
-  return handle_op(vm, o, handle, timeout);
+  if (st->end + len > WRITE_BUFFER) return write_out(vm, handle, st, data, len, timeout);
+  if (!st->buf) {
+    st->buf = malloc(WRITE_BUFFER);
+    if (!st->buf) agc_out_of_memory();
+    st->cap = WRITE_BUFFER;
+  }
+  if (len) memcpy(st->buf + st->end, data, len);
+  st->end += len;
+  return ok_void();
 }
 
 static agc_value builtin_write(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -884,8 +908,11 @@ static agc_value builtin_write_list(agc_vm *vm, agc_value *args, uint32_t span) 
 static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   agc_value failure;
-  if (!usable(vm, args[0], agc_as_int(vm, args[1]), false, &failure)) return failure;
-  return ok_void();
+  int64_t timeout = agc_as_int(vm, args[1]);
+  file_state *st = usable(vm, args[0], timeout, false, &failure);
+  if (!st) return failure;
+  if (!st->end) return ok_void();
+  return write_out(vm, args[0], st, NULL, 0, timeout);
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -896,15 +923,17 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!r->native) return ok_void();
   op *o = new_op(OP_CLOSE);
   o->st = r->native;
+  o->owns_st = true;
   r->native = NULL;
   agc_unregister(vm, r);
-  return handle_op(vm, o, args[0], timeout);
+  return start(vm, o, args[0], timeout);
 }
 
 static agc_value builtin_cwd(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
-  (void)span;
-  return agc_result_value(true, agc_string_value((agc_string *)cwd_of(vm)));
+  files_on(vm, span);
+  const agc_string *cwd = cwd_of(vm);
+  return agc_result_value(true, agc_string_value(lossy(cwd->data, cwd->bytes)));
 }
 
 static bool collapse_leading(const text *t) {
@@ -944,15 +973,11 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
     }
     put(&t, part->data, part->bytes);
   }
-  return agc_result_value(true, agc_string_value(agc_utf8_decode((const uint8_t *)t.data, t.len, "\xEF\xBF\xBD", false)));
-}
-
-static bool component_is(const char *data, size_t len, const char *word) {
-  return len == strlen(word) && memcmp(data, word, len) == 0;
+  return agc_result_value(true, agc_string_value(lossy(t.data, t.len)));
 }
 
 static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
+  files_on(vm, span);
   const agc_string *path = agc_as_string(vm, args[0]);
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
   text full = {0};
@@ -975,7 +1000,7 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
     const char *name = full.data + at;
     size_t len = end - at;
     bool last = end == full.len;
-    if (component_is(name, len, ".") || component_is(name, len, "..")) {
+    if (same_text(name, len, ".") || same_text(name, len, "..")) {
       if (len == 2 && depth > 0) depth--;
       if (last) dir_form = true;
     } else {
@@ -992,7 +1017,7 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
     put(&out, full.data + starts[k], lens[k]);
   }
   if (dir_form && depth > 0) puts_text(&out, "/");
-  return agc_result_value(true, agc_string_value(agc_utf8_decode((const uint8_t *)out.data, out.len, "\xEF\xBF\xBD", false)));
+  return agc_result_value(true, agc_string_value(lossy(out.data, out.len)));
 }
 
 const agc_builtin agc_file_builtins[] = {

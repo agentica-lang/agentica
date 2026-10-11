@@ -314,7 +314,7 @@ static int run(int argc, char **argv) {
   vm->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);
-  agc_io_close(vm);
+  bool settled = agc_io_close(vm);
   if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
@@ -322,12 +322,23 @@ static int run(int argc, char **argv) {
     outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
   }
+  int code = 0;
   if (outcome.kind == AGC_FAILED) {
     agc_print_diagnostic(stderr, program, &outcome, style);
-    return 1;
+    code = 1;
+  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
+    code = (int)outcome.exit_code;
   }
-  if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) return (int)outcome.exit_code;
-  return 0;
+#ifdef __linux__
+  if (!settled) {
+    fflush(stdout);
+    fflush(stderr);
+    _exit(code);
+  }
+#else
+  (void)settled;
+#endif
+  return code;
 }
 
 #ifdef _WIN32

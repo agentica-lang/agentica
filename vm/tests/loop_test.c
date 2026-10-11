@@ -31,8 +31,9 @@ static agc_value finished(agc_vm *vm, void *data, agc_value context) {
   return agc_int(value);
 }
 
-static agc_value expired(agc_vm *vm, agc_value context) {
+static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
+  (void)data;
   (void)context;
   return agc_int(-1);
 }
@@ -79,7 +80,7 @@ int main(void) {
   assert(dropped == 0);
   assert(run_one(&vm, 0, 5000) == 107);
   pause_ms(400);
-  agc_io_close(&vm);
+  assert(agc_io_close(&vm));
   assert(dropped == 1);
   assert(released == 500);
   assert(vm.loop == NULL);
@@ -87,7 +88,10 @@ int main(void) {
   assert(again->slot == 0);
   agc_unregister(&vm, again);
   assert(run_one(&vm, 0, 5000) == 107);
-  agc_io_close(&vm);
+  assert(run_one(&vm, 2000, 20) == -1);
+  assert(!agc_io_close(&vm));
+  pause_ms(2100);
+  assert(agc_io_close(&vm));
   assert(vm.loop == NULL);
 #endif
   puts("loop tests passed");
