@@ -12,11 +12,14 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 #include <gc.h>
 #endif
 
+#define BLOCK_COST ((size_t)64)
+
 static const char oom_line[] = "agentica-vm: out of memory\n";
 
 #ifdef AGC_NO_GC
 static void **owned;
-static size_t owned_count, owned_cap;
+static size_t owned_count, owned_cap, owned_bytes, limit_bytes;
+static jmp_buf *on_limit;
 #endif
 
 void agc_out_of_memory(void) {
@@ -63,8 +66,12 @@ unsigned agc_gc_version(void) {
 }
 
 #ifdef AGC_NO_GC
-static void *own(void *p) {
+static void *own(size_t size) {
+  size_t cost = size > SIZE_MAX - BLOCK_COST ? SIZE_MAX : size + BLOCK_COST;
+  if (on_limit && cost > limit_bytes - owned_bytes) longjmp(*on_limit, 1);
+  void *p = calloc(1, size);
   if (!p) agc_out_of_memory();
+  owned_bytes += cost;
   if (owned_count == owned_cap) {
     size_t cap = owned_cap ? owned_cap * 2 : 1024;
     void **bigger = realloc(owned, cap * sizeof *owned);
@@ -77,10 +84,22 @@ static void *own(void *p) {
 }
 #endif
 
+void agc_set_alloc_limit(jmp_buf *target, size_t limit) {
+#ifdef AGC_NO_GC
+  on_limit = target;
+  limit_bytes = limit;
+#else
+  (void)target;
+  (void)limit;
+#endif
+}
+
 void agc_release_all(void) {
 #ifdef AGC_NO_GC
   for (size_t i = 0; i < owned_count; i++) free(owned[i]);
   owned_count = 0;
+  owned_bytes = 0;
+  on_limit = NULL;
 #endif
 }
 
@@ -96,7 +115,7 @@ static void stress(void) {}
 void *agc_alloc(size_t size) {
   stress();
 #ifdef AGC_NO_GC
-  void *p = own(calloc(1, size ? size : 1));
+  void *p = own(size ? size : 1);
 #else
   void *p = GC_MALLOC(size ? size : 1);
 #endif
@@ -107,7 +126,7 @@ void *agc_alloc(size_t size) {
 void *agc_alloc_atomic(size_t size) {
   stress();
 #ifdef AGC_NO_GC
-  void *p = own(calloc(1, size ? size : 1));
+  void *p = own(size ? size : 1);
 #else
   void *p = GC_MALLOC_ATOMIC(size ? size : 1);
 #endif

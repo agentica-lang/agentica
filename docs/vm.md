@@ -1563,7 +1563,12 @@ written `size > limit - total`. A hermetic test sends over-long values.
   to `/dev/null`, so the diagnostic printer is fuzzed too. Under `AGC_NO_GC` it
   then frees every block of that mutant (`agc_release_all`, a no-op with libgc),
   so the fuzzer's peak memory is that of one mutant plus ASan's quarantine,
-  which still catches a use after free across mutants. It is linked only
+  which still catches a use after free across mutants. Steps bound
+  instructions, not bytes, so a mutant can still grow a value to gigabytes;
+  `agc_set_alloc_limit` gives each mutant 256 MB (each block counted with 64
+  bytes of overhead), and an allocation past it longjmps back to
+  `agc_fuzz_one`, which frees the mutant and counts it as run. The VM itself
+  sets no limit. It is linked only
   into the fuzz and test binaries. The plain C driver (`vm/fuzz_main.c`,
   `make vm-fuzz`) applies 1 to 4 mutations per run (byte deletion and
   insertion, bit flips, random bytes, small or maximal 16-bit operands) to a

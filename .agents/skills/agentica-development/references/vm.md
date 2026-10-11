@@ -282,6 +282,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `value.c` calls `GC_*` or includes `gc.h`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant
   (`agc_release_all`), so never cache an `agc_alloc` pointer in a static.
+  It also sets a 256 MB budget (`agc_set_alloc_limit`); an allocation past it
+  longjmps out of the mutant, so anything outside the agc heap (a libuv loop,
+  a yyjson doc) must be closed there too.
 - Never keep a GC pointer in `malloc` memory, an atomic object or a
   `_Thread_local`; never tag pointers. Frames hold register offsets, not
   pointers, because the register array moves when it grows.

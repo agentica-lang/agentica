@@ -6,12 +6,20 @@
 #define NULL_DEVICE "/dev/null"
 #endif
 
+#define ALLOC_LIMIT ((size_t)256 << 20)
+
 static FILE *sink;
 
 int agc_fuzz_one(const uint8_t *data, size_t len) {
   agc_init();
   if (!sink) sink = fopen(NULL_DEVICE, "w");
   if (!sink) return -1;
+  jmp_buf over_limit;
+  if (setjmp(over_limit)) {
+    agc_release_all();
+    return 1;
+  }
+  agc_set_alloc_limit(&over_limit, ALLOC_LIMIT);
   agc_program *program = NULL;
   char error[160];
   if (!agc_load(data, len, &program, error, sizeof error)) {
