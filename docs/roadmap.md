@@ -1174,7 +1174,8 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7i: Switch the default backend
 
-- [ ] `agentica --vm file.agc`: temporary bytecode file with the rules in `docs/vm.md` section 9; then make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
+- [x] `agentica --vm file.agc`: temporary bytecode file with the rules in `docs/vm.md` section 9 (Linux; Windows and macOS later).
+- [ ] Make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
 - [ ] Package the VM in `dist/` and the release workflow.
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
 - [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.

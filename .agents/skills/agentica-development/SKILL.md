@@ -53,7 +53,7 @@ src/
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm.md 4.6; the C loader is the only reader
-  main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, or `compile -o`); exit 1 on a diagnostic, 2 on usage or a missing file
+  main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, `compile -o`, or `--vm`: bytecode in a temp file run by dist/agentica-vm); exit 1 on a diagnostic, 2 on usage or a missing file
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c loader.c interp.c builtins.c diag.c main.c  # values+memory, text/debug forms, loader validation, loop, builtin table, diagnostics (plain, --ai, --json), CLI

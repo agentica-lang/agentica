@@ -53,7 +53,7 @@ bundle the runtime. `compiled/` and `dist/` are in `.gitignore`.
 ## Usage
 
 ```sh
-racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <file.agc>
+racket src/main.rkt [--vm] [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <file.agc>
 racket src/main.rkt help String.to_int --json
 ```
 
@@ -74,6 +74,7 @@ racket src/main.rkt examples/hello.agc
 | `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
 | `--seed N` | Seed `Random` with N (0..2147483647) so runs repeat; `agentica test` passes it to handlers and programs under test. Without it, each run is seeded from OS randomness. |
 | `--dump-ir` | Print the lowered VM IR instead of running it (VM subset only; see `docs/vm.md`). |
+| `--vm` | Run the program on the bytecode VM instead of the evaluator (tested on Linux only; elsewhere the VM has no guard against outliving the driver: macOS skips only the parent check, while the `O_NOFOLLOW`, privacy and inode checks run on every non-Windows system, and Windows skips both checks). The driver compiles to a temporary bytecode file and runs `dist/agentica-vm`, found next to the `agentica` executable, or in `dist/` of the checkout for `racket src/main.rkt`; `AGENTICA_VM=path` picks another VM. Passes `--max-steps`, `--ai`, `--json` and program arguments (unused until `System.args` lands); `--allow-run`, `--seed`, `--steps`, `--dump`, `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with `--vm`. Programs outside the VM subset fail with `LOWER-UNSUPPORTED`. |
 | `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). The VM runs a growing subset of the language; programs outside it fail with `LOWER-UNSUPPORTED`. |
 
 Use `--allow-run` before the command or source file to enable `Process.spawn`; spawning is disabled by default. `main()` now returns `Void`, and side-effect APIs return `Void` or `Result[Void]`. Use `ok()` for successful completion; `nil` remains data and JSON null. `racket src/main.rkt --allow-run examples/process-tool.agc` demonstrates tool execution and exit checks.

@@ -1,6 +1,9 @@
 #lang racket
 
-(require json
+(require file/sha1
+         json
+         racket/os
+         racket/random
          "bdd-runner.rkt"
          "builtins.rkt"
          "bytecode.rkt"
@@ -14,6 +17,69 @@
          "source.rkt"
          "version.rkt")
 
+(define vm-name (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))
+
+(define (find-vm)
+  (define override (getenv "AGENTICA_VM"))
+  (define here (variable-reference->module-source (#%variable-reference)))
+  (cond
+    [(and override (not (equal? override ""))) (path->complete-path override)]
+    [(path? here)
+     (define-values (directory _name _dir?) (split-path here))
+     (simplify-path (build-path directory 'up "dist" vm-name) #f)]
+    [else
+     (define run (find-system-path 'run-file))
+     (define program (normalize-path (or (find-executable-path run) run)))
+     (build-path (path-only program) vm-name)]))
+
+(define (temporary-bytecode-path)
+  (build-path (find-system-path 'temp-dir)
+              (format "agentica-~a.agcb" (bytes->hex-string (crypto-random-bytes 16)))))
+
+(define (write-temporary-bytecode path data created!)
+  (define out (parameterize-break #f
+                (begin0 (open-output-file path #:exists 'error #:permissions #o600)
+                        (created!))))
+  (dynamic-wind void (lambda () (write-bytes data out)) (lambda () (close-output-port out))))
+
+(define (delete-temporary path)
+  (with-handlers ([exn:fail:filesystem? void])
+    (delete-file path)))
+
+(define (run-vm-process vm bytecode-file options program-args)
+  (define (stream port) (and (file-stream-port? port) port))
+  (define stdout (current-output-port))
+  (define stderr (current-error-port))
+  (define stdin (current-input-port))
+  (flush-output stdout)
+  (flush-output stderr)
+  (define-values (process from-vm to-vm from-vm-err)
+    (with-handlers ([exn:fail? (lambda (_) (values #f #f #f #f))])
+      (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm
+             (append options (list "--driver-pid" (number->string (getpid)) "--" (path->string bytecode-file))
+                     program-args))))
+  (when to-vm (close-output-port to-vm))
+  (and process
+       (dynamic-wind
+         void
+         (lambda ()
+           (define (pump from to)
+             (thread (lambda ()
+                       (with-handlers ([exn:fail? (lambda (_) (copy-port from (open-output-nowhere)))])
+                         (copy-port from to))
+                       (close-input-port from))))
+           (define readers
+             (filter values (list (and from-vm (pump from-vm stdout))
+                                  (and from-vm-err (pump from-vm-err stderr)))))
+           (subprocess-wait process)
+           (for-each thread-wait readers)
+           (flush-output stdout)
+           (flush-output stderr)
+           (subprocess-status process))
+         (lambda ()
+           (when (eq? (subprocess-status process) 'running)
+             (subprocess-kill process #t))))))
+
 (module+ main
   (define dump? #f)
   (define dump-ir? #f)
@@ -21,12 +87,14 @@
   (define max-steps #f)
   (define allow-run? #f)
   (define seed #f)
+  (define vm? #f)
   (define step-files '())
   (define raw-arguments
     (command-line
      #:program "agentica"
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]
+     [("--vm") "run the program with the bytecode VM" (set! vm? #t)]
      [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]
      [("--max-steps") count "limit execution to N expression/statement entries"
       (define parsed (string->number count))
@@ -48,6 +116,18 @@
      [("--steps") path "load Agentica BDD step definitions" (set! step-files (append step-files (list path)))]
      #:args arguments
      arguments))
+  (when vm?
+    (define unsupported
+      (or (and allow-run? "--allow-run")
+          (and seed "--seed")
+          (and dump? "--dump")
+          (and dump-ir? "--dump-ir")
+          (and (pair? step-files) "--steps")
+          (and (pair? raw-arguments) (member (car raw-arguments) '("test" "help" "check" "compile"))
+               (car raw-arguments))))
+    (when unsupported
+      (eprintf "agentica: --vm does not support ~a\n" unsupported)
+      (exit 2)))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "test"))
     (for ([argument (in-list (cdr raw-arguments))])
       (when (member argument '("--ai" "--json"))
@@ -106,10 +186,14 @@
   (unless (if compile?
               (and (= (length arguments) 3) (equal? (cadr arguments) "-o") (not dump?) (not dump-ir?))
               (>= (length arguments) 1))
-    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--vm] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
+  (define vm (and vm? (find-vm)))
+  (when (and vm (not (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm)))))
+    (eprintf "agentica: cannot find the VM at ~a; run make vm or set AGENTICA_VM\n" vm)
+    (exit 2))
 
   (define (fail! problem)
     (displayln (case style
@@ -133,22 +217,25 @@
   (when (diagnostic? tree) (fail! tree))
   (define linked (link-program tree source-file))
   (when (diagnostic? linked) (fail! linked))
-  (define types (and (or compile? dump-ir?) (make-hasheq)))
+  (define types (and (or compile? dump-ir? vm?) (make-hasheq)))
   (define checked (check linked #:types types))
   (when (diagnostic? checked) (fail! checked))
   (define (lowered)
     (define ir (lower checked types))
     (when (diagnostic? ir) (fail! ir))
     ir)
+  (define (bytecode-data)
+    (define code (ir->bytecode (lowered)))
+    (when (diagnostic? code) (fail! code))
+    (define data (write-bytecode code))
+    (when (diagnostic? data) (fail! data))
+    data)
   (cond
     [check-only? (displayln (if (eq? style 'json) "{\"ok\":true}" "check ok"))]
     [dump? (pretty-print checked)]
     [dump-ir? (displayln (format-ir (lowered)))]
     [compile?
-     (define code (ir->bytecode (lowered)))
-     (when (diagnostic? code) (fail! code))
-     (define data (write-bytecode code))
-     (when (diagnostic? data) (fail! data))
+     (define data (bytecode-data))
      (define output-file (caddr arguments))
      (with-handlers ([exn:fail:filesystem?
                       (lambda (_)
@@ -156,6 +243,30 @@
                         (exit 2))])
        (call-with-output-file output-file #:exists 'truncate/replace
          (lambda (out) (void (write-bytes data out)))))]
+    [vm?
+     (define data (bytecode-data))
+     (define bytecode-file (temporary-bytecode-path))
+     (define created? #f)
+     (define options
+       (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
+               (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
+     (define status
+       (dynamic-wind
+         void
+         (lambda ()
+           (if (with-handlers ([exn:fail:filesystem? (lambda (_) #f)])
+                 (write-temporary-bytecode bytecode-file data (lambda () (set! created? #t)))
+                 #t)
+               (run-vm-process vm bytecode-file options program-args)
+               'no-temporary))
+         (lambda () (when created? (delete-temporary bytecode-file)))))
+     (when (eq? status 'no-temporary)
+       (eprintf "agentica: cannot write a temporary file in ~a\n" (find-system-path 'temp-dir))
+       (exit 2))
+     (unless (exact-integer? status)
+       (eprintf "agentica: cannot run the VM at ~a\n" vm)
+       (exit 2))
+     (exit status)]
     [else
      (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
                               #:seed seed #:builtin-handler (make-bdd-service)))
