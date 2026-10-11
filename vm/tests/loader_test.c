@@ -34,6 +34,17 @@ typedef struct {
   uint32_t captures, helper_captures;
 } spec;
 
+static const agc_instr puts_code[] = {
+  {AGC_OP_STEP, 2, 0, 0},
+  {AGC_OP_CONST, 0, 0, 0},
+  {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+  {AGC_OP_CONST, 0, 1, 0},
+  {AGC_OP_RETURN, 0, 0, 0},
+};
+static const uint32_t puts_spans[] = {1, 2, 1, 0, 0};
+static const agc_instr helper_code[] = {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+static const uint32_t two_spans[] = {0, 0};
+
 static void u8(buffer *b, uint8_t v) { b->data[b->len++] = v; }
 static void u16(buffer *b, uint16_t v) {
   u8(b, (uint8_t)v);
@@ -71,17 +82,6 @@ static void function(buffer *b, const char *name, uint32_t params, uint32_t capt
   }
   for (uint32_t i = 0; i < count; i++) u32(b, spans[i]);
 }
-
-static const agc_instr puts_code[] = {
-  {AGC_OP_STEP, 2, 0, 0},
-  {AGC_OP_CONST, 0, 0, 0},
-  {AGC_OP_CALL_BUILTIN, 0, 0, 0},
-  {AGC_OP_CONST, 0, 1, 0},
-  {AGC_OP_RETURN, 0, 0, 0},
-};
-static const uint32_t puts_spans[] = {1, 2, 1, 0, 0};
-static const agc_instr helper_code[] = {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-static const uint32_t two_spans[] = {0, 0};
 
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",

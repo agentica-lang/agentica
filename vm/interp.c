@@ -4,6 +4,17 @@
 #include <math.h>
 #include <string.h>
 
+struct agc_native {
+  agc_native_kind kind;
+  uint32_t span;
+  bool started;
+  bool more;
+  size_t index, count;
+  int64_t cur, last, dir;
+  agc_value list, fn, acc;
+  agc_list *out;
+};
+
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
   vm->outcome.kind = AGC_FAILED;
   vm->outcome.code = code;
@@ -61,17 +72,6 @@ static void ensure_registers(agc_vm *vm, size_t needed, uint32_t span) {
   vm->regs = regs;
   vm->reg_capacity = capacity;
 }
-
-struct agc_native {
-  agc_native_kind kind;
-  uint32_t span;
-  bool started;
-  bool more;
-  size_t index, count;
-  int64_t cur, last, dir;
-  agc_value list, fn, acc;
-  agc_list *out;
-};
 
 static agc_frame *new_frame(agc_vm *vm) {
   if (vm->frame_count == vm->frame_capacity) {

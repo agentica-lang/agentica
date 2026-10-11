@@ -2,28 +2,8 @@
 
 #include <string.h>
 
-typedef struct {
-  agc_hamt *child;
-  uint64_t hash;
-  agc_value key, value;
-} hamt_entry;
-
-struct agc_hamt {
-  uint32_t bitmap, n;
-  hamt_entry entries[];
-};
-
 #define HAMT_BITS 5u
 #define HAMT_HASH_BITS 64u
-
-static uint64_t sip_k0 = 0x0706050403020100ULL, sip_k1 = 0x0f0e0d0c0b0a0908ULL;
-
-void agc_map_seed(uint64_t k0, uint64_t k1) {
-  sip_k0 = k0;
-  sip_k1 = k1;
-}
-
-static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b)); }
 
 #define SIPROUND                                                                                   \
   do {                                                                                             \
@@ -42,6 +22,26 @@ static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b))
     v1 ^= v2;                                                                                      \
     v2 = rotl(v2, 32);                                                                             \
   } while (0)
+
+typedef struct {
+  agc_hamt *child;
+  uint64_t hash;
+  agc_value key, value;
+} hamt_entry;
+
+struct agc_hamt {
+  uint32_t bitmap, n;
+  hamt_entry entries[];
+};
+
+static uint64_t sip_k0 = 0x0706050403020100ULL, sip_k1 = 0x0f0e0d0c0b0a0908ULL;
+
+void agc_map_seed(uint64_t k0, uint64_t k1) {
+  sip_k0 = k0;
+  sip_k1 = k1;
+}
+
+static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b)); }
 
 static uint64_t siphash13(uint64_t domain, const uint8_t *in, size_t len) {
   uint64_t v0 = 0x736f6d6570736575ULL ^ sip_k0, v1 = 0x646f72616e646f6dULL ^ sip_k1;
@@ -98,7 +98,7 @@ static uint32_t slot_of(uint64_t hash, unsigned shift) { return (uint32_t)(hash 
 
 static uint32_t index_of(uint32_t bitmap, uint32_t bit) { return (uint32_t)__builtin_popcount(bitmap & (bit - 1)); }
 
-static agc_hamt *pair_node(unsigned shift, const hamt_entry *a, const hamt_entry *b) {
+static agc_hamt *pair_node(unsigned shift, const hamt_entry *a, const hamt_entry *b) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     agc_hamt *node = new_node(0, 2);
     node->entries[0] = *a;
@@ -131,7 +131,7 @@ static agc_hamt *insert_at(const agc_hamt *node, uint32_t bitmap, uint32_t at, c
   return copy;
 }
 
-static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const hamt_entry *leaf, bool *added) {
+static agc_hamt *put(agc_vm *vm, const agc_hamt *node, unsigned shift, const hamt_entry *leaf, bool *added) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     for (uint32_t k = 0; k < node->n; k++) {
       if (key_equal(vm, node->entries[k].key, leaf->key)) {
@@ -242,7 +242,7 @@ static agc_hamt *remove_at(const agc_hamt *node, uint32_t bitmap, uint32_t at) {
   return copy;
 }
 
-static agc_hamt *take(agc_vm *vm, agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed) {
+static agc_hamt *take(agc_vm *vm, agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     for (uint32_t k = 0; k < node->n; k++) {
       if (key_equal(vm, node->entries[k].key, key)) {

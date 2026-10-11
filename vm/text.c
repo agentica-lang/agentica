@@ -3,6 +3,17 @@
 #include <inttypes.h>
 #include <string.h>
 
+typedef struct {
+  agc_string *s;
+  size_t cap;
+} builder;
+
+typedef struct {
+  agc_value value;
+  size_t next;
+  agc_value *keys;
+} debug_frame;
+
 bool agc_in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp) {
   size_t lo = 0, hi = count;
   while (lo < hi) {
@@ -99,11 +110,6 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64, agc_as_int(vm, v));
 }
 
-typedef struct {
-  agc_string *s;
-  size_t cap;
-} builder;
-
 static char *reserve(builder *b, size_t extra) {
   size_t need = agc_size_add(b->s->bytes, extra);
   if (need > b->cap) {
@@ -147,12 +153,6 @@ static void append_string(builder *b, const agc_string *s) {
 static bool compound(agc_value v) {
   return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_MAP) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM) || agc_is(v, AGC_T_RESULT);
 }
-
-typedef struct {
-  agc_value value;
-  size_t next;
-  agc_value *keys;
-} debug_frame;
 
 const agc_struct_def *agc_struct_def_of(agc_vm *vm, const agc_struct *st) {
   const agc_program *p = vm->program;
