@@ -144,3 +144,12 @@ vm-gc-stress: build
 
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c
+
+CLANG_TIDY ?= clang-tidy
+VM_LINT_SKIP := vm/unicode_data.c vm/map.c
+VM_LINT_PENDING := vm/builtins.c vm/json.c vm/main.c vm/strings.c vm/text.c vm/value.c
+VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP) $(VM_LINT_PENDING),$(wildcard vm/*.c))
+
+.PHONY: vm-lint
+vm-lint: $(GC_DIR)/extra/gc.c
+	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include
