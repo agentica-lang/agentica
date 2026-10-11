@@ -1183,6 +1183,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] `agentica --vm file.agc`: temporary bytecode file with the rules in `docs/vm.md` section 9 (Linux; Windows and macOS later).
 - [ ] Make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
 - [ ] Package the VM in `dist/` and the release workflow.
+- [ ] Single-file Linux release: `raco exe --orig-exe` with the VM embedded, older glibc baseline ([`future.md` section 18](future.md#18-front-end-implementation-language)).
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
 - [ ] Decide whether to remove the Racket evaluator or keep it as the reference for differential tests.
 
@@ -1268,6 +1269,9 @@ Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
 - [ ] Define normative designs for interpolation, generics, methods, FFI, async, or actors before implementing them. Modules/imports have an explicit place in the current implementation order; error propagation is already implemented in 5e.
 - [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels and CPU parallelism remain unscheduled; [`future.md` section 8](future.md#8-concurrency-and-parallelism) records their remaining decisions.
 
-- [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
+### Open decisions
 
-The remaining items above are outside the current implementation order.
+- [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
+- [ ] Front-end implementation language: Racket for now; revisit (self-hosting, or Rust) only once the grammar is stable and startup time or binary size call for it ([`future.md` section 18](future.md#18-front-end-implementation-language)).
+
+The open items in this section are outside the current implementation order.
