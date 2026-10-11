@@ -44,12 +44,12 @@ int main(void) {
   agc_value missing;
   assert(!agc_map_get(&vm, half, agc_int((n - 1) * 7919 - 50000), &missing));
   assert(!agc_map_get(&vm, m, agc_int(1), &missing));
-  agc_value *keys = agc_map_keys(m);
+  agc_value *keys = agc_map_keys(&vm, m, 0);
   for (int64_t k = 0; k < n; k++) assert(agc_as_int(&vm, keys[k]) == k * 7919 - 50000);
 
   agc_map *replaced = agc_map_put(&vm, m, agc_int(-50000), agc_int(-1));
   assert(replaced->size == m->size && get_int(replaced, agc_int(-50000)) == -1 && get_int(m, agc_int(-50000)) == 0);
-  assert(agc_as_int(&vm, agc_map_keys(replaced)[0]) == -50000);
+  assert(agc_as_int(&vm, agc_map_keys(&vm, replaced, 0)[0]) == -50000);
 
   agc_map *words = agc_new_map();
   words = agc_map_put(&vm, words, text("b"), agc_int(1));
@@ -82,8 +82,44 @@ int main(void) {
   assert(get_hashed(prefix, 0x0aaaaaaaaaaaaaaaULL, 99) == 7);
   assert(get_hashed(prefix, 0, -1) == -1 && get_hashed(prefix, 1ULL << 63, -2) == -2);
   assert(!agc_map_get_hash(&vm, prefix, 0x1aaaaaaaaaaaaaaaULL, agc_int(0), &missing));
-  agc_value *prefix_keys = agc_map_keys(prefix);
+  agc_value *prefix_keys = agc_map_keys(&vm, prefix, 0);
   assert(agc_as_int(&vm, prefix_keys[0]) == 0 && agc_as_int(&vm, prefix_keys[16]) == 99);
+
+  const int64_t few = 2000;
+  agc_map *removed = agc_new_map();
+  for (int64_t k = 0; k < few; k++) removed = agc_map_put(&vm, removed, agc_int(k * 7919 - 50000), agc_int(k));
+  agc_map *full = removed;
+  for (int64_t k = 0; k < few; k += 2) removed = agc_map_delete(&vm, removed, agc_int(k * 7919 - 50000));
+  assert(removed->size == (size_t)few / 2 && full->size == (size_t)few);
+  for (int64_t k = 0; k < few; k++) {
+    agc_value v;
+    assert(agc_map_get(&vm, removed, agc_int(k * 7919 - 50000), &v) == (k % 2 == 1));
+    assert(get_int(full, agc_int(k * 7919 - 50000)) == k);
+  }
+  agc_value *left = agc_map_keys(&vm, removed, 0);
+  for (int64_t k = 0; k < few / 2; k++) assert(agc_as_int(&vm, left[k]) == (2 * k + 1) * 7919 - 50000);
+  assert(agc_map_delete(&vm, removed, agc_int(1)) == removed);
+  assert(agc_map_delete(&vm, agc_new_map(), agc_int(1))->size == 0);
+  for (int64_t k = few - 1; k > 0; k -= 2) removed = agc_map_delete(&vm, removed, agc_int(k * 7919 - 50000));
+  assert(removed->size == 0 && removed->table == NULL && removed->reversed == NULL);
+  removed = agc_map_put(&vm, removed, agc_int(3), agc_int(4));
+  assert(removed->size == 1 && get_int(removed, agc_int(3)) == 4);
+
+  agc_map *thin = collide;
+  for (int64_t k = 0; k < 39; k++) thin = agc_map_delete_hash(&vm, thin, same, agc_int(k));
+  assert(thin->size == 1 && get_hashed(thin, same, 39) == 390 && get_hashed(collide, same, 0) == 0);
+  thin = agc_map_put_hash(&vm, thin, same, agc_int(0), agc_int(1));
+  assert(thin->size == 2 && get_hashed(thin, same, 0) == 1 && get_hashed(thin, same, 39) == 390);
+  thin = agc_map_delete_hash(&vm, agc_map_delete_hash(&vm, thin, same, agc_int(39)), same, agc_int(0));
+  assert(thin->size == 0 && thin->table == NULL);
+
+  agc_map *cut = prefix;
+  for (int64_t k = 0; k < 16; k++) cut = agc_map_delete_hash(&vm, cut, ((uint64_t)k << 60) | 0x0aaaaaaaaaaaaaaaULL, agc_int(k));
+  assert(cut->size == 3 && get_hashed(cut, 0x0aaaaaaaaaaaaaaaULL, 99) == 7 && get_hashed(cut, 0, -1) == -1);
+  assert(!agc_map_get_hash(&vm, cut, 0x0aaaaaaaaaaaaaaaULL, agc_int(0), &missing));
+  agc_value *cut_keys = agc_map_keys(&vm, cut, 0);
+  assert(agc_as_int(&vm, cut_keys[0]) == 99 && agc_as_int(&vm, cut_keys[1]) == -1 && agc_as_int(&vm, cut_keys[2]) == -2);
+  debug_is(agc_map_value(agc_map_delete(&vm, words, text(""))), "{\"b\": 4, \"a\\\"\\n\": 3, 98: 5}");
 
   agc_list *wrapped = agc_new_list(1);
   wrapped->items[0] = agc_map_value(words);

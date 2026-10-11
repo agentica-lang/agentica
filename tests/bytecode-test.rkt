@@ -142,7 +142,7 @@
                   '(2 11))
     (check-equal? (unsupported-at "def get(m: Map[String, Json]) -> Json\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
                   '(2 10))
-    (check-equal? (unsupported-at "def main() -> Void\n  puts([1, 2].size)\nend\n") '(2 8))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(JSON.null?(JSON.null))\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8))
     (check-equal? (unsupported-at "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\nend\n")
                   '(6 7))

@@ -132,7 +132,7 @@ static bool key_less(agc_vm *vm, agc_value a, agc_value b) {
   return agc_as_int(vm, a) < agc_as_int(vm, b);
 }
 
-static agc_value sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys) {
+agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys) {
   size_t n = items->len;
   if (n < 2) return agc_list_value((agc_list *)items);
   size_t *order = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
@@ -228,7 +228,7 @@ static void resume_native(agc_vm *vm) {
     case AGC_NATIVE_ANY: result = agc_bool(false); break;
     case AGC_NATIVE_ALL: result = agc_bool(true); break;
     case AGC_NATIVE_REDUCE: result = st->acc; break;
-    case AGC_NATIVE_SORT_BY: result = sort_by_keys(vm, items, st->out); break;
+    case AGC_NATIVE_SORT_BY: result = agc_sort_by_keys(vm, items, st->out); break;
     default: break;
   }
   finish_native(vm, result);
