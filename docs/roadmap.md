@@ -14,7 +14,10 @@ done; the rest of item 5 (5c to 5e) and the
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (5e), in parallel with the rest of
 phase 7; queues also need only 5e, and sets need the VM maps (5d). Real
-applications follow, then MCP. Shared tables (phase 9) come after MCP and are
+applications follow, then MCP. Adapters and JSON inspection (phase 10) come
+after MCP: they are small language items, so they go before shared tables,
+which wait for a real program. 10a needs `.call` on the VM (5e); 10b and 10d
+need the VM JSON PR (`docs/vm.md` §12.2 item 7). Shared tables (phase 9) are
 on demand: they need tasks on the VM (7h) and start only when a real program
 needs them. Real applications and MCP keep running on the Racket evaluator
 meanwhile, and their findings feed the VM's differential tests. Historical
@@ -31,7 +34,8 @@ than their numeric order.
 | 6 | Core data structures (phase 8): ranges first (may start after 7e PR 5e), then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
 | 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 8 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 9 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
+| 9 | Adapters and JSON inspection (phase 10): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums | Write adapters and read JSON of unknown shape without workarounds |
+| 10 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
 
 After steps 1–2, target everyday scripts and automation. After steps 7–8,
 target larger general-purpose programs.
@@ -1195,6 +1199,17 @@ Specified in [`future.md` section 13](future.md#13-shared-tables-ats). It needs 
 - [ ] Later, each after a real program needs it: ordered tables, duplicate keys, a block-based `update`.
 
 **Done when:** an example with several tasks sharing a cache and a counter runs on both backends with the same output.
+
+## Phase 10: Adapters and JSON inspection
+
+Specified in [`future.md` section 15](future.md#15-adapters-and-json-inspection). Each item lands in the evaluator and the VM in one PR, with `grammar.md`, the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e PR 5e); 10b and 10d need the VM JSON PR (`docs/vm.md` §12.2 item 7).
+
+- [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the ".put.call(...)" help. Update the `grammar.md` sentence "structs and enums have no methods" and the skill's `.call` line. Show the adapter pattern in an example.
+- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Whole numbers follow `JSON.int`: integer form in `Int` range is `JsonInt`, anything else `JsonFloat`. `JSON.parse` keeps object key order and rejects integers too large for a finite `Float`. `JsonValue` becomes a reserved name (breaking change; say so in the changelog).
+- [ ] 10c Generic structs (`struct Box[T]`): inference at construction, substituted field types, the generic enum diagnostics; `JSON.encode` works, `JSON.decode` and `JSON.schema` reject generic structs (`CHECK-NOT-DECODABLE`). Update the `grammar.md` sentence "generic structs are not supported".
+- [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`.
+
+**Done when:** an example with a `Storage` adapter (disk and memory backends) and a walker over unknown JSON runs on both backends with the same output.
 
 ## Later extensions
 
