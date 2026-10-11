@@ -1065,7 +1065,7 @@ The Racket evaluator stays in the repository until 7i, so it can be measured at 
 
 - [x] IR: closures (block bodies with their captured values): each block is its own IR function; free variables are captured by value; `&name` is a closure with no captures.
 - [x] IR: shape of the lowered program: flat instruction lists over numbered slots, labels, typed operations, spans; the checker records expression types for the lowerer.
-- [x] Bytecode: register machine, 46 opcodes, generic `CALL_BUILTIN`, constant pool, type/struct/enum/function tables, span table, format version.
+- [x] Bytecode: register machine, 46 opcodes (47 with `TAIL_CALL`, added later), generic `CALL_BUILTIN`, constant pool, type/struct/enum/function tables, span table, format version.
 - [x] Serialization between Racket and the VM: little-endian binary with magic `AGCB`, format version and Agentica version, rejected on mismatch.
 - [x] Value representation in C: 16-byte tagged values with the Boehm GC; HAMT maps with insertion order; checked accessors for every value read.
 - [x] Execution limits: one step per former AST entry through `STEP` instructions; counts and spans match the evaluator.
@@ -1112,6 +1112,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Control flow, locals, function calls, returns, call-depth limit (`RUNTIME-STACK-OVERFLOW`), `--max-steps` (`RUNTIME-STEP-LIMIT`).
 - [x] Lists: literals (chunked above 255 elements), `for`, indexing with `RUNTIME-INDEX-OUT-OF-RANGE` at the index span, and their text and debug forms (`docs/vm.md` §12.2 item 5a).
 - [x] Structs, enums (generic too) and `case` with literal, `_` and variant patterns; text and debug forms with the linked display names (`docs/vm.md` §12.2 item 5b).
+- [x] Tail calls: `return f(...)` of a user function lowers to `TAIL_CALL`, which reuses the frame, so tail and mutual recursion do not grow the call depth on the VM; same steps as `CALL` + `RETURN`; a documented difference from the evaluator, which still overflows (`docs/vm.md` §4.3, §6.1).
 - [ ] Maps (insertion order), map indexing errors with their spans.
 - [ ] `Result`, `try`, function values, closures, resumable `List` builtins.
 - [ ] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`.

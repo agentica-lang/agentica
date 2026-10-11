@@ -31,14 +31,16 @@ details and reasons.
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
 and Windows CI, the Lists PR and the structs, enums and `case` PR (12.2
-items 1 to 4, 5a and 5b) are in. The VM covers Int, Float, Bool, Nil and
+items 1 to 4, 5a and 5b) are in, and so is the tail-call PR (after the
+list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
 imported ones included), and `List[T]` of any of them (lists of lists too),
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
 `break` and `next`, `for x in xs` with `break` and `next`, list literals,
 indexing `xs[i]`, struct construction and field access, enum constructors,
-`case` with literal, `_` and variant patterns, user functions, calls, `return`, interpolation,
+`case` with literal, `_` and variant patterns, user functions, calls, tail
+calls (`return f(...)` reuses the frame, 6.1), `return`, interpolation,
 `x.to_s` and `x.inspect` of those values, and `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn` of any of them. List library functions (`xs.size`,
 `List.append`, ...) join with the `List` library (12.2 item 6). Runtime diagnostics come in the plain,
@@ -357,7 +359,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
 | `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index, length and one slots (`const 0`, `list-len`, `const 1`, set once); `jump` to the test; body; increment (`add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
 | Functions | One IR function each; falling off the end returns Void. |
-| Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`. |
+| Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`, or `tail-call` when it is the value of a `return` (see `return`). |
 | Structs | `step` (construct span); arguments evaluated in written order directly into the slot of their declared position, then `struct`. A `construct` named `Enum.Variant` is an enum constructor (`eval-step-expression`). Field access: `step` (node span), target, then `field` with the declared index. A struct type that is not declared in the program (a builtin record such as `Header`) stays `LOWER-UNSUPPORTED`. |
 | Enums | `step` (constructor span), payload slots in order, then `enum` with a global variant id; a nullary variant is `enum dst dst v`. |
 | Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. An empty literal is `list dst dst 0`. |
@@ -370,7 +372,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's display name, as `type-expression` evaluates to its name. |
 | `&name` | `closure` with no captures. |
 | `f.call(...)` | `call-value` at the invoke span. |
-| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. |
+| `return` | `return` of the value, or of a Void constant. Inside a block it leaves the block. When the value is a direct call to a user function (local or imported; the linker turns `Mod.f(...)` into a plain call), the call lowers as usual but ends in `tail-call` instead of `call`, and no `return` follows. This holds wherever the `return` is: in `if`/`elsif`/`else` branches, `case` arms, `while` and `for` bodies, and in `main`. Builtin calls, `return try f(...)`, calls inside a larger expression (`return 1 + f(n)`) and `.call` (`call-value`) are not tail calls. |
 | Assignment to an existing local | Value into a temporary, then `move`. `and`/`or` write their target before the right side runs, so lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
 
 ### 3.4 Closure conversion
@@ -470,6 +472,7 @@ through the checked accessors (5.2); a wrong tag is `RUNTIME-INTERNAL`
 | | `CALL_VALUE` | a b | Call function value `R[a]` with `b` args `R[a+1..]`; result in `R[a]` |
 | | `CALL_BUILTIN` | a bx | Call builtin import `bx`; args `R[a..]`; result in `R[a]`; spans: call, then each argument |
 | | `RETURN` | a | Return `R[a]` |
+| | `TAIL_CALL` | a bx | Call function `bx` with args `R[a..]` in place of the current frame; its result goes where this frame's result would |
 | | `CLOSURE` | a bx | Closure of function `bx`, captures from `R[a..]`, result in `R[a]` |
 | Data | `LIST` | a b c | List of `R[b..b+c-1]` |
 | | `LIST_LEN` | a b | Length of list `R[b]` |
@@ -485,7 +488,7 @@ through the checked accessors (5.2); a wrong tag is `RUNTIME-INTERNAL`
 | | `IS_OK` | a b | Is `R[b]` ok? |
 | | `RESULT_VALUE` | a b | Value of an ok, or message of an error (for `case`) |
 
-That is 46 opcodes. Everything else, including `ok`, `error`, `puts` and every
+That is 47 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin; later subphases add builtins, not opcodes.
 
 Opcode numbers are positions in one list shared by `opcodes` in
@@ -496,7 +499,8 @@ LT_I LE_I EQ NE JUMP JUMP_IF_FALSE JUMP_IF_TRUE CALL CALL_BUILTIN RETURN`
 (20 opcodes); the Float PR appended `ADD_F SUB_F MUL_F DIV_F NEG_F LT_F
 LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30); the Lists
 PR appended `LIST LIST_LEN LIST_GET` (33); the structs, enums and `case` PR
-appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39). `EQ`/`NE`
+appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39); the tail-call PR
+appended `TAIL_CALL` (40). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
@@ -528,6 +532,18 @@ function value's parameter count against `b` at run time, and copies a
 closure's captures after the parameters. The lowerer keeps call windows at
 the top of the live registers; a corrupt file that breaks this mixes up
 values but stays memory safe.
+
+`TAIL_CALL a bx` keeps the current frame and its base. It first grows the
+registers to `base + ` the callee's register count (the callee may need more
+than the caller; the same cap and out-of-memory path as a push, 6.1), then
+moves the arguments `R[a..a+params-1]` down to `R[0..]` with `memmove`, since
+the two windows may overlap, and sets the frame's function to `bx` and its
+`pc` to 0. The callee's `RETURN` then writes the frame's base register, the
+result register of the `CALL` that made the frame, just as the replaced
+function's `RETURN` would have. `CALL` and `RETURN` charge
+no steps, and the lowering puts the same `step`s before a `tail-call` as
+before a `call`, so a tail call charges exactly what `call` + `return`
+charged: step counts and `--max-steps` failures do not change.
 
 `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` are
 **resumable builtins**. `CALL_BUILTIN` pushes a native frame whose state (the
@@ -591,8 +607,10 @@ bits.
 
 The VM accepts only its own format version and Agentica version; anything
 else is rejected (8). Any change to the layout or to an opcode's meaning
-bumps the format version. There are no compatibility shims: the Racket side
-and the VM ship together.
+bumps the format version. Appending an opcode changes neither, so it keeps
+the version (the Lists PR and the tail-call PR stayed on their versions); an
+older VM rejects the new opcode as unknown. There are no compatibility
+shims: the Racket side and the VM ship together.
 
 ## 5. Values in C
 
@@ -678,10 +696,21 @@ typedef struct {
 - Before `CALL`, `CALL_VALUE` or a callback push, `depth >= 10000` fails with
   `RUNTIME-STACK-OVERFLOW` ("call depth limit exceeded") at that
   instruction's span, like `call-function` and `call-closure`. `main` runs at
-  depth 1; native frames do not count; each task starts at 0. The register
+  depth 1; native frames do not count; each task starts at 0. `TAIL_CALL`
+  replaces the current frame (4.3), so it neither checks nor changes the
+  depth. The register
   array is capped at 2^24 per task; passing the cap fails the same way. A
   valid program reaches it only with more than about 1,600 registers per
   frame at full depth, so this is a documented difference, not a hole.
+- Documented difference: the evaluator has no tail calls, so a deep
+  tail-recursive program (a loop of a million `return f(n - 1)`, or two
+  functions that tail-call each other) fails there with
+  `RUNTIME-STACK-OVERFLOW` and runs on the VM. The VM's depth is never above
+  the evaluator's, so a program that stays within the limit on the evaluator
+  stays within it on the VM, with the same output, steps and spans; a
+  runtime diagnostic carries one span and no stack trace, so the replaced
+  frames are not visible. Non-tail recursion keeps the limit and its span.
+  The evaluator is not changed: it goes away in 7i.
 - `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. `STEP`
   is one compare and one subtraction. All tasks share it.
 
@@ -803,16 +832,17 @@ The loader validates the whole file before running anything. Failures print
   instruction; the last is `RETURN` or `JUMP`; known opcodes; every register
   operand below `registers`, including ranges: `LIST` `b..b+c-1`, `MAP`
   `b..b+2c-1`, `STRUCT` `b..b+fields-1`, `ENUM` `b..b+arity-1`, call windows
-  (`CALL` with the callee's parameter count, `CALL_VALUE` `a..a+b`,
+  (`CALL` and `TAIL_CALL` with the callee's parameter count, `CALL_VALUE` `a..a+b`,
   `CALL_BUILTIN` with its arity, `CLOSURE` with the captures); constant, function, builtin, type, struct,
   field, variant and span indexes in range, including the extra spans of
   `STEP` and `CALL_BUILTIN`; jump targets inside the function; `STEP` count at
   least 1.
 - **Termination**: every backward jump targets a `STEP`, and every function
   starts with a `STEP` unless it has at most 2 instructions and no `CALL`,
-  `CALL_VALUE` or `CALL_BUILTIN` (the `const`/`return` of an empty body). The
+  `TAIL_CALL`, `CALL_VALUE` or `CALL_BUILTIN` (the `const`/`return` of an empty body). The
   lowering in 3.3 always meets these rules. Together they mean every
-  unbounded repetition charges a step, so `--max-steps` holds even for
+  unbounded repetition charges a step (a cycle of tail calls runs only
+  functions that call, so each one charges its leading `STEP`), so `--max-steps` holds even for
   hostile files: the step budget bounds the number of instructions to about
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
   time and memory in proportion to their strings (trust model, 1).
@@ -845,9 +875,10 @@ The loader validates the whole file before running anything. Failures print
   (including the extra spans of `STEP` and `CALL_BUILTIN`, and the
   registers of the Float, String, List, struct and enum opcodes, and the
   `LIST`, `STRUCT` and `ENUM` windows), every struct and enum table rule
-  above (and that 65535 nullary variants and 65535 fields load), `CALL` and
-  `CALL_BUILTIN` windows, `STEP 0`, a backward jump that misses a `STEP`,
-  functions that should start with one, an unknown opcode, a missing final
+  above (and that 65535 nullary variants and 65535 fields load), `CALL`,
+  `TAIL_CALL` and `CALL_BUILTIN` windows, a `TAIL_CALL` to a function out of
+  range, `STEP 0`, a backward jump that misses a `STEP`,
+  functions that should start with one (one is just `TAIL_CALL`, `RETURN`), an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
 - **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
   string bounds, and the register cap (6.1).
@@ -1144,7 +1175,7 @@ the platform's OpenSSL package) to each job.
   the failing span must match. In the slice the test finds each program's
   total step count with the evaluator and sweeps every limit from 1 to it
   when the total is at most 2000; above that (the call-depth program, about
-  50,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
+  60,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
   and the total minus one. The run without a limit compares all three
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
@@ -1162,13 +1193,13 @@ the platform's OpenSSL package) to each job.
   case mapping join with the `String` library. `make vm-test` builds every
   `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
-  every Int parameter of every builtin. Deep-value corpus: a depth-200,000
+  every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
   enum chain and nested JSON array, printed and encoded. A program's lists
   are only as deep as their types, which are written in the source (there
   are no user generics), whether built by one literal (capped near 65,000
   levels by registers, 3.5) or by chained bindings, so
-  `vm/tests/text_test.c` builds a depth-200,000 list in C and prints it,
-  and a depth-200,000 chain of enum payloads wrapped in structs: enough to
+  `vm/tests/text_test.c` builds a depth-1,000,000 list in C and prints it,
+  and a depth-1,000,000 chain of enum payloads wrapped in structs: enough to
   overflow an 8 MB C stack even at about 48 bytes per frame, so a recursive
   printer would crash. The GC stress build uses depth 1,000 for both, since
   there the test is about GC safety while printing, not depth; the
@@ -1219,6 +1250,11 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
    `Random` (with the seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
+
+Outside this list, the **tail-call** PR (done) added `TAIL_CALL`: a
+`return f(...)` of a user function reuses the frame (3.3, 4.2, 4.3, 6.1),
+with loader rules (8), the `tail-calls` fixture, and a VM-only test of a
+loop and a mutually recursive pair one million calls deep.
 
 7e is done when every example runs on the VM with the same results, except
 those that need files, processes, tasks or the network by name:

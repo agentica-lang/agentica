@@ -152,6 +152,22 @@
           (check-equal? (first rejected) 2)
           (check-true (string-prefix? (third rejected) "agentica-vm: invalid bytecode: ")))
 
+        (test-case "deep tail calls run on the VM but overflow on the evaluator"
+          (define program (build-path work "deep-tail.agc"))
+          (display-to-file
+           (string-append
+            "def loop(n: Int, acc: Int) -> Int\n  if n == 0\n    return acc\n  end\n  return loop(n - 1, acc + 1)\nend\n\n"
+            "def even(n: Int) -> Bool\n  if n == 0\n    return true\n  end\n  return odd(n - 1)\nend\n\n"
+            "def odd(n: Int) -> Bool\n  if n == 0\n    return false\n  end\n  return even(n - 1)\nend\n\n"
+            "def main() -> Void\n  puts(loop(1000000, 0))\n  puts(even(1000001))\nend\n")
+           program)
+          (define bytecode (build-path work "deep-tail.agcb"))
+          (compile-file program bytecode)
+          (check-equal? (run-vm bytecode #f) (list 0 "1000000\nfalse\n" ""))
+          (define racket (run-racket (front-end program) #f))
+          (check-equal? (first racket) 1)
+          (check-true (string-contains? (third racket) "error[RUNTIME-STACK-OVERFLOW]")))
+
         (test-case "a CRLF program under a non-ASCII path matches the evaluator"
           (define folder (build-path work "dír-λ-𝔸"))
           (make-directory folder)

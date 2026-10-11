@@ -361,7 +361,12 @@
     (set! next (if want saved (add1 dst)))
     dst)
 
-  (define (lower-call expression want void? #:checked? [checked? #f])
+  (define (tail-call? expression)
+    (and (call? expression)
+         (not (builtin-ref (call-name expression) (length (call-args expression))))
+         (hash-has-key? function-index (call-name expression))))
+
+  (define (lower-call expression want void? #:checked? [checked? #f] #:tail? [tail? #f])
     (define name (call-name expression))
     (define arguments (call-args expression))
     (define span (call-span expression))
@@ -381,9 +386,10 @@
       (set! next (+ base index))
       (define slot (alloc!))
       (lower-expression argument slot))
-    (if builtin?
-        (apply emit! 'call-builtin (list base key (length arguments)) span (map node-span arguments))
-        (emit! 'call (list base (hash-ref function-index name)) span))
+    (cond
+      [builtin?
+       (apply emit! 'call-builtin (list base key (length arguments)) span (map node-span arguments))]
+      [else (emit! (if tail? 'tail-call 'call) (list base (hash-ref function-index name)) span)])
     (cond
       [want (emit! 'move (list want base) span)
             (set! next saved)
@@ -418,11 +424,14 @@
           (hash-set! (car scopes) name slot)])]
       [(return-stmt? statement)
        (define value (return-stmt-value statement))
-       (define slot
-         (cond
-           [value (lower-expression value #f #:void? #t)]
-           [else (define slot (alloc!)) (emit! 'const (list slot (void)) span) slot]))
-       (emit! 'return (list slot) span)
+       (cond
+         [(and value (tail-call? value)) (lower-call value #f #t #:tail? #t)]
+         [else
+          (define slot
+            (cond
+              [value (lower-expression value #f #:void? #t)]
+              [else (define slot (alloc!)) (emit! 'const (list slot (void)) span) slot]))
+          (emit! 'return (list slot) span)])
        (set! next saved)]
       [(expr-stmt? statement)
        (lower-expression (expr-stmt-value statement) #f #:void? #t)
@@ -559,7 +568,7 @@
     [(and (memq op '(jump jump-if-false jump-if-true))
           (= index (if (eq? op 'jump) 0 1)))
      (format "L~a" value)]
-    [(and (eq? op 'call) (= index 1)) (format "fn~a" value)]
+    [(and (memq op '(call tail-call)) (= index 1)) (format "fn~a" value)]
     [(and (memq op '(enum is-variant)) (= index 2)) (format "v~a" value)]
     [(and (eq? op 'struct) (= index 2)) (format "s~a" value)]
     [(and (memq op '(field payload)) (= index 2)) (format "~a" value)]
