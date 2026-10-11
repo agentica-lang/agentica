@@ -25,15 +25,15 @@ details and reasons.
 |---|---|
 | `src/checker.rkt` | One addition in 7c: it can fill a caller-supplied `eq?` hash from expression node to its checked type. |
 | `src/lower.rkt` (7c) | Checked program to IR. Resolves names to slots and indexes, makes types explicit, keeps spans, converts closures. |
-| `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, struct, enum and span tables (type tables join with JSON), step merging, binary writer and reader. |
+| `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, struct, enum, JSON type and span tables, step merging, binary writer and reader. |
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
 and Windows CI, the Lists PR, the structs, enums and `case` PR and the
 Result PR, the Maps PR, the closures PR, the IO and System PR, the
-library PR and part 1 of the JSON PR (12.2 items 1 to 4, 5a to 5e, 6a, 6b
-and 7 without typed decode and schema) are in, and so is the
+library PR and both parts of the JSON PR (12.2 items 1 to 4, 5a to 5e, 6a,
+6b and 7) are in, and so is the
 tail-call PR (after the list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
 imported ones included), `Result[T]` of any of them (and `Result[Void]`),
@@ -67,11 +67,11 @@ with or without a default, `delete`; also as methods such as `xs.size` and
 `Time` and `Random` builtins (`Float.from_int`, `to_int`, `to_int!`, also
 as `n.to_f`, `x.to_i` and `x.to_i!`; `Time.now_ms`, `monotonic_ms`;
 `Random.int`, `Random.float` with the VM's own seeded generator of 7.4),
-and the `JSON` builtins that need no type table (`JSON.parse`, `encode`,
-`from`, `object`, `array`, `null`, `null?`, `get`, `at`, `string`, `int`,
-`float`, `bool`, `list`, also as methods such as `j.get("a")`; 2.4, 2.6,
-5.1). `JSON.decode` and `JSON.schema` stay `LOWER-UNSUPPORTED` until
-part 2 adds a type table. Runtime diagnostics come in the plain,
+and every `JSON` builtin (`JSON.parse`, `encode`, `from`, `object`,
+`array`, `null`, `null?`, `get`, `at`, `string`, `int`, `float`, `bool`,
+`list`, also as methods such as `j.get("a")`, and the typed `decode` and
+`schema` of user structs through the Types section; 2.4, 2.6, 2.7, 4.6,
+5.1). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -451,6 +451,34 @@ fails when the committed file differs from what the generator prints.
   (`symbol<?` on the UTF-8 text) with a stable merge sort, and the last of
   equal keys is kept.
 
+### 2.7 Typed JSON (`src/json-typed.rkt`)
+
+- `JSON.decode(s, T)` parses `s` like `JSON.parse` (a parse failure is the
+  same error value with the `JSON.parse: ` prefix), then walks the target
+  type in field order, depth first, and stops at the first problem. Every
+  field is required; extra keys are ignored; a repeated key keeps its last
+  value, as in parsing.
+- Errors are values `"<path>: expected <what>"`. The path is `$` at the
+  root, `a.b` for fields, `a[3]` for list items and `a["k"]` for map keys,
+  the key in `write` form. `<what>` is `object` (struct or map), `array`,
+  `required field` (missing key, path of the field), `signed 64-bit Int`
+  (a JSON float or an integer outside int64), `finite Float` (an integer is
+  converted, and a big one that rounds to infinity fails), `Bool` or
+  `String`.
+- A decoded map is built in the order of the sorted JSON keys; the VM's
+  object nodes are already sorted (2.6).
+- `JSON.schema(T)` is the object `{type, properties, required}` of `T`,
+  plus `$defs` when `T`'s fields reach any struct (`T` itself only when it
+  is recursive). Every struct reached is in `$defs` once, under its linked
+  name (`@2::Point` for an imported one, as the evaluator keeps it), and a
+  struct field is `{"$ref": "#/$defs/<name>"}` with `~` as `~0` and `/` as
+  `~1`. Int is `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
+- The VM (`vm/json_typed.c`) walks the JSON tree and the type table with
+  one explicit stack and builds the error path only on failure; schema
+  builds one schema per type-table entry in index order (entries only point
+  back), then the reachable structs with a queue. Neither recurses, so a
+  recursive struct and a deep value are safe (7.3).
+
 ## 3. IR (7c)
 
 ### 3.1 Types from the checker
@@ -473,7 +501,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 
 ```racket
 (struct ir-program (sources structs enums functions entry span))
-(struct ir-struct (name fields))          ; display name; field names in declaration order
+(struct ir-struct (name fields types))    ; linked name; field names in declaration order; JSON field types or #f
 (struct ir-enum (name variants))          ; list of (variant-name . arity)
 (struct ir-function (name params captures slots body span))
 (struct ir-label (id))
@@ -485,9 +513,11 @@ and a receiver wrapped in `typed-target` carries its type already.
   declared functions.
   The tables hold every struct and enum declaration of the linked program in
   declaration order. Enums are generic only in their checked types, so the
-  table needs only each variant's arity. Field types are not in the IR yet:
-  only `JSON.decode` and `JSON.schema` need them, and the JSON PR (12.2
-  item 7) adds them.
+  table needs only each variant's arity. `types` holds a struct's field
+  types (`Int`, `Float`, `Bool`, `String`, `(List t)`, `(Map String t)`,
+  `(Struct name)`) when every field is decodable, the checker's rule with
+  recursion through structs allowed, else `#f`; only `JSON.decode` and
+  `JSON.schema` read them.
 - Slots are the VM registers, numbered per function: parameters `0..p-1`,
   captures `p..p+c-1`, then locals and temporaries. Temporaries follow a
   stack discipline, so a call's arguments are always the highest live slots
@@ -526,7 +556,7 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `ok`, `error`, `Result.*` | Builtin calls: keys `ok` (arity 1, and arity 0 for `ok()`), `error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`, `Result.message`. `Result.Ok(x)` and `Result.Err(m)` are already `ok`/`error` calls after parsing, and method forms (`r.ok?`, `r.unwrap!`) are resolved calls. |
 | Interpolation | `step`, then the first part straight into the target; each later part into the next free slot, then `concat target target slot`. A string part is a `const`; an expression part is lowered as usual and followed by `to-text slot slot` unless it is a String. String parts charge no step. |
 | `.inspect` | `inspect`. `.to_s` follows what the checker resolved: the receiver itself for String, `String.from_int`/`from_float` for Int/Float, a one-part interpolation for other types. A `method-call` or `field-access` with `resolved` set lowers its resolved node without a step, and a `typed-target` lowers its expression, as `eval-expression` does. |
-| `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's display name, as `type-expression` evaluates to its name. |
+| `JSON.decode(s, User)`, `JSON.schema(User)` | The type argument is charged one step and lowers to a String constant with the struct's linked name (`@2::User` when imported), as `type-expression` evaluates to it; the builtin finds the struct with that name in the Types section. A type that is not a user struct (a builtin record such as `Header`) is `LOWER-UNSUPPORTED` at the type argument. |
 | `&name` | `step`, then `closure dst fn` with no captures (a new function value each time, like `function-value`). |
 | `f.call(...)` | `step` (invoke span), the target into the window base, the arguments after it, then `call-value base n` at the invoke span; the result lands in the base. |
 | Blocks | `step` (block span), then closure conversion (3.4). |
@@ -815,11 +845,12 @@ bytes. Sections come in this fixed order; each starts with a `u32` count
 
 | Section | Entry |
 |---|---|
-| Header | magic `"AGCB"`, `u32` format version (2), `str` Agentica version (`src/version.rkt`) |
+| Header | magic `"AGCB"`, `u32` format version (3), `str` Agentica version (`src/version.rkt`) |
 | Sources | `str` name, `str` full text |
 | Spans | `u32` source, start line, start column, end line, end column; span 0 is the program span |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
 | Structs | `str` display name, `u32` field count, each field's `str` name |
+| Types | `u32` type count, each a `u8` kind (0 Int, 1 Float, 2 Bool, 3 String, 4 List, 5 Map with String keys, 6 Struct) and, for 4 to 6, a `u32` operand: the item or value type index (smaller than the entry's own) or the struct index; then a `u32` count of decodable structs, each a `u32` struct index (increasing), the `str` linked name, and one `u32` type index per field |
 | Enums | `str` display name, `u32` variant count, each `str` name and `u32` arity; variants numbered globally in file order |
 | Builtins | `str` name, `u32` arity |
 | Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
@@ -830,10 +861,13 @@ reading files.
 
 Format version 2 (the structs, enums and `case` PR) fills the Structs and
 Enums sections; version 1 had three empty sections there (Types, Structs,
-Enums). Version 2 has no Types section: the type data that `JSON.decode`
-and `JSON.schema` need (a type table with List and Map entries pointing to
-smaller indexes, so only struct entries make cycles, and a type index per
-struct field) joins with the JSON PR (12.2 item 7) and its own format bump.
+Enums). Format version 3 (JSON part 2, 12.2 item 7) adds the Types section
+after Structs: the type data that `JSON.decode` and `JSON.schema` need. List
+and Map entries point to smaller indexes, so only struct entries make
+cycles, and those go through the decodable struct records. `src/bytecode.rkt`
+interns each distinct type once (children first) and writes a record for
+every struct whose `ir-struct-types` is set; a program without them writes
+two zero counts.
 All seven constant kinds are in use; Float constants are the literal's IEEE
 bits.
 
@@ -1104,10 +1138,16 @@ The loader validates the whole file before running anything. Failures print
 - **Spans**: an existing source; `start <= end`; for both start and end,
   `1 <= line <= ` the source's line count and `1 <= column <=` the line's
   length in characters plus 1.
-- **Tables**: known constant kinds (and, with JSON, type kinds and type
-  operands in range); field counts and arities fit 16 bits;
+- **Tables**: known constant kinds; field counts and arities fit 16 bits;
   builtin record names only with their exact C layout; builtin `(name,
   arity)` pairs exist.
+- **Types**: at most 65535 types, each with a known kind; a List or Map
+  entry names an earlier type, a Struct entry a struct in range that has a
+  decodable record; records name structs in range in increasing order (so
+  at most one each), have one field type per field (the count checked
+  against the bytes left), and every field type index is in range. So the
+  only cycles go through named structs. `vm/tests/loader_test.c` checks
+  each rule and truncation at every byte of a file with a type table.
 - **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`; at least one
   instruction; the last is `RETURN` or `JUMP`; known opcodes; every register
   operand below `registers`, including ranges: `LIST` `b..b+c-1`, `MAP`
@@ -1747,8 +1787,16 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `RUNTIME-UNWRAP-ERROR` on a missing key, and a 1,024-deep array and
      object (kept small for the GC stress and sanitizer runs; the C test is
      the deep guard).
-   - **Part 2.** `JSON.decode` and `JSON.schema`, which need a type table
-     in the bytecode and a format bump.
+   - **Part 2** (done). `JSON.decode` and `JSON.schema` (2.7) in
+     `vm/json_typed.c`, with the Types section and format version 3 (4.6)
+     and its loader rules (8). The type argument lowers to the struct's
+     linked name (3.3). Fixtures: `json-decode` (nested, recursive, list
+     and map fields, imported structs, big integers to Float, a round
+     trip), `json-decode-errors` (every error kind with its path, and the
+     parse errors), `json-schema` (several structs, recursion through
+     lists and maps, an imported struct beside a local one of the same
+     name) and `json-decode-deep` (a 1,000-level recursive value and a
+     path error at the bottom).
 
 Phase 8a (ranges, done) added the `Range` value (5.1), `RANGE` and
 `RANGE_BOUNDS` (4.2), the counter loops of 3.3, the `Range` builtins and

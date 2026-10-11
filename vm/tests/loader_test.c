@@ -128,6 +128,8 @@ static buffer build(spec s) {
   } else {
     u32(&b, 0);
     u32(&b, 0);
+    u32(&b, 0);
+    u32(&b, 0);
   }
   u32(&b, 1);
   str(&b, s.builtin);
@@ -168,6 +170,8 @@ static buffer make_tables(uint32_t arity) {
   u32(&t, 2);
   str(&t, "a");
   str(&t, "b");
+  u32(&t, 0);
+  u32(&t, 0);
   u32(&t, 1);
   str(&t, "E");
   u32(&t, 2);
@@ -238,6 +242,58 @@ static bool loads_code(const agc_instr *code, const uint32_t *spans, uint32_t co
   s.code_spans = spans;
   s.count = count;
   return loads(s, reason);
+}
+
+static buffer type_tables(int which) {
+  buffer t;
+  t.data = malloc(70000);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, 2);
+  str(&t, "P");
+  u32(&t, 1);
+  str(&t, "x");
+  str(&t, "Q");
+  u32(&t, 2);
+  str(&t, "a");
+  str(&t, "b");
+  if (which == 7) {
+    u32(&t, 65536);
+    for (uint32_t k = 0; k < 65536; k++) u8(&t, 0);
+  } else {
+    u32(&t, which == 8 ? 0x10000000 : 3);
+    u8(&t, 0);
+    u8(&t, which == 1 ? 7 : 4);
+    u32(&t, which == 2 ? 1 : 0);
+    u8(&t, 6);
+    u32(&t, which == 3 ? 2 : 0);
+  }
+  u32(&t, which == 6 ? 1 : 2);
+  if (which != 5 && which != 6) {
+    u32(&t, which == 9 ? 5 : 0);
+    str(&t, "P");
+    u32(&t, which == 4 ? 3 : 2);
+  }
+  u32(&t, 1);
+  str(&t, "@1::Q");
+  u32(&t, 1);
+  u32(&t, 0);
+  if (which == 5) {
+    u32(&t, 0);
+    str(&t, "P");
+    u32(&t, 2);
+  }
+  u32(&t, 0);
+  return t;
+}
+
+static bool loads_types(int which, const char *reason) {
+  buffer t = type_tables(which);
+  spec s = base();
+  s.tables = &t;
+  bool ok = loads(s, reason);
+  free(t.data);
+  return ok;
 }
 
 int main(void) {
@@ -679,6 +735,8 @@ int main(void) {
     u32(&wide, fields);
     for (uint32_t k = 0; k < fields; k++) str(&wide, "f");
     u32(&wide, 0);
+    u32(&wide, 0);
+    u32(&wide, 0);
     s = base();
     s.tables = &wide;
     assert(fields == 65535 ? loads(s, NULL) : !loads(s, "too many fields"));
@@ -689,6 +747,8 @@ int main(void) {
   many.data = malloc(65535 * 9 + 64);
   assert(many.data);
   many.len = 0;
+  u32(&many, 0);
+  u32(&many, 0);
   u32(&many, 0);
   u32(&many, 1);
   str(&many, "E");
@@ -986,6 +1046,27 @@ int main(void) {
   s.registers = 3;
   agc_outcome range_wrong = run_spec(s, stdout);
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
+
+  assert(loads_types(0, NULL));
+  assert(!loads_types(1, "unknown type kind 7"));
+  assert(!loads_types(2, "element type is not an earlier type"));
+  assert(!loads_types(3, "struct index out of range"));
+  assert(!loads_types(4, "type index out of range"));
+  assert(!loads_types(5, "decodable structs out of order"));
+  assert(!loads_types(6, "type names a struct without field types"));
+  assert(!loads_types(7, "too many types"));
+  assert(!loads_types(8, "type count exceeds the file"));
+  assert(!loads_types(9, "struct index out of range"));
+  buffer typed = type_tables(0);
+  s = base();
+  s.tables = &typed;
+  buffer typed_file = build(s);
+  for (size_t n = 0; n < typed_file.len; n++) {
+    agc_program *q;
+    assert(!agc_load(typed_file.data, n, &q, error, sizeof error));
+  }
+  free(typed_file.data);
+  free(typed.data);
 
   puts("loader tests passed");
   return 0;

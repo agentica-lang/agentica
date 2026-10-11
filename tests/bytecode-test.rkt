@@ -142,7 +142,9 @@
                   '(2 11))
     (check-equal? (unsupported-at "def get(m: Map[String, Header]) -> Header\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
                   '(2 10))
-    (check-equal? (unsupported-at "struct P\n  a: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n") '(6 8))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(JSON.schema(Header))\nend\n") '(2 20))
+    (check-equal? (unsupported-at "def main() -> Void\n  r = JSON.decode(\"{}\", Header)\nend\n") '(2 7))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(File.read_text(\"a\", 10))\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(Path.resolve(\"a\"))\nend\n") '(2 8))
     (check-equal? (unsupported-at "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\nend\n")
                   '(6 7))
@@ -157,8 +159,8 @@
     (dynamic-wind
       void
       (lambda ()
-        (define unsupported (path->string (build-path work "json.agc")))
-        (display-to-file "struct P\n  a: Int\nend\n\ndef main() -> Void\n  puts(JSON.decode(\"1\", P))\nend\n" unsupported)
+        (define unsupported (path->string (build-path work "file.agc")))
+        (display-to-file "def main() -> Void\n  puts(File.read_text(\"a\", 10))\nend\n" unsupported)
         (define rejected (cli "compile" unsupported "-o" (path->string (build-path work "out.agcb"))))
         (check-equal? (first rejected) 1)
         (check-true (string-contains? (third rejected) "error[LOWER-UNSUPPORTED]"))

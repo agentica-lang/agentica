@@ -12,7 +12,7 @@
          (struct-out ir-instr))
 
 (struct ir-program (sources structs enums functions entry span) #:transparent)
-(struct ir-struct (name fields) #:transparent)
+(struct ir-struct (name fields types) #:transparent)
 (struct ir-enum (name variants) #:transparent)
 (struct ir-function (name params captures slots body span) #:transparent)
 (struct ir-label (id) #:transparent)
@@ -39,10 +39,50 @@
           (or (eq? (last type) 'Void) (vm-type? (last type) user-types)))]
     [else (and (memq type value-types) #t)]))
 
+(define (json-field-type reference struct-names)
+  (define name (type-ref-name reference))
+  (define args (type-ref-args reference))
+  (cond
+    [(and (null? args) (member name '("Int" "Float" "Bool" "String"))) (string->symbol name)]
+    [(and (equal? name "List") (= (length args) 1))
+     (define item (json-field-type (car args) struct-names))
+     (and item (list 'List item))]
+    [(and (equal? name "Map") (= (length args) 2)
+          (equal? (type-ref-name (car args)) "String") (null? (type-ref-args (car args))))
+     (define value (json-field-type (cadr args) struct-names))
+     (and value (list 'Map 'String value))]
+    [(and (null? args) (member name struct-names)) (list 'Struct name)]
+    [else #f]))
+
+(define (struct-names-in type)
+  (cond
+    [(symbol? type) '()]
+    [(eq? (car type) 'Struct) (list (cadr type))]
+    [else (struct-names-in (last type))]))
+
+(define (decodable-structs structs)
+  (define names (map struct-decl-name structs))
+  (define candidates
+    (for*/hash ([declaration (in-list structs)]
+                [types (in-value (for/list ([field (in-list (struct-decl-fields declaration))])
+                                   (json-field-type (field-decl-type field) names)))]
+                #:when (andmap values types))
+      (values (struct-decl-name declaration) types)))
+  (let loop ([table candidates])
+    (define kept
+      (for/hash ([(name types) (in-hash table)]
+                 #:when (for/and ([type (in-list types)])
+                          (andmap (lambda (n) (hash-has-key? table n)) (struct-names-in type))))
+        (values name types)))
+    (if (= (hash-count kept) (hash-count table)) kept (loop kept))))
+
 (define (user-tables declarations)
+  (define struct-decls (filter struct-decl? declarations))
+  (define decodable (decodable-structs struct-decls))
   (values
-   (for/list ([declaration (in-list declarations)] #:when (struct-decl? declaration))
-     (ir-struct (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration))))
+   (for/list ([declaration (in-list struct-decls)])
+     (ir-struct (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration))
+                (hash-ref decodable (struct-decl-name declaration) #f)))
    (for/list ([declaration (in-list declarations)] #:when (enum-decl? declaration))
      (ir-enum (enum-decl-name declaration)
               (for/list ([variant (in-list (enum-decl-variants declaration))])
@@ -83,7 +123,8 @@
                       "Float.from_int" "Float.to_int" "Float.to_int!" "Time.now_ms" "Time.monotonic_ms"
                       "Random.int" "Random.float"
                       "JSON.parse" "JSON.encode" "JSON.from" "JSON.object" "JSON.array" "JSON.null" "JSON.null?"
-                      "JSON.get" "JSON.at" "JSON.string" "JSON.int" "JSON.float" "JSON.bool" "JSON.list"))
+                      "JSON.get" "JSON.at" "JSON.string" "JSON.int" "JSON.float" "JSON.bool" "JSON.list"
+                      "JSON.decode" "JSON.schema"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))
@@ -231,6 +272,15 @@
        (define inner (typed-target-expression expression))
        (require-type! inner #f (typed-target-type expression))
        (lower-expression inner want)]
+      [(type-expression? expression)
+       (define name (type-expression-name expression))
+       (define span (node-span expression))
+       (unless (hash-has-key? struct-info name)
+         (unsupported (format "the type ~a" (display-name name)) span))
+       (emit! 'step '() span)
+       (define dst (target want))
+       (emit! 'const (list dst name) span)
+       dst]
       [(or (interpolation? expression) (inspection? expression)) (lower-value expression want)]
       [(or (try-expr? expression) (invoke? expression))
        (require-type! expression void?)
