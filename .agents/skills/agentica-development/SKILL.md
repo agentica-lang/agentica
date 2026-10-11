@@ -56,7 +56,7 @@ src/
   main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, `compile -o`, or `--vm`: bytecode in a temp file run by dist/agentica-vm); exit 1 on a diagnostic, 2 on usage or a missing file
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
-  value.c text.c map.c loader.c interp.c builtins.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, diagnostics (plain, --ai, --json), CLI
+  value.c text.c map.c loader.c interp.c builtins.c numbers.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random (Racket PRNG port), diagnostics (plain, --ai, --json), CLI
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
   fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests

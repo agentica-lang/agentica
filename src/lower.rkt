@@ -75,7 +75,9 @@
                       "Int.times" "Int.upto" "Int.downto"
                       "List.size" "List.append" "List.set" "List.repeat" "List.concat" "List.take"
                       "List.drop" "List.at" "List.reverse" "List.sort"
-                      "Map.has_key?" "Map.keys" "Map.size" "Map.put" "Map.get" "Map.delete" "Map.values"))
+                      "Map.has_key?" "Map.keys" "Map.size" "Map.put" "Map.get" "Map.delete" "Map.values"
+                      "Float.from_int" "Float.to_int" "Float.to_int!" "Time.now_ms" "Time.monotonic_ms"
+                      "Random.int" "Random.float"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))

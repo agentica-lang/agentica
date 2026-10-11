@@ -58,8 +58,10 @@ over a range, the `Range` builtins and `Int.times`, `upto`, `downto`, 3.3,
 (`List.size`, `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`,
 `reverse`, `sort`; `Map.has_key?`, `keys`, `values`, `size`, `put`, `get`
 with or without a default, `delete`; also as methods such as `xs.size` and
-`m.keys`; 12.2 item 6b). The other 6b modules (`String`, `Float`, `Time`,
-`Random`) follow. Runtime diagnostics come in the plain,
+`m.keys`; 12.2 item 6b), and the `Float`, `Time` and `Random` builtins
+(`Float.from_int`, `to_int`, `to_int!`, also as `n.to_f`, `x.to_i` and
+`x.to_i!`; `Time.now_ms`, `monotonic_ms`; `Random.int`, `Random.float`
+with the seeding port of 7.4). The last 6b module (`String`) follows. Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -939,26 +941,51 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
 
 ### 7.4 Random
 
-The VM reproduces Racket's generator so `--seed` gives the same sequence on
-both backends. Confirmed against Racket 9.3 with
-`pseudo-random-generator->vector`:
+The VM reproduces Racket CS's generator bit for bit, so `--seed N` gives
+the same `Random.int` and `Random.float` values on both backends
+(`vm/numbers.c`, ported from `racket/src/ChezScheme/c/random.c` of Racket
+9.3, which `random` and `random-seed` call through
+`pseudo-random-generator-next!` and `pseudo-random-generator-seed!` in
+`s/5_3.ss`):
 
-- State: six MRG32k3a words stored newest first,
-  `#(x1[n] x1[n-1] x1[n-2] x2[n] x2[n-1] x2[n-2])`. A draw is the standard
-  step (`m1 = 4294967087`, `m2 = 4294944443`; multipliers 1403580, 810728,
-  527612, 1370589) giving `z = (p1 - p2) mod m1`.
-- `(random)` is `(double)(z + 1) * (1.0 / (m1 + 1))`, and `(random k)` for
-  `k <= 4294967087` is `z * k / m1` in 64-bit integers: each matched 10,000 of
-  10,000 draws (k = 1000 and k = 4294967087).
-- `random-in-range` (larger ranges) is ported as written, with 128-bit
-  unsigned arithmetic, since `size` reaches 2^64.
-
-Plan: 7e ports `random-seed` (seed to six words) from Racket's source and
-checks the state vector for seeds 0, 1, 2, 3, 12345 and 2147483647, then
-1,000 draws of each kind. Fallback if it cannot be matched: `--seed`
-sequences become backend-specific, `grammar.md` says so before 7i, and seeded
-programs leave the differential corpus. Without `--seed`, the seed comes from
-the OS (`getrandom`, `arc4random_buf`, `BCryptGenRandom`), in `0 .. 2^31-1`.
+- State: six doubles `x10 x11 x12 x20 x21 x22` (`agc_random` in
+  `agc_vm`), the MRG32k3a step in double arithmetic as in `random.c`
+  (`m1 = 4294967087`, `m2 = 4294944443`; multipliers 1403580, 810728,
+  527612, 1370589), giving `y` in `0 .. m1-1`. Every product and difference
+  is an integer below 2^53, so they are exact; the only rounding is the one
+  correctly rounded division, so any IEEE 754 C compiler gives the same
+  words (with or without FMA contraction).
+- Seeding (`agc_random_seed`, `S_random_state_init`): start from Egner's
+  fixed six words, then mix the low and the high 16 bits of the seed in
+  turn (`sch_srand_half`) with the 32-bit multiply-with-carry
+  `x = 30903 * (x & 0xFFFF) + (x >> 16)`, two outputs per word (the first
+  one the high half), each reduced modulo the component's modulus and added
+  in 32-bit unsigned arithmetic. Seeds whose halves are swapped and one half
+  is 0 (1 and 65536) give the same state, as in Racket.
+- `(random)` (`Random.float`) is `(y + 1.0) * 2.328306549295728e-10`.
+- `(random k)` for `k <= 4294967087` (`agc_random_below`) is the rejection
+  method of `S_random_state_next_integer`: `q = trunc(m1 / k)`, draw until
+  `y < q * k`, return `trunc(y / q)`.
+- `Random.int` is the evaluator's `random-in-range` ported as written
+  (`agc_random_int`): `low + (random size)` when `size <= 4294967087`,
+  otherwise four `(random 65536)` draws make a 64-bit number, rejected
+  above the largest multiple of `size`, in 128-bit unsigned arithmetic
+  since `size` reaches 2^64. `min > max` is `RUNTIME-INVALID-RANGE` at the
+  call before any draw. `min == max` still draws once.
+- Seed: `--seed N` (0 .. 2147483647, the same check and message as
+  `src/main.rkt`) on `agentica-vm`; `agentica --vm --seed N` passes it.
+  Without it, `vm/main.c` takes 4 bytes from the same OS entropy as the map
+  hash key (`getrandom`, then `/dev/urandom`; `rand_s` on Windows) and
+  keeps 31 bits, like the evaluator's `crypto-random-bytes` seed; if every
+  source fails it mixes the wall clock. `agc_vm_init` seeds with 0, so the
+  C tests and the fuzzer stay deterministic.
+- Tests: `vm/tests/random_test.c` checks, for seeds 0, 1, 2, 3, 65535,
+  65536, 12345 and 2147483647, the state vector after seeding
+  (`pseudo-random-generator->vector`), 36 interleaved draws of `(random)`
+  and `(random k)` for k = 1, 2, 6, 1000, 65536, 2^31, 3e9 and 4294967087,
+  and the sums of 100,000 draws of each kind, all captured from Racket
+  9.3; and `random-in-range` for six ranges up to the full Int range. The
+  `random` fixture runs with the seeds of its `random.seeds` sidecar.
 
 ## 8. Loader safety
 
@@ -1088,9 +1115,8 @@ and cost one predictable branch each.
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv and OpenSSL from 7h).
-- In the slice the VM accepts `--version`, `--max-steps N`, `--ai`, `--json`
-  and `--`. `--seed` joins with `Random` (PR 6b); until then it is an
-  unknown option (exit 2). `--ai` and `--json` may both appear; the last one
+- In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
+  (7.4), `--ai`, `--json` and `--`. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
   exits 1 for every option error it raises itself (a repeated option, an
@@ -1104,7 +1130,7 @@ and cost one predictable branch each.
   runs the front end and `lower`, then writes the bytecode to
   `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
-  runs the VM as `agentica-vm [--max-steps N] [--ai|--json] --driver-pid
+  runs the VM as `agentica-vm [--max-steps N] [--seed N] [--ai|--json] --driver-pid
   PID -- file [args...]`. `--driver-pid` is a hidden VM flag (not in the
   usage text). On Linux the VM first calls `prctl(PR_SET_PDEATHSIG,
   SIGKILL)` and then checks that `getppid()` is `PID`; if not, the driver
@@ -1128,7 +1154,7 @@ and cost one predictable branch each.
   `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
-  `--vm` (exit 1). `--allow-run`, `--seed`, `--steps`, `--dump`,
+  `--vm` (exit 1). `--seed N` is passed to the VM. `--allow-run`, `--steps`, `--dump`,
   `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with
   `--vm does not support X`.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
@@ -1473,7 +1499,9 @@ the platform's OpenSSL package) to each job.
   and the total minus one. The run without a limit compares all three
   formats; the sweep compares the plain format; stderr includes `IO.warn`
   output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
-  step test. Programs using `Random` run with several `--seed` values.
+  step test. Programs using `Random` run with several `--seed` values: a
+  fixture's `name.seeds` sidecar (a Racket list) runs the format comparison
+  once per seed and the step sweep with the first.
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
   (values picked from a 708k-value comparison with Racket, 2.2) and the
   `tests/fixtures/vm/float-text.agc` differential fixture. Write escapes
@@ -1581,7 +1609,16 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      1048576 before allocating. `vm/tests/map_test.c` covers `delete`
      (persistence, order, collision nodes, shared prefixes, deleting to
      empty); the `list-library`, `map-library` and `list-*` error
-     fixtures cover the rest.
+     fixtures cover the rest. `Float`, `Time` and `Random` are done too
+     (`vm/numbers.c`, its own builtin table): `Float.to_int` fails at
+     the call with `RUNTIME-INVALID-NUMBER` (`cannot convert +nan.0 to
+     Int`, `+inf.0`, `-inf.0`) or `RUNTIME-INTEGER-OVERFLOW`, as an error
+     value without `!`; `Time.now_ms` is `timespec_get` and
+     `monotonic_ms` `CLOCK_MONOTONIC` (`QueryPerformanceCounter` on
+     Windows), both floored to milliseconds; `Random` is the bit-exact
+     port of 7.4, and `agentica --vm` passes `--seed`. Fixtures:
+     `float-convert`, `float-to-int-*`, `time` (shape only),
+     `random` (with `random.seeds`) and `random-invalid-range`.
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
 
@@ -1603,7 +1640,8 @@ those that need files, processes, tasks or the network by name:
 
 ## 13. Open questions
 
-- **Random seeding**: port planned in PR 6b, fallback in 7.4.
+- **Random seeding**: resolved in PR 6b: the VM ports Racket CS's
+  generator and seeding bit for bit (7.4).
 - **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
   runaway file reaches the out-of-memory exit. Before 7i runs untrusted
   bytecode by default, decide on a cap such as `--max-heap N` through

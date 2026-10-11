@@ -142,7 +142,6 @@
   (when vm?
     (define unsupported
       (or (and allow-run? "--allow-run")
-          (and seed "--seed")
           (and dump? "--dump")
           (and dump-ir? "--dump-ir")
           (and (pair? step-files) "--steps")
@@ -272,6 +271,7 @@
      (define created? #f)
      (define options
        (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
+               (if seed (list "--seed" (number->string seed)) '())
                (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
      (define status
        (dynamic-wind

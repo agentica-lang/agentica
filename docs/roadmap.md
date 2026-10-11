@@ -1138,7 +1138,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Function values, closures (blocks with snapshot captures), `&name`, `.call`, and the resumable `List` builtins `map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` as native frames (`docs/vm.md` §12.2 item 5e).
 - [x] `IO` (stdin/stdout/stderr, bytes, flush, EOF), `System.args`, `System.exit`, on blocking stdio through one input layer (`vm/input.c`); it moves to libuv resumable builtins with the scheduler in 7h (`docs/vm.md` §12.2 item 6a).
 - [x] `List` and `Map` builtins: `size`, `append`, `set`, `repeat`, `concat`, `take`, `drop`, `at`, `reverse`, `sort`; `has_key?`, `keys`, `values`, `size`, `put`, `get` (with and without a default), `delete` on the HAMT (`docs/vm.md` §12.2 item 6b).
-- [ ] `String`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket.
+- [ ] `String`, `Float`, `Time` and `Random` builtins, with Unicode data generated from Racket. `Float`, `Time` and `Random` are done: `Random` ports Racket CS's MRG32k3a generator and `random-seed` bit for bit, so `--seed` gives the same values on both backends, and `agentica --vm` passes `--seed` (`docs/vm.md` §7.4).
 - [ ] JSON: parse, extract, encode, builders, typed decode and schema (pure C, no event loop).
 - [ ] Linked programs (`std/`, `pkg/` and relative imports) run; resolution stays in the front end.
 - [x] Runtime diagnostics printed in the plain format, identical to the evaluator.
@@ -1150,7 +1150,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7f: Differential tests
 
-- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, seeded `Random` runs, an extreme-Int corpus and a deep-value corpus.
+- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares stdout, stderr, exit code and diagnostic code/span, plus a `--max-steps` sweep, seeded `Random` runs (done: a `.seeds` sidecar), an extreme-Int corpus and a deep-value corpus.
 - [ ] Inputs: `examples/`, `tests/eval/tasks/*` (reference solutions and hidden cases), and a set of rejected-at-runtime programs.
 - [x] Run it in `make test` and CI; a missing VM build fails CI and visibly skips locally (`tests/vm-diff-*-test.rkt`, `AGENTICA_REQUIRE_VM=1`).
 
