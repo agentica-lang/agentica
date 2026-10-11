@@ -119,13 +119,18 @@ jobs:
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
 
   dup-check:
-    if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - id: jscpd
+        run: echo "spec=$(sed -n 's/^JSCPD ?= npx --yes //p' Makefile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm/_npx
+          key: npx-${{ runner.os }}-node24-${{ steps.jscpd.outputs.spec }}
       - run: make dup-check
 
   test:
