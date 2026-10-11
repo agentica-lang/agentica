@@ -187,6 +187,28 @@ agc_value agc_fn_value(agc_fn *f) {
   return v;
 }
 
+agc_value agc_range_value(int64_t start, int64_t end, bool exclusive) {
+  agc_range *r = agc_alloc_atomic(sizeof(agc_range));
+  r->start = start;
+  r->end = end;
+  r->exclusive = exclusive;
+  agc_value v;
+  v.tag = AGC_T_RANGE;
+  v.as.p = r;
+  return v;
+}
+
+bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last) {
+  *first = r->start;
+  *last = r->end;
+  if (r->exclusive) {
+    if (r->end <= r->start) return false;
+    *last = r->end - 1;
+    return true;
+  }
+  return r->start <= r->end;
+}
+
 agc_fn *agc_new_fn(uint32_t function, uint32_t n) {
   agc_fn *f = agc_alloc(agc_size_add(sizeof(agc_fn), agc_size_mul(n, sizeof(agc_value))));
   f->function = function;
@@ -280,6 +302,11 @@ agc_result *agc_as_result(agc_vm *vm, agc_value v) {
 
 agc_fn *agc_as_fn(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_FN) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_range *agc_as_range(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_RANGE) wrong_tag(vm);
   return v.as.p;
 }
 
@@ -382,7 +409,7 @@ static int decimal_digits(double x, int precision, char *all) {
   return atoi(mark + 1);
 }
 
-size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
+size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]) {
   if (isnan(x)) return put(out, 0, "+nan.0", 6);
   if (isinf(x)) return put(out, 0, x > 0 ? "+inf.0" : "-inf.0", 6);
   size_t at = 0;
@@ -418,7 +445,7 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
           digits[k - 1]++;
         }
       }
-      char text[AGC_FLOAT_TEXT];
+      char text[AGC_SCALAR_TEXT];
       snprintf(text, sizeof text, "%c.%.*se%d", digits[0], (int)n - 1, digits + 1, digits_e);
       found = strtod(text, NULL) == x;
     }
@@ -434,7 +461,7 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]) {
       out[at++] = '.';
       at = put(out, at, digits + 1, n - 1);
     }
-    return at + (size_t)snprintf(out + at, AGC_FLOAT_TEXT - at, "e%c%d", e < 0 ? '-' : '+', e < 0 ? -e : e);
+    return at + (size_t)snprintf(out + at, AGC_SCALAR_TEXT - at, "e%c%d", e < 0 ? '-' : '+', e < 0 ? -e : e);
   }
   if (e < 0) {
     at = put(out, at, "0.", 2);

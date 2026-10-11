@@ -84,8 +84,27 @@ pear
 plum
 ```
 
-There is no range type. To count, use a `while` loop, or build a list with
-`List.repeat` and the index you need.
+To count, walk through a range: `a..b` includes `b`, `a...b` leaves it out.
+`n.times` runs a block `n` times. See [Range](/library/range/) for more.
+
+```agentica
+def main() -> Void
+  for i in 1..3
+    puts(i)
+  end
+  2.times do |i|
+    puts("round #{i}")
+  end
+end
+```
+
+```output
+1
+2
+3
+round 0
+round 1
+```
 
 ## break and next
 

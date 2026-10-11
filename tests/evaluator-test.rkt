@@ -56,6 +56,41 @@
   (list (source-position-line start) (source-position-column start)))
 
 (module+ test
+  (test-case "ranges iterate, print, compare and stop at the Int edges"
+    (check-equal?
+     (output-of
+      (main-with
+       (string-append
+        "  for i in 0...3 do\n    print(i)\n  end\n  for i in 1..3\n    print(i)\n  end\n"
+        "  for i in 3..1\n    print(i)\n  end\n  for i in 2...2\n    print(i)\n  end\n"
+        "  r = 9223372036854775806..9223372036854775807\n  for i in r\n    r = 1..1\n    puts(i)\n  end\n"
+        "  for i in (-9223372036854775807)...(-9223372036854775806)\n    puts(i)\n  end\n"
+        "  3.times do |i|\n    print(i)\n  end\n  0.times do |i|\n    print(i)\n  end\n"
+        "  1.upto(3) do |i|\n    print(i)\n  end\n  3.downto(1) do |i|\n    print(i)\n  end\n  3.upto(1) do |i|\n    print(i)\n  end\n"
+        "  (1...4).each do |i|\n    print(i)\n  end\n  puts(\"\")\n"
+        "  IO.inspect([1..5, 1...5, (-3)..(-1)])\n"
+        "  puts([(1...5).size, (5..1).size, (0..9223372036854775806).size])\n"
+        "  puts([(1...5).last, (1..5).first, (2...2).first])\n"
+        "  puts([(1..5) == (1..5), (1..5) == (1...5), (1..5).include?(5), (1...5).include?(5)])\n"
+        "  puts((0..10).to_a.filter do |n|\n    n % 5 == 0\n  end)")))
+     (string-append "0121239223372036854775806\n9223372036854775807\n-9223372036854775807\n012123321123\n"
+                    "[1..5, 1...5, -3..-1]\n[4, 0, 9223372036854775807]\n"
+                    "[ok(4), ok(1), error(\"the range is empty\")]\n[true, false, true, false]\n[0, 5, 10]\n"))
+    (define overflow (diagnostic-of (main-with "  n = (0..9223372036854775807).size")))
+    (check-equal? (diagnostic-code overflow) 'RUNTIME-INTEGER-OVERFLOW)
+    (check-equal? (position-of overflow) '(2 8))
+    (define too-many (diagnostic-of (main-with "  xs = (1..1048577).to_a")))
+    (check-equal? (diagnostic-code too-many) 'RUNTIME-INVALID-COUNT)
+    (check-equal? (position-of too-many) '(2 9))
+    (check-equal? (output-of (main-with "  puts((1..1048576).to_a.size)")) "1048576\n")
+    (for ([body (in-list '("  for i in 0..9223372036854775807 do\n  end"
+                           "  9223372036854775807.times do |i|\n  end"
+                           "  (0..9223372036854775807).each do |i|\n  end"
+                           "  0.upto(9223372036854775807) do |i|\n  end"
+                           "  0.downto(-9223372036854775807) do |i|\n  end"))])
+      (define-values (out err result) (run-io (main-with body) #:max-steps 100))
+      (check-equal? (diagnostic-code result) 'RUNTIME-STEP-LIMIT body)))
+
   (test-case "Void Results and tasks complete without turning nil data into completion"
     (check-equal?
      (output-of
@@ -543,6 +578,15 @@
         ("List.take" "List.take([1, 2], 1)" "[1]\n")
         ("List.drop" "List.drop([1, 2], 1)" "[2]\n")
         ("List.at" "List.at([false, true], 0)" "false\n")
+        ("Range.size" "Range.size(1...4)" "3\n")
+        ("Range.to_a" "Range.to_a(1..3)" "[1, 2, 3]\n")
+        ("Range.include?" "Range.include?(1...4, 4)" "false\n")
+        ("Range.each" "Range.each(1..2) do |n| IO.inspect(n) end" "1\n2\n")
+        ("Range.first" "Range.first(2..1)" "error(\"the range is empty\")\n")
+        ("Range.last" "Range.last(1...4)" "ok(3)\n")
+        ("Int.times" "Int.times(2) do |n| IO.inspect(n) end" "0\n1\n")
+        ("Int.upto" "Int.upto(1, 2) do |n| IO.inspect(n) end" "1\n2\n")
+        ("Int.downto" "Int.downto(2, 1) do |n| IO.inspect(n) end" "2\n1\n")
         ("String.length" "String.length(\"ñ😀\")" "2\n")
         ("String.upcase" "String.upcase(\"a\")" "\"A\"\n")
         ("String.downcase" "String.downcase(\"A\")" "\"a\"\n")

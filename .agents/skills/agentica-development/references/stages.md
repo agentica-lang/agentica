@@ -35,6 +35,7 @@ Accessors: `source-name`, `source-text`, `source-position-offset`/`-line`/`-colu
 | `arrow` `equal` `not-equal` `less-equal` `greater-equal` | `->` `==` `!=` `<=` `>=` |
 | `left-paren` `right-paren` `left-bracket` `right-bracket` `left-brace` `right-brace` | `(` `)` `[` `]` `{` `}` |
 | `comma` `colon` `dot` | `,` `:` `.` |
+| `dot-dot` `dot-dot-dot` | `..` `...` (ranges; `1..5` stays two integers, since a Float needs a digit after the dot) |
 | `ampersand` | `&` |
 | `and` `or` `not` (symbol forms) | `&&` `\|\|` `!` (a `!` glued to a name stays in the name; `!=` stays `not-equal`) |
 | `plus-assign` `minus-assign` `multiply-assign` `divide-assign` `modulo-assign` | `+=` `-=` `*=` `/=` `%=`; the parser desugars `x op= e` into `binding x #f (binary op ...)` |

@@ -151,9 +151,11 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
    `IO.gets`, `IO.gets!`, `IO.read`, `IO.read_bytes`, `IO.flush`,
    `IO.eof?`, `System.args`, `System.exit`, `String.from_int`,
    `String.from_float`, `ok` (arities 0 and 1), `error`, `Result.ok?`,
-   `Result.unwrap!`, `Result.unwrap_or`, `Result.message` and the callback
+   `Result.unwrap!`, `Result.unwrap_or`, `Result.message`, the callback
    builtins `List.map`, `List.filter`, `List.reduce`, `List.each`,
-   `List.any?`, `List.all?` and `List.sort_by` are accepted; everything else is
+   `List.any?`, `List.all?` and `List.sort_by`, and the range builtins
+   `Range.size`, `Range.to_a`, `Range.include?`, `Range.first`,
+   `Range.last`, `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are accepted; everything else is
    `LOWER-UNSUPPORTED`; `List.concat` and `Map.put` are in the C table but
    only the lowerer emits them, for list and map literals above 255
    elements; the loader rejects `MAP` with more than 255 pairs) and emit `call-builtin` with the catalog's
@@ -330,6 +332,22 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   builtin's call span). Deep recursion through a callback must not use
   `return f(...)` in the block in a fixture: that is a tail call on the
   VM only.
+- Ranges: `AGC_T_RANGE` holds an atomic `agc_range` (start, end,
+  exclusive); `agc_range_bounds` gives first, last included and non-empty
+  without overflow. A `for` over a range literal lowers to a counter loop
+  with no `RANGE` (`lower-range-for`); over a Range value it reads
+  `RANGE_BOUNDS` once into three slots. The loop variable is the counter
+  slot, and the exit test (`eq` with the last value) runs before `add-i`,
+  so the largest Int never overflows. The loop top is a `STEP` with the
+  `for` span, so each iteration charges one step even with an empty body
+  (never drop the loop); the counting natives call `charge_steps`, shared with `STEP`, before
+  each callback. The evaluator charges the same (`step!` per range
+  iteration and per counting callback). `tests/fixtures/vm/step-limited/`
+  holds huge loops that the extras shard runs only with small
+  `--max-steps` values. `Range.each`, `Int.times`, `upto` and
+  `downto` are counting native frames (`counting()` in `vm/interp.c`): no
+  list, a current value, a last value, a direction and a "more" flag. The
+  range text is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert` keeps it at least 44).
 - Results: `ok`, `error` and `Result.*` are builtins (`vm/builtins.c`);
   `try`, `is-ok` and `result-value` are opcodes. A Result pattern is a
   `variant-pattern` with enum name `"Result"` and variant `"Ok"` or `"Err"`

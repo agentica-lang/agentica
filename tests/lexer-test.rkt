@@ -13,6 +13,12 @@
   (map token-kind result))
 
 (module+ test
+  (test-case "range operators lex after integers without making a Float"
+    (check-equal? (kinds (lex-text "1..5 0...n 1.5 x.y"))
+                  '(integer dot-dot integer integer dot-dot-dot name float name dot name NL EOF))
+    (check-equal? (token-value (car (lex-text "1..5"))) 1)
+    (check-equal? (map token-lexeme (take (lex-text "a...b..c") 5)) '("a" "..." "b" ".." "c")))
+
   (test-case "keywords, identifiers, numeric literals, and EOF"
     (define result (lex-text "def main() -> Void\n  count = 12\n  ratio = 1.25"))
     (check-equal? (kinds result)

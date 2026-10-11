@@ -10,7 +10,7 @@ Agentica is Ruby with static types: Ruby-like syntax, checked before running, wi
 ## Write and verify
 
 1. Save the requested program as a `.agc` file. It needs one `main() -> Void`.
-2. Check and run it with `agentica program.agc`. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. Experimental VM tooling: `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm`, `--dump-ir` prints the lowered IR, and `agentica --vm program.agc` runs it on the VM in one step (Linux); both accept only the small VM subset (Int, Float, Bool, Nil, String with `+`/`==`, `List[T]` of those with literals, `for` and `xs[i]` but no `List.*` functions yet, structs, enums and `case`, `Result` with `ok`/`error`, `Result.*`, `try` and Result patterns, `Map[K, V]` literals and `m[key]` but no `Map.*` functions yet, interpolation, `to_s`/`inspect`, `if`, `while`, functions, `puts`/`print`/`IO.warn`) and report `LOWER-UNSUPPORTED` otherwise.
+2. Check and run it with `agentica program.agc`. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. Experimental VM tooling: `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm`, `--dump-ir` prints the lowered IR, and `agentica --vm program.agc` runs it on the VM in one step (Linux); both accept only the small VM subset (Int, Float, Bool, Nil, String with `+`/`==`, `List[T]` of those with literals, `for` and `xs[i]` but no `List.*` functions yet, structs, enums and `case`, `Result` with `ok`/`error`, `Result.*`, `try` and Result patterns, `Map[K, V]` literals and `m[key]` but no `Map.*` functions yet, interpolation, `to_s`/`inspect`, `if`, `while`, functions, `puts`/`print`/`IO.warn`, ranges with `Range.*`, `times`, `upto` and `downto`) and report `LOWER-UNSUPPORTED` otherwise.
 3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) and often a `help` line with the fix.
 4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
@@ -22,7 +22,7 @@ Read only the files the task needs:
 
 | Read | When the program |
 |---|---|
-| [references/builtins.md](references/builtins.md) | calls a builtin whose signature is not shown below (`String`, `List`, `Map`, `Int`, `Float`, `IO`, `System`, `Time`, `Random` functions), sorts, or reads counted input |
+| [references/builtins.md](references/builtins.md) | calls a builtin whose signature is not shown below (`String`, `List`, `Map`, `Range`, `Int`, `Float`, `IO`, `System`, `Time`, `Random` functions), sorts, or reads counted input |
 | [references/examples.md](references/examples.md) | needs a complete program to start from |
 | [references/modules.md](references/modules.md) | spans several files, or imports `std/` or `pkg/` modules |
 | [references/json.md](references/json.md) | reads or writes JSON |
@@ -76,6 +76,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 | `List[T]` | homogeneous, immutable, indexed from 0 |
 | `Map[K, V]` | homogeneous, immutable; `K` is `Int` or `String`; keeps insertion order |
 | `Result[T]` | `ok(value)` or `error(message)`; the error is always String; exactly one type argument |
+| `Range` | `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints as `1..5`; see `references/builtins.md` |
 | `Option[T]` (example) | A user-defined generic enum; `Option` is not a builtin type |
 | `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Fn[A, ..., R]` | function value (a block or `&name`); last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
@@ -143,6 +144,14 @@ for item in items      # items is a List[T]; item is a new, read-only variable
   puts(item)
 end
 
+for i in 0...n         # 0 to n - 1; 1..n includes n
+  puts(i)
+end
+
+3.times do |i|         # also a.upto(b) and a.downto(b) with a block
+  puts(i)
+end
+
 case option
   Option.Some(value) -> IO.inspect(value)
   Option.None -> puts("empty")
@@ -157,6 +166,7 @@ return count
 - A name created in a block is not visible after that block's `end`.
 - A new variable cannot reuse a name that is already visible in an outer scope (no shadowing).
 - The `for` variable cannot be assigned to.
+- `for` takes a `List[T]` or a `Range` (`a..b` includes `b`, `a...b` excludes it; both `Int`). A range iterates without building a list; an empty or reversed range runs zero times. There is no `range(n)`; write `0...n`, `n.times`, `a.upto(b)` or `a.downto(b)`.
 - `case value` ... `end` is a statement, with arms `pattern -> block` (a `do` after the value is allowed but not needed). Each arm has a normal block and its bindings are local to that arm. A short arm may put one simple statement on the arrow line: `1 -> puts("one")`, `Command.Add(n) -> total += n`; more lines may follow it.
 - Patterns are primitive literals, `_`, or qualified enum variants with one direct binding or `_` discard per payload position. Nested patterns and guards are not supported.
 - Enum cases cover every variant or use `_`. Every non-enum case—including `Bool` and `Nil`—requires a top-level `_`. It must be the final arm; duplicate or unreachable arms are checker errors.
@@ -188,11 +198,12 @@ Operators, from highest to lowest precedence:
 | 6 | `==` `!=` |
 | 7 | `and` / `&&` |
 | 8 | `or` / `\|\|` |
+| 9 | `..` `...` (ranges, no chaining) |
 
 - `+ - * /` take two numbers of the same type. There is no implicit conversion between `Int` and `Float`. `+` also joins two `String` values.
 - `/` on `Int` truncates toward zero. `%` takes two `Int` values. A zero divisor is a runtime error, also for `Float`.
 - `< <= > >=` take two numbers of the same type.
-- `==` and `!=` take two values of the same primitive type (`Int`, `Float`, `Bool`, `String`, `Nil`). Lists, maps, structs, Results, Json and Fn values cannot be compared.
+- `==` and `!=` take two values of the same primitive type (`Int`, `Float`, `Bool`, `String`, `Nil`), or two ranges. Lists, maps, structs, Results, Json and Fn values cannot be compared.
 - Comparisons do not chain: write `a < b and b < c`, not `a < b < c`.
 - `&&`, `||`, `!` take `Bool`, and `&&` / `||` short-circuit. `and`, `or`, `not` are the same operators. `!` / `not` bind tightly: write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Arguments and operands are evaluated left to right.
@@ -209,7 +220,8 @@ Operators, from highest to lowest precedence:
 | `Float` | `Float` |
 | `Result[T]` | `Result` |
 | `Json` | `JSON` |
-| `Int` | aliases only |
+| `Range` | `Range` |
+| `Int` | `Int` (`times`, `upto`, `downto`) and aliases |
 
 Only functions whose first parameter has the receiver's type are methods: `s.trim` is `String.trim(s)`, `xs.map(&f)` is `List.map(xs, &f)`, but `"a".from_int` is not a method. Without parentheses, `receiver.name` on a non-struct value is a method with no arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` is field access; structs and enums have no methods, and user functions cannot be called as methods. `.call(...)` invokes a function value.
 

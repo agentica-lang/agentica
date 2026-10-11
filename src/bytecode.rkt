@@ -24,7 +24,8 @@
     tail-call
     try is-ok result-value
     map map-get
-    call-value closure))
+    call-value closure
+    range range-bounds))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -126,7 +127,7 @@
           (define (wide a x) (list a (bitwise-and x max-u16) (arithmetic-shift x -16)))
           (cons (hash-ref opcode-number op)
                 (case op
-                  [(move neg-i neg-f not to-text inspect list-len try is-ok result-value)
+                  [(move neg-i neg-f not to-text inspect list-len try is-ok result-value range-bounds)
                    (list (first args) (second args) 0)]
                   [(const) (wide (first args) (constant! (second args)))]
                   [(step) (list (first args) 0 0)]

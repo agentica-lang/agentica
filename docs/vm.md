@@ -48,7 +48,9 @@ indexing `xs[i]`, map literals, map indexing `m[key]`, struct construction and f
 `Result.*` builtins, `try`, user functions, calls, tail
 calls (`return f(...)` reuses the frame, 6.1), `return`, the callback
 builtins `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and
-`sort_by` (resumable, 4.3), interpolation,
+`sort_by` (resumable, 4.3), ranges (Phase 8a: `a..b`, `a...b`, `for`
+over a range, the `Range` builtins and `Int.times`, `upto`, `downto`, 3.3,
+4.3, 5.1), interpolation,
 `x.to_s` and `x.inspect` of those values, `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn`/`IO.inspect` of any of them, blocking stdin
 (`gets`, `gets!`, `IO.read`, `IO.read_bytes`, `IO.eof?`), `IO.flush`,
@@ -95,9 +97,16 @@ differential tests (section 12) check them.
   `for` variable, and work inside builtins.
 - A `while` condition is charged on every evaluation, including the last
   false one. A `for` iterable is charged once.
+- A `for` over a range charges one step per iteration at the `for`
+  statement's span, before the body, even when the body is empty, so a loop
+  over a huge range always stops at `--max-steps`. A `for` over a list
+  charges nothing per iteration (the list length bounds it).
 - A block's final expression statement is charged as a statement
   (`call-closure`). Callbacks run by the `List` builtins charge only their
-  bodies.
+  bodies, since the list length bounds them. The counting builtins
+  (`Range.each`, `Int.times`, `Int.upto`, `Int.downto`) charge one step at
+  the call's span before each callback call, so an empty block or a leaf
+  function still meets the step limit.
 - Without `--max-steps`, nothing is counted. With limit N, the first N entries
   run and entry N+1 fails with `RUNTIME-STEP-LIMIT` at its own span. All tasks
   share one counter. Racket accepts any positive integer; the VM clamps values
@@ -384,6 +393,9 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Arithmetic, ordering | Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (operands already evaluated; NaN stays false). |
 | `if` / `elsif` / `else` | Conditional jumps over each branch. |
 | `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
+| `for x in a..b`, `for x in a...b` | No `Range` value. `step` (the range span), `a` into the counter slot `i`, `b` into `last`, then `le-i` (or `lt-i` for `...`) into `ok`, `jump-if-false ok` past the loop, `const 1`, and for `...` `sub-i last last one` (`b` is above `a`, so no overflow). The loop variable is the counter slot itself (it is read-only); the loop top is a `step` with the `for` span (one per iteration, 2.1), then the body; an empty body keeps the loop. After the body (the target of `next`): `eq` of `i` and `last`, `jump-if-true` past the loop, `add-i i i one`, `jump` back to the body. The equality test comes before the increment, so a range ending at the largest Int never overflows. |
+| `for x in r` (a `Range` value) | The iterable once, then `range-bounds i r`, which writes the first value, the last included value and whether the range is non-empty into `i`, `i+1`, `i+2`; then the same counter loop. The bounds are read once, so assigning `r` in the body does not change the loop, and `to_a` (and its cap) is never used. |
+| `a..b`, `a...b` (as a value) | `step` (binary span), `a` and `b` into a window `w`, `w+1`, then `range dst w kind` (kind 0 for `..`, 1 for `...`). |
 | `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index, length and one slots (`const 0`, `list-len`, `const 1`, set once); `jump` to the test; body; increment (`add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
 | Functions | One IR function each; falling off the end returns Void. |
 | Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`, or `tail-call` when it is the value of a `return` (see `return`). |
@@ -453,7 +465,9 @@ unsupported type can only come from an expression the lowerer rejects. The only 
 `String.from_int`, `String.from_float`, `ok`,
 `error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`,
 `Result.message`, `List.map`, `List.filter`, `List.reduce`, `List.each`,
-`List.any?`, `List.all?` and `List.sort_by` (their implementation keys; `print` and `IO.puts` map to
+`List.any?`, `List.all?`, `List.sort_by`, `Range.size`, `Range.to_a`,
+`Range.include?`, `Range.each`, `Range.first`, `Range.last`, `Int.times`,
+`Int.upto` and `Int.downto` (their implementation keys; `print` and `IO.puts` map to
 the first two, `gets` and `gets!` to `IO.gets` and `IO.gets!`).
 `String.from_int` and `String.from_float` are there because the checker
 resolves `x.to_s` on Int and Float to them.
@@ -531,8 +545,10 @@ through the checked accessors (5.2); a wrong tag is `RUNTIME-INTERNAL`
 | Result | `TRY` | a b | If `R[b]` is an error, return it; else `R[a]` = its value |
 | | `IS_OK` | a b | Is `R[b]` ok? |
 | | `RESULT_VALUE` | a b | Value of an ok, or message of an error (for `case`) |
+| Range | `RANGE` | a b c | Range from Int `R[b]` to Int `R[b+1]`; `c` is 0 for `..`, 1 for `...` |
+| | `RANGE_BOUNDS` | a b | From range `R[b]`: first value into `R[a]`, last included value into `R[a+1]`, non-empty into `R[a+2]` |
 
-That is 47 opcodes. Everything else, including `ok`, `error`, `puts` and every
+That is 49 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin; later subphases add builtins, not opcodes.
 
 Opcode numbers are positions in one list shared by `opcodes` in
@@ -546,14 +562,17 @@ PR appended `LIST LIST_LEN LIST_GET` (33); the structs, enums and `case` PR
 appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39); the tail-call PR
 appended `TAIL_CALL` (40); the Result PR appended `TRY IS_OK RESULT_VALUE`
 (43); the Maps PR appended `MAP MAP_GET` (45); the closures PR appended
-`CALL_VALUE CLOSURE` (47). `CLOSURE` takes the capture count from the
+`CALL_VALUE CLOSURE` (47); the ranges PR (Phase 8a) appended `RANGE
+RANGE_BOUNDS` (49), with no format bump. `CLOSURE` takes the capture count from the
 function table; `CALL_VALUE` checks that `R[a]` is a function value whose
 function takes exactly `b` parameters and has as many captures as the
 value holds (otherwise `RUNTIME-INTERNAL` at the call's span). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
-(String by length and bytes, which is `equal?` on valid UTF-8); other pairs
+(String by length and bytes, which is `equal?` on valid UTF-8), and Range
+pairs (start, end and kind, never identity: `equal?` on the evaluator's
+transparent `range-value`); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
-String and Nil (`CHECK-TYPE-MISMATCH` otherwise), so lists never reach
+String, Nil and Range (`CHECK-TYPE-MISMATCH` otherwise), so lists never reach
 `EQ`; equality on nested data joins with `case` and maps if the checker ever
 allows it there. `LIST` copies the window into a new immutable list (the
 window may include `a`); `LIST_GET` checks `0 <= i < len` on the int64
@@ -613,9 +632,19 @@ list, the position, the partial result) lives in a GC object that bytecode
 cannot reach. The interpreter asks it for the next callback call, pushes that
 as a normal frame with the builtin's call span, and resumes the native frame
 when the callback returns. So no builtin ever calls the interpreter from C,
-iteration is bounded by the list length, and a task can block inside a
+iteration is bounded by the list length (the counting builtins, which
+have no list, charge one step per callback instead), and a task can block inside a
 callback (7h). Native frames do not count toward call depth, matching the
 evaluator. `sort_by` collects all keys first, then sorts (7.3).
+`Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
+frames: their state is a current value, the last value, a direction (+1 or
+-1) and a "more" flag, set once from the arguments (`n > 0`, `a <= b`,
+`a >= b`, or the range's bounds). Each resume calls the callback with the
+current value after charging one step at the call's span (the same check
+as `STEP`: `RUNTIME-STEP-LIMIT` when the budget is gone, and the place a
+task will yield in 7h), then clears "more" when it equals the last value and steps
+otherwise, so counting up to the largest Int (or down to the smallest)
+never overflows, and memory stays O(1).
 
 In C (`vm/interp.c`): the C table marks these entries with an
 `agc_native_kind` instead of a function. `CALL_BUILTIN` copies the list,
@@ -702,7 +731,7 @@ shims: the Racket side and the VM ship together.
 typedef enum {
   AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT,
   AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM,
-  AGC_T_RESULT, AGC_T_FN, AGC_T_JSON, AGC_T_HANDLE
+  AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE
 } agc_tag;                            /* the full set; vm/agc.h grows toward it */
 
 typedef struct {
@@ -713,7 +742,7 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Fn, in that order; Json and Handle join with their PRs. |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Fn, in that order, then `AGC_T_RANGE` (Phase 8a); Json and Handle join with their PRs. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
@@ -721,6 +750,7 @@ typedef struct {
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
+| Range | `agc_range { int64_t start, end; bool exclusive; }` (`GC_MALLOC_ATOMIC`), tag `AGC_T_RANGE`, immutable. Text and debug form `1..5` or `1...5` (`agc_scalar_text`; the longest form is 43 bytes, so `AGC_SCALAR_TEXT` is 48). `agc_range_bounds` gives the first and last included values and whether the range is non-empty, with no overflow for `...` (the end is above the start). `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW` and `Range.to_a` above 1048576 values with `RUNTIME-INVALID-COUNT`, both at the receiver's span (`span + 1`), as the evaluator does; `first` and `last` of an empty range give `error("the range is empty")`. |
 | Function value | `agc_fn { uint32_t function, n; agc_value captured[]; }` (`GC_MALLOC`), tag `AGC_T_FN`. `&name` is a value with `n = 0`. Text and debug form `<Fn>` (the checker never lets a program print one). |
 | Json | Tree: null, bool, int64, big integer as decimal text (parsed integers may exceed Int until extracted), double, string, array, object. Objects are built by collecting pairs, then one sort and dedupe with the last value winning, which is the order `write-json` prints. |
 | Handle (7h) | `{ uint32_t kind; void *resource; }` for Task, Socket, Listener, HTTP values, FileHandle, Process. |
@@ -957,7 +987,9 @@ The loader validates the whole file before running anything. Failures print
   starts with a `STEP` unless it has at most 2 instructions and no `CALL`,
   `TAIL_CALL`, `CALL_VALUE` or `CALL_BUILTIN` (the `const`/`return` of an empty body). The
   lowering in 3.3 always meets these rules. Together they mean every
-  unbounded repetition charges a step (a cycle of tail calls runs only
+  unbounded repetition charges a step (a range loop charges its own `STEP`
+  each iteration, and a counting native frame charges one step before each
+  callback, like `STEP`; a cycle of tail calls runs only
   functions that call, so each one charges its leading `STEP`), so `--max-steps` holds even for
   hostile files: the step budget bounds the number of instructions to about
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
@@ -967,6 +999,8 @@ The loader validates the whole file before running anything. Failures print
   at most 255 pairs, so one step cannot pay for a huge literal; longer
   literals are extended one `Map.put` at a time.
 - **Entry**: exists, with no parameters or captures.
+- **Ranges**: `RANGE` checks `a`, the window `b..b+1` and that `c` is 0 or
+  1; `RANGE_BOUNDS` checks `b` and the window `a..a+2`.
 - **Closures**: `CALL_VALUE` checks the window `a..a+b`; `CLOSURE` checks
   the function index and the window of that function's captures (`a`
   itself when it has none). `CALL` and `TAIL_CALL` may not name a
@@ -1206,8 +1240,10 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   A callback short enough to skip its leading `STEP` (8) charges nothing, so
   a resumable builtin can run a whole list with it without a switch. This
   work is still bounded by the list length, so it is accepted. Counting
-  builtin iterations toward the turn would change step counts, so it is not
-  done.
+  `List` builtin iterations toward the turn would change step counts, so it
+  is not done. The counting builtins (`Range.each`, `Int.times`, `upto`,
+  `downto`) have no list to bound them, so each callback call charges one
+  step through the same check as `STEP` and is a switch point.
 - **One counter for both budgets.** `STEP` counts down one "next stop"
   counter, set to `min(turn_left, steps_left)` when a turn starts. The fast
   path runs while `counter > n` for `STEP n`: one compare and one
@@ -1531,6 +1567,12 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
    The VM Json tree, with its big-integer node from §5, must follow the number rules of `docs/future.md` §15.2.
+
+Phase 8a (ranges, done) added the `Range` value (5.1), `RANGE` and
+`RANGE_BOUNDS` (4.2), the counter loops of 3.3, the `Range` builtins and
+the counting native frames of 4.3, with loader rules (8) and the `ranges`,
+`range-size-overflow`, `range-to-a-count` and `times-callback-error`
+fixtures.
 
 Outside this list, the **tail-call** PR (done) added `TAIL_CALL`: a
 `return f(...)` of a user function reuses the frame (3.3, 4.2, 4.3, 6.1),

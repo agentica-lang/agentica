@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Ranges (Phase 8a): `a..b` includes `b`, `a...b` excludes it; both ends
+  are `Int` and the value has the new builtin type `Range` (start, end and
+  kind, no list inside). `for x in range` iterates without building a list
+  and never overflows at the `Int` edges. `Range.size` (overflow at the
+  receiver), `Range.to_a` (at most 1048576 values), `Range.include?`,
+  `Range.each`, `Range.first` and `Range.last` (both `Result[Int]`), also
+  as methods. `Int.times`, `Int.upto` and `Int.downto` take a block:
+  `3.times do |i| ... end`. Each range `for` iteration and each callback
+  call of `Range.each`, `times`, `upto` and `downto` costs one step, so
+  `--max-steps` stops even an empty loop over a huge range. Ranges print
+  as `1..5` / `1...5` and support `==`. Both the evaluator and the bytecode VM run them; the VM appends the
+  `RANGE` and `RANGE_BOUNDS` opcodes (the `.agcb` format version does not
+  change), and a `for` over a range literal allocates nothing.
+
 - The bytecode VM runs function values: blocks (`do |x| ... end`) as
   closures that capture the values visible when they are made, `&name` of
   local and imported functions, `f.call(...)`, and `Fn` values in lists,
@@ -149,6 +163,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--seed N` for repeatable runs, also passed through `agentica test`.
 
 ### Changed
+
+- Breaking: `Range` is now a reserved type and module name. A user
+  `struct Range`, `enum Range` or `import ... as Range` is
+  `CHECK-REDEFINED-NAME`; rename it.
 
 - `String.split` keeps every empty part. Before, it dropped empty parts at
   the ends (`"a\n".split("\n")` gave `["a"]`) but kept them in the middle;

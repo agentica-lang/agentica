@@ -29,6 +29,24 @@
   (binding-value (car (function-decl-body fn))))
 
 (module+ test
+  (test-case "ranges bind loosest and do not chain"
+    (define exclusive (parse-expr "0...n + 1"))
+    (check-equal? (binary-op exclusive) 'dot-dot-dot)
+    (check-equal? (binary-op (binary-right exclusive)) 'plus)
+    (define inclusive (parse-expr "a or b..c"))
+    (check-equal? (binary-op inclusive) 'dot-dot)
+    (check-equal? (binary-op (binary-left inclusive)) 'or)
+    (check-equal? (source-position-column (source-span-start (binary-op-span inclusive))) 13)
+    (define grouped (parse-expr "(1..5).to_a"))
+    (check-equal? (binary-op (field-access-target grouped)) 'dot-dot)
+    (check-true (for-stmt? (car (function-decl-body
+                                 (car (program-declarations
+                                       (parse-ok "def main() -> Void\n  for i in 0...3 do\n    puts(i)\n  end\nend\n\n")))))))
+    (check-equal? (parse-code "def f() -> Void\n  x = 1..2..3\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
+    (check-regexp-match #rx"parentheses"
+                        (diagnostic-help (parse-text "def f() -> Void\n  x = 1..2 == 3..4\nend\n\n")))
+    (check-equal? (parse-code "def f() -> Void\n  x = 1..\n  2\nend\n\n") 'PARSE-UNEXPECTED-TOKEN))
+
   (test-case "function references and chained calls retain their spans"
     (define expression (parse-expr "handlers[\"double\"].call(21)"))
     (check-true (invoke? expression))

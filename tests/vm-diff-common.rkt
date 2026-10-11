@@ -322,6 +322,18 @@
       (compile-file program bytecode)
       (parameterize ([fixture-input (file->bytes (build-path fixtures (string-append name ".stdin")))])
         (check-equal? (run-vm bytecode #f) (run-racket (front-end program) #f) name))))
+  (test-case "unbounded range loops stop at --max-steps like the evaluator"
+    (for ([program (in-list (directory-list (build-path fixtures "step-limited") #:build? #t))]
+          #:when (path-has-extension? program #".agc"))
+      (define name (path->string (file-name-from-path program)))
+      (define bytecode (build-path work (path-replace-extension (file-name-from-path program) #".agcb")))
+      (compile-file program bytecode)
+      (define checked (front-end program))
+      (for ([limit (in-list '(1 2 3 4 5 50 500))])
+        (define expected (run-racket checked limit))
+        (check-equal? (first expected) 1 (format "~a --max-steps ~a" name limit))
+        (check-true (string-contains? (third expected) "RUNTIME-STEP-LIMIT") name)
+        (check-equal? (run-vm bytecode limit) expected (format "~a --max-steps ~a" name limit)))))
   (test-case "the VM CLI checks options and stops parsing at the file"
     (define bytecode (build-path work "calls.agcb"))
     (check-equal? (first (run-vm bytecode #f "--max-steps" "1")) 0)

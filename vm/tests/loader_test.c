@@ -956,6 +956,37 @@ int main(void) {
   s.builtin_arity = 3;
   assert(!loads(s, "unknown builtin"));
 
+  static const agc_instr range_code[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_RANGE, 0, 0, 1}, {AGC_OP_RANGE_BOUNDS, 0, 0, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t range_spans[] = {1, 0, 0, 0, 0, 0};
+  s = base();
+  s.code = range_code;
+  s.code_spans = range_spans;
+  s.count = 6;
+  s.registers = 3;
+  assert(loads(s, NULL));
+  agc_outcome bounds = run_spec(s, stdout);
+  assert(bounds.kind == AGC_DONE);
+  s.registers = 2;
+  assert(!loads(s, "register range out of range"));
+  static const agc_instr range_kind[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_RANGE, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  s.code = range_kind;
+  s.count = 5;
+  assert(!loads(s, "bad range kind"));
+  static const agc_instr range_window[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_RANGE, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s.code = range_window;
+  assert(!loads(s, "register range out of range"));
+  static const agc_instr bounds_of_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_RANGE_BOUNDS, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s.code = bounds_of_int;
+  s.count = 4;
+  s.registers = 3;
+  agc_outcome range_wrong = run_spec(s, stdout);
+  assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
+
   puts("loader tests passed");
   return 0;
 }
