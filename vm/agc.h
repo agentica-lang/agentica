@@ -201,6 +201,8 @@ struct agc_vm {
   agc_input in;
   agc_random random;
   agc_value args;
+  const agc_string *cursor;
+  size_t cursor_index, cursor_offset;
   agc_outcome outcome;
   jmp_buf fail;
 };
@@ -242,6 +244,7 @@ bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
+uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
@@ -269,6 +272,7 @@ extern const uint32_t agc_write_joiner_ranges[][2];
 extern const size_t agc_write_joiner_count;
 extern const uint32_t agc_write_blank_ranges[][2];
 extern const size_t agc_write_blank_count;
+bool agc_in_ranges(const uint32_t (*ranges)[2], size_t count, uint32_t cp);
 bool agc_write_raw(uint32_t cp);
 size_t agc_write_form(const agc_string *s, char *out, size_t *chars);
 agc_string *agc_concat(const agc_string *a, const agc_string *b);
@@ -277,6 +281,29 @@ agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
 
 agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys);
+
+extern const uint32_t agc_upcase_map[][4];
+extern const size_t agc_upcase_map_count;
+extern const uint32_t agc_downcase_map[][4];
+extern const size_t agc_downcase_map_count;
+extern const uint32_t agc_cased_ranges[][2];
+extern const size_t agc_cased_count;
+extern const uint32_t agc_case_ignorable_ranges[][2];
+extern const size_t agc_case_ignorable_count;
+
+typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_number_status;
+
+size_t agc_utf8_encode(uint32_t cp, char out[4]);
+size_t agc_utf8_count(const uint8_t *s, size_t len);
+size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index);
+#define AGC_NOT_FOUND SIZE_MAX
+size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
+agc_string *agc_change_case(const agc_string *s, bool up);
+agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
+agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
+extern const agc_builtin agc_string_builtins[];
+extern const size_t agc_string_builtin_count;
+
 extern const agc_builtin agc_number_builtins[];
 extern const size_t agc_number_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);

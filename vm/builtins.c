@@ -421,6 +421,7 @@ static const struct {
   const size_t *count;
 } tables[] = {
   {table, &table_count},
+  {agc_string_builtins, &agc_string_builtin_count},
   {agc_number_builtins, &agc_number_builtin_count},
 };
 

@@ -995,12 +995,12 @@ name: set to Ana
 
 ## 18. Front-end implementation language
 
-**Today:** the front-end (lexer, parser, linker, checker, lowering, bytecode) and the reference evaluator are written in Racket; the VM is C. This stays while the language still changes: Phase 8 and the open JSON work (adapters, optional JSON fields, CBOR; sections 15–17).
+**Today:** the front-end (lexer, parser, linker, checker, lowering, bytecode) is written in Racket; the VM is C. The front-end stays in Racket while the language still changes: Phase 8 and the open JSON work (adapters, optional JSON fields, CBOR; sections 15–17). The reference evaluator is also Racket, until it is removed in roadmap 7i.
 
 **Why not now:**
 
 - Two front-ends would double the work of every language change.
-- The Racket evaluator stays anyway, as the parity reference for the VM (`tests/vm-diff-*-test.rkt`).
+- The Racket evaluator stays until 7i as the parity reference for the VM (`tests/vm-diff-*-test.rkt`); after that, golden-output tests replace it (roadmap 7i).
 
 **The goal is distribution: one binary to download.** Measured on Linux x86_64 with Racket CS 9.3:
 

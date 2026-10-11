@@ -76,6 +76,10 @@
                       "List.size" "List.append" "List.set" "List.repeat" "List.concat" "List.take"
                       "List.drop" "List.at" "List.reverse" "List.sort"
                       "Map.has_key?" "Map.keys" "Map.size" "Map.put" "Map.get" "Map.delete" "Map.values"
+                      "String.length" "String.upcase" "String.downcase" "String.trim" "String.split" "String.join"
+                      "String.contains?" "String.starts_with?" "String.ends_with?" "String.replace" "String.slice"
+                      "String.index_of" "String.at" "String.reverse" "String.code" "String.from_code" "String.from_bytes"
+                      "String.to_int" "String.to_int!" "String.to_float" "String.to_float!"
                       "Float.from_int" "Float.to_int" "Float.to_int!" "Time.now_ms" "Time.monotonic_ms"
                       "Random.int" "Random.float"))
 
