@@ -60,7 +60,7 @@
       [(zero? depth)
        (case c
          [(#\;)
-          (when (regexp-match? #px"^\\s*(typedef|static)\\b" header)
+          (when (regexp-match? #px"^\\s*(typedef\\b|((_Noreturn|inline)\\s+)*static\\b)" header)
             (set! headers (cons (cons (or start line) (string-append (string-normalize-spaces header) ";"))
                                 headers)))
           (next (add1 i) line "" #f)]
@@ -87,7 +87,10 @@
     [else 'other]))
 
 (define (style-problems file)
-  (define headers (top-level-headers (file->string (build-path vm-dir file))))
+  (text-problems file (file->string (build-path vm-dir file))))
+
+(define (text-problems file text)
+  (define headers (top-level-headers text))
   (define first-function
     (for/first ([h headers] #:when (eq? (header-kind (cdr h)) 'function)) (car h)))
   (for/list ([h headers]
@@ -119,6 +122,17 @@
   (check-equal? (map car headers) '(4 5 6 7 8 10 14 15 16 19))
   (check-equal? (map (compose header-kind cdr) headers)
                 '(prototype data data type data function data function type type)))
+
+(test-case "late types and static prototypes are reported with their lines"
+  (check-equal?
+   (map (lambda (m) (cadr (regexp-match #px"^vm/x[.]c:(\\d+):" m)))
+        (text-problems "x.c"
+                       (string-append "_Noreturn static void stop(void);\n"
+                                      "int f(void) {\n  return 0;\n}\n"
+                                      "struct x {\n  int a;\n};\n"
+                                      "inline static int g(void);\n"
+                                      "static int f2(void);\n")))
+   '("1" "5" "8" "9")))
 
 (test-case "no late type definition or static prototype in vm/*.c"
   (define files (vm-files))

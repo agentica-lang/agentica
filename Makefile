@@ -53,7 +53,7 @@ site-serve: site-sass
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
-# make vm-lint            clang-tidy (18 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
+# make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
@@ -164,7 +164,8 @@ VM_LINT_SKIP := vm/unicode_data.c
 VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 
 .PHONY: vm-lint
-vm-lint: $(GC_DIR)/extra/gc.c
+vm-lint: $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c
+	@$(CLANG_TIDY) --list-checks -checks=misc-use-internal-linkage | grep -q misc-use-internal-linkage || { echo "clang-tidy 19+ required" >&2; exit 1; }
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -DAGC_NO_GC -fsanitize=address,undefined
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS

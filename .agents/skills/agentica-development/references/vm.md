@@ -57,7 +57,7 @@ make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (callo
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
-make vm-lint CLANG_TIDY=path        # clang-tidy 18+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
+make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
@@ -245,17 +245,21 @@ instructions. A file that loads may still compute wrong values or end with
   upper case.
 - File-local helpers and data are `static` (*checked*).
 - No prototypes of `static` functions: define each helper before its first use, so files read bottom-up and the `agc_*` functions usually come last (*checked*); only unavoidable mutual recursion may have one.
-- No value-driven C recursion (`docs/vm.md` §7.3; *checked*). Depth bounded
-  by a constant or `log n` (HAMT levels) is allowed with
-  `// NOLINT(misc-no-recursion)` on the function line.
+- No value-driven C recursion (`docs/vm.md` §7.3; *checked* by
+  `misc-no-recursion` within one file only: recursion across files through
+  `agc_*` calls is not caught). Depth bounded by a constant or `log n` (HAMT
+  levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
 - Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
   index and size sums use `uint64_t`.
 - No code comments, except a legal header if one is ever needed.
 - Only `value.c` reads the value union. Immediates write the full word.
 
-`make vm-lint` (clang-tidy 18 or newer, for `misc-use-internal-linkage`)
+`make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
 skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
-(`__asan_default_options`) takes an exact `NOLINT(check,...)`.
+(`__asan_default_options`) takes an exact `NOLINT(check,...)`. The style test
+is a line scanner: it misses prototypes of functions that return function
+pointers, and it miscounts when `#if` branches open or close different
+numbers of braces.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
