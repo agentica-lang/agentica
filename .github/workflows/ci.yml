@@ -21,6 +21,34 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: [self-hosted, linux, docker-runner]
+    outputs:
+      vm: ${{ steps.vm.outputs.vm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: vm
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          vm=false
+          if [ "$EVENT" != pull_request ]; then
+            vm=true
+          elif ! files=$(git diff --name-only HEAD^1 HEAD); then
+            vm=true
+          else
+            while IFS= read -r f; do
+              case "$f" in
+                vm/*|src/lower.rkt|src/bytecode.rkt|tests/vm-diff-test.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.github/workflows/ci.yml)
+                  vm=true ;;
+              esac
+            done <<< "$files"
+          fi
+          echo "vm=$vm"
+          echo "vm=$vm" >> "$GITHUB_OUTPUT"
+
   test:
     runs-on: [self-hosted, linux, docker-runner]
     env:
@@ -82,6 +110,8 @@ jobs:
       - run: dist/agentica examples/queue.agc
 
   vm-sanitizers:
+    needs: changes
+    if: needs.changes.outputs.vm == 'true'
     runs-on: [self-hosted, linux, docker-runner]
     env:
       AGENTICA_REQUIRE_VM: '1'

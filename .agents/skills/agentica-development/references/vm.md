@@ -51,6 +51,11 @@ racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.ag
 racket src/main.rkt --dump-ir prog.agc
 ```
 
+- CI runs `vm-sanitizers` (ASan diff and bytecode tests, `make vm-fuzz`,
+  `make vm-gc-stress`) only when a pull request touches the VM paths listed
+  in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
+  bytecode, their tests and fixtures, the Makefile, `ci.yml`). A new VM
+  source or test file outside those paths must be added there.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
