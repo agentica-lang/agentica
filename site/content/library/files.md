@@ -56,7 +56,7 @@ Reads a whole file as text.
 ```agentica {mode="check"}
 def main() -> Void
   case File.read_text("notes.txt", 1000)
-    ok(text) -> puts("#{text.split("\n").size} lines")
+    ok(text) -> puts("#{text.trim.split("\n").size} lines")
     error(message) -> IO.warn("cannot read: #{message}")
   end
 end
