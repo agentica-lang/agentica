@@ -22,7 +22,8 @@
     list list-len list-get
     struct field enum is-variant payload same
     tail-call
-    try is-ok result-value))
+    try is-ok result-value
+    map map-get))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))

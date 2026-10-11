@@ -822,6 +822,58 @@ int main(void) {
   agc_outcome emptied = run_spec(s, stdout);
   assert(emptied.kind == AGC_FAILED && strcmp(emptied.code, "RUNTIME-INTERNAL") == 0);
 
+  static const agc_instr bad_map_target[] = {{AGC_OP_MAP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_map_target, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_map_start[] = {{AGC_OP_MAP, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_map_start, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_map_window[] = {{AGC_OP_MAP, 0, 1, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_map_window, two_spans, 2, 4, "register range out of range"));
+  static const agc_instr huge_map_window[] = {{AGC_OP_MAP, 0, 0, 65535}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(huge_map_window, two_spans, 2, 65535, "map literal chunk too large"));
+  static const agc_instr big_map_chunk[] = {{AGC_OP_MAP, 0, 0, 256}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(big_map_chunk, two_spans, 2, 1024, "map literal chunk too large"));
+  static const agc_instr max_map_chunk[] = {{AGC_OP_MAP, 0, 0, 255}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads_with_tables(max_map_chunk, two_spans, 2, 510, NULL));
+  static const agc_instr exact_map_window[] = {{AGC_OP_MAP, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads_with_tables(exact_map_window, two_spans, 2, 4, NULL));
+  static const agc_instr bad_map_get[] = {{AGC_OP_MAP_GET, 0, 0, 4}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_map_get, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_map_get_target[] = {{AGC_OP_MAP_GET, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_map_get_target, two_spans, 2, 4, "register out of range"));
+
+  static const agc_instr map_get_of_list[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 0}, {AGC_OP_MAP_GET, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr map_void_key[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_MAP, 0, 0, 1}, {AGC_OP_NOT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr map_get_void_key[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_MAP, 1, 1, 0}, {AGC_OP_MAP_GET, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const agc_instr *bad_maps[] = {map_get_of_list, map_void_key, map_get_void_key};
+  for (int k = 0; k < 3; k++) {
+    agc_outcome bad = run_with_tables(bad_maps[k], confused_spans, 4, stdout);
+    assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
+  }
+  static const agc_instr map_get_missing[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_MAP, 1, 1, 0}, {AGC_OP_MAP_GET, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t missing_spans[] = {1, 0, 0, 2, 0};
+  agc_outcome missing = run_with_tables(map_get_missing, missing_spans, 5, stdout);
+  assert(missing.kind == AGC_FAILED && strcmp(missing.code, "RUNTIME-KEY-NOT-FOUND") == 0 && missing.span == 2);
+  assert(strcmp(missing.message, "key 1 is not in the map") == 0);
+  static const agc_instr map_puts[] = {
+    {AGC_OP_STEP, 1, 0, 0},    {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_MAP, 3, 0, 1},
+    {AGC_OP_MAP_GET, 2, 3, 0}, {AGC_OP_MAP, 0, 2, 1},   {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+    {AGC_OP_CONST, 0, 1, 0},   {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t map_puts_spans[] = {1, 0, 0, 0, 0, 0, 1, 0, 0};
+  out = tmpfile();
+  assert(out);
+  assert(run_with_tables(map_puts, map_puts_spans, 9, out).kind == AGC_DONE);
+  expect_output(out, "{1: {1: 1}}\n");
+
+  s = base();
+  s.builtin = "Map.put";
+  s.builtin_arity = 2;
+  assert(!loads(s, "unknown builtin"));
+
   puts("loader tests passed");
   return 0;
 }

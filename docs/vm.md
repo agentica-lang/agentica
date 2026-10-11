@@ -31,21 +31,23 @@ details and reasons.
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
 and Windows CI, the Lists PR, the structs, enums and `case` PR and the
-Result PR (12.2 items 1 to 4, 5a, 5b and 5c) are in, and so is the
+Result PR and the Maps PR (12.2 items 1 to 4 and 5a to 5d) are in, and so is the
 tail-call PR (after the list in 12.2). The VM covers Int, Float, Bool, Nil and
 String values, user structs and user enums (generic and recursive ones too,
 imported ones included), `Result[T]` of any of them (and `Result[Void]`),
-and `List[T]` of any of them (lists of lists too),
+`List[T]` of any of them (lists of lists too), and `Map[K, V]` with Int or
+String keys and any of them as values,
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
 `break` and `next`, `for x in xs` with `break` and `next`, list literals,
-indexing `xs[i]`, struct construction and field access, enum constructors,
+indexing `xs[i]`, map literals, map indexing `m[key]`, struct construction and field access, enum constructors,
 `case` with literal, `_`, variant and Result patterns, `ok`/`error`, the
 `Result.*` builtins, `try`, user functions, calls, tail
 calls (`return f(...)` reuses the frame, 6.1), `return`, interpolation,
 `x.to_s` and `x.inspect` of those values, and `puts`/`print`/`IO.puts`/
-`IO.print`/`IO.warn` of any of them. List library functions (`xs.size`,
-`List.append`, ...) join with the `List` library (12.2 item 6). Runtime diagnostics come in the plain,
+`IO.print`/`IO.warn` of any of them. List and Map library functions
+(`xs.size`, `List.append`, `Map.get`, `Map.keys`, ...) join with the library
+PR (12.2 item 6). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -367,8 +369,8 @@ and a receiver wrapped in `typed-target` carries its type already.
 | Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`, or `tail-call` when it is the value of a `return` (see `return`). |
 | Structs | `step` (construct span); arguments evaluated in written order directly into the slot of their declared position, then `struct`. A `construct` named `Enum.Variant` is an enum constructor (`eval-step-expression`). Field access: `step` (node span), target, then `field` with the declared index. A struct type that is not declared in the program (a builtin record such as `Header`) stays `LOWER-UNSUPPORTED`. |
 | Enums | `step` (constructor span), payload slots in order, then `enum` with a global variant id; a nullary variant is `enum dst dst v`. |
-| Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. An empty literal is `list dst dst 0`. |
-| Indexing | `list-get` or `map-get` from the type table. `step` (index node), target, index, then `list-get` at the index expression's span, which is where `RUNTIME-INDEX-OUT-OF-RANGE` ("index -1 is outside a list of length 3") points. |
+| Lists, maps | `list` / `map` from consecutive slots (a map's key and value slots alternate, each entry's key lowered before its value, as `map-lit` evaluates them; entries charge no step). Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. For a map: the first 255 entries `map w w+1 255`, then each later entry's key in `w+1`, its value in `w+2` and `call-builtin w Map.put 3`, so a map literal needs at most 511 slots beside its entries' own temporaries. An empty literal is `list dst dst 0` or `map dst dst 0`; the checker gives an empty map literal its type from the context. |
+| Indexing | `list-get` or `map-get` from the target's checked type. `step` (index node), target, index, then `list-get` or `map-get` at the index expression's span, which is where `RUNTIME-INDEX-OUT-OF-RANGE` ("index -1 is outside a list of length 3") and `RUNTIME-KEY-NOT-FOUND` (`key "x" is not in the map`, the key in `write` form) point. |
 | `case` | Scrutinee once (a local is read in place: tests and payload reads all come before any body runs); per arm a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), body in its own scope through `lower-statement`, jump to the end. Patterns charge no steps. `_` has no test. An Int literal pattern outside 64 bits (the checker accepts `9223372036854775808 ->`) can never match, so its test is a plain `jump` to the next arm. A Result pattern (`ok(v)`, `error(m)`, `Result.Ok(v)`, `Result.Err(m)`; the scrutinee's checked type is `Result`) tests `is-ok`, then `jump-if-false` for `ok` or `jump-if-true` for `error`, and its binding reads `result-value` (the success value or the message). |
 | `try` | `step` (the `try` span), the operand, then `try dst src`: on an error, return that Result from the current function (from the block once closures land); else its value goes to `dst`. A `try` of a `Result[Void]` may be a statement. `return try f(...)` is not a tail call. |
 | `ok`, `error`, `Result.*` | Builtin calls: keys `ok` (arity 1, and arity 0 for `ok()`), `error`, `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`, `Result.message`. `Result.Ok(x)` and `Result.Err(m)` are already `ok`/`error` calls after parsing, and method forms (`r.ok?`, `r.unwrap!`) are resolved calls. |
@@ -411,7 +413,7 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
 exit 1. Today a value outside Int, Float, Bool, Nil, String, structs and
-enums declared in the program, and `List` and `Result` of those (nested to
+enums declared in the program, and `List`, `Map` and `Result` of those (nested to
 any depth; `Result[Void]` too) is rejected, except a Void call or `try`
 used as a statement or returned. A struct or
 enum type is accepted whatever its fields or payloads hold: a value of an
@@ -421,9 +423,9 @@ unsupported type can only come from an expression the lowerer rejects. The only 
 `Result.message` (their implementation keys; `print` and `IO.puts` map to
 the first two). The last
 two exist because the checker resolves `x.to_s` on Int and Float to them.
-`List.concat` is in the C table too, but only the lowerer emits it, for
-long literals (3.3); a written call to it stays `LOWER-UNSUPPORTED` until
-the `List` library PR. No core form turns into a `List` library call: `for`,
+`List.concat` and `Map.put` are in the C table too, but only the lowerer
+emits them, for long literals (3.3); a written call to either stays
+`LOWER-UNSUPPORTED` until the library PR. No core form turns into a `List` library call: `for`,
 literals and indexing have their own opcodes, `x.to_s` of a list is a
 one-part interpolation, and `xs.size`/`xs.length` are written method calls
 of `List.size`.
@@ -485,7 +487,7 @@ through the checked accessors (5.2); a wrong tag is `RUNTIME-INTERNAL`
 | Data | `LIST` | a b c | List of `R[b..b+c-1]` |
 | | `LIST_LEN` | a b | Length of list `R[b]` |
 | | `LIST_GET` | a b c | `R[b][R[c]]`; out of range fails at the index span |
-| | `MAP` | a b c | Map from `c` key/value pairs at `R[b..b+2c-1]`, `mapping-put` rules |
+| | `MAP` | a b c | Map from `c <= 255` key/value pairs at `R[b..b+2c-1]`, `mapping-put` rules |
 | | `MAP_GET` | a b c | `R[b][R[c]]`; missing key fails at the index span |
 | | `STRUCT` | a b c | Struct of type `c` from `R[b..]` in declaration order |
 | | `FIELD` | a b c | Field `c` of struct `R[b]` |
@@ -509,7 +511,7 @@ LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30); the Lists
 PR appended `LIST LIST_LEN LIST_GET` (33); the structs, enums and `case` PR
 appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39); the tail-call PR
 appended `TAIL_CALL` (40); the Result PR appended `TRY IS_OK RESULT_VALUE`
-(43). `EQ`/`NE`
+(43); the Maps PR appended `MAP MAP_GET` (45). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
@@ -538,6 +540,12 @@ hand-made file; the checker allows `try` only in functions that return
 Result) is `RUNTIME-INTERNAL`. Results have no equality
 (`CHECK-TYPE-MISMATCH`), so `EQ` and `SAME` never see one; given one, they
 are `RUNTIME-INTERNAL`.
+`MAP` puts its `c` pairs in order into an empty map with the `mapping-put`
+rule: a repeated key keeps its first position and takes the last value.
+`MAP_GET` builds its message at run time from the key's debug form. A key
+that is not an Int or a String (only in a hand-made file) is
+`RUNTIME-INTERNAL` when it is hashed. The checker rejects `==` on maps, so
+there is no map equality.
 
 ### 4.3 Calls, call windows and resumable builtins
 
@@ -647,11 +655,11 @@ typedef struct {
 
 | Type | Representation |
 |---|---|
-| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has Void, Nil, Bool, Int, Float, String, List, Struct, Enum and Result (Map waits for 5d, so the numbers are not those above). |
+| Void, Nil, Bool | Immediate. Tag 0 is Void, so zeroed registers are valid values. Today `vm/agc.h` has the tags above up to Result, in that order; Fn, Json and Handle join with their PRs. |
 | Int, Float | `int64_t` (`__builtin_*_overflow`), `double`. |
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
-| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }`: a persistent 32-way HAMT plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. Keys are Int or String, hashed with SipHash-1-3 under a per-run key from OS entropy (independent of `--seed`). |
+| Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }` (`vm/map.c`): a persistent 32-way HAMT from key to value plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. A put copies only the path to its key (at most 14 nodes of at most 32 entries) and, for a new key, conses one cell onto the shared list; a replaced key keeps its cell, so its position. Put and lookup are O(log32 n) (12 levels of 5 hash bits and a 13th of 4 bits, then a collision node that holds the entries whose 64-bit hashes are equal and is searched linearly); building a literal of n entries is O(n log n), never O(n^2). Printing (and later `Map.keys`/`values`) walks the list once into an array, oldest first, then looks each value up: O(n log n). Every node and cell is `GC_MALLOC`'d and immutable, so versions share structure. `Map.delete` (12.2 item 6) will copy the list without its key, O(n) like `remove` in the evaluator. Keys are Int (its 8 bytes, little-endian) or String (its UTF-8 bytes), compared by tag and value, which is `equal?` on them; they are hashed with SipHash-1-3, the value tag compressed as a leading 64-bit word before the bytes, so an Int and a String with the same bytes hash apart. The SipHash key is seeded once per run in `vm/main.c` from OS entropy, independent of `--seed`: on Linux `getrandom` (retried on `EINTR` and short reads), then `/dev/urandom` if `getrandom` fails (for example `ENOSYS` or `EPERM` under seccomp); `/dev/urandom` on other Unix systems and `rand_s` on Windows. If every source fails, the fixed default key stays. That is acceptable as a last resort: the hash is still 64 bits and a HAMT only degrades on full 64-bit collisions (a collision node is searched linearly), and forcing those still costs about 2^32 work per pair even with a known key. The C tests and the fuzzer keep the fixed default key. Iteration and printing order never depend on the hash. Later, with the Map library (12.2 item 6): `MAP` can build its fresh literal with a transient in-place put instead of a persistent copy per pair, and a node can split child and leaf slots to use less memory. |
 | Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
 | Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }` (`GC_MALLOC`); an error holds its String message; `ok()` holds Void. Debug form: `ok(v)`, `ok()` when the value is Void, `error("msg")` with the message in `write` form, printed by the same explicit-stack walker as lists, structs and enums. |
@@ -865,7 +873,9 @@ The loader validates the whole file before running anything. Failures print
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
   time and memory in proportion to their strings (trust model, 1). `LIST`
   and `TAIL_CALL` copy up to 65534 values in one instruction, so they cost
-  O(count) per step, still within steps × code size.
+  O(count) per step, still within steps × code size. `MAP` hashes and puts
+  at most 255 pairs, so one step cannot pay for a huge literal; longer
+  literals are extended one `Map.put` at a time.
 - **Entry**: exists, with no parameters or captures.
 - **In the slice**: captures must be 0; constant kinds above 6 are
   rejected. Struct field counts and variant arities are at most 65535. All
@@ -880,7 +890,10 @@ The loader validates the whole file before running anything. Failures print
   arity (`b` itself when it is 0); `IS_VARIANT` checks two registers and the
   variant id; `FIELD` and `PAYLOAD` check two registers and `c` below the
   largest field count or arity (the run time checks the value's own `n`);
-  `SAME` checks three registers; `TRY`, `IS_OK` and `RESULT_VALUE` two.
+  `SAME` checks three registers; `TRY`, `IS_OK` and `RESULT_VALUE` two;
+  `MAP` checks `a`, `c <= 255` (the lowerer's chunk size, 3.3) and the
+  window `b..b+2c-1` (`b` itself when `c` is 0; `2c` is computed in 32
+  bits), `MAP_GET` three registers.
   Builtin record layouts are not checked
   yet: the lowerer rejects builtin record types, and the check joins with
   the first library PR that reads one. `CONCAT`
@@ -900,7 +913,11 @@ The loader validates the whole file before running anything. Failures print
   `TAIL_CALL` and `CALL_BUILTIN` windows, a `TAIL_CALL` to a function out of
   range, the registers of `TRY`, `IS_OK` and `RESULT_VALUE` (and, at run
   time, that they fail on a non-Result and that a `TRY` error in `main`
-  is `RUNTIME-INTERNAL`), `STEP 0`, a backward jump that misses a `STEP`,
+  is `RUNTIME-INTERNAL`), the `MAP` window, a `MAP` count of 256 (and that 255 loads) and
+  `MAP_GET` registers (and, at
+  run time, a missing key's code, span and message, a nested map printed,
+  and `RUNTIME-INTERNAL` for a Void key or a `MAP_GET` on a list), a
+  `Map.put` import of the wrong arity, `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one (one is just `TAIL_CALL`, `RETURN`), an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
 - **Run time**: `CALL_VALUE` parameter counts, tags (5.2), list, map and
@@ -1374,7 +1391,16 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `message`), `try` (`TRY`), Result patterns in `case` (`IS_OK`,
      `RESULT_VALUE`), and the text and debug forms `ok(v)`, `ok()` and
      `error("msg")`. No format bump: the three opcodes are appended.
-   - **5d** Maps (HAMT, 5.1), map literals and indexing.
+   - **5d Maps** (done). `Map[K, V]` values as a persistent HAMT plus
+     the evaluator's reversed key list (5.1), map literals (empty typed
+     ones too; above 255 entries extended with `Map.put`, 3.3), `m[key]`
+     with `RUNTIME-KEY-NOT-FOUND` at the index span, and the `{k: v}` text
+     and debug forms in insertion order. `vm/tests/map_test.c` checks
+     20,000 keys, order, replacement, persistence, full 64-bit hash
+     collisions, keys that share 60 hash bits, and a depth-1,000,000
+     nested map printed. No format bump: `MAP` and `MAP_GET` are appended.
+     There is no `for` over a map (the checker rejects it); Map library
+     functions stay in item 6.
    - **5e** Closures (`block-lit`), `&name`, `.call`, the resumable `List`
      builtins (`map`, `filter`, `reduce`, `sort_by`, `each`, `any?`,
      `all?`).

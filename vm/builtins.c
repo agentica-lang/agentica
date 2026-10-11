@@ -50,6 +50,11 @@ static agc_value builtin_list_concat(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_list_value(l);
 }
 
+static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_map_value(agc_map_put(vm, agc_as_map(vm, args[0]), args[1], args[2]));
+}
+
 static agc_value builtin_ok(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)vm;
   (void)span;
@@ -102,6 +107,7 @@ static const agc_builtin table[] = {
   {"String.from_int", 1, builtin_from_int},
   {"String.from_float", 1, builtin_from_float},
   {"List.concat", 2, builtin_list_concat},
+  {"Map.put", 3, builtin_map_put},
   {"ok", 1, builtin_ok},
   {"ok", 0, builtin_ok_void},
   {"error", 1, builtin_error},

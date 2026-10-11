@@ -148,6 +148,13 @@ agc_value agc_list_value(agc_list *l) {
   return v;
 }
 
+agc_value agc_map_value(agc_map *m) {
+  agc_value v;
+  v.tag = AGC_T_MAP;
+  v.as.p = m;
+  return v;
+}
+
 agc_value agc_struct_value(agc_struct *s) {
   agc_value v;
   v.tag = AGC_T_STRUCT;
@@ -233,6 +240,11 @@ agc_string *agc_as_string(agc_vm *vm, agc_value v) {
 
 agc_list *agc_as_list(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_LIST) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_map *agc_as_map(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_MAP) wrong_tag(vm);
   return v.as.p;
 }
 

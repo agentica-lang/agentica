@@ -11,10 +11,11 @@
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
+#define AGC_MAX_MAP_CHUNK 255u
 #define AGC_FLOAT_TEXT 40
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT
 } agc_tag;
 
 typedef struct {
@@ -31,6 +32,19 @@ typedef struct {
   size_t len;
   agc_value items[];
 } agc_list;
+
+typedef struct agc_hamt agc_hamt;
+
+typedef struct agc_keys {
+  agc_value key;
+  struct agc_keys *next;
+} agc_keys;
+
+typedef struct {
+  size_t size;
+  agc_hamt *table;
+  agc_keys *reversed;
+} agc_map;
 
 typedef struct {
   uint32_t type, n;
@@ -59,6 +73,7 @@ typedef enum {
   AGC_OP_STRUCT, AGC_OP_FIELD, AGC_OP_ENUM, AGC_OP_IS_VARIANT, AGC_OP_PAYLOAD, AGC_OP_SAME,
   AGC_OP_TAIL_CALL,
   AGC_OP_TRY, AGC_OP_IS_OK, AGC_OP_RESULT_VALUE,
+  AGC_OP_MAP, AGC_OP_MAP_GET,
   AGC_OP_COUNT
 } agc_opcode;
 
@@ -163,6 +178,7 @@ agc_value agc_int(int64_t i);
 agc_value agc_float(double f);
 agc_value agc_string_value(agc_string *s);
 agc_value agc_list_value(agc_list *l);
+agc_value agc_map_value(agc_map *m);
 agc_value agc_struct_value(agc_struct *s);
 agc_value agc_enum_value(agc_enum *e);
 agc_value agc_result_value(bool ok, agc_value value);
@@ -171,6 +187,7 @@ int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
 agc_string *agc_as_string(agc_vm *vm, agc_value v);
 agc_list *agc_as_list(agc_vm *vm, agc_value v);
+agc_map *agc_as_map(agc_vm *vm, agc_value v);
 agc_struct *agc_as_struct(agc_vm *vm, agc_value v);
 agc_enum *agc_as_enum(agc_vm *vm, agc_value v);
 agc_result *agc_as_result(agc_vm *vm, agc_value v);
@@ -184,6 +201,15 @@ agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 agc_list *agc_new_list(size_t len);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
+
+void agc_map_seed(uint64_t k0, uint64_t k1);
+uint64_t agc_key_hash(agc_vm *vm, agc_value key);
+agc_map *agc_new_map(void);
+agc_map *agc_map_put(agc_vm *vm, const agc_map *m, agc_value key, agc_value value);
+agc_map *agc_map_put_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value value);
+bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value);
+bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value *value);
+agc_value *agc_map_keys(const agc_map *m);
 
 extern const uint32_t agc_write_raw_ranges[][2];
 extern const size_t agc_write_raw_count;

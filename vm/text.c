@@ -146,12 +146,13 @@ static void append_string(builder *b, const agc_string *s) {
 }
 
 static bool compound(agc_value v) {
-  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM) || agc_is(v, AGC_T_RESULT);
+  return agc_is(v, AGC_T_LIST) || agc_is(v, AGC_T_MAP) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM) || agc_is(v, AGC_T_RESULT);
 }
 
 typedef struct {
   agc_value value;
   size_t next;
+  agc_value *keys;
 } debug_frame;
 
 static const agc_struct_def *struct_def(agc_vm *vm, const agc_struct *st) {
@@ -170,6 +171,7 @@ static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
 
 static size_t item_count(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->len;
+  if (agc_is(v, AGC_T_MAP)) return agc_as_map(vm, v)->size;
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->n;
   if (agc_is(v, AGC_T_RESULT)) {
     const agc_result *r = agc_as_result(vm, v);
@@ -188,6 +190,10 @@ static agc_value item_at(agc_vm *vm, agc_value v, size_t k) {
 static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   if (agc_is(v, AGC_T_LIST)) {
     append(b, "[", 1);
+    return true;
+  }
+  if (agc_is(v, AGC_T_MAP)) {
+    append(b, "{", 1);
     return true;
   }
   if (agc_is(v, AGC_T_STRUCT)) {
@@ -233,13 +239,14 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
       }
       stack[depth].value = item;
       stack[depth].next = 0;
+      stack[depth].keys = agc_is(item, AGC_T_MAP) ? agc_map_keys(agc_as_map(vm, item)) : NULL;
       depth++;
     }
     for (;;) {
       if (!depth) return b.s;
       debug_frame *top = &stack[depth - 1];
       if (top->next < item_count(vm, top->value)) break;
-      append(&b, agc_is(top->value, AGC_T_LIST) ? "]" : ")", 1);
+      append(&b, agc_is(top->value, AGC_T_LIST) ? "]" : agc_is(top->value, AGC_T_MAP) ? "}" : ")", 1);
       depth--;
     }
     debug_frame *top = &stack[depth - 1];
@@ -247,6 +254,14 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
     if (agc_is(top->value, AGC_T_STRUCT)) {
       append_string(&b, struct_def(vm, agc_as_struct(vm, top->value))->fields[top->next]);
       append(&b, ": ", 2);
+    }
+    if (agc_is(top->value, AGC_T_MAP)) {
+      agc_value key = top->keys[top->next++];
+      append_item(vm, &b, key);
+      append(&b, ": ", 2);
+      if (!agc_map_get(vm, agc_as_map(vm, top->value), key, &item))
+        agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
+      continue;
     }
     item = item_at(vm, top->value, top->next++);
   }

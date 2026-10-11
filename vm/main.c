@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#define _CRT_RAND_S
+#endif
 #include "agc.h"
 
 #include <errno.h>
@@ -53,6 +56,59 @@ static void remove_input(int index, const char *path, const file_info *info) {
   if (lstat(path, &now) == 0 && now.st_dev == info->st_dev && now.st_ino == info->st_ino) unlink(path);
 }
 #endif
+
+#ifndef _WIN32
+static bool urandom_entropy(uint8_t *out, size_t len) {
+  int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+  if (fd < 0) return false;
+  size_t done = 0;
+  while (done < len) {
+    ssize_t n = read(fd, out + done, len - done);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) break;
+    done += (size_t)n;
+  }
+  close(fd);
+  return done == len;
+}
+#endif
+
+#ifdef __linux__
+#include <sys/random.h>
+
+static bool os_entropy(uint8_t *out, size_t len) {
+  size_t done = 0;
+  while (done < len) {
+    ssize_t n = getrandom(out + done, len - done, 0);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) return urandom_entropy(out, len);
+    done += (size_t)n;
+  }
+  return true;
+}
+#elif defined(_WIN32)
+static bool os_entropy(uint8_t *out, size_t len) {
+  for (size_t k = 0; k < len; k++) {
+    unsigned int x;
+    if (rand_s(&x) != 0) return false;
+    out[k] = (uint8_t)x;
+  }
+  return true;
+}
+#else
+static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, len); }
+#endif
+
+static void seed_map_hash(void) {
+  uint8_t key[16];
+  if (!os_entropy(key, sizeof key)) return;
+  uint64_t k0 = 0, k1 = 0;
+  for (unsigned k = 0; k < 8; k++) {
+    k0 |= (uint64_t)key[k] << (8 * k);
+    k1 |= (uint64_t)key[8 + k] << (8 * k);
+  }
+  agc_map_seed(k0, k1);
+}
 
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -198,6 +254,7 @@ static int run(int argc, char **argv) {
     return 2;
   }
 
+  seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
   agc_outcome outcome = agc_vm_run(vm);
