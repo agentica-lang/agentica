@@ -1,0 +1,34 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 1rem/1.65 var(--font);
+}
+
+a {
+  color: var(--link);
+  text-underline-offset: 0.15em;
+}
+
+.skip {
+  position: absolute;
+  left: -100vw;
+
+  &:focus {
+    left: var(--gutter);
+    top: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--bg);
+  }
+}

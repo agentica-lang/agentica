@@ -1,0 +1,52 @@
+@use "tokens" as *;
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: var(--header);
+  padding: 0 var(--gutter);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  color: var(--fg);
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-decoration: none;
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    margin-right: 0.5rem;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+}
+
+.repo {
+  margin-left: auto;
+}
+
+.nav-toggle {
+  display: none;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: $narrow) {
+  .js .nav-toggle {
+    display: block;
+  }
+}

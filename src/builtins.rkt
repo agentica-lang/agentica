@@ -1,20 +1,23 @@
 #lang racket
 
-(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string did-you-mean)
+(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
                       [alternatives #:auto #:mutable]) #:auto-value '() #:transparent)
 
+(define (display-name name)
+  (regexp-replace #rx"^@[0-9]+::" name ""))
+
 (define (type->string type)
   (cond
     [(symbol? type) (symbol->string type)]
-    [(eq? (car type) 'Struct) (cadr type)]
+    [(eq? (car type) 'Struct) (display-name (cadr type))]
     [(eq? (car type) 'TypeVar) (cadr type)]
     [(eq? (car type) 'Enum)
      (if (null? (cddr type))
-         (cadr type)
-         (format "~a[~a]" (cadr type) (string-join (map type->string (cddr type)) ", ")))]
+         (display-name (cadr type))
+         (format "~a[~a]" (display-name (cadr type)) (string-join (map type->string (cddr type)) ", ")))]
     [else (format "~a[~a]" (car type) (string-join (map type->string (cdr type)) ", "))]))
 
 (define builtins
@@ -226,10 +229,20 @@
     (vector-copy! last-row 0 row))
   (vector-ref last-row n))
 
-(define (did-you-mean name candidates)
+(define (name-prefix name)
+  (car (or (regexp-match #rx"^@[0-9]+::" name) '(""))))
+
+(define (did-you-mean full-name candidates #:shared [shared '()])
+  (define prefix (name-prefix full-name))
+  (define name (display-name full-name))
   (define limit (if (<= (string-length name) 4) 1 2))
+  (define pool
+    (append (for/list ([candidate (in-list candidates)]
+                       #:when (string=? (name-prefix candidate) prefix))
+              (display-name candidate))
+            shared))
   (define near
-    (sort (for/list ([candidate (in-list (remove-duplicates candidates))]
+    (sort (for/list ([candidate (in-list (remove-duplicates pool))]
                      #:unless (string=? candidate name)
                      #:when (<= (edit-distance name candidate) limit))
             candidate)

@@ -258,11 +258,13 @@ fails when the committed file differs from what the generator prints.
   `<FileHandle>`, `<Process>`.
 - A list prints its items in debug form even in the text form:
   `puts(["a"])` prints `["a"]`. Only a String at the top is printed raw.
-- Struct and enum names are the display names the lowerer copies verbatim
-  from the linked program, so the VM prints what the evaluator prints.
-  Today that includes the linker's internal prefix for imported types
-  (`@2::Point(x: 1)`, `@2::Shape.Dot`), an evaluator bug; when the evaluator
-  is fixed, the lowerer copies the fixed name and the VM follows.
+- Struct and enum names in the tables are display names: the bytecode
+  writer passes each linked name through `display-name`
+  (`src/builtins.rkt`), the same function the evaluator prints with, so an
+  imported type prints its declared name (`Point(x: 1)`, `Shape.Dot`), not
+  the linker's internal `@2::` identity. Two modules that both declare
+  `Point` both print `Point`; the name is display text only, and the VM
+  never looks a type up by it.
 - A struct prints its fields in declaration order whatever order the
   constructor wrote them in; a struct with no fields prints `Name()`, a
   nullary variant `Enum.Variant` (with no parentheses even when written
@@ -1268,10 +1270,11 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
   path to `uv_spawn`. All three stdio streams are pipes.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - Windows: after resolution, allow only `.exe` and `.com`, case-insensitively,
-  and reject names with a trailing dot or space. The Racket check in
-  `process.rkt` is case-sensitive today (`x.BAT` passes); it gets its own fix
-  before 7h so both backends match. Whether the current directory is searched
-  is decided once in `grammar.md` before 7h.
+  and reject names with a trailing dot or space or any `:`. Both backends use this same
+  allowlist: the Racket check in `process.rkt` (`windows-runnable-name?`)
+  applies it to the last component of the resolved path, and the VM must do
+  the same. Whether the current directory is searched is decided once in
+  `grammar.md` before 7h.
 
 ### 10.5 Limits the C runtime keeps
 
@@ -1290,7 +1293,7 @@ libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 | `max_connections` | at most 65536 | `http-client.rkt` |
 | HTTP body | `max_body_bytes`, 413 | `http-wire.rkt` |
 | Process launch | `--allow-run` | `process.rkt` |
-| Windows batch files | rejected | `process.rkt` |
+| Windows programs other than `.exe`, `.com` | rejected | `process.rkt` |
 
 HTTP numbers: `Content-Length` and chunk sizes accumulate with saturation:
 parsing stops once a value exceeds the limit (413), and every comparison is
@@ -1485,7 +1488,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      interpolation, `to_s` and `inspect`. The checker rejects `==` on lists,
      so there is no list equality. List library functions stay in item 6b.
    - **5b Structs, enums, `case`** (done). User structs and enums (generic
-     and recursive too, imported ones with their linked display names),
+     and recursive too, imported ones with their declared display names),
      construction, field access, `case` with literal, `_` and variant
      patterns, their text and debug forms, and format version 2 with the
      struct and enum tables. The checker rejects `==` on them, so

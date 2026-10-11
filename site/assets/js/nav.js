@@ -1,7 +1,9 @@
+import * as params from "@params";
+
 const navButton = document.querySelector(".nav-toggle");
 const sidebar = document.getElementById("sidebar");
 if (navButton && sidebar) {
-  const narrow = window.matchMedia("(max-width: 50rem)");
+  const narrow = window.matchMedia(`(max-width: ${params.narrow})`);
   const behind = [document.getElementById("main"), document.querySelector(".site-footer")].filter(Boolean);
   const setOpen = (open) => {
     sidebar.classList.toggle("open", open);

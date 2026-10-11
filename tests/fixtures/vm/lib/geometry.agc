@@ -16,3 +16,7 @@ end
 export def tag(label: String, at: Point) -> Shape[String]
   return Shape.Tagged(label, at)
 end
+
+export def describe(at: Point) -> String
+  return "at #{at}"
+end

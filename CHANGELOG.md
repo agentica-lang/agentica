@@ -199,6 +199,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The bytecode VM no longer does pointer arithmetic on a NULL buffer when
   `IO.read` reads an empty stdin (`agc_input_all`).
+- A struct or enum declared in an imported module prints its declared name
+  (`Point(x: 2)`, `Shape.Empty`) instead of the linker's internal
+  `@2::Point` on both the evaluator and the VM, through `puts`,
+  `IO.print`, `IO.warn`, interpolation, `to_s` and `inspect`, also nested
+  in lists, maps, results and enum payloads. Checker messages (unknown
+  types, type mismatches, unknown or missing fields, enum variants, arity
+  and missing-return signatures) name imported types and functions the
+  same way. Did-you-mean suggests only names of the same module (and
+  builtins), by their declared names. Types with the same name from
+  different modules print the same; `JSON.schema` keeps unique internal
+  `$defs` keys.
+
+### Security
+
+- `Process.spawn` on Windows runs only `.exe` and `.com` programs
+  (any case). Anything else is refused: `.bat`, `.cmd`, `.ps1`, no
+  extension, names ending in a dot or space (`x.exe.`, `x.com `), and
+  stream names (`x.bat::$DATA`). Before, only lowercase `.bat` and `.cmd`
+  were refused, so `x.BAT` or `x.bat.` ran through `cmd.exe` and reopened
+  argument injection (BatBadBut, CVE-2024-24576). The check uses the
+  resolved path.
 
 ## [0.1.0] - 2026-10-04
 
