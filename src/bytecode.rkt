@@ -9,7 +9,7 @@
          (struct-out bc-function))
 
 (struct bc-program (span sources spans constants structs enums builtins functions entry) #:transparent)
-(struct bc-function (name params registers span code spans) #:transparent)
+(struct bc-function (name params captures registers span code spans) #:transparent)
 
 (define format-version 2)
 (define max-u16 65535)
@@ -23,7 +23,8 @@
     struct field enum is-variant payload same
     tail-call
     try is-ok result-value
-    map map-get))
+    map map-get
+    call-value closure))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -131,13 +132,15 @@
                   [(step) (list (first args) 0 0)]
                   [(jump) (wide 0 (hash-ref labels (first args)))]
                   [(jump-if-false jump-if-true) (wide (first args) (hash-ref labels (second args)))]
-                  [(call tail-call) (wide (first args) (second args))]
+                  [(call tail-call closure) (wide (first args) (second args))]
+                  [(call-value) (list (first args) (second args) 0)]
                   [(call-builtin) (wide (first args) (builtin! (second args) (third args)))]
                   [(return) (list (first args) 0 0)]
                   [else args]))))
       (define instr-spans
         (for/vector ([instr (in-list instrs)]) (intern-spans! (ir-instr-spans instr))))
-      (bc-function (ir-function-name function) (ir-function-params function) slots
+      (bc-function (ir-function-name function) (ir-function-params function)
+                   (ir-function-captures function) slots
                    (intern-spans! (list (ir-function-span function))) code instr-spans))
     (define functions (map encode-function (ir-program-functions ir)))
     (bc-program (ir-program-span ir)
@@ -206,7 +209,7 @@
   (for ([function (in-list (bc-program-functions program))])
     (str out (bc-function-name function))
     (u32 out (bc-function-params function))
-    (u32 out 0)
+    (u32 out (bc-function-captures function))
     (u32 out (bc-function-registers function))
     (u32 out (bc-function-span function))
     (u32 out (vector-length (bc-function-code function)))

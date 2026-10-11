@@ -31,6 +31,7 @@ typedef struct {
   int64_t extra_int;
   const buffer *tables;
   double extra_float, second_float;
+  uint32_t captures, helper_captures;
 } spec;
 
 static void u8(buffer *b, uint8_t v) { b->data[b->len++] = v; }
@@ -54,11 +55,11 @@ static void float_bits(buffer *b, double f) {
   u32(b, (uint32_t)(bits >> 32));
 }
 
-static void function(buffer *b, const char *name, uint32_t params, uint32_t registers, const agc_instr *code,
-                     const uint32_t *spans, uint32_t count) {
+static void function(buffer *b, const char *name, uint32_t params, uint32_t captures, uint32_t registers,
+                     const agc_instr *code, const uint32_t *spans, uint32_t count) {
   str(b, name);
   u32(b, params);
-  u32(b, 0);
+  u32(b, captures);
   u32(b, registers);
   u32(b, 0);
   u32(b, count);
@@ -85,7 +86,7 @@ static const uint32_t two_spans[] = {0, 0};
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0};
   return s;
 }
 
@@ -132,8 +133,10 @@ static buffer build(spec s) {
   str(&b, s.builtin);
   u32(&b, s.builtin_arity ? s.builtin_arity : 1);
   u32(&b, s.helper_params ? 2 : 1);
-  function(&b, "main", s.params, s.registers, s.code, s.code_spans, s.count);
-  if (s.helper_params) function(&b, "helper", s.helper_params, s.helper_params, helper_code, two_spans, 2);
+  function(&b, "main", s.params, s.captures, s.registers, s.code, s.code_spans, s.count);
+  if (s.helper_params)
+    function(&b, "helper", s.helper_params, s.helper_captures, s.helper_params + s.helper_captures, helper_code,
+             two_spans, 2);
   u32(&b, s.entry);
   if (s.trailing) u8(&b, 0);
   return b;
@@ -872,6 +875,85 @@ int main(void) {
   s = base();
   s.builtin = "Map.put";
   s.builtin_arity = 2;
+  assert(!loads(s, "unknown builtin"));
+
+  static const agc_instr value_call[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_CLOSURE, 0, 1, 0}, {AGC_OP_CALL_VALUE, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t value_spans[] = {1, 0, 0, 1, 0};
+  s = base();
+  s.code = value_call;
+  s.code_spans = value_spans;
+  s.count = 5;
+  s.registers = 2;
+  s.helper_params = 1;
+  assert(loads(s, NULL));
+  out = tmpfile();
+  assert(out);
+  assert(run_spec(s, out).kind == AGC_DONE);
+  expect_output(out, "");
+  s.registers = 1;
+  assert(!loads(s, "register"));
+  s.registers = 2;
+  s.helper_captures = 3;
+  assert(!loads(s, "register range"));
+  s.registers = 3;
+  assert(loads(s, NULL));
+  s.helper_captures = 0;
+  s.helper_params = 2;
+  s.registers = 3;
+  agc_outcome arity = run_spec(s, stdout);
+  assert(arity.kind == AGC_FAILED && strcmp(arity.code, "RUNTIME-INTERNAL") == 0);
+  s = base();
+  s.code = call_window;
+  s.code_spans = four_spans;
+  s.count = 4;
+  s.registers = 3;
+  s.helper_params = 1;
+  s.helper_captures = 1;
+  assert(!loads(s, "direct call to a function with captures"));
+  s.code = tail_window;
+  assert(!loads(s, "direct call to a function with captures"));
+  static const agc_instr call_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  s = base();
+  s.code = call_int;
+  s.code_spans = four_spans;
+  s.count = 4;
+  agc_outcome not_fn = run_spec(s, stdout);
+  assert(not_fn.kind == AGC_FAILED && strcmp(not_fn.code, "RUNTIME-INTERNAL") == 0);
+  static const agc_instr value_without_step[] = {{AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(value_without_step, two_spans, 2, "does not start with STEP"));
+  static const agc_instr value_window[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_VALUE, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(value_window, three_spans, 3, "register range"));
+  static const agc_instr closure_far[] = {{AGC_OP_CLOSURE, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(closure_far, two_spans, 2, "function index out of range"));
+  static const agc_instr closure_target[] = {{AGC_OP_CLOSURE, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(closure_target, two_spans, 2, "register out of range"));
+  s = base();
+  s.captures = 2;
+  assert(!loads(s, "bad register count"));
+  s.registers = 2;
+  assert(!loads(s, "entry has captures"));
+
+  static const agc_instr map_callback[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_LIST, 0, 1, 1}, {AGC_OP_CLOSURE, 1, 1, 0},
+    {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t map_callback_spans[] = {1, 0, 0, 0, 0, 0};
+  s = base();
+  s.builtin = "List.map";
+  s.builtin_arity = 2;
+  s.code = map_callback;
+  s.code_spans = map_callback_spans;
+  s.count = 6;
+  s.registers = 2;
+  s.helper_params = 1;
+  assert(run_spec(s, stdout).kind == AGC_DONE);
+  s.helper_params = 2;
+  s.registers = 2;
+  agc_outcome callback_arity = run_spec(s, stdout);
+  assert(callback_arity.kind == AGC_FAILED && strcmp(callback_arity.code, "RUNTIME-INTERNAL") == 0);
+  s.builtin_arity = 3;
   assert(!loads(s, "unknown builtin"));
 
   puts("loader tests passed");
