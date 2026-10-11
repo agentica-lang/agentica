@@ -184,7 +184,7 @@ Reads all the rest of the input.
 ```agentica
 def main() -> Void
   text = IO.read()
-  puts(text.split("\n").size)
+  puts(text.split("\n"))
 end
 ```
 
@@ -194,8 +194,10 @@ two
 ```
 
 ```output
-2
+["one", "two", ""]
 ```
+
+The last line ends with `\n`, so `split` gives an empty last part.
 
 ## IO.read_bytes
 

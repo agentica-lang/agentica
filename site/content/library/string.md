@@ -84,17 +84,27 @@ end
 String.split(s: String, separator: String) -> List[String]
 ```
 
-Cuts text at each separator. An empty separator gives the characters.
+Cuts text at each separator. Every part is kept, even an empty one at either
+end or between two separators, so `join` with the same separator gives the text
+back. Empty text gives `[""]`. An empty separator gives the characters.
 
 ```agentica
 def main() -> Void
   puts("a,b,c".split(","))
+  puts("a,,b,".split(","))
+  puts("line\n".split("\n"))
+  puts("".split(","))
+  puts("a,,b,".split(",").join(","))
   puts("abc".split(""))
 end
 ```
 
 ```output
 ["a", "b", "c"]
+["a", "", "b", ""]
+["line", ""]
+[""]
+a,,b,
 ["a", "b", "c"]
 ```
 
