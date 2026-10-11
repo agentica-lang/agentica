@@ -24,6 +24,16 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
   longjmp(vm->fail, 1);
 }
 
+void agc_exit(agc_vm *vm, int64_t code) {
+  vm->outcome.kind = AGC_EXITED;
+  vm->outcome.exit_code = code;
+  longjmp(vm->fail, 1);
+}
+
+void agc_flush(agc_vm *vm) {
+  if (fflush(vm->out) != 0) agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to standard output", 0);
+}
+
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
   if (len && fwrite(data, 1, len, stream) != len)
     agc_fail(vm, "RUNTIME-INTERNAL",
@@ -36,6 +46,8 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   vm->out = out;
   vm->err = err;
   vm->steps_left = max_steps;
+  vm->in.fd = -1;
+  vm->args = agc_list_value(agc_new_list(0));
 }
 
 static void ensure_registers(agc_vm *vm, size_t needed, uint32_t span) {

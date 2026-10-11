@@ -265,38 +265,42 @@ agc_result *agc_as_result(agc_vm *vm, agc_value v) {
 
 size_t agc_utf8_width(uint8_t lead) { return lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4; }
 
+size_t agc_utf8_valid(const uint8_t *s, size_t len) {
+  if (len == 0) return 0;
+  uint8_t c = s[0];
+  size_t n;
+  uint32_t cp;
+  if (c < 0x80) {
+    return 1;
+  } else if (c >= 0xC2 && c <= 0xDF) {
+    n = 1;
+    cp = c & 0x1F;
+  } else if (c >= 0xE0 && c <= 0xEF) {
+    n = 2;
+    cp = c & 0x0F;
+  } else if (c >= 0xF0 && c <= 0xF4) {
+    n = 3;
+    cp = c & 0x07;
+  } else {
+    return 0;
+  }
+  if (len - 1 < n) return 0;
+  for (size_t k = 1; k <= n; k++) {
+    uint8_t d = s[k];
+    if ((d & 0xC0) != 0x80) return 0;
+    cp = (cp << 6) | (d & 0x3F);
+  }
+  if ((n == 2 && cp < 0x800) || (n == 3 && cp < 0x10000) || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+    return 0;
+  return n + 1;
+}
+
 bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {
   size_t count = 0, i = 0;
   while (i < len) {
-    uint8_t c = s[i];
-    size_t n;
-    uint32_t cp;
-    if (c < 0x80) {
-      i++;
-      count++;
-      continue;
-    } else if (c >= 0xC2 && c <= 0xDF) {
-      n = 1;
-      cp = c & 0x1F;
-    } else if (c >= 0xE0 && c <= 0xEF) {
-      n = 2;
-      cp = c & 0x0F;
-    } else if (c >= 0xF0 && c <= 0xF4) {
-      n = 3;
-      cp = c & 0x07;
-    } else {
-      return false;
-    }
-    if (len - i - 1 < n) return false;
-    for (size_t k = 1; k <= n; k++) {
-      uint8_t d = s[i + k];
-      if ((d & 0xC0) != 0x80) return false;
-      cp = (cp << 6) | (d & 0x3F);
-    }
-    if ((n == 2 && cp < 0x800) || (n == 3 && cp < 0x10000) || cp > 0x10FFFF ||
-        (cp >= 0xD800 && cp <= 0xDFFF))
-      return false;
-    i += n + 1;
+    size_t n = agc_utf8_valid(s + i, len - i);
+    if (n == 0) return false;
+    i += n;
     count++;
   }
   *chars = count;

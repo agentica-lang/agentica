@@ -13,6 +13,7 @@
 #define AGC_MAX_REGISTERS ((size_t)1 << 24)
 #define AGC_MAX_MAP_CHUNK 255u
 #define AGC_FLOAT_TEXT 40
+#define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
 
 typedef enum {
   AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT
@@ -138,7 +139,7 @@ typedef struct {
 
 typedef struct { uint32_t function, pc, base; } agc_frame;
 
-typedef enum { AGC_DONE, AGC_FAILED } agc_outcome_kind;
+typedef enum { AGC_DONE, AGC_FAILED, AGC_EXITED } agc_outcome_kind;
 
 typedef enum { AGC_STYLE_PLAIN, AGC_STYLE_AI, AGC_STYLE_JSON } agc_style;
 
@@ -149,7 +150,15 @@ typedef struct {
   const agc_string *text;
   size_t message_len;
   uint32_t span;
+  int64_t exit_code;
 } agc_outcome;
+
+typedef struct {
+  int fd;
+  bool flush_out, pending_eof;
+  uint8_t *buf;
+  size_t start, end, cap;
+} agc_input;
 
 struct agc_vm {
   const agc_program *program;
@@ -159,6 +168,8 @@ struct agc_vm {
   size_t reg_capacity;
   agc_frame *frames;
   uint32_t frame_capacity, depth;
+  agc_input in;
+  agc_value args;
   agc_outcome outcome;
   jmp_buf fail;
 };
@@ -195,6 +206,7 @@ bool agc_is(agc_value v, agc_tag tag);
 
 size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
+size_t agc_utf8_valid(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
@@ -232,7 +244,15 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
 agc_outcome agc_vm_run(agc_vm *vm);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
+_Noreturn void agc_exit(agc_vm *vm, int64_t code);
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
+void agc_flush(agc_vm *vm);
+
+void agc_input_open(agc_vm *vm, int fd, bool flush_out);
+int agc_input_peek(agc_vm *vm);
+agc_string *agc_input_line(agc_vm *vm);
+agc_string *agc_input_all(agc_vm *vm);
+bool agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
 
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style);
 

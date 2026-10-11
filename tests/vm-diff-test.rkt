@@ -22,6 +22,11 @@
       (path->complete-path vm-binary root)
       (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
 (define full-sweep-limit 2000)
+(define fixture-input (make-parameter #""))
+(define fixture-args (make-parameter '()))
+
+(define (exit-status code)
+  (if (and (exact-integer? code) (<= 1 code 255)) code 0))
 
 (define (vm-built?)
   (define make (find-executable-path "make"))
@@ -48,34 +53,40 @@
 (define (run-racket checked limit [style 'plain])
   (define out (open-output-string))
   (define err (open-output-string))
-  (define result (evaluate checked #:out out #:err err #:in (open-input-string "") #:max-steps limit))
+  (define result (evaluate checked #:out out #:err err #:in (open-input-bytes (fixture-input))
+                           #:args (fixture-args) #:max-steps limit))
   (define text
     (cond
       [(not (diagnostic? result)) ""]
       [(eq? style 'ai) (format-diagnostic-ai result)]
       [(eq? style 'json) (jsexpr->string (diagnostic->jsexpr result))]
       [else (format-diagnostic result)]))
-  (list (if (diagnostic? result) 1 0)
+  (list (cond [(diagnostic? result) 1] [(exit-code? result) (exit-status (exit-code-code result))] [else 0])
         (get-output-string out)
         (string-append (get-output-string err) (if (diagnostic? result) (string-append text "\n") ""))))
 
-(define (run-process program . arguments)
+(define (run-process program #:input [input #""] . arguments)
   (define-values (process out in err) (apply subprocess #f #f #f program arguments))
-  (close-output-port in)
+  (define writer
+    (thread (lambda ()
+              (with-handlers ([exn:fail? void]) (write-bytes input in))
+              (with-handlers ([exn:fail? void]) (close-output-port in)))))
   (define stderr #f)
   (define reader (thread (lambda () (set! stderr (port->string err)))))
   (define stdout (port->string out))
   (thread-wait reader)
+  (thread-wait writer)
   (close-input-port out)
   (close-input-port err)
   (subprocess-wait process)
   (list (subprocess-status process) stdout stderr))
 
 (define (run-vm bytecode limit #:style [style 'plain] . extra)
-  (apply run-process vm-file
+  (apply run-process vm-file #:input (fixture-input)
          (append (if limit (list "--max-steps" (number->string limit)) '())
                  (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])
                  (list "--" (path->string bytecode))
+                 (fixture-args)
                  extra)))
 
 (define (cli-environment temp vm)
@@ -84,11 +95,11 @@
   (environment-variables-set! env #"AGENTICA_VM" (path->bytes vm))
   env)
 
-(define (run-cli temp #:vm [vm vm-file] . arguments)
+(define (run-cli temp #:vm [vm vm-file] #:input [input #""] . arguments)
   (parameterize ([current-environment-variables (cli-environment temp vm)])
-    (apply run-process (find-system-path 'exec-file) (path->string main-file) arguments)))
+    (apply run-process (find-system-path 'exec-file) (path->string main-file) #:input input arguments)))
 
-(define (run-cli-in-process temp . arguments)
+(define (run-cli-in-process temp #:input [input #""] . arguments)
   (define out (open-output-string))
   (define err (open-output-string))
   (define status
@@ -96,7 +107,7 @@
       (parameterize ([current-environment-variables (cli-environment temp vm-file)]
                      [current-namespace (make-base-namespace)]
                      [current-command-line-arguments (list->vector arguments)]
-                     [current-input-port (open-input-string "")]
+                     [current-input-port (open-input-bytes input)]
                      [current-output-port out]
                      [current-error-port err]
                      [exit-handler escape])
@@ -154,15 +165,20 @@
           (define bytecode (build-path work (path-replace-extension (file-name-from-path program) #".agcb")))
           (compile-file program bytecode)
           (define checked (front-end program))
-          (test-case (format "~a matches the evaluator in every diagnostic format" name)
-            (for ([style (in-list '(plain ai json))])
-              (check-equal? (run-vm bytecode #f #:style style) (run-racket checked #f style)
-                            (format "~a ~a" name style))))
-          (test-case (format "~a matches under every --max-steps" name)
-            (define total (total-steps checked))
-            (for ([limit (in-list (sweep-limits total))])
-              (check-equal? (run-vm bytecode limit) (run-racket checked limit)
-                            (format "~a --max-steps ~a" name limit)))))
+          (define (sidecar extension read-it default)
+            (define file (path-replace-extension program extension))
+            (if (file-exists? file) (read-it file) default))
+          (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
+                         [fixture-args (sidecar #".args" file->value '())])
+            (test-case (format "~a matches the evaluator in every diagnostic format" name)
+              (for ([style (in-list '(plain ai json))])
+                (check-equal? (run-vm bytecode #f #:style style) (run-racket checked #f style)
+                              (format "~a ~a" name style))))
+            (test-case (format "~a matches under every --max-steps" name)
+              (define total (total-steps checked))
+              (for ([limit (in-list (sweep-limits total))])
+                (check-equal? (run-vm bytecode limit) (run-racket checked limit)
+                              (format "~a --max-steps ~a" name limit))))))
 
         (test-case "the VM CLI checks options and stops parsing at the file"
           (define bytecode (build-path work "calls.agcb"))
@@ -203,7 +219,7 @@
                 (check-equal? (first (same "--max-steps" "3" calls)) 1)
                 (check-equal? (first (same calls "first" "--allow-run" "--json")) 0)
                 (define unsupported (build-path temp "args.agc"))
-                (display-to-file "def main() -> Void\n  puts(System.args().size.to_s)\nend\n\n" unsupported)
+                (display-to-file "def main() -> Void\n  puts([1, 2].size.to_s)\nend\n\n" unsupported)
                 (define lowered (run-cli temp "--vm" "--json" (path->string unsupported)))
                 (check-equal? (first lowered) 1)
                 (check-equal? (hash-ref (string->jsexpr (third lowered)) 'code) "LOWER-UNSUPPORTED")
@@ -218,6 +234,13 @@
                 (check-equal? (first (run-cli temp #:vm plain "--vm" calls)) 2)
                 (delete-file plain)
                 (check-equal? (run-cli-in-process temp "--vm" calls) (run-cli temp calls))
+                (define gets (path->string (build-path fixtures "io-gets.agc")))
+                (define input (file->bytes (build-path fixtures "io-gets.stdin")))
+                (define expected (run-cli temp #:input input gets))
+                (check-equal? (run-cli temp #:input input "--vm" gets) expected)
+                (check-equal? (run-cli-in-process temp #:input input "--vm" gets) expected)
+                (check-equal? (first (same (path->string (build-path fixtures "system-exit.agc")))) 3)
+                (same (path->string (build-path fixtures "system-args.agc")) "a" "" "λ 𝔸" "--json")
                 (check-equal? (directory-list temp) '()))
               (lambda () (delete-directory/files temp))))
 
@@ -244,6 +267,20 @@
             (check-true (file-exists? copy))
             (delete-file link)
             (delete-file copy)))
+
+        (when linux?
+          (test-case "the VM decodes invalid UTF-8 arguments like the evaluator in a UTF-8 locale"
+            (define program (build-path fixtures "system-args.agc"))
+            (define bytecode (build-path work "system-args.agcb"))
+            (define arguments
+              (list #"\xff\xfeZ" #"\xe2\x82A" #"\xed\xa0\x80z" #"a\xe2\x82" #"\xf0\x9f\x98" #"\xe0\x80"
+                    #"\xf0\x80\x80" #"\xed\xa0" #"\xf4\x90" #"\xc0\xaf" #"\xe2\x82\xe2\x82" #"\xe2\x82\xac"))
+            (define env (environment-variables-copy (current-environment-variables)))
+            (environment-variables-set! env #"LC_ALL" #"C.UTF-8")
+            (parameterize ([current-environment-variables env])
+              (check-equal? (apply run-process vm-file "--" (path->string bytecode) arguments)
+                            (apply run-process (find-system-path 'exec-file) (path->string main-file)
+                                   (path->string program) arguments)))))
 
         (test-case "deep tail calls run on the VM but overflow on the evaluator"
           (define program (build-path work "deep-tail.agc"))

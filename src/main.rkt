@@ -58,7 +58,18 @@
       (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm
              (append options (list "--driver-pid" (number->string (getpid)) "--" (path->string bytecode-file))
                      program-args))))
-  (when to-vm (close-output-port to-vm))
+  (define feeder
+    (and to-vm
+         (thread (lambda ()
+                   (with-handlers ([exn:fail? void])
+                     (define buffer (make-bytes 65536))
+                     (let loop ()
+                       (define count (read-bytes-avail! buffer stdin))
+                       (unless (eof-object? count)
+                         (write-bytes buffer to-vm 0 count)
+                         (flush-output to-vm)
+                         (loop))))
+                   (with-handlers ([exn:fail? void]) (close-output-port to-vm))))))
   (and process
        (dynamic-wind
          void
@@ -77,6 +88,9 @@
            (flush-output stderr)
            (subprocess-status process))
          (lambda ()
+           (when feeder
+             (kill-thread feeder)
+             (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
            (when (eq? (subprocess-status process) 'running)
              (subprocess-kill process #t))))))
 

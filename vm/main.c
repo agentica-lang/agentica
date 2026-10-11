@@ -124,6 +124,44 @@ static bool bind_to_driver(int64_t driver) {
 }
 #endif
 
+static bool incomplete_tail(const uint8_t *s, size_t len) {
+  uint8_t c = s[0];
+  size_t width = c >= 0xC2 && c <= 0xDF ? 2 : c >= 0xE0 && c <= 0xEF ? 3 : c >= 0xF0 && c <= 0xF4 ? 4 : 0;
+  if (width == 0 || len >= width) return false;
+  for (size_t k = 1; k < len; k++)
+    if ((s[k] & 0xC0) != 0x80) return false;
+  if (len > 1 && ((c == 0xE0 && s[1] < 0xA0) || (c == 0xF0 && s[1] < 0x90))) return false;
+  return true;
+}
+
+static agc_string *decode_arg(const char *arg) {
+  const uint8_t *s = (const uint8_t *)arg;
+  size_t len = strlen(arg);
+  agc_string *out = agc_new_string(len, 0);
+  size_t at = 0, chars = 0;
+  for (size_t i = 0; i < len; chars++) {
+    size_t n = agc_utf8_valid(s + i, len - i);
+    if (n) {
+      memcpy(out->data + at, s + i, n);
+      at += n;
+      i += n;
+    } else {
+      out->data[at++] = '?';
+      i = incomplete_tail(s + i, len - i) ? len : i + 1;
+    }
+  }
+  out->bytes = at;
+  out->chars = chars;
+  return out;
+}
+
+static agc_value program_args(int argc, char **argv, int first) {
+  size_t n = first < argc ? (size_t)(argc - first) : 0;
+  agc_list *list = agc_new_list(n);
+  for (size_t k = 0; k < n; k++) list->items[k] = agc_string_value(decode_arg(argv[(size_t)first + k]));
+  return agc_list_value(list);
+}
+
 static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--ai|--json] -- <file.agcb> [args...]\n";
 
 static int usage_error(void) {
@@ -257,8 +295,10 @@ static int run(int argc, char **argv) {
   seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  vm->args = program_args(argc, argv, i + 1);
+  agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);
-  if (outcome.kind == AGC_DONE && fflush(stdout) != 0) {
+  if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
     outcome.message = "cannot write to standard output";
@@ -269,6 +309,7 @@ static int run(int argc, char **argv) {
     agc_print_diagnostic(stderr, program, &outcome, style);
     return 1;
   }
+  if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) return (int)outcome.exit_code;
   return 0;
 }
 
