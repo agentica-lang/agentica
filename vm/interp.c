@@ -111,6 +111,17 @@ static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, 
   agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", message, span);
 }
 
+static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
+  static const char before[] = "key ", after[] = " is not in the map";
+  const agc_string *form = agc_debug(vm, key);
+  size_t len = agc_size_add(agc_size_add(sizeof before - 1, form->bytes), sizeof after);
+  char *message = agc_alloc_atomic(len);
+  memcpy(message, before, sizeof before - 1);
+  memcpy(message + sizeof before - 1, form->data, form->bytes);
+  memcpy(message + sizeof before - 1 + form->bytes, after, sizeof after);
+  agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
+}
+
 static void run(agc_vm *vm) {
   const agc_program *p = vm->program;
   push_frame(vm, p->entry, 0, 0);
@@ -192,6 +203,19 @@ static void run(agc_vm *vm) {
         x = agc_as_int(vm, R[in.c]);
         if (x < 0 || (uint64_t)x >= l->len) index_out_of_range(vm, x, l->len, s);
         R[in.a] = l->items[x];
+        break;
+      }
+      case AGC_OP_MAP: {
+        agc_map *m = agc_new_map();
+        for (uint32_t k = 0; k < in.c; k++)
+          m = agc_map_put(vm, m, R[(uint32_t)in.b + 2 * k], R[(uint32_t)in.b + 2 * k + 1]);
+        R[in.a] = agc_map_value(m);
+        break;
+      }
+      case AGC_OP_MAP_GET: {
+        agc_value found;
+        if (!agc_map_get(vm, agc_as_map(vm, R[in.b]), R[in.c], &found)) key_not_found(vm, R[in.c], s);
+        R[in.a] = found;
         break;
       }
       case AGC_OP_STRUCT: {

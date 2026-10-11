@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs `Map[K, V]` values: map literals (an empty one with
+  a known type too; a repeated key keeps its first position and takes the
+  last value), `m[key]` with `RUNTIME-KEY-NOT-FOUND` at the index span, and
+  the `{k: v}` text and debug forms in insertion order, as on the
+  evaluator. Maps are a persistent HAMT with SipHash-1-3 keyed per run. The
+  `.agcb` format version does not change.
 - The bytecode VM runs `Result[T]` values: `ok(x)`, `ok()`, `error(m)` (and
   `Result.Ok`/`Result.Err`), `Result.ok?`, `Result.unwrap!` (with
   `RUNTIME-UNWRAP-ERROR` at the call span), `Result.unwrap_or`,

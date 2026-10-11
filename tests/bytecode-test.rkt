@@ -69,6 +69,18 @@
                     (list-ref opcodes (first instr)))
                   '(call try return return)))
 
+  (test-case "a map literal above 255 entries adds the rest with Map.put"
+    (define entries (string-join (for/list ([k (in-range 257)]) (format "~a: ~a" k k)) ", "))
+    (define program
+      (ir->bytecode (lower-text (format "def main() -> Void\n  puts({~a})\nend\n" entries))))
+    (define main (list-ref (bc-program-functions program) (bc-program-entry program)))
+    (check-equal? (for/list ([instr (in-vector (bc-function-code main))]
+                             #:when (memv (first instr) (map (lambda (op) (index-of opcodes op))
+                                                             '(map map-get call-builtin))))
+                    (list (list-ref opcodes (first instr)) (fourth instr)))
+                  '((map 255) (call-builtin 0) (call-builtin 0) (call-builtin 0)))
+    (check-equal? (bc-program-builtins program) '(("Map.put" . 3) ("puts" . 1))))
+
   (test-case "opcode numbers match vm/agc.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)
@@ -86,20 +98,20 @@
       (check-equal? (diagnostic-code problem) 'LOWER-UNSUPPORTED)
       (define start (source-span-start (diagnostic-span problem)))
       (list (source-position-line start) (source-position-column start)))
-    (check-equal? (unsupported-at "def main() -> Void\n  ages = {\"Ana\": 3}\n  puts(ages)\nend\n") '(2 10))
-    (check-equal? (unsupported-at "def main() -> Void\n  for m in [{\"a\": 1}]\n    puts(m)\n  end\nend\n") '(2 12))
-    (check-equal? (unsupported-at "def show(xs: Map[String, Int]) -> Void\n  print(xs)\nend\n\ndef main() -> Void\nend\n")
+    (check-equal? (unsupported-at "def main() -> Void\n  ages = {\"Ana\": JSON.null}\n  puts(ages)\nend\n") '(2 10))
+    (check-equal? (unsupported-at "def main() -> Void\n  for m in [JSON.null]\n    puts(m)\n  end\nend\n") '(2 12))
+    (check-equal? (unsupported-at "def show(xs: Json) -> Void\n  print(xs)\nend\n\ndef main() -> Void\nend\n")
                   '(2 9))
-    (check-equal? (unsupported-at "def show(xs: List[Map[String, Int]]) -> Void\n  puts(\"#{xs}\")\nend\n\ndef main() -> Void\nend\n")
+    (check-equal? (unsupported-at "def show(xs: List[Json]) -> Void\n  puts(\"#{xs}\")\nend\n\ndef main() -> Void\nend\n")
                   '(2 11))
-    (check-equal? (unsupported-at "def get(m: Map[String, Int]) -> Int\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
+    (check-equal? (unsupported-at "def get(m: Map[String, Json]) -> Json\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
                   '(2 10))
     (check-equal? (unsupported-at "def main() -> Void\n  puts([1, 2].size)\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  puts(\"abc\".length)\nend\n") '(2 8))
     (check-equal? (unsupported-at "def main() -> Void\n  h = Header(name: \"a\", value: \"b\")\nend\n") '(2 7))
-    (check-equal? (unsupported-at "struct S\n  m: Map[String, Int]\nend\n\ndef main() -> Void\n  s = S(m: {\"a\": 1})\nend\n")
+    (check-equal? (unsupported-at "struct S\n  j: Json\nend\n\ndef main() -> Void\n  s = S(j: JSON.null)\nend\n")
                   '(6 12))
-    (check-equal? (unsupported-at "def f(r: Result[Map[String, Int]]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
+    (check-equal? (unsupported-at "def f(r: Result[Json]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
                   '(2 8)))
 
   (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
@@ -107,8 +119,8 @@
     (dynamic-wind
       void
       (lambda ()
-        (define unsupported (path->string (build-path work "maps.agc")))
-        (display-to-file "def main() -> Void\n  ages = {\"Ana\": 3}\n  puts(ages)\nend\n" unsupported)
+        (define unsupported (path->string (build-path work "json.agc")))
+        (display-to-file "def main() -> Void\n  puts(JSON.null)\nend\n" unsupported)
         (define rejected (cli "compile" unsupported "-o" (path->string (build-path work "out.agcb"))))
         (check-equal? (first rejected) 1)
         (check-true (string-contains? (third rejected) "error[LOWER-UNSUPPORTED]"))

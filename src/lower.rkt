@@ -24,10 +24,12 @@
 (define value-types '(Int Float Bool Nil String))
 
 (define max-list-chunk 255)
+(define max-map-chunk 255)
 
 (define (vm-type? type user-types)
   (cond
     [(list-type? type) (vm-type? (cadr type) user-types)]
+    [(map-type? type) (vm-type? (caddr type) user-types)]
     [(result-type? type) (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
     [(and (pair? type) (memq (car type) '(Struct Enum)))
      (eq? (hash-ref user-types (cadr type) #f) (car type))]
@@ -44,6 +46,9 @@
 
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
+
+(define (map-type? type)
+  (and (pair? type) (eq? (car type) 'Map)))
 
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
@@ -207,6 +212,7 @@
        dst]
       [(binary? expression) (lower-binary expression want)]
       [(list-lit? expression) (lower-list expression want)]
+      [(map-lit? expression) (lower-map expression want)]
       [(enum-constructor? expression)
        (lower-enum (enum-constructor-enum-name expression) (enum-constructor-variant-name expression)
                    (enum-constructor-args expression) span want)]
@@ -230,14 +236,13 @@
        dst]
       [(index-access? expression)
        (define target-node (index-access-target expression))
-       (unless (list-type? (static-type target-node))
-         (unsupported "indexing a map" span))
        (emit! 'step '() span)
        (define saved next)
        (define dst (target want))
        (define items (lower-expression target-node #f))
        (define index (lower-expression (index-access-index expression) #f))
-       (emit! 'list-get (list dst items index) (node-span (index-access-index expression)))
+       (emit! (if (map-type? (static-type target-node)) 'map-get 'list-get)
+              (list dst items index) (node-span (index-access-index expression)))
        (set! next (if want saved (add1 dst)))
        dst]
       [(try-expr? expression)
@@ -313,6 +318,38 @@
               (emit! 'list (list start start (length chunk)) span)
               (emit! 'call-builtin (list base "List.concat" 2) span span span)])
            (unless (null? rest) (loop rest #f)))
+         (cond
+           [want (emit! 'move (list want base) span) want]
+           [else base])]))
+    (set! next (if want saved (add1 dst)))
+    dst)
+
+  (define (lower-map expression want)
+    (define span (node-span expression))
+    (emit! 'step '() span)
+    (define saved next)
+    (define entries (map-lit-entries expression))
+    (define (lower-entry! entry)
+      (lower-expression (map-entry-key entry) (alloc!) #:known? #t)
+      (lower-expression (map-entry-value entry) (alloc!) #:known? #t))
+    (define dst
+      (cond
+        [(<= (length entries) max-map-chunk)
+         (define dst (target want))
+         (define start next)
+         (for-each lower-entry! entries)
+         (emit! 'map (list dst (if (null? entries) dst start) (length entries)) span)
+         dst]
+        [else
+         (define base (alloc!))
+         (define-values (chunk rest) (split-at entries max-map-chunk))
+         (define start next)
+         (for-each lower-entry! chunk)
+         (emit! 'map (list base start (length chunk)) span)
+         (for ([entry (in-list rest)])
+           (set! next (add1 base))
+           (lower-entry! entry)
+           (emit! 'call-builtin (list base "Map.put" 3) span span span span))
          (cond
            [want (emit! 'move (list want base) span) want]
            [else base])]))
@@ -597,7 +634,7 @@
     [(and (memq op '(enum is-variant)) (= index 2)) (format "v~a" value)]
     [(and (eq? op 'struct) (= index 2)) (format "s~a" value)]
     [(and (memq op '(field payload)) (= index 2)) (format "~a" value)]
-    [(and (eq? op 'list) (= index 2)) (format "~a" value)]
+    [(and (memq op '(list map)) (= index 2)) (format "~a" value)]
     [(and (eq? op 'call-builtin) (>= index 1)) (format "~a" value)]
     [else (format "r~a" value)]))
 
