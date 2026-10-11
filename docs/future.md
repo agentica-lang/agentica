@@ -460,3 +460,113 @@ text = "42"
 count = String.to_int!(text)
 puts((count + 1).to_s)
 ```
+
+## 16. Binary serialization (CBOR)
+
+The counterpart of Erlang's `term_to_binary` and `binary_to_term`: a typed binary form of Agentica values, in CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)). It lands only when a real program needs it (roadmap Phase 11).
+
+### 16.1 Motivation
+
+JSON covers interop with other programs. A binary form keeps what JSON loses or bends:
+
+- `Map[Int, V]`: JSON object keys are always text, so `JSON.encode` rejects Int keys today.
+- Exact `Float` bits: JSON goes through decimal text and cannot write infinities.
+- `nil` as its own value, and enums without a convention on top of objects.
+
+It is also smaller and faster to read and write. Uses: a disk cache, messages between Agentica processes (over `Process.spawn` pipes), and later a snapshot of a shared table (§13) through `Table.to_map`.
+
+### 16.2 API
+
+```agentica
+struct Entry
+  hits: Map[Int, Int]
+  score: Float
+end
+
+def main() -> Void
+  data = Term.encode(Entry(hits: {1: 10, 2: 20}, score: 0.5))   # Bytes
+  entry = Term.decode(data, Entry)                              # Result[Entry]
+  IO.inspect(entry)
+end
+```
+
+```text
+Term.encode(value: T) -> Bytes
+Term.decode(data: Bytes, type: T) -> Result[T]
+```
+
+- Typed like `JSON.decode`: the second argument of `decode` is a type, not a value. It is a named struct or a non-generic enum, as for `JSON.decode` after the JSON-for-enums plan (PR #62).
+- There is never an untyped decode. Erlang's `binary_to_term` is a known attack vector: it can create atoms until the atom table is full, build functions, and allocate huge terms. Here the target type decides what is accepted, and nothing outside it is ever built.
+- No method form (`value.to_cbor`). JSON has no `.to_json` either, and structs and enums have no methods. One spelling is easier for agents.
+- The module is named for what it stores, not for the format. `Term` becomes a reserved type and module name: a user `struct Term`, `enum Term` or `import ... as Term` is `CHECK-REDEFINED-NAME`. This is a breaking change; say so in the changelog.
+
+### 16.3 What can be serialized
+
+The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle (`FileHandle`, `Process`, `Socket` and the rest), at any depth.
+
+- The checker reuses `printable-type?` (`src/checker.rkt`), the deep walk that §13 uses for table values. It already looks through struct fields, list elements, `Map` keys and values, enum payloads and generic arguments, and it stops on recursive declarations. On top of it, `Json`, `Result` and `Void` are rejected: `Json` has its own text form (`JSON.encode` it to a `String` first), and `Result`, like in JSON, is for error flow, not for stored data (use a user enum).
+- Codes: `Term.encode` on a type that fails the rule is `CHECK-NOT-ENCODABLE`; a `Term.decode` target that fails it is `CHECK-NOT-DECODABLE`. The span is on the argument, as for JSON.
+- Unlike JSON, `Map` keys may be `Int`. Key types stay `Int` or `String` (`CHECK-MAP-KEY-TYPE`), so nothing new is needed there.
+- `Nil` is allowed, as a field type or a payload.
+- **Generic instances:** `encode` takes any generic instance whose fields or payloads pass the rule after substitution, as JSON does in the JSON-for-enums plan. Unlike that plan, `decode` also takes a generic instance nested inside the target, such as a field `best: Option[Int]` or `List[Box[String]]`. JSON rejects them only because its schema keys `$defs` by the bare type name, so `Box[Int]` and `Box[String]` would collide. CBOR has no schema: the decoder walks the substituted type, which the checker knows in full. A generic instance as the direct target stays out: `Term.decode(data, Option[Int])` needs type arguments in expression position (`Option[Int]` reads as indexing), and a bare `Option` is `CHECK-UNKNOWN-TYPE`, as today. Wrap it in a struct.
+
+### 16.4 Format mapping
+
+| Agentica | CBOR |
+|---|---|
+| `Int` | major type 0 (`n >= 0`) or 1 (`n < 0`) |
+| `Float` | always a 64-bit float (major type 7, additional info 27) |
+| `String` | text string (major type 3) |
+| `Bool` | simple values `false` (0xF4) and `true` (0xF5) |
+| `nil` | simple value `null` (0xF6) |
+| `List[T]` | array (major type 4) |
+| `Map[K, V]` | map (major type 5), in insertion order |
+| struct | map keyed by field name, in declaration order |
+| enum | 2-element array `[tag, [values...]]` |
+| `Bytes` | byte string (major type 2) |
+
+- **Int:** decode rejects values outside signed 64-bit (`major 0` above `2^63 - 1`, `major 1` below `-2^63`). Bignum tags (2, 3) are rejected like any tag.
+- **Float:** always 8 bytes, so the bits are exact and a `Float` never comes back as an `Int`. Infinities and NaN can occur in Agentica values: an overflow gives `+inf.0`, and `inf - inf` gives NaN (`grammar.md` says that a NaN is not equal to itself). They are written as IEEE 754 values, and `-0.0` keeps its sign. Every NaN is written as the quiet NaN `0x7FF8000000000000`, so both backends give the same bytes whatever NaN payload the host makes. Decode reads a `Float` only from the 8-byte form; half and single floats are rejected.
+- **String:** invalid UTF-8 (overlong forms, surrogates, code points above U+10FFFF, truncated sequences) is rejected on decode, with the same rule as the `.agcb` loader (`docs/vm.md` §8).
+- **Map:** encode keeps insertion order and decode keeps the order of the bytes, so a round trip keeps the order (`JSON.decode` sorts keys instead). Duplicate keys are rejected on decode. Keys must match `K`: text strings for `String`, major 0/1 for `Int`.
+- **Struct:** a map from field name (text string) to value, not an array in field order. An array is smaller, but adding, removing or reordering fields breaks old data, and when two fields have the same type it breaks it silently: the values swap. With names, removing a field keeps old data readable, because extra keys are ignored on decode, as in `JSON.decode`. A missing field is an error. Decode accepts the keys in any order.
+- **Enum:** `[tag, [values...]]`, where `tag` is the variant name without the enum name, as a text string, and `values` holds the payloads in order. A nullary variant is `["Empty", []]`. This is the JSON tagged form of the JSON-for-enums plan as an array: same tag, same values, same paths in errors. An unknown tag or a wrong number of values is an error.
+- **Deterministic encoding** (RFC 8949 §4.2): the shortest form of every integer and length head, and definite lengths only, so equal values give equal bytes. Two rules of §4.2.1 are not followed, on purpose: map keys keep insertion order (an Agentica `Map` is ordered, so the order is part of the value), and floats always take 8 bytes (so `Float` bits are exact).
+- **Decode accepts only what encode writes:** shortest heads, definite lengths, 8-byte floats, the one NaN above, and no tags at all. It rejects indefinite lengths, every tag, other simple values (`undefined` and the rest), a non-shortest head, and trailing bytes after the value. Struct key order and extra struct keys are the only freedom. So a decoded value encodes back to the same bytes (except for ignored struct keys), and there is one form to test. Reading CBOR from other programs is not a goal; JSON covers interop.
+
+### 16.5 Untrusted input
+
+`Term.decode` treats its bytes like the `.agcb` loader treats a file (`docs/vm.md` §8): they may come from another process or a file anyone could write.
+
+- **Depth:** at most 10,000 nested arrays and maps, the same number as the call depth limit. The VM walks with an explicit stack, never with C recursion (`docs/vm.md` §7.3). Deeper input is an error.
+- **Lengths before allocation:** every length is checked against the bytes left before anything is allocated. Each item takes at least one byte, so an array of `n` items needs at least `n` bytes left, a map of `n` entries at least `2n`, and a byte or text string exactly its length. Memory stays proportional to the input. All sums use `uint64_t` and the form `size > limit - total`.
+- **Total size:** input above 64 MiB is an error before any reading.
+- **Errors are Results:** every problem returns `error(...)`, never a runtime diagnostic, with the path style of `JSON.decode`: `<path>: <reason>`, lowercase, with no final period. The root is `$`; fields, indexes, map keys and enum values use `JSON.decode`'s paths (`shapes[0].values[1]`, `hits[3]`, `users["ana"].age`). Examples: `$: trailing bytes after the value`, `users[2].name: expected String`, `items: length is larger than the input`, `$: depth limit exceeded`, `$: indefinite length is not allowed`, `$: tags are not allowed`, `score: expected a 64-bit Float`.
+- **Encode keeps the same limits:** a value deeper than the depth limit, or whose bytes would pass 64 MiB, halts with `RUNTIME-TERM-ENCODE` at the call, as `JSON.encode` does with `RUNTIME-JSON-ENCODE`. So whatever `encode` writes, `decode` can read.
+
+### 16.6 Versioning
+
+No version prefix and no self-describing tag (55799). The type is the schema, and struct keys are names, so a program can add a `version: Int` field to its top struct when it needs one. A prefix would cost bytes in every message and would still not say which type to decode into. If the mapping ever changes, that is a new function, not a flag in the data.
+
+### 16.7 Backends
+
+- **Evaluator:** a small codec in Racket, in its own module (for example `src/term.rkt`), with no library. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of argument.
+- **VM:** an in-house C codec in `vm/`, with no new dependency. It needs the VM maps (`docs/vm.md` §12.2 item 5d) and `Bytes` on the VM. It lands with the evaluator codec in one PR.
+- **Same bytes:** both backends give byte-identical output and the same error messages for the same input. `tests/vm-diff-test.rkt` checks it.
+- **Tests:**
+  - round trips: `decode(encode(v))` gives `v`, and `encode(decode(b))` gives `b`;
+  - the RFC 8949 Appendix A vectors that fit the mapping, as fixed bytes in `tests/fixtures/`; they come from the RFC, not from our encoder, so they are the independent counterpart;
+  - hostile input: truncation at every byte, lengths larger than the input, depth one above the limit, duplicate keys, tags, indefinite lengths, non-shortest heads, invalid UTF-8, Ints outside int64, and trailing bytes. The VM loader fuzzer (`make vm-fuzz`) gets a decode target too.
+- **Framing:** decode rejects trailing bytes, so a stream of messages needs framing. A program writes a length first, for example a fixed 4-byte length, then the bytes.
+
+### 16.8 Dependencies
+
+- **`Bytes` first.** Today binary data is `List[Int]` (`IO.read_bytes`, `String.from_bytes`, `Process.send_bytes`). `Bytes` is in §12.5 "Later" and has no plan yet; it must be planned there, and landed, before this section starts.
+- **The JSON-for-enums plan (PR #62)**, for the shared tag form: enum tags and value paths match in both formats.
+- It starts only when a real program needs it, for example a disk cache or messages between Agentica processes.
+
+### 16.9 Not planned
+
+- **Functions and handles:** a `Fn` may capture handles, and a handle (`Task`, `Table`, `FileHandle`, `Process`, `Socket`) is only valid inside the run that made it.
+- **Untyped decode:** it is the `binary_to_term` attack surface; the target type is what keeps decode safe.
+- **Erlang distribution** (transparent messages between nodes): Agentica processes talk through pipes or TCP with explicit `Term.encode` and `Term.decode`, so failures stay visible as Results.
