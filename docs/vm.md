@@ -1533,10 +1533,14 @@ concurrently. The design follows BEAM.
   plus a wake if it is parked.
 - **Park and wake protocol.** Each task has an atomic state: RUNNING,
   PARKING, PARKED or WOKEN. To park, the task sets RUNNING to PARKING
-  before it registers its wait, then CASes PARKING to PARKED. A waker acts
-  only on PARKING (CAS to WOKEN, no queue: the task's CAS fails, so it
-  stays ready) and on PARKED (CAS to WOKEN, then queue the task). A wake
-  that finds RUNNING or WOKEN is stale and dropped. The scheduler sets
+  before it registers its wait. Then it re-checks its wait condition and
+  its cancel flag; if either is satisfied, it unregisters and goes back to
+  RUNNING. Otherwise it CASes PARKING to PARKED. Registering on another
+  task's result is done under that task's lock and fails if the result is
+  already published. A waker acts only on PARKING (CAS to WOKEN, no queue:
+  the task's CAS fails, so it sets WOKEN to RUNNING and re-checks at once)
+  and on PARKED (CAS to WOKEN, then queue the task). A wake that finds
+  RUNNING or WOKEN is stale and dropped. The scheduler sets
   WOKEN to RUNNING when the task's turn starts. A resumed task re-checks
   its wait condition, so a wake is only a hint. No wake is lost, and a task
   is queued at most once.
@@ -1544,7 +1548,7 @@ concurrently. The design follows BEAM.
   a place:
   - Runtime, read-only after start-up: `program` (with its constants),
     `args`, and the config. Also in the runtime but shared under rules: the
-    atomic `steps_left` (10.2.1, Quotas), `outcome` (set once, 6.2), `out`
+    atomic `steps_left` (10.2.1, Quotas), `outcome` (set once by a CAS on the outcome kind, 6.2), `out`
     and `err` (one lock per stream, see Output), and stdin (`in`, an
     `agc_input`): one reader owned by the runtime under a lock, each read
     done whole under that lock, as for output.
@@ -1578,15 +1582,26 @@ concurrently. The design follows BEAM.
 - **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s
   return value. One 64-bit atomic word packs the idle scheduler count and
   the live count (handles, parked I/O and timer waiters, pending wakes), so
-  the check reads one snapshot. A pending wake counts as live: the waker
-  increments the count before the push, and the home scheduler decrements
-  it when it drains the wake. A scheduler leaves idle before it touches a
-  queue or drains a wake. The scheduler that sees the idle count reach N
-  and the live count at zero while tasks are still parked fails the run
-  with `RUNTIME-INTERNAL` (10.2.1, Fairness).
+  the check reads one snapshot. The per-scheduler wake `uv_async_t` is not
+  counted. A pending wake counts as live: the waker increments the count
+  before the push, and the home scheduler decrements it when it drains the
+  wake. A scheduler leaves idle before it touches a queue or drains a wake.
+  The check runs on every change of the word that makes idle == N and
+  live == 0: the idle increment and every live decrement. The thread that
+  makes that change, if tasks are still parked, fails the run with
+  `RUNTIME-INTERNAL` and wakes the other schedulers (10.2.1, Fairness).
+- **Shutdown.** Each scheduler closes its own registry's handles and runs
+  its own loop to completion on its own thread before the main thread
+  joins it.
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and
-  `THREAD_LOCAL_ALLOC`. Scheduler threads are created with
-  `GC_pthread_create` or register with `GC_register_my_thread`. Collections
+  `THREAD_LOCAL_ALLOC`. The main thread calls `GC_allow_register_threads()`
+  first. Scheduler threads are created with `GC_pthread_create` or register
+  with `GC_register_my_thread`; the libuv pool threads stay unregistered on
+  purpose, since they never touch GC memory. The runtime struct stays on
+  the main thread's stack, which Boehm scans, for the whole run. MPSC wake
+  and hand-off queue nodes are GC-allocated; if one is not, the task or
+  payload it carries is also rooted in the owner's registry until it is
+  drained. Collections
   stop the world; that cost is accepted and measured (round 2 benchmarks).
   Boehm stops threads with signals, so the VM's syscall paths retry on
   `EINTR`, and libuv signal handling (`uv_signal_t`) must never take
