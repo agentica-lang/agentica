@@ -510,6 +510,7 @@ end
 - `s.put` without parentheses is still the field value, so it can be passed on or stored.
 - A block is allowed: `s.put(a) do |x| ... end` passes the block as the last argument, the same as `s.put.call(a) do |x| ... end`.
 - Structs have no methods, so there is no ambiguity. A struct with a `Fn` field has no `to_s` or `inspect` either, because a `Fn` is not printable. Today `s.put(a, b)` is `CHECK-UNKNOWN-METHOD` (with the help "put is a function field; call it with .put.call(...)"), so no valid program changes meaning.
+- On a generic struct (15.3) the rule applies after substitution: for `b: Box[Fn[Int, Int]]`, `b.value(1)` calls the field.
 - Arity and type errors are the same as for `.call`: a wrong number of arguments is `CHECK-ARITY`, a wrong argument type is `CHECK-TYPE-MISMATCH`. A name that is not a field, or a field that is not a `Fn`, stays `CHECK-UNKNOWN-METHOD` with today's help.
 - **Adapter pattern:** a struct of `Fn` fields is the interface; a function such as `disk_storage(dir)` is one implementation, and its blocks capture `dir`. Code like `save_note` takes `Storage` and does not know the backend. The disk backend writes files under a directory; its tests use a temporary directory. The memory backend is read-only: its map is fixed when it is created, `get` reads it, and `put` returns `error("read-only")`. A test can pass the memory backend to code that only reads, and the program passes the disk one. A block can only be written as the last argument of a call, so each block goes through a small function that returns it (`getter`, `putter` above); standalone lambdas stay open (§3).
 - **Facade pattern:** a file module that exports a few functions and hides the rest. It needs no new syntax:
@@ -531,7 +532,7 @@ end
   end
   ```
 
-  Callers write `import "users.agc" as Users` and call `Users.load_user(dir, "ana")`.
+  Callers write `import "users.agc" as Users` and call `Users.load_user(dir, "ana")`. A real facade must check that `user.name` (and `name`) has no `/` or `..` before it uses it in a path, and return `error(...)` if it does.
 - **Limit:** values are immutable and blocks capture by value, so an in-memory adapter cannot change its own data. A memory adapter that writes needs a new struct per write (its `put` returns one, for example `Fn[String, String, MemoryStorage]`), or, later, blocks that capture a shared table (§13).
 - VM: no new opcode. The checker records the call as an invoke of the field value, so lowering emits a field read and `call-value`, as for `.call`. It needs `.call` on the VM (7e PR 5e).
 
@@ -580,13 +581,13 @@ end
   - `JsonFloat(x)` for a number with a fraction or exponent, the value `JSON.float` returns. `3.0` and `1e2` are `JsonFloat`, even when they are whole numbers.
 
   So `kind` stays total.
-- **Object order:** the keys of `JsonObject` follow the JSON object's key order in the text. A repeated key keeps its first position and its last value, as `Map` replacement does. Today `JSON.parse` does not keep this order (`grammar.md` says it is unspecified, and Racket's `read-json` returns a hash), so 10b changes the evaluator's parser to keep it; the VM keeps it in the JSON PR. Objects built with `JSON.object` keep the map's order. `JSON.encode` does not change. `JSON.decode` into a `Map` keeps sorted key order on purpose, unchanged; only `JsonObject` from `kind` follows the text order.
+- **Object order:** the keys of `JsonObject` use the same sorted order as `JSON.decode` into a `Map`. The text order is not kept, so `JSON.parse` does not change. Text order may come later if a real program needs it; it would need an ordered object representation in the evaluator.
 - It works with the existing `case`, the branch check and bindings, with no grammar change. Variants are qualified like any enum (`JsonValue.JsonInt(n)`). `JsonValue` values are for reading: they have `to_s` and `inspect` like other enums, but no JSON encoding (`CHECK-NOT-ENCODABLE`); build Json with the builders.
 - `JsonValue` becomes a reserved name: a user `struct JsonValue`, `enum JsonValue` or `import ... as JsonValue` is `CHECK-REDEFINED-NAME`. This is a breaking change; say so in the changelog.
 - The recommended path is still `JSON.decode` into typed structs. `kind` is the low-level tool for unknown shapes: a generic pretty printer, a config with free-form values, or a reply whose shape depends on a field.
 - Unlike Ruby's `case x when String`, a general `typeof` or a type-pattern `case` is not planned. Static types make the answer constant for every other value; `Json` is the only dynamic value, and `kind` covers it.
 - Diagnostics: none new. A non-`Json` argument is `CHECK-TYPE-MISMATCH`; a missing variant is `CHECK-NON-EXHAUSTIVE-CASE`.
-- VM: needs the JSON PR (`docs/vm.md` §12.2 item 7). `JsonValue` is a builtin entry of the enum table with this fixed variant order, so `case` lowers as for user enums. The VM parser keeps object key order and keeps big integers as exact text (yyjson's `BIGNUM_AS_RAW`). `JSON.kind` is a builtin that builds the variant from the parsed node; lists and maps hold the child nodes as `Json` values without copying them.
+- VM: needs the JSON PR (`docs/vm.md` §12.2 item 7). `JsonValue` is a builtin entry of the enum table with this fixed variant order, so `case` lowers as for user enums. The VM parser must keep integers outside int64 as exact decimal text (for example yyjson's `BIGNUM_AS_RAW`), and still reject non-finite reals such as `1e400` with `JSON number is not finite`. `JSON.kind` is a builtin that builds the variant from the parsed node; lists and maps hold the child nodes as `Json` values without copying them.
 
 ### 15.3 Generic structs
 
@@ -595,24 +596,26 @@ struct Box[T]
   value: T
 end
 
-struct Cache[K, V]
-  items: Map[K, V]
+struct Cache[V]
+  items: Map[String, V]
   limit: Int
 end
 
 def main() -> Void
   b = Box(value: 1)                                 # Box[Int]
   puts(b.value + 1)                                 # b.value is Int
-  c: Cache[String, Int] = Cache(items: {}, limit: 10)
+  c: Cache[Int] = Cache(items: {}, limit: 10)
 end
 ```
 
-- Same rules as generic enums: `struct Name[T, ...]` declares type parameters; their names may not repeat or reuse a reserved type name. Construction infers them from the field values; when it cannot (an empty list or map), it needs an expected type from an annotation, parameter, field or return. Type arguments are checked like enum type arguments (`Map` keys must still be `Int` or `String`).
-- Field access returns the substituted type: `b.value` is `Int` for a `Box[Int]`.
+- Same rules as generic enums: `struct Name[T, ...]` declares type parameters; their names may not repeat or reuse a reserved type name. Construction infers them from the field values; when it cannot (an empty list or map), it needs an expected type from an annotation, parameter, field or return. Type arguments are checked like enum type arguments.
+- `Map` keys must still be `Int` or `String`. A type parameter used as a `Map` key (`items: Map[K, V]`) is rejected at the declaration with `CHECK-MAP-KEY-TYPE`, as for generic enums today.
+- All rules apply after substitution. Field access returns the substituted type: `b.value` is `Int` for a `Box[Int]`. `printable-type?` is checked on the substituted type, so `Box[Int]` has `to_s` and `inspect`, and `Box[Fn[Int, Int]]` does not.
 - An imported generic struct is written `M.Box[Int]`, as for enums.
-- Diagnostics reuse the enum codes: a wrong number of type arguments, or a bare `Box` in a type, is `CHECK-UNKNOWN-TYPE`; a repeated or reserved parameter name is `CHECK-REDEFINED-NAME`; a parameter that cannot be inferred is `CHECK-ENUM-TYPE-INFERENCE` (the code keeps its name, the message names the struct); conflicting field types are `CHECK-TYPE-MISMATCH`.
+- Diagnostics reuse the enum codes: a wrong number of type arguments, or a bare `Box` in a type, is `CHECK-UNKNOWN-TYPE`; a repeated or reserved parameter name is `CHECK-REDEFINED-NAME`; a parameter that cannot be inferred is `CHECK-ENUM-TYPE-INFERENCE` (the message names the struct); conflicting field types are `CHECK-TYPE-MISMATCH`.
+- `CHECK-ENUM-TYPE-INFERENCE` is reused for structs and keeps its name; 10c adds a note about it to the diagnostics reference of the programming skill.
 - They enable a reusable adapter: `struct Storage[T]` with `get: Fn[String, Result[T]]` and `put: Fn[String, T, Result[Void]]`, filled once per backend.
-- JSON: `JSON.encode` and `JSON.from` work on an instance whose fields are encodable after substitution. `JSON.decode` and `JSON.schema` do not take generic structs in 10c: a generic struct anywhere in the target is `CHECK-NOT-DECODABLE`. A direct target would need type arguments in expression position (`Box[Int]` reads as indexing), and the schema needs a `$defs` name per instance. Both wait for a real program.
+- JSON: `JSON.encode` and `JSON.from` work on an instance whose fields are encodable after substitution. `JSON.decode` and `JSON.schema` reject any generic instance, struct or enum, anywhere in the target, with `CHECK-NOT-DECODABLE`, until a real program needs it. The reason: `$defs` is keyed by the bare type name, so `Box[Int]` and `Box[String]` would collide. A direct target would also need type arguments in expression position (`Box[Int]` reads as indexing).
 - VM: no change. Type parameters exist only in the checker, as for generic enums; the struct table keeps field names and order.
 
 ### 15.4 `JSON.decode` into enums
@@ -636,10 +639,10 @@ end
 ```
 
 - A variant is an object with `tag` (the variant name, without the enum name) and `values` (the payloads in order). `JSON.encode` and `JSON.from` always write both keys, in that order. `JSON.decode` accepts a missing `values` for a nullary variant and ignores extra keys, as for structs.
-- An enum is decodable when its payload types are, after substitution (a user generic enum such as `Option[Int]` in a field is fine). `Result` stays out. `JsonValue` (15.2) stays out too; use `Json` for free-form data.
+- Only non-generic enums are decodable, and only when their payload types are. A generic enum instance such as `Option[Int]` anywhere in the target is `CHECK-NOT-DECODABLE` (15.3 gives the reason). `Result` stays out. `JsonValue` (15.2) stays out too; use `Json` for free-form data.
 - The decode target may be a non-generic enum: `JSON.decode(text, Shape)`.
 - Errors return `error(...)` with the same paths as struct fields (`shapes[0].values[1]`): an unknown tag, a missing `tag`, a wrong number of values, or a wrong value type. No new code: an enum with a non-decodable payload is `CHECK-NOT-DECODABLE`.
-- `JSON.schema(Shape)` accepts the same enums as decode and describes the tagged-object form. It writes a `oneOf` with one object per variant, its `tag` as a `const` and `values` as a fixed-length array (`prefixItems`); enums go into `$defs` like structs.
+- `JSON.schema(Shape)` accepts the same enums as decode and describes the tagged-object form. It writes a `oneOf` with one object per variant, its `tag` as a `const` and `values` as a fixed-length array: `prefixItems` with one schema per payload, plus `"items": false` (JSON Schema 2020-12). Enums go into `$defs` like structs.
 - VM: lands with or after the JSON PR (`docs/vm.md` §12.2 item 7); the type table gets an enum entry with each variant's payload types.
 
 ### 15.5 Not planned

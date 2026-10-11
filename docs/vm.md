@@ -1320,7 +1320,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
 6. **Library.** `IO`, `System`, `String`, `List`, `Map`, `Float`, `Time`,
    `Random` (with the seeding port).
 7. **JSON.** Parse, extract, encode, builders, typed decode, schema.
-   The parser keeps object key order and keeps big integers as exact text (yyjson's `BIGNUM_AS_RAW`), for `JSON.kind` (`future.md` §15.2).
+   For `JSON.kind` (`future.md` §15.2), the parser must keep integers outside int64 as exact decimal text (for example yyjson's `BIGNUM_AS_RAW`), and still reject non-finite reals such as `1e400` with `JSON number is not finite`.
 
 Outside this list, the **tail-call** PR (done) added `TAIL_CALL`: a
 `return f(...)` of a user function reuses the frame (3.3, 4.2, 4.3, 6.1),
