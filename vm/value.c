@@ -148,6 +148,34 @@ agc_value agc_list_value(agc_list *l) {
   return v;
 }
 
+agc_value agc_struct_value(agc_struct *s) {
+  agc_value v;
+  v.tag = AGC_T_STRUCT;
+  v.as.p = s;
+  return v;
+}
+
+agc_value agc_enum_value(agc_enum *e) {
+  agc_value v;
+  v.tag = AGC_T_ENUM;
+  v.as.p = e;
+  return v;
+}
+
+agc_struct *agc_new_struct(uint32_t type, uint32_t n) {
+  agc_struct *s = agc_alloc(agc_size_add(sizeof(agc_struct), agc_size_mul(n, sizeof(agc_value))));
+  s->type = type;
+  s->n = n;
+  return s;
+}
+
+agc_enum *agc_new_enum(uint32_t variant, uint32_t n) {
+  agc_enum *e = agc_alloc(agc_size_add(sizeof(agc_enum), agc_size_mul(n, sizeof(agc_value))));
+  e->variant = variant;
+  e->n = n;
+  return e;
+}
+
 agc_list *agc_new_list(size_t len) {
   agc_list *l = agc_alloc(agc_size_add(sizeof(agc_list), agc_size_mul(len, sizeof(agc_value))));
   l->len = len;
@@ -195,6 +223,16 @@ agc_string *agc_as_string(agc_vm *vm, agc_value v) {
 
 agc_list *agc_as_list(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_LIST) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_struct *agc_as_struct(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_STRUCT) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_enum *agc_as_enum(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_ENUM) wrong_tag(vm);
   return v.as.p;
 }
 

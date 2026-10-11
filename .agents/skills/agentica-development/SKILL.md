@@ -57,7 +57,8 @@ src/
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c loader.c interp.c builtins.c diag.c main.c  # values+memory, text/debug forms, loader validation, loop, builtin table, diagnostics (plain, --ai, --json), CLI
-  gen-unicode.rkt unicode_data.c  # Racket generator and its committed output (write-escape ranges)
+  unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
+  tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
   fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
 tests/

@@ -25,17 +25,20 @@ details and reasons.
 |---|---|
 | `src/checker.rkt` | One addition in 7c: it can fill a caller-supplied `eq?` hash from expression node to its checked type. |
 | `src/lower.rkt` (7c) | Checked program to IR. Resolves names to slots and indexes, makes types explicit, keeps spans, converts closures. |
-| `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, type and span tables, step merging, binary writer and reader. |
+| `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, struct, enum and span tables (type tables join with JSON), step merging, binary writer and reader. |
 | `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), `--vm` (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS
-and Windows CI and the Lists PR (12.2 items 1 to 4 and 5a) are in. The VM covers Int, Float, Bool, Nil and String values
-and `List[T]` of any of them (lists of lists too),
+and Windows CI, the Lists PR and the structs, enums and `case` PR (12.2
+items 1 to 4, 5a and 5b) are in. The VM covers Int, Float, Bool, Nil and
+String values, user structs and user enums (generic and recursive ones too,
+imported ones included), and `List[T]` of any of them (lists of lists too),
 locals, their operators (Float `+ - * /`, unary minus and comparisons with
 IEEE semantics; String `+`, `==` and `!=`), `if`/`elsif`/`else`, `while` with
 `break` and `next`, `for x in xs` with `break` and `next`, list literals,
-indexing `xs[i]`, user functions, calls, `return`, interpolation,
+indexing `xs[i]`, struct construction and field access, enum constructors,
+`case` with literal, `_` and variant patterns, user functions, calls, `return`, interpolation,
 `x.to_s` and `x.inspect` of those values, and `puts`/`print`/`IO.puts`/
 `IO.print`/`IO.warn` of any of them. List library functions (`xs.size`,
 `List.append`, ...) join with the `List` library (12.2 item 6). Runtime diagnostics come in the plain,
@@ -188,7 +191,7 @@ differential tests (section 12) check them.
   the contract. Windows console input code pages are outside it too.
 
 The case mapping, final-sigma and write-escape data are generated from
-Racket itself by `vm/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
+Racket itself by `vm/tools/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
 so they agree with the reference by construction (Racket 9.3).
 `make vm-unicode` regenerates the file (about 40 s; run it with Racket CS 9.3,
 the CI version, since the tables follow Racket's Unicode data), and the Linux CI job
@@ -233,6 +236,13 @@ fails when the committed file differs from what the generator prints.
   `puts(["a"])` prints `["a"]`. Only a String at the top is printed raw.
 - Struct and enum names are the display names the lowerer copies verbatim
   from the linked program, so the VM prints what the evaluator prints.
+  Today that includes the linker's internal prefix for imported types
+  (`@2::Point(x: 1)`, `@2::Shape.Dot`), an evaluator bug; when the evaluator
+  is fixed, the lowerer copies the fixed name and the VM follows.
+- A struct prints its fields in declaration order whatever order the
+  constructor wrote them in; a struct with no fields prints `Name()`, a
+  nullary variant `Enum.Variant` (with no parentheses even when written
+  `Enum.Variant()`).
 - JSON text (`write-json`): object keys sorted; strings escape `"`, `\`,
   control characters and DEL, with short forms such as `\n` and lowercase
   `\u007f` otherwise; non-ASCII stays raw; floats use 2.2.
@@ -306,8 +316,8 @@ and a receiver wrapped in `typed-target` carries its type already.
 ### 3.2 Structures
 
 ```racket
-(struct ir-program (sources types structs enums functions entry span))
-(struct ir-struct (name fields))          ; display name; (field-name . type-index) in declaration order
+(struct ir-program (sources structs enums functions entry span))
+(struct ir-struct (name fields))          ; display name; field names in declaration order
 (struct ir-enum (name variants))          ; list of (variant-name . arity)
 (struct ir-function (name params captures slots body span))
 (struct ir-label (id))
@@ -315,9 +325,13 @@ and a receiver wrapped in `typed-target` carries its type already.
 ```
 
 - `body` is a flat list of `ir-instr` and `ir-label`; `--dump-ir` prints it.
-- In the slice, `ir-program` is `(sources functions entry span)` and
-  `ir-function` is `(name params slots body span)`; the type, struct, enum and
-  capture fields join with the PRs that fill them.
+- In the slice, `ir-function` is `(name params slots body span)`; the
+  capture field joins with closures (5e). `ir-program` has every field.
+  The tables hold every struct and enum declaration of the linked program in
+  declaration order. Enums are generic only in their checked types, so the
+  table needs only each variant's arity. Field types are not in the IR yet:
+  only `JSON.decode` and `JSON.schema` need them, and the JSON PR (12.2
+  item 7) adds them.
 - Slots are the VM registers, numbered per function: parameters `0..p-1`,
   captures `p..p+c-1`, then locals and temporaries. Temporaries follow a
   stack discipline, so a call's arguments are always the highest live slots
@@ -344,11 +358,11 @@ and a receiver wrapped in `typed-target` carries its type already.
 | `for x in xs` | Iterable once into a hidden slot (a `move` even for a local, since the body may assign that local), hidden index, length and one slots (`const 0`, `list-len`, `const 1`, set once); `jump` to the test; body; increment (`add-i`); test `lt-i`, `jump-if-true` back to the body. The body starts with its first statement's `step`, then `list-get x xs i` (span of the `for`), then the rest of that statement: the backward jump must land on a `STEP` (8), and the read charges nothing. `next` jumps to the increment, `break` past the test. An empty body lowers to just the iterable: its iterations charge nothing and do nothing. |
 | Functions | One IR function each; falling off the end returns Void. |
 | Calls | A builtin (`builtin-ref name arity`, as `eval-call`) gives `call-builtin`, including the higher-order `List` functions (4.3); a user function gives `call`. |
-| Structs | Arguments evaluated in written order directly into the slot of their declared position, then `struct`. A `construct` named `Enum.Variant` is an enum constructor (`eval-step-expression`). |
-| Enums | Payload slots in order, then `enum` with a global variant id. |
+| Structs | `step` (construct span); arguments evaluated in written order directly into the slot of their declared position, then `struct`. A `construct` named `Enum.Variant` is an enum constructor (`eval-step-expression`). Field access: `step` (node span), target, then `field` with the declared index. A struct type that is not declared in the program (a builtin record such as `Header`) stays `LOWER-UNSUPPORTED`. |
+| Enums | `step` (constructor span), payload slots in order, then `enum` with a global variant id; a nullary variant is `enum dst dst v`. |
 | Lists, maps | `list` / `map` from consecutive slots. Literals longer than 255 elements are built in chunks joined with `List.concat`, or extended with `Map.put` (no steps, literal span). For a list: the accumulator slot `w`, each chunk's elements in `w+1..`, the first chunk `list w`, every later one `list w+1` then `call-builtin w List.concat 2`, so a literal needs at most 256 slots beside its elements' own temporaries. An empty literal is `list dst dst 0`. |
 | Indexing | `list-get` or `map-get` from the type table. `step` (index node), target, index, then `list-get` at the index expression's span, which is where `RUNTIME-INDEX-OUT-OF-RANGE` ("index -1 is outside a list of length 3") points. |
-| `case` | Scrutinee once; per arm a test (`same` for literals, `is-variant`, `is-ok`), jump to the next arm, payload into arm slots (`_` skipped), body, jump to the end. |
+| `case` | Scrutinee once (a local is read in place: tests and payload reads all come before any body runs); per arm a test (`const` + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next arm, payload into arm slots (`_` skipped), body in its own scope through `lower-statement`, jump to the end. Patterns charge no steps. `_` has no test. An Int literal pattern outside 64 bits (the checker accepts `9223372036854775808 ->`) can never match, so its test is a plain `jump` to the next arm. Result patterns join with 5c. Until then nothing in `case` checks for them: the scrutinee goes through the type check of every expression, which rejects a Result value with `LOWER-UNSUPPORTED` at the scrutinee, so no Result pattern is ever reached. |
 | `try` | `try dst src`: on error, return it from the current function or block. |
 | `ok`, `error`, `Result.*` | Builtin calls. |
 | Interpolation | `step`, then the first part straight into the target; each later part into the next free slot, then `concat target target slot`. A string part is a `const`; an expression part is lowered as usual and followed by `to-text slot slot` unless it is a String. String parts charge no step. |
@@ -389,9 +403,11 @@ with the language codes (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`):
 | `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception inside `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
 
 `agentica compile` and `--dump-ir` print them like any other diagnostic and
-exit 1. Today a value outside Int, Float, Bool, Nil, String and `List` of
-those (nested to any depth) is rejected, except a Void call used as a
-statement or returned. The only builtins a program may call are `puts`,
+exit 1. Today a value outside Int, Float, Bool, Nil, String, structs and
+enums declared in the program, and `List` of those (nested to any depth) is
+rejected, except a Void call used as a statement or returned. A struct or
+enum type is accepted whatever its fields or payloads hold: a value of an
+unsupported type can only come from an expression the lowerer rejects. The only builtins a program may call are `puts`,
 `IO.print`, `IO.warn`, `String.from_int` and `String.from_float` (their
 implementation keys; `print` and `IO.puts` map to the first two). The last
 two exist because the checker resolves `x.to_s` on Int and Float to them.
@@ -479,7 +495,8 @@ slice the list is `MOVE CONST STEP ADD_I SUB_I MUL_I DIV_I MOD_I NEG_I NOT
 LT_I LE_I EQ NE JUMP JUMP_IF_FALSE JUMP_IF_TRUE CALL CALL_BUILTIN RETURN`
 (20 opcodes); the Float PR appended `ADD_F SUB_F MUL_F DIV_F NEG_F LT_F
 LE_F` (27); the Strings PR appended `CONCAT TO_TEXT INSPECT` (30); the Lists
-PR appended `LIST LIST_LEN LIST_GET` (33). `EQ`/`NE`
+PR appended `LIST LIST_LEN LIST_GET` (33); the structs, enums and `case` PR
+appended `STRUCT FIELD ENUM IS_VARIANT PAYLOAD SAME` (39). `EQ`/`NE`
 accept Int, Float (C `==`, which is Racket `=`), Bool, Nil or String pairs
 (String by length and bytes, which is `equal?` on valid UTF-8); other pairs
 are `RUNTIME-INTERNAL`. The checker allows `==` only on Int, Float, Bool,
@@ -490,6 +507,17 @@ window may include `a`); `LIST_GET` checks `0 <= i < len` on the int64
 before using it, and its message is built at run time. There is no String ordering: the checker allows
 `< <= > >=` only on numbers. `TO_TEXT` returns a String operand itself and
 `INSPECT` of a non-String gives the same text as `TO_TEXT`.
+The checker allows `==` only on primitives, so structs and enums have no
+equality either. `SAME` is Racket `equal?` on the literal types: false when
+the tags differ, Int, Bool, Nil and String as in `EQ`, Float by `eqv?`
+(`-0.0` does not match `0.0`, NaN matches NaN); other tags are
+`RUNTIME-INTERNAL`. `STRUCT` takes its field count and `ENUM` its arity from
+the tables; a nullary `ENUM` returns the variant's shared value, made by the
+loader. `IS_VARIANT` compares the global variant id, which is unique per
+enum declaration, as the evaluator compares the enum and variant names; an
+id from another enum (only in a hand-made file) is simply false.
+`FIELD` and `PAYLOAD` read item `c` of the value's own `n`; past it is
+`RUNTIME-INTERNAL`.
 
 ### 4.3 Calls, call windows and resumable builtins
 
@@ -539,25 +567,27 @@ bytes. Sections come in this fixed order; each starts with a `u32` count
 
 | Section | Entry |
 |---|---|
-| Header | magic `"AGCB"`, `u32` format version (1), `str` Agentica version (`src/version.rkt`) |
+| Header | magic `"AGCB"`, `u32` format version (2), `str` Agentica version (`src/version.rkt`) |
 | Sources | `str` name, `str` full text |
 | Spans | `u32` source, start line, start column, end line, end column; span 0 is the program span |
 | Constants | `u8` kind (0 Void, 1 Nil, 2 false, 3 true, 4 Int, 5 Float, 6 String), then `i64`, `f64` bits or `str` |
-| Types | `u8` kind (0 Int, 1 Float, 2 Bool, 3 String, 4 List, 5 Map, 6 Struct, 7 other), `u32` x, `u32` y (element, key/value, or struct index) |
-| Structs | `str` display name, `u32` field count, each `str` name and `u32` type index |
+| Structs | `str` display name, `u32` field count, each field's `str` name |
 | Enums | `str` display name, `u32` variant count, each `str` name and `u32` arity; variants numbered globally in file order |
 | Builtins | `str` name, `u32` arity |
 | Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
 | Entry | `u32` index of `main` |
 
-The type table exists for `JSON.decode` and `JSON.schema`; List and Map
-entries must point to smaller indexes, so only Struct entries can make
-cycles (recursive structs). The full source texts are embedded so the VM
-prints diagnostics without reading files.
+The full source texts are embedded so the VM prints diagnostics without
+reading files.
 
-Today the writer always emits empty Types, Structs and Enums sections, and
-the loader rejects anything else until the PR that needs it. All seven
-constant kinds are in use; Float constants are the literal's IEEE bits.
+Format version 2 (the structs, enums and `case` PR) fills the Structs and
+Enums sections; version 1 had three empty sections there (Types, Structs,
+Enums). Version 2 has no Types section: the type data that `JSON.decode`
+and `JSON.schema` need (a type table with List and Map entries pointing to
+smaller indexes, so only struct entries make cycles, and a type index per
+struct field) joins with the JSON PR (12.2 item 7) and its own format bump.
+All seven constant kinds are in use; Float constants are the literal's IEEE
+bits.
 
 The VM accepts only its own format version and Agentica version; anything
 else is rejected (8). Any change to the layout or to an opcode's meaning
@@ -588,8 +618,8 @@ typedef struct {
 | String | `{ size_t bytes, chars; char data[]; }`, `GC_MALLOC_ATOMIC`. `chars == bytes` means ASCII, O(1) indexing; otherwise indexing scans. Not NUL-terminated by contract. |
 | List | `{ size_t len; agc_value items[]; }`, immutable. `append`, `set`, `concat` copy (same O(n) as now); indexing is O(1). |
 | Map | `{ size_t size; agc_hamt *table; agc_keys *reversed; }`: a persistent 32-way HAMT plus a persistent cons list of keys, newest first, exactly like `mapping`/`mapping-put` in `src/runtime-values.rkt`. Keys are Int or String, hashed with SipHash-1-3 under a per-run key from OS entropy (independent of `--seed`). |
-| Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. |
-| Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared. |
+| Struct | `{ uint32_t type, n; agc_value fields[]; }`, declaration order. Text: the struct's display name, then `(f: v, ...)` from the table's field names. |
+| Enum | `{ uint32_t variant, n; agc_value payload[]; }`; nullary variants are shared (one object per variant, made at load time). Text: enum display name, `.`, variant name, then `(a, b)` when `n > 0`. |
 | Result | `{ bool ok; agc_value value; }`; an error holds its String message; `ok()` holds Void. |
 | Function value | `{ uint32_t function, n; agc_value captured[]; }`. |
 | Json | Tree: null, bool, int64, big integer as decimal text (parsed integers may exceed Int until extracted), double, string, array, object. Objects are built by collecting pairs, then one sort and dedupe with the last value winning, which is the order `write-json` prints. |
@@ -606,7 +636,7 @@ typedef struct {
   Builtins check list and map elements when they touch them
   (`agc_expect`).
 - `FIELD` and `PAYLOAD` check the index against the value's own `n`, not
-  only against the type table.
+  only against the struct and enum tables.
 - Builtins that read builtin records (`Header`, `Request`, `Response`,
   `HttpClientOptions`, `HttpServerOptions`, `FileInfo`) check the struct type
   id; the loader accepts those names only with the exact field names and
@@ -765,8 +795,8 @@ The loader validates the whole file before running anything. Failures print
 - **Spans**: an existing source; `start <= end`; for both start and end,
   `1 <= line <= ` the source's line count and `1 <= column <=` the line's
   length in characters plus 1.
-- **Tables**: known constant and type kinds; type operands in range, List and
-  Map pointing to smaller indexes; field counts and arities fit 16 bits;
+- **Tables**: known constant kinds (and, with JSON, type kinds and type
+  operands in range); field counts and arities fit 16 bits;
   builtin record names only with their exact C layout; builtin `(name,
   arity)` pairs exist.
 - **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`; at least one
@@ -787,8 +817,22 @@ The loader validates the whole file before running anything. Failures print
   steps × code size. It does not bound bytes: `CONCAT` and `INSPECT` cost
   time and memory in proportion to their strings (trust model, 1).
 - **Entry**: exists, with no parameters or captures.
-- **In the slice**: captures must be 0 and the Types, Structs and Enums
-  sections must be empty; constant kinds above 6 are rejected. `CONCAT`
+- **In the slice**: captures must be 0; constant kinds above 6 are
+  rejected. Struct field counts and variant arities are at most 65535. All
+  variants go into one array sized by a first pass over the Enums section,
+  and each nullary variant gets one small shared empty enum value, so a file
+  with 65535 variants or a struct with 65535 fields stays within the load
+  budget. `load_alloc` returns NULL for a zero size without charging the
+  budget; callers never read or copy through a zero-size result.
+  `STRUCT` checks `a`, `c`
+  below the struct count and the window of that struct's field count;
+  `ENUM` checks `a`, `c` below the variant count and the window of its
+  arity (`b` itself when it is 0); `IS_VARIANT` checks two registers and the
+  variant id; `FIELD` and `PAYLOAD` check two registers and `c` below the
+  largest field count or arity (the run time checks the value's own `n`);
+  `SAME` checks three registers. Builtin record layouts are not checked
+  yet: the lowerer rejects builtin record types, and the check joins with
+  the first library PR that reads one. `CONCAT`
   checks three registers, `TO_TEXT` and `INSPECT` two. `LIST` checks `a`
   and the window `b..b+c-1` (and `b` itself when `c` is 0), `LIST_LEN` two
   registers and `LIST_GET` three. `vm/tests/loader_test.c` checks each rejection by its reason:
@@ -799,7 +843,9 @@ The loader validates the whole file before running anything. Failures print
   that start after they end, bad register counts (0, above 65535, fewer than
   the parameters), out-of-range registers, constants, jumps and spans
   (including the extra spans of `STEP` and `CALL_BUILTIN`, and the
-  registers of the Float, String and List opcodes, and the `LIST` window), `CALL` and
+  registers of the Float, String, List, struct and enum opcodes, and the
+  `LIST`, `STRUCT` and `ENUM` windows), every struct and enum table rule
+  above (and that 65535 nullary variants and 65535 fields load), `CALL` and
   `CALL_BUILTIN` windows, `STEP 0`, a backward jump that misses a `STEP`,
   functions that should start with one, an unknown opcode, a missing final
   `RETURN`/`JUMP`, and a file over the memory budget.
@@ -1026,8 +1072,8 @@ written `size > limit - total`. A hermetic test sends over-long values.
   short run (30,000 mutants in the sanitizer job, about 12 s) is
   reproducible; `FUZZ_SEED=N` picks another sequence and is printed on
   stderr. In a sanitizer build a crash prints the mutant's index and saves
-  it to `fuzz-crash.agcb`. The weekly workflow (`.github/workflows/fuzz.yml`,
-  also run by hand) builds the sanitizer VM, runs 5 million mutants with a
+  it to `fuzz-crash.agcb`. The fuzz workflow (`.github/workflows/fuzz.yml`,
+  run by hand) builds the sanitizer VM, runs 5 million mutants with a
   random `FUZZ_SEED`, prints the commit and seed first, and uploads
   `fuzz-crash.agcb` as an artifact on failure; `agentica-vm --` on that
   file, or the same commit, seed and at least as many runs, reproduces it. A clang
@@ -1106,7 +1152,7 @@ the platform's OpenSSL package) to each job.
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
   (values picked from a 708k-value comparison with Racket, 2.2) and the
   `tests/fixtures/vm/float-text.agc` differential fixture. Write escapes
-  are checked where the data is made: `vm/gen-unicode.rkt` compares its C
+  are checked where the data is made: `vm/tools/gen-unicode.rkt` compares its C
   rule with Racket's `write` for every code point and the joiner contexts
   (2.3) and refuses to generate otherwise. On the C side,
   `vm/tests/text_test.c` checks the range lookup at every range edge, a few
@@ -1116,13 +1162,19 @@ the platform's OpenSSL package) to each job.
   case mapping join with the `String` library. `make vm-test` builds every
   `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
-  every Int parameter of every builtin. Deep-value corpus: a depth-1,000,000
+  every Int parameter of every builtin. Deep-value corpus: a depth-200,000
   enum chain and nested JSON array, printed and encoded. A program's lists
   are only as deep as their types, which are written in the source (there
   are no user generics), whether built by one literal (capped near 65,000
   levels by registers, 3.5) or by chained bindings, so
-  `vm/tests/text_test.c` builds a depth-1,000,000 list in C and prints it; the printer walks lists with an
-  explicit `agc_alloc`'d stack (7.3).
+  `vm/tests/text_test.c` builds a depth-200,000 list in C and prints it,
+  and a depth-200,000 chain of enum payloads wrapped in structs: enough to
+  overflow an 8 MB C stack even at about 48 bytes per frame, so a recursive
+  printer would crash. The GC stress build uses depth 1,000 for both, since
+  there the test is about GC safety while printing, not depth; the
+  printer walks lists, structs and enums with one explicit `agc_alloc`'d
+  stack (7.3). Recursive enums can be built to any depth in a loop; the
+  `enums-case` fixture builds one and walks it with `case`.
 - Tasks, processes and network programs join in 7h, with the independent
   counterparts the current tests use.
 
@@ -1153,7 +1205,12 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      forms `[a, b]` for every value type the VM has, through `puts`,
      interpolation, `to_s` and `inspect`. The checker rejects `==` on lists,
      so there is no list equality. List library functions stay in item 6.
-   - **5b** Structs, enums, `case`.
+   - **5b Structs, enums, `case`** (done). User structs and enums (generic
+     and recursive too, imported ones with their linked display names),
+     construction, field access, `case` with literal, `_` and variant
+     patterns, their text and debug forms, and format version 2 with the
+     struct and enum tables. The checker rejects `==` on them, so
+     there is no struct or enum equality. Result patterns stay in 5c.
    - **5c** Result, `ok`/`error`/`Result.*`, `try`.
    - **5d** Maps (HAMT, 5.1), map literals and indexing.
    - **5e** Closures (`block-lit`), `&name`, `.call`, the resumable `List`

@@ -1,6 +1,7 @@
 #include "../agc.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,6 +29,8 @@ typedef struct {
   bool trailing;
   uint32_t builtin_arity;
   int64_t extra_int;
+  const buffer *tables;
+  double extra_float, second_float;
 } spec;
 
 static void u8(buffer *b, uint8_t v) { b->data[b->len++] = v; }
@@ -44,6 +47,13 @@ static void str(buffer *b, const char *s) {
   memcpy(b->data + b->len, s, strlen(s));
   b->len += strlen(s);
 }
+static void float_bits(buffer *b, double f) {
+  uint64_t bits;
+  memcpy(&bits, &f, sizeof bits);
+  u32(b, (uint32_t)bits);
+  u32(b, (uint32_t)(bits >> 32));
+}
+
 static void function(buffer *b, const char *name, uint32_t params, uint32_t registers, const agc_instr *code,
                      const uint32_t *spans, uint32_t count) {
   str(b, name);
@@ -75,13 +85,13 @@ static const uint32_t two_spans[] = {0, 0};
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0};
   return s;
 }
 
 static buffer build(spec s) {
   buffer b;
-  b.data = malloc(4096 + (size_t)s.extra_voids);
+  b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0));
   assert(b.data);
   b.len = 0;
   memcpy(b.data, s.magic, 4);
@@ -94,25 +104,30 @@ static buffer build(spec s) {
   u32(&b, 3);
   for (int i = 0; i < 3; i++)
     for (int k = 0; k < 5; k++) u32(&b, s.spans[i][k]);
-  u32(&b, 2 + s.extra_voids + (s.extra_kind >= 0));
+  u32(&b, 2 + s.extra_voids + (s.extra_kind >= 0) + (s.second_float != 0));
   u8(&b, 4);
   u32(&b, 1);
   u32(&b, 0);
   u8(&b, 0);
   for (uint32_t i = 0; i < s.extra_voids; i++) u8(&b, 0);
   if (s.extra_kind >= 0) u8(&b, (uint8_t)s.extra_kind);
-  if (s.extra_kind == 5) {
-    u32(&b, 0);
-    u32(&b, 0x3FF80000);
-  }
+  if (s.extra_kind == 5) float_bits(&b, s.extra_float);
   if (s.extra_kind == 6) str(&b, s.extra_string);
+  if (s.second_float != 0) {
+    u8(&b, 5);
+    float_bits(&b, s.second_float);
+  }
   if (s.extra_kind == 4) {
     u32(&b, (uint32_t)(uint64_t)s.extra_int);
     u32(&b, (uint32_t)((uint64_t)s.extra_int >> 32));
   }
-  u32(&b, 0);
-  u32(&b, 0);
-  u32(&b, 0);
+  if (s.tables) {
+    memcpy(b.data + b.len, s.tables->data, s.tables->len);
+    b.len += s.tables->len;
+  } else {
+    u32(&b, 0);
+    u32(&b, 0);
+  }
   u32(&b, 1);
   str(&b, s.builtin);
   u32(&b, s.builtin_arity ? s.builtin_arity : 1);
@@ -135,6 +150,83 @@ static bool loads(spec s, const char *reason) {
     return true;
   }
   return ok;
+}
+
+static buffer make_tables(uint32_t arity) {
+  buffer t;
+  t.data = malloc(4096);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, 2);
+  str(&t, "P");
+  u32(&t, 1);
+  str(&t, "x");
+  str(&t, "Q");
+  u32(&t, 2);
+  str(&t, "a");
+  str(&t, "b");
+  u32(&t, 1);
+  str(&t, "E");
+  u32(&t, 2);
+  str(&t, "A");
+  u32(&t, 0);
+  str(&t, "B");
+  u32(&t, arity);
+  return t;
+}
+
+static bool loads_tables(uint32_t arity, const char *reason) {
+  buffer t = make_tables(arity);
+  spec s = base();
+  s.tables = &t;
+  bool ok = loads(s, reason);
+  free(t.data);
+  return ok;
+}
+
+static agc_outcome run_spec(spec s, FILE *out) {
+  buffer b = build(s);
+  agc_program *p;
+  char error[160];
+  assert(agc_load(b.data, b.len, &p, error, sizeof error));
+  free(b.data);
+  agc_vm vm;
+  agc_vm_init(&vm, p, out, out, INT64_MAX);
+  return agc_vm_run(&vm);
+}
+
+static void expect_output(FILE *out, const char *expected) {
+  char text[64] = {0};
+  rewind(out);
+  assert(fread(text, 1, sizeof text, out) == strlen(expected) && strcmp(text, expected) == 0);
+  fclose(out);
+}
+
+static bool loads_with_tables(const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t registers,
+                              const char *reason) {
+  buffer t = make_tables(1);
+  spec s = base();
+  s.tables = &t;
+  s.code = code;
+  s.code_spans = spans;
+  s.count = count;
+  s.registers = registers;
+  bool ok = loads(s, reason);
+  free(t.data);
+  return ok;
+}
+
+static agc_outcome run_with_tables(const agc_instr *code, const uint32_t *spans, uint32_t count, FILE *out) {
+  buffer t = make_tables(1);
+  spec s = base();
+  s.tables = &t;
+  s.code = code;
+  s.code_spans = spans;
+  s.count = count;
+  s.registers = 4;
+  agc_outcome outcome = run_spec(s, out);
+  free(t.data);
+  return outcome;
 }
 
 static bool loads_code(const agc_instr *code, const uint32_t *spans, uint32_t count, const char *reason) {
@@ -510,6 +602,160 @@ int main(void) {
     wrong = agc_vm_run(&vm);
     assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INDEX-OUT-OF-RANGE") == 0 && wrong.span == 2);
     assert(strcmp(wrong.message, negative_messages[k]) == 0);
+  }
+
+  static const agc_instr data_code[] = {
+    {AGC_OP_STEP, 1, 0, 0},        {AGC_OP_CONST, 0, 0, 0},       {AGC_OP_STRUCT, 1, 0, 0},
+    {AGC_OP_ENUM, 2, 1, 1},        {AGC_OP_MOVE, 3, 2, 0},        {AGC_OP_CALL_BUILTIN, 3, 0, 0},
+    {AGC_OP_PAYLOAD, 3, 2, 0},     {AGC_OP_FIELD, 3, 3, 0},       {AGC_OP_SAME, 3, 3, 0},
+    {AGC_OP_CALL_BUILTIN, 3, 0, 0}, {AGC_OP_IS_VARIANT, 3, 2, 0}, {AGC_OP_CALL_BUILTIN, 3, 0, 0},
+    {AGC_OP_ENUM, 3, 3, 0},        {AGC_OP_CALL_BUILTIN, 3, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t data_spans[] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0};
+  out = tmpfile();
+  assert(out);
+  assert(run_with_tables(data_code, data_spans, 16, out).kind == AGC_DONE);
+  expect_output(out, "E.B(P(x: 1))\ntrue\nfalse\nE.A\n");
+  buffer t = make_tables(1);
+  s = base();
+  s.tables = &t;
+  s.code = data_code;
+  s.code_spans = data_spans;
+  s.count = 16;
+  s.registers = 4;
+  buffer with_tables = build(s);
+  for (size_t n = 0; n < with_tables.len; n++) {
+    agc_program *q;
+    assert(!agc_load(with_tables.data, n, &q, error, sizeof error));
+  }
+  free(with_tables.data);
+  free(t.data);
+
+  assert(!loads_tables(65536, "variant arity too large"));
+  assert(loads_tables(65535, NULL));
+
+  for (uint32_t fields = 65535; fields <= 65536; fields++) {
+    buffer wide;
+    wide.data = malloc((size_t)fields * 5 + 64);
+    assert(wide.data);
+    wide.len = 0;
+    u32(&wide, 1);
+    str(&wide, "W");
+    u32(&wide, fields);
+    for (uint32_t k = 0; k < fields; k++) str(&wide, "f");
+    u32(&wide, 0);
+    s = base();
+    s.tables = &wide;
+    assert(fields == 65535 ? loads(s, NULL) : !loads(s, "too many fields"));
+    free(wide.data);
+  }
+
+  buffer many;
+  many.data = malloc(65535 * 9 + 64);
+  assert(many.data);
+  many.len = 0;
+  u32(&many, 0);
+  u32(&many, 1);
+  str(&many, "E");
+  u32(&many, 65535);
+  for (uint32_t k = 0; k < 65535; k++) {
+    str(&many, "V");
+    u32(&many, 0);
+  }
+  static const agc_instr last_variant[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ENUM, 0, 0, 65534}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t last_spans[] = {1, 0, 1, 0, 0};
+  s = base();
+  s.tables = &many;
+  s.code = last_variant;
+  s.code_spans = last_spans;
+  s.count = 5;
+  out = tmpfile();
+  assert(out);
+  assert(run_spec(s, out).kind == AGC_DONE);
+  expect_output(out, "E.V\n");
+  free(many.data);
+
+  static const agc_instr same_floats[] = {
+    {AGC_OP_STEP, 1, 0, 0},       {AGC_OP_CONST, 0, 2, 0},       {AGC_OP_SAME, 1, 0, 0},
+    {AGC_OP_CALL_BUILTIN, 1, 0, 0}, {AGC_OP_CONST, 0, 3, 0},     {AGC_OP_SUB_F, 0, 0, 0},
+    {AGC_OP_NEG_F, 1, 0, 0},      {AGC_OP_SAME, 1, 0, 1},        {AGC_OP_CALL_BUILTIN, 1, 0, 0},
+    {AGC_OP_MOVE, 1, 0, 0},       {AGC_OP_SAME, 1, 0, 1},        {AGC_OP_CALL_BUILTIN, 1, 0, 0},
+    {AGC_OP_CONST, 0, 1, 0},      {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t same_spans[] = {1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0};
+  s = base();
+  s.extra_kind = 5;
+  s.extra_float = NAN;
+  s.second_float = 1.5;
+  s.code = same_floats;
+  s.code_spans = same_spans;
+  s.count = 14;
+  s.registers = 2;
+  out = tmpfile();
+  assert(out);
+  assert(run_spec(s, out).kind == AGC_DONE);
+  expect_output(out, "true\nfalse\ntrue\n");
+
+  static const agc_instr bad_struct_type[] = {{AGC_OP_STRUCT, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_struct_type, two_spans, 2, 4, "struct index out of range"));
+  static const agc_instr bad_struct_window[] = {{AGC_OP_STRUCT, 0, 3, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_struct_window, two_spans, 2, 4, "register range out of range"));
+  static const agc_instr bad_struct_target[] = {{AGC_OP_STRUCT, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_struct_target, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_enum_variant[] = {{AGC_OP_ENUM, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_enum_variant, two_spans, 2, 4, "variant index out of range"));
+  static const agc_instr bad_enum_window[] = {{AGC_OP_ENUM, 0, 4, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_enum_window, two_spans, 2, 4, "register out of range"));
+  buffer pair_tables = make_tables(2);
+  static const agc_instr bad_pair_window[] = {{AGC_OP_ENUM, 0, 3, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  s = base();
+  s.tables = &pair_tables;
+  s.code = bad_pair_window;
+  s.code_spans = two_spans;
+  s.count = 2;
+  s.registers = 4;
+  assert(!loads(s, "register range out of range"));
+  free(pair_tables.data);
+  static const agc_instr bad_nullary_start[] = {{AGC_OP_ENUM, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_nullary_start, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_is_variant[] = {{AGC_OP_IS_VARIANT, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_is_variant, two_spans, 2, 4, "variant index out of range"));
+  static const agc_instr bad_is_variant_reg[] = {{AGC_OP_IS_VARIANT, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_is_variant_reg, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_field[] = {{AGC_OP_FIELD, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_field, two_spans, 2, 4, "field index out of range"));
+  static const agc_instr bad_field_reg[] = {{AGC_OP_FIELD, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_field_reg, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_payload[] = {{AGC_OP_PAYLOAD, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_payload, two_spans, 2, 4, "payload index out of range"));
+  static const agc_instr bad_payload_reg[] = {{AGC_OP_PAYLOAD, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_payload_reg, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_same[] = {{AGC_OP_SAME, 0, 0, 4}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_same, two_spans, 2, 4, "register out of range"));
+  assert(!loads_code(bad_field, two_spans, 2, "field index out of range"));
+  static const agc_instr exact_struct[] = {{AGC_OP_STRUCT, 0, 2, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads_with_tables(exact_struct, two_spans, 2, 4, NULL));
+
+  static const agc_instr field_past_own[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_FIELD, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr payload_of_nullary[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ENUM, 0, 0, 0}, {AGC_OP_PAYLOAD, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr field_of_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_FIELD, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr variant_of_struct[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_IS_VARIANT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr same_lists[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr same_structs[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const agc_instr same_enums[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ENUM, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  const agc_instr *broken[] = {field_past_own,    payload_of_nullary, field_of_int, variant_of_struct,
+                               same_lists,        same_structs,       same_enums};
+  for (int k = 0; k < 7; k++) {
+    agc_outcome bad = run_with_tables(broken[k], confused_spans, 4, stdout);
+    assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
   }
 
   puts("loader tests passed");

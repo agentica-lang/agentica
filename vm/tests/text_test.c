@@ -67,7 +67,11 @@ int main(void) {
   assert(mixed->bytes == strlen(expected) && memcmp(mixed->data, expected, mixed->bytes) == 0);
   assert(mixed->chars == strlen(expected) - 1);
 
+#ifdef AGC_GC_STRESS
+  size_t depth = 1000;
+#else
   size_t depth = 1000000;
+#endif
   agc_value deep = agc_int(1);
   for (size_t k = 0; k < depth; k++) {
     agc_list *wrap = agc_new_list(1);
@@ -78,6 +82,40 @@ int main(void) {
   assert(text->bytes == 2 * depth + 1 && text->chars == text->bytes);
   for (size_t k = 0; k < depth; k++) assert(text->data[k] == '[' && text->data[depth + 1 + k] == ']');
   assert(text->data[depth] == '1');
+
+  agc_string *field_names[] = {agc_make_string("value", 5, 5)};
+  agc_struct_def structs[] = {{agc_make_string("Node", 4, 4), 1, field_names}};
+  agc_enum_def enums[] = {{agc_make_string("@2::Chain", 9, 9), 0, 2}};
+  agc_enum *end = agc_new_enum(1, 0);
+  agc_variant_def variants[] = {{agc_make_string("Link", 4, 4), 0, 2, NULL},
+                                {agc_make_string("End", 3, 3), 0, 0, end}};
+  agc_program program;
+  memset(&program, 0, sizeof program);
+  program.struct_count = 1;
+  program.enum_count = 1;
+  program.variant_count = 2;
+  program.structs = structs;
+  program.enums = enums;
+  program.variants = variants;
+  vm.program = &program;
+  agc_value lambda = agc_string_value(agc_make_string("\xce\xbb", 2, 1));
+  agc_value chain = agc_enum_value(end);
+  for (size_t k = 0; k < depth; k++) {
+    agc_struct *node = agc_new_struct(0, 1);
+    node->fields[0] = chain;
+    agc_enum *link = agc_new_enum(0, 2);
+    link->payload[0] = lambda;
+    link->payload[1] = agc_struct_value(node);
+    chain = agc_enum_value(link);
+  }
+  const char *open = "@2::Chain.Link(\"\xce\xbb\", Node(value: ";
+  size_t open_len = strlen(open), tail_len = strlen("@2::Chain.End");
+  agc_string *chained = agc_text(&vm, chain);
+  assert(chained->bytes == depth * (open_len + 2) + tail_len);
+  assert(chained->chars == chained->bytes - depth);
+  for (size_t k = 0; k < depth; k++) assert(memcmp(chained->data + k * open_len, open, open_len) == 0);
+  assert(memcmp(chained->data + depth * open_len, "@2::Chain.End", tail_len) == 0);
+  for (size_t k = depth * open_len + tail_len; k < chained->bytes; k++) assert(chained->data[k] == ')');
 
   puts("text tests passed");
   return 0;

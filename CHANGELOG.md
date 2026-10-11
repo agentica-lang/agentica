@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs structs, enums and `case`: struct construction (fields
+  in any order, evaluated as written), field access, generic and recursive
+  enums, nullary variants with or without `()`, struct and enum values in
+  locals, parameters, returns and lists, imported types, and `case` with
+  literal, `_` and variant patterns (payload bindings and `_` discards).
+  They print as `Name(f: v)` and `Enum.Variant(a)` through `puts`, `print`,
+  `IO.warn`, interpolation, `to_s` and `inspect`, with the same names as the
+  evaluator, and deep values print without C recursion. The `.agcb` format
+  is now version 2: it carries the struct and enum tables.
 - A documentation website in `site/`, built with Hugo and a small custom
   theme. It shows the language reference (`docs/grammar.md`), the guide and
   the library pages from the programming skill without copying them.
@@ -94,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `vm/gen-unicode.rkt` moved to `vm/tools/gen-unicode.rkt`; `make vm-unicode`
+  runs it from there and writes the same `vm/unicode_data.c`.
 - CI runs on pull requests only, and only on Linux; pull requests that
   change only docs, the site or Markdown skip it. Compiled Racket files are
   cached per job. The macOS and Windows VM jobs moved to

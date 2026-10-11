@@ -8,10 +8,10 @@
          (struct-out bc-program)
          (struct-out bc-function))
 
-(struct bc-program (span sources spans constants builtins functions entry) #:transparent)
+(struct bc-program (span sources spans constants structs enums builtins functions entry) #:transparent)
 (struct bc-function (name params registers span code spans) #:transparent)
 
-(define format-version 1)
+(define format-version 2)
 (define max-u16 65535)
 
 (define opcodes
@@ -19,7 +19,8 @@
     jump jump-if-false jump-if-true call call-builtin return
     add-f sub-f mul-f div-f neg-f lt-f le-f
     concat to-text inspect
-    list list-len list-get))
+    list list-len list-get
+    struct field enum is-variant payload same))
 
 (define opcode-number
   (for/hasheq ([op (in-list opcodes)] [index (in-naturals)]) (values op index)))
@@ -35,6 +36,16 @@
   (let/ec return
     (define (too-big what span)
       (return (diagnostic 'BYTECODE-LIMIT (format "the program has too many ~a for the VM" what) span)))
+    (define structs (ir-program-structs ir))
+    (define enums (ir-program-enums ir))
+    (when (> (length structs) max-u16) (too-big "structs" (ir-program-span ir)))
+    (when (> (for/sum ([entry (in-list enums)]) (length (ir-enum-variants entry))) max-u16)
+      (too-big "enum variants" (ir-program-span ir)))
+    (when (for/or ([entry (in-list structs)]) (> (length (ir-struct-fields entry)) max-u16))
+      (too-big "fields in one struct" (ir-program-span ir)))
+    (when (for/or ([entry (in-list enums)])
+            (for/or ([variant (in-list (ir-enum-variants entry))]) (> (cdr variant) max-u16)))
+      (too-big "payload items in one variant" (ir-program-span ir)))
     (define sources (ir-program-sources ir))
     (define source-index
       (for/hasheq ([text-source (in-list sources)] [index (in-naturals)])
@@ -130,6 +141,8 @@
                   (cons (source-name text-source) (source-text text-source)))
                 (list->vector (reverse spans))
                 (list->vector (reverse constants))
+                structs
+                enums
                 builtins
                 functions
                 (ir-program-entry ir))))
@@ -168,9 +181,19 @@
       [(eq? value #t) (u8 out 3)]
       [(exact-integer? value) (u8 out 4) (write-bytes (integer->integer-bytes value 8 #t #f) out)]
       [(string? value) (u8 out 6) (str out value)]))
-  (u32 out 0)
-  (u32 out 0)
-  (u32 out 0)
+  (u32 out (length (bc-program-structs program)))
+  (for ([entry (in-list (bc-program-structs program))])
+    (str out (ir-struct-name entry))
+    (u32 out (length (ir-struct-fields entry)))
+    (for ([field (in-list (ir-struct-fields entry))])
+      (str out field)))
+  (u32 out (length (bc-program-enums program)))
+  (for ([entry (in-list (bc-program-enums program))])
+    (str out (ir-enum-name entry))
+    (u32 out (length (ir-enum-variants entry)))
+    (for ([variant (in-list (ir-enum-variants entry))])
+      (str out (car variant))
+      (u32 out (cdr variant))))
   (u32 out (length (bc-program-builtins program)))
   (for ([entry (in-list (bc-program-builtins program))])
     (str out (car entry))

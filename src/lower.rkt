@@ -5,23 +5,41 @@
 (provide lower
          format-ir
          (struct-out ir-program)
+         (struct-out ir-struct)
+         (struct-out ir-enum)
          (struct-out ir-function)
          (struct-out ir-label)
          (struct-out ir-instr))
 
-(struct ir-program (sources functions entry span) #:transparent)
+(struct ir-program (sources structs enums functions entry span) #:transparent)
+(struct ir-struct (name fields) #:transparent)
+(struct ir-enum (name variants) #:transparent)
 (struct ir-function (name params slots body span) #:transparent)
 (struct ir-label (id) #:transparent)
 (struct ir-instr (op args spans) #:transparent)
 
 (define int-min (- (expt 2 63)))
+(define int-max (sub1 (expt 2 63)))
 
 (define value-types '(Int Float Bool Nil String))
 
 (define max-list-chunk 255)
 
-(define (vm-type? type)
-  (if (list-type? type) (vm-type? (cadr type)) (and (memq type value-types) #t)))
+(define (vm-type? type user-types)
+  (cond
+    [(list-type? type) (vm-type? (cadr type) user-types)]
+    [(and (pair? type) (memq (car type) '(Struct Enum)))
+     (eq? (hash-ref user-types (cadr type) #f) (car type))]
+    [else (and (memq type value-types) #t)]))
+
+(define (user-tables declarations)
+  (values
+   (for/list ([declaration (in-list declarations)] #:when (struct-decl? declaration))
+     (ir-struct (struct-decl-name declaration) (map field-decl-name (struct-decl-fields declaration))))
+   (for/list ([declaration (in-list declarations)] #:when (enum-decl? declaration))
+     (ir-enum (enum-decl-name declaration)
+              (for/list ([variant (in-list (enum-decl-variants declaration))])
+                (cons (enum-variant-name variant) (length (enum-variant-payload-types variant))))))))
 
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
@@ -51,6 +69,19 @@
         (for/list ([declaration (in-list (program-declarations program))]
                    #:when (function-decl? declaration))
           declaration))
+      (define-values (structs enums) (user-tables (program-declarations program)))
+      (define user-types (make-hash))
+      (define struct-info (make-hash))
+      (for ([entry (in-list structs)] [index (in-naturals)])
+        (hash-set! user-types (ir-struct-name entry) 'Struct)
+        (hash-set! struct-info (ir-struct-name entry) (cons index (ir-struct-fields entry))))
+      (define variant-ids (make-hash))
+      (for/fold ([id 0]) ([entry (in-list enums)])
+        (hash-set! user-types (ir-enum-name entry) 'Enum)
+        (for/fold ([id id]) ([variant (in-list (ir-enum-variants entry))])
+          (hash-set! variant-ids (cons (ir-enum-name entry) (car variant)) id)
+          (add1 id)))
+      (define program-types (list user-types struct-info variant-ids))
       (define function-index
         (for/hash ([declaration (in-list declarations)] [index (in-naturals)])
           (values (function-decl-name declaration) index)))
@@ -62,11 +93,12 @@
       (note-source! (program-span program))
       (define functions
         (for/list ([declaration (in-list declarations)])
-          (lower-function declaration types function-index unsupported note-source!)))
-      (ir-program sources functions (hash-ref function-index "main")
+          (lower-function declaration types program-types function-index unsupported note-source!)))
+      (ir-program sources structs enums functions (hash-ref function-index "main")
                   (program-span program)))))
 
-(define (lower-function declaration types function-index unsupported note-source!)
+(define (lower-function declaration types program-types function-index unsupported note-source!)
+  (match-define (list user-types struct-info variant-ids) program-types)
   (define code '())
   (define next 0)
   (define high 0)
@@ -99,7 +131,7 @@
   (define (type-of expression)
     (hash-ref types expression #f))
   (define (require-type! expression void? [type (type-of expression)])
-    (unless (or (vm-type? type) (and void? (eq? type 'Void)))
+    (unless (or (vm-type? type user-types) (and void? (eq? type 'Void)))
       (unsupported (if type (format "values of type ~a" (type->string type)) "this expression")
                    (node-span expression))))
 
@@ -167,6 +199,27 @@
        dst]
       [(binary? expression) (lower-binary expression want)]
       [(list-lit? expression) (lower-list expression want)]
+      [(enum-constructor? expression)
+       (lower-enum (enum-constructor-enum-name expression) (enum-constructor-variant-name expression)
+                   (enum-constructor-args expression) span want)]
+      [(construct? expression)
+       (define parts (string-split (construct-type-name expression) "."))
+       (if (and (= (length parts) 2) (eq? (hash-ref user-types (car parts) #f) 'Enum))
+           (lower-enum (car parts) (cadr parts)
+                       (for/list ([argument (in-list (construct-args expression))])
+                         (if (named-arg? argument) (named-arg-value argument) argument))
+                       span want)
+           (lower-struct expression want))]
+      [(field-access? expression)
+       (emit! 'step '() span)
+       (define saved next)
+       (define dst (target want))
+       (define target-node (field-access-target expression))
+       (define source (lower-expression target-node #f))
+       (define fields (cdr (hash-ref struct-info (cadr (static-type target-node)))))
+       (emit! 'field (list dst source (index-of fields (field-access-name expression))) span)
+       (set! next (if want saved (add1 dst)))
+       dst]
       [(index-access? expression)
        (define target-node (index-access-target expression))
        (unless (list-type? (static-type target-node))
@@ -247,6 +300,35 @@
          (cond
            [want (emit! 'move (list want base) span) want]
            [else base])]))
+    (set! next (if want saved (add1 dst)))
+    dst)
+
+  (define (lower-enum enum-name variant-name arguments span want)
+    (emit! 'step '() span)
+    (define saved next)
+    (define dst (target want))
+    (define id (hash-ref variant-ids (cons enum-name variant-name)))
+    (define start next)
+    (for ([argument (in-list arguments)])
+      (lower-expression argument (alloc!)))
+    (emit! 'enum (list dst (if (null? arguments) dst start) id) span)
+    (set! next (if want saved (add1 dst)))
+    dst)
+
+  (define (lower-struct expression want)
+    (define span (construct-span expression))
+    (match-define (cons index fields) (hash-ref struct-info (construct-type-name expression)))
+    (emit! 'step '() span)
+    (define saved next)
+    (define dst (target want))
+    (define start next)
+    (for ([_ (in-list fields)]) (alloc!))
+    (define after next)
+    (for ([argument (in-list (construct-args expression))])
+      (lower-expression (named-arg-value argument)
+                        (+ start (index-of fields (named-arg-name argument))))
+      (set! next after))
+    (emit! 'struct (list dst (if (null? fields) dst start) index) span)
     (set! next (if want saved (add1 dst)))
     dst)
 
@@ -413,7 +495,47 @@
          (emit! 'jump-if-true (list temp top) span)
          (place! exit))
        (set! next saved)]
-      [(case-stmt? statement) (unsupported "case" span)]
+      [(case-stmt? statement)
+       (define value (lower-expression (case-stmt-value statement) #f))
+       (define end (new-label!))
+       (define arms (case-stmt-arms statement))
+       (for ([arm (in-list arms)] [index (in-naturals 1)])
+         (define pattern (case-arm-pattern arm))
+         (define pattern-span (node-span pattern))
+         (define skip (new-label!))
+         (define test-slot next)
+         (cond
+           [(wildcard-pattern? pattern) (void)]
+           [(literal-pattern? pattern)
+            (define literal (literal-pattern-value pattern))
+            (cond
+              [(and (exact-integer? literal) (not (<= int-min literal int-max)))
+               (emit! 'jump (list skip) pattern-span)]
+              [else
+               (define slot (alloc!))
+               (emit! 'const (list slot literal) pattern-span)
+               (emit! 'same (list slot value slot) pattern-span)
+               (emit! 'jump-if-false (list slot skip) pattern-span)])]
+           [else
+            (define id (hash-ref variant-ids (cons (variant-pattern-enum-name pattern)
+                                                   (variant-pattern-variant-name pattern))))
+            (define slot (alloc!))
+            (emit! 'is-variant (list slot value id) pattern-span)
+            (emit! 'jump-if-false (list slot skip) pattern-span)])
+         (set! next test-slot)
+         (scoped (lambda ()
+                   (when (variant-pattern? pattern)
+                     (for ([name (in-list (variant-pattern-bindings pattern))] [item (in-naturals)]
+                           #:when name)
+                       (define slot (alloc!))
+                       (hash-set! (car scopes) name slot)
+                       (emit! 'payload (list slot value item) pattern-span)))
+                   (lower-block (case-arm-body arm))))
+         (when (< index (length arms))
+           (emit! 'jump (list end) span))
+         (place! skip))
+       (place! end)
+       (set! next saved)]
       [else (unsupported "this statement" span)]))
 
   (for ([parameter (in-list (function-decl-params declaration))])
@@ -438,11 +560,41 @@
           (= index (if (eq? op 'jump) 0 1)))
      (format "L~a" value)]
     [(and (eq? op 'call) (= index 1)) (format "fn~a" value)]
+    [(and (memq op '(enum is-variant)) (= index 2)) (format "v~a" value)]
+    [(and (eq? op 'struct) (= index 2)) (format "s~a" value)]
+    [(and (memq op '(field payload)) (= index 2)) (format "~a" value)]
     [(and (eq? op 'list) (= index 2)) (format "~a" value)]
     [(and (eq? op 'call-builtin) (>= index 1)) (format "~a" value)]
     [else (format "r~a" value)]))
 
+(define (format-tables ir)
+  (define structs
+    (for/list ([entry (in-list (ir-program-structs ir))] [index (in-naturals)])
+      (format "struct s~a ~a~a" index (ir-struct-name entry)
+              (string-append*
+               (for/list ([field (in-list (ir-struct-fields entry))])
+                 (format " ~a" field))))))
+  (define enums
+    (let loop ([entries (ir-program-enums ir)] [id 0] [out '()])
+      (cond
+        [(null? entries) (reverse out)]
+        [else
+         (define variants (ir-enum-variants (car entries)))
+         (loop (cdr entries) (+ id (length variants))
+               (cons (format "enum ~a~a" (ir-enum-name (car entries))
+                             (string-append*
+                              (for/list ([variant (in-list variants)] [k (in-naturals id)])
+                                (format " v~a=~a/~a" k (car variant) (cdr variant)))))
+                     out))])))
+  (append structs enums))
+
 (define (format-ir ir)
+  (define tables (format-tables ir))
+  (string-append
+   (if (null? tables) "" (string-append (string-join tables "\n") "\n\n"))
+   (format-functions ir)))
+
+(define (format-functions ir)
   (string-join
    (for/list ([function (in-list (ir-program-functions ir))] [index (in-naturals)])
      (string-join
