@@ -3,6 +3,7 @@
 (require (except-in rackunit check)
          json
          racket/runtime-path
+         "cli-in-process.rkt"
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
          "../src/evaluator.rkt"
@@ -44,19 +45,7 @@
   (if (diagnostic? result) (diagnostic-code result) result))
 
 (define (cli . arguments)
-  (define out (open-output-string))
-  (define err (open-output-string))
-  (define status
-    (let/ec escape
-      (parameterize ([current-namespace (make-base-namespace)]
-                     [current-command-line-arguments (list->vector arguments)]
-                     [current-input-port (open-input-bytes #"")]
-                     [current-output-port out]
-                     [current-error-port err]
-                     [exit-handler escape])
-        (dynamic-require `(submod ,main-file main) #f)
-        0)))
-  (list status (get-output-string out) (get-output-string err)))
+  (apply run-main-in-process arguments))
 
 (define (cli-process . arguments)
   (define-values (process out in err)
@@ -378,7 +367,7 @@
     (check-equal? (cli "--json" "check" hello) '(0 "{\"ok\":true}\n" ""))
     (define bad (make-temporary-file "agentica~a.agc"))
     (display-to-file "def main() -> Void\n  x = 1 / 0\nend\n\n" bad #:exists 'truncate)
-    (define failed (cli (path->string bad)))
+    (define failed (cli-process (path->string bad)))
     (delete-file bad)
     (check-equal? (car failed) 1)
     (check-regexp-match #rx"error\\[RUNTIME-DIVISION-BY-ZERO\\]" (caddr failed))

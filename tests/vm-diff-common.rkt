@@ -4,6 +4,7 @@
          json
          racket/os
          racket/runtime-path
+         "cli-in-process.rkt"
          "../src/bytecode.rkt"
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
@@ -126,20 +127,7 @@
     (apply run-process (find-system-path 'exec-file) (path->string main-file) #:input input arguments)))
 
 (define (run-cli-in-process temp #:input [input #""] #:port [port (open-input-bytes input)] . arguments)
-  (define out (open-output-string))
-  (define err (open-output-string))
-  (define status
-    (let/ec escape
-      (parameterize ([current-environment-variables (cli-environment temp vm-file)]
-                     [current-namespace (make-base-namespace)]
-                     [current-command-line-arguments (list->vector arguments)]
-                     [current-input-port port]
-                     [current-output-port out]
-                     [current-error-port err]
-                     [exit-handler escape])
-        (dynamic-require `(submod ,main-file main) #f)
-        0)))
-  (list status (get-output-string out) (get-output-string err)))
+  (apply run-main-in-process #:environment (cli-environment temp vm-file) #:port port arguments))
 
 (define (bytecode-files directory)
   (for/list ([file (in-list (directory-list directory))]
