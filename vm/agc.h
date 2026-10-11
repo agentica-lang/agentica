@@ -408,6 +408,7 @@ const char *agc_uv_version(void);
 void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_park(agc_vm *vm, size_t reg);
 bool agc_io_close(agc_vm *vm);
+void agc_files_init(agc_vm *vm);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 

@@ -192,14 +192,17 @@ static bool same_text(const char *data, size_t len, const char *word) {
 
 static bool path_string(const agc_string *s) { return s->bytes > 0 && !memchr(s->data, 0, s->bytes); }
 
-static const agc_string *cwd_of(agc_vm *vm) {
-  if (vm->cwd) return vm->cwd;
+void agc_files_init(agc_vm *vm) {
   size_t cap = 256;
   char *buf = NULL;
   for (;;) {
     buf = agc_alloc_atomic(cap);
     if (getcwd(buf, cap)) break;
-    if (errno != ERANGE) agc_fail(vm, "RUNTIME-INTERNAL", "cannot read the current directory", 0);
+    if (errno != ERANGE) {
+      buf[0] = '/';
+      buf[1] = '\0';
+      break;
+    }
     cap = agc_size_mul(cap, 2);
   }
   size_t len = strlen(buf);
@@ -207,6 +210,10 @@ static const agc_string *cwd_of(agc_vm *vm) {
   put(&t, buf, len);
   if (len == 0 || buf[len - 1] != '/') puts_text(&t, "/");
   vm->cwd = agc_make_string(t.data, t.len, 0);
+}
+
+static const agc_string *cwd_of(agc_vm *vm) {
+  if (!vm->cwd) agc_files_init(vm);
   return vm->cwd;
 }
 
@@ -1041,6 +1048,8 @@ const agc_builtin agc_file_builtins[] = {
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
 #else
+void agc_files_init(agc_vm *vm) { (void)vm; }
+
 const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE}};
 
 const size_t agc_file_builtin_count = 0;

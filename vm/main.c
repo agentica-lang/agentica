@@ -310,6 +310,7 @@ static int run(int argc, char **argv) {
   seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  agc_files_init(vm);
   agc_random_seed(&vm->random, seen_seed ? seed : entropy_seed());
   vm->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));

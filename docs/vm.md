@@ -510,7 +510,9 @@ The checks run in this order:
   `write` form (2.3); above 256 characters it keeps the first 253 and adds
   `...` (Racket's `error-print-width`).
 - A relative path is completed with the current directory (the raw
-  `getcwd` bytes, read once, with a trailing `/`), and runs of `/` collapse,
+  `getcwd` bytes, read once at start-up by `agc_files_init` as Racket fixes
+  `current-directory` when it starts, with a trailing `/`; if `getcwd`
+  fails it is `/`, Racket's fallback too), and runs of `/` collapse,
   as Racket's host paths do. That path is what the OS gets and what
   messages show after `path: `. `Path.cwd` and `Path.resolve` return the
   directory decoded with U+FFFD for invalid UTF-8.
@@ -1614,7 +1616,10 @@ The first 7h PR has one task, so it has no run queue yet. What it has:
   returns false when a job is still stuck in the OS (a read on a silent
   FIFO, say); `vm/main.c` then flushes stdout and stderr and ends with
   `_exit`, because a normal exit would run libuv's destructor, which joins
-  the pool threads and would wait for that read.
+  the pool threads and would wait for that read. The flush of a handle's
+  write buffer at the end of run is a blocking write, so it can block on a
+  FIFO whose reader stopped reading, as Racket's flush in
+  `filesystem-close-all!` does (parity).
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
   never touch the file system; a file builtin (`Path.cwd` and
   `Path.resolve` too, since they read the current directory) then ends the
@@ -1657,6 +1662,9 @@ once two tasks can share one.
   (PATH or a path relative to the working directory), and passes the absolute
   path to `uv_spawn`. All three stdio streams are pipes.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
+- The file loop sets `UV_USE_IO_URING=0` in the VM's own environment
+  (10.2.2). The processes PR must not pass it on: it removes it from the
+  child's environment unless the user had set it before the VM started.
 - Windows: after resolution, allow only `.exe` and `.com`, case-insensitively,
   and reject names with a trailing dot or space or any `:`. Both backends use this same
   allowlist: the Racket check in `process.rkt` (`windows-runnable-name?`)

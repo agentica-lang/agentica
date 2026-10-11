@@ -146,6 +146,8 @@
     (check-equal? (unsupported-at "def main() -> Void\n  r = JSON.decode(\"{}\", Header)\nend\n") '(2 7))
     (check-equal? (unsupported-at "struct Wrap\n  h: Header\n  n: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(Wrap))\nend\n") '(7 20))
     (check-equal? (unsupported-at "struct Wrap\n  h: Header\n  n: Int\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Wrap)\nend\n") '(7 25))
+    (check-equal? (unsupported-at "def main() -> Void\n  puts(JSON.schema(FileInfo))\nend\n") '(2 20))
+    (check-equal? (unsupported-at "struct Wrap\n  info: FileInfo\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Wrap)\nend\n") '(6 25))
     (check-equal? (unsupported-at "def main() -> Void\n  Task.sleep(5)\nend\n") '(2 3))
     (check-equal? (unsupported-at "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\nend\n")
                   '(6 7))
