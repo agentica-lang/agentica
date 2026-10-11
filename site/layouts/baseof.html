@@ -7,8 +7,8 @@
   <title>{{ if .IsHome }}{{ site.Title }}: Ruby with static types{{ else }}{{ .Title }} · {{ site.Title }}{{ end }}</title>
   <meta name="description" content="{{ if .Params.name }}{{ site.Params.description }}{{ else }}{{ .Description | default site.Params.description }}{{ end }}">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23b4232a'/%3E%3Cpath d='M4 13 8 3l4 10M5.6 9h4.8' stroke='%23fff' stroke-width='1.8' fill='none'/%3E%3C/svg%3E">
-  {{- $sass := dict "transpiler" "dartsass" "outputStyle" "compressed" "targetPath" "css/main.css" }}
-  {{- with resources.Get "scss/main.scss" | css.Sass $sass | minify | fingerprint }}
+  {{- $sass := dict "transpiler" "dartsass" "outputStyle" "compressed" "targetPath" "css/main.css" "vars" (dict "narrow" site.Params.narrow) }}
+  {{- with resources.Get "scss/main.scss" | css.Sass $sass | fingerprint }}
   <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous">
   {{- end }}
   <script>document.documentElement.classList.add("js")</script>
@@ -22,7 +22,7 @@
     </main>
   </div>
   {{ partial "footer.html" . }}
-  {{- with resources.Get "js/nav.js" | js.Build (dict "minify" true "targetPath" "js/nav.js") | fingerprint }}
+  {{- with resources.Get "js/nav.js" | js.Build (dict "minify" true "targetPath" "js/nav.js" "params" (dict "narrow" site.Params.narrow)) | fingerprint }}
   <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
   {{- end }}
 </body>

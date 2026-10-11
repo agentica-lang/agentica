@@ -7,6 +7,7 @@ disableKinds = ["taxonomy", "term", "rss"]
   description = "Agentica is Ruby with static types: Ruby-like syntax, checked before running, with immutable values."
   repo = "https://github.com/sonic182/agentica"
   repoPublic = false
+  narrow = "50rem"
 
 [markup.highlight]
   noClasses = false

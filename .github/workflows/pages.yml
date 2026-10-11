@@ -39,6 +39,7 @@ jobs:
         run: |
           curl -fsSL -o "$RUNNER_TEMP/dart-sass.tar.gz" "https://github.com/sass/dart-sass/releases/download/${DART_SASS_VERSION}/dart-sass-${DART_SASS_VERSION}-linux-x64.tar.gz"
           echo "${DART_SASS_SHA256}  $RUNNER_TEMP/dart-sass.tar.gz" | sha256sum -c -
+          rm -rf "$RUNNER_TEMP/dart-sass"
           tar -xzf "$RUNNER_TEMP/dart-sass.tar.gz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/dart-sass" >> "$GITHUB_PATH"
       - id: pages

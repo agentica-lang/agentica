@@ -1,4 +1,6 @@
-$narrow: 50rem;
+@use "hugo:vars";
+
+$narrow: vars.$narrow;
 
 :root {
   --bg: #ffffff;
