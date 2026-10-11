@@ -926,13 +926,19 @@ and cost one predictable branch each.
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
   runs the VM as `agentica-vm [--max-steps N] [--ai|--json] --driver-pid
   PID -- file [args...]`. `--driver-pid` is a hidden VM flag (not in the
-  usage text): the VM deletes its input right after reading it, and on
-  Linux it first calls `prctl(PR_SET_PDEATHSIG, SIGKILL)` and then checks
-  that `getppid()` is `PID`; if not, the driver is already gone, so it
-  deletes the input and exits 2 (Racket's `subprocess` cannot run code
-  between fork and exec, so the check closes that race). The driver also
-  deletes the file when the VM never ran or failed before loading, and on
-  a break. When a driver port is not a file stream (rackunit, captured
+  usage text). On Linux the VM first calls `prctl(PR_SET_PDEATHSIG,
+  SIGKILL)` and then checks that `getppid()` is `PID`; if not, the driver
+  is already gone, so it prints a message and exits 2 without touching the
+  input (Racket's `subprocess` cannot run code between fork and exec, so
+  the check closes that race). Then it opens the input with `O_NOFOLLOW`
+  and loads it only if it is a regular file owned by the VM's user, with
+  one link and no group or other permission bits; otherwise it exits 2.
+  The path is visible in `ps`, and a shared temp directory without the
+  sticky bit would let another user swap the file between the driver's
+  close and the VM's open; these checks refuse a swapped file. After those
+  checks it deletes the input, but only if the path still names the file it
+  opened (same device and inode). The driver deletes the file too, when the
+  VM never ran or failed before loading, and on a break. When a driver port is not a file stream (rackunit, captured
   output) it copies that stream through a pipe; otherwise it passes the
   real stdin, stdout and stderr, so the VM's output and exit code reach
   the user unchanged. Front-end and `LOWER-` diagnostics print as without
@@ -942,8 +948,9 @@ and cost one predictable branch each.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is
-  `agentica-vm` next to the executable (`run-file`). A missing VM prints
-  `agentica: cannot find the VM at PATH` and exits 2. It does not use
+  `agentica-vm` next to the executable (`run-file`). A missing or
+  non-executable VM prints `agentica: cannot find the VM at PATH` and
+  exits 2. It does not use
   `define-runtime-path`: `raco distribute` would then copy the VM into
   `lib/` and fail when it is not built. Packaging the VM in `bin/` of the
   release is a later 7i item.

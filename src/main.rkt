@@ -32,24 +32,14 @@
      (define program (path->complete-path (or (find-executable-path run) run)))
      (build-path (path-only program) vm-name)]))
 
-(define (write-temporary-bytecode data)
-  (let retry ([tries 0])
-    (define path (build-path (find-system-path 'temp-dir)
-                             (format "agentica-~a.agcb" (bytes->hex-string (crypto-random-bytes 16)))))
-    (define out
-      (with-handlers ([(lambda (e) (and (exn:fail:filesystem:exists? e) (< tries 8)))
-                       (lambda (_) #f)])
-        (open-output-file path #:exists 'error #:permissions #o600)))
-    (cond
-      [(not out) (retry (add1 tries))]
-      [else
-       (with-handlers ([exn:fail? (lambda (e)
-                                    (close-output-port out)
-                                    (delete-temporary path)
-                                    (raise e))])
-         (write-bytes data out)
-         (close-output-port out))
-       path])))
+(define (temporary-bytecode-path)
+  (build-path (find-system-path 'temp-dir)
+              (format "agentica-~a.agcb" (bytes->hex-string (crypto-random-bytes 16)))))
+
+(define (write-temporary-bytecode path data created!)
+  (define out (open-output-file path #:exists 'error #:permissions #o600))
+  (created!)
+  (dynamic-wind void (lambda () (write-bytes data out)) (lambda () (close-output-port out))))
 
 (define (delete-temporary path)
   (with-handlers ([exn:fail:filesystem? void])
@@ -63,34 +53,31 @@
   (flush-output stdout)
   (flush-output stderr)
   (define-values (process from-vm to-vm from-vm-err)
-    (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm
-           (append options (list "--driver-pid" (number->string (getpid)) "--" (path->string bytecode-file))
-                   program-args)))
-  (dynamic-wind
-    void
-    (lambda ()
-      (define (pump from to)
-        (thread (lambda () (copy-port from to) (close-input-port from))))
-      (define readers
-        (filter values (list (and from-vm (pump from-vm stdout))
-                             (and from-vm-err (pump from-vm-err stderr)))))
-      (define writer
-        (and to-vm
+    (with-handlers ([exn:fail? (lambda (_) (values #f #f #f #f))])
+      (apply subprocess (stream stdout) (stream stdin) (stream stderr) vm
+             (append options (list "--driver-pid" (number->string (getpid)) "--" (path->string bytecode-file))
+                     program-args))))
+  (when to-vm (close-output-port to-vm))
+  (and process
+       (dynamic-wind
+         void
+         (lambda ()
+           (define (pump from to)
              (thread (lambda ()
-                       (with-handlers ([exn:fail? void])
-                         (copy-port stdin to-vm)
-                         (close-output-port to-vm))))))
-      (subprocess-wait process)
-      (for-each thread-wait readers)
-      (when writer
-        (kill-thread writer)
-        (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
-      (flush-output stdout)
-      (flush-output stderr)
-      (subprocess-status process))
-    (lambda ()
-      (when (eq? (subprocess-status process) 'running)
-        (subprocess-kill process #t)))))
+                       (with-handlers ([exn:fail? (lambda (_) (copy-port from (open-output-nowhere)))])
+                         (copy-port from to))
+                       (close-input-port from))))
+           (define readers
+             (filter values (list (and from-vm (pump from-vm stdout))
+                                  (and from-vm-err (pump from-vm-err stderr)))))
+           (subprocess-wait process)
+           (for-each thread-wait readers)
+           (flush-output stdout)
+           (flush-output stderr)
+           (subprocess-status process))
+         (lambda ()
+           (when (eq? (subprocess-status process) 'running)
+             (subprocess-kill process #t))))))
 
 (module+ main
   (define dump? #f)
@@ -203,7 +190,7 @@
   (define source-file (car arguments))
   (define program-args (cdr arguments))
   (define vm (and vm? (find-vm)))
-  (when (and vm (not (file-exists? vm)))
+  (when (and vm (not (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm)))))
     (eprintf "agentica: cannot find the VM at ~a; run make vm or set AGENTICA_VM\n" vm)
     (exit 2))
 
@@ -257,13 +244,8 @@
          (lambda (out) (void (write-bytes data out)))))]
     [vm?
      (define data (bytecode-data))
-     (define bytecode-file
-       (with-handlers ([exn:fail:filesystem?
-                        (lambda (_)
-                          (eprintf "agentica: cannot write a temporary file in ~a\n"
-                                   (find-system-path 'temp-dir))
-                          (exit 2))])
-         (write-temporary-bytecode data)))
+     (define bytecode-file (temporary-bytecode-path))
+     (define created? #f)
      (define options
        (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
                (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
@@ -271,9 +253,15 @@
        (dynamic-wind
          void
          (lambda ()
-           (with-handlers ([exn:fail? (lambda (_) #f)])
-             (run-vm-process vm bytecode-file options program-args)))
-         (lambda () (delete-temporary bytecode-file))))
+           (if (with-handlers ([exn:fail:filesystem? (lambda (_) #f)])
+                 (write-temporary-bytecode bytecode-file data (lambda () (set! created? #t)))
+                 #t)
+               (run-vm-process vm bytecode-file options program-args)
+               'no-temporary))
+         (lambda () (when created? (delete-temporary bytecode-file)))))
+     (when (eq? status 'no-temporary)
+       (eprintf "agentica: cannot write a temporary file in ~a\n" (find-system-path 'temp-dir))
+       (exit 2))
      (unless (exact-integer? status)
        (eprintf "agentica: cannot run the VM at ~a\n" vm)
        (exit 2))
