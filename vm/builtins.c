@@ -92,7 +92,6 @@ static agc_value builtin_eof(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_args(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)vm;
   (void)args;
   (void)span;
   return vm->args;

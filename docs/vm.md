@@ -837,7 +837,14 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
   builtins only call it, so 7h can replace it with libuv reads that park
   the task (10.2) without changing what the builtins return. A failed read
   is `RUNTIME-INTERNAL` for `gets`, `read` and `eof?` and the error value
-  `"input read failed"` for `read_bytes`, as in the evaluator. Reading
+  `"input read failed"` for `read_bytes`, as in the evaluator. The
+  message differs (the evaluator shows Racket's port error, the VM says
+  "cannot read standard input"), but the span is the same: the evaluator
+  reports any Racket failure at the whole-program span, and the VM passes
+  span 0, which maps to that span. When stdout is a terminal, `vm/main.c`
+  opens stdin with `agc_input_open(vm, 0, isatty(1))`, so stdout is flushed
+  before each blocking stdin read; a prompt written before `gets` shows
+  up first, as it does with the evaluator on a terminal. Reading
   charges no steps: work inside builtins is free (2.1), so `--max-steps`
   does not bound a single read; only memory does (see the heap cap in
   13). `IO.flush` flushes
