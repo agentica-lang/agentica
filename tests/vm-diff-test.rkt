@@ -86,7 +86,7 @@
          (append (if limit (list "--max-steps" (number->string limit)) '())
                  (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])
                  (list "--" (path->string bytecode))
-                 (fixture-args)
+                 (map string->bytes/utf-8 (fixture-args))
                  extra)))
 
 (define (cli-environment temp vm)
@@ -99,7 +99,7 @@
   (parameterize ([current-environment-variables (cli-environment temp vm)])
     (apply run-process (find-system-path 'exec-file) (path->string main-file) #:input input arguments)))
 
-(define (run-cli-in-process temp #:input [input #""] . arguments)
+(define (run-cli-in-process temp #:input [input #""] #:port [port (open-input-bytes input)] . arguments)
   (define out (open-output-string))
   (define err (open-output-string))
   (define status
@@ -107,7 +107,7 @@
       (parameterize ([current-environment-variables (cli-environment temp vm-file)]
                      [current-namespace (make-base-namespace)]
                      [current-command-line-arguments (list->vector arguments)]
-                     [current-input-port (open-input-bytes input)]
+                     [current-input-port port]
                      [current-output-port out]
                      [current-error-port err]
                      [exit-handler escape])
@@ -239,6 +239,13 @@
                 (define expected (run-cli temp #:input input gets))
                 (check-equal? (run-cli temp #:input input "--vm" gets) expected)
                 (check-equal? (run-cli-in-process temp #:input input "--vm" gets) expected)
+                (define broken
+                  (make-input-port 'broken (lambda (_) (raise (exn:fail "read failed" (current-continuation-marks))))
+                                   #f void))
+                (define failed (run-cli-in-process temp #:port broken "--vm" "--json" gets))
+                (check-equal? (first failed) 1)
+                (check-equal? (hash-ref (string->jsexpr (last (string-split (third failed) "\n"))) 'code)
+                              "RUNTIME-INTERNAL")
                 (check-equal? (first (same (path->string (build-path fixtures "system-exit.agc")))) 3)
                 (same (path->string (build-path fixtures "system-args.agc")) "a" "" "λ 𝔸" "--json")
                 (check-equal? (directory-list temp) '()))
@@ -297,6 +304,32 @@
           (define racket (run-racket (front-end program) #f))
           (check-equal? (first racket) 1)
           (check-true (string-contains? (third racket) "error[RUNTIME-STACK-OVERFLOW]")))
+
+        (test-case "large generated input splits lines like the evaluator across buffer boundaries"
+          (define program (build-path work "large-input.agc"))
+          (display-to-file
+           (string-append
+            "def main() -> Void\n  count = 0\n  running = true\n  while running\n    case gets()\n"
+            "      ok(line) -> puts(\"#{count}: #{line.inspect}\")\n"
+            "      error(message) ->\n        puts(message)\n        running = false\n    end\n"
+            "    count = count + 1\n  end\n  puts(count)\nend\n")
+           program)
+          (define bytecode (build-path work "large-input.agcb"))
+          (compile-file program bytecode)
+          (define checked (front-end program))
+          (define (run-of n byte) (make-bytes n (char->integer byte)))
+          (define input
+            (bytes-append
+             (run-of 65535 #\a) #"\xe2\x82\xac\n"
+             (run-of 65535 #\b) #"\r\n"
+             (run-of 65535 #\c) #"\rnext\n"
+             (run-of 65534 #\d) #"\xf0\x9f\x98\x80\xff\xe2\x82\n"
+             (apply bytes-append (for/list ([k (in-range 20000)]) (string->bytes/utf-8 (format "line ~a\r\n" k))))
+             #"tail \xe2\x82"))
+          (parameterize ([fixture-input input])
+            (for ([limit (in-list '(#f 1 50 100000 400000))])
+              (check-equal? (run-vm bytecode limit) (run-racket checked limit)
+                            (format "large input --max-steps ~a" limit)))))
 
         (test-case "a CRLF program under a non-ASCII path matches the evaluator"
           (define folder (build-path work "dír-λ-𝔸"))

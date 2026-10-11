@@ -14,6 +14,7 @@
 #endif
 
 #define INPUT_CHUNK ((size_t)64 * 1024)
+#define INPUT_SHRINK ((size_t)1024 * 1024)
 #define INPUT_READ_MAX ((size_t)1 << 30)
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out) {
@@ -27,31 +28,17 @@ static _Noreturn void read_failed(agc_vm *vm) {
 }
 
 static agc_string *decode(const uint8_t *data, size_t len) {
-  size_t bytes = 0, chars = 0;
-  for (size_t i = 0; i < len; chars++) {
-    size_t n = agc_utf8_valid(data + i, len - i);
-    bytes = agc_size_add(bytes, n ? n : 3);
-    i += n ? n : 1;
-  }
-  agc_string *s = agc_new_string(bytes, chars);
-  size_t at = 0;
-  for (size_t i = 0; i < len;) {
-    size_t n = agc_utf8_valid(data + i, len - i);
-    if (n) {
-      memcpy(s->data + at, data + i, n);
-      at += n;
-      i += n;
-    } else {
-      memcpy(s->data + at, "\xEF\xBF\xBD", 3);
-      at += 3;
-      i++;
-    }
-  }
-  return s;
+  return agc_utf8_decode(data, len, "\xEF\xBF\xBD", false);
 }
 
 static void make_room(agc_input *in) {
-  if (in->start == in->end) in->start = in->end = 0;
+  if (in->start == in->end) {
+    in->start = in->end = 0;
+    if (in->cap > INPUT_SHRINK) {
+      in->buf = NULL;
+      in->cap = 0;
+    }
+  }
   if (in->end < in->cap) return;
   size_t used = in->end - in->start;
   if (in->start > 0 && used <= in->cap / 2) {

@@ -205,8 +205,10 @@ differential tests (section 12) check them.
   incomplete sequence at the end of an argument into a single `?` (`E2 82`
   at the end gives one `?`; `E0 80` and `F0 80 80` are invalid starts, so
   they give one `?` per byte). Under a non-UTF-8 locale Racket decodes
-  differently; that case is outside the contract. Windows console input
-  code pages are outside it too.
+  differently; that case is outside the contract. This includes the C and
+  POSIX locales, the default in containers and cron jobs, when
+  `agentica-vm` is called directly. Windows console input code pages are
+  outside it too.
 
 The case mapping, final-sigma and write-escape data are generated from
 Racket itself by `vm/tools/gen-unicode.rkt` into a committed `vm/unicode_data.c`,
@@ -781,7 +783,9 @@ handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
 line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
 GC error`) and call `_Exit(70)` (no atexit handlers, no stdio flush, so
 buffered stdout is lost). Racket has no matching diagnostic, so this is a
-documented difference.
+documented difference. It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
+so libgc warnings (such as `Repeated allocation of very large block`) never
+reach the program's stderr.
 
 ## 7. Builtins in C
 
@@ -826,13 +830,17 @@ loop). 7h: files, tasks, processes, TCP, TLS, HTTP, BDD.
   lives in `vm/input.c` (`agc_input_*`), the only code that reads stdin:
   one growing buffer (64 KiB first, doubled through `agc_size_mul`, so a
   long line or `IO.read` is bounded only by memory, and ends in the
-  out-of-memory exit like any other growth), blocking `read` with `EINTR`
+  out-of-memory exit like any other growth; a buffer above 1 MiB is
+  dropped for a fresh 64 KiB one once it is empty, so one huge line does
+  not keep its memory for the rest of the run), blocking `read` with `EINTR`
   retried and, on Linux, `poll` when the descriptor is non-blocking. The
   builtins only call it, so 7h can replace it with libuv reads that park
   the task (10.2) without changing what the builtins return. A failed read
   is `RUNTIME-INTERNAL` for `gets`, `read` and `eof?` and the error value
   `"input read failed"` for `read_bytes`, as in the evaluator. Reading
-  charges no steps: work inside builtins is free (2.1). `IO.flush` flushes
+  charges no steps: work inside builtins is free (2.1), so `--max-steps`
+  does not bound a single read; only memory does (see the heap cap in
+  13). `IO.flush` flushes
   stdout and fails like a write. `System.exit` records the code in the
   outcome (`AGC_EXITED`) and `longjmp`s like a diagnostic; `vm/main.c`
   flushes stdout and exits (2.5). A VM run without `vm/main.c` (the C
@@ -1007,7 +1015,12 @@ and cost one predictable branch each.
   VM never ran or failed before loading, and on a break. When a driver
   output port is not a file stream (rackunit, captured output) it copies
   that stream through a pipe, and a non-file stdin is copied into the VM's
-  stdin by a thread that stops when the VM exits. Otherwise it passes the real stdin, stdout
+  stdin by a thread that stops when the VM exits. The thread reads ahead
+  of what the program consumes, so on a non-file stdin shared with other
+  code the driver may take bytes the program never read. If reading the
+  driver's stdin fails, the thread kills the VM and the driver reports
+  `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
+  a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
   `--vm` (exit 1). `--allow-run`, `--seed`, `--steps`, `--dump`,
   `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with

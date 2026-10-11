@@ -208,6 +208,7 @@ size_t agc_float_text(double x, char out[AGC_FLOAT_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
+agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 agc_list *agc_new_list(size_t len);
