@@ -14,7 +14,8 @@ structs, enums and `case` PR and the Result PR (`docs/vm.md` §12.2 items 1 to
 other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
 ranges may start once the VM has closures (7e PR 5e), in parallel with the rest of
 phase 7; queues also need only 7e PR 5e, and sets need the VM maps (7e PR 5d). Real
-applications follow, then MCP. Adapters and JSON inspection (phase 10) come
+applications follow, then cross-language benchmarks (phase 12 round 1, once 7g and 8d
+are done; round 2 follows tasks on the VM, 7h), then MCP. Adapters and JSON inspection (phase 10) come
 after MCP: they are small language items, so they go before shared tables,
 which wait for a real program. 10a needs `.call` on the VM (7e PR 5e); 10b, 10d and 10e,
 and the JSON part of 10c, need the VM JSON PR (`docs/vm.md` §12.2 item 7); 10e also
@@ -37,13 +38,14 @@ governs pending work rather than their numeric order.
 | 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7): the vertical slice is in; widen it PR by PR (`docs/vm.md` §12.2) | Run checked programs much faster, with the same output and diagnostics |
 | 6 | Core data structures (phase 8): ranges first (may start after 7e PR 5e), then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
 | 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 8 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 9 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums, optional and nullable JSON fields | Write adapters and read JSON of unknown shape without workarounds |
-| 10 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
-| 11 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
+| 8 | Cross-language benchmarks (phase 12): the same small programs in Agentica (VM and evaluator), Ruby, Crystal and optionally Python. Round 1 (single-threaded) needs the 7g benchmark script, real applications and 8d; round 2 (concurrent programs) needs tasks on the VM (7h), and runs again if multicore lands | Honest speed numbers against Ruby and Crystal, and the VM hot spots to fix next |
+| 9 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 10 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums, optional and nullable JSON fields | Write adapters and read JSON of unknown shape without workarounds |
+| 11 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
+| 12 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
 
-After steps 1–2, target everyday scripts and automation. After steps 7–8,
-target larger general-purpose programs.
+After steps 1–2, target everyday scripts and automation. After steps 7 and 9
+(real applications and MCP), target larger general-purpose programs.
 Keep diagnostics, behavior tests, grammar, and the self-contained programming
 reference part of every phase.
 Specify new APIs in `future.md` before implementation; move them into the
@@ -1229,6 +1231,21 @@ Needs: `Bytes`, not repeated here. It is the Phase 8 "Later" item (`future.md` �
 - [ ] 11b Tests: round trips both ways (`encode(decode(b))` gives `b` for canonical bytes); RFC 8949 Appendix A vectors as fixtures; byte-identical output and equal error messages on both backends (`tests/vm-diff-test.rkt`); hostile input (truncation at every byte, lengths past the input, depth over the limit (enum nesting counted as one level), more than `TERM_MAX_ITEMS` values (`$: too many items`, also inside an ignored struct value), duplicate keys (also a duplicate struct key that the struct does not have), tags, indefinite lengths, non-shortest heads, invalid UTF-8, Ints outside int64, trailing bytes); encode errors past the depth (`$: depth limit exceeded`), item (`$: too many items`) and size limits; the exact item cap boundary (`Wrap(items: xs)` with 3,999,998 Int elements round trips, one more element is `$: too many items` on encode and on decode); a decode target for `make vm-fuzz`.
 
 **Done when:** an example writes a struct with an `Int`-keyed map, a Float NaN and an enum to bytes and reads it back, with the same bytes and output on both backends, and every hostile-input case returns `error(...)` with its path on both.
+
+## Phase 12: Cross-language benchmarks
+
+Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It is a measuring task: no language change, no new builtin. It has two rounds. Round 1 (12a to 12d) uses single-threaded programs and starts after the 7g benchmark script, the real applications (order step 7) and faster lists (8d), so the numbers show the VM with its planned list representation on realistic programs. Round 2 (12e to 12g) adds concurrent programs once tasks run on the VM (7h, scheduler in `docs/vm.md` §10.2), and runs again if multicore lands later (`docs/vm.md` §10.2 keeps 7h on one OS thread). The goal is to find VM hot spots and to give honest numbers for the "Ruby with types" pitch, not to win a contest.
+
+- [ ] 12a Suite: reuse the 7g programs (`knight-tour`, `maze-bfs`, `traveling-salesman` and the small loops) and add one CLI-style program from the real applications step, for example file processing over a fixed input file in `benchmarks/`. Keep the suite small and fixed; every program reads the same input and prints the same output in every language.
+- [ ] 12b Other languages: write each program idiomatically (no tricks a normal user would not use) in Ruby (CRuby, run with YJIT on and off), Crystal (`--release` build; compile time reported apart from run time) and, optionally, Python (CPython). Put them next to the Agentica versions under `benchmarks/`.
+- [ ] 12c Runner: a script under `benchmarks/` that first checks that every language gives the same output for each program, then times them. It runs Agentica on the VM and, for reference, on the evaluator. When a language's tool (`ruby`, `crystal`, `python3`) is missing, it skips that language and says so in its report.
+- [ ] 12d Report: record the machine, OS, tool versions, wall time and peak memory (median of several runs) in `docs/vm-benchmarks.md` (a cross-language section next to the 7g numbers). Note where the VM is slow and link the hot spots to VM issues.
+- [ ] 12e Round 2 suite (needs 7h): add concurrent programs, for example many tasks doing I/O-like work over pipes or localhost TCP (port 0, cleaned up as in the network tests), and a CPU-bound fan-out over tasks. Same rules as 12a: fixed inputs, same output in every language.
+- [ ] 12f Round 2 other languages: idiomatic versions in Ruby (Threads, Fibers, and Ractors for the CPU-bound fan-out), Crystal (fibers; `-Dpreview_mt` reported as its own column if used) and, optionally, Python (asyncio, and threads). The 12c runner times them the same way.
+- [ ] 12g Round 2 report: add the concurrent results to `docs/vm-benchmarks.md` and re-run round 1 on the same machine to catch regressions from 7h. If multicore lands later, run round 2 and round 1 again and add a new set of numbers; this depends on the multicore work only if it happens.
+- [ ] Not part of `make test` or CI, and no timing thresholds: the numbers are observations.
+
+**Done when:** round 1: `docs/vm-benchmarks.md` has a table for every program and language, made by the runner on one machine, and the largest VM hot spots it shows are listed as follow-up work. Round 2: the same holds for the concurrent programs after 7h, with the round 1 numbers re-run next to them.
 
 ## Later extensions
 
