@@ -1545,11 +1545,13 @@ concurrently. The design follows BEAM.
   PARKING, PARKED or WOKEN. To park, the task sets RUNNING to PARKING
   before it registers its wait. Then it re-checks its wait condition and
   its cancel flag; if either is satisfied, it unregisters and goes back to
-  RUNNING. Otherwise it CASes PARKING to PARKED. Registering on another
+  RUNNING with one CAS that accepts PARKING or WOKEN. Otherwise it CASes PARKING to PARKED. Registering on another
   task's result is done under that task's lock and fails if the result is
   already published. A waker acts only on PARKING (CAS to WOKEN, no queue:
   the task's CAS fails, so it sets WOKEN to RUNNING and re-checks at once)
-  and on PARKED (CAS to WOKEN, then queue the task). A wake that finds
+  and on PARKED (CAS to WOKEN, then queue the task). A waker that finds
+  PARKING, and so does not queue, undoes its pending-wake increment. A wake
+  that finds
   RUNNING or WOKEN is stale and dropped. The scheduler sets
   WOKEN to RUNNING when the task's turn starts. A resumed task re-checks
   its wait condition, so a wake is only a hint. No wake is lost, and a task
@@ -1588,11 +1590,11 @@ concurrently. The design follows BEAM.
   per stream, so lines from different tasks never mix mid-line. These
   writes never park, so the lock is never held across a park. Once the
   outcome is set, writes are dropped; the check is made under the stream
-  lock. Only the order in which output from different tasks interleaves is
+  lock. The final diagnostic that `vm/main.c` prints is exempt. Only the order in which output from different tasks interleaves is
   not repeatable.
 - **Idle schedulers park, not spin.** An idle scheduler (empty queue,
-  nothing to steal) raises the idle count, re-checks the queues once, then
-  refs its wake `uv_async_t` and blocks in
+  nothing to steal) raises the idle count, re-checks the queues once (a
+  read only; it leaves idle before it pops or steals), then refs its wake `uv_async_t` and blocks in
   `uv_run(UV_RUN_ONCE)`, so its loop stays alive even with no other handle.
   A wake or new work for it calls `uv_async_send`. When the run ends, each
   scheduler unrefs its wake handle so its loop can close. With N=1 the wake
@@ -1600,11 +1602,16 @@ concurrently. The design follows BEAM.
   still holds.
 - **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s
   return value. One 64-bit atomic word packs the idle scheduler count and
-  the live count (handles, parked I/O and timer waiters, pending wakes and
-  pending I/O hand-offs), so the check reads one snapshot. The
-  per-scheduler wake `uv_async_t` is not counted. A pending wake or
-  hand-off counts as live: the sender increments the count before the push,
-  and the receiving scheduler decrements it when it drains the item. A scheduler leaves idle before it touches a queue or drains a wake.
+  the live count (handles, parked I/O and timer waiters, pending wakes,
+  pending I/O hand-offs, and ready tasks in run queues), so the check reads
+  one snapshot. The per-scheduler wake `uv_async_t` is not counted. A
+  pending wake or hand-off counts as live: the sender increments the count
+  before the push, and the receiving scheduler decrements it when it drains
+  the item. Every hand-on of liveness (waiter, then pending wake, then
+  ready task) increments the new item before it decrements the old one, or
+  does both in one CAS on the packed word. A libuv callback that readies a
+  task on an idle scheduler leaves idle in that same CAS. A scheduler
+  leaves idle before it touches a queue or drains a wake.
   The check runs on every change of the word that makes idle == N and
   live == 0: the idle increment and every live decrement. The thread that
   makes that change, if tasks are still parked, fails the run with
@@ -1618,9 +1625,9 @@ concurrently. The design follows BEAM.
   with `GC_register_my_thread`; the libuv pool threads stay unregistered on
   purpose, since they never touch GC memory. The runtime struct stays on
   the main thread's stack, which Boehm scans, for the whole run. MPSC wake
-  and hand-off queue nodes are GC-allocated; if one is not, the task or
-  payload it carries is also rooted in the owner's registry until it is
-  drained. Collections
+  and hand-off queue nodes, and the run-queue and steal-deque storage, are
+  GC-allocated; if one is not, the task or payload it carries is also
+  rooted in the owner's registry until it is drained. Collections
   stop the world; that cost is accepted and measured (round 2 benchmarks).
   Boehm stops threads with signals, so the VM's syscall paths retry on
   `EINTR`, and libuv signal handling (`uv_signal_t`) must never take
@@ -1660,8 +1667,10 @@ concurrently. The design follows BEAM.
   `--schedulers 4`, under TSan when available; TSan does not get along with
   Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build with
   `-fsanitize=thread` that never calls `agc_set_alloc_limit`, so the
-  `AGC_NO_GC` block tracking stays off; the GC-threaded build is covered by
-  a GC-stress run with `--schedulers 4` and by the ASan job instead); then round 2 of the
+  `AGC_NO_GC` block tracking stays off. ASan and TSan, both without GC,
+  cover memory errors and data races in the scheduler code; the
+  GC-threaded build is covered only by a GC-stress run with
+  `--schedulers 4`); then round 2 of the
   benchmarks covers multicore (roadmap phase 12). Multicore does not block
   7i: the evaluator cannot run in parallel anyway. The parity rule stays:
   with N=1, output, counts and spans match the evaluator. The differential,
