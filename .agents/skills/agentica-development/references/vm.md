@@ -441,9 +441,11 @@ instructions. A file that loads may still compute wrong values or end with
   it say why, not what: an invariant, a subtle ownership or lifetime rule, a
   protocol, OpenSSL or libuv quirk, an order that is not obvious, or the
   spec section or RFC the code follows. Use short `/* */` block comments.
-  Never narrate obvious code and never leave commented-out code. A legal
-  header is also allowed, and tool markers (`// NOLINT(...)`,
-  `/* fall through */`) are not comments in this sense.
+  Never narrate obvious code and never leave commented-out code. A file may
+  also start with a short header comment that says what the file is and
+  where its design lives, as `vm/main.c` does, or with a legal header. Tool
+  markers (`// NOLINT(...)`, `/* fall through */`) are not comments in this
+  sense.
 - Only `value.c` reads the value union. Immediates write the full word.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
