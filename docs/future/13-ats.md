@@ -27,7 +27,7 @@ end
 
   | Function | Result |
   |---|---|
-  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map` |
+  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map`; without one, `CHECK-EXPECTED-TYPE` (the general code of [§27.2](27-iteration-and-concurrency.md#272-channels)) |
   | `Table.put(t, k: K, v: V) -> Void` | insert or replace |
   | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent; `false` leaves the table unchanged (ETS `insert_new`) |
   | `Table.get(t, k: K) -> Result[V]`, `Table.has_key?(t, k: K) -> Bool` | |

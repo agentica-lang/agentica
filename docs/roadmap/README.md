@@ -140,8 +140,10 @@ the programming reference contain the current signatures.
   cannot be a `std/` module; it goes in the compiler prelude
   (`stdlib/prelude/*.agc`, `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica.
   The prelude has the only guarded exceptions to "no internal helper
-  builtins": `__fail_arg` and `__float_fixed`, which the loader accepts
-  only in prelude functions.
+  builtins": `__fail_arg` and `__float_fixed` (§25.6, §25.11), and
+  `__task_settled?` and `__task_wait`
+  (`docs/future/27-iteration-and-concurrency.md` §27.3), which the loader
+  accepts only in prelude functions.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 
