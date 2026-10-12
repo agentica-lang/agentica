@@ -80,7 +80,10 @@ resource registry (10.2.2) with every `File`, `Dir` and `Path` builtin
 (`File.open`, `read_bytes`, `read_line`, `write`, `write_bytes`, `flush`,
 `close`, `read_text`, `write_text`, `append_text`, `stat`; `Dir.list`,
 `mkdir`; `Path.cwd`, `join`, `resolve`), `FileHandle` values and the
-`FileInfo` record (2.8). Runtime diagnostics come in the plain,
+`FileInfo` record (2.8), and the tasks PR of 7h: `Task.spawn`,
+`Task.await` and `Task.sleep` on one scheduler (N=1) with a run queue,
+turns and turn costs, per-task `Random`, and stdin, file jobs and sleeps
+that park only their own task (10.2.1 to 10.2.3, "As built"). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -1088,8 +1091,9 @@ typedef struct {
   runtime diagnostic carries one span and no stack trace, so the replaced
   frames are not visible. Non-tail recursion keeps the limit and its span.
   The evaluator is not changed: it goes away in 7i.
-- `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. All
-  tasks share it. `STEP` is one compare and one subtraction on a "next stop"
+- `steps_left` is an atomic `int64_t` in the runtime: the limit, or
+  `INT64_MAX` without one. All tasks share it; a turn takes it in batches
+  (10.2.1, "As built"). `STEP` is one compare and one subtraction on a "next stop"
   counter; before 7h it is just `steps_left`, and from 7h it also covers the
   turn budget (10.2.1). Long builtins and opcodes charge their work to the
   turn only, never to `steps_left` (10.2.1, Builtins). With N schedulers,
@@ -1146,7 +1150,7 @@ builtins copy what they need into their GC state.
 7e: `IO`, `puts`, `print`, `gets`, `gets!`, `System`, `String`, `List`,
 `Map`, `Float`, `Time`, `Random`, `ok`, `error`, `Result.*`, and `JSON`
 (parse, extract, encode, builders, typed decode, schema: pure C, no event
-loop). 7h: files (done on Linux, 2.8, 10.2.2), tasks, processes, TCP, TLS,
+loop). 7h: files (done on Linux, 2.8, 10.2.2), tasks (done, 10.2.1), processes, TCP, TLS,
 HTTP, BDD.
 
 ### 7.3 Builtin safety and streams
@@ -1180,8 +1184,10 @@ HTTP, BDD.
   dropped for a fresh 64 KiB one once it is empty, so one huge line does
   not keep its memory for the rest of the run), blocking `read` with `EINTR`
   retried and, on Linux, `poll` when the descriptor is non-blocking. The
-  builtins only call it, so 7h can replace it with libuv reads that park
-  the task (10.2) without changing what the builtins return. A failed read
+  builtins only call it; since the tasks PR each `read` runs as a
+  thread-pool job that parks only the reading task (10.2.2, "Stdin"), and
+  a builtin that must wait re-runs once the read is in, so what the
+  builtins return did not change. A failed read
   is `RUNTIME-INTERNAL` for `gets`, `read` and `eof?` and the error value
   `"input read failed"` for `read_bytes`, as in the evaluator. The
   message differs (the evaluator shows Racket's port error, the VM says
@@ -1212,7 +1218,7 @@ the `RUNTIME-INVALID-RANGE` error at the call.
 - Generator (`vm/random.c`): xoshiro256** (Blackman and Vigna, public
   domain), its four state words (`agc_random` in `agc_vm`) filled by four
   splitmix64 outputs from the seed (also public domain).
-- Tasks (7h): the generator state becomes per task. The main task is seeded
+- Tasks (7h, done): the generator state is per task (`agc_task.random`). The main task is seeded
   from `--seed`; a spawned task gets its own generator from its parent's at
   spawn time (a splitmix64 split of one parent draw). Each task's values
   then depend only on its own order of calls, so `--seed` repeats each
@@ -1676,10 +1682,73 @@ raw epoll or io_uring stays local if measurements ever ask for it.
 - **N=1 first.** The first tasks PR of 7h runs one scheduler, but on the
   split structures of 10.2.3, so going to N>1 later adds threads, stealing
   and the I/O hand-off without a rewrite.
+- **As built (tasks PR).** `vm/task.c` holds the scheduler (`agc_vm_run`,
+  the FIFO run queue, wake, park) and the `Task` builtins; `vm/interp.c`
+  runs one turn of the current task (`agc_run_turn`, which returns yield,
+  parked or done) and owns the budget code (`agc_turn_begin`,
+  `agc_turn_finish`, the `STEP` slow path, the turn-cost apply path).
+  Decisions and tuning:
+  - The turn budget stays 2000 steps (`AGC_TURN_STEPS`), and one turn
+    unit is one step, one list item, map entry or JSON node, or 64 bytes
+    (`AGC_COST_BYTES`). Measured with the latency test: a `Task.sleep(10)`
+    wake is at most about 20 ms late next to a CPU loop, a task sorting
+    100,000 Ints (one sort is about 25 ms) and a task concatenating a
+    1 MiB string; a stdin echo about 30 ms. Without turn costs the same
+    waits take about 4.5 s. Single-task speed did not change measurably
+    (the `make bench` programs within noise of the previous VM).
+  - Builtin costs come from a `cost` field in each C table entry:
+    `AGC_COST_SIZE` charges the size of the arguments and of the result
+    (String bytes / 64, List items, Map entries, Json members) around
+    the call, for the builtins whose work is linear in those sizes
+    (`String.upcase`, `split`, `join`, `replace`, `index_of`, ...,
+    `List.append`, `concat`, `take`, `drop`, `reverse`, `repeat`,
+    `Map.keys`, `values`, `Range.to_a`, `JSON.parse`, `JSON.list`,
+    `puts`, `IO.read`, `Path.join`). Walkers charge from inside:
+    `agc_sort_by_keys` (n·⌈log2 n⌉), `agc_debug`, `agc_text` and
+    `agc_json_encode` (output bytes), `agc_json_from` and
+    `agc_json_decode` (one per node), `agc_key_hash` and the map key
+    compare (String bytes, so `MAP`, `MAP_GET` and every `Map` builtin
+    are covered), and `EQ`/`NE`/`SAME` on equal-length Strings. `CONCAT`
+    charges its result bytes. File builtins charge nothing: their work is
+    I/O, at most 1 MiB per call.
+  - The step budget is the runtime's atomic `steps_left`; a turn takes a
+    batch of `AGC_TURN_STEPS` (or what is left) and gives the unspent part
+    back at its end, and a `STEP n` past its batch takes more first, so
+    with N=1 the failing span stays `s + steps_left`. Without
+    `--max-steps` the counter starts at `INT64_MAX`.
+  - `Task.sleep(0)` yields (the task goes to the back of the queue).
+    `Task.sleep(n)` starts a timer-only job (`agc_io_kind` with no `work`
+    half) and parks. Under `no_files` (the fuzzer) every sleep yields, so
+    a mutant never waits on a clock.
+  - `Task.await` of a running task appends the caller to that task's
+    FIFO of waiters and parks with *retry*: when the target finishes, the
+    waiters are queued in order and each re-runs its `CALL_BUILTIN`,
+    which now returns the cached result. Stdin reads and a second
+    reader waiting for a read in flight use the same retry (a wake is
+    only a hint, as 10.2.3 asks). A task whose bottom frame returns, or
+    leaves through `try`, is done; its registers and frames are dropped.
+  - Cancellation: when `main` returns, the run ends; ready and parked
+    tasks never run again, and `agc_io_close` closes their timers and
+    jobs as before. A failure or `System.exit` in any task ends the run at
+    once through `agc_fail`/`agc_exit`, as the evaluator's first
+    published outcome does.
+  - Stall check (N=1): the queue is empty and `uv_loop_alive` is false
+    (or there is no loop) while `main` is not done: `RUNTIME-INTERNAL`
+    ("every task is waiting and nothing can wake them"). No Agentica
+    program reaches it: a task can only await tasks created before it
+    (there are no channels and no way to pass a task its own handle), so
+    awaits form no cycle, and every other wait holds a libuv request or
+    timer. It guards against VM bugs.
+  - Step counts and the `RUNTIME-STEP-LIMIT` span of one task, and of
+    tasks that never run at the same time, match the evaluator. When
+    several tasks are runnable at once, which one meets the limit depends
+    on the interleaving (Racket's preemption vs. our turns), so the span
+    may differ; the code and exit status match (Quotas).
 
-#### 10.2.2 The loop today (one task)
+#### 10.2.2 The loop
 
-The first 7h PR has one task, so it has no run queue yet. What it has:
+The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
+"As built"). What the loop has:
 
 - **Resource registry** (`vm/loop.c`). `vm->registry` is a GC object with
   an array of `agc_resource` GC objects. Each one owns `malloc` memory
@@ -1697,14 +1766,25 @@ The first 7h PR has one task, so it has no run queue yet. What it has:
   request (paths through the rules of 2.8), and calls `agc_io_start`, which
   queues one `uv_queue_work` request for the whole operation (stat, open,
   read, close: one thread-pool job, so the task parks once per call) and
-  starts a timer for the call's timeout after `uv_update_time`. Then it
-  returns, and `CALL_BUILTIN` sees `vm->parked` and calls `agc_io_park`.
-- **Parking** is the scheduler's job. Today `agc_io_park` runs
-  `uv_run(UV_RUN_ONCE)` until the work or the timer is done, and fails with
-  `RUNTIME-INTERNAL` if the loop reports nothing active while it waits. It
-  then closes the timer and, on completion, calls the request's `done`
-  half on the interpreter thread, which turns the `malloc`'d result into
-  GC values and frees the request; on timeout it calls `expired`, which
+  starts a timer for the call's timeout after `uv_update_time` (a
+  negative timeout starts no timer, a kind without `work` is a timer
+  only). It records the task in the resource (`r->task`) and in
+  `task->parked`, and marks the task as parking. `CALL_BUILTIN` sees that,
+  keeps the result register (`park_reg`) and ends the turn.
+- **Waking**: the work and timer callbacks only set flags and append the
+  `malloc`'d job to the loop's ready list. After each `uv_run` the
+  scheduler drains that list: the job keeps its registry slot (an index,
+  updated when `agc_unregister` moves an entry), so the scheduler finds
+  the resource and queues its task. No GC pointer is stored in `malloc`
+  memory.
+- **Parking** is the scheduler's job. After each turn it calls
+  `uv_run(UV_RUN_NOWAIT)` when the loop is alive; with an empty run queue
+  it calls `uv_run(UV_RUN_ONCE)`, or fails with `RUNTIME-INTERNAL` when the
+  loop has nothing alive (stall check, 10.2.1). When a parked task runs
+  again, `agc_io_finish` closes the timer and, on completion, calls the
+  request's `done` half on the interpreter thread, which turns the
+  `malloc`'d result into GC values and frees the request; on timeout it
+  calls `expired`, which
   gives `filesystem: operation timed out` and, for a handle operation,
   closes the handle as the evaluator does (the stuck request then owns the
   file state). The result goes into the call's result register. A
@@ -1736,7 +1816,22 @@ The first 7h PR has one task, so it has no run queue yet. What it has:
   `agc_release_all`, on the normal path and after the allocation limit, so
   a loop or a resource would never outlive the mutant.
 
-How tasks extend it (10.2.1): `agc_io_park` becomes the place where a task
+**Stdin (deviation from 10.2).** Stdin is read by thread-pool jobs, not
+by `uv_pipe_t`/`uv_tty_t` handles chosen with `uv_guess_handle`: a job
+does one blocking `read(0)` (with `poll` on `EAGAIN`) into a `malloc`'d
+buffer of up to 1 MiB, and its `done` half appends the bytes to the
+shared `agc_input` buffer (owned by the runtime, served by scheduler 0)
+and wakes the tasks waiting for that read. It works for every kind of
+descriptor (TTY, pipe, file, socket) with one code path, and it never
+changes the descriptor's flags: `uv_pipe_open` and `uv_tty_init` make the
+inherited descriptor non-blocking, which leaks into the parent's open file
+description (a shell's terminal) when the VM is killed. One read is in
+flight at a time; a second reader parks in the input's FIFO. A read stuck
+at the end of the run is handled like a stuck file job (`_exit`). A stdin
+read shares the pool with file jobs, so four stuck file calls delay it.
+Non-Linux builds keep the blocking read.
+
+How tasks extended it (10.2.1): `agc_io_park` became the place where a task
 leaves its turn. It records the task and the result register, and the
 scheduler runs the next ready task; the work and timer callbacks, which
 today only set flags, also put the task at the back of the run queue;
@@ -1807,8 +1902,18 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   WOKEN to RUNNING when the task's turn starts. A resumed task re-checks
   its wait condition, so a wake is only a hint. No wake is lost, and a task
   is queued at most once.
-- **State split.** Every field of today's `struct agc_vm` (`vm/agc.h`) has
-  a place:
+- **State split.** As built (`vm/agc.h`): `agc_runtime` (shared),
+  `struct agc_vm` (the scheduler: the context every builtin gets, with
+  `rt`, the current `task`, the run queue, `loop`, `registry`, the turn
+  counters and the `fail` jmp_buf) and `agc_task`. Deviations, with N=1:
+  the runtime is GC-allocated by `agc_vm_init` and reachable from the
+  scheduler, not a struct on the main thread's stack (both are roots for
+  Boehm); the `fail` jmp_buf is per scheduler, not per task, because the
+  only `setjmp` is the scheduler's own, armed once on its thread, and any
+  failure ends the run; the task state is a plain READY, RUNNING, PARKED,
+  DONE enum without the PARKING and WOKEN steps, which only matter when
+  another thread can wake a task; and there are no stream locks, since
+  one thread writes. Every field of the old `struct agc_vm` has a place:
   - Runtime, read-only after start-up: `program` (with its constants),
     `args`, `cwd` (raw bytes, read at start-up by `agc_files_init`),
     `no_files`, and the config. Also in the runtime but shared under rules: the
@@ -1915,13 +2020,14 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   - The SipHash keys are `hash_key` in `agc_vm`, set by `agc_vm_init` and,
     from OS entropy, by `vm/main.c` before the run.
   - The locale for OS error text (`vm/files.c`) is `messages_locale` in
-    `agc_vm`, made on first use and never freed. The tasks PR makes it
-    once at start-up and read-only in the shared runtime, which also frees
-    it on exit.
+    `agc_vm`, made on first use and never freed. The tasks PR made it
+    once at start-up (`agc_files_init`), read-only in the shared runtime,
+    and freed on exit (`agc_files_close`).
   - `setenv("UV_USE_IO_URING", "0", 0)` in `vm/loop.c` runs when the first
-    loop is made; `setenv` is not thread-safe, so the tasks PR moves it to
-    start-up, before any scheduler thread exists. The tasks PR also moves
-    the `agc_vm` fields above to the shared runtime or the scheduler.
+    loop is made; `setenv` is not thread-safe, so the tasks PR moved it to
+    start-up (`agc_io_init`, called by `vm/main.c` before any loop exists).
+    The tasks PR also moved the `agc_vm` fields above to the shared
+    runtime or the scheduler.
 - **Values are immutable**, so tasks on different schedulers share them
   without locks. Any in-place mutation inside the VM (caches, updates in
   place when a value is known to be unique, the faster lists of roadmap 8d)
@@ -2344,6 +2450,14 @@ structs, enums and blocks, and `RUNTIME-INDEX-OUT-OF-RANGE` raised inside
 so two functions are named `block@m.agc:2:17`), `--vm` CLI runs of
 `linked` in the three formats,
 and loader asserts for spans in a second source. No format bump.
+
+9. **7h tasks** (done, Linux). The split structures of 10.2.3 with N=1,
+   the scheduler and turn costs of 10.2.1, `Task.spawn`, `await` and
+   `sleep`, per-task `Random` (7.4), stdin and file jobs that park only
+   their task (10.2.2), the `task-*` fixtures, and the latency test
+   (`tests/vm-latency-test.rkt`, `make vm-latency`) with its
+   `AGENTICA_VM_TEST_NO_TURN_COST=1` counter-check. No format bump: the
+   Task builtins are new import keys only.
 
 7e is done when every example runs on the VM with the same results, except
 those that need files, processes, tasks or the network by name:

@@ -60,8 +60,8 @@
 
 (module+ test
   (cond
-    [(getenv "AGENTICA_VM")
-     (displayln "SKIP VM latency tests: AGENTICA_VM names another binary")]
+    [(or (getenv "AGENTICA_VM") (getenv "AGENTICA_VM_BINARY"))
+     (displayln "SKIP VM latency tests: AGENTICA_VM or AGENTICA_VM_BINARY names another binary")]
     [(not (parameterize ([current-directory root]) (system* (find-executable-path "make") "-s" "vm")))
      (if (getenv "AGENTICA_REQUIRE_VM")
          (error 'latency "the VM must build when AGENTICA_REQUIRE_VM is set")

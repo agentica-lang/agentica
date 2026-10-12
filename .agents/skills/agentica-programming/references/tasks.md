@@ -10,6 +10,8 @@ Start tasks before awaiting them to overlap I/O. They call named functions with 
 
 Any task diagnostic terminates the evaluation with its original code and span, even when unawaited. System.exit in any task terminates that evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending work; explicitly await tasks that must finish. External interruption cancels tasks and closes newly created resources while preserving caller-supplied ports. No channels or CPU parallelism are exposed. A block can be the task function when passed through a `Fn` variable or parameter.
 
+Random: on the evaluator all tasks share one generator. On the VM (`--vm`) each task has its own, split from its parent at spawn (one parent draw per spawn), so with `--seed N` each task repeats its own values. `--seed` alone does not make a multi-task run repeatable once the VM runs several schedulers (N>1, planned): only per-task values repeat, never the interleaving. Do not depend on cross-task order.
+
 Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
 ```ruby
