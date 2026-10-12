@@ -4,12 +4,41 @@ This document closes roadmap step 7b. It fixes the decisions that 7c
 (lowering), 7d (bytecode emitter) and 7e (VM core) build on, and the library
 choices and safety rules that 7h and 7i need. The language does not change.
 `grammar.md` stays the contract, and the Racket evaluator
-(`src/evaluator.rkt`) stays the reference until 7i. Where this document and
-the evaluator disagree, the evaluator wins and this document is fixed.
-Roadmap step 7b lists each decision in one line; this document gives the
-details and reasons.
+(`src/evaluator.rkt`) stays the reference until 7i. Roadmap step 7b lists
+each decision in one line; this document gives the details and reasons.
 
 ## 1. Overview
+
+**Parity is black-box.** The VM must give the evaluator's exit code, the
+stdout and program stderr (what the program itself writes, as with
+`IO.warn`; the diagnostic after it is not part of this) of every run except
+one stopped by `--max-steps`, and on failure the same diagnostic code
+(`RUNTIME-INDEX-OUT-OF-RANGE`, say); a runaway program must stop with
+`RUNTIME-STEP-LIMIT` under `--max-steps`, and a program the evaluator runs
+in T steps must finish on the VM under a limit of 2T + 100. Everything else may differ: diagnostic message text
+and span, the VM's own stderr wording, OS error text, the error strings of
+library `Result`s (HTTP, files, processes), exact step counts and the
+step-limit span, `Random` sequences, and cross-task order. An error string
+that a program prints is program data, though: today's fixtures that print
+one must still match. When a library message changes (roadmap 7k), the
+fixtures that print it switch, in the same PR, to printing only ok or error
+(or a stable kind). VM
+messages must still be clear and useful for agents; evaluation rounds judge
+that, not identity with Racket. Where this document and the evaluator
+disagree on what must match, the evaluator wins and this document is
+fixed. Much of this document records Racket's exact behavior because the
+first PRs copied it; that is a description of today's VM, not a rule, and
+designs kept only to copy Racket's text or counts may be simplified. For
+example, the HTTP adapter does not need to map parser failures onto
+`http-wire.rkt`'s exact messages, only onto the same diagnostic or `Result`
+error kind (10.6). The turn cost (10.2.1) stays: it is there for fairness, not
+for parity. With black-box parity the compiler may also optimize freely as
+long as exit code, stdout, program stderr and diagnostic codes stay the
+same: inlining,
+constant folding, common subexpression elimination, loop-invariant code
+motion, and merging or moving `STEP`s (a runaway loop must still hit
+`RUNTIME-STEP-LIMIT`; step counts may change). New APIs the evaluator never
+had (UDP, say) may be VM-only, tested with fixed expected output.
 
 ```text
 .agc files
@@ -105,10 +134,12 @@ number of bindings, and a file can run `LIST r0 r0 2` in a loop; printing
 such a list ends in the same out-of-memory exit (the evaluator also runs out
 of memory). A heap cap is an open question (13).
 
-## 2. Reference behavior the VM must copy
+## 2. Reference behavior (today's VM)
 
 These rules come from the Racket sources, not only from the grammar. The
-differential tests (section 12) check them.
+differential tests (section 12) check only what black-box parity needs
+(exit code, stdout, program stderr, diagnostic code); messages, spans and step counts below
+describe the VM today and may change (1).
 
 ### 2.1 Steps (`task-step!` in `src/task.rkt`, `step!` in `src/evaluator.rkt`)
 
@@ -136,7 +167,9 @@ differential tests (section 12) check them.
   function still meets the step limit.
 - Without `--max-steps`, nothing is counted. With limit N, the first N entries
   run and entry N+1 fails with `RUNTIME-STEP-LIMIT` at its own span. All tasks
-  share one counter. Racket accepts any positive integer; the VM clamps values
+  share one counter. Only the outcome must match the evaluator: a runaway
+  program stops with `RUNTIME-STEP-LIMIT`; the exact count and span may
+  differ (1). Racket accepts any positive integer; the VM clamps values
   above `INT64_MAX`, which can never be exhausted anyway.
 
 ### 2.2 Numbers
@@ -384,8 +417,9 @@ fails when the committed file differs from what the generator prints.
 
 ### 2.5 Diagnostics, streams and exit codes
 
-- Runtime diagnostics carry only code, message and span. Messages are copied
-  verbatim from the Racket sources.
+- Runtime diagnostics carry only code, message and span. Messages started as
+  copies of the Racket text; only the code must match (1), and a VM message
+  may be reworded when that makes it clearer.
   `RUNTIME-UNWRAP-ERROR` uses the error's own String as its message, so the
   VM's outcome carries the message with its byte length (`agc_fail_text`)
   and prints it as raw bytes, like any other String.
@@ -396,7 +430,7 @@ fails when the committed file differs from what the generator prints.
   NBSP stay). `--json` prints one line; `jsexpr->string` escapes `"`, `\`,
   `\b \f \n \r \t` in short form and the other bytes below 0x20 and DEL as
   lowercase `\u00XX`, and leaves everything else raw, so the VM's JSON is
-  byte-for-byte the evaluator's even for odd file names.
+  valid even for odd file names.
 - The formats are `format-diagnostic`, `format-diagnostic-ai` (which also
   starts with `check failed: 1 error` at runtime) and `diagnostic->jsexpr` in
   `src/diagnostic.rkt`. Columns count characters; source lines split on LF
@@ -494,9 +528,10 @@ fails when the committed file differs from what the generator prints.
 
 ### 2.8 Files and paths (`src/filesystem.rkt`)
 
-Every failure is an error value whose message is the evaluator's text, so
-the VM copies Racket's own messages where the evaluator lets them through.
-The checks run in this order:
+Every failure is an error value. Its text started as the evaluator's (Racket's
+own messages included, where the evaluator lets them through); error strings
+need not match (1), so they may be replaced with clearer ones. The checks
+run in this order:
 
 - `File.write`, `write_text`, `append_text`: text above 1 MiB (`filesystem:
   text exceeds 1048576 bytes`); `File.write_bytes`: `network: bytes must be
@@ -566,9 +601,7 @@ After a timeout on an active handle operation both backends close the
 handle: later operations give `filesystem: file handle is closed` and
 `File.close` gives `ok()`.
 
-Documented differences: read and write errors after a successful open
-(`EIO`, `ENOSPC`) say `error reading from stream port` or `error writing to
-stream port` with the OS error, not Racket's port text. FIFOs and devices
+Documented difference: FIFOs and devices
 count as files on both backends, but they are not compared beyond a timed
 out read: the evaluator waits on them with Racket's nonblocking ports, while
 the VM does a blocking read or write on a thread-pool thread. So a FIFO with
@@ -878,7 +911,9 @@ result register of the `CALL` that made the frame, just as the replaced
 function's `RETURN` would have. `CALL` and `RETURN` charge
 no steps, and the lowering puts the same `step`s before a `tail-call` as
 before a `call`, so a tail call charges exactly what `call` + `return`
-charged: step counts and `--max-steps` failures do not change.
+charged: step counts and `--max-steps` failures do not change (exact counts
+are not part of parity, 1, but keeping them made the change easy to test at
+the time).
 
 `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` are
 **resumable builtins**. `CALL_BUILTIN` pushes a native frame whose state (the
@@ -926,9 +961,12 @@ The IR has one `step` per charged node. The 7d emitter merges only adjacent
 `step`s with no label between them into one `STEP n`, splitting runs above
 65535 because the count is 16 bits. Struct and variant ids are 16-bit
 operands too, so the emitter rejects a program with more than 65535 structs
-or variants. The charge points do
-not move, so counts and failing spans stay exact. Wider merging across pure
-instructions is left to 7g if profiling asks for it.
+or variants. Today the charge points do not move, so counts and failing
+spans match the evaluator. Black-box parity (1) allows more: merging `STEP`s
+across pure instructions or moving them out of straight-line code is fine as
+long as every loop and recursion still charges at least one step per round,
+so a runaway program still stops with `RUNTIME-STEP-LIMIT`. Roadmap 7k
+lists it with the other lowering optimizations.
 
 ### 4.5 Builtin imports
 
@@ -965,8 +1003,7 @@ points into: the entry file first (span 0), then the others in the order
 the lowerer meets them. Each entry keeps the name the front end gave the
 file (the entry file as given on the command line, other files by their
 full path, `std/` modules by their `std/...` key), so a diagnostic raised in
-imported code names that file, line and column exactly as the evaluator
-does. The loader checks every span's line and column against its own
+imported code names that file, line and column. The loader checks every span's line and column against its own
 source.
 
 Format version 2 (the structs, enums and `case` PR) fills the Structs and
@@ -1087,7 +1124,7 @@ typedef struct {
   functions that tail-call each other) fails there with
   `RUNTIME-STACK-OVERFLOW` and runs on the VM. The VM's depth is never above
   the evaluator's, so a program that stays within the limit on the evaluator
-  stays within it on the VM, with the same output, steps and spans; a
+  stays within it on the VM, with the same output; a
   runtime diagnostic carries one span and no stack trace, so the replaced
   frames are not visible. Non-tail recursion keeps the limit and its span.
   The evaluator is not changed: it goes away in 7i.
@@ -1126,7 +1163,7 @@ handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
 line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
 GC error`) and call `_Exit(70)` (no atexit handlers, no stdio flush, so
 buffered stdout is lost). Racket has no matching diagnostic, so this is a
-documented difference. It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
+documented difference (the exit code differs). It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
 so libgc warnings (such as `Repeated allocation of very large block`) never
 reach the program's stderr.
 
@@ -1377,7 +1414,7 @@ and cost one predictable branch each.
 - `agentica-vm [--max-steps N] [--seed N] [--ai|--json] -- file.agcb
   [args...]` (7e; `--allow-run` joins in 7h). The option parser is hand
   written: it stops at the first non-option and honors `--`. Option values are
-  checked with the same messages and exit code 2 as `src/main.rkt`. Callers
+  checked with exit code 2, as in `src/main.rkt`. Callers
   always pass `--` before the file. A test checks that `--allow-run` after the
   file is a program argument. On Windows, arguments come from `wmain`
   (`-municode`) and are converted to UTF-8; the input file is opened with `_wopen` on the original UTF-16 argument, so
@@ -1390,7 +1427,9 @@ and cost one predictable branch each.
   differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
-  (and libuv and OpenSSL from 7h).
+  (and libuv, picohttpparser and OpenSSL from 7h). For OpenSSL it prints the version in use:
+  in the default dynamic build that is the loaded library's
+  `OpenSSL_version(OPENSSL_VERSION)`, not the headers it was built with.
 - In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
   (7.4), `--ai`, `--json` and `--`. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
@@ -1474,7 +1513,97 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, its `LICENSE` stays in the submodule), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
-| OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
+| picohttpparser | 7h (HTTP) | Vendored: git submodule `vm/third_party/picohttpparser` from `https://github.com/h2o/picohttpparser` (dual MIT or Perl license; we take MIT; the notice is in `picohttpparser.h`, and releases ship it extracted to a license file), pinned to tag v1.4 (commit `516cdd3e00b3`). It parses and validates the start line and headers (`phr_parse_request`, `phr_parse_response`), behind our adapter (10.6); `phr_decode_chunked` is not used, since it knows no limits. `make vm` compiles `picohttpparser.c` per build mode into `$(VM_BUILD)/picohttpparser.o`, like yyjson, at the baseline (no `-msse4.2`; its SSE4.2 path is a SIMD candidate, `future.md` §19). Everything else in HTTP is our own C. |
+| OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `libssl.a` and `libcrypto.a` from that prefix by full path, searching only that prefix's `pkg-config` files, and fails rather than fall back to the system's shared libraries. Not vendored; see the note on OpenSSL under the license rule. |
+
+License rule: vendored or statically linked third-party code must be MIT,
+BSD, ISC, zlib, Apache-2.0 or similarly permissive (no copyleft). Its
+license file stays with it (in the submodule) and ships with releases.
+OpenSSL 3 (Apache-2.0) is permissive too, but it is singled out for two
+reasons: Apache-2.0 adds an attribution duty (its `LICENSE.txt`, and a
+`NOTICE` file if one is present; OpenSSL 3.0 to 3.5 have none), and the
+default build does not ship it at all, since it is linked dynamically. It
+is linked statically only in release artifacts that include its
+`LICENSE.txt` (10.0).
+
+### 10.0 Linking OpenSSL
+
+The default build links OpenSSL 3 dynamically, so `dist/agentica-vm` needs
+libc and `libssl.so.3`/`libcrypto.so.3`. All other libraries stay static.
+The dynamic build is the default for local builds, CI and distro packages;
+every downloadable release artifact (the `dist/` archive and the single
+file) is built with `OPENSSL=static`, so it needs only glibc's own
+libraries (libc, libm and the dynamic loader; on an older glibc baseline,
+`future.md` §18). The release baseline is Debian bookworm
+or newer, whose `libssl-dev` has the OpenSSL 3 static archives (glibc
+2.36); an older baseline would need a built OpenSSL prefix.
+
+- `make vm` (default `OPENSSL=system`) finds the system OpenSSL 3 with
+  `pkg-config libssl libcrypto` and links `-lssl -lcrypto`. A missing
+  OpenSSL, or one older than 3.0, stops the build with a clear error.
+- Why dynamic: security fixes come with the distro's `libssl.so.3`, with no
+  VM release; the system OpenSSL knows its own CA store (`OPENSSLDIR`); the
+  binary is smaller and CI does not build OpenSSL; we do not ship OpenSSL
+  code, so its attribution duty does not apply (license rule above); and
+  the OpenSSL 3.x ABI is stable.
+- `make vm OPENSSL=static` links a static OpenSSL 3, for the release
+  artifacts or minimal glibc images without OpenSSL (distroless, `scratch`
+  style). musl (Alpine) needs its own build (`future.md` §18); there the
+  dynamic build with Alpine's `openssl-dev` works. If a musl artifact is
+  ever released, it is static too (musl plus a static OpenSSL).
+- `OPENSSL=static` needs `OPENSSL_PREFIX=/path`, a prefix with `libssl.a`
+  and `libcrypto.a`; without it the build stops with an error. Debian's
+  `libssl-dev` ships both archives, so CI and the release build use
+  `OPENSSL_PREFIX=/usr` with the distro's own static archives and never
+  build OpenSSL. Any other prefix works too (for example OpenSSL built with
+  `no-shared`). There is no vendored OpenSSL submodule unless the release
+  workflow needs one later.
+- The static build must never link the system's shared OpenSSL by
+  accident. Its recipe unsets `PKG_CONFIG_PATH` and sets
+  `PKG_CONFIG_LIBDIR` to the prefix's `lib/pkgconfig`, `lib64/pkgconfig`
+  and `lib/<multiarch>/pkgconfig` (multiarch from `$(CC) -print-multiarch`
+  when it is not empty), which replaces `pkg-config`'s default search path.
+  The build fails if `pkg-config --exists libssl libcrypto` fails there, or
+  if `pkg-config --variable=libdir` for `libssl` or `libcrypto` is not
+  inside `OPENSSL_PREFIX`. The VM links the two archives by full path, in
+  that `libdir` (so the `.pc` files decide `lib`, `lib64` or the multiarch
+  directory). The extra libraries come from libcrypto's `Libs.private`
+  (`pkg-config --static --libs-only-l --libs-only-other libssl
+  libcrypto`): each `-lX` that is not part of glibc is linked as `libX.a`
+  by full path, found through `pkg-config` in the same environment, and a
+  missing one is a build error. Nothing is hard-coded; on Debian trixie,
+  for example, `libcrypto.a` needs `-lz -lzstd` (from `zlib1g-dev` and
+  `libzstd-dev`). Only glibc's own flags (such as `-ldl`, `-pthread`,
+  `-lm`) stay as they are. The static CI or release job checks `readelf
+  -d` of the VM against an allowlist: `NEEDED` may only name libc, libm and the dynamic loader
+  (`ld-linux`), plus libpthread, libdl and librt on an old glibc.
+- Both modes take `pkg-config --cflags libssl libcrypto` from the same
+  `pkg-config` environment as their link flags.
+- `pkg-config` never runs when the Makefile is parsed (no parse-time
+  `$(shell pkg-config ...)`), so `make site`, `make dup-check` and the
+  Racket-only tests do not need OpenSSL. The recipe for the
+  `build/vm/flags` stamp runs `pkg-config` and writes the resolved cflags
+  and link flags there, with `OPENSSL` and `OPENSSL_PREFIX`; the link
+  recipe reads them back. A change of mode, prefix or flags relinks.
+- The VM needs only OpenSSL 3.0.0 and loads with any 3.x. It calls only
+  symbols of the `OPENSSL_3.0.0` version node; OpenSSL also has later
+  nodes inside 3.0 (`OPENSSL_3.0.3`, `3.0.8`, `3.0.9`, for example
+  `OPENSSL_strcasecmp`) and in 3.1 and later. `-DOPENSSL_API_COMPAT=30000`
+  only hides deprecated API; what enforces the rule is a check in the
+  normal dynamic CI `test` job, after `make vm`: it fails if
+  `objdump -T dist/agentica-vm | rg -o 'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints anything. Newer features
+  (Argon2id and `OSSL_set_max_threads` need 3.2) are found at run time: if
+  `EVP_KDF_fetch` returns `NULL`, the call returns an error `Result` that
+  names the missing feature.
+- A static OpenSSL's built-in paths point at the build machine, so the
+  static build finds the CA store itself (10.3).
+- Static release artifacts ship OpenSSL's `LICENSE.txt` (and its `NOTICE`
+  if a later version adds one), as the license rule above requires.
+- Rejected for now: loading OpenSSL with `dlopen` only when a program uses
+  TLS. It is more complex, so the default VM needs libssl even for programs
+  without TLS. On purpose, then, without an OpenSSL development package the
+  VM does not build and all VM tests skip locally; install `libssl-dev` to
+  run them.
 
 ### 10.1 Event loop: libuv, not libevent
 
@@ -1570,8 +1699,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   one per 64 bytes of text it copies or scans. The units are tuned with the
   turn budget in 7h; a builtin with constant work charges nothing. The turn
   cost is taken from the turn only, never from `--max-steps`
-  (`steps_left`), so step counts, the `RUNTIME-STEP-LIMIT` span and the
-  `--max-steps` sweep stay equal to the evaluator. When the builtin has
+  (`steps_left`), so it never changes when `--max-steps` stops a program. When the builtin has
   returned and its result is stored, the task yields at the next
   instruction if its turn is spent (see "One counter for both budgets").
   This does not cut a long builtin in half: it bounds what runs after it.
@@ -1658,8 +1786,9 @@ raw epoll or io_uring stays local if measurements ever ask for it.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
     6.1), as today. Preemption never changes what is charged, and turn
-    costs (see "Builtins") are never charged to it. With one task,
-    counts and failing spans match the evaluator (2.1). With several tasks,
+    costs (see "Builtins") are never charged to it. With one task, a
+    runaway program stops with `RUNTIME-STEP-LIMIT` as on the evaluator
+    (black-box parity, 1; today counts and spans also match, 2.1). With several tasks,
     which task fails at the limit depends on the interleaving, so, like
     cross-task output order, it is not compared.
   - With N schedulers, `steps_left` is one atomic counter. A scheduler takes
@@ -1671,7 +1800,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     end of its batch first takes more from the shared counter, and fails
     with `RUNTIME-STEP-LIMIT` only when that is not enough. With N=1 this is
     the same as one plain counter, so counts and the span `s + steps_left`
-    still match the evaluator exactly. With N>1, other schedulers may hold
+    are those of one task's counter. With N>1, other schedulers may hold
     unspent batches, so the run may stop up to (N-1) times the turn budget
     below the limit, and which task hits the limit is not compared, as
     cross-task output order is not compared.
@@ -1714,7 +1843,8 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   - The step budget is the runtime's atomic `steps_left`; a turn takes a
     batch of `AGC_TURN_STEPS` (or what is left) and gives the unspent part
     back at its end, and a `STEP n` past its batch takes more first, so
-    with N=1 the failing span stays `s + steps_left`. Without
+    with N=1 the stop is exact: the program stops at the step that passes
+    the limit. Without
     `--max-steps` the counter starts at `INT64_MAX`.
   - `Task.sleep(0)` yields (the task goes to the back of the queue).
     `Task.sleep(n)` starts a timer-only job (`agc_io_kind` with no `work`
@@ -1747,11 +1877,13 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     (there are no channels and no way to pass a task its own handle), so
     awaits form no cycle, and every other wait holds a libuv request or
     timer. It guards against VM bugs.
-  - Step counts and the `RUNTIME-STEP-LIMIT` span of one task, and of
-    tasks that never run at the same time, match the evaluator. When
-    several tasks are runnable at once, which one meets the limit depends
-    on the interleaving (Racket's preemption vs. our turns), so the span
-    may differ; the code and exit status match (Quotas).
+  - Under the black-box rule (§1) a multi-task run must stop with
+    `RUNTIME-STEP-LIMIT` when it runs away, and the `--max-steps` sweep
+    (§12.1) needs each limit to give the full outcome or the step limit
+    with stdout a prefix of the full run. The task fixtures keep that
+    deterministic: their step counts do not depend on the clock, and main
+    prints after its awaits. Which task meets the limit depends on the
+    interleaving, so the span may differ from the evaluator's.
 
 #### 10.2.2 The loop
 
@@ -2075,23 +2207,42 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   GC-threaded build is covered only by a GC-stress run with
   `--schedulers 4`); then round 2 of the benchmarks covers multicore
   (roadmap phase 12) if it landed. Multicore does not block 7i: the
-  evaluator cannot run in parallel anyway. The parity rule stays:
-  with N=1, output, counts and spans match the evaluator. The differential,
-  bytecode and golden tests, the `--max-steps` sweep and the seeded runs
-  all run the VM with `--schedulers 1`.
+  evaluator cannot run in parallel anyway. The parity rule stays
+  black-box (1): with N=1, exit code, stdout, program stderr and diagnostic
+  codes match the evaluator. The differential, bytecode and golden tests, the `--max-steps`
+  sweep and the seeded runs all run the VM with `--schedulers 1`.
 
 ### 10.3 TLS
 
-- OpenSSL 3, which Racket's `openssl` module also uses. Initialize with
-  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`.
+- OpenSSL 3, which Racket's `openssl` module also uses. The default
+  dynamic build initializes without `OPENSSL_INIT_NO_LOAD_CONFIG`, so
+  OpenSSL loads the system `openssl.cnf` as it does for Racket, and the
+  distro's hardening applies. The `OPENSSL=static` build initializes with
+  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`, since its
+  configuration path points at the build machine, and sets explicit
+  minimums (TLS 1.2, security level 2); this is a documented difference of
+  the static build.
 - With an empty `ca_file`, use system trust like
-  `ssl-secure-client-context`: on Linux, `SSL_CERT_FILE`/`SSL_CERT_DIR`, then
-  well-known bundle paths (`/etc/ssl/certs/ca-certificates.crt`,
-  `/etc/pki/tls/certs/ca-bundle.crt`, ...), because a static OpenSSL's
-  built-in paths point at the build machine; on Windows only the `ROOT` store,
-  on macOS only the Keychain anchors, never `set_default_verify_paths`. A
-  non-empty `ca_file` replaces system trust. Trust-store usage and disallowed
-  lists are honored only as far as Racket honors them.
+  `ssl-secure-client-context`, matching Racket: the CA file and the CA
+  directory are two sources, and each is replaced on its own. On Linux the
+  default dynamic build loads exactly Racket's sources: the file is
+  `SSL_CERT_FILE` or else `X509_get_default_cert_file()`, the directory is
+  `SSL_CERT_DIR` or else `X509_get_default_cert_dir()` (both under
+  `OPENSSLDIR`), loaded with `SSL_CTX_load_verify_file` and
+  `SSL_CTX_load_verify_dir` (3.0 API; no store URI). The `OPENSSL=static` build (10.0) cannot use its built-in
+  paths, which point at the build machine: the file is `SSL_CERT_FILE` or
+  else the first existing file of a list of distro bundles
+  (`/etc/ssl/certs/ca-certificates.crt`,
+  `/etc/pki/tls/certs/ca-bundle.crt`, ...), and the directory is
+  `SSL_CERT_DIR` or else none. Racket probes such paths only for its
+  natipkg OpenSSL build (`RACKET_USE_ALT_PATH`). The static build has two
+  documented differences: this CA-bundle probing, and its own TLS
+  minimums without `openssl.cnf` (above). On a normal host the
+  evaluator and the dynamic VM both use OpenSSL's defaults. On Windows only
+  the `ROOT` store, on macOS only the Keychain anchors, never
+  OpenSSL's default paths. A non-empty `ca_file` replaces system trust.
+  Trust-store usage and disallowed lists are honored only as far as Racket
+  honors them.
 - Per connection: `SSL_set1_host`, SNI set, IP literals through
   `X509_VERIFY_PARAM_set1_ip_asc`. There is no `SSL_VERIFY_NONE` path.
 - Hermetic tests: wrong hostname, self-signed server without `ca_file`, and a
@@ -2128,7 +2279,7 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 | HTTP start and header line | 8192 bytes | `wire-line`, `http-wire.rkt` |
 | HTTP header block | 65536 bytes | `http-wire.rkt` |
 | HTTP headers | 100 | `http-wire.rkt` |
-| HTTP interim responses | 16 | `http-wire.rkt` |
+| HTTP interim responses | 15 accepted, the 16th fails | `read-response-head`, `http-wire.rkt` |
 | `max_connections` | at most 65536 | `http-client.rkt` |
 | HTTP body | `max_body_bytes`, 413 | `http-wire.rkt` |
 | Process launch | `--allow-run` | `process.rkt` |
@@ -2137,6 +2288,131 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 HTTP numbers: `Content-Length` and chunk sizes accumulate with saturation:
 parsing stops once a value exceeds the limit (413), and every comparison is
 written `size > limit - total`. A hermetic test sends over-long values.
+
+### 10.6 HTTP parsing
+
+Parity with the evaluator is black-box (1): the exit code, the stdout and
+program stderr of every run except one stopped by `--max-steps`, the
+diagnostic code, and the HTTP status or `Result` error kind must match; message text, spans, step counts and library error
+strings may differ. For HTTP this means:
+
+- Well-formed messages: the VM and the evaluator agree on the status, the
+  headers, the body, and whether a `Result` is ok or an error.
+- Malformed or hostile input: both reject it. A server answers with an
+  error status and closes the connection; a client request call returns an
+  error `Result` (the "error kind" in this section; its message text is
+  free). The exact 4xx or 5xx code may differ, except these, which must
+  match: 413 (body over the limit), 431 (too many headers or trailers, or
+  a line, head or trailer block over its size limit), 505 (a request with
+  an HTTP version the evaluator rejects with 505; a bad response version
+  is a client error `Result`) and 501 (`CONNECT`, and any
+  `Transfer-Encoding` other than one `chunked`).
+- The VM does not copy evaluator quirks (for example 431 for a bad chunk
+  terminator byte), and it does not have to report the first failing line
+  in the evaluator's order.
+- Documented differences: picohttpparser's RFC 9112 leniencies, one
+  leading empty line before a request and runs of spaces in the start line,
+  are accepted. They do not make framing ambiguous. The reason phrase
+  accepts what picohttpparser accepts; control bytes in a reason phrase
+  give a client error on the VM.
+- Framing rules stay strict: `Content-Length` with `Transfer-Encoding`
+  (with any `Transfer-Encoding`, this is 400 first), conflicting `Content-Length` values (400), bad chunk sizes and obs-fold
+  are rejected. Equal duplicate `Content-Length` values (the header twice,
+  or `5, 5`) are accepted as one, like the evaluator (RFC 9110 §8.6).
+  `Transfer-Encoding` other than one `chunked` (`gzip`, `gzip, chunked`,
+  two `Transfer-Encoding` headers) gives 501.
+
+The VM does not copy `src/http-wire.rkt` check by check. picohttpparser
+validates the head; that is why it is a dependency (and its SSE4.2 path
+later, `future.md` §19). It sits behind our own small adapter, so it can be
+swapped later (for example for llhttp), the same way libuv stays inside
+the I/O layer.
+
+- `vm/http_parse.h` holds our types only: a parsed head struct (method,
+  target, version, status, reason, and the headers with their count, all
+  as byte slices into the input buffer) and
+  `agc_http_parse_request_head(buf, len, limits, out)` and
+  `agc_http_parse_response_head(buf, len, limits, out)`. They return OK
+  with the bytes consumed, INCOMPLETE, or ERROR with our own error enum.
+- Only `vm/http_pico.c` includes `picohttpparser.h`. No picohttpparser type
+  or return code leaks out of it.
+- The adapter calls picohttpparser without `last_len`, and only when the
+  newly read bytes complete a line (contain LF). Each call parses the whole
+  buffered head again. A head is at most the start line (8192 bytes plus
+  CRLF) and 64 KiB of headers (10.5), and it has at most about 100 lines
+  (the start line, 100 headers and the blank line) before the pre-scan
+  stops it, so parsing work is bounded by lines × head size. On INCOMPLETE
+  the caller reads more and calls again with the grown buffer.
+- A -1 from picohttpparser maps to one error: 400 "invalid HTTP request
+  head" for a server, and an error `Result` ("invalid HTTP response head")
+  for a client.
+- The adapter checks more than picohttpparser, all on our own pre-scan or
+  on picohttpparser's output:
+  - The pre-scan (one pass over newly read bytes) checks the line and
+    head size limits (431), rejects bare LF (kept strict against
+    smuggling), and counts header lines: once the count passes 100 it
+    returns 431, before picohttpparser runs. Before a request, the
+    pre-scan and the start-line check skip one leading CRLF, matching the
+    documented leniency, so the header count is not off by one. The
+    pre-scan stops at the end of the start line; the start-line check
+    (431 for its length, then 505 or 400) runs before the pre-scan looks
+    at any header line.
+  - Once the start line is complete, and before picohttpparser runs, the
+    adapter checks it itself with the evaluator's shape. A request is
+    `METHOD SP+ TARGET SP+ VERSION`, a response `VERSION SP+ 3DIGIT`. In
+    a request, a version of the form `HTTP/[0-9.]+` gives 505 unless it is
+    exactly `HTTP/1.1` (so `HTTP/1`, `HTTP/2`, `HTTP/1.10` and `HTTP/2.0`
+    give 505); any other bad shape gives 400. In a response, a bad version
+    or shape is a client error `Result`. So a complete bad start line
+    always fails at once, even where picohttpparser would still return -2
+    for short input.
+  - Request target: origin form (`/...`), or `*` with `OPTIONS`; only bytes
+    33 to 126; anything else is 400.
+  - Method: token characters only (400); `CONNECT` gives 501.
+  - obs-fold lines (picohttpparser returns a header with `name == NULL`)
+    are rejected with 400.
+  - Responses: `HTTP/1.1` only, status 100 to 599, 101 rejected, at most
+    15 interim responses (the 16th fails); these give an error `Result`.
+  - The `Host` rules, and the body framing and smuggling rules above
+    (conflicting `Content-Length` 400, unsupported `Transfer-Encoding`
+    501).
+- The body is never buffered whole by the parsing layer. Our own body
+  decoder, `vm/http_body.c` (no third-party code), is an incremental state
+  machine. It is set up with the framing (`Content-Length` n, chunked, or
+  until close for responses) and the `max_body_bytes` limit; then
+  `feed(buf, len)` returns the bytes consumed, zero or more body slices
+  pointing into the input, and NEED_MORE, DONE or ERROR: 413 over the
+  limit, 431 for an over-long chunk-size or trailer line or for trailers
+  over the block-size or count limit, and 400 for every other malformed
+  body. Chunk sizes accumulate with saturation;
+  `phr_decode_chunked` is not used, since it knows no limits. `HttpBody`,
+  `HTTP.request_stream` and `HttpWriter` read and write through it chunk by
+  chunk, so a large upload or download never sits whole in memory. Trailer
+  lines are checked by the body decoder with the header rules (token
+  names, value bytes, the forbidden trailer list, and the size and count
+  limits), as `http-wire.rkt`'s `read-headers` with `#:trailers? #t`. The
+  encoder that writes chunked output is ours too. Swapping the head parser
+  leaves the body decoder unchanged.
+- Tests target the adapter interface, so a replacement parser must pass the
+  same tests: a C unit test in `vm/tests/`, and fixed, deterministic hostile
+  cases run on both backends. They check that both reject (and the code
+  where it must match), not message text: `Content-Length` with
+  `Transfer-Encoding`, conflicting `Content-Length` (400), equal duplicate
+  `Content-Length` twice and as `5, 5` (accepted), `Transfer-Encoding:
+  gzip`, `gzip, chunked` and two `Transfer-Encoding` headers (501), huge
+  chunk sizes (413), bare LF, over-long lines and heads (431), 100 headers
+  accepted and 101 and 150 rejected with 431, trailers over the line,
+  block-size or count limit (431), `HTTP/1`, `HTTP/2`, `HTTP/1.10` and
+  `HTTP/2.0` (505), an `HTTP/2.0` start line followed by 101 headers in
+  one write (505), a malformed version, a leading CRLF before a request
+  with 100 headers (accepted), absolute-form and non-ASCII targets, `*`
+  without `OPTIONS`, a bad method token, `CONNECT` (501), an obs-fold line,
+  bad trailers, and on the client
+  side `HTTP/1.0` responses, status 99 and 600, a 101 response, and 15
+  interim responses accepted and 16 rejected. One case sends a complete bad
+  start line ending in CRLF and leaves the socket open: it is rejected
+  before any timeout; another sends the short line `GET / HTTP/1\r\n`,
+  which gets 505.
 
 ## 11. Build, CI and supply chain
 
@@ -2153,6 +2429,8 @@ written `size > limit - total`. A hermetic test sends over-long values.
   The two defines are what bdwgc's configure and CMake builds set.
   yyjson's `src/yyjson.c` is compiled per build mode into
   `$(VM_BUILD)/yyjson.o` with only its reader enabled (10).
+  picohttpparser (7h) is compiled the same way into
+  `$(VM_BUILD)/picohttpparser.o`, without `-msse4.2` (10, 10.6).
   `NO_EXECUTE_PERMISSION` maps the heap without execute permission: macOS on
   arm64 refuses writable and executable pages (`Cannot allocate executable
   pages` once the heap grows), and Linux no longer gets RWX heap pages.
@@ -2161,12 +2439,26 @@ written `size > limit - total`. A hermetic test sends over-long values.
   static data and to one-past-the-end pointers, at one extra byte per
   object. Nothing in the VM relies on it today; it is upstream's default and
   costs nothing measurable. libuv (7h) is built from its submodule into
-  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h)
-  comes through `pkg-config --atleast-version` and its static archive path.
+  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h) is linked
+  dynamically by default: `OPENSSL=system` checks `pkg-config
+  --atleast-version=3.0 libssl libcrypto` and links `-lssl -lcrypto`.
+  `OPENSSL=static` requires `OPENSSL_PREFIX`, unsets `PKG_CONFIG_PATH`,
+  sets `PKG_CONFIG_LIBDIR` to the prefix's `lib/pkgconfig`,
+  `lib64/pkgconfig` and `lib/<multiarch>/pkgconfig`, fails if `pkg-config
+  --exists libssl libcrypto` fails there or if `--variable=libdir` is
+  outside the prefix, and links `libssl.a` and `libcrypto.a` from that
+  `libdir` by full path, plus each other non-glibc library of libcrypto's
+  `Libs.private` as its `.a` archive by full path (a missing one is a
+  build error); only glibc's own flags stay (10.0). Both modes take `pkg-config --cflags` from the same
+  environment and compile with `-DOPENSSL_API_COMPAT=30000`. The recipe
+  for the `build/vm/flags` stamp runs `pkg-config` and writes the resolved
+  flags; the link recipe reads them back; nothing runs `pkg-config` at
+  Makefile parse time.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
-  build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
-  recorded in `build/vm/flags`, so switching between a normal and a sanitizer
-  build always relinks.
+  build needs no Racket. Output `dist/agentica-vm`. The compiler flags,
+  `OPENSSL`, `OPENSSL_PREFIX` and the resolved OpenSSL cflags and link
+  flags are recorded in `build/vm/flags`, so switching between a normal and
+  a sanitizer build, or between OpenSSL modes, always relinks.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and
@@ -2215,16 +2507,22 @@ written `size > limit - total`. A hermetic test sends over-long values.
   job also builds it with `-fsanitize=fuzzer` (later PR).
 - `make test` includes the VM tests. They first run `make -s vm`, so a stale
   `dist/agentica-vm` is rebuilt from its sources. They skip visibly when the
-  VM cannot be built locally (no C compiler, or the submodule is not checked
-  out) and fail in CI (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
+  VM cannot be built locally (no C compiler, the submodule is not checked
+  out, or no OpenSSL 3 development package or `pkg-config`) and fail in CI
+  (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
   `make vm` reads `SANITIZE` from the environment, so the sanitizer job sets
   `SANITIZE=1` once and the tests rebuild the sanitized VM.
-- Supply chain: pinned runner images; libgc, yyjson (and libuv from 7h) are git
-  submodules pinned to a release tag, upgraded only by bumping the submodule
-  in a reviewed PR; CI checks out with `submodules: true`. `agentica-vm
-  --version` and the release notes list the libgc, yyjson, libuv and OpenSSL
-  versions; the release checklist says to rebuild and release after any High
-  or Critical advisory for libgc, yyjson, libuv or OpenSSL.
+- Supply chain: pinned runner images; libgc, yyjson (and libuv and
+  picohttpparser from 7h) are git submodules pinned to a release tag,
+  upgraded only by bumping the submodule in a reviewed PR; CI checks out
+  with `submodules: true`. `agentica-vm --version` and the release notes
+  list the libgc, yyjson, libuv, picohttpparser and OpenSSL versions (for
+  OpenSSL, the one in use at run time); the release checklist says to
+  rebuild and release after any High or Critical advisory for libgc,
+  yyjson, libuv, picohttpparser or OpenSSL (or the other archives the
+  static build links, such as zlib and zstd). For OpenSSL that means the release artifacts,
+  which are built with `OPENSSL=static` (10.0); dynamic builds get OpenSSL
+  fixes from the distro.
 
 CI matrix:
 
@@ -2255,7 +2553,17 @@ test`: the process and network tests are not portable yet. `.gitattributes`
 checks every text file out with LF (`.agcb` files are binary, and git
 detects the `string-inspect.agc` fixture as binary from its NUL bytes), so Windows sees the same sources,
 spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
-the platform's OpenSSL package) to each job.
+the platform's OpenSSL 3 development package, `libssl-dev` on Debian) to each
+job; these jobs use the default dynamic build. One Linux job (or the release
+workflow) also installs the `-dev` packages of libcrypto's
+`Libs.private` (on trixie `zlib1g-dev` and `libzstd-dev`), builds
+`OPENSSL=static OPENSSL_PREFIX=/usr`, checks `readelf -d` against the
+`NEEDED` allowlist of 10.0, and runs the TLS tests. The
+`test` job, after `make vm`, fails if
+`objdump -T dist/agentica-vm | rg -o 'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints
+anything. On macOS (paused),
+Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
+`lib/pkgconfig`.
 
 ## 12. Testing and first PRs
 
@@ -2271,19 +2579,46 @@ the platform's OpenSSL package) to each job.
 - `tests/vm-diff-*-test.rkt` (from the first VM PR, completed in 7f; four
   shards of `tests/vm-diff-common.rkt`) run each
   program on the evaluator in-process (as `tests/examples-test.rkt` does,
-  formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm`, and
-  compare stdout, stderr, exit code, and diagnostic code and span in all
-  three formats. Inputs: `examples/`, `tests/eval/tasks/*` reference
+  formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm` with
+  `--json`, and compare exit code, stdout, the program's own stderr and
+  the diagnostic code (black-box parity, 1). With `--json` the diagnostic
+  is the last stderr line: it is parsed as JSON for the code and removed
+  before stderr is compared. Each fixture also runs once on the VM in the
+  plain and `--ai` formats: exit code and stdout must equal the full run's,
+  stderr must start with the full run's program stderr, and the rest must
+  name the same code (`error[CODE]` or an `[CODE]` line) or be empty when
+  there is no diagnostic. Inputs: `examples/`, `tests/eval/tasks/*` reference
   solutions and hidden cases, and `tests/fixtures/vm/` with one program per
   runtime code and error span.
-- Every program also runs with `--max-steps` 1 to 200 and some larger values;
-  the failing span must match. In the slice the test finds each program's
-  total step count with the evaluator and sweeps every limit from 1 to it
-  when the total is at most 2000; above that (the call-depth program, about
-  60,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
-  and the total minus one. The run without a limit compares all three
-  formats; the sweep compares the plain format; stderr includes `IO.warn`
-  output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
+- Every program also runs on the VM under a sweep of `--max-steps`
+  limits. The test finds each program's total step count T with the
+  evaluator and sweeps every limit from 1 to T when T is at most 2000;
+  above that (the call-depth program, about 60,000 steps) it sweeps 1 to
+  300, 50 evenly spaced limits, T - 1 and T; then it adds 2T + 100. For
+  each limit the VM must either give the full run's outcome, or stop with
+  exit 1 and `RUNTIME-STEP-LIMIT` with a stdout and stderr that are
+  prefixes of the evaluator's full run. Once the VM finishes at one limit
+  it must finish at every larger one, and it must finish at 2T + 100. The
+  evaluator runs once per program, not once per limit. This allows other
+  step counts and spans but catches a wrong code, extra output, and
+  over-charging (not finishing by 2T + 100). It cannot catch an ignored
+  limit, since these programs finish anyway: the runaway programs in
+  `tests/fixtures/vm/step-limited/` do (`while true`, non-tail recursion,
+  a self tail call, mutual tail calls, a `while true` whose body is only dead
+  code, a `while` inside a `List.each` block, a loop inside a
+  closure called through a function value, and the counting builtins).
+  Each must stop with exit 1 and `RUNTIME-STEP-LIMIT` on both backends at
+  every tested limit, their stdouts and program stderrs must be prefixes
+  of one another, and neither may print what follows the loop. On Linux every
+  VM run in the sweep and the runaway test has a 60-second timeout
+  (`timeout --foreground -k 5 60` in the batch script, so the VM stays in
+  the batch's process group; `#:timeout` in `run-process`), so a VM that
+  ignores the limit fails with the fixture and limit named instead of
+  hanging. After the first run in a batch that times out (status 124 or
+  137) the script skips the rest and records them as 124 with empty
+  output, so a hanging VM costs one timeout per fixture, not one per
+  limit. The inputs are
+  `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. `Random` fixtures print only what both backends share, since
   seeded sequences differ by design (7.4).
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
