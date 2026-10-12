@@ -30,7 +30,7 @@ Checked at `5fb7ed7`:
 
 Other paths may keep allocating: nothing depends on sharing, so coverage can grow with the numbers.
 
-**Related, separate candidate.** `filter` allocates its output list as long as its input and only lowers `len` at the end (`vm/interp.c:341`), so a filter that keeps few items holds the whole allocation. The fix to evaluate is copying the kept items into a list of the kept length (or shrinking it in place, which Boehm cannot do); it needs its own measurement, peak RSS above all, with the same benchmark.
+**Related, separate candidate.** `filter` allocates its output list as long as its input and only lowers `len` at the end (`vm/interp.c:341`), so a filter that keeps few items holds the whole allocation. The fix to evaluate is shrinking the list to the kept length (`GC_REALLOC`) or copying the kept items into a new list; it needs its own measurement, peak RSS above all, with the same benchmark.
 
 ### 34.3 Why it is safe
 
