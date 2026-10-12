@@ -5,6 +5,7 @@
 #include <string.h>
 
 #ifdef __linux__
+#include <signal.h>
 #include <uv.h>
 #endif
 
@@ -171,6 +172,23 @@ static void drain(agc_vm *vm) {
   }
 }
 
+const int agc_stop_signals[AGC_STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
+
+void agc_io_block_stop(sigset_t *saved) {
+  sigset_t block;
+  sigemptyset(&block);
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) sigaddset(&block, agc_stop_signals[k]);
+  pthread_sigmask(SIG_BLOCK, &block, saved);
+}
+
+static int queue_work(agc_loop *loop, job *j) {
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+  int rc = uv_queue_work(&loop->uv, &j->work, run_work, work_finished);
+  pthread_sigmask(SIG_SETMASK, &saved, NULL);
+  return rc;
+}
+
 bool agc_io_init(void) {
   if (getenv("UV_USE_IO_URING")) return false;
   setenv("UV_USE_IO_URING", "0", 1);
@@ -201,7 +219,7 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   }
   if (!kind->work) {
     j->work_done = !kind->external;
-  } else if (uv_queue_work(&loop->uv, &j->work, run_work, work_finished) != 0) {
+  } else if (queue_work(loop, j) != 0) {
     j->work_done = true;
     j->consumed = true;
     if (!j->timer_closing) close_timer(j);

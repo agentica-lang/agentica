@@ -1,26 +1,31 @@
 #include "agc.h"
 
 #ifdef __linux__
+#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
-#define CHUNK ((size_t)65536)
+#define READ_AHEAD ((size_t)4096)
 #define ERR_CHUNK 4096
+#define REAP_STEPS 10000
+#define REAP_STEP_NS 100000L
 #define URING_ENV "UV_USE_IO_URING="
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
-#define WATCHED 3
 
 typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT } req_kind;
 
 typedef struct proc proc;
 typedef struct request request;
+typedef struct guard guard;
 typedef struct watch watch;
 
 struct request {
@@ -33,8 +38,16 @@ struct request {
 
 struct watch {
   uv_signal_t handle;
-  proc *owner;
-  bool open;
+  guard *owner;
+  bool usable;
+};
+
+struct guard {
+  watch watches[AGC_STOP_SIGNALS];
+  proc *first;
+  size_t running, handles;
+  bool released;
+  int signal;
 };
 
 struct proc {
@@ -42,18 +55,17 @@ struct proc {
   uv_pipe_t in, out, err;
   uv_write_t write_req;
   FILE *forward;
+  guard *g;
+  proc *run_prev, *run_next;
   size_t users, handles;
-  bool running, exited, err_done, out_eof, in_closed, closed, reading, forward_failed;
+  bool linked, running, exited, err_done, out_eof, in_closed, closed, reading, forward_failed;
   int out_error, write_status;
   int64_t status;
   uint8_t *buf, *write_data;
   size_t start, end, cap;
   request *reader, *writer, *waits;
-  watch watches[WATCHED];
   uint8_t err_buf[ERR_CHUNK];
 };
-
-static const int caught[WATCHED] = {SIGINT, SIGTERM, SIGHUP};
 
 static const char closed_text[] = "process: process is closed";
 static const char timed_out[] = "network: operation timed out";
@@ -87,15 +99,45 @@ static void closed_out(uv_handle_t *h) { handle_gone(OWNER(h, out)); }
 
 static void closed_err(uv_handle_t *h) { handle_gone(OWNER(h, err)); }
 
-static void closed_watch(uv_handle_t *h) { handle_gone(((watch *)(void *)h)->owner); }
-
 static void close_handle(uv_handle_t *h, uv_close_cb done) {
   if (!uv_is_closing(h)) uv_close(h, done);
 }
 
-static void stop_watching(proc *p) {
-  for (size_t k = 0; k < WATCHED; k++)
-    if (p->watches[k].open) close_handle((uv_handle_t *)&p->watches[k].handle, closed_watch);
+static void guard_settle(guard *g) {
+  if (g->released && !g->handles && !g->running) free(g);
+}
+
+static void closed_watch(uv_handle_t *h) {
+  guard *g = ((watch *)(void *)h)->owner;
+  g->handles--;
+  guard_settle(g);
+}
+
+static void guard_stop(guard *g, int sig) {
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
+    uv_signal_t *h = &g->watches[k].handle;
+    if (!g->watches[k].usable || !uv_is_active((uv_handle_t *)h)) continue;
+    if (!sig && h->caught_signals != h->dispatched_signals) sig = agc_stop_signals[k];
+    uv_signal_stop(h);
+  }
+  if (sig) raise(sig);
+  pthread_sigmask(SIG_SETMASK, &saved, NULL);
+}
+
+static void unlink_child(proc *p) {
+  guard *g = p->g;
+  p->linked = false;
+  if (p->run_prev)
+    p->run_prev->run_next = p->run_next;
+  else
+    g->first = p->run_next;
+  if (p->run_next) p->run_next->run_prev = p->run_prev;
+  p->run_prev = p->run_next = NULL;
+  if (--g->running) return;
+  guard_stop(g, g->signal);
+  guard_settle(g);
 }
 
 static size_t pending(const proc *p) { return p->end - p->start; }
@@ -107,35 +149,50 @@ static void notify_waits(proc *p) {
   for (request *q = p->waits; q; q = q->next) agc_io_ready(q->job);
 }
 
-static void reap(proc *p) {
-  int status = 0;
-  pid_t pid;
-  do {
-    pid = waitpid(p->process.pid, &status, 0);
-  } while (pid < 0 && errno == EINTR);
+static void finished(proc *p, int64_t status) {
   p->running = false;
   p->exited = true;
-  if (pid == p->process.pid) p->status = WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status);
+  p->status = status;
+  if (p->linked) unlink_child(p);
 }
 
-static void close_proc(proc *p) {
-  if (p->closed) return;
-  p->closed = true;
-  if (p->running) {
-    uv_process_kill(&p->process, SIGKILL);
-    reap(p);
+static void reap(proc *p, int steps) {
+  struct timespec pause = {0, REAP_STEP_NS};
+  for (int k = 0;; k++) {
+    int status = 0;
+    pid_t pid = waitpid(p->process.pid, &status, WNOHANG);
+    if (pid == p->process.pid) {
+      finished(p, WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status));
+      return;
+    }
+    if (pid < 0 && errno == ECHILD) {
+      finished(p, p->status);
+      return;
+    }
+    if (k >= steps) return;
+    nanosleep(&pause, NULL);
   }
-  close_handle((uv_handle_t *)&p->process, closed_process);
+}
+
+static int close_proc(proc *p) {
+  if (p->closed) return 0;
+  p->closed = true;
+  int err = 0;
+  if (p->running) {
+    err = uv_process_kill(&p->process, SIGKILL);
+    reap(p, err ? 0 : REAP_STEPS);
+  }
+  if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
   close_handle((uv_handle_t *)&p->in, closed_in);
   close_handle((uv_handle_t *)&p->out, closed_out);
   close_handle((uv_handle_t *)&p->err, closed_err);
-  stop_watching(p);
   free(p->buf);
   p->buf = NULL;
   p->start = p->end = p->cap = 0;
   if (p->reader) agc_io_ready(p->reader->job);
   if (p->writer) agc_io_ready(p->writer->job);
   notify_waits(p);
+  return err;
 }
 
 static void release_proc(void *native) {
@@ -265,28 +322,79 @@ static void wrote(uv_write_t *w, int status) {
 
 static void exited(uv_process_t *h, int64_t status, int signal) {
   proc *p = OWNER(h, process);
-  p->running = false;
-  p->exited = true;
-  p->status = signal ? 128 + signal : status;
-  stop_watching(p);
+  finished(p, signal ? 128 + signal : status);
+  if (p->closed) close_handle((uv_handle_t *)&p->process, closed_process);
   notify_waits(p);
 }
 
-static void interrupted(uv_signal_t *h, int signum) {
-  close_proc(((watch *)(void *)h)->owner);
-  raise(signum);
+static void close_children(guard *g) {
+  for (proc *p = g->first, *next = NULL; p; p = next) {
+    next = p->run_next;
+    close_proc(p);
+  }
 }
 
-static void start_watching(uv_loop_t *loop, proc *p) {
-  for (size_t k = 0; k < WATCHED; k++) {
-    watch *w = &p->watches[k];
-    w->owner = p;
-    struct sigaction now;
-    if (sigaction(caught[k], NULL, &now) || now.sa_handler == SIG_IGN || uv_signal_init(loop, &w->handle)) continue;
-    w->open = true;
-    p->handles++;
-    uv_signal_start(&w->handle, interrupted, caught[k]);
+static void interrupted(uv_signal_t *h, int signum) {
+  guard *g = ((watch *)(void *)h)->owner;
+  g->signal = signum;
+  close_children(g);
+  guard_stop(g, signum);
+}
+
+static void link_child(guard *g, proc *p) {
+  p->g = g;
+  p->linked = true;
+  p->run_prev = NULL;
+  p->run_next = g->first;
+  if (g->first) g->first->run_prev = p;
+  g->first = p;
+  if (g->running++) return;
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++)
+    if (g->watches[k].usable) uv_signal_start(&g->watches[k].handle, interrupted, agc_stop_signals[k]);
+}
+
+static void release_guard(void *native) {
+  guard *g = native;
+  close_children(g);
+  guard_stop(g, 0);
+  g->released = true;
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++)
+    if (g->watches[k].usable) close_handle((uv_handle_t *)&g->watches[k].handle, closed_watch);
+  guard_settle(g);
+}
+
+static void keep_descriptors_private(void) {
+  DIR *dir = opendir("/proc/self/fd");
+  if (!dir) return;
+  int own = dirfd(dir);
+  for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
+    char *end = NULL;
+    long fd = strtol(e->d_name, &end, 10);
+    if (end == e->d_name || *end || fd < 3 || fd == own || fd > INT32_MAX) continue;
+    int flags = fcntl((int)fd, F_GETFD);
+    if (flags >= 0 && !(flags & FD_CLOEXEC)) fcntl((int)fd, F_SETFD, flags | FD_CLOEXEC);
   }
+  closedir(dir);
+}
+
+static guard *guard_of(agc_vm *vm, uv_loop_t *loop) {
+  if (vm->process_guard) return vm->process_guard->native;
+  agc_resource *r = agc_register(vm, NULL, release_guard);
+  guard *g = calloc(1, sizeof(guard));
+  if (!g) agc_out_of_memory();
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
+    watch *w = &g->watches[k];
+    w->owner = g;
+    struct sigaction now;
+    if (sigaction(agc_stop_signals[k], NULL, &now) || now.sa_handler == SIG_IGN || uv_signal_init(loop, &w->handle))
+      continue;
+    w->usable = true;
+    g->handles++;
+  }
+  keep_descriptors_private();
+  r->native = g;
+  vm->process_guard = r;
+  return g;
 }
 
 static void alloc_err(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
@@ -306,6 +414,13 @@ static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   notify_waits(p);
 }
 
+static size_t read_size(const proc *p) {
+  const request *q = p->reader;
+  size_t have = pending(p);
+  if (q && q->kind == REQ_BYTES && q->count > have && q->count - have > READ_AHEAD) return q->count - have;
+  return READ_AHEAD;
+}
+
 static bool make_room(proc *p, size_t want) {
   if (p->start == p->end) p->start = p->end = 0;
   if (p->cap - p->end >= want) return true;
@@ -316,7 +431,7 @@ static bool make_room(proc *p, size_t want) {
     p->end = used;
     if (p->cap - used >= want) return true;
   }
-  size_t cap = p->cap ? p->cap : CHUNK;
+  size_t cap = p->cap ? p->cap : READ_AHEAD;
   while (cap - used < want) cap = agc_size_mul(cap, 2);
   uint8_t *bigger = realloc(p->buf, cap);
   if (!bigger) return false;
@@ -328,7 +443,8 @@ static bool make_room(proc *p, size_t want) {
 static void alloc_out(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
   (void)suggested;
   proc *p = OWNER(h, out);
-  *buf = make_room(p, CHUNK) ? uv_buf_init((char *)p->buf + p->end, (unsigned)CHUNK) : uv_buf_init(NULL, 0);
+  size_t size = read_size(p);
+  *buf = make_room(p, size) ? uv_buf_init((char *)p->buf + p->end, (unsigned)size) : uv_buf_init(NULL, 0);
 }
 
 static void stop_reading(proc *p) {
@@ -429,7 +545,7 @@ static int open_pipe(uv_pipe_t *pipe, int *fd, int rc) {
   return rc;
 }
 
-static int start_child(uv_loop_t *loop, proc *p, char **argv, char **env) {
+static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **env) {
   int fds[6] = {-1, -1, -1, -1, -1, -1};
   int rc = 0;
   for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
@@ -447,22 +563,25 @@ static int start_child(uv_loop_t *loop, proc *p, char **argv, char **env) {
     options.env = env;
     options.stdio_count = 3;
     options.stdio = stdio;
+    link_child(g, p);
     rc = uv_spawn(loop, &p->process, &options);
     p->handles = 1;
-    if (rc) uv_close((uv_handle_t *)&p->process, closed_process);
+    p->running = !rc;
+    if (rc) {
+      uv_close((uv_handle_t *)&p->process, closed_process);
+      unlink_child(p);
+    }
   }
   close_fd(&fds[0]);
   close_fd(&fds[3]);
   close_fd(&fds[5]);
   if (!rc) {
-    p->running = true;
     uv_pipe_init(loop, &p->in, 0);
     uv_pipe_init(loop, &p->out, 0);
     uv_pipe_init(loop, &p->err, 0);
     p->handles = 4;
     rc = open_pipe(&p->err, &fds[4], open_pipe(&p->out, &fds[2], open_pipe(&p->in, &fds[1], 0)));
     if (!rc) rc = uv_read_start((uv_stream_t *)&p->err, alloc_err, forward_err);
-    if (!rc) start_watching(loop, p);
   }
   close_fd(&fds[1]);
   close_fd(&fds[2]);
@@ -480,6 +599,7 @@ static agc_resource *new_lock(void) {
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
+  if (!vm->rt->allow_run) return error_of("process: spawning requires --allow-run");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -488,13 +608,13 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
     const agc_string *arg = agc_as_string(vm, list->items[k]);
     valid = valid && !memchr(arg->data, 0, arg->bytes);
   }
-  if (!vm->rt->allow_run) return error_of("process: spawning requires --allow-run");
   if (!valid) return error_of("process: command must be nonempty and arguments cannot contain NUL");
   if (timeout <= 0) return error_of(bad_timeout);
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = new_lock();
   pr->writer = new_lock();
   uv_loop_t *loop = agc_io_uv(vm);
+  guard *g = guard_of(vm, loop);
   char *path = resolve(vm, command);
   if (!path) return error_of("process: executable is unavailable");
   char **argv = child_args(vm, path, list);
@@ -502,7 +622,7 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->forward = vm->rt->err;
-  int rc = start_child(loop, p, argv, env);
+  int rc = start_child(loop, g, p, argv, env);
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
   free(env);
@@ -636,19 +756,20 @@ static agc_value builtin_wait(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   agc_resource *r = agc_as_process(vm, args[0])->state;
   proc *p = r->native;
-  if (p) {
-    r->native = NULL;
-    agc_unregister(vm, r);
-    release_proc(p);
-  }
+  if (!p) return agc_void();
+  r->native = NULL;
+  agc_unregister(vm, r);
+  int err = close_proc(p);
+  p->users--;
+  settle(p);
+  if (err) agc_fail(vm, "RUNTIME-PROCESS-CLOSE", "process: the child cannot be stopped", span);
   return agc_void();
 }
 
 const agc_builtin agc_process_builtins[] = {
-  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE},

@@ -3,6 +3,7 @@
 
 #ifdef __linux__
 #include <locale.h>
+#include <signal.h>
 #endif
 #include <setjmp.h>
 #include <stdatomic.h>
@@ -24,6 +25,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
 #define AGC_TURN_STEPS 2000
 #define AGC_COST_BYTES 64
+#define AGC_STOP_SIGNALS 3
 
 typedef enum {
   AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS
@@ -323,6 +325,7 @@ struct agc_vm {
   agc_task *ready, *ready_tail;
   agc_registry *registry;
   agc_loop *loop;
+  agc_resource *process_guard;
   int64_t next_stop, stop_set, turn_left, batch;
   bool yield;
   jmp_buf fail;
@@ -474,6 +477,10 @@ bool agc_io_init(void);
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
+#ifdef __linux__
+extern const int agc_stop_signals[AGC_STOP_SIGNALS];
+void agc_io_block_stop(sigset_t *saved);
+#endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
