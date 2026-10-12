@@ -1841,7 +1841,9 @@ concurrently. The design follows BEAM.
   - The SipHash keys are `hash_key` in `agc_vm`, set by `agc_vm_init` and,
     from OS entropy, by `vm/main.c` before the run.
   - The locale for OS error text (`vm/files.c`) is `messages_locale` in
-    `agc_vm`, made on first use.
+    `agc_vm`, made on first use and never freed. The tasks PR makes it
+    once at start-up and read-only in the shared runtime, which also frees
+    it on exit.
   - `setenv("UV_USE_IO_URING", "0", 0)` in `vm/loop.c` runs when the first
     loop is made; `setenv` is not thread-safe, so the tasks PR moves it to
     start-up, before any scheduler thread exists. The tasks PR also moves
