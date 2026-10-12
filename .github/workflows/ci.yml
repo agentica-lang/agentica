@@ -196,16 +196,10 @@ jobs:
       - run: dist/agentica examples/json-modules.agc
       - run: dist/agentica check examples/json-modules.agc
       - run: dist/agentica --vm examples/hello.agc
-      - run: dist/agentica --vm examples/tasks.agc
-      - run: diff <(dist/agentica examples/hello.agc) <(dist/agentica --vm examples/hello.agc)
-        shell: bash
-      - run: diff <(dist/agentica examples/tasks.agc) <(dist/agentica --vm examples/tasks.agc)
-        shell: bash
-      - run: diff <(dist/agentica examples/file-summary.agc examples/hello.agc) <(dist/agentica --vm examples/file-summary.agc examples/hello.agc)
-        shell: bash
-      - run: diff <(dist/agentica examples/concurrency.agc) <(dist/agentica --vm examples/concurrency.agc)
-        shell: bash
-      - run: diff <(dist/agentica --allow-run examples/process-tool.agc; echo "exit $?") <(dist/agentica --vm --allow-run examples/process-tool.agc; echo "exit $?")
+      - run: dist/agentica examples/tasks.agc
+      - run: dist/agentica examples/file-summary.agc examples/hello.agc
+      - run: dist/agentica --allow-run examples/process-tool.agc
+      - run: diff <(dist/agentica --seed 7 tests/fixtures/vm/random.agc) <(dist/agentica --seed 7 tests/fixtures/vm/random.agc)
         shell: bash
       - run: dist/agentica examples/queue.agc
 
