@@ -1,6 +1,6 @@
 ## 33. Digit separators
 
-**Status:** planned (roadmap [phase 23](../roadmap/23-digit-separators.md)). Decided on 2026-10-12: number literals may use `_` between digits, as in Ruby and Elixir: `3_000`, `1_000_000`. It is front end only and does not change the evaluator, so it goes before 7i (§33.5).
+**Status:** planned (roadmap [phase 23](../roadmap/23-digit-separators.md)). Decided on 2026-10-12: number literals may use `_` between digits, as in Ruby and Elixir: `3_000`, `1_000_000`. It is front end only. It comes after 7i, right after doc comments (§33.5).
 
 ### 33.1 Today
 
@@ -56,6 +56,5 @@ end
 
 ### 33.5 Order
 
-- **Front end only:** the lexer and the docs. The token value is the same `Int` or `Float`, so the AST, the checker, lowering, the bytecode, the VM and the frozen evaluator do not change.
-- **Before 7i.** Like doc comments (§32.7), it gets no new behaviour in the evaluator, so it comes before 7i as a third exception, decided by the user on 2026-10-12.
-- **When:** 23a goes right after phase 22 (22a, 22b) and before HTTP 20b.
+- **Front end only:** the lexer and the docs. The token value is the same `Int` or `Float`, so the AST, the checker, lowering, the bytecode, and the VM do not change.
+- **When:** decided by the user on 2026-10-13, 23a comes after 7i, right after phase 22 (22a, 22b), at roadmap order step 7.2a, before `Task.map` and channels (order step 7.3). It is no longer an exception to "new features are VM-only and come after 7i".

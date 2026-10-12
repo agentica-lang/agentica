@@ -1,6 +1,6 @@
 ## 32. Doc comments
 
-**Status:** planned (roadmap [phase 22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets documentation comments written as `##` lines, in the style of Rust's `///`, so that a later tool can generate documentation from the code. The user asked for this as soon as possible: phase 22 is front end only and does not change the evaluator, so it goes before 7i (§32.7).
+**Status:** planned (roadmap [phase 22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets documentation comments written as `##` lines, in the style of Rust's `///`, so that a later tool can generate documentation from the code. Phase 22 is front end only. It comes after 7i, as the first new feature (§32.7).
 
 The idea in one paragraph: a run of lines that start with `##` documents the declaration on the next line. `#` stays an ordinary comment that tools ignore. The text is Markdown. A `##` run at the top of a file documents the module. The parser keeps each run with its declaration, and two tools read it: `agentica doc`, which prints a module's exported API with its docs, and `agentica help`, which learns to show `std/` functions. No tags such as `@param` are needed, because the types are in the signature.
 
@@ -79,7 +79,7 @@ end
 
 - The lexer keeps doc lines instead of dropping them and emits one `DOC` token per doc block. The token carries the text and the span of the whole block. Inside parentheses, brackets or braces, where no `NL` is emitted, a doc line is still an error (`PARSE-DETACHED-DOC`).
 - The parser attaches each `DOC` token to the declaration, field or variant on the next line, or makes it the module doc.
-- The docs do not go into the existing AST structs. The parser returns them in a side table on `program`: a map from the span of each documented declaration, field or variant to its doc text, plus the module doc. So the checker, lowering, the bytecode and the frozen evaluator see the same AST as before, and the `.agcb` format does not change.
+- The docs do not go into the existing AST structs. The parser returns them in a side table on `program`: a map from the span of each documented declaration, field or variant to its doc text, plus the module doc. So the checker, lowering and the bytecode see the same AST as before, and the `.agcb` format does not change.
 - `agentica doc` and `help` read the table straight from the parser (§32.5), so `src/modules.rkt` does not change.
 
 ### 32.5 `agentica doc`
@@ -124,12 +124,10 @@ end
 
 ### 32.7 Order and the evaluator
 
-- **Why it can go before 7i.** "New features are VM-only and come after 7i" exists so that the frozen evaluator gets no new behaviour. Doc comments change only the lexer, the parser and the CLI, and the AST that the evaluator reads keeps its shape (§32.4). So the user's request "as soon as possible" is met without touching the evaluator.
-- **When.**
-  - 22a and 22b go after HTTP 20a (#118), the `AGENTS.md` trim and the shorter golden sweep.
-  - They go before 20b.
-  - 20a's `stdlib/http.agc` is documented in 22a.
-- **How the backends are affected.** Both backends run programs with doc comments the same way, because docs never reach them.
+- **Front end only.** Doc comments change only the lexer, the parser and the CLI, and the AST keeps its shape (§32.4).
+- **When.** Decided by the user on 2026-10-13: 22a and 22b come after 7i, as the first new features (roadmap order step 7.2a), before digit separators (§33) and before `Task.map` and channels (order step 7.3). They are no longer an exception to "new features are VM-only and come after 7i".
+  - `stdlib/http.agc` (HTTP 20a to 20d) is documented in 22a.
+- **How the VM is affected.** It runs programs with doc comments as before, because docs never reach it.
 
 ### 32.8 Later, to evaluate
 
