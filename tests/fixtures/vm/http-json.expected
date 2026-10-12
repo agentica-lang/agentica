@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 40,
+  "stdout": [
+    "{\"properties\":{\"ca_file\":{\"type\":\"string\"},\"idle_timeout_ms\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"max_body_bytes\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"max_connections\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"timeout_ms\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}},\"required\":[\"timeout_ms\",\"idle_timeout_ms\",\"max_connections\",\"max_body_bytes\",\"ca_file\"],\"type\":\"object\"}",
+    "{\"name\":\"a\",\"value\":\"ñ\"}",
+    "ok(Header(name: \"a\", value: \"ñ\"))",
+    "{\"properties\":{\"name\":{\"type\":\"string\"},\"value\":{\"type\":\"string\"}},\"required\":[\"name\",\"value\"],\"type\":\"object\"}",
+    "ok(HttpResponse(status: 200, headers: [Header(name: \"a\", value: \"ñ\")], body: \"x\"))",
+    "error(\"name: expected String\")",
+    ""
+  ],
+  "stderr": []
+}

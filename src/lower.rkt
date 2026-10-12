@@ -1,6 +1,6 @@
 #lang racket
 
-(require "ast.rkt" "builtins.rkt" "diagnostic.rkt" "source.rkt")
+(require "ast.rkt" "builtins.rkt" "builtin-types.rkt" "diagnostic.rkt" "source.rkt")
 
 (provide lower
          check-vm-only
@@ -26,10 +26,9 @@
 (define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient))
 
 (define builtin-structs
-  (list (ir-struct "FileInfo" '("kind" "size_bytes" "modified_seconds") #f)
-        (ir-struct "Header" '("name" "value") #f)
-        (ir-struct "HttpResponse" '("status" "headers" "body") #f)
-        (ir-struct "HttpClientOptions" '("timeout_ms" "idle_timeout_ms" "max_connections" "max_body_bytes" "ca_file") #f)))
+  (for/list ([name (in-list '("FileInfo" "Header" "HttpResponse" "HttpClientOptions"))])
+    (define fields (hash-ref builtin-records name))
+    (ir-struct name (map car fields) (map cdr fields))))
 
 (define builtin-struct-needs (hash "HttpResponse" '("Header")))
 
@@ -39,10 +38,16 @@
     [(pair? type) (for/or ([part (in-list type)]) (mentions-struct? part name))]
     [else #f]))
 
-(define (used-builtin-structs types)
+(define (used-builtin-structs types declarations)
+  (define written '())
+  (walk-ast declarations
+            (lambda (node)
+              (when (type-expression? node) (set! written (cons (type-expression-name node) written)))
+              #f))
   (define named
     (for*/list ([entry (in-list builtin-structs)]
-                #:when (for/or ([type (in-hash-values types)]) (mentions-struct? type (ir-struct-name entry))))
+                #:when (or (member (ir-struct-name entry) written)
+                           (for/or ([type (in-hash-values types)]) (mentions-struct? type (ir-struct-name entry)))))
       (ir-struct-name entry)))
   (define wanted (append named (append-map (lambda (name) (hash-ref builtin-struct-needs name '())) named)))
   (filter (lambda (entry) (member (ir-struct-name entry) wanted)) builtin-structs))
@@ -226,7 +231,7 @@
                    #:when (function-decl? declaration))
           declaration))
       (define-values (declared-structs enums) (user-tables (program-declarations program)))
-      (define structs (append declared-structs (used-builtin-structs types)))
+      (define structs (append declared-structs (used-builtin-structs types declarations)))
       (define user-types (make-hash))
       (define struct-info (make-hash))
       (for ([entry (in-list structs)] [index (in-naturals)])
