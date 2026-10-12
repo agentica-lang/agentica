@@ -111,12 +111,13 @@ jobs:
           cp dist/agentica-vm "dist/$name/bin/"
           cp LICENSE NOTICE "dist/$name/"
           share=$(racket -e '(require setup/dirs) (display (find-share-dir))')
-          mkdir -p "dist/$name/licenses/"{racket,bdwgc,libuv,yyjson,openssl,unicode}
+          mkdir -p "dist/$name/licenses/"{racket,bdwgc,libuv,yyjson,picohttpparser,openssl,unicode}
           cp "$share/LICENSE.txt" "$share/LICENSE-MIT.txt" "$share/LICENSE-APACHE.txt" \
             licenses/racket/ChezScheme-NOTICE "dist/$name/licenses/racket/"
           sed -n '1,/covered by the GPL\./p' vm/third_party/bdwgc/README.QUICK > "dist/$name/licenses/bdwgc/NOTICE"
           cp vm/third_party/libuv/LICENSE vm/third_party/libuv/LICENSE-extra "dist/$name/licenses/libuv/"
           cp vm/third_party/yyjson/LICENSE "dist/$name/licenses/yyjson/"
+          sed -n '1,/^ \*\//p' vm/third_party/picohttpparser/picohttpparser.h > "dist/$name/licenses/picohttpparser/LICENSE"
           cp vm/third_party/openssl/LICENSE.txt "dist/$name/licenses/openssl/"
           cp licenses/unicode/LICENSE.txt "dist/$name/licenses/unicode/"
           tar -czf "dist/$name.tar.gz" -C dist "$name"
@@ -124,7 +125,7 @@ jobs:
           listing=$(tar -tzf "dist/$name.tar.gz")
           for f in bin/agentica bin/agentica-vm LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
             licenses/racket/LICENSE-APACHE.txt licenses/racket/ChezScheme-NOTICE licenses/bdwgc/NOTICE \
-            licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/openssl/LICENSE.txt licenses/unicode/LICENSE.txt; do
+            licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/picohttpparser/LICENSE licenses/openssl/LICENSE.txt licenses/unicode/LICENSE.txt; do
             grep -qxF "$name/$f" <<< "$listing" || { echo "$name.tar.gz lacks $name/$f" >&2; exit 1; }
           done
           unpacked="$RUNNER_TEMP/unpacked"
