@@ -133,7 +133,8 @@ static void seed_map_hash(agc_vm *vm) {
 
 #ifdef __linux__
 static bool bind_to_driver(int64_t driver) {
-  if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) return false;
+  signal(SIGTERM, SIG_DFL);
+  if (prctl(PR_SET_PDEATHSIG, SIGTERM) != 0) return false;
   return (int64_t)getppid() == driver;
 }
 #else
