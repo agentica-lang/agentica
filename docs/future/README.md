@@ -1,0 +1,40 @@
+# Agentica: future grammar
+
+Status: proposals only. This document is not normative; implemented language behavior is specified in [`grammar.md`](../grammar.md).
+
+Working rule: when a phase of the [roadmap](../roadmap/README.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
+
+Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT) are implementation proposals with no language change. Section 23 (binary data) adds `Int` and `Float` builtins and the `std/binary` module, with no grammar change. Section 24 (logging and debugging) adds the `std/log` module, stack traces on runtime errors and tracing inside the VM, with no grammar change.
+
+
+## Files
+
+Each numbered section has its own file, named by its number, so `§23` is in `23-binary-data.md`. Sections that have landed or were decided are in [`done.md`](done.md). Section 1 no longer exists.
+
+| § | Title | File | Status |
+|---|---|---|---|
+| 2 | Landed: enums and pattern matching | [`done.md`](done.md#2-landed-enums-and-pattern-matching) | Landed; spec in `grammar.md` |
+| 3 | Extensions without a normative grammar | [`03-extensions.md`](03-extensions.md) | Proposals |
+| 4 | Standard library and function values | [`04-stdlib-and-function-values.md`](04-stdlib-and-function-values.md) | Mostly landed; the rest is planned |
+| 5 | Remaining `List` operations | [`05-list-operations.md`](05-list-operations.md) | Mostly landed; other gaps listed |
+| 6 | Native runtime | [`06-native-runtime.md`](06-native-runtime.md) | Replaced by the bytecode VM ([`docs/vm/`](../vm/README.md)) |
+| 7 | Possible metatables: Ruby-style modules | [`07-metatables.md`](07-metatables.md) | Exploratory |
+| 8 | Concurrency and parallelism | [`08-concurrency.md`](08-concurrency.md) | Tasks landed; channels and CPU parallelism proposed |
+| 9 | Files and paths | [`done.md`](done.md#9-files-and-paths-implemented) | Implemented |
+| 10 | Void and processes | [`done.md`](done.md#10-void-and-processes-implemented) | Implemented |
+| 11 | Ruby-style ergonomics | [`11-ruby-ergonomics.md`](11-ruby-ergonomics.md) | Implemented; its rule for new forms still applies; a few items open |
+| 12 | Data structures | [`12-data-structures.md`](12-data-structures.md) | Ranges landed; sets, queues and faster lists planned (roadmap phase 8) |
+| 13 | Shared tables (ATS) | [`13-ats.md`](13-ats.md) | On demand (roadmap phase 9) |
+| 14 | Decided: no shadowing | [`done.md`](done.md#14-decided-no-shadowing) | Decided |
+| 15 | Adapters and JSON inspection | [`15-adapters-and-json-inspection.md`](15-adapters-and-json-inspection.md) | Planned (roadmap phase 10) |
+| 16 | Binary serialization (CBOR) | [`16-cbor.md`](16-cbor.md) | On demand (roadmap phase 11) |
+| 17 | Optional and nullable JSON fields | [`17-optional-json-fields.md`](17-optional-json-fields.md) | Planned (roadmap 10e) |
+| 18 | Front-end implementation language | [`18-front-end-language.md`](18-front-end-language.md) | Deferred decision |
+| 19 | SIMD in the VM | [`19-simd.md`](19-simd.md) | On demand |
+| 20 | Crypto module | [`20-crypto.md`](20-crypto.md) | On demand |
+| 21 | VM layers | [`21-vm-layers.md`](21-vm-layers.md) | Planned (roadmap 7l) |
+| 22 | JIT | [`22-jit.md`](22-jit.md) | Required (roadmap 7m) |
+| 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Planned (roadmap phase 13) |
+| 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14) |
+
+The rule "New library features: `std/` first" (a new pure library feature starts as a `std/` module written in Agentica, not as a builtin) lives in the roadmap: [`../roadmap/README.md`](../roadmap/README.md#new-library-features-std-first).

@@ -1,6 +1,6 @@
 # Agentica: grammar and language design
 
-Status: implemented by the interpreter in Racket (`src/`). This document describes what the interpreter accepts; remaining proposals live in [`future.md`](future.md).
+Status: implemented by the interpreter in Racket (`src/`). This document describes what the interpreter accepts; remaining proposals live in [`future/`](future/README.md).
 
 ## 1. What we want to validate
 
@@ -21,7 +21,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
 | Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and `HTTP` |
 
-Generic enums and exhaustive `case` matching are part of the current language. Other proposals remain in [`future.md`](future.md).
+Generic enums and exhaustive `case` matching are part of the current language. Other proposals remain in [`future/`](future/README.md).
 
 ## 3. A core program
 
