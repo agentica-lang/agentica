@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-UNWRAP-ERROR",
+  "steps": 41,
   "stdout": [],
   "stderr": []
 }

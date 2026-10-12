@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 371,
   "stdout": [
     "{\"Ana\": 31, \"Bo\": 4, \"Cy\": 27}",
     "4",

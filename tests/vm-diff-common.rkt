@@ -338,7 +338,13 @@
            [(limited? middle) (narrow (add1 middle) high)]
            [else (narrow low middle)]))])))
 
-(define (sweep-limits total)
+(define (last-limit steps)
+  (max (+ (* 2 steps) 100) (+ steps (* 2 vm-turn-steps))))
+
+(define (step-allowance steps)
+  (+ steps (max 10 (quotient steps 10))))
+
+(define (sweep-limits total expected-steps)
   (append
    (if (<= total full-sweep-limit)
        (range 1 (add1 total))
@@ -346,7 +352,7 @@
         (append (range 1 301)
                 (range 300 total (quotient total 50))
                 (list (sub1 total) total))))
-   (list (max (+ (* 2 total) 100) (+ total (* 2 vm-turn-steps))))))
+   (list (last-limit expected-steps))))
 
 (define (expected-file program)
   (path-replace-extension program #".expected"))
@@ -363,19 +369,33 @@
                                   ",\n")
                      "\n  ]")))
 
-(define (expected->string result)
+(define (expected->string result [steps #f])
   (match-define (list status stdout stderr code) result)
   (string-append "{\n  \"exit\": " (number->string status) ",\n  \"code\": " (jsexpr->string (or code 'null)) ",\n"
+                 (if steps (format "  \"steps\": ~a,\n" steps) "")
                  (json-lines "stdout" stdout) ",\n" (json-lines "stderr" stderr) "\n}\n"))
 
-(define (read-expected program)
+(define (read-golden program)
   (define file (expected-file program))
   (unless (file-exists? file)
     (error 'vm-golden "~a is missing; run make goldens" file))
-  (define data (call-with-input-file file read-json))
+  (call-with-input-file file read-json))
+
+(define (read-expected program)
+  (define data (read-golden program))
   (define (text key) (string-join (hash-ref data key) "\n"))
   (define code (hash-ref data 'code))
   (list (hash-ref data 'exit) (text 'stdout) (text 'stderr) (and (string? code) code)))
+
+(define (read-expected-steps program)
+  (define steps (hash-ref (read-golden program) 'steps #f))
+  (unless (exact-positive-integer? steps)
+    (error 'vm-golden "~a has no step count; run make goldens" (expected-file program)))
+  steps)
+
+(define (check-steps total expected-steps name)
+  (check-true (<= total (step-allowance expected-steps))
+              (format "~a takes ~a steps, more than its golden ~a allows (over-charging)" name total expected-steps)))
 
 (define (fixture-name program)
   (path->string (file-name-from-path program)))
@@ -403,7 +423,10 @@
    (lambda ()
      (test-case (format "~a gives its expected exit code, stdout, stderr and diagnostic code under every --max-steps" name)
        (define full (read-expected program))
-       (define limits (sweep-limits (total-steps bytecode)))
+       (define expected-steps (read-expected-steps program))
+       (define total (total-steps bytecode))
+       (check-steps total expected-steps name)
+       (define limits (sweep-limits total expected-steps))
        (define text-styles '(plain ai))
        (define vm-results
          (vm-batch name bytecode runs
@@ -552,12 +575,13 @@
           (check-equal? (take with-args 2) (take (expected "calls.agc") 2))
           (define unsupported (build-path temp "args.agc"))
           (display-to-file "def main() -> Void\n  c = HTTP.client_options()\n  puts(\"ran\")\nend\n\n" unsupported)
-          (define fallback (run-cli temp "--json" (path->string unsupported)))
-          (check-equal? fallback
-                        (list 0 "ran\n"
-                              (string-append "agentica: the VM does not support the builtin HTTP.client_options yet; "
-                                             "running on the legacy evaluator\n")))
-          (check-equal? (run-cli temp "--vm" "--json" (path->string unsupported)) fallback)
+          (define fallback (run-cli temp (path->string unsupported)))
+          (check-equal? (take fallback 2) (list 0 "ran\n"))
+          (check-true (fallback-notice? (third fallback) "HTTP.client_options") (third fallback))
+          (define ai-fallback (run-cli temp "--vm" "--ai" (path->string unsupported)))
+          (check-equal? (take ai-fallback 2) (list 0 "ran\n"))
+          (check-true (fallback-notice? (third ai-fallback) "HTTP.client_options") (third ai-fallback))
+          (check-equal? (run-cli temp "--json" (path->string unsupported)) (list 0 "ran\n" ""))
           (define compiled (run-cli temp "--json" "compile" (path->string unsupported) "-o" (path->string (build-path temp "x.agcb"))))
           (check-equal? (first compiled) 1)
           (check-equal? (fourth (outcome compiled)) "LOWER-UNSUPPORTED")
@@ -876,24 +900,35 @@
           (check-equal? (outcome on-vm) full (format "~a" style))
           (check-text-format on-vm full (format "~a" style))))
     (define total (total-steps bytecode))
-    (define limits (list 1 (sub1 total) total (+ (* 2 total) 100)))
+    (define expected-steps (read-expected-steps (build-path fixtures "division-by-zero.agc")))
+    (check-steps total expected-steps "CRLF program")
+    (define limits (list 1 (sub1 total) total (last-limit expected-steps)))
     (check-sweep (for/list ([limit (in-list limits)]) (run-vm bytecode limit #:timeout run-timeout)) limits full "CRLF program")))
 
 (define (write-goldens)
   (unless (vm-built?) (exit 1))
   (define work (make-temporary-directory "agentica-goldens~a"))
-  (define (save program result)
-    (unless (exact-integer? (first result))
-      (error 'vm-golden "~a did not finish: ~s" program result))
+  (define (save program result [steps #f])
+    (define seen (outcome result))
+    (unless (and (exact-integer? (first seen)) (not (< 128 (first seen) 160)))
+      (error 'vm-golden "~a did not finish (timeout or signal): ~s" program result))
+    (when (equal? (fourth seen) "RUNTIME-INTERNAL")
+      (error 'vm-golden "~a failed with RUNTIME-INTERNAL: ~s" program result))
     (call-with-output-file (expected-file program) #:exists 'truncate/replace
-      (lambda (out) (write-string (expected->string (outcome result)) out))))
+      (lambda (out) (write-string (expected->string seen steps) out))))
+  (for ([directory (list fixtures (build-path fixtures "step-limited"))])
+    (for ([file (in-list (directory-list directory #:build? #t))]
+          #:when (and (path-has-extension? file #".expected")
+                      (not (file-exists? (path-replace-extension file #".agc")))))
+      (eprintf "~a has no .agc next to it; delete it\n" file)))
   (dynamic-wind
     void
     (lambda ()
       (parameterize ([tmp-root work])
         (for ([program (in-list (fixture-programs))])
           (define bytecode (fixture-bytecode work program))
-          (call-with-fixture program (lambda () (save program (run-fixture-vm bytecode #f)))))
+          (call-with-fixture program
+                             (lambda () (save program (run-fixture-vm bytecode #f) (total-steps bytecode)))))
         (for ([program (in-list (runaway-programs))])
           (save program (run-vm (fixture-bytecode work program) runaway-limit #:timeout run-timeout)))))
     (lambda () (delete-directory/files work))))

@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 281,
   "stdout": [
     "[ok(), ok(), ok(), error(\"filesystem: text exceeds 1048576 bytes\")]",
     "error(\"filesystem: file exceeds 1048576 bytes\")",

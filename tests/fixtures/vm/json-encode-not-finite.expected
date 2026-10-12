@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-JSON-ENCODE",
+  "steps": 17,
   "stdout": [
     "{\"values\":[1.0]}",
     ""

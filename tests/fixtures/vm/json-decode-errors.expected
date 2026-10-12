@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 336,
   "stdout": [
     "Box(count: 1, leaf: Leaf(name: \"n\", weight: 1.0, on: true), items: [], tags: {}, rows: [], self: [])",
     "$: expected object",

@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-DIVISION-BY-ZERO",
+  "steps": 15,
   "stdout": [
     "start",
     ""

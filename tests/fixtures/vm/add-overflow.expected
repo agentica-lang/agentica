@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-INTEGER-OVERFLOW",
+  "steps": 66,
   "stdout": [
     "9223372036854775801",
     "9223372036854775802",

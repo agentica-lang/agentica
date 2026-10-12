@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 149,
   "stdout": [
     "{\"a\":{\"y\":[true,false],\"z\":null},\"b\":\"last\"}",
     "{\"a\":{\"y\":[true,false],\"z\":null},\"b\":\"last\"} <Json>",

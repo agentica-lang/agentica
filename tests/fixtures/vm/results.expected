@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 1123,
   "stdout": [
     "ok(1)",
     "error(\"bad\")",

@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-INVALID-CHARACTER",
+  "steps": 8,
   "stdout": [
     "233",
     ""

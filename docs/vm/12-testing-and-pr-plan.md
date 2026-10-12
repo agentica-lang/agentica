@@ -15,7 +15,7 @@
   `dist/agentica-vm` with `--json` and compare the exit code, stdout, the
   program's own stderr and the diagnostic code with its golden,
   `<name>.expected` (1). A golden is JSON: `exit`, `code` (a string or
-  `null`), and `stdout` and `stderr` as lists of lines, one per line, so a
+  `null`), `steps` (below), and `stdout` and `stderr` as lists of lines, one per line, so a
   diff reads well. With `--json` the diagnostic is the last stderr line: it
   is parsed as JSON for the code and removed before stderr is compared.
   Each fixture also runs once in the plain and `--ai` formats: exit code
@@ -28,18 +28,22 @@
   VM; a PR that changes behaviour on purpose commits the new goldens, and
   the reviewer reads their diff. The goldens were first generated from the
   evaluator; the VM matched every one.
-- Every fixture also runs under a sweep of `--max-steps` limits. The test
-  finds the fixture's total step count T on the VM (the smallest limit
-  that does not stop with `RUNTIME-STEP-LIMIT`, by doubling and then
-  bisection) and sweeps every limit from 1 to T when T is at most 2000;
-  above that (the call-depth program, about 60,000 steps) it sweeps 1 to
-  300, 50 evenly spaced limits, T - 1 and T; then it adds the larger of
-  2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`). For each limit the
+- Every fixture also runs under a sweep of `--max-steps` limits. Its golden
+  records its step count T (`"steps"`, written by `make goldens`). The test
+  finds the fixture's step count on the VM (the smallest limit that does
+  not stop with `RUNTIME-STEP-LIMIT`, by doubling and then bisection),
+  which may be lower than T but at most T + max(10, T / 10), so
+  over-charging fails while the 7k optimisations may cut steps. It sweeps
+  every limit from 1 to the VM's count when that is at most 2000; above
+  that (the call-depth program, about 60,000 steps) it sweeps 1 to 300, 50
+  evenly spaced limits, the count minus 1 and the count; then it adds the
+  larger of 2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`), with the
+  golden's T. For each limit the
   VM must either give the golden outcome, or stop with exit 1 and
   `RUNTIME-STEP-LIMIT` with a stdout and stderr that are prefixes of the
   golden's. Once the VM finishes at one limit it must finish at every larger
   one, and it must finish at that last limit. This catches a wrong code,
-  extra output, and a limit that is not monotonic. It cannot catch an
+  extra output, a limit that is not monotonic, and over-charging. It cannot catch an
   ignored limit, since these programs finish anyway: the runaway programs
   in `tests/fixtures/vm/step-limited/` do (`while true`, non-tail
   recursion, a self tail call, mutual tail calls, a `while true` whose body
@@ -56,7 +60,11 @@
   of hanging. After the first run in a batch that times out (status 124 or
   137) the script skips the rest and records them as 124 with empty
   output, so a hanging VM costs one timeout per fixture, not one per
-  limit. This covers 2.1 and 4.4, so the IR needs no step test. `Random`
+  limit. Every program the tests run gets `LC_ALL=C.UTF-8` and
+  `LANG=C.UTF-8`, so OS error text in the goldens is the untranslated C
+  text whatever the machine's locale. `make goldens` refuses a run that
+  timed out, died by a signal (status 129 to 159) or ends in `RUNTIME-INTERNAL`. The release
+  workflow runs these shards against the zig-built release VM too. This covers 2.1 and 4.4, so the IR needs no step test. `Random`
   fixtures print only what does not depend on the generator's numbers,
   since seeded sequences differ by backend (7.4).
 - The fourth shard also runs the extras: the CLI on the VM (styles, the

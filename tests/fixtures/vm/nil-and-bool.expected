@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 60,
   "stdout": [
     "nil",
     "nil true",

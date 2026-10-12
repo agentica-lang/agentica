@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-STACK-OVERFLOW",
+  "steps": 55001,
   "stdout": [
     "start",
     ""

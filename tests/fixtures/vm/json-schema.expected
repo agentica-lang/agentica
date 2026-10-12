@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 51,
   "stdout": [
     "{\"properties\":{\"x\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}},\"required\":[\"x\"],\"type\":\"object\"}",
     "{\"properties\":{\"x\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"y\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}},\"required\":[\"x\",\"y\"],\"type\":\"object\"}",

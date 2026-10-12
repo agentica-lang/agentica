@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 440,
   "stdout": [
     "error(\"filesystem: Path.join needs at least one part\")",
     "ok(\"a\")",

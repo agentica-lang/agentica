@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 1130,
   "stdout": [
     "[Shape.Circle(2.0), Shape.Rect(3, 4), Shape.Dot, Shape.Dot]",
     "circle",

@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-DIVISION-BY-ZERO",
+  "steps": 32,
   "stdout": [
     "key 4",
     "key 2",

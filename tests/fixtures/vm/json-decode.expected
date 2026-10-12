@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 69,
   "stdout": [
     "Tree(label: \"root\", kids: [Tree(label: \"a\", kids: [], leaves: {}, grid: [], spots: {}, mine: Point(x: -1)), Tree(label: \"b\", kids: [Tree(label: \"c\", kids: [], leaves: {\"z\": Leaf(name: \"zed\", weight: 0.0, on: false)}, grid: [[]], spots: {}, mine: Point(x: 0))], leaves: {}, grid: [[1, 2], [3]], spots: {\"\": []}, mine: Point(x: 9223372036854775807))], leaves: {\"a\": Leaf(name: \"last\", weight: 1e+23, on: true), \"b\": Leaf(name: \"bee\", weight: 2.0, on: true)}, grid: [[-9223372036854775808]], spots: {\"home\": [Point(x: 1, y: 2)], \"été\": []}, mine: Point(x: 7))",
     "0.0",

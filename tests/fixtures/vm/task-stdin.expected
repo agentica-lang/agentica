@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 25061,
   "stdout": [
     "5000",
     "[\"first line\", \"second\", \"third\"]",

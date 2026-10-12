@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-INVALID-COUNT",
+  "steps": 11,
   "stdout": [
     "[1, 2, 3]",
     ""

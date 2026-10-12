@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-END-OF-INPUT",
+  "steps": 42,
   "stdout": [
     "first \"one\"",
     "eof? false",

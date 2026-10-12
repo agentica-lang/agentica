@@ -85,9 +85,12 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
   `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
   only `TCP`, `TLS`, `HTTP` and `BDD` builtins, which are not in
-  `vm-builtins` in `src/lower.rkt`) it prints `agentica: <the lowering's
-  message>; running on the legacy evaluator` on stderr and runs the
-  evaluator. The hidden `--legacy-eval` flag (stripped by
+  `vm-builtins` in `src/lower.rkt`; `tests/bytecode-test.rkt` checks that
+  every other catalog implementation is there) it prints `agentica: <the
+  lowering's message>; running on the legacy evaluator` on stderr (not with
+  `--json`) and runs the evaluator. Tests check the notice with
+  `fallback-notice?` (`tests/cli-in-process.rkt`): prefix, builtin name and
+  suffix, never the whole text. The hidden `--legacy-eval` flag (stripped by
   `split-legacy-flag` from the options before the file) forces the
   evaluator; `agentica test` and the BDD driver (`default-bdd-command` in
   `src/bdd.rkt` adds `--legacy-eval`) stay on it until BDD runs on the VM.
@@ -128,11 +131,21 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   (`check-text-format`). The `--max-steps` sweep: each limit must give the
   golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr
   that are prefixes of the golden's; once a limit finishes, larger ones must
-  too, and 2T + 100 (T the VM's own step count, found by `total-steps`) must
-  finish (`check-sweep`). A new fixture needs its golden: run `make
-  goldens`, read the new `.expected` by hand, and commit it; a changed
-  golden is a reviewed behaviour change. The runaway fixtures in
-  `step-limited/` keep their golden at `--max-steps 500`. The sweep cannot see an ignored limit: add a runaway
+  too (`check-sweep`). Each golden records the fixture's step count T
+  (`"steps"`, the smallest limit that finishes); the VM's own count, found
+  by `total-steps`, may be lower but at most `T + max(10, T / 10)`
+  (`check-steps`, which catches over-charging), and the last sweep limit,
+  `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. A new
+  fixture needs its golden: run `make goldens`, read the new `.expected` by
+  hand, and commit it; a changed golden is a reviewed behaviour change.
+  `make goldens` refuses a run that timed out, died by a signal (status
+  129 to 159) or ends in `RUNTIME-INTERNAL`, and names `.expected` files
+  with no `.agc` next to them. The runaway fixtures in `step-limited/`
+  keep their golden at `--max-steps 500`, with no step count. Every program
+  the tests run gets `LC_ALL=C.UTF-8` and `LANG=C.UTF-8` (set when
+  `tests/cli-in-process.rkt` loads), so OS error text is the untranslated
+  C text; plain `C` would make Racket decode command-line arguments as
+  ASCII. The sweep cannot see an ignored limit: add a runaway
   program to `tests/fixtures/vm/step-limited/` for each new loop or call
   construct (it prints nothing after the loop). On Linux, sweep and runaway
   VM runs time out after 60 seconds (`timeout --foreground` in the batch

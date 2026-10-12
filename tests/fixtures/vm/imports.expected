@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 109,
   "stdout": [
     "Point(x: 1, y: 2)",
     "Point(x: 3)",

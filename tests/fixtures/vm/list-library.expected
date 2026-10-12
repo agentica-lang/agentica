@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 304,
   "stdout": [
     "3",
     "3",

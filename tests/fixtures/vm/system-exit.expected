@@ -1,6 +1,7 @@
 {
   "exit": 3,
   "code": null,
+  "steps": 9,
   "stdout": [
     "buffered"
   ],

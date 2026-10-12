@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 167,
   "stdout": [
     "ok(<Json>)",
     "error(\"missing JSON key \\\"nope\\\"\")",

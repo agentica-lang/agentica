@@ -1,6 +1,7 @@
 {
   "exit": 0,
   "code": null,
+  "steps": 24,
   "stdout": [
     "\"head\"",
     "\"body ��\\nline\\r\\n😀 tail\\r\"",

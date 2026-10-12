@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-INTEGER-OVERFLOW",
+  "steps": 17,
   "stdout": [
     "-5",
     ""

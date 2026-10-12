@@ -1,6 +1,7 @@
 {
   "exit": 1,
   "code": "RUNTIME-KEY-NOT-FOUND",
+  "steps": 28,
   "stdout": [
     "minus two",
     ""
