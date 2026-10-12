@@ -821,8 +821,8 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, agc_void(), timeout);
 }
 
-static bool blocked(agc_vm *vm, agc_value handle, int64_t timeout, agc_value *result) {
-  if (timeout <= 0) {
+static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *result) {
+  if (*timeout <= 0) {
     *result = error_of(bad_timeout);
     return true;
   }
@@ -851,7 +851,7 @@ static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value 
 
 static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t count, int64_t timeout) {
   agc_value failure;
-  if (blocked(vm, handle, timeout, &failure)) return failure;
+  if (blocked(vm, handle, &timeout, &failure)) return failure;
   file_state *st = usable(vm, handle, true, &failure);
   if (!st) return failure;
   op *o = new_op(kind);
@@ -887,7 +887,7 @@ static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const u
 
 static agc_value write_bytes(agc_vm *vm, agc_value handle, const uint8_t *data, size_t len, int64_t timeout) {
   agc_value failure;
-  if (blocked(vm, handle, timeout, &failure)) return failure;
+  if (blocked(vm, handle, &timeout, &failure)) return failure;
   file_state *st = usable(vm, handle, false, &failure);
   if (!st) return failure;
   if (st->end + len > WRITE_BUFFER) return write_out(vm, handle, st, data, len, timeout);
@@ -926,7 +926,7 @@ static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   agc_value failure;
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (blocked(vm, args[0], timeout, &failure)) return failure;
+  if (blocked(vm, args[0], &timeout, &failure)) return failure;
   file_state *st = usable(vm, args[0], false, &failure);
   if (!st) return failure;
   if (!st->end) return ok_void();
@@ -938,7 +938,7 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_resource *r = agc_as_handle(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value failure;
-  if (blocked(vm, args[0], timeout, &failure)) return failure;
+  if (blocked(vm, args[0], &timeout, &failure)) return failure;
   if (!r->native) return ok_void();
   op *o = new_op(OP_CLOSE);
   o->st = r->native;

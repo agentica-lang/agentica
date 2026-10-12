@@ -1978,7 +1978,11 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   job that ends at its own deadline (set from its `timeout_ms` at the
   first wait and kept across retries). At the deadline the task leaves
   the FIFO and the builtin returns the timeout error; the handle stays
-  open, as with the evaluator's `network-timed` around the semaphore.
+  open, as with the evaluator's `network-timed` around the semaphore. One
+  deadline covers the wait and the operation, as there: a task that gets
+  the lock passes what is left of its timeout to the operation, and one
+  that gets it after its deadline returns the timeout error (waking the
+  other waiters first, as a `next_owner` does).
   Release is a FIFO hand-off, never a free-for-all: `agc_io_finish`
   clears `holder` before the `done` or `expired` half runs, pops the
   head waiter, makes it `next_owner` and wakes only it, so the releasing

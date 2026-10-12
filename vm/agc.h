@@ -456,7 +456,7 @@ extern const size_t agc_task_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
-agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t timeout_ms);
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
 void agc_io_init(void);

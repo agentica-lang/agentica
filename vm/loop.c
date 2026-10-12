@@ -223,28 +223,39 @@ static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
 
 static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL};
 
-agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t timeout_ms) {
+static uint64_t loop_now(agc_vm *vm) {
+  agc_loop *loop = loop_of(vm);
+  uv_update_time(&loop->uv);
+  return uv_now(&loop->uv);
+}
+
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_task *t = vm->task;
+  uint64_t deadline = t->lock_deadline;
+  uint64_t now = deadline ? loop_now(vm) : 0;
   if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
-    if (t->lock_deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+    if (deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
     t->lock_deadline = 0;
     if (handle->next_owner == t) {
       handle->next_owner = NULL;
       agc_task_wake_all(vm, &handle->waiters, &handle->waiters_tail);
     }
+    if (!deadline) return AGC_LOCK_TAKEN;
+    if (now >= deadline) return AGC_LOCK_TIMEOUT;
+    *timeout_ms = (int64_t)(deadline - now);
     return AGC_LOCK_TAKEN;
   }
-  agc_loop *loop = loop_of(vm);
-  uv_update_time(&loop->uv);
-  uint64_t now = uv_now(&loop->uv);
-  if (!t->lock_deadline) t->lock_deadline = now + (uint64_t)timeout_ms;
+  if (!deadline) {
+    now = loop_now(vm);
+    deadline = t->lock_deadline = now + (uint64_t)*timeout_ms;
+  }
   agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
-  if (now >= t->lock_deadline) {
+  if (now >= deadline) {
     t->lock_deadline = 0;
     return AGC_LOCK_TIMEOUT;
   }
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
-  agc_io_start(vm, &lock_io, NULL, agc_void(), (int64_t)(t->lock_deadline - now));
+  agc_io_start(vm, &lock_io, NULL, agc_void(), (int64_t)(deadline - now));
   agc_task_park(vm, true);
   return AGC_LOCK_WAIT;
 }
@@ -335,7 +346,7 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   return false;
 }
 
-agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t timeout_ms) {
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   (void)vm;
   (void)handle;
   (void)timeout_ms;
