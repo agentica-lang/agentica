@@ -5,7 +5,7 @@ This document closes roadmap step 7b. It fixes the decisions that 7c
 choices and safety rules that 7h and 7i need. The language does not change.
 `grammar.md` stays the contract. The VM is the default backend; the Racket
 evaluator (`src/evaluator.rkt`) is frozen and runs only the programs the VM
-cannot run yet (`TLS`, `HTTP`, `BDD`, and `agentica test`) until 7i
+cannot run yet (`HTTP`, `BDD`, and `agentica test`) until 7i
 deletes it. Roadmap step 7b lists each decision in one line; this document
 gives the details and reasons. The VM's codename is Aurora (Aurora VM). Only
 the docs use it: the binary (`agentica-vm`), the `AGENTICA_VM*` variables, the

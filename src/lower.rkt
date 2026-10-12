@@ -157,7 +157,8 @@
                       "Process.spawn" "Process.send" "Process.send_bytes" "Process.read_line" "Process.read_bytes"
                       "Process.close_stdin" "Process.wait" "Process.close"
                       "TCP.connect" "TCP.listen" "TCP.accept" "TCP.local_port" "TCP.close_listener"
-                      "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"))
+                      "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"
+                      "TLS.connect" "TLS.listen"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))

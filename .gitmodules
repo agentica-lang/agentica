@@ -7,3 +7,7 @@
 [submodule "vm/third_party/libuv"]
 	path = vm/third_party/libuv
 	url = https://github.com/libuv/libuv.git
+[submodule "vm/third_party/openssl"]
+	path = vm/third_party/openssl
+	url = https://github.com/openssl/openssl.git
+	shallow = true

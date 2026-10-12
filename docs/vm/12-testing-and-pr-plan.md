@@ -287,7 +287,7 @@ and loader asserts for spans in a second source. No format bump.
 11. **7h TCP** (done, Linux). Every `TCP` builtin with `Socket` and
     `Listener` values (10.3.1) in `vm/tcp.c`, with the stream helpers it
     shares with processes in `vm/stream.c`; the `TCP` fallback is gone
-    (`TLS` keeps it). The `tcp-*` fixtures are their own peers (a
+    (`TLS` kept it until item 12). The `tcp-*` fixtures are their own peers (a
     listener and its clients in one program, only `main` prints):
     `tcp-echo` (lines, fragmented UTF-8, CRLF, bytes, EOF), `tcp-errors`
     (argument checks, timeouts, closed sockets and listeners, a refused
@@ -301,6 +301,22 @@ and loader asserts for spans in a second source. No format bump.
     and checks with the `io` trace that every socket closes at exit.
     `tests/tcp-test.rkt` runs its TCP client through the CLI, so on the
     VM. No format bump: the `TCP` builtins are new import keys only.
+
+12. **7h TLS** (done, Linux). `TLS.connect` and `TLS.listen` (10.3) on
+    the vendored, static OpenSSL 3.5 (10.0), through the adapter
+    `vm/tls.h` and `vm/tls_openssl.c`; TLS sockets reuse the TCP
+    builtins and code; the `TLS` fallback is gone. `vm/tests/tls_test.c`
+    runs two adapters in memory. Only two small goldens, `tls-echo` and
+    `tls-errors` (argument and load errors), since every run of the
+    `--max-steps` sweep does a handshake; they take the certificate
+    directory as `@fixtures/tls` (the `.args` token for a path under
+    `tests/fixtures/`). `tests/vm-tls-test.rkt` runs every other case
+    once: against Node and Python peers (`tests/fixtures/tls-peer.js`,
+    `tests/fixtures/tls-peer.py`), and VM programs for the handshake
+    errors on both sides, timeouts, a pending handshake and the end of a
+    run with TLS work pending. `tests/vm-trace-test.rkt` traces
+    `tls-echo`. The certificates
+    come from `tests/fixtures/tls/make-certs.sh`. No format bump.
 
 7e is done when every example runs on the VM with the same results, except
 those that need files, processes, tasks or the network by name:

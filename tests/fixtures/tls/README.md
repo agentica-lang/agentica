@@ -1,14 +1,21 @@
 # Local test certificates
 
-`ca.pem` is a test-only CA. `server.pem` is signed by it and has the DNS SAN
-`localhost`. `server-key.pem` is public test data, never a deployment key.
-Certificates are valid for ten years from generation. The CA private key is
-not retained. The fixtures test verified TLS in both directions, rejection
-without explicit trust, and rejection of an incorrect hostname.
+Test data only: every key here is public and never a deployment key.
 
-To replace the fixtures, generate a temporary RSA 2048-bit CA with OpenSSL
-`req -x509`, `basicConstraints=critical,CA:TRUE` and a ten-year validity. Generate
-a server CSR with `subjectAltName=DNS:localhost`, then sign it using `x509 -req`
-with `-copy_extensions copy`. Replace all three PEM files together and delete
-the temporary CA private key and CSR. OpenSSL is needed for regeneration only;
-normal tests use the checked-in fixtures.
+`make-certs.sh` writes all of them at once, next to itself. It needs the
+`openssl` command, 3.4 or newer for the expired certificate (`-not_before`
+and `-not_after`). Last regenerated on 2026-10-12 with OpenSSL 3.5.7. Tests
+use the checked-in files; nothing regenerates them during a test run.
+
+| File | What it is |
+| --- | --- |
+| `ca.pem` | test CA (RSA 2048, CN "Agentica Test CA"); its private key is made in a temporary directory and not kept |
+| `server.pem`, `server-key.pem` | signed by the CA; SAN `DNS:localhost`, `IP:127.0.0.1`, `IP:::1` |
+| `wrong-host.pem`, `wrong-host-key.pem` | signed by the CA; SAN `DNS:wrong.example` (host name mismatch) |
+| `expired.pem`, `expired-key.pem` | signed by the CA for `localhost`, valid only on 2020-01-01 |
+| `self-signed.pem`, `self-signed-key.pem` | self-signed for `localhost` (untrusted) |
+
+The other certificates are valid for 36,500 days, so they do not expire
+during the project's life. They test verified TLS both ways, rejection
+without explicit trust, a wrong host name, an expired and a self-signed
+certificate, and the load errors of `TLS.listen`.

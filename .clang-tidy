@@ -12,6 +12,6 @@ Checks: >
   bugprone-misplaced-widening-cast,
   cppcoreguidelines-avoid-non-const-global-variables
 WarningsAsErrors: '*'
-HeaderFilterRegex: 'vm/(agc|trace)\.h'
+HeaderFilterRegex: 'vm/(agc|trace|tls)\.h'
 CheckOptions:
   readability-identifier-naming.GlobalFunctionPrefix: agc_

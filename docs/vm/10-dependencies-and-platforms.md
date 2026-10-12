@@ -15,7 +15,7 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, with BSD-2-Clause and ISC parts in its `LICENSE-extra`; both files stay in the submodule and ship with releases), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
 | picohttpparser | 7h (HTTP) | Vendored: git submodule `vm/third_party/picohttpparser` from `https://github.com/h2o/picohttpparser` (dual MIT or Perl license; we take MIT; the notice is in `picohttpparser.h`, and releases ship it extracted to a license file), pinned to tag v1.4 (commit `516cdd3e00b3`). It parses and validates the start line and headers (`phr_parse_request`, `phr_parse_response`), behind our adapter (10.6); `phr_decode_chunked` is not used, since it knows no limits. `make vm` compiles `picohttpparser.c` per build mode into `$(VM_BUILD)/picohttpparser.o`, like yyjson, at the baseline (no `-msse4.2`; its SSE4.2 path is a SIMD candidate, `docs/future/19-simd.md` §19). Everything else in HTTP is our own C. |
-| OpenSSL 3 | 7h | **Superseded in part** by the user's decision of 2026-10-12: OpenSSL 3.5 LTS is vendored as a git submodule and built static in dev, CI and release; the TLS catch-up PR rewrites this text, `docs/vm/10-dependencies-and-platforms.md` §10 and §10.0, and `docs/vm/10-io-tls-processes-http.md` §10.3 to match. Until then: Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `libssl.a` and `libcrypto.a` from that prefix by full path, searching only that prefix's `pkg-config` files, and fails rather than fall back to the system's shared libraries. Not vendored; see the note on OpenSSL under the license rule. |
+| OpenSSL 3.5 LTS | 7h (TLS) | Vendored (user decision of 2026-10-12): git submodule `vm/third_party/openssl` from `https://github.com/openssl/openssl` (Apache-2.0; its `LICENSE.txt` stays in the submodule and ships with releases), shallow, pinned to tag `openssl-3.5.9`. `make vm` builds `libssl.a` and `libcrypto.a` per build mode into `$(VM_BUILD)/openssl/` (10.0) and links them statically, in dev, CI and release alike. No system package: `libssl-dev` is not used. OpenSSL's `Configure` needs Perl 5 (on the dev machines and the Ubuntu CI runners). Only `vm/tls_openssl.c` includes OpenSSL headers (`docs/vm/10-io-tls-processes-http.md` 10.3). |
 
 License rule: vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive (no copyleft). Its
@@ -24,93 +24,90 @@ Where there is no license file, releases ship the notice extracted to one:
 bdwgc's from its `README.QUICK`, like picohttpparser's from its header.
 The notices that ship with the VM also include the Unicode License v3
 notice for `vm/unicode_data.c`, which is generated from Unicode data.
-OpenSSL 3 (Apache-2.0) is permissive too, but it is singled out for two
-reasons: Apache-2.0 adds an attribution duty (its `LICENSE.txt`, and a
-`NOTICE` file if one is present; OpenSSL 3.0 to 3.5 have none), and the
-default build does not ship it at all, since it is linked dynamically. It
-is linked statically only in release artifacts that include its
-`LICENSE.txt` (10.0). Agentica itself is `Apache-2.0 WITH LLVM-exception`,
+OpenSSL 3 is Apache-2.0, which adds an attribution duty: releases ship its
+`LICENSE.txt` (and a `NOTICE` file if a later version adds one; 3.5 has
+none) in `licenses/openssl/`, since the VM links it statically (10.0).
+Agentica itself is `Apache-2.0 WITH LLVM-exception`,
 and releases ship its `LICENSE` and `NOTICE` alongside the third-party
 licenses.
 
-### 10.0 Linking OpenSSL
+### 10.0 Building and linking OpenSSL
 
-The default build links OpenSSL 3 dynamically, so `dist/agentica-vm` needs
-libc and `libssl.so.3`/`libcrypto.so.3`. All other libraries stay static.
-The dynamic build is the default for local builds, CI and distro packages;
-every downloadable release artifact (the `dist/` archive and the single
-file) is built with `OPENSSL=static`, so it needs only glibc's own
-libraries (libc, libm and the dynamic loader; on an older glibc baseline,
-`docs/future/18-front-end-language.md` §18). The release baseline is Debian bookworm
-or newer, whose `libssl-dev` has the OpenSSL 3 static archives (glibc
-2.36); an older baseline would need a built OpenSSL prefix.
+OpenSSL is built from the pinned submodule and linked statically into
+`dist/agentica-vm` in every build: local `make vm`, CI and the release
+(user decision of 2026-10-12; it replaced the earlier plan of a dynamic
+default build with an optional `OPENSSL=static` mode). So there is one
+behaviour everywhere, the VM needs only glibc's own libraries (libc, libm,
+libpthread, libdl; `readelf -d` shows no `libssl` or `libcrypto`), and no machine needs
+an OpenSSL development package.
 
-- `make vm` (default `OPENSSL=system`) finds the system OpenSSL 3 with
-  `pkg-config libssl libcrypto` and links `-lssl -lcrypto`. A missing
-  OpenSSL, or one older than 3.0, stops the build with a clear error.
-- Why dynamic: security fixes come with the distro's `libssl.so.3`, with no
-  VM release; the system OpenSSL knows its own CA store (`OPENSSLDIR`); the
-  binary is smaller and CI does not build OpenSSL; we do not ship OpenSSL
-  code, so its attribution duty does not apply (license rule above); and
-  the OpenSSL 3.x ABI is stable.
-- `make vm OPENSSL=static` links a static OpenSSL 3, for the release
-  artifacts or minimal glibc images without OpenSSL (distroless, `scratch`
-  style). musl (Alpine) needs its own build (`docs/future/18-front-end-language.md` §18); there the
-  dynamic build with Alpine's `openssl-dev` works. If a musl artifact is
-  ever released, it is static too (musl plus a static OpenSSL).
-- `OPENSSL=static` needs `OPENSSL_PREFIX=/path`, a prefix with `libssl.a`
-  and `libcrypto.a`; without it the build stops with an error. Debian's
-  `libssl-dev` ships both archives, so CI and the release build use
-  `OPENSSL_PREFIX=/usr` with the distro's own static archives and never
-  build OpenSSL. Any other prefix works too (for example OpenSSL built with
-  `no-shared`). There is no vendored OpenSSL submodule unless the release
-  workflow needs one later.
-- The static build must never link the system's shared OpenSSL by
-  accident. Its recipe unsets `PKG_CONFIG_PATH` and sets
-  `PKG_CONFIG_LIBDIR` to the prefix's `lib/pkgconfig`, `lib64/pkgconfig`
-  and `lib/<multiarch>/pkgconfig` (multiarch from `$(CC) -print-multiarch`
-  when it is not empty), which replaces `pkg-config`'s default search path.
-  The build fails if `pkg-config --exists libssl libcrypto` fails there, or
-  if `pkg-config --variable=libdir` for `libssl` or `libcrypto` is not
-  inside `OPENSSL_PREFIX`. The VM links the two archives by full path, in
-  that `libdir` (so the `.pc` files decide `lib`, `lib64` or the multiarch
-  directory). The extra libraries come from libcrypto's `Libs.private`
-  (`pkg-config --static --libs-only-l --libs-only-other libssl
-  libcrypto`): each `-lX` that is not part of glibc is linked as `libX.a`
-  by full path, found through `pkg-config` in the same environment, and a
-  missing one is a build error. Nothing is hard-coded; on Debian trixie,
-  for example, `libcrypto.a` needs `-lz -lzstd` (from `zlib1g-dev` and
-  `libzstd-dev`). Only glibc's own flags (such as `-ldl`, `-pthread`,
-  `-lm`) stay as they are. The static CI or release job checks `readelf
-  -d` of the VM against an allowlist: `NEEDED` may only name libc, libm and the dynamic loader
-  (`ld-linux`), plus libpthread, libdl and librt on an old glibc.
-- Both modes take `pkg-config --cflags libssl libcrypto` from the same
-  `pkg-config` environment as their link flags.
-- `pkg-config` never runs when the Makefile is parsed (no parse-time
-  `$(shell pkg-config ...)`), so `make site`, `make dup-check` and the
-  Racket-only tests do not need OpenSSL. The recipe for the
-  `build/vm/flags` stamp runs `pkg-config` and writes the resolved cflags
-  and link flags there, with `OPENSSL` and `OPENSSL_PREFIX`; the link
-  recipe reads them back. A change of mode, prefix or flags relinks.
-- The VM needs only OpenSSL 3.0.0 and loads with any 3.x. It calls only
-  symbols of the `OPENSSL_3.0.0` version node; OpenSSL also has later
-  nodes inside 3.0 (`OPENSSL_3.0.3`, `3.0.8`, `3.0.9`, for example
-  `OPENSSL_strcasecmp`) and in 3.1 and later. `-DOPENSSL_API_COMPAT=30000`
-  only hides deprecated API; what enforces the rule is a check in the
-  normal dynamic CI `test` job, after `make vm`: it fails if
-  `objdump -T dist/agentica-vm | rg -o 'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints anything. Newer features
-  (Argon2id and `OSSL_set_max_threads` need 3.2) are found at run time: if
-  `EVP_KDF_fetch` returns `NULL`, the call returns an error `Result` that
-  names the missing feature.
-- A static OpenSSL's built-in paths point at the build machine, so the
-  static build finds the CA store itself (10.3).
-- Static release artifacts ship OpenSSL's `LICENSE.txt` (and its `NOTICE`
-  if a later version adds one), as the license rule above requires.
-- Rejected for now: loading OpenSSL with `dlopen` only when a program uses
-  TLS. It is more complex, so the default VM needs libssl even for programs
-  without TLS. On purpose, then, without an OpenSSL development package the
-  VM does not build and all VM tests skip locally; install `libssl-dev` to
-  run them.
+- Linux only for now, like libuv. On macOS and Windows (paused) the
+  Makefile leaves OpenSSL out and `vm/tls_openssl.c` has stubs.
+- Build: the rule for `$(VM_BUILD)/openssl/libcrypto.a` runs OpenSSL's
+  `Configure` out of tree in `$(VM_BUILD)/openssl/` with the mode's
+  compiler (`VM_CC`: `cc`, `clang` for `SANITIZE=1`, `zig cc` in the
+  release), then `make build_libs` there with `-j $(JOBS)` and the same
+  `CC` (`OSSL_CONFIGURE` and `OSSL_SUBMAKE`). Both run under `env -u` for
+  `MAKEFLAGS`, `MFLAGS`, `MAKELEVEL`, `MAKEOVERRIDES`, `CC`, `CFLAGS`,
+  `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS` and `LDLIBS`, so nothing from the
+  parent make or its command line leaks in; the flags come only from
+  Configure's own and `OSSL_CFLAGS`. The sub-make is a plain `make`, not
+  `$(MAKE)`, so `make -n` does not run it. Its output goes to `configure.log`
+  and `build.log` in that directory; a failure prints their tail. It
+  needs Perl 5 with its core modules for `Configure` (on Debian the
+  `perl` package; `perl-base` alone lacks `IPC::Cmd`). The rule stops with
+  a clear message when they are missing; CI then installs `perl`.
+- Options (`OSSL_OPTS` in the Makefile): `no-shared no-tests no-docs
+  no-apps`, no loadable code (`no-module no-dso no-engine`), no legacy
+  provider, no automatic `openssl.cnf` loading (`no-autoload-config`),
+  and no parts TLS does not use (`no-async no-comp no-ssl3 no-dtls no-srp
+  no-quic no-ui-console no-cmp no-ts no-ct no-ocsp no-http`), plus
+  `no-deprecated`, so only the 3.x API is visible. Assembly stays on (it
+  builds with gcc, clang and `zig cc`). The static libraries are PIC
+  (OpenSSL adds `-fPIC`), so the PIE link works.
+- Flags per mode (`OSSL_CFLAGS`): the release mode adds
+  `-fstack-protector-strong -D_FORTIFY_SOURCE=2`; the GC-stress mode adds
+  `-g`; the sanitizer mode builds with clang and `-g
+  -fno-omit-frame-pointer` but without `-fsanitize`. A non-instrumented
+  OpenSSL is enough there: the ASan run is for our own C code; OpenSSL is
+  fuzzed with sanitizers upstream (OSS-Fuzz); ASan still replaces
+  `malloc` and checks OpenSSL's `memcpy` and friends through its
+  interceptors, so an overflow of a buffer our code hands to OpenSSL is
+  still caught there; and an instrumented OpenSSL would make its build
+  and every TLS test in the sanitizer job much slower.
+- Stamp: `$(VM_BUILD)/openssl-flags` holds the Configure and sub-make
+  command lines (without the checkout path and `-j`), so they carry the
+  compiler, the options and the mode's flags, then the first line of
+  `$(VM_CC) --version`, the submodule's `VERSION.dat` and its commit. A
+  change to the recipe changes the key, which rebuilds locally and misses
+  the CI cache. It is rewritten only when that text changes,
+  and the libraries depend only on it (not on the OpenSSL source files'
+  times), so toggling `TRACE` or touching sources never rebuilds OpenSSL,
+  and a CI cache restore is up to date. `make vm-openssl-key` prints the
+  same text; CI hashes it into the cache key (11) and caches only
+  `include/`, `libssl.a`, `libcrypto.a` and the stamp, which is all the
+  VM build reads. `make vm-openssl`
+  builds only the libraries. After editing OpenSSL
+  sources by hand, remove `$(VM_BUILD)/openssl` to rebuild.
+- Headers: `vm/*.c` see `-I $(VM_BUILD)/openssl/include -I
+  vm/third_party/openssl/include` (the first holds the generated
+  `opensslv.h` and `configuration.h`); only `vm/tls_openssl.c` includes
+  them. `make vm-lint` builds the mode's OpenSSL first for those headers.
+- Initialization: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG |
+  OPENSSL_INIT_NO_ATEXIT, NULL)`, because the built-in `OPENSSLDIR`
+  points at the build machine and the VM may end with `_exit` while a
+  pool thread still runs. Contexts set TLS 1.2 and security level 2 as
+  minimums themselves. The CA store is found as in 10.3.
+- `--version` prints the OpenSSL version (`OpenSSL_version(
+  OPENSSL_VERSION_STRING)`, for example `OpenSSL 3.5.9`).
+- Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`
+  (`git fetch --depth 1 origin tag openssl-3.5.N`), `git add
+  vm/third_party/openssl`, rebuild (the changed `VERSION.dat` changes the
+  stamp and the CI keys), and rerun the TLS, sanitizer and diff tests.
+  Moving to the next LTS line is a reviewed change of its own.
+- Rejected: loading OpenSSL with `dlopen` only when a program uses TLS
+  (more complex, and the static build costs only binary size: about 6 MB
+  more for `dist/agentica-vm`).
 
 ### 10.1 Event loop: libuv, not libevent
 

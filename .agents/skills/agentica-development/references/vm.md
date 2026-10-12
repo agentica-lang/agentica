@@ -41,7 +41,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/files.c` | the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only; `docs/vm/02-reference-behavior.md` §2.8): argument checks in the evaluator's order (for a handle: arguments and timeout, then the lock, then open and mode), host paths (raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it fails, + `/` collapsing), `malloc`'d `op` requests whose `work` half runs in the libuv pool, Racket's messages (contract forms cut at 256 characters, `strerror_l` in the message locale, the byte string form for invalid UTF-8), `FileHandle` state with its read buffer or its 4096-byte write buffer (Racket's rule: append when it fits, else write pending and new bytes together; flush, close and the end of run write it), `owns_st` saying which request frees the state (open, close, or a handle request after its timeout), `Path.join` and `Path.resolve` as pure string code |
 | `vm/process.c` | the `Process` builtins (`agc_process_builtins`, Linux only; `docs/vm/10-io-tls-processes-http.md` §10.4): a GC `agc_process` with the registered `state` resource and two unregistered lock records (`reader`, `writer`) for `agc_handle_wait`; a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes from `uv_pipe` given with `UV_INHERIT_FD`), the stdout buffer and the pending requests, freed when its user count (resource and requests) and handle count (close callbacks) reach zero; requests park on `external` jobs that pipe, write and exit callbacks ready with `agc_io_ready`; stdout is read only while a reader waits, 4 KiB at a time (more only for a bigger `read_bytes`); stderr is forwarded in its read callback; one close path (`SIGKILL`, then `waitpid` with `WNOHANG` until a 1 s `CLOCK_MONOTONIC` deadline, shared by one cleanup of all children, which kills them all first; a failed kill or a child still alive keeps the `uv_process_t` open for libuv to reap; a failed kill in `Process.close` is `RUNTIME-PROCESS-CLOSE`) for `close`, stream timeouts and the end of run; the per-run guard (a registered resource, `vm->process_guard`): the list of running children and `uv_signal_t` watchers for `SIGINT`/`SIGTERM`/`SIGHUP`, started before the first `uv_spawn` and stopped when the last child is reaped, each stop under blocked signals with a check of libuv's `caught_signals` against `dispatched_signals` so a caught signal is raised, never lost; the first spawn marks inherited descriptors above 2 close-on-exec; executable lookup (`PATH` only for a bare name, the working directory for a name with `/`) |
 | `vm/stream.c` | what processes and TCP share (`docs/vm/10-io-tls-processes-http.md` §10.3.1): `agc_inbuf` (one `malloc`'d input buffer with EOF and a sticky read error; `agc_inbuf_room` for libuv's alloc callback, `agc_inbuf_got` for its read callback, `agc_inbuf_ready`, `agc_inbuf_want` for the read size: 4 KiB or what a byte read still needs), `agc_inbuf_line` (LF in the first 1 MiB + 1 bytes, searched once per byte through `scanned`, CRLF stripped, a final line only at EOF, the read error when bytes without LF end in an error, the caller's texts for too long and end of input; it says when the line was too long so the caller closes) and `agc_inbuf_bytes`, `agc_stream_write` (`uv_try_write`, then one `uv_write` of a `malloc`'d copy in buffers of at most 1 GiB; 0 written, 1 queued, or a libuv error), `agc_new_lock` and `agc_stream_lock` (an unregistered lock record, and the timeout check plus `agc_handle_wait`), `agc_error_value` and the `network:` timeout texts |
-| `vm/tcp.c` | the `TCP` builtins (`agc_tcp_builtins`, Linux only; §10.3.1): one `malloc`'d `net` for a socket or a listener (users: the resource and each request; callbacks: a DNS lookup in flight and one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its `uv_connect_t` that finds the `net` through `owner`), registered when the call starts so the end of the run always closes it; requests park on `external` jobs (`park`): connect resolves with `uv_getaddrinfo` and tries each address with a fresh link (`attempt` takes its callback as an argument, so no prototype is needed), listen binds every resolved address on one port (one link per address, chained through `next`; `bind_all` retries a port-0 listen when a later address finds the port taken), accept is one FIFO for all links whose head is marked served by a link's connection callback (`chosen`) and calls `uv_accept` in its `done` half (a failed `uv_accept` closes the listener, since libuv stops watching that link), reads and writes use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is the one close (trace `why`), and wakes every waiting request; `no_files` (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL` |
+| `vm/tcp.c` | the `TCP` and `TLS` builtins (`agc_tcp_builtins`, Linux only; §10.3.1, TLS in §10.3): one `malloc`'d `net` for a socket or a listener (users: the resource and each request; callbacks: a DNS lookup in flight and one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its `uv_connect_t` that finds the `net` through `owner`), registered when the call starts so the end of the run always closes it; requests park on `external` jobs (`park`): connect resolves with `uv_getaddrinfo` and tries each address with a fresh link (`attempt` takes its callback as an argument, so no prototype is needed), listen binds every resolved address on one port (one link per address, chained through `next`; `bind_all` retries a port-0 listen when a later address finds the port taken), accept is one FIFO for all links whose head is marked served by a link's connection callback (`chosen`) and calls `uv_accept` in its `done` half (a failed `uv_accept` closes the listener, since libuv stops watching that link), reads and writes use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is the one close (trace `why`), and wakes every waiting request; `no_files` (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL` |
 | `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux each `read(0)` (with `poll` on `EAGAIN`) is a thread-pool job whose `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
 | `vm/task.c` | the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built"): `agc_vm_run` (setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each turn and ONCE when idle, the stall check), `agc_task_wake`, `agc_task_park`, and the `Task` builtins (`agc_task_builtins`: spawn with a per-task `Random` split, await with a FIFO of waiters and retry, sleep as a timer job, `sleep(0)` and fuzz sleeps yield) |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, the same formats as `src/diagnostic.rkt`; only the code must match |
@@ -61,6 +61,10 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; `gc` lines from `map-large` (skipped on a sanitizer build); a VM started with stderr or stdout closed; skips on a `TRACE=0` VM |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
+| `vm/third_party/openssl` | OpenSSL submodule (Apache-2.0), shallow, pinned to tag `openssl-3.5.9`; built static on Linux per build mode into `$(VM_BUILD)/openssl/` (`libssl.a`, `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md` §10.0) |
+| `vm/tls.h`, `vm/tls_openssl.c` | the TLS adapter (`docs/vm/10-io-tls-processes-http.md` §10.3): our own types (`agc_tls_config`, `agc_tls`, status OK, WANT_READ, WANT_WRITE, CLOSED or ERROR, `agc_tls_error`, `agc_tls_failure` with code, `errno` and a short detail); `vm/tls_openssl.c` is the only file that includes OpenSSL: init with `OPENSSL_INIT_NO_LOAD_CONFIG \| OPENSSL_INIT_NO_ATEXIT`, TLS 1.2 and security level 2, trust (`SSL_CERT_FILE` or the first readable bundle of a fixed list, `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them), SNI and `SSL_set1_host` or `X509_VERIFY_PARAM_set1_ip_asc`, two memory BIOs per session, error-queue draining into our codes; stubs that fail with "TLS needs Linux" elsewhere |
+| `vm/tests/tls_test.c` | two adapters in memory: handshakes with tiny record slices, a 100,000-byte transfer, `close_notify` and raw EOF, every verify error, EOF and a plain HTTP request during the handshake, the load errors (`ENOENT`, bad certificate, bad key, mismatch, bad CA) |
+| `tests/vm-tls-test.rkt` | the VM against independent peers (`tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`, certificates in `tests/fixtures/tls/` from `make-certs.sh`): a client against Node servers (one-byte records, abrupt EOF, a reset, 100,000-byte lines, the 1 MiB limit, a silent peer, wrong host, expired, self-signed, TLS 1.0/1.1 only, plain text, a stalled handshake), system trust through `SSL_CERT_FILE`, a Python TLS 1.2 server, a VM server with two Node clients (TLS 1.3 and 1.2), a Python client and a client that does not trust it; VM programs that are their own peers for handshake errors on both sides, timeouts and a pending handshake, and the end of a run with TLS work pending (`tls` trace); every case runs once (no step sweep), in about 5 s; needs Node and Python 3 in CI |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
 | `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue` |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
@@ -68,8 +72,10 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 ## Commands
 
 ```sh
-git submodule update --init          # fetch bdwgc, yyjson and libuv after a clone or a bump
-make vm                              # dist/agentica-vm (libgc from extra/gc.c, static)
+git submodule update --init          # fetch bdwgc, yyjson, libuv and openssl after a clone or a bump
+make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; OpenSSL built once per mode, needs Perl)
+make vm-openssl                      # only build/vm/<mode>/openssl/libssl.a and libcrypto.a
+make -s vm-openssl-key               # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
@@ -90,14 +96,15 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 - CI runs `vm-sanitizers` (`make vm-lint`, ASan diff and bytecode tests, `make vm-fuzz`,
   `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
   in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
-  bytecode, `src/version.rkt`, their tests and fixtures (`tests/vm-tcp-test.rkt`
-  and `tests/fixtures/tcp-peer.js` too; the job sets up Node for them), the Makefile,
+  bytecode, `src/version.rkt`, their tests and fixtures (`tests/vm-tcp-test.rkt`,
+  `tests/fixtures/tcp-peer.js`, `tests/vm-tls-test.rkt`, `tests/fixtures/tls-peer.js`,
+  `tests/fixtures/tls-peer.py` and `tests/fixtures/tls/` too; the job sets up Node for them), the Makefile,
   `.gitmodules`, `.clang-tidy`, `ci.yml`). A new VM source or test file outside those paths must be added
   there.
 - `agentica file.agc` runs on the VM by default (Linux only for now,
   `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
   `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
-  only `TLS`, `HTTP` and `BDD` builtins, which are not in
+  only `HTTP` and `BDD` builtins, which are not in
   `vm-builtins` in `src/lower.rkt`; `tests/bytecode-test.rkt` checks that
   every other catalog implementation is there) it prints `agentica: <the
   lowering's message>; running on the legacy evaluator` on stderr (not with
@@ -499,38 +506,34 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `uv_run` NOWAIT so the callbacks still fire at the end of the run.
   Request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
-- **OpenSSL 3 (7h)**: the dynamic build initializes without
-  `OPENSSL_INIT_NO_LOAD_CONFIG` (the system `openssl.cnf` applies, as for
-  Racket); the static build passes it and sets TLS 1.2 and security level
-  2 as minimums. Linux trust as in Racket, file and directory each replaced
-  on its own: dynamic loads `SSL_CERT_FILE` or else
-  `X509_get_default_cert_file()` with `SSL_CTX_load_verify_file`, and
-  `SSL_CERT_DIR` or else `X509_get_default_cert_dir()` with
-  `SSL_CTX_load_verify_dir`; static uses `SSL_CERT_FILE` or else the first
-  existing distro CA bundle, and `SSL_CERT_DIR` or else no directory.
-  Windows: the ROOT store; macOS: the Keychain anchors (never OpenSSL's
-  default paths there). A non-empty `ca_file` replaces system trust.
-  `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
-  Linking: dynamic by default (`OPENSSL=system`, `pkg-config libssl
-  libcrypto`, `-lssl -lcrypto`); the build fails for a missing or pre-3.0
-  OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for release artifacts:
-  `OPENSSL_PREFIX` required (CI and releases: `/usr`, Debian's static
-  archives), `PKG_CONFIG_PATH` unset, `PKG_CONFIG_LIBDIR` limited to the
-  prefix (`lib`, `lib64`, multiarch) and `libdir` checked inside it,
-  `libssl.a`, `libcrypto.a` and each non-glibc library of libcrypto's
-  `Libs.private` (on trixie `libz.a`, `libzstd.a`) linked by full path,
-  a missing one a build error (only glibc's own flags stay), and `readelf
-  -d` checked against the `NEEDED` allowlist of 10.0 (libc, libm,
-  `ld-linux`). The OpenSSL settings and
-  resolved cflags and link flags are written to `build/vm/flags` by its
-  stamp recipe and read back by the link recipe; no parse-time
-  `pkg-config`. Only `OPENSSL_3.0.0` symbols are called:
-  `-DOPENSSL_API_COMPAT=30000` only hides deprecated API, and the CI
-  `test` job fails if `objdump -T dist/agentica-vm | rg -o
-  'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints anything;
-  newer features are found at run time. Without `libssl-dev` all VM tests
-  skip locally. `--version` prints the OpenSSL version in use
-  (`docs/vm/10-dependencies-and-platforms.md` 10.0, `docs/vm/10-io-tls-processes-http.md` 10.3).
+- **OpenSSL 3.5 (7h, in on Linux)**: vendored submodule, built static
+  per build mode by the Makefile (`docs/vm/10-dependencies-and-platforms.md`
+  §10.0): out-of-tree `Configure` in `$(VM_BUILD)/openssl/` with
+  `OSSL_OPTS` (`no-shared no-tests no-docs no-apps no-module ... no-deprecated`)
+  and the mode's `OSSL_CFLAGS` (release hardening, `-g` for GC stress,
+  clang `-g -fno-omit-frame-pointer` without `-fsanitize` for the
+  sanitizer build: a non-instrumented OpenSSL; ASan's interceptors still
+  check the buffers we hand it), output in `configure.log` and
+  `build.log`; both commands run under `env -u` for the make and compiler
+  variables, and the sub-make is a plain `make` (never `$(MAKE)`, so
+  `make -n` skips it). `$(VM_BUILD)/openssl-flags` is the key (`make -s
+  vm-openssl-key`: the two command lines, compiler version, OpenSSL
+  version and commit), rewritten only when it changes, and the archives depend
+  only on it, so `TRACE` and VM flag changes never rebuild OpenSSL and a
+  restored CI cache is up to date; after editing OpenSSL sources by hand,
+  remove `$(VM_BUILD)/openssl`. Init with `OPENSSL_INIT_NO_LOAD_CONFIG |
+  OPENSSL_INIT_NO_ATEXIT`; TLS 1.2 and security level 2 as minimums;
+  trust: `SSL_CERT_FILE` or else the first readable distro bundle, and
+  `SSL_CERT_DIR` or else no directory (a failing system source is
+  skipped); a non-empty `ca_file` replaces system trust and must load.
+  SNI plus `SSL_set1_host` per connection, `X509_VERIFY_PARAM_set1_ip_asc`
+  (no SNI) for IP literals; no `SSL_VERIFY_NONE` path. Never hand OpenSSL a
+  GC pointer, and keep file loading off the scheduler thread (the config
+  loads in a libuv pool job). The release (`zig cc`, glibc 2.28) builds it
+  the same way; `readelf -d` must show no `libssl` or `libcrypto`.
+  `--version` prints the version linked in. Bumping: fetch the new 3.5.x
+  tag in the submodule, commit it, rebuild, rerun the TLS, sanitizer and
+  golden tests.
 - **HTTP (7h)**: parity is black-box. Well-formed messages: same status,
   headers, body and `Result` ok or error. Malformed input: both reject
   (server error status and close, client error `Result`); the code may
@@ -584,8 +587,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   signal tests in `tests/vm-diff-common.rkt` signal the driver and the VM
   with libc `kill` through the FFI and bound every wait.
 - **TCP (7h, in on Linux)**: `vm/tcp.c`, `docs/vm/10-io-tls-processes-http.md`
-  §10.3.1. `TLS` stays `LOWER-UNSUPPORTED`, so a TLS program falls back as a
-  whole and the VM never sees a TLS socket; the TLS PR builds on `net`.
+  §10.3.1. TLS sockets and listeners are the same `net` with
+  `secure` set (see TLS below).
   The `tcp-*` fixtures are their own peers (a listener and its client tasks
   in one program) and print only from `main` after its awaits, so output and
   step counts do not depend on timing; `recv_bytes` returns what has
@@ -597,6 +600,33 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   loopback buffers (64 MiB), never a loop of sends: the number of sends
   that complete depends on the kernel's buffer sizes, and so would the
   step count.
+- **TLS (7h, in on Linux)**: `TLS.connect` and `TLS.listen` in `vm/tcp.c`
+  on the adapter of `vm/tls.h` (`docs/vm/10-io-tls-processes-http.md`
+  §10.3). A secure `net` first loads its config in a pool job
+  (`start_setup`), then resolves and connects or listens as for TCP. The
+  read callback feeds ciphertext to the session, runs the handshake, then
+  decrypts into `agc_inbuf`, so line and byte reads, limits, locks and
+  timeouts are the TCP ones. Sends copy plaintext to a `malloc`'d buffer
+  and encrypt it 16 KiB at a time, one `agc_stream_write` per piece. On a
+  TLS listener a waiting accept takes the connection at once and handshakes
+  it under the accept's timeout; children in a handshake hang off their
+  request (`handshakes` list), and closing the listener closes them.
+  Closing sends `close_notify` with one `uv_try_write`. Messages keep
+  Racket's shapes (`ssl-connect: connect failed (...)`, `port->ssl-ports:
+  accept failed (...)`, `ssl-load-...: load failed from: "path" (...)`);
+  only the `Result` kind must match the evaluator. A peer that closes
+  without `close_notify` is EOF (`SSL_OP_IGNORE_UNEXPECTED_EOF`), as in
+  Racket. `tls` trace points: handshake, handshake_done, handshake_error,
+  setup_error, read_error, close. Keep TLS goldens few and small (now
+  `tls-echo` and `tls-errors`, about 60 steps each): every run of the
+  `--max-steps` sweep does a handshake. Put other TLS cases in
+  `tests/vm-tls-test.rkt`, which runs each once, with short timeouts, small
+  payloads and no sleeps. The `tls-*` fixtures take their
+  certificate directory as `@fixtures/tls` in `.args` (`fixture-arg` in
+  `tests/vm-diff-common.rkt` makes it absolute, since `raco test` and
+  `make goldens` run from different directories). Certificates come from
+  `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or newer for the expired
+  one).
 - **Limits**: the 1 MiB per-call reads, HTTP framing limits and the other
   caps in the `docs/vm/10-io-tls-processes-http.md` limits table stay exactly as in the Racket
   sources.

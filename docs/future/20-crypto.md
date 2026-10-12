@@ -1,6 +1,6 @@
 ## 20. Crypto module
 
-**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library, linked the same way (dynamic by default, `OPENSSL=static` as an option, `docs/vm/10-dependencies-and-platforms.md` 10.0). The VM needs only OpenSSL 3.0.0 and calls only symbols of the `OPENSSL_3.0.0` version node (CI checks it with `objdump -T`): newer features such as Argon2id and `OSSL_set_max_threads` (3.2) are found at run time, and when `EVP_KDF_fetch` returns `NULL` the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
+**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same vendored OpenSSL 3.5 LTS, linked statically in every build (`docs/vm/10-dependencies-and-platforms.md` 10.0). Every 3.5 feature (Argon2id, `OSSL_set_max_threads`) is always there; when `EVP_KDF_fetch` still returns `NULL` (an algorithm left out of the build), the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
 
 **Sketch** (names are not final):
 
@@ -16,7 +16,7 @@ Crypto.open(key: Bytes, sealed: Bytes) -> Result[Bytes]
 ```
 
 - Hex and Base64 encoding go here only if no other module has them by then.
-- `password_hash` uses Argon2id when the OpenSSL in use has it (3.2 or later), else scrypt; the hash string carries its algorithm and parameters, so verify needs no settings. `password_verify` of an Argon2id hash on OpenSSL older than 3.2 returns an error `Result`. `OSSL_set_max_threads` (3.2) is looked up at run time too; without it Argon2 runs single-threaded.
+- `password_hash` uses Argon2id (OpenSSL 3.2 or later, so always with the vendored 3.5); the hash string carries its algorithm and parameters, so verify needs no settings. Argon2 uses `OSSL_set_max_threads` for its lanes.
 - AEAD is AES-256-GCM or ChaCha20-Poly1305. The nonce rule is fixed by the module: `seal` makes a random nonce for each call and puts it in front of the output, so a user never picks or reuses one. `open` fails with `error(...)` on a wrong key or changed data.
 - No low-level primitives: no raw block ciphers, no ECB, no unauthenticated modes.
 - Errors are `Result` values. Hashes and HMAC have no effect label; `random_bytes`, `password_hash` and `seal` use the existing `random` label.

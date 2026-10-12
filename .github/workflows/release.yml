@@ -60,6 +60,7 @@ jobs:
             rm "$archive"
           fi
           echo "CC=$dir/zig cc -target x86_64-linux-gnu.$VM_GLIBC" >> "$GITHUB_ENV"
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - name: Build the VM against glibc ${{ env.VM_GLIBC }}
         run: |
           set -o pipefail
@@ -83,6 +84,7 @@ jobs:
           segments=$(readelf -lW dist/agentica-vm)
           symbols=$(objdump -T dist/agentica-vm)
           grep -q 'Type:[[:space:]]*DYN' <<< "$header" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
+          if grep -qE 'NEEDED.*lib(ssl|crypto)' <<< "$dynamic"; then echo "dist/agentica-vm links OpenSSL dynamically" >&2; exit 1; fi
           grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
           grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || { echo "dist/agentica-vm lacks BIND_NOW" >&2; exit 1; }
           grep -q 'GNU_RELRO' <<< "$segments" || { echo "dist/agentica-vm lacks RELRO" >&2; exit 1; }
@@ -109,19 +111,20 @@ jobs:
           cp dist/agentica-vm "dist/$name/bin/"
           cp LICENSE NOTICE "dist/$name/"
           share=$(racket -e '(require setup/dirs) (display (find-share-dir))')
-          mkdir -p "dist/$name/licenses/"{racket,bdwgc,libuv,yyjson,unicode}
+          mkdir -p "dist/$name/licenses/"{racket,bdwgc,libuv,yyjson,openssl,unicode}
           cp "$share/LICENSE.txt" "$share/LICENSE-MIT.txt" "$share/LICENSE-APACHE.txt" \
             licenses/racket/ChezScheme-NOTICE "dist/$name/licenses/racket/"
           sed -n '1,/covered by the GPL\./p' vm/third_party/bdwgc/README.QUICK > "dist/$name/licenses/bdwgc/NOTICE"
           cp vm/third_party/libuv/LICENSE vm/third_party/libuv/LICENSE-extra "dist/$name/licenses/libuv/"
           cp vm/third_party/yyjson/LICENSE "dist/$name/licenses/yyjson/"
+          cp vm/third_party/openssl/LICENSE.txt "dist/$name/licenses/openssl/"
           cp licenses/unicode/LICENSE.txt "dist/$name/licenses/unicode/"
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
           listing=$(tar -tzf "dist/$name.tar.gz")
           for f in bin/agentica bin/agentica-vm LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
             licenses/racket/LICENSE-APACHE.txt licenses/racket/ChezScheme-NOTICE licenses/bdwgc/NOTICE \
-            licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/unicode/LICENSE.txt; do
+            licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/openssl/LICENSE.txt licenses/unicode/LICENSE.txt; do
             grep -qxF "$name/$f" <<< "$listing" || { echo "$name.tar.gz lacks $name/$f" >&2; exit 1; }
           done
           unpacked="$RUNNER_TEMP/unpacked"

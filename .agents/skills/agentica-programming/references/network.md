@@ -29,8 +29,14 @@ host resolves to, all on one port (`localhost` takes both `127.0.0.1` and
 without it, are skipped. Ports are 1..65535 for connect and 0..65535 for
 listen. A host containing NUL is an error. TLS listeners and sockets use the
 same TCP operations. TLS verifies certificates and hostnames with TLS 1.2 or
-later; an empty CA path uses system trust, a nonempty path selects a PEM CA.
-The server takes a PEM certificate chain and private key.
+later; there is no way to turn verification off. An empty CA path uses
+system trust (`SSL_CERT_FILE`, else the system CA bundle, plus
+`SSL_CERT_DIR`); a nonempty path is a PEM CA file that replaces system
+trust, and a missing or empty file makes the connect fail. An IP address
+host is checked against the certificate's IP addresses. The server takes a
+PEM certificate chain and private key; a bad file or a key that does not
+match fails the listen. A peer that closes without TLS's closing message
+ends the stream like EOF.
 
 Timeouts are positive milliseconds and cover the whole operation, including
 lock waits. Read and write directions have independent locks; coordinate
@@ -47,12 +53,7 @@ without a terminator at EOF, and errors on empty EOF, on a read error (a
 connection reset in the middle of a line is an error, not a line) and on a
 line over 1 MiB, which also closes the socket.
 
-Temporary exception until TLS moves to the VM: TLS sockets run on the
-legacy evaluator, where a line over 1 MiB leaves the socket open in the
-middle of that line, and a call after a timed-out read or write waits out
-its own timeout instead of failing at once.
-
-`TCP` programs run on the VM (Linux). A program that uses `TLS` or `HTTP`
+`TCP` and `TLS` programs run on the VM (Linux). A program that uses `HTTP`
 runs on the legacy evaluator.
 
 Builtin records are immutable and use the existing named-field constructors:

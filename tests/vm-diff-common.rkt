@@ -21,7 +21,8 @@
          vm-built?
          compile-file
          run-process
-         run-timeout)
+         run-timeout
+         fixture-arg)
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
@@ -57,6 +58,7 @@
 (define fixture-allow-run (make-parameter #f))
 (define allow-run-prefix "process-")
 (define tmp-token "@tmp")
+(define fixture-token "@fixtures/")
 (define tmp-root (make-parameter #f))
 (define tmp-count 0)
 
@@ -94,6 +96,11 @@
   (define checked (if (diagnostic? linked) linked (check linked #:types types)))
   (when (diagnostic? checked) (error 'vm-diff "~a" (format-diagnostic checked)))
   checked)
+
+(define (fixture-arg argument)
+  (if (string-prefix? argument fixture-token)
+      (path->string (simplify-path (build-path tests-directory "fixtures" (substring argument (string-length fixture-token)))))
+      argument))
 
 (define (uses-tmp?)
   (and (member tmp-token (fixture-args)) #t))
@@ -414,7 +421,7 @@
     (define file (path-replace-extension program extension))
     (if (file-exists? file) (read-it file) default))
   (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
-                 [fixture-args (sidecar #".args" file->value '())]
+                 [fixture-args (sidecar #".args" (lambda (file) (map fixture-arg (file->value file))) '())]
                  [fixture-allow-run (string-prefix? (fixture-name program) allow-run-prefix)])
     (thunk)))
 

@@ -2,7 +2,7 @@
 
 (require rackunit
          racket/runtime-path
-         (only-in "vm-diff-common.rkt" vm-file vm-built?))
+         (only-in "vm-diff-common.rkt" vm-file vm-built? fixture-arg))
 
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
@@ -48,7 +48,7 @@
   (define file (build-path fixtures (string-append name ".args")))
   (if (file-exists? file)
       (for/list ([arg (file->value file)])
-        (if (equal? arg "@tmp") (path->string tmp) arg))
+        (if (equal? arg "@tmp") (path->string tmp) (fixture-arg arg)))
       '()))
 
 (define (fresh-directory dir)
@@ -92,7 +92,8 @@
         (list "process-streams" #f #t '("loader" "sched" "io" "proc"))
         (list "files-handles" #f #f '("loader" "sched" "io"))
         (list "task-file-shared" #f #f '("loader" "sched" "io"))
-        (list "task-fail" #f #f '("loader" "sched"))))
+        (list "task-fail" #f #f '("loader" "sched"))
+        (list "tls-echo" #f #f '("loader" "sched" "io" "tls"))))
 
 (module+ test
   (cond

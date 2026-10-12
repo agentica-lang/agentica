@@ -1,38 +1,142 @@
 ### 10.3 TLS
 
-- OpenSSL 3, which Racket's `openssl` module also uses. The default
-  dynamic build initializes without `OPENSSL_INIT_NO_LOAD_CONFIG`, so
-  OpenSSL loads the system `openssl.cnf` as it does for Racket, and the
-  distro's hardening applies. The `OPENSSL=static` build initializes with
-  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`, since its
-  configuration path points at the build machine, and sets explicit
-  minimums (TLS 1.2, security level 2); this is a documented difference of
-  the static build.
-- With an empty `ca_file`, use system trust like
-  `ssl-secure-client-context`, matching Racket: the CA file and the CA
-  directory are two sources, and each is replaced on its own. On Linux the
-  default dynamic build loads exactly Racket's sources: the file is
-  `SSL_CERT_FILE` or else `X509_get_default_cert_file()`, the directory is
-  `SSL_CERT_DIR` or else `X509_get_default_cert_dir()` (both under
-  `OPENSSLDIR`), loaded with `SSL_CTX_load_verify_file` and
-  `SSL_CTX_load_verify_dir` (3.0 API; no store URI). The `OPENSSL=static` build (10.0) cannot use its built-in
-  paths, which point at the build machine: the file is `SSL_CERT_FILE` or
-  else the first existing file of a list of distro bundles
-  (`/etc/ssl/certs/ca-certificates.crt`,
-  `/etc/pki/tls/certs/ca-bundle.crt`, ...), and the directory is
-  `SSL_CERT_DIR` or else none. Racket probes such paths only for its
-  natipkg OpenSSL build (`RACKET_USE_ALT_PATH`). The static build has two
-  documented differences: this CA-bundle probing, and its own TLS
-  minimums without `openssl.cnf` (above). On a normal host the
-  evaluator and the dynamic VM both use OpenSSL's defaults. On Windows only
-  the `ROOT` store, on macOS only the Keychain anchors, never
-  OpenSSL's default paths. A non-empty `ca_file` replaces system trust.
-  Trust-store usage and disallowed lists are honored only as far as Racket
-  honors them.
-- Per connection: `SSL_set1_host`, SNI set, IP literals through
-  `X509_VERIFY_PARAM_set1_ip_asc`. There is no `SSL_VERIFY_NONE` path.
-- Hermetic tests: wrong hostname, self-signed server without `ca_file`, and a
-  `ca_file` that excludes system roots.
+**As built (TLS PR, Linux).** `TLS.connect` and `TLS.listen` run on the
+VM; a TLS program no longer falls back to the evaluator. OpenSSL 3.5 LTS is
+vendored and linked statically in every build (10.0), so there is one
+behaviour everywhere.
+
+- **Adapter.** `vm/tls.h` declares our own types only (`agc_tls_config`,
+  `agc_tls`, `agc_tls_status`, `agc_tls_error`, `agc_tls_failure`);
+  `vm/tls_openssl.c` is the only file that includes OpenSSL headers. A
+  config wraps one `SSL_CTX` (client: trust store; server: certificate
+  chain and key); a session wraps one `SSL` with two memory BIOs.
+  Ciphertext goes in with `agc_tls_feed_in` (and `agc_tls_feed_eof` at the
+  transport's EOF) and comes out with `agc_tls_out_peek` and
+  `agc_tls_out_consume` (a full consume resets the BIO, so no copy);
+  plaintext goes through `agc_tls_read` and `agc_tls_write`. Every call
+  returns OK, WANT_READ, WANT_WRITE, CLOSED or ERROR, and an error fills an
+  `agc_tls_failure`: our error code, an `errno` for a system error (a
+  missing file), and a short detail (OpenSSL's reason text, or
+  `certificate verify failed: ` and the X.509 verify text). OpenSSL's
+  error queue is drained in the adapter and never leaks to other calls.
+  OpenSSL never gets a GC pointer: plaintext is copied into a `malloc`'d
+  buffer first, and reads land in the socket's `malloc`'d input buffer.
+  A later `TlsContext` (`docs/future/29-tls-context.md`) is a config held
+  by a value instead of by one connection; nothing here blocks it.
+- **Error codes** (`agc_tls_error`): `VERIFY_UNTRUSTED` (unknown issuer,
+  self-signed), `VERIFY_EXPIRED` (expired or not yet valid),
+  `VERIFY_HOSTNAME` (DNS name or IP address mismatch), `VERIFY_FAILED`
+  (any other verify result), `HANDSHAKE_FAILED`,
+  `NO_SHARED_VERSION_OR_CIPHER` (protocol version or cipher, group or
+  signature algorithm reasons, and the peer's protocol version alert),
+  `UNEXPECTED_EOF` (the peer closed during the handshake), `PROTOCOL` (an
+  error after the handshake), `BAD_CA`, `BAD_CERT`, `BAD_KEY`,
+  `KEY_MISMATCH`, `NOMEM` and `INTERNAL`. The `tls` trace prints them in
+  lower case.
+- **Setup.** `TLS.connect` checks the timeout, the port and the host as
+  `TCP.connect` does, and a NUL in `ca_file`; `TLS.listen` checks the
+  port and host as `TCP.listen` does, and a NUL in either path ("network:
+  path cannot contain NUL"). Then one libuv pool job builds the config
+  (reading the CA file or the certificate and key with OpenSSL's file
+  loaders, off the scheduler thread), and only then the VM resolves the
+  host and connects or listens, as for TCP. So, as in the evaluator, a bad
+  certificate or key fails `TLS.listen` before the port is bound. The
+  pool job is started with the stop signals blocked, like every other
+  pool job (10.2.2). The connect timeout covers the setup, the lookup,
+  the connect and the handshake.
+- **Minimums.** TLS 1.2 and security level 2 (RSA keys of at least 2048
+  bits), set on every context; renegotiation is off. No `openssl.cnf` is
+  read.
+- **Trust.** A non-empty `ca_file` replaces system trust (a missing or
+  empty file fails the connect: `BAD_CA`). With an empty `ca_file` the
+  file is `SSL_CERT_FILE` when set, or else the first readable file of
+  `/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`,
+  `/etc/ssl/ca-bundle.pem`, `/etc/pki/tls/cacert.pem`,
+  `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem` and
+  `/etc/ssl/cert.pem`; the directory is `SSL_CERT_DIR` when set (OpenSSL's
+  `:`-separated list) or else none. A system source that fails to load is
+  skipped, as OpenSSL's own default paths are. Windows (the `ROOT` store)
+  and macOS (the Keychain anchors) are for when those ports resume.
+- **Per connection.** The client verifies the peer (`SSL_VERIFY_PEER`;
+  there is no verify-none path). A host that parses as an IPv4 or IPv6
+  literal is checked against IP SANs with `X509_VERIFY_PARAM_set1_ip_asc`
+  and sends no SNI; any other host gets SNI and `SSL_set1_host` (no
+  partial wildcards). The server does not ask for client certificates.
+- **Data path.** A TLS socket is the TCP `net` of 10.3.1 with a session.
+  libuv reads ciphertext into a 16 KiB `malloc`'d buffer; the read
+  callback feeds it to the session, runs the handshake while it is not
+  done, then decrypts everything available into the socket's input
+  buffer (`agc_inbuf`), so `read_line`, `recv_bytes`, the 1 MiB limits,
+  the locks and the timeouts are exactly the TCP ones. During the
+  handshake the socket is read all the time; after it, only while a
+  reader waits, as for TCP. `send` and `send_bytes` copy the plaintext and
+  encrypt it in 16 KiB pieces; each piece's records are written with the
+  shared `agc_stream_write` (try first, then one `uv_write` of a copy),
+  and the next piece is encrypted when that write completes, so a large
+  send never holds more than one piece of ciphertext. Records the
+  session writes by itself (handshake, alerts, key updates) take the same
+  path. The writer parks until every byte reached the kernel. A failed
+  write is sticky on a TLS socket: later sends return the same error.
+- **Accept.** On a TLS listener a waiting `TCP.accept` takes the
+  connection at once (`uv_accept` in the connection callback), runs the
+  server handshake under the accept's timeout, and returns the socket
+  only when it is done; a failed handshake returns "port->ssl-ports:
+  accept failed (...)", as in the evaluator, and the listener stays open.
+  Connections in a handshake hang off their accept request; closing the
+  listener (or the end of the run) closes them too.
+- **Handshake I/O errors.** A write error or a failed `uv_read_start`
+  during the handshake fails it at once with that system error, never a
+  timeout, and a failed handshake is reported only once.
+- **EOF.** A peer that closes without `close_notify` gives a plain end of
+  input, as in the evaluator (`SSL_OP_IGNORE_UNEXPECTED_EOF`); the
+  framing above TLS (lines, HTTP lengths) must catch truncation. A
+  transport error after the handshake is the TCP read error; a TLS error
+  after it is "error reading from stream port" with `EPROTO`.
+- **Close.** `TCP.close`, a timeout and the end of the run send
+  `close_notify` with one `uv_try_write` when the handshake finished and
+  no write is pending, then close as TCP does.
+- **Messages** keep Racket's shapes: "ssl-connect: connect failed
+  (detail)", "port->ssl-ports: accept failed (detail)",
+  "ssl-load-certificate-chain!: load failed from: \"path\" (detail)",
+  "ssl-load-private-key!: ..." (also for a key that does not match the
+  certificate), "ssl-load-verify-source!: ..." for `ca_file`; a system
+  error (a missing file) ends with the usual "system error: ...;
+  errno=N" lines instead of a detail. Only the `Result` error kind must
+  match the evaluator; the detail is OpenSSL's text.
+- **Trace** (`tls` category, `docs/vm/08-loader-and-cli.md` §9):
+  `tls_handshake` (role, host), `tls_handshake_done` (protocol, cipher),
+  `tls_handshake_error` (error code, detail), `tls_setup_error`,
+  `tls_read_error` and `tls_close` (why, right after `tcp_close`). A server-side connection shows
+  `socket=0` and its `listener` until the accept returns its id.
+- **Turn costs.** TLS sockets use the TCP builtins, so reads and writes
+  charge by size (10.2.1, `AGC_COST_SIZE`); `TLS.connect` and
+  `TLS.listen` charge nothing.
+- **Fuzzing.** Under `no_files`, `TLS.connect` and `TLS.listen` end the run
+  with `RUNTIME-INTERNAL`, like their TCP twins.
+- **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against
+  each other (handshake with tiny record slices, a 100 KB transfer,
+  `close_notify`, raw EOF, every verify error, an EOF and a plain-text
+  request in the handshake, and the load errors). Two small goldens are
+  their own peers: `tls-echo` (one echo through a VM server and client)
+  and `tls-errors` (argument and load errors); each run of the
+  `--max-steps` sweep does a full handshake, so they stay near 60 steps.
+  Everything else runs once in `tests/vm-tls-test.rkt`, against Node
+  (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`)
+  peers or as a VM program that is its own peer: one-byte records, EOF
+  with and without `close_notify`, a reset, 100,000-byte lines, the 1 MiB
+  limit, a silent peer, every verify error on both sides, a TLS
+  1.0/1.1-only server, plain text both ways, a stalled and a pending
+  handshake, timeouts, system trust through `SSL_CERT_FILE`, a TLS 1.2
+  Python server, Node clients on TLS 1.3 and 1.2, a Python client, a
+  client that does not trust the VM's server, and the end of a run with
+  TLS sockets, a handshake and an 8 MiB send pending (the smallest size
+  that fills loopback buffers of 4 MiB plus the receive window). The certificates in `tests/fixtures/tls/` come from
+  `make-certs.sh` (see its `README.md`).
+- **Black-box differences.** After a timed-out read or write the next
+  call returns "network: socket is closed" at once, and a line over 1 MiB
+  closes the socket, as for TCP (the evaluator kept a dead lock and the
+  rest of the line). A missing or empty `ca_file` fails at connect with
+  its own message; the evaluator ignored it and failed verification.
 
 ### 10.3.1 TCP (as built)
 
@@ -42,8 +146,7 @@ buffer (`agc_inbuf`) with its line and byte takes, the write path
 (`uv_try_write`, then one `uv_write` of a `malloc`'d copy), the
 lock-or-timeout helper and the `network:` timeout texts. Other systems get
 an empty table, so the lowerer's keys fail at load as unknown imports.
-`TLS` stays on the evaluator fallback, and a TLS socket never reaches the
-VM: a program that calls a `TLS` builtin falls back as a whole.
+TLS sockets are the same `net` with a TLS session on top (10.3).
 
 - **Values.** A `Socket` (`AGC_T_SOCKET`, printed `<Socket>`) is a GC
   `agc_socket` with the registered `state` resource and two lock records,
@@ -173,14 +276,13 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   - After a timed-out read or write closes a socket, the next call
     returns "network: socket is closed" at once, as `grammar.md` now
     says. The evaluator's timed-out thread keeps that direction's lock,
-    so its next call waits its whole timeout (the legacy bug of 10.4);
-    `grammar.md` keeps that as a temporary exception for TLS sockets.
+    so its next call waits its whole timeout (the legacy bug of 10.4).
+    TLS sockets now behave the same way (10.3).
   - A `read_line` over 1 MiB closes the socket, as `grammar.md` now
     says. The evaluator drops the 1 MiB + 1 bytes it read and leaves the
     stream in the middle of the line, so its next `read_line` returns the
-    tail of the long line as if it were a whole line; `grammar.md` keeps
-    that as a temporary exception for TLS sockets until TLS moves to the
-    VM.
+    tail of the long line as if it were a whole line. TLS sockets now
+    behave the same way (10.3).
   - A host with a NUL byte is an error (`grammar.md`); Racket cut the
     host at the NUL.
   - A port out of range returns the VM's own message, not Racket's

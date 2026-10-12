@@ -62,7 +62,7 @@ jobs:
                   trace=true ;;
               esac
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/vm-trace-test.rkt|tests/vm-tcp-test.rkt|tests/fixtures/tcp-peer.js|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/vm-trace-test.rkt|tests/vm-tcp-test.rkt|tests/fixtures/tcp-peer.js|tests/vm-tls-test.rkt|tests/fixtures/tls-peer.js|tests/fixtures/tls-peer.py|tests/fixtures/tls/*|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"
@@ -130,6 +130,46 @@ jobs:
       - if: steps.unicode.outputs.cache-hit != 'true'
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
 
+  warm-openssl:
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
+      - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-release
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
+      - run: make vm-openssl
+      - run: mkdir -p build && make -s vm-openssl-key SANITIZE=1 > build/openssl-key-sanitize
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/sanitize/openssl/include
+            build/vm/sanitize/openssl/libssl.a
+            build/vm/sanitize/openssl/libcrypto.a
+            build/vm/sanitize/openssl-flags
+          key: openssl-sanitize-${{ hashFiles('build/openssl-key-sanitize') }}
+      - run: make vm-openssl SANITIZE=1
+      - run: mkdir -p build && make -s vm-openssl-key GC_STRESS=1 > build/openssl-key-gcstress
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/gcstress/openssl/include
+            build/vm/gcstress/openssl/libssl.a
+            build/vm/gcstress/openssl/libcrypto.a
+            build/vm/gcstress/openssl-flags
+          key: openssl-gcstress-${{ hashFiles('build/openssl-key-gcstress') }}
+      - run: make vm-openssl GC_STRESS=1
+
   dup-check:
     runs-on: [self-hosted, linux, docker-runner]
     timeout-minutes: 10
@@ -178,6 +218,17 @@ jobs:
           restore-keys: racket-zo-${{ github.job }}-9.3-
       - run: git ls-files -z | xargs -0 touch
       - run: make build && raco make -j 4 tests/*.rkt
+      - run: python3 --version
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
+      - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-release
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - run: make vm vm-test
       - run: mkdir -p build && sed -n '/^vm-unicode:/,/^$/p' Makefile > build/vm-unicode.mk
       - id: unicode
@@ -253,6 +304,26 @@ jobs:
             racket-zo-test-9.3-
       - run: git ls-files -z | xargs -0 touch
       - run: clang --version
+      - run: python3 --version
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
+      - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-sanitize
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/sanitize/openssl/include
+            build/vm/sanitize/openssl/libssl.a
+            build/vm/sanitize/openssl/libcrypto.a
+            build/vm/sanitize/openssl-flags
+          key: openssl-sanitize-${{ hashFiles('build/openssl-key-sanitize') }}
+      - run: mkdir -p build && make -s vm-openssl-key GC_STRESS=1 SANITIZE=0 > build/openssl-key-gcstress
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/gcstress/openssl/include
+            build/vm/gcstress/openssl/libssl.a
+            build/vm/gcstress/openssl/libcrypto.a
+            build/vm/gcstress/openssl-flags
+          key: openssl-gcstress-${{ hashFiles('build/openssl-key-gcstress') }}
       - run: command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
       - run: |
           clang-tidy --version
@@ -267,7 +338,7 @@ jobs:
           make vm vm-test TRACE=0
           dist/agentica-vm --version | grep -q 'trace off'
       - run: make vm vm-test
-      - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt
-      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt
+      - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt
+      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt
       - run: make vm-fuzz
       - run: make vm-gc-stress

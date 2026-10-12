@@ -135,9 +135,9 @@ and cost one predictable branch each.
   golden test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
-  (and libuv, picohttpparser and OpenSSL from 7h). For OpenSSL it prints the version in use:
-  in the default dynamic build that is the loaded library's
-  `OpenSSL_version(OPENSSL_VERSION)`, not the headers it was built with.
+  (and libuv, picohttpparser and OpenSSL from 7h). OpenSSL is linked
+  statically, so its version is the one built in (`agentica-vm 0.1.0
+  (libgc 8.2.12, yyjson 0.13.0, libuv 1.53.0, OpenSSL 3.5.9)`).
 - In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
   (7.4), `--ai`, `--json`, `--allow-run` (10.4) and `--`. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
@@ -188,7 +188,7 @@ and cost one predictable branch each.
   are passed to the VM; a seeded run repeats on the VM, with other numbers
   than the evaluator gave.
 - Fallback to the evaluator. When `lower` rejects the program with
-  `LOWER-UNSUPPORTED` (today only a call to a `TLS`, `HTTP` or `BDD`
+  `LOWER-UNSUPPORTED` (today only a call to an `HTTP` or `BDD`
   builtin), the driver prints one line on stderr (in the plain and `--ai` modes;
   never with `--json`, where the last stderr line stays the diagnostic),
   `agentica: <the lowering's message>; running on the legacy evaluator` (for example `agentica: the VM
@@ -277,7 +277,13 @@ and cost one predictable branch each.
   found), exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
   stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
   `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
-  collect (`at=turn|end`). `tls` has no trace points yet. A cut line ends
+  collect (`at=turn|end`); `tls` (10.3) tls_handshake (`socket`, or
+  `socket=0` and the `listener` on the server side, `role=client|server`,
+  the client's `host`), tls_handshake_done (`protocol`, `cipher`),
+  tls_handshake_error (`error`, `detail`), tls_setup_error (`error`, for
+  a bad CA file, certificate or key), tls_read_error (`error`) and
+  tls_close (`socket`, `why` as for tcp_close, right after the socket's
+  tcp_close). A cut line ends
   with `...` after a whole escape or UTF-8 sequence; a cut inside a quoted
   value closes the quote first (`"...`). `make vm TRACE=0` passes
   `-DAGC_TRACE_BUILD=0` and `--version` then says `trace off`.

@@ -4,7 +4,7 @@ TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -75,14 +75,16 @@ site-serve: site-sass
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
+# make vm-openssl-key     print what the OpenSSL build of this mode depends on (the CI cache key)
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 UV_DIR := vm/third_party/libuv
+OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/stream.c vm/process.c vm/tcp.c vm/interp.c vm/task.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/stream.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/interp.c vm/task.c vm/diag.c vm/trace.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
-VM_DEPS := $(VM_SRC) vm/agc.h vm/trace.h src/version.rkt
+VM_DEPS := $(VM_SRC) vm/agc.h vm/trace.h vm/tls.h src/version.rkt
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -121,6 +123,7 @@ VM_LDFLAGS := -fsanitize=address,undefined $(VM_LIBS)
 VM_GC :=
 VM_BUILD := build/vm/sanitize
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
+OSSL_CFLAGS := -g -fno-omit-frame-pointer
 FUZZ_RUNS ?= 30000
 else ifeq ($(GC_STRESS),1)
 VM_CC := $(CC)
@@ -129,6 +132,7 @@ VM_LDFLAGS := $(VM_PIE) $(VM_LIBS)
 VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/gcstress
 YY_CFLAGS := -O1 -g $(VM_PIC)
+OSSL_CFLAGS := -g
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
@@ -136,6 +140,7 @@ VM_LDFLAGS := $(VM_HARDEN_LDFLAGS) $(VM_LIBS)
 VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/release
 YY_CFLAGS := -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
+OSSL_CFLAGS := -fstack-protector-strong -D_FORTIFY_SOURCE=2
 FUZZ_RUNS ?= 100000
 endif
 ifeq ($(TRACE),0)
@@ -146,6 +151,18 @@ VM_TP_STAMP := $(VM_BUILD)/third-party-flags
 VM_YY := $(VM_BUILD)/yyjson.o
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
 UV_OBJS := $(patsubst %,$(VM_BUILD)/uv/%.o,$(UV_NAMES))
+OSSL_BUILD := $(VM_BUILD)/openssl
+OSSL_STAMP := $(VM_BUILD)/openssl-flags
+OSSL_OPTS := no-shared no-tests no-docs no-apps no-module no-dso no-engine no-legacy no-autoload-config no-async no-comp \
+  no-ssl3 no-dtls no-srp no-quic no-ui-console no-cmp no-ts no-ct no-ocsp no-http no-deprecated
+OSSL_ENV := env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL -u MAKEOVERRIDES -u CC -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS -u LDLIBS
+OSSL_CONFIGURE = $(OSSL_ENV) CC='$(VM_CC)' perl $(CURDIR)/$(OSSL_DIR)/Configure $(OSSL_OPTS) $(OSSL_CFLAGS)
+OSSL_SUBMAKE = $(OSSL_ENV) make -C $(OSSL_BUILD) CC='$(VM_CC)' build_libs
+OSSL_RECIPE = $(subst ','\'',$(subst $(CURDIR)/,,$(OSSL_CONFIGURE) | $(OSSL_SUBMAKE)))
+OSSL_KEY = { echo '$(OSSL_RECIPE)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; git -C $(OSSL_DIR) rev-parse HEAD 2>/dev/null || true; }
+VM_OSSL := $(if $(UV_NAMES),$(OSSL_BUILD)/libssl.a $(OSSL_BUILD)/libcrypto.a)
+OSSL_INC := $(if $(UV_NAMES),-I $(OSSL_BUILD)/include -I $(OSSL_DIR)/include)
+VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
@@ -180,30 +197,53 @@ $(VM_BUILD)/libuv.a: $(UV_DIR)/src/uv-common.c $(UV_OBJS)
 	rm -f $@
 	$(AR) rcs $@ $(UV_OBJS)
 
-dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_STAMP)
+$(OSSL_DIR)/VERSION.dat:
+	@echo "missing $(OSSL_DIR): run git submodule update --init" >&2; exit 1
+
+vm-openssl-key: $(OSSL_DIR)/VERSION.dat
+	@$(OSSL_KEY)
+
+vm-openssl: $(VM_OSSL)
+
+$(OSSL_STAMP): $(OSSL_DIR)/VERSION.dat FORCE
+	@mkdir -p $(VM_BUILD)
+	@$(OSSL_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+
+$(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
+	@perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { echo "building OpenSSL needs perl 5 with its core modules (Debian: perl)" >&2; exit 1; }
+	rm -rf $(OSSL_BUILD)
+	mkdir -p $(OSSL_BUILD)
+	cd $(OSSL_BUILD) && $(OSSL_CONFIGURE) > configure.log 2>&1 || { cat configure.log; exit 1; }
+	$(OSSL_SUBMAKE) -j $(JOBS) > $(OSSL_BUILD)/build.log 2>&1 || { tail -n 40 $(OSSL_BUILD)/build.log; exit 1; }
+	touch $@
+
+$(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
+	@test -f $@ || { echo "$@ is missing: remove $(OSSL_BUILD) and rebuild" >&2; exit 1; }
+
+dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
 	@mkdir -p dist
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_LDFLAGS) $(VM_ENTRY)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS) $(VM_ENTRY)
 
 vm: dist/agentica-vm$(EXE)
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 
-$(VM_BUILD)/%-test$(EXE): vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_YY) $(VM_UV) $(VM_LDFLAGS)
+$(VM_BUILD)/%-test$(EXE): vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS)
 
 vm-test: $(VM_TESTS)
 	for t in $(VM_TESTS); do $$t || exit 1; done
 
-$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_LDFLAGS)
+$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS)
 
 vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	@mkdir -p $(VM_BUILD)/corpus
 	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
-$(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_LDFLAGS) $(VM_ENTRY)
+$(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS) $(VM_ENTRY)
 
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
@@ -217,8 +257,8 @@ VM_LINT_SKIP := vm/unicode_data.c
 VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 
 .PHONY: vm-lint
-vm-lint: $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(UV_DIR)/src/uv-common.c
+vm-lint: $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(UV_DIR)/src/uv-common.c $(VM_OSSL)
 	@$(CLANG_TIDY) --list-checks -checks=misc-use-internal-linkage | grep -q misc-use-internal-linkage || { echo "clang-tidy 19+ required" >&2; exit 1; }
-	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include
-	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -DAGC_NO_GC -fsanitize=address,undefined
-	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
+	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -I $(GC_DIR)/include
+	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -DAGC_NO_GC -fsanitize=address,undefined
+	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
