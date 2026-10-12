@@ -1,6 +1,6 @@
 ## 26. Strict diagnostics
 
-**Status:** planned (roadmap phase 16), after 7i deletes the evaluator (order 7.2), as the first items of order step 7.4, before the phase 15 items of that step. Decided by the user on 2026-10-12.
+**Status:** planned (roadmap phase 16), after 7i deletes the evaluator (order 7.2), as the first items of order step 7.4, before the phase 15 items of that step, in the order 26.1, 26.3, 26.2 (roadmap 16a, 16c, 16b). Decided by the user on 2026-10-12.
 
 This section adds three errors that other languages give as warnings: an unused import, an unused variable and unreachable code. The checks are small and need no new syntax; the decision behind them is the principle below.
 
@@ -10,6 +10,8 @@ This section adds three errors that other languages give as warnings: an unused 
 2. **A warning means "wrong, but allowed".** That is a second accepted way to write the code, against the one-way rule of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms): if a form is wrong, the language rejects it; if it is right, the language says nothing.
 3. **One diagnostic per stage.** Each stage returns its output or exactly one diagnostic, and stops at the first error (`AGENTS.md`, "Conventions"). The diagnostic format has only `error` (`src/diagnostic.rkt`). Warnings would need a list of diagnostics next to a successful result, which breaks that contract for every stage and for `--json`.
 
+**What the principle covers.** It covers the diagnostics of the language stages: `LEX-`, `PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-` and `RUNTIME-`. Output of the runtime and the tools that is not a diagnostic about the program's code is outside it: the VM tracer's lines (`AGENTICA_VM_TRACE`), the CLI's one-line fallback notice, and what a program itself writes to stderr with `IO.warn`.
+
 So a new check is either an error with a stable code or it is not added. A check becomes an error only when the case is almost always a mistake and the fix is local and mechanical (remove a line, or rename to a `_` name). Checks that fail this test are not added (26.4).
 
 **Deprecations.** Deprecation warnings may be considered only after 1.0, when there are users whose code must keep working while they move. Before 1.0, a change in behavior is a breaking change: it lands as an error, the implementing PR migrates the repo, and the `CHANGELOG.md` lists it under "Changed".
@@ -18,7 +20,7 @@ So a new check is either an error with a stable code or it is not added. A check
 
 **How it lands.**
 
-- Each item is its own small PR, after 7i (order 7.2), so the Racket evaluator and its tests are gone and need no migration. All three are front end only: the linker (`src/modules.rkt`) for 26.1, the checker (`src/checker.rkt`) for 26.2 and 26.3. `src/lower.rkt`, the bytecode format and the VM do not change.
+- Each item is its own small PR, in the order 26.1, 26.3, 26.2: the two small migrations first, and 26.2 after 26.3, so a read in dead code never has to be counted (26.2, "Code that never runs"). Each PR comes after 7i (order 7.2), so the Racket evaluator and its tests are gone and need no migration. All three are front end only: the linker (`src/modules.rkt`) for 26.1, the checker (`src/checker.rkt`) for 26.2 and 26.3. `src/lower.rkt`, the bytecode format and the VM do not change.
 - Each PR is a breaking change and migrates the repo in the same PR: the programs in `examples/`, `stdlib/`, `benchmarks/`, `tests/` (the `.agc` fixtures and the Agentica programs written inline in the Racket tests), the `agentica` blocks of `site/content`, and the examples of the programming skill. The impact list at the end of this section says what each item breaks today. The `CHANGELOG.md` gets one "Changed" entry per item.
 - **Tests** in each PR: checker or linker tests that assert the code and the span (`tests/checker-test.rkt`, `tests/modules-test.rkt`), never the message text; a golden fixture per code (`tests/fixtures/vm/*.expected` records the diagnostic code); and an `{expect="CODE"}` site example.
 - **Docs** in each PR: `docs/grammar.md` (the rule, and §7 "Diagnostics for agents" gets the no-warnings principle with whichever item lands first), the programming skill (`references/diagnostics.md` for the code, and one line in `SKILL.md`, since these rules apply to every program), the matching site page, and the development skill's notes. When an item lands, its text moves to `grammar.md` and is deleted here.
@@ -69,12 +71,13 @@ the import alias "JsonUtil" is never used
 
 - `import-decl` (`src/ast.rkt:54`) gains an `alias-span` field, filled by the parser from the alias token (`src/parser.rkt:128`); today the node has only the span of the whole line.
 - `visit` (`src/modules.rkt:102`) keeps, per file, the set of aliases used. `resolve` marks an alias when it finds it.
-- After every file is rewritten (the `append-map` that builds the merged `program`, `src/modules.rkt:265`), the linker walks the files in link order (the root first) and, in each file, the imports in source order, and fails at the first alias that was never marked.
-- Errors found while rewriting come first (an unknown name in a file is reported before an unused import), and every linker error comes before every checker error, since the linker runs first.
+- After every file is rewritten (the `append-map` that builds the merged `program`, `src/modules.rkt:266`), the linker walks the files in link order (the root first) and, in each file, the imports in source order, and fails at the first alias that was never marked.
+- **A mistyped alias is not an unused import.** In `import "text.agc" as Text` with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real mistake is the call. `resolve` sends a two-part function name whose first part is not an alias to the checker unchanged, so the checker can report it with its stable code (the comment at `src/modules.rkt:169`). So while rewriting, `resolve` also records, per file, the two-part function names whose first part is not an alias of that file and that are not builtins (`builtin-ref`; `IO.inspect` and `String.length` are valid calls of that shape). When a file has any, the unused-import check skips that file, and the checker reports the call as `CHECK-UNKNOWN-NAME`, as today, with its "did you mean" help over functions and builtins.
+- **Order.** Errors found while rewriting come first: an unknown or private imported name (`CHECK-IMPORT-NAME`) in a file is reported before an unused import. A mistyped alias in a call is not a rewriting error; it is the checker's `CHECK-UNKNOWN-NAME`, and the rule above keeps the unused import from hiding it. Apart from that case, every linker error comes before every checker error, since the linker runs first.
 
 **Help idea:** "remove this import" (the help names the line: `remove import "json_util.agc" as JsonUtil`). There is no "use it" hint: the linker cannot know what the code meant to call.
 
-**Tests** (`tests/modules-test.rkt`): an unused alias in the root (code and the alias's span); an unused alias in an imported file and in a `std/` import; an alias used only in a type annotation, only in a pattern, only as `&Alias.f`, only in a construction, and only in a function that is never called (all valid); two unused imports (the first is reported); a file imported by two files where only one uses its own alias; an unknown name and an unused import in the same file (the unknown name wins); with 15b, a facade that only re-exports. A golden fixture and an `{expect="CHECK-UNUSED-IMPORT"}` block on the modules page.
+**Tests** (`tests/modules-test.rkt`): an unused alias in the root (code and the alias's span); an unused alias in an imported file and in a `std/` import; an alias used only in a type annotation, only in a pattern, only as `&Alias.f`, only in a construction, and only in a function that is never called (all valid); two unused imports (the first is reported); a file imported by two files where only one uses its own alias; an unknown imported name (`Text.nope()`) and an unused import in the same file (`CHECK-IMPORT-NAME` wins); a misspelled alias in a call (`Txet.shout("hi")`) next to the import it was meant to use (`CHECK-UNKNOWN-NAME` at the call, not `CHECK-UNUSED-IMPORT`); a valid builtin call such as `IO.inspect(x)` next to an unused import (still `CHECK-UNUSED-IMPORT`); with 15b, a facade that only re-exports. A golden fixture and an `{expect="CHECK-UNUSED-IMPORT"}` block on the modules page.
 
 **Docs:** `grammar.md` ("File modules and imports"), the programming skill (`references/modules.md`, `references/diagnostics.md`, one line in `SKILL.md`), `site/content/tour/modules.md`.
 
@@ -109,13 +112,13 @@ end
 
 - **Compound assignment is not a read.** A read of `x` inside the value of an assignment to `x` itself does not count: `x += 1`, `x = x + 1` and `xs = xs.push(v)` alone do not make `x` or `xs` used. The parser already turns `x += 1` into `x = x + 1` (`parse-compound-assignment`, `src/parser.rkt:517`), so both forms get the same answer. The reason: values are immutable, so the only way the new value of `x` leaves such an assignment is through a later read of `x`. A counter that is only incremented, or a list that is only appended to, is lost work, and usually a bug (the result was meant to be printed or returned). Rust warns the same way (`variable is assigned to, but never used`). A call in such a value still runs; if a loop calls a function with effects only to feed its own state (`n = tick(n)`), the name is `_n`.
 - **Reassignment before any read.** The rule is per variable, not per assignment: `x = 1`, then `x = 2`, then `puts(x)` is valid. The first value is never read, but finding that needs a flow analysis of every path; the checker does not do one, and Go does not reject it either. A variable is unused only when no read of it exists at all.
-- **Code that never runs.** A read in a statement after a `return` does not exist for the checker, since 26.3 rejects that statement first.
+- **Code that never runs.** A read in a statement after a `return` does not count. 26.3 lands before this item, so the checker rejects that statement first and the question never comes up.
 
 **`_` names.** Names that start with `_` are already valid: `NAME = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }` (`grammar.md`, "Literals"; the lexer at `src/lexer.rkt:169`). So the rule needs no grammar change. A name that starts with `_` is never reported; reading one stays valid. Outside patterns, `_` alone is an ordinary name today: two nested `for _ in` loops are `CHECK-SHADOWED-NAME`, and a second `_ = "s"` after `_ = 3` is `CHECK-TYPE-MISMATCH`, because it is the same variable. That does not change here, so the help suggests a `_name` (`_i`, `_k`), not `_` alone, except in patterns, where `_` is the discard. Making `_` a discard everywhere would be a grammar change; it is not part of this item.
 
 **Discarding a call's value.** `sent = TCP.send(socket, text, 1000)` with `sent` never read is reported. When the value is a call whose result may be ignored (a user function, or a builtin with effects, which `CHECK-UNUSED-VALUE` does not flag), the help shows the call as a statement, without `sent =`. Two cases found in the repo (the impact list) show why this matters: the site's network and process examples assign a `Result` from `send` or `close` and never look at it.
 
-**Span and order.** The span is where the variable is introduced: the assignment statement that introduces it (the span `CHECK-SHADOWED-NAME` uses today), the block parameter (`block-param` has a span), the `for` variable or the pattern binding. The last two have no span of their own today, so `for-stmt` (`src/ast.rkt:72`) gains a `var-span` field and `variant-pattern` (`src/ast.rkt:78`) a `binding-spans` field (one span per binding, `_` included), filled by the parser (`src/parser.rkt:582`, `:351`, `:387`). `bindings` stays a list of names, so readers such as `src/lower.rkt` keep working; the positional `match` patterns in `rewrite` (`src/modules.rkt:214`, `:247`) gain the field. The check runs at the end of each function, after its body is checked, so every other error in the function comes first; it reports the unused name that is introduced first in the source. Functions are checked in the linked program's order.
+**Span and order.** The span is where the variable is introduced: the assignment statement that introduces it (the span `CHECK-SHADOWED-NAME` uses today), the block parameter (`block-param` has a span), the `for` variable or the pattern binding. The last two have no span of their own today, so `for-stmt` (`src/ast.rkt:72`) gains a `var-span` field and `variant-pattern` (`src/ast.rkt:78`) a `binding-spans` field (one span per binding, `_` included), filled by the parser (`src/parser.rkt:582`, `:351`, `:387`). `bindings` stays a list of names, so readers such as `src/lower.rkt` keep working; the positional `match` patterns in `rewrite` (`src/modules.rkt:214`, `:247`) gain the field. The check runs at the end of each function (`check-function`, `src/checker.rkt:1533`), after its body is checked and after its `CHECK-MISSING-RETURN` check, so every other error in the function comes first, including the `CHECK-MISSING-RETURN` of the blocks inside it (`check-block-body`, `:1207`), which runs when each block ends. It reports the unused name that is introduced first in the source. Functions are checked in the linked program's order.
 
 **Implementation sketch** (`src/checker.rkt`):
 
@@ -130,7 +133,7 @@ end
 - block parameter: `write |_x, i|`.
 - pattern binding: `write error(_) to match without binding the value` (the wording of today's help for an empty pattern, `src/parser.rkt:350`).
 
-**Tests** (`tests/checker-test.rkt`): each kind, with its span; a variable read only inside a block (valid); `x += 1` alone, `x = x + 1` alone and `xs = xs.push(1)` alone (all reported); `x = 1`, `x = 2`, `puts(x)` (valid); `_x`, `for _i`, `|_k, v|`, `error(_)` (valid); an unused parameter of a function and of a callback passed as `&name` (valid); two unused names in one function (the first in the source is reported); a type error after an unused variable in the same function (the type error wins). A golden fixture and an `{expect="CHECK-UNUSED-VARIABLE"}` block on the variables page.
+**Tests** (`tests/checker-test.rkt`): each kind, with its span; a variable read only inside a block (valid); `x += 1` alone, `x = x + 1` alone and `xs = xs.push(1)` alone (all reported); `x = 1`, `x = 2`, `puts(x)` (valid); `_x`, `for _i`, `|_k, v|`, `error(_)` (valid); an unused parameter of a function and of a callback passed as `&name` (valid); two unused names in one function (the first in the source is reported); a type error after an unused variable in the same function (the type error wins); an unused variable in a function that also misses a return (`CHECK-MISSING-RETURN` wins), and the same inside a block. A golden fixture and an `{expect="CHECK-UNUSED-VARIABLE"}` block on the variables page.
 
 **Docs:** `grammar.md` ("Variables and scope": the rule, `_` names and what a read is; "Enums and pattern matching" and "Blocks and closures" for `_` and `|_x|`), the programming skill (`SKILL.md` and `references/diagnostics.md`), `site/content/tour/variables.md`, `control-flow.md` (`for _i`), `blocks.md` and `enums-and-case.md`.
 
@@ -151,6 +154,8 @@ end
 
 **Rule:** a statement that follows a terminator in the same block is `CHECK-UNREACHABLE-CODE`, at the first such statement.
 
+This is a new code, apart from the existing `CHECK-UNREACHABLE-CASE-ARM` (a `case` arm that an earlier arm already covers, `src/checker.rkt:1332`), which does not change.
+
 **Terminators**, kept to what the checker already knows:
 
 - `return`, `break` and `next`;
@@ -166,7 +171,7 @@ Branches inside a block are checked as their own blocks: `if c` with a `return` 
 
 **Where.** In the checker, because the rule needs the block structure that it already walks and the same "ends on every path" logic as `returns?`; the linker does not look at statements. `check-block` (`src/checker.rkt:1404`) and the statement loop of `check-block-body` (`:1207`, for blocks and lambdas) check each statement, then, before the next one, fail if the one just checked is a terminator. So errors before the terminator come first, and the unreachable statement itself is not checked.
 
-**Today.** The checker accepts code after a `return`, a `break` or an exhaustive `if`/`case`: `block-returns?` (`src/checker.rkt:191`) is true when any statement of the block returns, wherever it is. After this item a terminator can only be the last statement of its block, so `block-returns?` and `contains-return?` (`:153`) may look at the last statement only; that is a simplification, not a change in behavior.
+**Today.** The checker accepts code after a `return`, a `break` or an exhaustive `if`/`case`: `block-returns?` (`src/checker.rkt:191`) is true when any statement of the block returns, wherever it is. After this item a terminator can only be the last statement of its block, so `block-returns?` may look at the last statement only; that is a simplification, not a change in behavior. `contains-return?` (`:153`) stays a deep search: `missing-return-help` (`:168`) uses it to tell "no `return` anywhere" apart from "a `return` on some paths only", and that question is about returns nested anywhere in the body.
 
 **Help idea:** `this statement never runs, because the block ends at the return on line 5; remove it, or move it before the return`. For a `case` or `if`: `every branch of the case above ends with return, break or next`.
 
@@ -186,24 +191,26 @@ These are not planned. Each one would need its own decision against the principl
 
 ### Impact on existing code
 
-A scan of the repo on 2026-10-12 (a throwaway script on the real lexer and parser that applies the rules above; it does not replace running `make test` in each PR) found:
+A scan of the repo on 2026-10-12 found what the table shows. It was a throwaway script on the real lexer, parser, linker and checker: it applies the three rules to every node of the AST (interpolation parts included), and counts a hit only when the program passes today or when its present error would come after the new one (a test that expects an earlier error is not affected). It read the `.agc` files of `examples/`, `stdlib/`, `benchmarks/` and `tests/`, the `agentica` blocks of `site/content`, the examples of the programming skill, and the Agentica programs written inline in the Racket tests: string literals, and the `check-ok` programs of `tests/checker-test.rkt` that its `main-with` helper builds. It does not replace running `make test` in each PR.
 
 | Where | 26.1 imports | 26.2 variables | 26.3 unreachable |
 |---|---|---|---|
 | `examples/` (26 files), `stdlib/` | 0 | 0 | 0 |
 | `benchmarks/programs/` | 0 | 1 (`error(message)` in `string-library.agc`) | 0 |
-| `tests/fixtures/` (`.agc`) | 1 (`Pad` in `vm/linked.agc`) | 35 in 22 files | 1 (`vm/calls.agc`, a statement after `return`) |
+| `tests/fixtures/` (`.agc`) | 0 | 35 in 22 files | 1 (`vm/calls.agc`, a statement after `return`) |
 | `tests/bdd/handlers.agc` | 0 | 1 (`invalid = 1 / 0`, a handler that crashes on purpose) | 0 |
-| `site/content` blocks | 0 | 16 blocks on 7 pages (`library/network.md` 6, `process.md` 3, `files.md` 3, `io.md`, `range.md`, `task.md`, `tour/results-and-try.md`) | 0 |
+| `site/content` blocks | 0 | 17 blocks on 7 pages (`library/network.md` 7, `process.md` 3, `files.md` 3, `io.md`, `range.md`, `task.md`, `tour/results-and-try.md`) | 0 |
 | Programming skill examples | 0 | 0 | 0 |
-| Inline programs in Racket tests | 0 | about 36: 23 of the 33 `check-ok` programs in `tests/checker-test.rkt` that the scan could read, and 13 in `bytecode-test.rkt` (7), `bdd-integration.rkt` (2), `checker-test.rkt`, `examples-test.rkt`, `task-test.rkt` and `vm-diff-common.rkt` | 0 |
+| Inline programs in Racket tests, before 7i | 1 (`tests/modules-test.rkt:207`) | 36: 24 in `checker-test.rkt` (23 of the 33 `check-ok` programs the scan could read, and one more), 6 in `bytecode-test.rkt`, 2 in `bdd-integration.rkt`, 1 each in `modules-test.rkt` (`:208`), `examples-test.rkt`, `task-test.rkt` and `vm-diff-common.rkt` | 0 |
+
+The inline counts are for the tests as they are before 7i. 7i deletes the evaluator and the tests that only exercise it, so the implementing PRs, which come after 7i, will find the same number or fewer.
 
 What the hits are, and their fix:
 
-- **Variables.** Most are tasks spawned and never awaited (`t = Task.spawn(...)`), values computed to test a step limit or preemption (`x += 1` in `while true`, 5 hits that only the compound-assignment rule finds), unused `for` and block variables in fixtures, and, on the site, `Result` values of `TCP.send`, `Process.send`, `Process.close_stdin` and `Process.wait` assigned and never read. The fix is a `_` name, a bare call statement, or using the value. The `checker-test.rkt` programs mostly introduce a variable only to check its type (`x: Int = i`); they get `_x` names or a `puts`.
-- **The one unreachable statement** is the golden fixture `tests/fixtures/vm/calls.agc`, which checks that code after `return` does not run; the PR removes that line and the new checker test covers the case.
-- **The one unused import** is `pkg/text/pad.agc` in `tests/fixtures/vm/linked.agc`, which tests `pkg/` resolution; the PR uses a name from it.
+- **Variables.** Most are tasks spawned and never awaited (`t = Task.spawn(...)`), values computed to test a step limit or preemption (`x += 1` in `while true`, 5 hits that only the compound-assignment rule finds), unused `for` and block variables in fixtures, and, on the site, `Result` values of `TCP.send`, `Process.send`, `Process.close_stdin` and `Process.wait` assigned and never read. The fix is a `_` name, a bare call statement, or using the value. The `checker-test.rkt` programs mostly introduce a variable only to check its type (`x: Int = i`); they get `_x` names or a `puts`. In `tests/modules-test.rkt:208`, `funcs.agc` assigns `n = C.go()` and never reads it; its `main` is checked before the imported file's error that the test expects, so the PR uses `n`.
+- **The one unreachable statement** is the golden fixture `tests/fixtures/vm/calls.agc`, which checks that code after `return` does not run; the PR removes that line and the new checker test covers the case. (A program in `tests/parser-test.rkt` also has a statement after `return`, but parser tests never run the checker.)
+- **The one unused import** is in `tests/modules-test.rkt:207`: `types.agc` imports `bad.agc` as `B` and never uses it, and the test expects `CHECK-UNKNOWN-TYPE` from `bad.agc`. Under 26.1 the linker would stop first with `CHECK-UNUSED-IMPORT`. The PR gives `B` a use (for example a parameter of type `B.Pair`, once `Pair` is exported), so the test keeps checking that a checker error in an imported file is reported in that file. The other module tests with an unused alias fail earlier in the linker (missing file, bad path, duplicate or reserved alias, import cycle) and are not affected.
 - `tests/eval/tasks/t5-scope-return/start.agc` has an unused `last`, but it is broken on purpose (agents fix it) and fails earlier with `CHECK-MISSING-RETURN`; it needs no edit.
 - `{expect="..."}` site blocks that fail earlier with another checker code are not affected; `tour/results-and-try.md`'s `RUNTIME-UNWRAP-ERROR` block is, since a check error now comes before the run.
 
-So 26.2 is the large migration (about 30 program and test files, and 16 site blocks on 7 pages); 26.1 and 26.3 touch one fixture each. Each count goes in its PR description.
+So 26.2 is the large migration (about 30 program and test files, and 17 site blocks on 7 pages); 26.1 and 26.3 touch one test or fixture each. Each count goes in its PR description.
