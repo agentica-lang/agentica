@@ -1580,13 +1580,14 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   build the text of a whole value (interpolation, `to_s`, `inspect`,
   `puts` of a big list), and `EQ`, `NE` and `SAME` compare whole strings
   (`==` on big strings, String literal patterns in `case`; the checker
-  allows `==` only on scalars, strings and ranges). They leave a turn cost
+  allows `==` only on scalars, strings and ranges). `MAP_GET`, and `MAP`
+  for each entry, hash a String key whole (SipHash, `vm/map.c`) and
+  compare it with the keys they meet (`key_equal`). They leave a turn cost
   in the same per-task field, with the same units (one per 64 bytes
-  copied, built or compared), and it is applied after the instruction
-  through the same path (below). The other
-  opcodes do constant work, or work bounded by their operand count
-  (`LIST`, `MAP`, `STRUCT`, `CLOSURE`, at most 255 items), and charge
-  nothing.
+  copied, built, hashed or compared), and it is applied after the
+  instruction through the same path (below). The other opcodes do
+  constant work, or work bounded by their operand count (`LIST`,
+  `STRUCT`, `CLOSURE`, at most 255 items), and charge nothing.
 - **One counter for both budgets.** `STEP` counts down one "next stop"
   counter. It is set to `min(turn_left, steps_left)` when a turn starts and
   after each sync (below), and the value it was set to is kept. The fast
@@ -1620,11 +1621,12 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   stop from a real one and keep the steps spent somewhere else, and the
   task would yield only at the next `STEP`, not right after the builtin.
   So that the 7h latency test can show it fails without the rule, a test
-  environment variable, `AGENTICA_VM_NO_TURN_COST=1`, read once at start-up into the
-  runtime config, makes the apply path skip the charge. It changes only
-  when tasks switch, never output, step counts or diagnostics, so every
-  build honors it and the CI `test` job uses the normal `make vm` binary;
-  it is for tests only and not documented for users.
+  environment variable, `AGENTICA_VM_TEST_NO_TURN_COST=1`, read once at
+  start-up into the runtime config, makes the apply path skip the charge.
+  It changes only when tasks switch, never output, step counts or
+  diagnostics, so every build honors it and the latency test uses the
+  normal `make vm` binary. It is for tests only, not documented for users,
+  and may be removed after 7i.
   With N schedulers, `steps_left` in this bullet is the scheduler's batch
   (Quotas): the sync takes spent steps out of the batch, not the atomic
   counter, and a turn cost touches neither. The turn-cost path checks the

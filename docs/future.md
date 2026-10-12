@@ -198,7 +198,7 @@ Lightweight I/O tasks are implemented before networking in phase 5j2. Their norm
 | Places, `place-channel` | `racket/place` | Real multicore | One VM per place; messages serialized; heavy |
 | Futures | `racket/future` | Limited | Parallel only for a safe value subset; finicky performance; not proposed |
 
-The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). In the evaluator, add CPU parallelism only after measuring a concrete workload and reviewing shared state. The VM is designed for multicore from its first tasks PR (`docs/vm.md` §10.2.3).
+The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). In the evaluator, add CPU parallelism only after measuring a concrete workload and reviewing shared state. The VM is designed for multicore from its first tasks PR (`docs/vm.md` §10.2.3), but N>1 schedulers are gated: the roadmap builds them only if the server measurement asks for it (roadmap order step 11).
 
 ### Shape: builtin modules, no grammar change
 
