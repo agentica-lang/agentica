@@ -78,7 +78,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 
 ```sh
 git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
-make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; OpenSSL built once per mode, needs Perl)
+make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; OpenSSL built once per mode, needs Perl, a few minutes the first time)
 make vm-openssl                      # only build/vm/<mode>/openssl/libssl.a and libcrypto.a
 make -s vm-openssl-key               # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
@@ -87,10 +87,11 @@ make vm vm-test TRACE=0              # trace points compiled out (still type-che
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
-make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests
+make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
+make vm-latency                      # tests/vm-latency-test.rkt alone (see Gotchas, Tasks)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
 make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
-make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; CI checks it is committed)
+make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; use Racket CS 9.3, the CI version; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
 racket src/main.rkt --dump-ir prog.agc
@@ -100,12 +101,9 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 
 - CI runs `vm-sanitizers` (`make vm-lint`, ASan diff and bytecode tests, `make vm-fuzz`,
   `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
-  in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
-  bytecode, `src/version.rkt`, their tests and fixtures (`tests/vm-tcp-test.rkt`,
-  `tests/fixtures/tcp-peer.js`, `tests/vm-tls-test.rkt`, `tests/fixtures/tls-peer.js`,
-  `tests/fixtures/tls-peer.py` and `tests/fixtures/tls/` too; the job sets up Node for them), the Makefile,
-  `.gitmodules`, `.clang-tidy`, `ci.yml`). A new VM source or test file outside those paths must be added
-  there.
+  in the `changes` job of `.github/workflows/ci.yml`; the list and the other
+  jobs are in `references/ci.md`. A new VM source or test file outside those
+  paths must be added there.
 - `agentica file.agc` runs on the VM by default (Linux only for now,
   `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
   `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
@@ -144,6 +142,15 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
+- Golden tests (`docs/vm/README.md` §1, `docs/vm/12-testing-and-pr-plan.md`
+  §12.1): `tests/vm-diff-1-test.rkt` … `vm-diff-4-test.rkt` run each fixture
+  of `tests/fixtures/vm/` on the VM and compare exit code, stdout, program
+  stderr and diagnostic code with its `<name>.expected`, plus a
+  `--max-steps` sweep. Shared code is in `tests/vm-diff-common.rkt`; each
+  shard takes a fixed share of the fixtures so `raco test -j` runs them in
+  parallel. When behaviour changes on purpose, `make goldens` rewrites the
+  expected files from the VM; commit them, and the PR diff shows the change
+  for review.
 - The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
   file lock in `build/`, since they run in parallel), print `SKIP` locally
   when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
@@ -222,7 +229,9 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   target ends in `$(EXE)`; the diff test runs `dist/agentica-vm.exe` on
   Windows. The `platforms.yml` workflow, run by hand, runs `make vm vm-test`
   and the diff and bytecode tests on `macos-15` and `windows-2025`, not the
-  whole `make test`; run it before merging platform code.
+  whole `make test`; run it before merging platform code. macOS and
+  Windows are paused (`references/ci.md`); Linux code goes under
+  `#ifdef __linux__`.
 
 ## Add a trace point
 
@@ -734,7 +743,14 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   deep case lives in the VM-only test in `tests/vm-diff-common.rkt`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
 - Tasks: `make vm-latency` runs `tests/vm-latency-test.rkt` alone (kept
-  out of `make test` by `tests/info.rkt`); the `task-*` fixtures keep tasks
+  out of `make test`'s parallel batch by `tests/info.rkt`; CI runs it right
+  after `make test`). A sleeping task and a stdin reader must wake within
+  250 ms next to CPU, sort and concat tasks, and must not with
+  `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only switch that skips turn
+  costs, `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a
+  `FileHandle` in a loop must let `main` close it, and the run must end.
+  Every read from the VM has a 60-second timeout. The test skips when
+  `AGENTICA_VM` names another binary. The `task-*` fixtures keep tasks
   from running side by side where the step-limit span matters, since with
   several runnable tasks the span depends on the interleaving. Builtins get
   `vm->task->regs + base`; `Task.spawn` builds the child's frame with

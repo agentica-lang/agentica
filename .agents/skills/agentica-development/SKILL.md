@@ -1,6 +1,6 @@
 ---
 name: agentica-development
-description: "Develops the Agentica interpreter: the Racket pipeline (lexer, parser, checker, evaluator, libraries) and the C11 bytecode VM (lowering, bytecode, vm/ with the Boehm GC, loader safety, golden tests; the VM is the default backend). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, and the Racket and C gotchas of this repo. Use when working in the agentica repository on src/, vm/, tests/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
+description: "Develops the Agentica interpreter: the Racket pipeline (lexer, parser, checker, evaluator, libraries) and the C11 bytecode VM (lowering, bytecode, vm/ with the Boehm GC, loader safety, golden tests; the VM is the default backend). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, the Racket and C gotchas of this repo, and the VM build, CI, release, documentation site, benchmarks and copy-paste check. Use when working in the agentica repository on src/, vm/, tests/, site/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
 ---
 
 # Agentica development
@@ -12,15 +12,19 @@ Read the active phase in the roadmap before adding code. Implement only what tha
 ## Commands
 
 ```sh
-make test                                 # every stage test, in parallel
+make test                                 # builds the VM, then raco test -j $(nproc) tests/
+make test JOBS=8                          # set the number of workers
 make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
 racket src/main.rkt check examples/blocks.agc
 make vm vm-test                           # the C VM and its loader tests (references/vm.md)
-make dup-check                            # jscpd copy-paste check over src/*.rkt and vm/ C code
+make goldens                              # rewrite the VM golden files (references/vm.md)
+make vm-latency                           # task latency test, run alone (references/vm.md)
+make dup-check                            # jscpd copy-paste check over src/*.rkt and vm/ C code (references/ci.md)
+make site                                 # build the documentation site (references/site.md)
 ```
 
-Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the network tests against the compiled executable, and every example smoke run; it is the source of truth for that list. It also runs `make dup-check`: a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the network tests against the compiled executable, and every example smoke run; it is the source of truth for that list. It also runs `make dup-check` (`references/ci.md`): a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 
 ## Repository map
 
@@ -193,13 +197,15 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm/` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep black-box parity with the evaluator (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm/README.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`.
 
-Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners evaluator,exe,vm,python`) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart. It is outside `make test` and CI; record new numbers in `docs/vm-benchmarks.md`. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
+Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners evaluator,exe,vm,python`) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart. It is outside `make test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make bench`; record new numbers in `docs/vm-benchmarks.md`. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
+
+Agent evaluation (not part of `make test`): `python3 tests/eval/run.py --help`. Docker is the default; its image is built automatically when missing. Allow provider credentials with repeatable `--pass-env NAME`. Optional Firejail requires `--sandbox firejail --chroot-root PATH`. `--jobs N` runs in parallel.
 
 ## Releases
 
 - `src/version.rkt` is the single source of the version: `make version` prints it and `agentica --version` reports it. Keep it in sync with `CHANGELOG.md` and the Git tag.
 - `CHANGELOG.md` follows Keep a Changelog and Semantic Versioning. Add user-visible entries under `## [Unreleased]` as work lands, and move them into a dated version section when tagging.
-- Tag releases with the bare version (`0.1.0`, no `v` prefix). `.github/workflows/release.yml` validates the tag against `src/version.rkt`, builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`, `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share directory) and Chez Scheme's `NOTICE` (checked in at `licenses/racket/ChezScheme-NOTICE`, from Racket v9.3's source; update it when the Racket version changes), checks that the archive has them, and publishes a GitHub Release with generated notes.
+- Tag releases with the bare version (`0.1.0`, no `v` prefix). `.github/workflows/release.yml` validates the tag against `src/version.rkt`, builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`, `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share directory) and Chez Scheme's `NOTICE` (checked in at `licenses/racket/ChezScheme-NOTICE`, from Racket v9.3's source; update it when the Racket version changes), checks that the archive has them, and publishes a GitHub Release with generated notes. How it builds and checks `agentica-vm` is in `references/ci.md`.
 
 ## When to read a reference
 
@@ -207,4 +213,6 @@ Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S 
 |---|---|
 | `references/stages.md` | adding or renaming tokens, AST nodes or diagnostic codes; you need the token-kind table, the code list, the AST node list or a module's public API |
 | `references/runtime-notes.md` | changing the evaluator or a library area: Result and `try`, stdio, JSON, collections, modules, methods, interpolation, blocks, hints, enums, function values and BDD, tasks, TCP/TLS/HTTP, files, Void and processes |
-| `references/vm.md` | working on the bytecode VM: lowering, bytecode, `vm/` C code, Boehm GC, the loader, VM tests, fuzzing, or libuv/OpenSSL work |
+| `references/vm.md` | working on the bytecode VM: lowering, bytecode, `vm/` C code, the VM build and its submodules, Boehm GC, the loader, golden tests, the latency test, sanitizers, lint, fuzzing, or libuv/OpenSSL work |
+| `references/ci.md` | changing `.github/workflows/`, the Makefile, or adding VM files, test peers or fixtures: CI jobs, the `changes` path list, caches and warm jobs, manual workflows, macOS and Windows (paused), the release build, jscpd |
+| `references/site.md` | changing `site/` or a language rule or builtin shown on a site page: Hugo and Dart Sass, content layout, the site-examples test and its fence attributes, deploy |
