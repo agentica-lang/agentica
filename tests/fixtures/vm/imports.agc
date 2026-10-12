@@ -1,4 +1,4 @@
-import "lib/geometry.agc" as Geo
+import "lib/geometry" as Geo
 
 struct Point
   x: Int

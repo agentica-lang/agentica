@@ -1,4 +1,4 @@
-import "lib/callbacks.agc" as Cb
+import "lib/callbacks" as Cb
 
 struct Handler
   name: String

@@ -99,7 +99,7 @@ The standard library ships embedded in the executable—no separate download or
 `.venv` is needed. Its implementation is Agentica source, not native builtins:
 
 ```ruby
-import "std/queue.agc" as Queue
+import "std/queue" as Queue
 ```
 
 See [examples/queue.agc](examples/queue.agc) for the immutable String FIFO.
@@ -107,7 +107,7 @@ See [examples/queue.agc](examples/queue.agc) for the immutable String FIFO.
 External `pkg/` imports search `agc_libs/` beside the root program, absolute
 roots in `AGENTICA_PATH` (colon-separated on Unix, semicolon-separated on
 Windows), the user data directory, then Unix system data directories.
-For example, `import "pkg/acme/tools.agc" as Tools` looks for `acme/tools.agc`
+For example, `import "pkg/acme/tools" as Tools` looks for `acme/tools.agc`
 inside each root. The Unix user root defaults to
 `~/.local/share/agentica/lib/` and respects `XDG_DATA_HOME`; system roots are
 `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`.
@@ -153,7 +153,7 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/concurrency.agc`](examples/concurrency.agc): lightweight tasks with `Task.spawn` and `Task.await`.
 - [`examples/process-tool.agc`](examples/process-tool.agc): run another program (needs `--allow-run`).
 - [`examples/tcp_echo.agc`](examples/tcp_echo.agc), [`examples/http_get.agc`](examples/http_get.agc), [`examples/http_server.agc`](examples/http_server.agc): TCP and HTTP.
-- [`examples/queue.agc`](examples/queue.agc): the embedded `std/queue.agc` library.
+- [`examples/queue.agc`](examples/queue.agc): the embedded `std/queue` library.
 - [`examples/json-modules.agc`](examples/json-modules.agc): a program split across files (`examples/modules/json-tools.agc`).
 - [`examples/mcp/stdio.agc`](examples/mcp/stdio.agc): a minimal MCP stdio server.
 - [`examples/result.agc`](examples/result.agc): Result values, propagation, messages, and fallbacks.

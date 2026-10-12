@@ -31,7 +31,7 @@ end
 every name from that file.
 
 ```agentica
-import "shapes.agc" as Shapes
+import "shapes" as Shapes
 
 def main() -> Void
   s = Shapes.Square(side: 3)
@@ -43,11 +43,12 @@ end
 9
 ```
 
-Paths are relative to the importing file and end in `.agc`. Aliases start with
-an uppercase letter. Calling a private function is an error:
+Paths are relative to the importing file and leave out the `.agc` extension:
+`"shapes"` loads `shapes.agc`. Aliases start with an uppercase letter.
+Calling a private function is an error:
 
 ```agentica {expect="CHECK-IMPORT-NAME"}
-import "shapes.agc" as Shapes
+import "shapes" as Shapes
 
 def main() -> Void
   puts(Shapes.secret())
@@ -67,7 +68,7 @@ end
 ```
 
 ```agentica
-import "status.agc" as S
+import "status" as S
 
 def show(s: S.Status) -> String
   case s
@@ -91,10 +92,10 @@ importing a file never runs anything.
 ## The standard library
 
 Paths that start with `std/` load the standard library that ships with
-Agentica. `std/queue.agc` is a first-in, first-out queue of strings:
+Agentica. `std/queue` is a first-in, first-out queue of strings:
 
 ```agentica
-import "std/queue.agc" as Queue
+import "std/queue" as Queue
 
 def main() -> Void
   q = Queue.new()
@@ -118,7 +119,7 @@ See [Queue](/library/queue/) for every function.
 
 ## Other libraries
 
-Paths that start with `pkg/` load installed libraries. `import "pkg/acme/tools.agc"
+Paths that start with `pkg/` load installed libraries. `import "pkg/acme/tools"
 as Tools` looks for `acme/tools.agc` in `agc_libs/` next to the main program,
 then in each directory listed in `AGENTICA_PATH`, then in
 `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and

@@ -53,7 +53,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 
 ## Program shape
 
-- A file has top-level `def`, `struct`, `enum`, and `import` declarations. Functions, structs, and enums may use `export`. No executable statements at the top level.
+- A file has top-level `def`, `struct`, `enum`, and `import` declarations. Functions, structs, and enums may use `export`. No executable statements at the top level. Import paths have no extension: `import "models" as Models` loads `models.agc`.
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.

@@ -54,6 +54,20 @@
                     (or (member part '("" "." ".."))
                         (regexp-match? #rx":" part))))
           (bail 'CHECK-IMPORT-PATH "invalid library path" span)))
+      (define (module-file path alias span)
+        (define (module-name? text)
+          (define name (car (regexp-match #rx"[^/]*$" text)))
+          (not (or (string=? name "") (regexp-match? #rx"[.]" name))))
+        (define stem (and (string-suffix? path ".agc")
+                          (substring path 0 (- (string-length path) 4))))
+        (cond
+          [(module-name? path) (string-append path ".agc")]
+          [(and stem (module-name? stem))
+           (bail 'CHECK-IMPORT-PATH "import paths name a module without the .agc extension" span
+                 #:help (format "write import \"~a\" as ~a" stem alias))]
+          [else
+           (bail 'CHECK-IMPORT-PATH "import paths name a module without an extension" span
+                 #:help (format "write import \"models\" as ~a to load models.agc" alias))]))
       (define (resolve-import key path span)
         (cond
           [(string-prefix? path "std/")
@@ -128,11 +142,10 @@
             (when (or (hash-has-key? aliases alias) (hash-has-key? names alias)
                       (member alias reserved-type-names))
               (bail 'CHECK-REDEFINED-NAME "duplicate or reserved import alias" span))
-            (unless (string-suffix? path ".agc")
-              (bail 'CHECK-IMPORT-PATH "import paths must end in .agc" span))
+            (define file (module-file path alias span))
             (define target
               (with-handlers ([exn:fail? (lambda (_) (bail 'CHECK-IMPORT-IO "cannot resolve import" span))])
-                (resolve-import key path span)))
+                (resolve-import key file span)))
             (hash-set! aliases alias target)
             (cond
               [(member target active) (bail 'CHECK-IMPORT-CYCLE "import cycle" span)]

@@ -330,7 +330,7 @@ and docs:
   golden fixtures of a client and a server in one program,
   `close_server` during a handler, and every hostile request of 10.6
   from a Python raw-socket peer on port 0.
-- **20d** `std/http`, the switch to `import "std/http.agc" as HTTP`, the
+- **20d** `std/http`, the switch to `import "std/http" as HTTP`, the
   removal of the `HTTP` fallback and of the evaluator's HTTP code, the
   migration of every HTTP program and test, and a performance sanity
   check against the evaluator's HTTP (`benchmarks/http.py`, not a gate).

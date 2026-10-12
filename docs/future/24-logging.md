@@ -25,7 +25,7 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
 ### 24.2 `std/log`
 
 ```agentica
-import "std/log.agc" as Log
+import "std/log" as Log
 
 def expensive_dump() -> String
   return "..."
