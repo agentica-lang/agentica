@@ -2156,9 +2156,9 @@ written `size > limit - total`. A hermetic test sends over-long values.
 
 ### 10.6 HTTP parsing
 
-Parity with the evaluator is black-box (1): the exit code, the stdout of
-finished programs, the diagnostic code, and the HTTP status or `Result`
-error kind must match; message text, spans, step counts and library error
+Parity with the evaluator is black-box (1): the exit code, the stdout and
+program stderr of every run except one stopped by `--max-steps`, the
+diagnostic code, and the HTTP status or `Result` error kind must match; message text, spans, step counts and library error
 strings may differ. For HTTP this means:
 
 - Well-formed messages: the VM and the evaluator agree on the status, the
@@ -2474,10 +2474,15 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   closure called through a function value, and the counting builtins).
   Each must stop with exit 1 and `RUNTIME-STEP-LIMIT` on both backends at
   every tested limit, their stdouts and program stderrs must be prefixes
-  of one another, and neither may print what follows the loop. Every VM
-  run in the sweep and the runaway test has a 60-second timeout, so a VM
-  that ignores the limit fails with the fixture and limit named instead
-  of hanging. The inputs are
+  of one another, and neither may print what follows the loop. On Linux every
+  VM run in the sweep and the runaway test has a 60-second timeout
+  (`timeout --foreground -k 5 60` in the batch script, so the VM stays in
+  the batch's process group; `#:timeout` in `run-process`), so a VM that
+  ignores the limit fails with the fixture and limit named instead of
+  hanging. After the first run in a batch that times out (status 124 or
+  137) the script skips the rest and records them as 124 with empty
+  output, so a hanging VM costs one timeout per fixture, not one per
+  limit. The inputs are
   `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. `Random` fixtures print only what both backends share, since
   seeded sequences differ by design (7.4).

@@ -111,9 +111,10 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   too, and 2T + 100 (T the evaluator's step count) must finish
   (`check-sweep`). The sweep cannot see an ignored limit: add a runaway
   program to `tests/fixtures/vm/step-limited/` for each new loop or call
-  construct (it prints nothing after the loop). Sweep and runaway VM runs
-  time out after 60 seconds (`timeout` in the batch script, `#:timeout` in
-  `run-process`). Fixtures are compiled in-process
+  construct (it prints nothing after the loop). On Linux, sweep and runaway
+  VM runs time out after 60 seconds (`timeout --foreground` in the batch
+  script, `#:timeout` in `run-process`); after the first timeout (124 or
+  137) the batch skips its remaining runs and records them as 124. Fixtures are compiled in-process
   (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
   The VM runs of one fixture go through one `/bin/sh` script that writes each
   run's stdout, stderr and exit status to files (stdin from a file, arguments

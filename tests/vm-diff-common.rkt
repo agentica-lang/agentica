@@ -24,7 +24,7 @@
 (define-runtime-path tests-directory ".")
 (define make-lock-wait 900)
 (define run-timeout 60)
-(define timeout-program (find-executable-path "timeout"))
+(define timeout-program (and linux? (find-executable-path "timeout")))
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
 (define linux? (eq? (system-type 'os*) 'linux))
 (define vm-file
@@ -209,17 +209,22 @@
       (define script (build-path directory "run.sh"))
       (call-with-output-file script
         (lambda (port)
-          (write-string "exec 2>/dev/null\n" port)
+          (write-string "exec 2>/dev/null\nhung=0\n" port)
           (for ([options (in-list option-lists)] [tmp (in-list tmps)] [index (in-naturals)])
             (define base (path->string (build-path directory (number->string index))))
+            (define out-file (shell-quote (string-append base ".out")))
+            (define err-file (shell-quote (string-append base ".err")))
             (write-string
-             (format "~a~a ~a ~a < ~a > ~a 2> ~a\necho $? > ~a\n"
+             (format (string-append "if [ $hung = 0 ]; then\n  ~a~a ~a ~a < ~a > ~a 2> ~a\n  status=$?\n"
+                                    "else\n  : > ~a\n  : > ~a\n  status=124\nfi\n"
+                                    "echo $status > ~a\ncase $status in 124|137) hung=1 ;; esac\n")
                      (if timeout-program
-                         (format "~a -k 5 ~a " (shell-quote (path->string timeout-program)) run-timeout)
+                         (format "~a --foreground -k 5 ~a "
+                                 (shell-quote (path->string timeout-program)) run-timeout)
                          "")
                      (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) (tail tmp)
-                     (shell-quote (path->string input)) (shell-quote (string-append base ".out"))
-                     (shell-quote (string-append base ".err")) (shell-quote (string-append base ".status")))
+                     (shell-quote (path->string input)) out-file err-file out-file err-file
+                     (shell-quote (string-append base ".status")))
              port))))
       (define-values (started stdout-port stdin-port stderr-port)
         (parameterize ([subprocess-group-enabled #t])
@@ -308,7 +313,7 @@
 
 (define (check-limited on-vm full name limit)
   (define seen (outcome on-vm))
-  (define message (format "~a --max-steps ~a (exit 124 or timeout: the run timed out): ~s" name limit seen))
+  (define message (format "~a --max-steps ~a (exit 124/137 or timeout: the run timed out): ~s" name limit seen))
   (unless (equal? seen full)
     (check-equal? (first seen) 1 message)
     (check-equal? (fourth seen) "RUNTIME-STEP-LIMIT" message)
