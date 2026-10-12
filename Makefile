@@ -3,7 +3,7 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd bench version vm vm-test vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build test exe clean test-bdd bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -25,6 +25,10 @@ exe: build
 # dist/agentica is timed only when present; rebuild it with make exe first, or pass --runners evaluator,vm,python
 bench: build vm
 	python3 benchmarks/run.py $(BENCH_ARGS)
+
+# Task wake latency next to busy tasks (docs/vm.md 10.2.1), alone so it has the CPU to itself
+vm-latency: build vm
+	$(RACO) test tests/vm-latency-test.rkt
 
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
