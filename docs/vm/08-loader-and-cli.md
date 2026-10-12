@@ -199,7 +199,9 @@ and cost one predictable branch each.
   evaluator; only options before the file are read, so after the file it is
   a program argument. `compile` and `--dump-ir` never fall back.
   `agentica test` runs the step handlers and the programs under test on the
-  evaluator (the BDD driver passes `--legacy-eval`) until BDD runs on the VM.
+  evaluator (the BDD driver passes `--legacy-eval`) until BDD runs on the VM,
+  written in Agentica (roadmap phase 21, `docs/future/31-bdd-in-agentica.md`
+  §31).
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is
@@ -224,7 +226,10 @@ and cost one predictable branch each.
 - The hidden flag deletes its private input after loading, so it must not
   be reused for anything else.
 - `check`, `help` and `test` stay Racket commands; when BDD runs on the VM
-  (7h), its handlers and the programs under test move there. `make vm`
+  (phase 21, §31 of `docs/future/`), `test` only compiles the step program
+  and an embedded runner written in Agentica and runs the runner on the VM,
+  which starts a child VM per scenario; its handlers and the programs under
+  test move there. `make vm`
   builds `dist/agentica-vm` (`.exe` on Windows), and `make exe` and
   `make test` build it first. The release workflow builds it with `zig cc`
   against glibc 2.28 (pinned zig, checked by sha256), checks that floor with

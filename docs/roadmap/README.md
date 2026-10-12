@@ -18,7 +18,8 @@ The Racket evaluator is frozen. It runs only what the VM lacks: programs that
 use `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
 notice) and `agentica test`. The next work is the catch-up that removes those
 fallbacks: VM tracing (14a, done), TCP (done), then TLS, then HTTP, then BDD
-on the VM (7h). Then 7i deletes the evaluator. New features (phase 17's
+in Agentica (phase 21, 7h; `docs/future/31-bdd-in-agentica.md` §31). Then 7i
+deletes the evaluator. New features (phase 17's
 `Task.map` and channels first, then the streaming items of phase 20 (§30),
 then `TlsContext` (phase 19, §29), then default parameter values (15a), binary
 data, UDP, logging, crypto, then the strict diagnostics of phase 16 (no
@@ -64,7 +65,7 @@ order.
 | 5 | **Mostly complete:** Bytecode VM core in C with the Boehm GC (`docs/vm/12-testing-and-pr-plan.md` §12.2 items 1 to 8), the 7g benchmark script, 7h part 1 (event loop and files) and ranges (8a); small items stay open in 7c, 7e (loader validation for opcodes as they land) and 7f | Checked programs run on the VM with the evaluator's exit code, stdout, program stderr and diagnostic codes, now recorded as golden outputs |
 | 6 | **Complete:** 7h tasks with one scheduler (N=1) on the structures split for N (`docs/vm/10-io-multicore.md` §10.2.3), with the fairness rule of §10.2.1 (long builtins charge the turn, never `--max-steps`) and the latency test of the 7h tasks item | Concurrent programs on the VM; timers and I/O stay responsive while other tasks compute |
 | 7 | **Complete:** the VM is the default backend (7i, first item): `agentica file.agc` runs on the VM; programs that use `TCP`, `TLS`, `HTTP` or `BDD`, and `agentica test`, fall back to the evaluator; the differential tests became golden tests; the release ships `agentica-vm` | One backend for almost every program; CI runs each test once |
-| 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4, done), then TCP (done), then TLS, then HTTP, then BDD on the VM (7h); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
+| 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4, done), then TCP (done), then TLS, then HTTP, then BDD in Agentica (phase 21, 7h, `docs/future/31-bdd-in-agentica.md` §31: `std/bdd` and a runner in Agentica, a child VM per scenario); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
 | 7.2 | 7i: delete the evaluator and its runtime modules; the Racket front end (lexer, parser, checker, lowering, bytecode) stays | One backend |
 | 7.3 | New features, VM-only, first: iteration and concurrent collections (phase 17, `docs/future/27-iteration-and-concurrency.md` §27): `Task.map` (17a) with bounded concurrency, a per-item timeout and results in input order, then `Channel[T]` (17b), bounded with required timeouts; C builtins, so they need neither 8d nor the prelude; 17a adds the checker rule for `try` in a block whose result is `Result[T]` (§25.9), which 15i reuses; they land before phase 16, whose PRs migrate their programs; `Task.await` with a timeout (17c) is prelude code and comes at step 8.2; lazy streams stay to evaluate later (§27.4) | Programs run I/O for each item of a list N at a time, and build producer and consumer pipelines, with one form for each job; CPU speed-ups follow only if the multicore schedulers land (step 11) |
 | 7.4 | New features, VM-only (cont.): the streaming items of phase 20 (§30, the hybrid HTTP plan), built on the channels of 17b; then `TlsContext` (phase 19, §29) | Programs stream HTTP bodies through channels and set up TLS with a `TlsContext` |
@@ -170,6 +171,7 @@ This file holds what matters now: the order above and the general rules. Each op
 | [`16-strict-diagnostics.md`](16-strict-diagnostics.md) | Phase 16: strict diagnostics (no warnings) |
 | [`17-iteration-and-concurrency.md`](17-iteration-and-concurrency.md) | Phase 17: iteration and concurrent collections (`Task.map`, channels, `Task.await` with a timeout) |
 | [`18-vm-metrics.md`](18-vm-metrics.md) | Phase 18: VM metrics (Prometheus) |
+| [`21-bdd-in-agentica.md`](21-bdd-in-agentica.md) | Phase 21: BDD in Agentica (`std/bdd`, a runner and a child VM per scenario; catch-up item 7h) |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
 | [`later-extensions.md`](later-extensions.md) | Later extensions and open decisions |

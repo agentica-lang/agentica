@@ -11,8 +11,9 @@
 - Racket threads are preemptive, so the scheduler also switches tasks that do
   not block, by reductions (10.2.1). Cross-task output order is not compared.
 - Builtins that take a function (`Task.spawn`, `HTTP.listen` and
-  `HTTP.listen_tls` handlers, `HTTP.request_stream`'s producer, `BDD.step`)
-  run it as a new VM task; the ones that need its result await it.
+  `HTTP.listen_tls` handlers, `HTTP.request_stream`'s producer)
+  run it as a new VM task (`BDD.step` is not among them: BDD is written
+  in Agentica, `docs/future/31-bdd-in-agentica.md` §31); the ones that need its result await it.
 - Stdin may be a TTY, pipe or file: `uv_guess_handle` picks the reader, and a
   file (`UV_FILE`) uses a `uv_fs_read` path. Stdout and stderr stay on
   blocking stdio.
