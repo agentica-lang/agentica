@@ -1,6 +1,6 @@
 # Roadmap: completed phases
 
-Phases 1 to 5h and the completed foundations for general programming and MCP. They are kept for their history, decisions and checklists. A few small items stay open here: the rest of the 5d3 agent API (`symbols`, `show`, `refs`) and the Sonnet round of 6a. The current order is in [`README.md`](README.md).
+Phases 1 to 5h and the completed foundations for general programming and MCP. They are kept for their history, decisions and checklists. A few small items stay open here: the rest of 5d3 (the agent API commands `symbols`, `show`, `refs`, their tests, and the `--ai` measurement) and the Sonnet round of 6a. The current order is in [`README.md`](README.md).
 
 ## Phase 1: Source handling and lexer
 
@@ -521,7 +521,7 @@ The spec and the implementation must agree, because an agent that reads both lea
 - [x] Separate suffix recognition from call syntax: `String.contains? ("a", "a")` and whitespace in declarations work; `a!=b` remains `a != b`. Regression reproduced before the fix. Function values still wait for 5j.
 - [x] Align the newline contract with emission: one NL per LF/CRLF outside delimiters, including blank/comment lines. Kept scanner/parser acceptance unchanged and tested the exact token sequence.
 - [x] Add CHECK-EMPTY-MAP-TYPE for an untyped empty map; lists keep CHECK-EMPTY-LIST-TYPE. Regression reproduced before the fix.
-- [x] Clean `grammar.md`: removed "no implementation yet", the native runtime notes, and the old decisions; planned syntax moved to `docs/future/`; the docs were renamed to `grammar.md`, `roadmap.md`, and `future.md`.
+- [x] Clean `grammar.md`: removed "no implementation yet", the native runtime notes, and the old decisions; planned syntax moved to `future.md`; the docs were renamed to `grammar.md`, `roadmap.md`, and `future.md`.
 - [x] Close IO.gets -> Result[String] and IO.gets! -> String with 5e. Migrated all existing String-consuming example/evaluation callers, preserving intentional starter bugs.
 - [x] Add optional --max-steps N / RUNTIME-STEP-LIMIT, counting expression/statement entries including repeated loop conditions. Empty infinite loops are bounded and counts reset per evaluation. No default limit or blocking-I/O timeout; existing evaluation subprocess timeouts remain.
 - [x] Document O(n) list indexing and prefer for traversal; no list representation change.
