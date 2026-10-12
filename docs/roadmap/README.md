@@ -105,6 +105,11 @@ foundations below.
   peers, not against the evaluator. A catch-up PR (TCP, TLS, HTTP, BDD on the
   VM) removes the fallback for its module.
 - New features are VM-only and come after 7i. They have no Racket twin.
+  One exception, decided by the user on 2026-10-12: the HTTP catch-up
+  (phase 20, 20a to 20d) changes the HTTP API before 7i (whole messages,
+  `std/http` behind an import, the std-only `HttpWire` builtins) instead of
+  porting today's API, and the driver refuses, with `LOWER-VM-ONLY`, any
+  program that needs those VM-only builtins on an evaluator path.
 - The evaluator is frozen: it gets no new behaviour, only the fixes that keep
   the fallback running until 7i deletes it.
 
@@ -147,11 +152,17 @@ the programming reference contain the current signatures.
   that must be called as a method on a builtin type (`xs.find do ... end`),
   cannot be a `std/` module; it goes in the compiler prelude
   (`stdlib/prelude/*.agc`, `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica.
-  The prelude has the only guarded exceptions to "no internal helper
+  The prelude has guarded exceptions to "no internal helper
   builtins": `__fail_arg` and `__float_fixed` (§25.6, §25.11), and
   `__task_settled?` and `__task_wait`
   (`docs/future/27-iteration-and-concurrency.md` §27.3), which the loader
   accepts only in prelude functions.
+- One builtin module is std-only: `HttpWire` (phase 20,
+  `docs/future/30-hybrid-http.md` §30.5), the framing layer under
+  `std/http`. A public raw layer next to `std/http` would be a second way
+  to do HTTP, so the linker lets only modules embedded from `stdlib/`
+  call it (`std-only-modules` in `src/builtins.rkt`), and user code gets
+  `CHECK-UNKNOWN-NAME` with a help that shows the `std/http` import.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 

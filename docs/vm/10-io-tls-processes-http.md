@@ -526,7 +526,11 @@ Planned in `docs/future/30-hybrid-http.md` §30 and roadmap phase 20. HTTP is
 split between a small C builtin module, `HttpWire`, and the Agentica module
 `std/http.agc`, which programs import as `HTTP`.
 
-- **C (`HttpWire`)** keeps what is byte-level, security-critical or shared
+- **C (`HttpWire`)**, VM-only and std-only: the linker lets only modules
+  embedded from `stdlib/` call it, and gives user code
+  `CHECK-UNKNOWN-NAME` with a help that shows the `std/http` import
+  (`src/builtins.rkt` lists it in `std-only-modules` and
+  `vm-only-modules`; §30.5). It keeps what is byte-level, security-critical or shared
   across tasks: the head parser of 10.6 (`vm/http_parse.h`,
   `vm/http_pico.c`), the body decoder (`vm/http_body.c`) filling one
   `malloc`'d buffer per body, the UTF-8 check, the error answers before
@@ -537,7 +541,8 @@ split between a small C builtin module, `HttpWire`, and the Agentica module
   accept with the `max_connections` slots, group tasks that own their
   sockets, and `close_server`, which cancels the group's tasks through
   `agc_task_cancel` (§30.6; the core of the cancellation planned in
-  `docs/future/27-iteration-and-concurrency.md` §27.1, landed early).
+  `docs/future/27-iteration-and-concurrency.md` §27.1, landed early in
+  20b, with pool waiters among its states).
 - **Agentica (`std/http`)** keeps the rest: options and their checks, URL
   parsing, request building, the accept loop, the per-connection loop,
   keep-alive, handler dispatch, the 500 answers for a handler `error` or an
