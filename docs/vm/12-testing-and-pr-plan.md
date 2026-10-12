@@ -338,7 +338,24 @@ and docs:
   hostile list of 10.6 at the adapter; golden fixtures fetch from a
   server written over `TCP` in the same program; `tests/vm-http-test.rkt`
   runs Python `http.server`, an HTTPS server made with Python's `ssl`, and
-  the client-side hostile responses from a raw peer.
+  the client-side hostile responses from a raw peer. Done: the goldens are
+  `http-client` (GET, a `DELETE` with a header, POST, keep-alive reuse
+  shown by the accepts, `Connection: close`, chunked and close-delimited
+  bodies, a call after `close_client`) and `http-errors` (option checks,
+  bad URLs and headers, bodies over the limit both ways, a non-UTF-8
+  body); their step counts are about 2,800 and 4,100 because the URL
+  parser is Agentica, so the sweep samples them (each takes about 2 s).
+  `tests/vm-http-test.rkt` starts one peer, `tests/fixtures/http-peer.py`
+  (a `ThreadingHTTPServer`, the same over `ssl` with
+  `tests/fixtures/tls/`, and a raw socket server), and runs three
+  programs: keep-alive, chunked, close-delimited, the timeout,
+  `max_connections` (one connection shared by three tasks, three opened
+  at once behind a barrier) and `close_client` in flight; HTTPS with
+  `ca_file`, a wrong trust store and a missing file; a 413 answered before
+  a 4 MiB upload ends, and the client-side hostile list. The refusal is
+  tested in `tests/vm-diff-common.rkt` (the fallback and `--legacy-eval`)
+  and `tests/bdd-test.rkt` (a step file); the guard in
+  `tests/modules-test.rkt`.
 - **20b** the core of task cancellation (`agc_task_cancel`, parent and
   children links, pool waiters), with `vm/tests/task_cancel_test.c`.
 - **20c** the server: `HttpWire.read_request`, `write_response` and the

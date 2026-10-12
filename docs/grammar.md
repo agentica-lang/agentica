@@ -237,6 +237,51 @@ The implementation uses Lists: push, pop, peek, size and empty? are O(n)
 with the current host list operations; new is O(1). No constant-time FIFO
 performance is promised.
 
+#### HTTP client (`std/http`)
+
+Status: the builtin `HTTP` module (below, in "TCP, TLS and HTTP/1.1") stays
+the way to write HTTP programs until the switch of roadmap 20d. `std/http`
+holds the client of the library that replaces it. It runs only on the VM,
+and until 20d it is imported under another alias, such as `Web`, because
+`HTTP` is still a reserved builtin name.
+
+```text
+Web.client_options() -> HttpClientOptions
+Web.client(options: HttpClientOptions) -> Result[HttpClient]
+Web.close_client(client: HttpClient) -> Void
+Web.get(client: HttpClient, url: String) -> Result[HttpResponse]
+Web.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+Web.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+Web.header_values(headers: List[Header], name: String) -> List[String]
+```
+
+`HttpResponse(status: Int, headers: List[Header], body: String)` is a builtin
+record. Every call is whole: it returns after the whole body was read, and
+the body must be valid UTF-8. `client_options()` gives a 30 s timeout, a 30 s
+idle timeout, 4 connections per origin, a 1 MiB body limit and system CA
+trust; options must be positive, `max_connections` at most 65536 and
+`max_body_bytes` at most 64 MiB. One `timeout_ms` covers the whole call:
+the wait for a pooled connection, DNS, connect, the TLS handshake, the
+request and the whole response. The client keeps idle keep-alive connections
+per scheme, host and port, and calls wait in FIFO order for one of the
+`max_connections` slots. `close_client` closes them; a call in flight then
+fails with "http: client is closed".
+
+URLs are `http://` or `https://` with a host, an optional port (1..65535)
+and an optional path and query; the fragment is dropped, user info is
+rejected and IPv6 hosts go in brackets. The client adds `Host` and, when
+there is a body or the method is `POST`, `PUT` or `PATCH`, `Content-Length`;
+a request that sets `Host`, `Content-Length`, `Transfer-Encoding` or
+`Connection` itself is an error. Response header names are lowercase. 4xx
+and 5xx are normal responses. Errors are Results whose text starts with
+`http: ` (or `network: ` for connection errors). `std/http` calls the
+internal module `HttpWire`, which no other module can name
+(`CHECK-UNKNOWN-NAME`). A program that reaches `HttpWire` cannot fall back
+to the legacy evaluator: when the program also needs the evaluator (it uses
+something the VM does not run yet, such as `HTTP` or `BDD`, it runs under `--legacy-eval`, or it is a step file of
+`agentica test`) it stops with `LOWER-UNSUPPORTED` at the first `HttpWire`
+call, exit 1, before anything runs.
+
 ### Statements and blocks
 
 ```ebnf
@@ -804,9 +849,9 @@ BDD registration and step handlers support tasks but must finish them before ret
 ### TCP, TLS and HTTP/1.1
 
 Networking uses the existing expression syntax and lightweight Racket tasks.
-`TCP`, `TLS`, `HTTP`, `Socket`, `Listener`, `HttpClient`, `HttpServer`,
-`HttpBody`, `HttpWriter`, `Header`, `Request`, `Response`,
-`HttpClientOptions` and `HttpServerOptions` are reserved. Handles are opaque:
+`TCP`, `TLS`, `HTTP`, `HttpWire`, `Socket`, `Listener`, `HttpClient`,
+`HttpServer`, `HttpBody`, `HttpWriter`, `Header`, `Request`, `Response`,
+`HttpResponse`, `HttpClientOptions` and `HttpServerOptions` are reserved. Handles are opaque:
 no constructor, equality, fields or JSON encoding; inspect prints their type
 in angle brackets. Handles belong to their evaluation and close when it ends.
 Network access needs no CLI permission flag.
@@ -1069,7 +1114,7 @@ unknown function "totl"
 
 `agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `HTTP` or `BDD`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
 
-The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
+The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running); the VM compiler stages use `LOWER-` and `BYTECODE-`. `LOWER-UNSUPPORTED` also means "needs the VM": a program that calls a VM-only builtin (such as `std/http`) but must run on the legacy evaluator stops with it at that call. Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
 Names and forms from other languages get a `help` that names the Agentica form. A method hint is given only when the suggested method exists for the receiver's type:
 
@@ -1098,6 +1143,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `Result.Some(x)` and other unknown Result variants | `Result.Ok(x)` / `ok(x)`, `Result.Err(m)` / `error(m)` |
 | `Color.Red` with no `Color` enum or import | `enum Color`, or `import "path" as Color` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
+| `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as Web`, then `Web.get`, `Web.post` or `Web.request` |
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
 
