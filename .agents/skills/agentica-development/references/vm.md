@@ -383,6 +383,21 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   path, and `readelf -d` shows no libssl/libcrypto `NEEDED`. Only 3.0
   symbols are called directly; newer features are found at run time.
   `--version` prints the OpenSSL version in use (`docs/vm.md` 10.0, 10.3).
+- **HTTP (7h)**: ports `src/http-wire.rkt`. picohttpparser (submodule
+  `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the baseline
+  without `-msse4.2`) parses only start lines and headers, behind
+  `vm/http_parse.h` (our head struct with byte slices,
+  `agc_http_parse_request_head`/`agc_http_parse_response_head` returning
+  OK with bytes consumed, INCOMPLETE or ERROR with our error enum; on
+  INCOMPLETE call again with the grown buffer and the previous length). Only
+  `vm/http_pico.c` includes `picohttpparser.h`. Size limits are checked
+  before the parser; failures and inputs pico accepts but `http-wire.rkt`
+  rejects are classified by our own checks, so messages match the
+  evaluator. The body goes through our incremental decoder
+  `vm/http_body.c` (`feed` returns bytes consumed, body slices, and
+  NEED_MORE, DONE or ERROR; no `phr_decode_chunked`), so bodies stream and
+  are never buffered whole. Smuggling, `Host`, interim responses and limits
+  live above the adapter. Tests target the adapter (`docs/vm.md` 10.6).
 - **Processes (7h)**: the VM resolves the executable itself; on Windows only
   `.exe`/`.com`, case-insensitive; never verbatim arguments; all three stdio
   piped.

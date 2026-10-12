@@ -1470,6 +1470,7 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, its `LICENSE` stays in the submodule), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
+| picohttpparser | 7h (HTTP) | Vendored: git submodule `vm/third_party/picohttpparser` from `https://github.com/h2o/picohttpparser` (dual MIT or Perl license; we take MIT, the text is in `picohttpparser.h`), pinned to tag v1.4 (commit `516cdd3e00b3`). Only the start line and headers (`phr_parse_request`, `phr_parse_response`), behind our adapter (10.6); `phr_decode_chunked` is not used, since it knows no limits. `make vm` compiles `picohttpparser.c` per build mode into `$(VM_BUILD)/picohttpparser.o`, like yyjson, at the baseline (no `-msse4.2`; its SSE4.2 path is a SIMD candidate, `future.md` §19). Everything else in HTTP is our own C. |
 | OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `libssl.a` and `libcrypto.a` from that prefix by full path, searching only that prefix's `pkg-config` files, and fails rather than fall back to the system's shared libraries. Not vendored: no submodule. The one exception to the license rule below. |
 
 License rule: vendored or statically linked third-party code must be MIT,
@@ -2069,6 +2070,55 @@ HTTP numbers: `Content-Length` and chunk sizes accumulate with saturation:
 parsing stops once a value exceeds the limit (413), and every comparison is
 written `size > limit - total`. A hermetic test sends over-long values.
 
+### 10.6 HTTP parsing
+
+The VM's HTTP code ports the rules of `src/http-wire.rkt` to C. Only the
+start line and headers go through picohttpparser (10), and only behind our
+own small adapter, so the parser can be swapped later (for example for
+llhttp), the same way libuv stays inside the I/O layer.
+
+- `vm/http_parse.h` holds our types only: a parsed head struct (method,
+  target, version, status, reason, and the headers with their count, all
+  as byte slices into the input buffer) and
+  `agc_http_parse_request_head(buf, len, limits, out)` and
+  `agc_http_parse_response_head(buf, len, limits, out)`. They return OK
+  with the bytes consumed, INCOMPLETE, or ERROR with our own error enum,
+  which maps to the evaluator's messages.
+- The head parse is incremental. On INCOMPLETE the caller reads more and
+  calls again with the grown buffer, passing the previous length so the
+  parser can skip what it already scanned (picohttpparser's `last_len`).
+  The head is bounded by the 64 KiB block limit (10.5), so buffering it is
+  fine.
+- Only `vm/http_pico.c` includes `picohttpparser.h`. No picohttpparser type
+  or return code leaks out of it.
+- picohttpparser returns only -1 on a bad message, so the adapter
+  classifies failures with our own checks, and the messages match the
+  evaluator: "invalid request line", "invalid request target", "invalid
+  HTTP header", "too many HTTP headers" (431). The line and block size
+  limits (10.5) are checked before the parser is called. Where
+  picohttpparser accepts input that `http-wire.rkt` rejects (header name
+  and value characters, obs-fold, and so on), the adapter checks it again
+  with `http-wire.rkt`'s rules, so both backends behave the same.
+- The body is never buffered whole by the parsing layer. Our own body
+  decoder, `vm/http_body.c` (no third-party code), is an incremental state
+  machine. It is set up with the framing (`Content-Length` n, chunked, or
+  until close for responses) and the `max_body_bytes` limit; then
+  `feed(buf, len)` returns the bytes consumed, zero or more body slices
+  pointing into the input, and NEED_MORE, DONE or ERROR (413, invalid chunk
+  size, invalid chunk terminator, ...). Chunk sizes accumulate with
+  saturation. `HttpBody`, `HTTP.request_stream` and `HttpWriter` read and
+  write through it chunk by chunk, so a large upload or download never sits
+  whole in memory. The encoder that writes chunked output is ours too.
+  Swapping the head parser leaves the body decoder unchanged.
+- Above the adapter, in our code: the body decoder above, the request
+  smuggling rejections, the `Host` rules, interim responses, every limit in
+  10.5, and the evaluator's exact error messages.
+- Tests target the adapter interface, so a replacement parser must pass the
+  same tests: a C unit test in `vm/tests/`, and fixed, deterministic hostile
+  cases run on both backends (`Content-Length` with `Transfer-Encoding`,
+  duplicate `Content-Length`, huge chunk sizes, bare LF, over-long lines
+  and blocks, too many headers).
+
 ## 11. Build, CI and supply chain
 
 - `make vm`: `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`, hardening flags
@@ -2084,6 +2134,8 @@ written `size > limit - total`. A hermetic test sends over-long values.
   The two defines are what bdwgc's configure and CMake builds set.
   yyjson's `src/yyjson.c` is compiled per build mode into
   `$(VM_BUILD)/yyjson.o` with only its reader enabled (10).
+  picohttpparser (7h) is compiled the same way into
+  `$(VM_BUILD)/picohttpparser.o`, without `-msse4.2` (10, 10.6).
   `NO_EXECUTE_PERMISSION` maps the heap without execute permission: macOS on
   arm64 refuses writable and executable pages (`Cannot allocate executable
   pages` once the heap grows), and Linux no longer gets RWX heap pages.
@@ -2157,7 +2209,7 @@ written `size > limit - total`. A hermetic test sends over-long values.
   out, or no OpenSSL 3 development package or `pkg-config`) and fail in CI (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
   `make vm` reads `SANITIZE` from the environment, so the sanitizer job sets
   `SANITIZE=1` once and the tests rebuild the sanitized VM.
-- Supply chain: pinned runner images; libgc, yyjson (and libuv from 7h) are git
+- Supply chain: pinned runner images; libgc, yyjson (and libuv and picohttpparser from 7h) are git
   submodules pinned to a release tag, upgraded only by bumping the submodule
   in a reviewed PR; CI checks out with `submodules: true`. `agentica-vm
   --version` and the release notes list the libgc, yyjson, libuv and OpenSSL
