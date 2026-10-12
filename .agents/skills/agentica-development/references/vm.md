@@ -370,10 +370,11 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
 - **OpenSSL 3 (7h)**: linked dynamically by default (`OPENSSL=system`,
-  `pkg-config libssl libcrypto`, `-lssl -lcrypto`, an error before 3.0);
-  `OPENSSL=static OPENSSL_PREFIX=/path` for the single-file release, which
-  then reads `SSL_CERT_FILE`/`SSL_CERT_DIR` or probes the distro CA paths
-  (`docs/vm.md` 10.0, 10.3). `--version` prints the version in use.
+  `pkg-config libssl libcrypto`, `-lssl -lcrypto`); the build fails for a
+  missing or pre-3.0 OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for
+  release artifacts (`pkg-config --static --libs`). System trust: default
+  verify paths (static: `SSL_CERT_FILE`/`SSL_CERT_DIR`), then the distro CA
+  paths if the store is empty (`docs/vm.md` 10.0, 10.3). `--version` prints the version in use.
   `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
   system trust from the Windows ROOT store or the macOS Keychain (never
   `set_default_verify_paths` there); a non-empty `ca_file` replaces system
