@@ -406,8 +406,12 @@ each fixture's golden holds its exit code, stdout, program stderr
 (`IO.warn`) and diagnostic code; a runaway program stops with
 `RUNTIME-STEP-LIMIT` under `--max-steps`. Catch-up work (TCP, TLS, HTTP,
 BDD) is tested with goldens and independent Node/Python peers, not against
-the evaluator; new features are VM-only and come after 7i; the evaluator is
-frozen. Error strings a program prints are program data: when a library
+the evaluator. Pick the peer by role: where the VM must talk to a real
+implementation, use one whose library does the protocol work (Node's `http`
+for HTTP streaming, since Python's `http.server` does not decode chunked
+request bodies); for raw or hostile cases, use the language the test file
+already uses, so each test file has one peer. New features are VM-only
+and come after 7i; the evaluator is frozen. Error strings a program prints are program data: when a library
 message changes, switch the fixtures that print it to printing only ok or
 error in the same PR, or update their goldens on purpose. Message text,
 spans, stderr wording, OS error text, exact step counts and the step-limit
