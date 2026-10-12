@@ -18,8 +18,10 @@ The Racket evaluator is frozen. It runs only what the VM lacks: programs that
 use `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
 notice) and `agentica test`. The next work is the catch-up that removes those
 fallbacks: VM tracing (14a, done), TCP (done), then TLS, then HTTP, then BDD
-on the VM (7h). Then 7i deletes the evaluator. New features (binary data, UDP, logging,
-crypto) come after 7i and are VM-only. The later steps keep their order:
+on the VM (7h). Then 7i deletes the evaluator. New features (default parameter
+values (15a) first, then binary data, UDP, logging, crypto, then the rest of
+phase 15's Ruby typed idioms) come after 7i and are VM-only; the prelude part
+of phase 15 waits for faster lists (8d). The later steps keep their order:
 faster lists (8d) before any instruction-dispatch micro-optimization (7g);
 the review of what the VM inherited from Racket (7k) and the VM layers (7l);
 a measurement of a small real server on the VM (7j) and the JIT (7m); an
@@ -58,9 +60,11 @@ order.
 | 7 | **Complete:** the VM is the default backend (7i, first item): `agentica file.agc` runs on the VM; programs that use `TCP`, `TLS`, `HTTP` or `BDD`, and `agentica test`, fall back to the evaluator; the differential tests became golden tests; the release ships `agentica-vm` | One backend for almost every program; CI runs each test once |
 | 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4, done), then TCP (done), then TLS, then HTTP, then BDD on the VM (7h); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
 | 7.2 | 7i: delete the evaluator and its runtime modules; the Racket front end (lexer, parser, checker, lowering, bytecode) stays | One backend |
-| 7.3 | New features, VM-only: binary data (phase 13, `docs/future/23-binary-data.md` §23), then UDP, then logging and debugging (14b stack traces, then 14c `std/log`, `docs/future/24-logging.md` §24), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`) | Programs read and write binary numbers with `std/binary` and send UDP; agents see the call stack of a runtime error; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
+| 7.3 | New features, VM-only: default parameter values first (15a, `docs/future/25-ruby-typed-idioms.md` §25.1; front end only, so `std/log` can use them), then binary data (phase 13, `docs/future/23-binary-data.md` §23), then UDP, then logging and debugging (14b stack traces, then 14c `std/log`, `docs/future/24-logging.md` §24), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`) | Programs read and write binary numbers with `std/binary` and send UDP; agents see the call stack of a runtime error; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
+| 7.4 | New features, VM-only (cont.): Ruby typed idioms (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A, one way to do each thing): re-exports, `with`, value equality, lambdas, `File.open` with a block, heredocs (15b to 15e, 15i, 15j); one small PR each | Agents write the Ruby forms they know, still checked, immutable and with one canonical form |
 | 8 | Faster lists (8d): a persistent vector behind `List`, before any instruction-dispatch micro-optimization (7g); then the review of what the VM inherited from Racket (7k), next to the 7g hot spots | `push` stops copying the whole list; list-heavy programs stop being O(n²); the VM keeps Racket's rules only where they are good on their own |
 | 8.1 | VM layers (7l, `docs/future/21-vm-layers.md` §21); after the tasks PR, next to 7k | The prerequisites of the JIT |
+| 8.2 | Ruby typed idioms, prelude part (15f, 15k; `docs/future/25-ruby-typed-idioms.md` §25.6 and §25.11): the compiler prelude with the Enumerable methods, then `format`; after faster lists (8d), since the prelude's cost contract needs them | Enumerable methods and `format`, written in Agentica, O(n) on the new lists |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g) | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
 | 9.1 | JIT (7m, `docs/future/22-jit.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision | Hot functions run as native code with the same results |
 | 10 | Evaluation round: Agentica against typed Python on harder tasks (6c) | Evidence on whether agents do better in Agentica than in typed Python |
@@ -126,6 +130,13 @@ the programming reference contain the current signatures.
   5. Basic operations on the core types, at the level of operators, which
      would be loops or fragile code in Agentica: for example the `Int` bit
      operations and `Float` bit conversions of `docs/future/23-binary-data.md` §23.
+- Library code that must be generic over the builtin type variables, or
+  that must be called as a method on a builtin type (`xs.find do ... end`),
+  cannot be a `std/` module; it goes in the compiler prelude
+  (`stdlib/prelude/*.agc`, `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica.
+  The prelude has the only guarded exceptions to "no internal helper
+  builtins": `__fail_arg` and `__float_fixed`, which the loader accepts
+  only in prelude functions.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 
@@ -144,6 +155,7 @@ This file holds what matters now: the order above and the general rules. Each op
 | [`12-benchmarks.md`](12-benchmarks.md) | Phase 12: cross-language benchmarks |
 | [`13-binary-data.md`](13-binary-data.md) | Phase 13: binary data |
 | [`14-logging.md`](14-logging.md) | Phase 14: logging and debugging |
+| [`15-ruby-typed-idioms.md`](15-ruby-typed-idioms.md) | Phase 15: Ruby typed idioms |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
 | [`later-extensions.md`](later-extensions.md) | Later extensions and open decisions |
