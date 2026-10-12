@@ -11,6 +11,7 @@
 #define _CRT_RAND_S
 #endif
 #include "agc.h"
+#include "tls.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -299,13 +300,15 @@ static int run(int argc, char **argv) {
     if (strcmp(arg, "--version") == 0) {
       unsigned gc = agc_gc_version();
       const char *uv = agc_uv_version();
+      const char *ssl = agc_tls_version();
       const char *trace = AGC_TRACE_BUILD ? "" : ", trace off";
       if (gc)
-        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF,
-               gc & 0xFF, agc_json_version(), uv ? ", libuv " : "", uv ? uv : "", trace);
+        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF,
+               gc & 0xFF, agc_json_version(), uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "",
+               ssl ? ssl : "", trace);
       else
-        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s%s)\n", AGC_VERSION, agc_json_version(),
-               uv ? ", libuv " : "", uv ? uv : "", trace);
+        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, agc_json_version(),
+               uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
       return fflush(stdout) == 0 ? 0 : 1;
     }
     if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
