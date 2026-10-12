@@ -165,6 +165,7 @@ static void close_conn(agc_conn *conn, const char *why) {
 }
 
 static void lease(exchange *x, agc_conn *conn) {
+  agc_conn_hold(conn, true);
   x->conn = conn;
   x->at = X_EXCHANGE;
   agc_conn_observe(conn, x->c->on_exchange, x);
@@ -204,6 +205,29 @@ static void expire(origin *o, uint64_t now) {
   }
 }
 
+static void arm_timer(client *c) {
+  if (c->closed) return;
+  uint64_t oldest = UINT64_MAX;
+  bool handover = false;
+  for (const origin *o = c->origins; o; o = o->next) {
+    if (o->waiters && o->idle) handover = true;
+    for (const idle *k = o->idle; k; k = k->next)
+      if (k->since < oldest) oldest = k->since;
+  }
+  if (oldest == UINT64_MAX) return;
+  if (!c->timer_ready) {
+    uv_timer_init(c->loop, &c->timer);
+    c->timer_ready = true;
+    c->callbacks++;
+  }
+  uint64_t now = uv_now(c->loop), due = oldest + (uint64_t)c->idle_ms;
+  uv_timer_start(&c->timer, c->on_timer, handover ? 1 : due > now ? due - now : 0, 0);
+  if (handover)
+    uv_ref((uv_handle_t *)&c->timer);
+  else
+    uv_unref((uv_handle_t *)&c->timer);
+}
+
 static void grant(origin *o) {
   while (!o->c->closed && o->waiters && (o->idle || o->open < o->c->max_connections)) {
     exchange *x = o->waiters;
@@ -222,32 +246,9 @@ static void grant(origin *o) {
   }
 }
 
-static void arm_timer(client *c) {
-  if (c->closed) return;
-  uint64_t oldest = UINT64_MAX;
-  for (const origin *o = c->origins; o; o = o->next)
-    for (const idle *k = o->idle; k; k = k->next)
-      if (k->since < oldest) oldest = k->since;
-  if (oldest == UINT64_MAX) return;
-  if (!c->timer_ready) {
-    uv_timer_init(c->loop, &c->timer);
-    c->timer_ready = true;
-    c->callbacks++;
-  }
-  uint64_t now = uv_now(c->loop), due = oldest + (uint64_t)c->idle_ms;
-  uv_timer_start(&c->timer, c->on_timer, due > now ? due - now : 0, 0);
-}
-
 static void park_idle(origin *o, agc_conn *conn) {
   client *c = o->c;
-  if (o->waiters) {
-    exchange *x = o->waiters;
-    o->waiters = x->next;
-    if (!o->waiters) o->waiters_tail = NULL;
-    x->next = NULL;
-    lease(x, conn);
-    return;
-  }
+  agc_conn_hold(conn, false);
   idle *node = calloc(1, sizeof(idle));
   if (!node) agc_out_of_memory();
   node->conn = conn;
@@ -361,6 +362,7 @@ static bool head_step(exchange *x, agc_inbuf *in) {
   keep_fields(x, &head);
   if (closes(&head)) x->keep = false;
   if (x->head_only || head.status == 204 || head.status == 304) {
+    if (head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0)) x->keep = false;
     head.frame = AGC_HTTP_FRAME_LENGTH;
     head.length = 0;
   }
@@ -406,7 +408,9 @@ static void pump(exchange *x) {
     if (!x->write_failed) x->sys = in->error;
     complete(x, x->write_failed ? F_WRITE : F_READ);
   } else if (in->eof && x->in_body) {
-    if (agc_http_body_end(&x->body) == AGC_HTTP_OK)
+    if (x->body.frame == AGC_HTTP_FRAME_CLOSE && !agc_conn_clean_eof(conn))
+      protocol_error(x, AGC_HTTP_ERR_TRUNCATED);
+    else if (agc_http_body_end(&x->body) == AGC_HTTP_OK)
       finish(x, in);
     else
       protocol_error(x, x->body.error);
@@ -757,7 +761,7 @@ static const char *build_request(agc_vm *vm, bytes *b, const agc_value *args, bo
   if (literal) put_text(b, "[");
   put(b, host->data, host->bytes);
   if (literal) put_text(b, "]");
-  char number[32];
+  char number[64];
   if (port != (secure ? 443 : 80)) {
     snprintf(number, sizeof number, ":%" PRId64, port);
     put_text(b, number);

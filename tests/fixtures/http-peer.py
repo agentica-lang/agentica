@@ -9,6 +9,7 @@ import threading
 
 CERTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tls")
 GATE = threading.Barrier(3, timeout=10)
+HELD = []
 
 RAW = {
     "/http10": b"HTTP/1.0 200 OK\r\nContent-Length: 2\r\n\r\nok",
@@ -27,6 +28,7 @@ RAW = {
     "/smuggle": b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\n\r\n",
     "/gzip": b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip, chunked\r\n\r\n0\r\n\r\n",
     "/badtrailer": b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n0\r\nContent-Length: 2\r\n\r\n",
+    "/after": b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok",
     "/truncated": b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nabc",
     "/headerless": b"",
 }
@@ -69,6 +71,20 @@ class Web(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"until the end")
             self.close_connection = True
+        elif self.path == "/notify":
+            self.send_response(200)
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(b"closed cleanly")
+            self.wfile.flush()
+            self.connection.unwrap()
+            self.close_connection = True
+        elif self.path == "/hold":
+            HELD.append(port)
+            threading.Event().wait(3)
+            self.close_connection = True
+        elif self.path == "/held":
+            self.reply(200, str(len(HELD)))
         elif self.path == "/slow":
             threading.Event().wait(3)
             self.close_connection = True
@@ -101,6 +117,11 @@ class Raw(socketserver.BaseRequestHandler):
             self.request.shutdown(socket.SHUT_WR)
             while self.request.recv(65536):
                 pass
+            return
+        if path == "/nocontent":
+            self.request.sendall(b"HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\n")
+            if self.request.recv(65536):
+                self.request.sendall(b"helloHTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nreused")
             return
         self.request.sendall(RAW[path])
         if path in ("/truncated", "/headerless"):

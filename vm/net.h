@@ -16,6 +16,8 @@ agc_value agc_conn_error(agc_vm *vm, const agc_conn *c);
 int agc_conn_send(agc_conn *c, const uint8_t *data, size_t len);
 bool agc_conn_sent(const agc_conn *c);
 int agc_conn_write_status(const agc_conn *c);
+bool agc_conn_clean_eof(const agc_conn *c);
+void agc_conn_hold(agc_conn *c, bool hold);
 agc_inbuf *agc_conn_input(agc_conn *c);
 void agc_conn_read(agc_conn *c);
 void agc_conn_shut(agc_conn *c, const char *why);

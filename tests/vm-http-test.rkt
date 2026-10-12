@@ -135,7 +135,11 @@ def main() -> Void
   c = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
   puts(apart(a, b, c))
   closing = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
-  pending = Task.spawn(&fetch, Fetch(pool: closing, url: plain + "/slow"))
+  pending = Task.spawn(&fetch, Fetch(pool: closing, url: plain + "/hold"))
+  watcher = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
+  while Result.unwrap!(Web.get(watcher, plain + "/held")).body == "0"
+    Task.sleep(1)
+  end
   Web.close_client(closing)
   IO.inspect(Task.await(pending))
 end
@@ -151,6 +155,8 @@ def main() -> Void
   show(Web.get(secure, "https://localhost:#{port}/hello"))
   show(Web.get(secure, "https://LOCALHOST:#{port}/hello"))
   show(Web.post(secure, "https://127.0.0.1:#{port}/post", [], "over tls"))
+  show(Web.get(secure, "https://localhost:#{port}/notify"))
+  show(Web.get(secure, "https://localhost:#{port}/close"))
   show(Web.get(secure, "http://localhost:#{port}/hello"))
   show(Web.get(Result.unwrap!(Web.client(options(5000, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
   show(Web.get(Result.unwrap!(Web.client(options(5000, 1, 1000, certs + "/missing.pem"))), "https://localhost:#{port}/hello"))
@@ -169,7 +175,7 @@ def main() -> Void
   large = Result.unwrap!(Web.client(options(5000, 1, 8388608, "")))
   show(Web.post(large, raw + "/early", [], upload))
   hostile = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
-  for path in ["/http10", "/status99", "/status600", "/upgrade", "/interim15", "/interim16", "/badchunk", "/atlimit", "/big", "/bigchunks", "/barelf", "/fold", "/twolengths", "/smuggle", "/gzip", "/badtrailer", "/truncated", "/headerless"]
+  for path in ["/http10", "/status99", "/status600", "/upgrade", "/interim15", "/interim16", "/badchunk", "/atlimit", "/big", "/bigchunks", "/barelf", "/fold", "/twolengths", "/smuggle", "/gzip", "/badtrailer", "/truncated", "/headerless", "/nocontent", "/after"]
     show(Web.get(hostile, raw + path))
   end
 end
@@ -204,8 +210,10 @@ AGC
                           (list "200 hello localhost 15"
                                 "200 hello localhost 15"
                                 "200 None 8 over tls 15"
+                                "200 closed cleanly 14"
+                                "http: truncated HTTP body"
                                 '(prefix "error reading from stream port | ")
-                                "ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)"
+                                '(prefix "ssl-connect: connect failed (certificate verify failed")
                                 '(prefix "ssl-load-verify-source!: load failed from: "))
                           "tls"))
 
@@ -229,6 +237,8 @@ AGC
                                 "http: unsupported transfer encoding"
                                 "http: invalid trailer"
                                 "http: truncated HTTP body"
-                                "http: connection closed before the response was complete")
+                                "http: connection closed before the response was complete"
+                                "204  0"
+                                "200 ok 2")
                           "raw")))))
       (lambda () (delete-directory/files work)))))

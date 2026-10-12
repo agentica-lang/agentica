@@ -64,7 +64,7 @@ struct agc_conn {
   agc_tls_failure failure;
   uint8_t *cipher, *plain;
   size_t plain_at, plain_len;
-  bool secure, setting_up, handshaken, tls_failed, flushing, raw_eof, borrowed;
+  bool secure, setting_up, handshaken, tls_failed, flushing, raw_eof, borrowed, clean_eof;
   agc_conn_watch watch;
   void *watcher;
 };
@@ -384,6 +384,7 @@ static void decrypt(net *n) {
     if (got) agc_inbuf_got(&n->in, (int64_t)got, false);
     if (status == AGC_TLS_OK) continue;
     if (status == AGC_TLS_CLOSED || (status == AGC_TLS_WANT_READ && n->raw_eof)) n->in.eof = true;
+    if (status == AGC_TLS_CLOSED && !n->raw_eof) n->clean_eof = true;
     if (status == AGC_TLS_ERROR) {
       AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_read_error socket=%" PRIu64 " error=%s", n->id,
                 agc_tls_error_name(n->failure.code));
@@ -1125,6 +1126,16 @@ int agc_conn_send(agc_conn *c, const uint8_t *data, size_t len) {
 bool agc_conn_sent(const agc_conn *c) { return c->tls ? !c->flushing && !c->plain : !c->write_data; }
 
 int agc_conn_write_status(const agc_conn *c) { return c->write_status; }
+
+bool agc_conn_clean_eof(const agc_conn *c) { return !c->secure || c->clean_eof; }
+
+void agc_conn_hold(agc_conn *c, bool hold) {
+  if (!c->conn || c->closed) return;
+  if (hold)
+    uv_ref((uv_handle_t *)&c->conn->tcp);
+  else
+    uv_unref((uv_handle_t *)&c->conn->tcp);
+}
 
 agc_inbuf *agc_conn_input(agc_conn *c) { return &c->in; }
 
