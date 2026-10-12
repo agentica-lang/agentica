@@ -668,7 +668,10 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   uv_loop_t *loop = agc_io_uv(vm);
   guard *g = guard_of(vm, loop);
   char *path = resolve(vm, command);
-  if (!path) return error_of("process: executable is unavailable");
+  if (!path) {
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=unresolved");
+    return error_of("process: executable is unavailable");
+  }
   char **argv = child_args(vm, path, list);
   char **env = vm->rt->drop_uring_env ? child_env() : NULL;
   proc *p = calloc(1, sizeof(proc));

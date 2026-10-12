@@ -1,4 +1,4 @@
-#include "trace.h"
+#include "agc.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -57,9 +57,23 @@ static bool special(unsigned char c) { return c <= 0x20 || c == 0x7f || c == '='
 
 static bool plain(const char *s, size_t n) {
   if (!n) return false;
-  for (size_t i = 0; i < n; i++)
+  for (size_t i = 0; i < n;) {
     if (special((unsigned char)s[i])) return false;
+    size_t k = agc_utf8_valid((const uint8_t *)s + i, n - i);
+    if (!k) return false;
+    i += k;
+  }
   return true;
+}
+
+static size_t hex_escape(unsigned char c, char esc[6]) {
+  esc[0] = '\\';
+  esc[1] = 'u';
+  esc[2] = '0';
+  esc[3] = '0';
+  esc[4] = hex_digits[c >> 4];
+  esc[5] = hex_digits[c & 15];
+  return 6;
 }
 
 static size_t escape_of(unsigned char c, char esc[6]) {
@@ -75,12 +89,7 @@ static size_t escape_of(unsigned char c, char esc[6]) {
     default: break;
   }
   if (c >= 0x20 && c != 0x7f) return 0;
-  esc[1] = 'u';
-  esc[2] = '0';
-  esc[3] = '0';
-  esc[4] = hex_digits[c >> 4];
-  esc[5] = hex_digits[c & 15];
-  return 6;
+  return hex_escape(c, esc);
 }
 
 static void put_quoted(agc_trace_line *l, const char *s, size_t n) {
@@ -90,16 +99,10 @@ static void put_quoted(agc_trace_line *l, const char *s, size_t n) {
     unsigned char c = (unsigned char)s[i];
     char esc[6];
     size_t k = escape_of(c, esc);
-    if (k) {
-      if (!put_unit(l, esc, k)) return;
-      i++;
-      continue;
-    }
-    size_t width = utf8_width(c);
-    k = 1;
-    while (k < width && i + k < n && ((unsigned char)s[i + k] & 0xC0) == 0x80) k++;
-    if (!put_unit(l, s + i, k)) return;
-    i += k;
+    size_t valid = k ? 0 : agc_utf8_valid((const uint8_t *)s + i, n - i);
+    if (!k && !valid) k = hex_escape(c, esc);
+    if (valid ? !put_unit(l, s + i, valid) : !put_unit(l, esc, k)) return;
+    i += valid ? valid : 1;
   }
   l->data[l->len++] = '"';
   l->quoted = false;

@@ -50,8 +50,8 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/budget_test.c` | under `AGC_NO_GC`, an allocation past `agc_set_alloc_limit` longjmps once, and after `agc_release_all` no limit is set |
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm/02-reference-behavior.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
-| `vm/tests/trace_test.c` | the trace escaper and line buffer: numbers, empty and special text values, lines cut at 512 bytes on a UTF-8 boundary, the unknown-category warning |
-| `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; a VM started with stderr or stdout closed; skips on a `TRACE=0` VM |
+| `vm/tests/trace_test.c` | the trace escaper and line buffer: numbers, empty and special text values, invalid UTF-8 bytes as `\u00XX`, lines cut at 512 bytes on a UTF-8 or escape boundary, the unknown-category warning |
+| `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; `gc` lines from `map-large` (skipped on a sanitizer build); a VM started with stderr or stdout closed; skips on a `TRACE=0` VM |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
@@ -65,8 +65,8 @@ git submodule update --init          # fetch bdwgc, yyjson and libuv after a clo
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
-make vm TRACE=0                      # trace points compiled out (still type-checked); --version says "trace off"
-AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=/tmp/t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
+make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
+AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test

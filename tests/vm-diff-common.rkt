@@ -17,7 +17,9 @@
          "../src/source.rkt")
 
 (provide shard-count
-         run-shard)
+         run-shard
+         vm-file
+         vm-built?)
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
@@ -58,7 +60,7 @@
 (define (exit-status code)
   (if (and (exact-integer? code) (<= 1 code 255)) code 0))
 
-(define (vm-built?)
+(define (vm-built? [tests "VM differential tests"])
   (define make (find-executable-path "make"))
   (define (make-vm)
     (define lock (build-path root "build" "vm-diff-make.lock"))
@@ -82,7 +84,7 @@
   (cond
     [built? #t]
     [(getenv "AGENTICA_REQUIRE_VM") (error 'vm-diff "the VM must build when AGENTICA_REQUIRE_VM is set")]
-    [else (displayln "SKIP VM differential tests: make vm failed") #f]))
+    [else (printf "SKIP ~a: make vm failed\n" tests) #f]))
 
 (define (front-end path #:types [types #f])
   (define name (path->string path))

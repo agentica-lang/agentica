@@ -220,13 +220,19 @@ and cost one predictable branch each.
   walks the format itself: numbers (`d`, `i`, `u`, `x` with `hh` to `j`,
   `z`, `t`) go through `snprintf`, every `%s` and `%.*s` through the
   escaper, and any other conversion (`%c`, `%p`, floats, widths, flags)
-  ends the line with `?`. `vm/main.c`
+  ends the line with `?`. A text value with a byte that is not part of a
+  valid UTF-8 sequence (a lone continuation byte, a cut lead byte) is
+  quoted, and each such byte is written as `\u00XX`, so a trace line is
+  always valid UTF-8. `vm/main.c`
   reads both variables after the option checks and before
   `agc_load_traced` (`agc_load` is the untraced form the tests and the
-  fuzzer call), opens the file with `O_NONBLOCK` and takes only a regular
-  file (a FIFO or device gives the `cannot open` line, so start-up never
+  fuzzer call), opens the file with `O_NONBLOCK` and `O_NOFOLLOW` and takes
+  only a regular file owned by the VM's user (a FIFO, a device, a symlink
+  or another user's file gives the `cannot open` line, so start-up never
   blocks), moves a trace descriptor that lands on 0, 1 or 2 to 3 or above (so a closed stderr stays closed), and stores the
-  struct in `agc_runtime`; `proc` and the process guard keep a copy, since
+  struct in `agc_runtime`. With `AGENTICA_VM_TRACE_FILE` set, the
+  `unknown category` warning goes to the trace file, not to stderr; the
+  `cannot open` line goes to stderr. `proc` and the process guard keep a copy, since
   libuv callbacks have no runtime pointer. Task ids come from the runtime's
   `next_task_id` (main is 1); job and handle ids are resource ids from the
   scheduler's registry. Event names: `sched` spawn, turn (`steps`, `cost`,
@@ -234,9 +240,11 @@ and cost one predictable branch each.
   start, done, timeout (`us` from the job start to its `done` callback,
   `result=ok|error|value`; lock jobs have none, `lock_handoff` and
   `lock_timeout` cover them), lock_wait, lock_handoff, lock_timeout, stdin,
-  poll (`mode=once|nowait`, `us` blocked), close (`resources` left in the
+  poll (`mode=once|nowait`, `us` blocked; a `nowait` poll that found no
+  finished job writes nothing), close (`resources` left in the
   registry, `settled`), hard_exit; `proc` spawn,
-  spawn_failed, exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
+  spawn_failed (`rc`, or `reason=unresolved` when the executable is not
+  found), exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
   stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
   `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
   collect (`at=turn|end`). `tls` has no trace points yet. A cut line ends

@@ -31,7 +31,7 @@ static wchar_t **wide_args; // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 #include <unistd.h>
 
 #define file_stat fstat
-#define TRACE_OPEN (O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK)
+#define TRACE_OPEN (O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW)
 #define TRACE_MODE 0600
 
 typedef struct stat file_info;
@@ -153,7 +153,7 @@ static int private_trace_fd(int fd) { return fd; }
 #else
 static int private_trace_fd(int fd) {
   struct stat info;
-  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode)) {
+  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != geteuid()) {
     close(fd);
     return -1;
   }

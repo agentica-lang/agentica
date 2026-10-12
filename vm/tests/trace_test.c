@@ -121,6 +121,11 @@ int main(void) {
   agc_trace_format(&l, &t, AGC_TRACE_LOADER, "file path=%s", "/tmp/caf\xC3\xA9.agcb");
   assert(strcmp(body(&l, "loader"), "file path=/tmp/caf\xC3\xA9.agcb\n") == 0);
 
+  agc_trace_format(&l, &t, AGC_TRACE_LOADER, "file path=%s next=%s", "a\x80" "b", "c \xC3");
+  assert(strcmp(body(&l, "loader"), "file path=\"a\\u0080b\" next=\"c \\u00c3\"\n") == 0);
+  agc_trace_format(&l, &t, AGC_TRACE_LOADER, "file path=%.*s", 4, "x\xE2\x82y");
+  assert(strcmp(body(&l, "loader"), "file path=\"x\\u00e2\\u0082y\"\n") == 0);
+
   static const char special[] = "a b=\"c\\\n\r\t\b\f\x01\x1f\x7f\0z";
   agc_trace_format(&l, &t, AGC_TRACE_LOADER, "reject reason=%.*s", (int)(sizeof special - 1), special);
   assert(strcmp(body(&l, "loader"),
@@ -148,7 +153,7 @@ int main(void) {
     assert(agc_utf8_chars((const uint8_t *)l.data, l.len, &chars));
   }
 
-  static const char *const units[] = {"\n", "\x01", "\xC3\xA9 ", "\"", " \xE2\x82\xAC\xF0\x9F\x98\x80"};
+  static const char *const units[] = {"\n", "\x01", "\xC3\xA9 ", "\"", " \xE2\x82\xAC\xF0\x9F\x98\x80", "\x80", "\xF0\x9F\x98"};
   for (size_t u = 0; u < sizeof units / sizeof units[0]; u++) {
     size_t n = strlen(units[u]);
     for (size_t k = 0; k + n <= sizeof longer; k += n) memcpy(longer + k, units[u], n);

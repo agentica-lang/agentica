@@ -1,16 +1,13 @@
 #lang racket
 
 (require rackunit
-         racket/runtime-path)
+         racket/runtime-path
+         (only-in "vm-diff-common.rkt" vm-file vm-built?))
 
-(define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
 (define-runtime-path main-file "../src/main.rkt")
 
 (define wait-seconds 60)
-(define make-lock-wait 900)
-(define vm-binary (getenv "AGENTICA_VM_BINARY"))
-(define vm-file (if vm-binary (path->complete-path vm-binary root) (build-path root "dist" "agentica-vm")))
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
   (environment-variables-set! (current-environment-variables) name #f))
@@ -21,25 +18,6 @@
     (string-append
      "^agc-trace \\+[0-9]+\\.[0-9]{6} (sched|io|proc|tls|loader|gc) [a-z_]+"
      "( [a-z_]+=([^ =\"\\\\\x00-\x20\x7f]+|\"([^\"\\\\\x00-\x1f\x7f]|\\\\[\"\\\\bfnrt]|\\\\u[0-9a-f]{4})*\"))*$"))))
-
-(define (vm-built?)
-  (define make (find-executable-path "make"))
-  (define (make-vm)
-    (define lock (build-path root "build" "vm-diff-make.lock"))
-    (make-directory* (build-path root "build"))
-    (define deadline (+ (current-inexact-milliseconds) (* 1000 make-lock-wait)))
-    (let retry ()
-      (define result
-        (call-with-file-lock/timeout
-         lock 'exclusive
-         (lambda () (if (parameterize ([current-directory root]) (system* make "-s" "vm")) 'built 'failed))
-         (lambda () 'busy)
-         #:max-delay 0.2))
-      (cond
-        [(eq? result 'built) #t]
-        [(and (eq? result 'busy) (< (current-inexact-milliseconds) deadline)) (retry)]
-        [else #f])))
-  (if vm-binary (file-exists? vm-file) (and make (make-vm))))
 
 (define (compile-fixture name work)
   (define out (build-path work (string-append name ".agcb")))
@@ -61,10 +39,10 @@
   (check-true (and finished #t) (format "the VM finished within ~a s" wait-seconds))
   (list (subprocess-status process) out-bytes err-bytes))
 
-(define (trace-built?)
+(define (vm-version)
   (define-values (process out in err) (subprocess #f #f #f vm-file "--version"))
   (close-output-port in)
-  (not (regexp-match? #rx#"trace off" (second (finish process out err)))))
+  (second (finish process out err)))
 
 (define (fixture-args name tmp)
   (define file (build-path fixtures (string-append name ".args")))
@@ -103,6 +81,9 @@
       (regexp-split #rx#"\n" (let ([b (file->bytes file)]) (subbytes b 0 (max 0 (sub1 (bytes-length b))))))
       '()))
 
+(define gc-line
+  #px#"^agc-trace \\+[0-9]+\\.[0-9]{6} gc collect at=(turn|end) count=[0-9]+ heap=[0-9]+ free=[0-9]+ since=[0-9]+$")
+
 (define (line-category line)
   (bytes->string/latin-1 (cadr (regexp-match #px#"^agc-trace \\S+ (\\S+)" line))))
 
@@ -116,11 +97,8 @@
 (module+ test
   (cond
     [(not (eq? (system-type 'os*) 'linux)) (displayln "SKIP VM trace tests: Linux only")]
-    [(not (vm-built?))
-     (if (getenv "AGENTICA_REQUIRE_VM")
-         (error 'vm-trace "the VM must build when AGENTICA_REQUIRE_VM is set")
-         (displayln "SKIP VM trace tests: make vm failed"))]
-    [(not (trace-built?)) (displayln "SKIP VM trace tests: the VM was built with TRACE=0")]
+    [(not (vm-built? "VM trace tests")) (void)]
+    [(regexp-match? #rx#"trace off" (vm-version)) (displayln "SKIP VM trace tests: the VM was built with TRACE=0")]
     [else
      (define work (make-temporary-directory "agentica-trace~a"))
      (dynamic-wind
@@ -162,7 +140,23 @@
                                           (cons #"AGENTICA_VM_TRACE_FILE" (path->bytes missing)))))
            (check-equal? status (first plain))
            (check-equal? out (second plain))
-           (check-equal? err (bytes-append #"agc-trace cannot open " (path->bytes missing) #"\n" (third plain))))
+           (define line-end (- (bytes-length err) (bytes-length (third plain))))
+           (check-true (>= line-end 0))
+           (check-equal? (subbytes err (max 0 line-end)) (third plain))
+           (check-regexp-match #px#"^agc-trace cannot open \"?[^\n]*/missing/trace\"?\n$" (subbytes err 0 (max 0 line-end))))
+         (test-case "an allocation-heavy run writes gc collect lines"
+           (if (regexp-match? #rx#"sanitizer build" (vm-version))
+               (displayln "SKIP gc trace test: sanitizer build, no libgc")
+               (let* ([gc-bytecode (compile-fixture "map-large" work)]
+                      [file (build-path work "map-large.trace")]
+                      [gc-plain (run-vm gc-bytecode)]
+                      [traced (run-vm gc-bytecode #:env (list (cons #"AGENTICA_VM_TRACE" #"gc")
+                                                              (cons #"AGENTICA_VM_TRACE_FILE" (path->bytes file))))]
+                      [lines (trace-lines file)])
+                 (check-equal? traced gc-plain)
+                 (check-true (pair? lines))
+                 (for ([line lines])
+                   (check-true (regexp-match? gc-line line) (format "gc line ~s" line))))))
          (define stdin-file (build-path fixtures "task-stdin.stdin"))
          (define stdin-bytecode (build-path work "task-stdin.agcb"))
          (define stdin-plain (run-vm stdin-bytecode #:stdin stdin-file))

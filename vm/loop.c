@@ -256,8 +256,9 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   const agc_trace *tr = &vm->rt->trace;
   uint64_t before = AGC_TRACE_ON(tr, AGC_TRACE_IO) ? agc_trace_now() : 0;
   uv_run(&vm->loop->uv, wait ? UV_RUN_ONCE : UV_RUN_NOWAIT);
-  AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, wait ? "once" : "nowait",
-            (agc_trace_now() - before) / 1000u);
+  if (wait || vm->loop->ready)
+    AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, wait ? "once" : "nowait",
+              (agc_trace_now() - before) / 1000u);
   drain(vm);
   return true;
 }
