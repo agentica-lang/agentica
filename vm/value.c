@@ -266,6 +266,13 @@ agc_value agc_task_value(agc_task *t) {
   return v;
 }
 
+agc_value agc_process_value(agc_process *p) {
+  agc_value v;
+  v.tag = AGC_T_PROCESS;
+  v.as.p = p;
+  return v;
+}
+
 uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
@@ -404,6 +411,11 @@ agc_task *agc_as_task(agc_vm *vm, agc_value v) {
   return v.as.p;
 }
 
+agc_process *agc_as_process(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_PROCESS) wrong_tag(vm);
+  return v.as.p;
+}
+
 char *agc_cstr(const agc_string *s) {
   if (s->bytes && memchr(s->data, 0, s->bytes)) return NULL;
   char *copy = malloc(agc_size_add(s->bytes, 1));
@@ -411,6 +423,17 @@ char *agc_cstr(const agc_string *s) {
   if (s->bytes) memcpy(copy, s->data, s->bytes);
   copy[s->bytes] = '\0';
   return copy;
+}
+
+uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit) {
+  if (values->len > limit) return NULL;
+  uint8_t *data = agc_alloc_atomic(values->len ? values->len : 1);
+  for (size_t k = 0; k < values->len; k++) {
+    int64_t b = agc_as_int(vm, values->items[k]);
+    if (b < 0 || b > 255) return NULL;
+    data[k] = (uint8_t)b;
+  }
+  return data;
 }
 
 size_t agc_utf8_width(uint8_t lead) { return lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4; }

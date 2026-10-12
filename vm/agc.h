@@ -26,7 +26,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS
 } agc_tag;
 
 typedef struct {
@@ -158,14 +158,20 @@ struct agc_resource {
   agc_task *waiters, *waiters_tail;
 };
 
+typedef struct {
+  agc_resource *state, *reader, *writer;
+} agc_process;
+
 typedef struct agc_registry agc_registry;
 typedef struct agc_loop agc_loop;
+typedef struct agc_io_job agc_io_job;
 
 typedef struct {
   void (*work)(void *data);
   agc_value (*done)(agc_vm *vm, void *data, agc_value context);
   agc_value (*expired)(agc_vm *vm, void *data, agc_value context);
   void (*drop)(void *data);
+  bool external;
 } agc_io_kind;
 
 typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
@@ -276,7 +282,7 @@ typedef struct {
   FILE *out, *err;
   agc_value args;
   agc_string *cwd;
-  bool no_files, no_turn_cost;
+  bool no_files, no_turn_cost, allow_run, drop_uring_env;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -348,6 +354,7 @@ agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 agc_value agc_json_value(agc_json *j);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);
+agc_value agc_process_value(agc_process *p);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -362,7 +369,9 @@ agc_range *agc_as_range(agc_vm *vm, agc_value v);
 agc_json *agc_as_json(agc_vm *vm, agc_value v);
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
 agc_task *agc_as_task(agc_vm *vm, agc_value v);
+agc_process *agc_as_process(agc_vm *vm, agc_value v);
 char *agc_cstr(const agc_string *s);
+uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 bool agc_is(agc_value v, agc_tag tag);
 
@@ -453,19 +462,26 @@ extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
 extern const agc_builtin agc_task_builtins[];
 extern const size_t agc_task_builtin_count;
+extern const agc_builtin agc_process_builtins[];
+extern const size_t agc_process_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
-void agc_io_init(void);
-void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+bool agc_io_init(void);
+struct uv_loop_s *agc_io_uv(agc_vm *vm);
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+void agc_io_ready(agc_io_job *j);
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
 void agc_files_close(agc_vm *vm);
+char *agc_host_path(agc_vm *vm, const agc_string *s);
+agc_value agc_utf8_error(const uint8_t *data, size_t len);
+agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 
