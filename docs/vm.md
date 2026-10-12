@@ -2397,8 +2397,13 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   the run (`agc_io_close` releases every resource, also after
   `System.exit`, a runtime error or the step limit) all go through one
   close. If the child still runs, it sends `SIGKILL` and polls `waitpid`
-  with `WNOHANG` every 0.1 ms for at most 1 second; a child normally dies
-  within the first polls. A child in uninterruptible sleep (a hung
+  with `WNOHANG` every 0.1 ms until a `CLOCK_MONOTONIC` deadline 1 second
+  away; a child normally dies within the first polls. `Process.close` and
+  a stream timeout give their one child its own deadline. A cleanup of all
+  children (the end of the run, or a stop signal, below) sends `SIGKILL`
+  to every running child first and then reaps them under one shared
+  deadline, so the whole cleanup stays within about 1 second, inside the
+  driver's 2-second grace (9). A child in uninterruptible sleep (a hung
   network file system, say) can outlast that bound: then, and when the
   kill fails (`EPERM`, for example a child that became another user
   through `sudo`), the VM does not wait. It keeps the `uv_process_t` open
@@ -2435,11 +2440,17 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   it once the children are gone. The pool threads keep the three signals
   blocked (10.2.2), so no handler runs on another thread while the loop
   thread stops the watchers. The loop runs between turns, so a CPU-bound
-  task or a blocking write to stdout delays the cleanup by at most one
-  turn or that write. A VM killed by `SIGKILL`, or ended by the
+  task delays the cleanup by at most one turn. A blocking write to stdout
+  delays it until that write ends, which may be never: if nobody reads the
+  VM's stdout any more (for example `agentica --vm prog.agc | less` after
+  the pager stopped reading and the driver died), the VM stays blocked in
+  `write`, never runs its loop, and neither it nor its children react to
+  the `SIGTERM` (the parent-death signal of 9 included); the VM has no
+  alarm fallback for this. A VM killed by `SIGKILL`, or ended by the
   out-of-memory exit (70, 6.3), leaves its children running (they get EOF
   or `EPIPE` when they next touch a pipe). `agentica --vm` stops the VM
-  with `SIGTERM` and kills it only after 2 seconds (9).
+  with `SIGTERM` and kills it only after 2 seconds (9), so a cleanup that
+  takes longer than that leaves the rest of the children running.
 - **Black-box differences.**
   - A file that exists but cannot be executed (no execute permission, a
     bad format) is an error `Result` from `Process.spawn` on the VM; the
