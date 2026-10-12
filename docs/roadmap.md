@@ -71,6 +71,8 @@ order.
 | 16 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums, optional and nullable JSON fields | Write adapters and read JSON of unknown shape without workarounds |
 | 17 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
 | 18 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
+| 19 | (On demand) SIMD in the VM (`future.md` §19): AVX2 first, with run-time dispatch and a scalar fallback; only after profiling (7j or phase 12) shows time in string, JSON or copy routines | Faster string and JSON work without changing the release baseline |
+| 20 | (On demand) `Crypto` module (`future.md` §20): hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes` and TLS on the VM (7h) | Sign, hash and encrypt without calling out to other tools |
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs.
@@ -1318,6 +1320,9 @@ Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
   | 1,000 | 9.94 / 1.23 | 25.11 / 2.85 |
   | 10,000 | 869.56 / 12.59 | 2,200.83 / 29.21 |
   | 50,000 | 23,240.65 / 61.62 | 54,904.19 / 146.60 |
+
+- [ ] SIMD in the VM ([`future.md` section 19](future.md#19-simd-in-the-vm)), on demand: starts only if profiling (7j or phase 12) shows time in string, JSON or copy routines. Using libc `memcpy`/`memcmp`/`memchr` in place of hand loops needs no profiling and can land at any time.
+- [ ] `Crypto` module ([`future.md` section 20](future.md#20-crypto-module)), on demand: after TLS on the VM (7h) and `Bytes`; VM only if it lands after 7i.
 
 ### Enums and pattern matching: implemented
 
