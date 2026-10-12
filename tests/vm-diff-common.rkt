@@ -52,7 +52,7 @@
 (define heavy-fixtures
   '(("tail-calls.agc" . 1) ("files-large.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
     ("callback-overflow.agc" . 3) ("results.agc" . 3) ("list-chunks.agc" . 3)))
-(define light-shard-rotation '(2 3 4 3))
+(define light-shard-rotation '(1 2 3 4))
 (define extras-shard 4)
 (define fixture-input (make-parameter #""))
 (define fixture-args (make-parameter '()))
