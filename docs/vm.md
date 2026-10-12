@@ -1477,10 +1477,11 @@ License rule: vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive (no copyleft). Its
 license file stays with it (in the submodule) and ships with releases.
 OpenSSL 3 (Apache-2.0) is permissive too, but it is singled out for two
-reasons: Apache-2.0 adds a `NOTICE` (attribution) duty, and the default
-build does not ship it at all, since it is linked dynamically. It is linked
-statically only in release artifacts that include its `LICENSE` and
-`NOTICE` text (10.0).
+reasons: Apache-2.0 adds an attribution duty (its `LICENSE.txt`, and a
+`NOTICE` file if one is present; OpenSSL 3.0 to 3.5 have none), and the
+default build does not ship it at all, since it is linked dynamically. It
+is linked statically only in release artifacts that include its
+`LICENSE.txt` (10.0).
 
 ### 10.0 Linking OpenSSL
 
@@ -1493,34 +1494,46 @@ glibc baseline, `future.md` §18).
 
 - `make vm` (default `OPENSSL=system`) finds the system OpenSSL 3 with
   `pkg-config libssl libcrypto` and links `-lssl -lcrypto`. A missing
-  OpenSSL, or one older than 3.0, stops the build with a clear error. The
-  check runs only inside the recipe that links the VM, never when the
-  Makefile is parsed, so `make site`, `make dup-check` and the Racket-only
-  tests do not need OpenSSL.
+  OpenSSL, or one older than 3.0, stops the build with a clear error.
 - Why dynamic: security fixes come with the distro's `libssl.so.3`, with no
   VM release; the system OpenSSL knows its own CA store (`OPENSSLDIR`); the
   binary is smaller and CI does not build OpenSSL; we do not ship OpenSSL
-  code, so its `NOTICE` duty does not apply (license rule above); and the
-  OpenSSL 3.x ABI is stable.
+  code, so its attribution duty does not apply (license rule above); and
+  the OpenSSL 3.x ABI is stable.
 - `make vm OPENSSL=static` links a static OpenSSL 3, for the release
   artifacts or minimal glibc images without OpenSSL (distroless, `scratch`
   style). musl (Alpine) needs its own build (`future.md` §18); there the
   dynamic build with Alpine's `openssl-dev` works. If a musl artifact is
   ever released, it is static too (musl plus a static OpenSSL).
-  `OPENSSL_PREFIX=/path` names a prefix with `libssl.a` and `libcrypto.a`
-  (for example OpenSSL built with `no-shared`). It must never link the
-  system's shared OpenSSL by accident:
-  `PKG_CONFIG_LIBDIR=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig`
-  replaces `pkg-config`'s default search path, and the build fails if
-  `pkg-config --exists libssl libcrypto` fails there. The VM links the two
-  archives by full path, in the directory that `pkg-config --variable=libdir`
-  gives for `libssl` and `libcrypto` (so the `.pc` files decide `lib` or
-  `lib64`), plus the flags of `pkg-config --static
-  --libs-only-l --libs-only-other libssl libcrypto` with `-lssl` and
-  `-lcrypto` removed (leaving, for example, `-ldl -pthread`). The static
-  CI or release job checks that `readelf -d` of the VM shows no `NEEDED`
-  entry for libssl or libcrypto. There is no vendored
-  OpenSSL submodule unless the release workflow needs one later.
+- `OPENSSL=static` needs `OPENSSL_PREFIX=/path`, a prefix with `libssl.a`
+  and `libcrypto.a`; without it the build stops with an error. Debian's
+  `libssl-dev` ships both archives, so CI and the release build use
+  `OPENSSL_PREFIX=/usr` with the distro's own static archives and never
+  build OpenSSL. Any other prefix works too (for example OpenSSL built with
+  `no-shared`). There is no vendored OpenSSL submodule unless the release
+  workflow needs one later.
+- The static build must never link the system's shared OpenSSL by
+  accident. Its recipe unsets `PKG_CONFIG_PATH` and sets
+  `PKG_CONFIG_LIBDIR` to the prefix's `lib/pkgconfig`, `lib64/pkgconfig`
+  and `lib/<multiarch>/pkgconfig` (multiarch from `$(CC) -print-multiarch`
+  when it is not empty), which replaces `pkg-config`'s default search path.
+  The build fails if `pkg-config --exists libssl libcrypto` fails there, or
+  if `pkg-config --variable=libdir` for `libssl` or `libcrypto` is not
+  inside `OPENSSL_PREFIX`. The VM links the two archives by full path, in
+  that `libdir` (so the `.pc` files decide `lib`, `lib64` or the multiarch
+  directory), plus the flags of `pkg-config --static --libs-only-l
+  --libs-only-other libssl libcrypto` with `-lssl` and `-lcrypto` removed
+  (leaving, for example, `-ldl -pthread`). The static CI or release job
+  checks that `readelf -d` of the VM shows no `NEEDED` entry for libssl or
+  libcrypto.
+- Both modes take `pkg-config --cflags libssl libcrypto` from the same
+  `pkg-config` environment as their link flags.
+- `pkg-config` never runs when the Makefile is parsed (no parse-time
+  `$(shell pkg-config ...)`), so `make site`, `make dup-check` and the
+  Racket-only tests do not need OpenSSL. The recipe for the
+  `build/vm/flags` stamp runs `pkg-config` and writes the resolved cflags
+  and link flags there, with `OPENSSL` and `OPENSSL_PREFIX`; the link
+  recipe reads them back. A change of mode, prefix or flags relinks.
 - The VM needs only OpenSSL 3.0 and loads with any 3.x. It never calls a
   symbol that exists only in 3.1 or later. `-DOPENSSL_API_COMPAT=30000`
   only hides deprecated API; what enforces 3.0-only symbols is a check in
@@ -1530,8 +1543,8 @@ glibc baseline, `future.md` §18).
   returns an error `Result` that names the missing feature.
 - A static OpenSSL's built-in paths point at the build machine, so the
   static build finds the CA store itself (10.3).
-- Static release artifacts ship OpenSSL's `LICENSE` and `NOTICE` text, as
-  the license rule above requires.
+- Static release artifacts ship OpenSSL's `LICENSE.txt` (and its `NOTICE`
+  if a later version adds one), as the license rule above requires.
 - Rejected for now: loading OpenSSL with `dlopen` only when a program uses
   TLS. It is more complex, so the default VM needs libssl even for programs
   without TLS. On purpose, then, without an OpenSSL development package the
@@ -2106,18 +2119,35 @@ libuv stays inside the I/O layer.
   or return code leaks out of it.
 - The adapter calls picohttpparser without `last_len`: each call parses
   the whole buffered head again (at most 64 KiB, 10.5). So a bad start line
-  returns -1 as soon as it is read, before the head is complete, and an
-  error surfaces on the call where the bad bytes arrive. On INCOMPLETE the
-  caller reads more and calls again with the grown buffer.
-- A -1 from picohttpparser maps to one error kind: 400, with a message such
-  as "invalid HTTP request head" or "invalid HTTP response head" (the
-  wording is free).
-- Our own checks add only what gives a different status or protects us:
-  the line and block size limits (10.5, checked before parsing); the
-  header count (the adapter passes a 101-entry header array and counts
-  itself, so the 101st header gives 431); the HTTP version (505, as in the
-  evaluator); rejecting bare LF (kept strict against smuggling); the
-  `Host` rules; and the body framing and smuggling rules.
+  returns -1 as soon as its line is complete, before the head is complete.
+  On INCOMPLETE the caller reads more and calls again with the grown
+  buffer.
+- A -1 from picohttpparser maps to one error kind: 400 "invalid HTTP
+  request head" for a server, and the client `Result` error kind "invalid
+  HTTP response head" for a response.
+- The adapter checks more than picohttpparser, all on our own pre-scan or
+  on picohttpparser's output:
+  - The pre-scan (one pass over newly read bytes) checks the line and
+    block size limits (10.5), rejects bare LF (kept strict against
+    smuggling), and counts header lines: once the count passes 100 it
+    returns 431, before picohttpparser runs.
+  - The start-line version is classified before a -1 is trusted: any
+    `HTTP/<digits and dots>` that is not `HTTP/1.1` gives 505, as in the
+    evaluator; a malformed version gives 400.
+  - Request target: origin form (`/...`), or `*` with `OPTIONS`; only bytes
+    33 to 126; anything else is 400.
+  - Method: token characters only (400); `CONNECT` gives 501.
+  - obs-fold lines (picohttpparser returns a header with `name == NULL`)
+    are rejected with 400.
+  - Responses: `HTTP/1.1` only, status 100 to 599, 101 rejected, at most 16
+    interim responses; these fail as client `Result` error kinds.
+  - The `Host` rules, and the body framing and smuggling rules.
+- The parser runs only when the newly read bytes complete a line (contain
+  LF). Each call reparses at most 64 KiB, and a head has at most about 100
+  lines (the start line, 100 headers and the blank line) before the
+  pre-scan stops it, so parsing work is bounded by lines ×
+  head size (at most 100 × 64 KiB). Errors surface per complete line, like
+  the evaluator's `wire-line`.
 - The body is never buffered whole by the parsing layer. Our own body
   decoder, `vm/http_body.c` (no third-party code), is an incremental state
   machine. It is set up with the framing (`Content-Length` n, chunked, or
@@ -2128,15 +2158,23 @@ libuv stays inside the I/O layer.
   saturation; `phr_decode_chunked` is not used, since it knows no limits.
   `HttpBody`, `HTTP.request_stream` and `HttpWriter` read and write through
   it chunk by chunk, so a large upload or download never sits whole in
-  memory. The encoder that writes chunked output is ours too. Swapping the
+  memory. Trailer lines are checked by the body decoder with the header
+  rules (token names, value bytes, the forbidden trailer list, and the size
+  and count limits), as `http-wire.rkt`'s `read-headers` with `#:trailers?
+  #t`. The encoder that writes chunked output is ours too. Swapping the
   head parser leaves the body decoder unchanged.
 - Tests target the adapter interface, so a replacement parser must pass the
   same tests: a C unit test in `vm/tests/`, and fixed, deterministic hostile
   cases run on both backends that check status codes and error kinds, not
   message text: `Content-Length` with `Transfer-Encoding`, duplicate
   `Content-Length`, huge chunk sizes, bare LF, over-long lines and blocks,
-  100 headers accepted and 101 rejected, and a bad start line with the
-  socket left open, which gets 400 before any timeout.
+  100 headers accepted and 101 and 150 rejected with 431, `HTTP/1.0` and
+  `HTTP/2.0` (505) and a malformed version (400), absolute-form and
+  non-ASCII targets (400), `*` without `OPTIONS` (400), a bad method token
+  (400), `CONNECT` (501), an obs-fold line (400), bad trailers, and on the
+  client side `HTTP/1.0` responses, status 99 and 600, a 101 response and
+  17 interim responses. One case sends a complete bad start line ending in
+  CRLF and leaves the socket open: it gets 400 before any timeout.
 
 ## 11. Build, CI and supply chain
 
@@ -2165,21 +2203,24 @@ libuv stays inside the I/O layer.
   costs nothing measurable. libuv (7h) is built from its submodule into
   `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h) is linked
   dynamically by default: `OPENSSL=system` checks `pkg-config
-  --atleast-version=3.0 libssl libcrypto` and links `-lssl -lcrypto`;
-  `OPENSSL=static` sets
-  `PKG_CONFIG_LIBDIR=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig`,
-  fails if `pkg-config --exists libssl libcrypto` fails there, and links
-  `libssl.a` and `libcrypto.a` by full path plus the flags of `pkg-config
-  --static --libs-only-l --libs-only-other libssl libcrypto` without
-  `-lssl` and `-lcrypto`, from the directory `pkg-config --variable=libdir`
-  gives (10.0). Both builds compile with `-DOPENSSL_API_COMPAT=30000`. Both
-  checks run only in the recipe that links the VM, never at Makefile parse
-  time.
+  --atleast-version=3.0 libssl libcrypto` and links `-lssl -lcrypto`.
+  `OPENSSL=static` requires `OPENSSL_PREFIX`, unsets `PKG_CONFIG_PATH`,
+  sets `PKG_CONFIG_LIBDIR` to the prefix's `lib/pkgconfig`,
+  `lib64/pkgconfig` and `lib/<multiarch>/pkgconfig`, fails if `pkg-config
+  --exists libssl libcrypto` fails there or if `--variable=libdir` is
+  outside the prefix, and links `libssl.a` and `libcrypto.a` from that
+  `libdir` by full path, plus the flags of `pkg-config --static
+  --libs-only-l --libs-only-other libssl libcrypto` without `-lssl` and
+  `-lcrypto` (10.0). Both modes take `pkg-config --cflags` from the same
+  environment and compile with `-DOPENSSL_API_COMPAT=30000`. The recipe
+  for the `build/vm/flags` stamp runs `pkg-config` and writes the resolved
+  flags; the link recipe reads them back; nothing runs `pkg-config` at
+  Makefile parse time.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
   build needs no Racket. Output `dist/agentica-vm`. The compiler flags,
-  `OPENSSL`, `OPENSSL_PREFIX` and the resolved OpenSSL link flags are
-  recorded in `build/vm/flags`, so switching between a normal and a
-  sanitizer build, or between OpenSSL modes, always relinks.
+  `OPENSSL`, `OPENSSL_PREFIX` and the resolved OpenSSL cflags and link
+  flags are recorded in `build/vm/flags`, so switching between a normal and
+  a sanitizer build, or between OpenSSL modes, always relinks.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and

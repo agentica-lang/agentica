@@ -380,11 +380,15 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   Linking: dynamic by default (`OPENSSL=system`, `pkg-config libssl
   libcrypto`, `-lssl -lcrypto`); the build fails for a missing or pre-3.0
   OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for release artifacts:
-  `PKG_CONFIG_LIBDIR` limited to the prefix, the archives linked by full
+  `OPENSSL_PREFIX` required (CI and releases: `/usr`, Debian's static
+  archives), `PKG_CONFIG_PATH` unset, `PKG_CONFIG_LIBDIR` limited to the
+  prefix (`lib`, `lib64`, multiarch) and `libdir` checked inside it, the archives linked by full
   path plus `pkg-config --static --libs-only-l --libs-only-other` without
   `-lssl -lcrypto`, archives from `pkg-config --variable=libdir`, and
   `readelf -d` shows no libssl/libcrypto `NEEDED`. The OpenSSL settings
-  and link flags are in `build/vm/flags`. Only 3.0 symbols are called
+  and resolved cflags and link flags are written to `build/vm/flags` by its
+  stamp recipe and read back by the link recipe; no parse-time
+  `pkg-config`. Only 3.0 symbols are called
   directly: `-DOPENSSL_API_COMPAT=30000` only hides deprecated API, and the
   CI `test` job checks `objdump -T` for no `OPENSSL_3.[1-9]`; newer
   features are found at run time. Without `libssl-dev` all VM tests skip
@@ -398,15 +402,19 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `agc_http_parse_request_head`/`agc_http_parse_response_head` returning
   OK with bytes consumed, INCOMPLETE or ERROR with our error enum). Only
   `vm/http_pico.c` includes `picohttpparser.h`. It is called without
-  `last_len` (full reparse, at most 64 KiB), so a bad start line fails at
-  once; a -1 is one 400 error kind. Our checks add only the size limits
-  (before parsing), the header count (101-entry array, 431), the version
-  (505), bare LF, `Host`, and framing and smuggling rules. The body goes
-  through our incremental decoder `vm/http_body.c` (`feed` returns bytes
-  consumed, body slices, and NEED_MORE, DONE or ERROR; no
-  `phr_decode_chunked`), so bodies stream and are never buffered whole.
-  Tests target the adapter and check statuses, not messages
-  (`docs/vm.md` 10.6).
+  `last_len` and only when new bytes complete a line (work at most 100
+  lines × 64 KiB); a -1 is 400 "invalid HTTP request head" or the client
+  error kind "invalid HTTP response head". A pre-scan checks size limits,
+  bare LF and the header count (431 past 100, before pico runs). On pico's
+  output: version (non-1.1 `HTTP/x` 505, malformed 400), target (origin
+  form or `*` with `OPTIONS`, bytes 33–126), method token, `CONNECT` 501,
+  obs-fold (`name == NULL`) 400, response version, status 100–599, no 101,
+  at most 16 interim responses, `Host`, framing and smuggling. The body
+  goes through our incremental decoder `vm/http_body.c` (`feed` returns
+  bytes consumed, body slices, and NEED_MORE, DONE or ERROR; trailers
+  checked with the header rules; no `phr_decode_chunked`), so bodies
+  stream and are never buffered whole. Tests target the adapter and check
+  statuses, not messages (`docs/vm.md` 10.6).
 - **Processes (7h)**: the VM resolves the executable itself; on Windows only
   `.exe`/`.com`, case-insensitive; never verbatim arguments; all three stdio
   piped.
