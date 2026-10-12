@@ -1470,8 +1470,8 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, its `LICENSE` stays in the submodule), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
-| picohttpparser | 7h (HTTP) | Vendored: git submodule `vm/third_party/picohttpparser` from `https://github.com/h2o/picohttpparser` (dual MIT or Perl license; we take MIT, the text is in `picohttpparser.h`), pinned to tag v1.4 (commit `516cdd3e00b3`). Only the start line and headers (`phr_parse_request`, `phr_parse_response`), behind our adapter (10.6); `phr_decode_chunked` is not used, since it knows no limits. `make vm` compiles `picohttpparser.c` per build mode into `$(VM_BUILD)/picohttpparser.o`, like yyjson, at the baseline (no `-msse4.2`; its SSE4.2 path is a SIMD candidate, `future.md` §19). Everything else in HTTP is our own C. |
-| OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `libssl.a` and `libcrypto.a` from that prefix by full path, searching only that prefix's `pkg-config` files, and fails rather than fall back to the system's shared libraries. Not vendored: no submodule. The one exception to the license rule below. |
+| picohttpparser | 7h (HTTP) | Vendored: git submodule `vm/third_party/picohttpparser` from `https://github.com/h2o/picohttpparser` (dual MIT or Perl license; we take MIT; the notice is in `picohttpparser.h`, and releases ship it extracted to a license file), pinned to tag v1.4 (commit `516cdd3e00b3`). It parses and validates the start line and headers (`phr_parse_request`, `phr_parse_response`), behind our adapter (10.6); `phr_decode_chunked` is not used, since it knows no limits. `make vm` compiles `picohttpparser.c` per build mode into `$(VM_BUILD)/picohttpparser.o`, like yyjson, at the baseline (no `-msse4.2`; its SSE4.2 path is a SIMD candidate, `future.md` §19). Everything else in HTTP is our own C. |
+| OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `libssl.a` and `libcrypto.a` from that prefix by full path, searching only that prefix's `pkg-config` files, and fails rather than fall back to the system's shared libraries. Not vendored; see the note on OpenSSL under the license rule. |
 
 License rule: vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive (no copyleft). Its
@@ -1505,24 +1505,27 @@ glibc baseline, `future.md` §18).
 - `make vm OPENSSL=static` links a static OpenSSL 3, for the release
   artifacts or minimal glibc images without OpenSSL (distroless, `scratch`
   style). musl (Alpine) needs its own build (`future.md` §18); there the
-  dynamic build with Alpine's `openssl-dev` works. `OPENSSL_PREFIX=/path`
-  names a prefix with `libssl.a` and `libcrypto.a` under `lib/` or `lib64/`
+  dynamic build with Alpine's `openssl-dev` works. If a musl artifact is
+  ever released, it is static too (musl plus a static OpenSSL).
+  `OPENSSL_PREFIX=/path` names a prefix with `libssl.a` and `libcrypto.a`
   (for example OpenSSL built with `no-shared`). It must never link the
   system's shared OpenSSL by accident:
   `PKG_CONFIG_LIBDIR=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig`
   replaces `pkg-config`'s default search path, and the build fails if
   `pkg-config --exists libssl libcrypto` fails there. The VM links the two
-  archives by full path, plus the flags of `pkg-config --static
+  archives by full path, in the directory that `pkg-config --variable=libdir`
+  gives for `libssl` and `libcrypto` (so the `.pc` files decide `lib` or
+  `lib64`), plus the flags of `pkg-config --static
   --libs-only-l --libs-only-other libssl libcrypto` with `-lssl` and
   `-lcrypto` removed (leaving, for example, `-ldl -pthread`). The static
-  CI or release job checks that `readelf -d` of the
-  VM shows no `NEEDED` entry for libssl or libcrypto. There is no vendored
+  CI or release job checks that `readelf -d` of the VM shows no `NEEDED`
+  entry for libssl or libcrypto. There is no vendored
   OpenSSL submodule unless the release workflow needs one later.
 - The VM needs only OpenSSL 3.0 and loads with any 3.x. It never calls a
-  symbol that exists only in 3.1 or later: it is built with
-  `-DOPENSSL_API_COMPAT=30000`, and the static CI job also checks that
-  `objdump -T` of the dynamic VM shows no `OPENSSL_3.[1-9]` symbol
-  version. Newer features (Argon2id needs
+  symbol that exists only in 3.1 or later. `-DOPENSSL_API_COMPAT=30000`
+  only hides deprecated API; what enforces 3.0-only symbols is a check in
+  the normal dynamic CI `test` job, after `make vm`: `objdump -T` of the VM
+  shows no `OPENSSL_3.[1-9]` symbol version. Newer features (Argon2id needs
   3.2) are found at run time: if `EVP_KDF_fetch` returns `NULL`, the call
   returns an error `Result` that names the missing feature.
 - A static OpenSSL's built-in paths point at the build machine, so the
@@ -1531,7 +1534,9 @@ glibc baseline, `future.md` §18).
   the license rule above requires.
 - Rejected for now: loading OpenSSL with `dlopen` only when a program uses
   TLS. It is more complex, so the default VM needs libssl even for programs
-  without TLS.
+  without TLS. On purpose, then, without an OpenSSL development package the
+  VM does not build and all VM tests skip locally; install `libssl-dev` to
+  run them.
 
 ### 10.1 Event loop: libuv, not libevent
 
@@ -2082,36 +2087,37 @@ written `size > limit - total`. A hermetic test sends over-long values.
 
 ### 10.6 HTTP parsing
 
-The VM's HTTP code ports the rules of `src/http-wire.rkt` to C. Only the
-start line and headers go through picohttpparser (10), and only behind our
-own small adapter, so the parser can be swapped later (for example for
-llhttp), the same way libuv stays inside the I/O layer.
+Parity with the evaluator is black-box: the exit code, the stdout of
+finished programs, the diagnostic code, and the HTTP status or `Result`
+error kind must match; message text, spans, step counts and library error
+strings may differ. So the VM does not copy `src/http-wire.rkt` check by
+check. picohttpparser validates the head; that is why it is a dependency
+(and its SSE4.2 path later, `future.md` §19). It sits behind our own small
+adapter, so it can be swapped later (for example for llhttp), the same way
+libuv stays inside the I/O layer.
 
 - `vm/http_parse.h` holds our types only: a parsed head struct (method,
   target, version, status, reason, and the headers with their count, all
   as byte slices into the input buffer) and
   `agc_http_parse_request_head(buf, len, limits, out)` and
   `agc_http_parse_response_head(buf, len, limits, out)`. They return OK
-  with the bytes consumed, INCOMPLETE, or ERROR with our own error enum,
-  which maps to the evaluator's messages.
-- The head parse is incremental. On INCOMPLETE the caller reads more and
-  calls again with the grown buffer, passing the previous length so the
-  parser can skip what it already scanned (picohttpparser's `last_len`).
-  The head is bounded by the 64 KiB block limit (10.5), so buffering it is
-  fine.
+  with the bytes consumed, INCOMPLETE, or ERROR with our own error enum.
 - Only `vm/http_pico.c` includes `picohttpparser.h`. No picohttpparser type
   or return code leaks out of it.
-- picohttpparser returns only -1 on a bad message, so the adapter
-  classifies failures with our own checks, and the messages match the
-  evaluator: "invalid request line", "invalid request target", "invalid
-  HTTP header", "too many HTTP headers" (431). The adapter gives
-  picohttpparser a header array larger than the limit (101 entries) and
-  counts the headers itself, so the 101st header fails with "too many HTTP
-  headers" (431) exactly where `http-wire.rkt` does. The line and block size
-  limits (10.5) are checked before the parser is called. Where
-  picohttpparser accepts input that `http-wire.rkt` rejects (header name
-  and value characters, obs-fold, and so on), the adapter checks it again
-  with `http-wire.rkt`'s rules, so both backends behave the same.
+- The adapter calls picohttpparser without `last_len`: each call parses
+  the whole buffered head again (at most 64 KiB, 10.5). So a bad start line
+  returns -1 as soon as it is read, before the head is complete, and an
+  error surfaces on the call where the bad bytes arrive. On INCOMPLETE the
+  caller reads more and calls again with the grown buffer.
+- A -1 from picohttpparser maps to one error kind: 400, with a message such
+  as "invalid HTTP request head" or "invalid HTTP response head" (the
+  wording is free).
+- Our own checks add only what gives a different status or protects us:
+  the line and block size limits (10.5, checked before parsing); the
+  header count (the adapter passes a 101-entry header array and counts
+  itself, so the 101st header gives 431); the HTTP version (505, as in the
+  evaluator); rejecting bare LF (kept strict against smuggling); the
+  `Host` rules; and the body framing and smuggling rules.
 - The body is never buffered whole by the parsing layer. Our own body
   decoder, `vm/http_body.c` (no third-party code), is an incremental state
   machine. It is set up with the framing (`Content-Length` n, chunked, or
@@ -2119,18 +2125,18 @@ llhttp), the same way libuv stays inside the I/O layer.
   `feed(buf, len)` returns the bytes consumed, zero or more body slices
   pointing into the input, and NEED_MORE, DONE or ERROR (413, invalid chunk
   size, invalid chunk terminator, ...). Chunk sizes accumulate with
-  saturation. `HttpBody`, `HTTP.request_stream` and `HttpWriter` read and
-  write through it chunk by chunk, so a large upload or download never sits
-  whole in memory. The encoder that writes chunked output is ours too.
-  Swapping the head parser leaves the body decoder unchanged.
-- Above the adapter, in our code: the body decoder above, the request
-  smuggling rejections, the `Host` rules, interim responses, every limit in
-  10.5, and the evaluator's exact error messages.
+  saturation; `phr_decode_chunked` is not used, since it knows no limits.
+  `HttpBody`, `HTTP.request_stream` and `HttpWriter` read and write through
+  it chunk by chunk, so a large upload or download never sits whole in
+  memory. The encoder that writes chunked output is ours too. Swapping the
+  head parser leaves the body decoder unchanged.
 - Tests target the adapter interface, so a replacement parser must pass the
   same tests: a C unit test in `vm/tests/`, and fixed, deterministic hostile
-  cases run on both backends (`Content-Length` with `Transfer-Encoding`,
-  duplicate `Content-Length`, huge chunk sizes, bare LF, over-long lines
-  and blocks, 100 headers accepted and 101 rejected).
+  cases run on both backends that check status codes and error kinds, not
+  message text: `Content-Length` with `Transfer-Encoding`, duplicate
+  `Content-Length`, huge chunk sizes, bare LF, over-long lines and blocks,
+  100 headers accepted and 101 rejected, and a bad start line with the
+  socket left open, which gets 400 before any timeout.
 
 ## 11. Build, CI and supply chain
 
@@ -2165,13 +2171,15 @@ llhttp), the same way libuv stays inside the I/O layer.
   fails if `pkg-config --exists libssl libcrypto` fails there, and links
   `libssl.a` and `libcrypto.a` by full path plus the flags of `pkg-config
   --static --libs-only-l --libs-only-other libssl libcrypto` without
-  `-lssl` and `-lcrypto` (10.0). Both builds compile with
-  `-DOPENSSL_API_COMPAT=30000`. Both checks run only in the recipe that
-  links the VM, never at Makefile parse time.
+  `-lssl` and `-lcrypto`, from the directory `pkg-config --variable=libdir`
+  gives (10.0). Both builds compile with `-DOPENSSL_API_COMPAT=30000`. Both
+  checks run only in the recipe that links the VM, never at Makefile parse
+  time.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
-  build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
-  recorded in `build/vm/flags`, so switching between a normal and a sanitizer
-  build always relinks.
+  build needs no Racket. Output `dist/agentica-vm`. The compiler flags,
+  `OPENSSL`, `OPENSSL_PREFIX` and the resolved OpenSSL link flags are
+  recorded in `build/vm/flags`, so switching between a normal and a
+  sanitizer build, or between OpenSSL modes, always relinks.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and
@@ -2267,8 +2275,9 @@ spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` pl
 the platform's OpenSSL 3 development package, `libssl-dev` on Debian) to each
 job; these jobs use the default dynamic build. One Linux job (or the release
 workflow) builds `OPENSSL=static`, checks that `readelf -d` shows no
-libssl or libcrypto `NEEDED` entry and that `objdump -T` of the dynamic VM
-shows no `OPENSSL_3.[1-9]` symbol version, and runs the TLS tests. On macOS (paused),
+libssl or libcrypto `NEEDED` entry, and runs the TLS tests. The `test` job,
+after `make vm`, checks that `objdump -T` of its dynamic VM shows no
+`OPENSSL_3.[1-9]` symbol version. On macOS (paused),
 Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
 `lib/pkgconfig`.
 
