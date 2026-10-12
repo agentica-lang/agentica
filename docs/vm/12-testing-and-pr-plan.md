@@ -306,6 +306,39 @@ those that need files, processes, tasks or the network by name:
 `file-summary`, `process-tool`, `concurrency`, `tcp_echo`, `http_get` and
 `http_server`.
 
+### 12.3 Plan for HTTP and `TlsContext` (planned)
+
+The C-only HTTP PR that 7h planned (10.6) is replaced by phase 20
+(`docs/future/30-hybrid-http.md` §30, roadmap `20-hybrid-http.md`). After
+the TLS PR (today's API), HTTP lands as four PRs, each with its own tests
+and docs:
+
+- **20a** the wire layer, server side: picohttpparser and the adapter, the
+  body decoder into one buffer, `HttpWire.read_request` and
+  `write_response`, `HttpRequest` and `HttpResponse`.
+  `vm/tests/http_parse_test.c` covers the whole hostile list of 10.6;
+  golden fixtures serve raw requests to themselves over `TCP`;
+  `tests/vm-http-test.rkt` sends every hostile case from a Python
+  raw-socket peer on port 0.
+- **20b** the client wire and the pool (`HttpWire.client`, `exchange`,
+  `close_client`), tested against Python `http.server` and an HTTPS
+  server made with Python's `ssl`, and the client-side hostile responses.
+- **20c** the server's task group and the core of task cancellation
+  (`agc_task_cancel`, parent and children links), with a C test of each
+  task state and golden fixtures of `close_server` during a handler.
+- **20d** `std/http`, the switch to `import "std/http.agc" as HTTP`, the
+  removal of the `HTTP` fallback and of the evaluator's HTTP code, the
+  migration of every HTTP program and test, and a performance sanity
+  check against the evaluator's HTTP (`benchmarks/http.py`, not a gate).
+
+Golden fixtures stay timing-free (a fixture is its own client and server,
+only `main` prints); anything that depends on a timeout goes in
+`tests/vm-http-test.rkt`. Python and Node peers use their standard
+libraries only and are required in CI, as for TCP. After 7i, at order
+step 7.4, the streaming items (20e to 20g, on channels) and `TlsContext`
+(phase 19, `docs/future/29-tls-context.md` §29) follow with the same kinds
+of tests.
+
 ## 13. Open questions
 
 - **Random seeding**: resolved in PR 6b: the VM uses its own

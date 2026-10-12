@@ -374,7 +374,7 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
 | HTTP headers | 100 | `http-wire.rkt` |
 | HTTP interim responses | 15 accepted, the 16th fails | `read-response-head`, `http-wire.rkt` |
 | `max_connections` | at most 65536 | `http-client.rkt` |
-| HTTP body | `max_body_bytes`, 413 | `http-wire.rkt` |
+| HTTP body | `max_body_bytes`, 413; from phase 20 the body is held whole, so the default is 1 MiB and the cap 64 MiB (10.7) | `http-wire.rkt` |
 | Process launch | `--allow-run` | `process.rkt` |
 | Windows programs other than `.exe`, `.com` | rejected | `process.rkt` |
 
@@ -383,6 +383,13 @@ parsing stops once a value exceeds the limit (413), and every comparison is
 written `size > limit - total`. A hermetic test sends over-long values.
 
 ### 10.6 HTTP parsing
+
+Phase 20 (`docs/future/30-hybrid-http.md` §30) runs HTTP on the VM with a
+simpler API: whole messages, `String` bodies, no streaming until channels.
+Every parsing and framing rule of this section stays; what changes is how
+bodies are handed over (the last bullets, and 10.7). The evaluator's HTTP is
+deleted by phase 20, so the codes below are fixed by the hostile-case
+goldens, not by a comparison with it.
 
 Parity with the evaluator is black-box (1): the exit code, the stdout and
 program stderr of every run except one stopped by `--max-steps`, the
@@ -469,6 +476,12 @@ the I/O layer.
   - The `Host` rules, and the body framing and smuggling rules above
     (conflicting `Content-Length` 400, unsupported `Transfer-Encoding`
     501).
+- Phase 20 keeps this decoder but not its streaming use: the slices go
+  into one `malloc`'d buffer for the whole body, within `max_body_bytes`,
+  which becomes one `String` (10.7). `HttpBody`, `HTTP.request_stream`,
+  `HttpWriter`, trailers as an API and the chunked encoder are dropped
+  until the streaming items (20e to 20g) bring the encoder back on
+  channels. The paragraph below is the design it replaces in part.
 - The body is never buffered whole by the parsing layer. Our own body
   decoder, `vm/http_body.c` (no third-party code), is an incremental state
   machine. It is set up with the framing (`Content-Length` n, chunked, or
@@ -507,3 +520,33 @@ the I/O layer.
   before any timeout; another sends the short line `GET / HTTP/1\r\n`,
   which gets 505.
 
+### 10.7 HTTP on the VM: the hybrid split (planned, phase 20)
+
+Planned in `docs/future/30-hybrid-http.md` §30 and roadmap phase 20. HTTP is
+split between a small C builtin module, `HttpWire`, and the Agentica module
+`std/http.agc`, which programs import as `HTTP`.
+
+- **C (`HttpWire`)** keeps what is byte-level, security-critical or shared
+  across tasks: the head parser of 10.6 (`vm/http_parse.h`,
+  `vm/http_pico.c`), the body decoder (`vm/http_body.c`) filling one
+  `malloc`'d buffer per body, the UTF-8 check, the error answers before
+  dispatch (400, 413, 417, 431, 501, 505), response writing with
+  `Content-Length` only, the client's connection pool and its `SSL_CTX`
+  (one per client, from `ca_file`, until `TlsContext`,
+  `docs/future/29-tls-context.md` §29), and the server's task group:
+  accept with the `max_connections` slots, group tasks that own their
+  sockets, and `close_server`, which cancels the group's tasks through
+  `agc_task_cancel` (§30.6; the core of the cancellation planned in
+  `docs/future/27-iteration-and-concurrency.md` §27.1, landed early).
+- **Agentica (`std/http`)** keeps the rest: options and their checks, URL
+  parsing, request building, the accept loop, the per-connection loop,
+  keep-alive, handler dispatch, the 500 answers for a handler `error` or an
+  unsendable response, and the header helpers. No Agentica code touches a
+  body byte by byte: a body crosses once, as a `String`.
+- **What is dropped** from the C-only design of 10.6 and roadmap 7h: the
+  streaming body API (`HttpBody`, `HttpWriter`, the `request_stream`
+  producer task), the trailer API, the chunked encoder (back in 20f and 20g
+  for streams on channels), and a server loop and handler dispatch in C.
+- **What is kept**: picohttpparser v1.4 behind the adapter, every check of
+  10.6, the limits of 10.5 with saturating sizes, and the hostile-case list,
+  run against the VM server and client by a Python raw-socket peer.
