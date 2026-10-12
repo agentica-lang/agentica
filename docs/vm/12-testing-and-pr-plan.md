@@ -307,6 +307,42 @@ those that need files, processes, tasks or the network by name:
 `file-summary`, `process-tool`, `concurrency`, `tcp_echo`, `http_get` and
 `http_server`.
 
+### 12.3 Plan for HTTP and `TlsContext` (planned)
+
+The C-only HTTP PR that 7h planned (10.6) is replaced by phase 20
+(`docs/future/30-hybrid-http.md` §30, roadmap `20-hybrid-http.md`). After
+the TLS PR (today's API), HTTP lands as four PRs, each with its own tests
+and docs:
+
+- **20a** the client: picohttpparser and the adapter, the body decoder
+  into one buffer, `HttpResponse`, the pool and `HttpWire.client`,
+  `exchange` and `close_client`, the client part of `std/http.agc`, the
+  std-only guard on `HttpWire`, and the refusal (`LOWER-UNSUPPORTED`,
+  "needs the VM") wherever a program would reach the evaluator. `vm/tests/http_parse_test.c` covers the whole
+  hostile list of 10.6 at the adapter; golden fixtures fetch from a
+  server written over `TCP` in the same program; `tests/vm-http-test.rkt`
+  runs Python `http.server`, an HTTPS server made with Python's `ssl`, and
+  the client-side hostile responses from a raw peer.
+- **20b** the core of task cancellation (`agc_task_cancel`, parent and
+  children links, pool waiters), with `vm/tests/task_cancel_test.c`.
+- **20c** the server: `HttpWire.read_request`, `write_response` and the
+  task group, `HttpRequest`, and the server part of `std/http.agc`;
+  golden fixtures of a client and a server in one program,
+  `close_server` during a handler, and every hostile request of 10.6
+  from a Python raw-socket peer on port 0.
+- **20d** `std/http`, the switch to `import "std/http.agc" as HTTP`, the
+  removal of the `HTTP` fallback and of the evaluator's HTTP code, the
+  migration of every HTTP program and test, and a performance sanity
+  check against the evaluator's HTTP (`benchmarks/http.py`, not a gate).
+
+Golden fixtures stay timing-free (a fixture is its own client and server,
+only `main` prints); anything that depends on a timeout goes in
+`tests/vm-http-test.rkt`. Python and Node peers use their standard
+libraries only and are required in CI, as for TCP. After 7i, at order
+step 7.4, the streaming items (20e to 20g, on channels) and `TlsContext`
+(phase 19, `docs/future/29-tls-context.md` §29) follow with the same kinds
+of tests.
+
 ## 13. Open questions
 
 - **Random seeding**: resolved in PR 6b: the VM uses its own

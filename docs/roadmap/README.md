@@ -29,10 +29,10 @@ work rather than their numeric order.
 | 5 | **Mostly complete:** Bytecode VM core in C with the Boehm GC (`docs/vm/12-testing-and-pr-plan.md` §12.2 items 1 to 8), the 7g benchmark script, 7h part 1 (event loop and files) and ranges (8a); small items stay open in 7c, 7e (loader validation for opcodes as they land) and 7f | Checked programs run on the VM with the evaluator's exit code, stdout, program stderr and diagnostic codes, now recorded as golden outputs |
 | 6 | **Complete:** 7h tasks with one scheduler (N=1) on the structures split for N (`docs/vm/10-io-multicore.md` §10.2.3), with the fairness rule of §10.2.1 (long builtins charge the turn, never `--max-steps`) and the latency test of the 7h tasks item | Concurrent programs on the VM; timers and I/O stay responsive while other tasks compute |
 | 7 | **Complete:** the VM is the default backend (7i, first item): `agentica file.agc` runs on the VM; programs that use `TCP`, `TLS`, `HTTP` or `BDD`, and `agentica test`, fall back to the evaluator; the differential tests became golden tests; the release ships `agentica-vm` | One backend for almost every program; CI runs each test once |
-| 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4, done), then TCP (done), then TLS, then HTTP, then BDD in Agentica (phase 21, 7h, `docs/future/31-bdd-in-agentica.md` §31: `std/bdd` and a runner in Agentica, a child VM per scenario); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
+| 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4, done), then TCP (done), then TLS (today's API), then HTTP (phase 20, 20a to 20d, `docs/future/30-hybrid-http.md` §30: hybrid and synchronous, whole messages, C for parsing, framing, the pool and the server's task group, `std/http` in Agentica, imported as `HTTP`; a breaking change), then BDD in Agentica ([phase 21](21-bdd-in-agentica.md), 7h, [§31](../future/31-bdd-in-agentica.md#31-bdd-in-agentica): `std/bdd` and a runner in Agentica, a child VM per scenario), then 7i; each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
 | 7.2 | 7i: delete the evaluator and its runtime modules; the Racket front end (lexer, parser, checker, lowering, bytecode) stays | One backend |
 | 7.3 | New features, VM-only, first: iteration and concurrent collections (phase 17, `docs/future/27-iteration-and-concurrency.md` §27): `Task.map` (17a) with bounded concurrency, a per-item timeout and results in input order, then `Channel[T]` (17b), bounded with required timeouts; C builtins, so they need neither 8d nor the prelude; 17a adds the checker rule for `try` in a block whose result is `Result[T]` (§25.9), which 15i reuses; they land before phase 16, whose PRs migrate their programs; `Task.await` with a timeout (17c) is prelude code and comes at step 8.2; lazy streams stay to evaluate later (§27.4) | Programs run I/O for each item of a list N at a time, and build producer and consumer pipelines, with one form for each job; CPU speed-ups follow only if the multicore schedulers land (step 11) |
-| 7.4 | New features, VM-only (cont.): the streaming items of phase 20 (§30, the hybrid HTTP plan), built on the channels of 17b; then `TlsContext` (phase 19, §29) | Programs stream HTTP bodies through channels and set up TLS with a `TlsContext` |
+| 7.4 | New features, VM-only (cont.): the streaming items of phase 20 (20e to 20g, [§30](../future/30-hybrid-http.md#3011-streaming-on-channels), the hybrid HTTP plan), built on the channels of 17b; then `TlsContext` ([phase 19](19-tls-context.md), [§29](../future/29-tls-context.md#29-tls-contexts)) | Programs stream HTTP bodies through channels and set up TLS with a `TlsContext` |
 | 7.5 | New features, VM-only (cont.): default parameter values first (15a, `docs/future/25-ruby-typed-idioms.md` §25.1; front end only, so `std/log` can use them), then binary data (phase 13, `docs/future/23-binary-data.md` §23), then UDP, then logging and debugging (14b stack traces, then 14c `std/log`, `docs/future/24-logging.md` §24), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`) | Programs read and write binary numbers with `std/binary` and send UDP; agents see the call stack of a runtime error; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
 | 7.6 | New features, VM-only (cont.): strict diagnostics first (phase 16, `docs/future/26-strict-diagnostics.md` §26, no warnings: `CHECK-UNUSED-IMPORT`, `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`, `CHECK-UNUSED-RESULT`, in the order 16a, 16c, 16b, 16d; front end only, each PR migrates the repo's programs); then Ruby typed idioms (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A, one way to do each thing): re-exports, `with`, value equality, lambdas, `File.open` with a block, heredocs (15b to 15e, 15i, 15j); one small PR each | Unused imports, unused variables, unreachable code and ignored `Result` values are errors, and there are no warnings; agents write the Ruby forms they know, still checked, immutable and with one canonical form |
 | 7.7 | VM metrics (phase 18, `docs/future/28-vm-metrics.md` §28), VM-only, no language change: 18a metrics derived from the VM's own state and the `.prom` file, 18b the `GET /metrics` endpoint, 18c the enabled-only hooks with the overhead check; it needs only 7i (not the HTTP stack), and goes before the server measurement (7j) | Prometheus scrapes a running VM and Grafana graphs its GC, tasks, run-queue delay and I/O; batch runs leave their exit code and totals for node_exporter; nothing costs anything while nobody asks |
@@ -66,6 +66,12 @@ foundations below.
   peers, not against the evaluator. A catch-up PR (TCP, TLS, HTTP, BDD on the
   VM) removes the fallback for its module.
 - New features are VM-only and come after 7i. They have no Racket twin.
+  One exception, decided by the user on 2026-10-12: the HTTP catch-up
+  (phase 20, 20a to 20d) changes the HTTP API before 7i (whole messages,
+  `std/http` behind an import, the std-only `HttpWire` builtins) instead of
+  porting today's API, and the driver refuses (`LOWER-UNSUPPORTED`, "needs
+  the VM") any program that needs those VM-only builtins on an evaluator
+  path, as [phase 21](21-bdd-in-agentica.md) does for its own builtins.
 - The evaluator is frozen: it gets no new behaviour, only the fixes that keep
   the fallback running until 7i deletes it.
 
@@ -108,11 +114,17 @@ the programming reference contain the current signatures.
   that must be called as a method on a builtin type (`xs.find do ... end`),
   cannot be a `std/` module; it goes in the compiler prelude
   (`stdlib/prelude/*.agc`, `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica.
-  The prelude has the only guarded exceptions to "no internal helper
+  The prelude has guarded exceptions to "no internal helper
   builtins": `__fail_arg` and `__float_fixed` (§25.6, §25.11), and
   `__task_settled?` and `__task_wait`
   (`docs/future/27-iteration-and-concurrency.md` §27.3), which the loader
   accepts only in prelude functions.
+- One builtin module is std-only: `HttpWire` (phase 20,
+  `docs/future/30-hybrid-http.md` §30.5), the framing layer under
+  `std/http`. A public raw layer next to `std/http` would be a second way
+  to do HTTP, so the linker lets only modules embedded from `stdlib/`
+  call it (`std-only-modules` in `src/builtins.rkt`), and user code gets
+  `CHECK-UNKNOWN-NAME` with a help that shows the `std/http` import.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 
@@ -135,6 +147,8 @@ This file holds what matters now: the order above and the general rules. Each op
 | [`16-strict-diagnostics.md`](16-strict-diagnostics.md) | Phase 16: strict diagnostics (no warnings) |
 | [`17-iteration-and-concurrency.md`](17-iteration-and-concurrency.md) | Phase 17: iteration and concurrent collections (`Task.map`, channels, `Task.await` with a timeout) |
 | [`18-vm-metrics.md`](18-vm-metrics.md) | Phase 18: VM metrics (Prometheus) |
+| [`19-tls-context.md`](19-tls-context.md) | Phase 19: TLS contexts (`TlsContext`, `TLS.upgrade`) |
+| [`20-hybrid-http.md`](20-hybrid-http.md) | Phase 20: HTTP on the VM, simple and synchronous (C framing, `std/http` in Agentica), then streaming on channels |
 | [`21-bdd-in-agentica.md`](21-bdd-in-agentica.md) | Phase 21: BDD in Agentica (`std/bdd`, a runner and a child VM per scenario; catch-up item 7h) |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
