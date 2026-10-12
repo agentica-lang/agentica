@@ -1044,7 +1044,7 @@ No rewrite decision is taken now.
 
 ## 20. Crypto module
 
-**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library, linked the same way (dynamic by default, `OPENSSL=static` as an option, `docs/vm.md` 10.0). If it lands after 7i, it is VM only.
+**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library, linked the same way (dynamic by default, `OPENSSL=static` as an option, `docs/vm.md` 10.0). The VM needs only OpenSSL 3.0 and never calls 3.1+ symbols directly: newer features such as Argon2id (3.2) are found at run time, and when `EVP_KDF_fetch` returns `NULL` the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
 
 **Sketch** (names are not final):
 

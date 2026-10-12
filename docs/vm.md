@@ -1470,7 +1470,7 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, its `LICENSE` stays in the submodule), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
-| OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links the static libraries from that prefix with the flags of `pkg-config --static --libs libssl libcrypto`. Not vendored: no submodule. The one exception to the license rule below. |
+| OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `libssl.a` and `libcrypto.a` from that prefix by full path, searching only that prefix's `pkg-config` files, and fails rather than fall back to the system's shared libraries. Not vendored: no submodule. The one exception to the license rule below. |
 
 License rule: vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib or similarly permissive (no copyleft). Its license file stays
@@ -1485,7 +1485,8 @@ The default build links OpenSSL 3 dynamically, so `dist/agentica-vm` needs
 libc and `libssl.so.3`/`libcrypto.so.3`. All other libraries stay static.
 The dynamic build is the default for local builds, CI and distro packages;
 every downloadable release artifact (the `dist/` archive and the single
-file) is built with `OPENSSL=static`, so it runs anywhere.
+file) is built with `OPENSSL=static`, so it needs only libc (on an older
+glibc baseline, `future.md` §18).
 
 - `make vm` (default `OPENSSL=system`) finds the system OpenSSL 3 with
   `pkg-config libssl libcrypto` and links `-lssl -lcrypto`. A missing
@@ -1500,12 +1501,21 @@ file) is built with `OPENSSL=static`, so it runs anywhere.
   is stable.
 - `make vm OPENSSL=static` links a static OpenSSL 3, for the release
   artifacts or minimal containers (Alpine, distroless). `OPENSSL_PREFIX=/path`
-  names a prefix with `libssl.a` and `libcrypto.a` (for example OpenSSL built
-  with `no-shared`). The link flags come from
-  `PKG_CONFIG_PATH=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig
-  pkg-config --static --libs libssl libcrypto`, which adds `-ldl -pthread`
-  and handles `lib64` prefixes. There is no vendored OpenSSL submodule
-  unless the release workflow needs one later.
+  names a prefix with `libssl.a` and `libcrypto.a` under `lib/` or `lib64/`
+  (for example OpenSSL built with `no-shared`). It must never link the
+  system's shared OpenSSL by accident:
+  `PKG_CONFIG_LIBDIR=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig`
+  replaces `pkg-config`'s default search path, and the build fails if
+  `pkg-config --exists libssl libcrypto` fails there. The VM links the two
+  archives by full path, plus the other flags of `pkg-config --static
+  --libs-only-l --libs-only-other libssl libcrypto` (such as `-ldl
+  -pthread`). The static CI or release job checks that `readelf -d` of the
+  VM shows no `NEEDED` entry for libssl or libcrypto. There is no vendored
+  OpenSSL submodule unless the release workflow needs one later.
+- The VM needs only OpenSSL 3.0 and loads with any 3.x. It never calls a
+  symbol that exists only in 3.1 or later. Newer features (Argon2id needs
+  3.2) are found at run time: if `EVP_KDF_fetch` returns `NULL`, the call
+  returns an error `Result` that names the missing feature.
 - A static OpenSSL's built-in paths point at the build machine, so the
   static build finds the CA store itself (10.3).
 - Static release artifacts ship OpenSSL's `LICENSE` and `NOTICE` text, as
@@ -1997,15 +2007,19 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 - OpenSSL 3, which Racket's `openssl` module also uses. Initialize with
   `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`.
 - With an empty `ca_file`, use system trust like
-  `ssl-secure-client-context`. On Linux the default dynamic build first
-  calls `SSL_CTX_set_default_verify_paths`, which uses the system OpenSSL's
-  own CA store (`OPENSSLDIR`) and honors `SSL_CERT_FILE`/`SSL_CERT_DIR`. The
-  `OPENSSL=static` build (10.0) first honors `SSL_CERT_FILE`/`SSL_CERT_DIR`,
-  because a static OpenSSL's built-in paths point at the build machine. In
-  both builds, if that loaded no CA (the store is empty), the VM probes
-  well-known bundle paths (`/etc/ssl/certs/ca-certificates.crt`,
-  `/etc/pki/tls/certs/ca-bundle.crt`, ...), matching Racket. On Windows only the `ROOT`
-  store, on macOS only the Keychain anchors, never
+  `ssl-secure-client-context`. On Linux, if `SSL_CERT_FILE` or
+  `SSL_CERT_DIR` is set, the VM uses only those, so a user can narrow trust;
+  it never adds a distro bundle to an explicit choice. Otherwise the default
+  dynamic build calls `SSL_CTX_set_default_verify_paths`, which uses the
+  system OpenSSL's own CA store (`OPENSSLDIR`), as Racket does. The
+  `OPENSSL=static` build (10.0) cannot use its built-in paths, which point
+  at the build machine, so it loads the first existing file of a list of
+  distro bundles (`/etc/ssl/certs/ca-certificates.crt`,
+  `/etc/pki/tls/certs/ca-bundle.crt`, ...). Racket does not probe these
+  paths (it uses the env vars or OpenSSL's built-in paths), so this is a
+  documented difference of the static build only; on a normal host the
+  evaluator and the dynamic VM both use OpenSSL's defaults. On Windows only
+  the `ROOT` store, on macOS only the Keychain anchors, never
   `set_default_verify_paths`. A non-empty `ca_file` replaces system trust.
   Trust-store usage and disallowed lists are honored only as far as Racket
   honors them.
@@ -2081,10 +2095,12 @@ written `size > limit - total`. A hermetic test sends over-long values.
   `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h) is linked
   dynamically by default: `OPENSSL=system` checks `pkg-config
   --atleast-version=3.0 libssl libcrypto` and links `-lssl -lcrypto`;
-  `OPENSSL=static` takes its link flags from
-  `PKG_CONFIG_PATH=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig
-  pkg-config --static --libs libssl libcrypto` (10.0). Both checks run only
-  in the recipe that links the VM, never at Makefile parse time.
+  `OPENSSL=static` sets
+  `PKG_CONFIG_LIBDIR=$(OPENSSL_PREFIX)/lib/pkgconfig:$(OPENSSL_PREFIX)/lib64/pkgconfig`,
+  fails if `pkg-config --exists libssl libcrypto` fails there, and links
+  `libssl.a` and `libcrypto.a` by full path plus the remaining `--static`
+  flags (10.0). Both checks run only in the recipe that links the VM, never
+  at Makefile parse time.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
   build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
   recorded in `build/vm/flags`, so switching between a normal and a sanitizer
@@ -2182,7 +2198,8 @@ detects the `string-inspect.agc` fixture as binary from its NUL bytes), so Windo
 spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
 the platform's OpenSSL 3 development package, `libssl-dev` on Debian) to each
 job; these jobs use the default dynamic build. One Linux job (or the release
-workflow) builds `OPENSSL=static` and runs the TLS tests. On macOS (paused),
+workflow) builds `OPENSSL=static`, checks that `readelf -d` shows no
+libssl or libcrypto `NEEDED` entry, and runs the TLS tests. On macOS (paused),
 Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
 `lib/pkgconfig`.
 

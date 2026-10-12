@@ -369,16 +369,20 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   its scheduler's resource registry until its `uv_close` callback, and
   request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
-- **OpenSSL 3 (7h)**: linked dynamically by default (`OPENSSL=system`,
-  `pkg-config libssl libcrypto`, `-lssl -lcrypto`); the build fails for a
-  missing or pre-3.0 OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for
-  release artifacts (`pkg-config --static --libs`). System trust: default
-  verify paths (static: `SSL_CERT_FILE`/`SSL_CERT_DIR`), then the distro CA
-  paths if the store is empty (`docs/vm.md` 10.0, 10.3). `--version` prints the version in use.
-  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
-  system trust from the Windows ROOT store or the macOS Keychain (never
-  `set_default_verify_paths` there); a non-empty `ca_file` replaces system
-  trust; `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
+- **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`.
+  Linux trust: `SSL_CERT_FILE`/`SSL_CERT_DIR` alone when set (never widened
+  with a distro bundle); else the dynamic build uses the default verify
+  paths and the static build loads the first existing distro CA bundle.
+  Windows: the ROOT store; macOS: the Keychain anchors (never
+  `set_default_verify_paths` there). A non-empty `ca_file` replaces system
+  trust. `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
+  Linking: dynamic by default (`OPENSSL=system`, `pkg-config libssl
+  libcrypto`, `-lssl -lcrypto`); the build fails for a missing or pre-3.0
+  OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for release artifacts:
+  `PKG_CONFIG_LIBDIR` limited to the prefix, the archives linked by full
+  path, and `readelf -d` shows no libssl/libcrypto `NEEDED`. Only 3.0
+  symbols are called directly; newer features are found at run time.
+  `--version` prints the OpenSSL version in use (`docs/vm.md` 10.0, 10.3).
 - **Processes (7h)**: the VM resolves the executable itself; on Windows only
   `.exe`/`.com`, case-insensitive; never verbatim arguments; all three stdio
   piped.
