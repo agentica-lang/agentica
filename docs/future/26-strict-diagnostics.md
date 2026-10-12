@@ -231,6 +231,7 @@ These are not planned. Each one would need its own decision against the principl
 - **Unused function parameters:** signatures are fixed by callers and adapters (26.2).
 - **Unused private functions, types, struct fields and enum variants:** they need a whole-file analysis, and a library file may keep a private helper on purpose. Not decided.
 - **Ignored results:** decided. A dropped value of a builtin without effects is already `CHECK-UNUSED-VALUE`; a dropped `Result`, from any call, is `CHECK-UNUSED-RESULT` (26.4). Other dropped values of calls with effects or of user functions (an `Int` from a user function) stay valid: the call is made for its effect, and there is no error to lose.
+- **Dropped tasks:** decided. A bare `Task.spawn(&save, x)` statement stays valid even when `save` returns a `Result`: its type is `Task[...]`, and `Task.spawn` is a call with effects. The task's error is lost only if no one awaits it, and a named handle that is never awaited is already `CHECK-UNUSED-VARIABLE` (26.2). A rule on a dropped `Task[Result[...]]` would reject the fire-and-forget form that 26.2 leaves on purpose.
 - **Style lints** (naming, line length, layout): never. The grammar and the one-way hints already fix the form.
 
 ### Impact on existing code (counts as of 2026-10-12, master 12df0f8)

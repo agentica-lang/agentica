@@ -21,8 +21,8 @@ fallbacks: VM tracing (14a), then TCP and TLS, then HTTP, then BDD on the VM
 (7h). Then 7i deletes the evaluator. New features (default parameter values
 (15a) first, then binary data, UDP, logging, crypto, then the strict
 diagnostics of phase 16 (no warnings: unused imports, unused variables,
-unreachable code and ignored `Result` values become errors), then the rest of phase 15's Ruby typed
-idioms) come after 7i and are VM-only; the prelude part of
+unreachable code and ignored `Result` values become errors), then the rest
+of phase 15's Ruby typed idioms) come after 7i and are VM-only; the prelude part of
 phase 15 waits for faster lists (8d). The later steps keep their order:
 faster lists (8d) before any instruction-dispatch micro-optimization (7g);
 the review of what the VM inherited from Racket (7k) and the VM layers (7l);
