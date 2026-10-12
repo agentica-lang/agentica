@@ -285,7 +285,9 @@ agc_tls_status agc_tls_handshake(agc_tls *t, agc_tls_failure *failure) {
 
 bool agc_tls_feed_in(agc_tls *t, const uint8_t *data, size_t len) {
   size_t written = 0;
-  return len == 0 || (BIO_write_ex(t->in, data, len, &written) == 1 && written == len);
+  if (len == 0 || (BIO_write_ex(t->in, data, len, &written) == 1 && written == len)) return true;
+  ERR_clear_error();
+  return false;
 }
 
 void agc_tls_feed_eof(agc_tls *t) { BIO_set_mem_eof_return(t->in, 0); }

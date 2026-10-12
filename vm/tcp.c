@@ -305,6 +305,25 @@ static void read_port(net *n, const tcp_link *k) {
   if (address.ss_family == AF_INET6) n->port = ntohs(((const struct sockaddr_in6 *)&address)->sin6_port);
 }
 
+static void stop_reading(net *n) {
+  if (!n->reading) return;
+  uv_read_stop((uv_stream_t *)&n->conn->tcp);
+  n->reading = false;
+}
+
+static void handshake_failed(net *n, agc_tls_status status) {
+  if (status != AGC_TLS_ERROR) {
+    n->failure.code = AGC_TLS_ERR_UNEXPECTED_EOF;
+    n->failure.sys = n->in.error ? n->in.error : n->write_status < 0 ? -n->write_status : 0;
+    snprintf(n->failure.detail, sizeof n->failure.detail, "%s", "connection closed during handshake");
+  }
+  n->tls_failed = true;
+  stop_reading(n);
+  AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake_error socket=%" PRIu64 " listener=%" PRIu64 " error=%s detail=%s",
+            n->id, n->parent, agc_tls_error_name(n->failure.code), n->failure.detail);
+  ready(n->opener);
+}
+
 static void flush(net *n, uv_write_cb wrote) {
   while (!n->flushing && !n->closed && n->write_status >= 0) {
     const uint8_t *data;
@@ -339,7 +358,12 @@ static void tls_wrote(uv_write_t *w, int status) {
   n->write_data = NULL;
   n->flushing = false;
   if (status < 0 && n->write_status >= 0) n->write_status = status;
-  if (!n->closed) flush(n, tls_wrote);
+  if (n->closed) return;
+  if (n->write_status < 0 && !n->handshaken && !n->tls_failed) {
+    handshake_failed(n, AGC_TLS_WANT_WRITE);
+    return;
+  }
+  flush(n, tls_wrote);
 }
 
 static void decrypt(net *n) {
@@ -363,19 +387,8 @@ static void decrypt(net *n) {
   }
 }
 
-static void handshake_failed(net *n, agc_tls_status status) {
-  if (status != AGC_TLS_ERROR) {
-    n->failure.code = AGC_TLS_ERR_UNEXPECTED_EOF;
-    n->failure.sys = n->in.error ? n->in.error : n->write_status < 0 ? -n->write_status : 0;
-    snprintf(n->failure.detail, sizeof n->failure.detail, "%s", "connection closed during handshake");
-  }
-  n->tls_failed = true;
-  AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake_error socket=%" PRIu64 " listener=%" PRIu64 " error=%s detail=%s",
-            n->id, n->parent, agc_tls_error_name(n->failure.code), n->failure.detail);
-  ready(n->opener);
-}
-
 static void advance(net *n) {
+  if (n->tls_failed) return;
   if (!n->handshaken) {
     agc_tls_status status = agc_tls_handshake(n->tls, &n->failure);
     flush(n, tls_wrote);
@@ -391,12 +404,6 @@ static void advance(net *n) {
   }
   decrypt(n);
   flush(n, tls_wrote);
-}
-
-static void stop_reading(net *n) {
-  if (!n->reading) return;
-  uv_read_stop((uv_stream_t *)&n->conn->tcp);
-  n->reading = false;
 }
 
 static void alloc_in(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
@@ -468,7 +475,9 @@ static void begin_tls(net *n, agc_tls *t) {
   n->cipher = malloc(CIPHER_SIZE);
   if (!n->cipher) agc_out_of_memory();
   advance(n);
+  if (n->tls_failed) return;
   start_reading(n);
+  if (n->in.error) handshake_failed(n, AGC_TLS_WANT_READ);
 }
 
 static bool handshake_accept(net *l, tcp_link *k, request *q) {

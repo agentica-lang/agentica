@@ -84,6 +84,9 @@ behaviour everywhere.
   accept failed (...)", as in the evaluator, and the listener stays open.
   Connections in a handshake hang off their accept request; closing the
   listener (or the end of the run) closes them too.
+- **Handshake I/O errors.** A write error or a failed `uv_read_start`
+  during the handshake fails it at once with that system error, never a
+  timeout, and a failed handshake is reported only once.
 - **EOF.** A peer that closes without `close_notify` gives a plain end of
   input, as in the evaluator (`SSL_OP_IGNORE_UNEXPECTED_EOF`); the
   framing above TLS (lines, HTTP lengths) must catch truncation. A
