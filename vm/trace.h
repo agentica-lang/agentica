@@ -35,7 +35,7 @@ typedef struct {
 
 typedef struct {
   size_t len;
-  bool cut;
+  bool cut, quoted;
   char data[AGC_TRACE_LINE];
 } agc_trace_line;
 

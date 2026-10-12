@@ -31,7 +31,7 @@ static wchar_t **wide_args; // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 #include <unistd.h>
 
 #define file_stat fstat
-#define TRACE_OPEN (O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC)
+#define TRACE_OPEN (O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK)
 #define TRACE_MODE 0600
 
 typedef struct stat file_info;
@@ -152,10 +152,27 @@ static bool bind_to_driver(int64_t driver) {
 static int private_trace_fd(int fd) { return fd; }
 #else
 static int private_trace_fd(int fd) {
+  struct stat info;
+  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode)) {
+    close(fd);
+    return -1;
+  }
   if (fd > 2) return fd;
   int moved = fcntl(fd, F_DUPFD_CLOEXEC, 3);
   close(fd);
   return moved;
+}
+#endif
+
+#ifdef __linux__
+static void fill_standard_fds(void) {
+  for (int fd = 0; fd <= 2; fd++) {
+    if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) continue;
+    int opened = open("/dev/null", fd == 0 ? O_RDONLY : O_WRONLY);
+    if (opened < 0 || opened == fd) continue;
+    dup2(opened, fd);
+    close(opened);
+  }
 }
 #endif
 
@@ -411,5 +428,10 @@ int wmain(int argc, wchar_t **wide_argv) {
   return run(argc, argv);
 }
 #else
-int main(int argc, char **argv) { return run(argc, argv); }
+int main(int argc, char **argv) {
+#ifdef __linux__
+  fill_standard_fds();
+#endif
+  return run(argc, argv);
+}
 #endif

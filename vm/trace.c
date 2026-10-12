@@ -11,25 +11,47 @@
 #define CUT_MARK "..."
 #define CUT_BYTES (sizeof CUT_MARK - 1)
 #define NUMBER_TEXT 48
+#define CONTENT_LIMIT (AGC_TRACE_LINE - 1 - CUT_BYTES)
 
 typedef enum { LEN_INT, LEN_CHAR, LEN_SHORT, LEN_LONG, LEN_LLONG, LEN_SIZE, LEN_MAX, LEN_PTRDIFF } length_kind;
 
 static const char *const category_names[] = {"sched", "io", "proc", "tls", "loader", "gc"};
 static const char hex_digits[] = "0123456789abcdef";
 
-static size_t room(const agc_trace_line *l) { return sizeof l->data - 1 - l->len; }
+static size_t utf8_width(unsigned char c) { return c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1; }
+
+static void drop_partial_utf8(agc_trace_line *l) {
+  size_t i = l->len, tail = 0;
+  while (i > 0 && tail < 3 && ((unsigned char)l->data[i - 1] & 0xC0) == 0x80) {
+    i--;
+    tail++;
+  }
+  if (i > 0 && utf8_width((unsigned char)l->data[i - 1]) > tail + 1) l->len = i - 1;
+}
 
 static void put(agc_trace_line *l, const char *s, size_t n) {
-  size_t r = room(l);
-  if (n > r) {
-    n = r;
-    l->cut = true;
-  }
+  if (l->cut) return;
+  size_t room = CONTENT_LIMIT - l->len;
+  bool fits = n <= room;
+  if (!fits) n = room;
   if (n) memcpy(l->data + l->len, s, n);
   l->len += n;
+  if (fits) return;
+  l->cut = true;
+  drop_partial_utf8(l);
 }
 
 static void put_char(agc_trace_line *l, char c) { put(l, &c, 1); }
+
+static bool put_unit(agc_trace_line *l, const char *s, size_t n) {
+  if (l->cut || l->len + n > CONTENT_LIMIT - 1) {
+    l->cut = true;
+    return false;
+  }
+  memcpy(l->data + l->len, s, n);
+  l->len += n;
+  return true;
+}
 
 static bool special(unsigned char c) { return c <= 0x20 || c == 0x7f || c == '=' || c == '"' || c == '\\'; }
 
@@ -40,28 +62,47 @@ static bool plain(const char *s, size_t n) {
   return true;
 }
 
-static void put_quoted(agc_trace_line *l, const char *s, size_t n) {
-  put_char(l, '"');
-  for (size_t i = 0; i < n && !l->cut; i++) {
-    unsigned char c = (unsigned char)s[i];
-    switch (c) {
-      case '"': put(l, "\\\"", 2); break;
-      case '\\': put(l, "\\\\", 2); break;
-      case '\b': put(l, "\\b", 2); break;
-      case '\f': put(l, "\\f", 2); break;
-      case '\n': put(l, "\\n", 2); break;
-      case '\r': put(l, "\\r", 2); break;
-      case '\t': put(l, "\\t", 2); break;
-      default:
-        if (c < 0x20 || c == 0x7f) {
-          char esc[6] = {'\\', 'u', '0', '0', hex_digits[c >> 4], hex_digits[c & 15]};
-          put(l, esc, sizeof esc);
-        } else {
-          put_char(l, (char)c);
-        }
-    }
+static size_t escape_of(unsigned char c, char esc[6]) {
+  esc[0] = '\\';
+  switch (c) {
+    case '"': esc[1] = '"'; return 2;
+    case '\\': esc[1] = '\\'; return 2;
+    case '\b': esc[1] = 'b'; return 2;
+    case '\f': esc[1] = 'f'; return 2;
+    case '\n': esc[1] = 'n'; return 2;
+    case '\r': esc[1] = 'r'; return 2;
+    case '\t': esc[1] = 't'; return 2;
+    default: break;
   }
-  put_char(l, '"');
+  if (c >= 0x20 && c != 0x7f) return 0;
+  esc[1] = 'u';
+  esc[2] = '0';
+  esc[3] = '0';
+  esc[4] = hex_digits[c >> 4];
+  esc[5] = hex_digits[c & 15];
+  return 6;
+}
+
+static void put_quoted(agc_trace_line *l, const char *s, size_t n) {
+  if (!put_unit(l, "\"", 1)) return;
+  l->quoted = true;
+  for (size_t i = 0; i < n;) {
+    unsigned char c = (unsigned char)s[i];
+    char esc[6];
+    size_t k = escape_of(c, esc);
+    if (k) {
+      if (!put_unit(l, esc, k)) return;
+      i++;
+      continue;
+    }
+    size_t width = utf8_width(c);
+    k = 1;
+    while (k < width && i + k < n && ((unsigned char)s[i + k] & 0xC0) == 0x80) k++;
+    if (!put_unit(l, s + i, k)) return;
+    i += k;
+  }
+  l->data[l->len++] = '"';
+  l->quoted = false;
 }
 
 static void put_text(agc_trace_line *l, const char *s, size_t n) {
@@ -186,6 +227,7 @@ static const char *category_name(unsigned category) {
 static void start_line(agc_trace_line *l, const agc_trace *trace, unsigned category) {
   l->len = 0;
   l->cut = false;
+  l->quoted = false;
   uint64_t now = agc_trace_now();
   uint64_t d = now > trace->start_ns ? now - trace->start_ns : 0;
   char text[NUMBER_TEXT];
@@ -199,10 +241,9 @@ static void start_line(agc_trace_line *l, const agc_trace *trace, unsigned categ
 
 static void end_line(agc_trace_line *l) {
   if (l->cut) {
-    size_t at = l->len > CUT_BYTES ? l->len - CUT_BYTES : 0;
-    while (at > 0 && ((unsigned char)l->data[at] & 0xC0) == 0x80) at--;
-    memcpy(l->data + at, CUT_MARK, CUT_BYTES);
-    l->len = at + CUT_BYTES;
+    if (l->quoted) l->data[l->len++] = '"';
+    memcpy(l->data + l->len, CUT_MARK, CUT_BYTES);
+    l->len += CUT_BYTES;
   }
   l->data[l->len++] = '\n';
 }
@@ -238,6 +279,7 @@ void agc_trace_message(int fd, const char *text, const char *value, size_t len, 
   agc_trace_line l;
   l.len = 0;
   l.cut = false;
+  l.quoted = false;
   put(&l, "agc-trace ", 10);
   put(&l, text, strlen(text));
   put_char(&l, ' ');

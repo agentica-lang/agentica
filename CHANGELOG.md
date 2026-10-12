@@ -330,6 +330,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `agentica-vm` started with stdin, stdout or stderr closed (`2>&-`) no
+  longer aborts on a libuv assertion: on Linux it opens `/dev/null` onto
+  the closed descriptor first.
+
 - A file handle closed by a timeout no longer holds its lock in the
   evaluator: later operations give `filesystem: file handle is closed` at
   once and `File.close` gives `ok()`, instead of each waiting for its own

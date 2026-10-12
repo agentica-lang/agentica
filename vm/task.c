@@ -132,7 +132,6 @@ static uint64_t pending_tasks(const agc_vm *vm) {
 }
 
 agc_outcome agc_vm_run(agc_vm *vm) {
-  const agc_trace *tr = &vm->rt->trace;
   if (setjmp(vm->fail) == 0) {
     agc_task_enter(vm, vm->main, vm->rt->program->entry);
     trace_spawn(vm, vm->main, 0);
@@ -141,7 +140,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_task *t = dequeue(vm);
       if (!t) {
         if (!agc_io_poll(vm, true)) {
-          AGC_TRACE(tr, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
+          AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
         }
         continue;
@@ -156,7 +155,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       trace_gc(vm, "turn");
       if (r == AGC_TURN_DONE) {
         if (t == vm->main) {
-          AGC_TRACE(tr, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
+          AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
           break;
         }
         finish_task(vm, t);

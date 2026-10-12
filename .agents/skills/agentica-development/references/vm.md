@@ -182,7 +182,9 @@ must never crash or change the run):
 
 - The format is checked by `__attribute__((format(printf, ...)))`; only
   `d`, `i`, `u`, `x`, `X` (with `hh`, `h`, `l`, `ll`, `z`, `j`, `t`), `%s`,
-  `%.*s` and `%%` are supported, and anything else ends the line with `?`.
+  `%.*s` and `%%` are supported; anything else (`%c`, `%p`, floats, widths,
+  flags) still compiles but ends the line with `?`. `vm/tests/trace_test.c`
+  has one case per supported conversion; add one for any new conversion.
 - Text goes through the escaper (plain, or JSON-quoted when empty or when it
   has a space, `=`, `"`, `\`, or a control byte). An `agc_string` or any
   (pointer, length) data is `%.*s` with `agc_trace_len(bytes)`, never `%s`.

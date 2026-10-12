@@ -504,6 +504,12 @@ static void trace_tables(const agc_trace *tr, const agc_program *p) {
             p->type_count, p->enum_count, p->variant_count);
 }
 
+static bool load_guarded(reader *r, agc_program *p) {
+  if (setjmp(r->fail)) return false;
+  load(r, p);
+  return true;
+}
+
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                      const agc_trace *trace) {
   static const agc_trace off = {0, 2, 0};
@@ -525,8 +531,7 @@ bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, cha
     trace_reject(&r);
     return false;
   }
-  if (setjmp(r.fail)) return false;
-  load(&r, p);
+  if (!load_guarded(&r, p)) return false;
   AGC_TRACE(tr, AGC_TRACE_LOADER, "format version=%" PRIu32, r.format);
   trace_tables(tr, p);
   AGC_TRACE(tr, AGC_TRACE_LOADER, "done us=%" PRIu64, elapsed_us(r.start));
