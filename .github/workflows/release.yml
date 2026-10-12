@@ -11,13 +11,23 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, docker-runner]
     steps:
       - uses: actions/checkout@v4
-      - uses: Bogdanp/setup-racket@v1.15
+      - id: racket
+        run: |
+          dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          if "$dir/bin/racket" -e '(exit (if (equal? (version) "9.3") 0 1))' 2>/dev/null; then
+            echo "$dir/bin" >> "$GITHUB_PATH"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.racket.outputs.found != 'true'
+        uses: Bogdanp/setup-racket@v1.15
         with:
           variant: CS
           version: '9.3'
+          dest: ${{ steps.racket.outputs.dir }}
       - name: Validate release version
         id: version
         run: |
@@ -64,10 +74,14 @@ jobs:
   publish:
     if: github.event_name == 'push'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, docker-runner]
     permissions:
       contents: write
     steps:
+      - name: Install GitHub CLI
+        run: |
+          command -v gh || { sudo apt-get update && sudo apt-get install -y --no-install-recommends gh; }
+          rm -rf dist
       - uses: actions/download-artifact@v4
         with:
           pattern: agentica-*
