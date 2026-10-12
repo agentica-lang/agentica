@@ -168,7 +168,8 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      `reduce`, `sort_by`, `each`, `any?`, `all?`) as native frames
      (4.3). No format bump: the function table always had its captures
      field, and the two opcodes are appended. Closures passed to
-     `Task.spawn`, HTTP or BDD stay `LOWER-UNSUPPORTED` until 7h.
+     `Task.spawn`, HTTP or BDD stay `LOWER-UNSUPPORTED` until 7h (BDD:
+     until phase 21 replaces the `BDD` builtins with `std/bdd`, §31).
 6. **Library.** Two PRs:
    - **6a IO and System** (done). Blocking stdio; it moves to libuv
      resumable builtins with the scheduler (7h). `IO.inspect`, `IO.gets`
@@ -316,8 +317,8 @@ and docs:
 - **20a** the client: picohttpparser and the adapter, the body decoder
   into one buffer, `HttpResponse`, the pool and `HttpWire.client`,
   `exchange` and `close_client`, the client part of `std/http.agc`, the
-  std-only guard on `HttpWire`, and the `LOWER-VM-ONLY` refusal on the
-  three evaluator paths. `vm/tests/http_parse_test.c` covers the whole
+  std-only guard on `HttpWire`, and the refusal (`LOWER-UNSUPPORTED`,
+  "needs the VM") wherever a program would reach the evaluator. `vm/tests/http_parse_test.c` covers the whole
   hostile list of 10.6 at the adapter; golden fixtures fetch from a
   server written over `TCP` in the same program; `tests/vm-http-test.rkt`
   runs Python `http.server`, an HTTPS server made with Python's `ssl`, and
@@ -354,5 +355,8 @@ of tests.
   stays behind a flag. yyjson allocates its parse document with libc
   `malloc`, outside the GC heap, so such a cap must bound it too (for
   example with a counting `yyjson_alc` passed to `yyjson_read_opts`).
-- **BDD on the VM**: decided; handlers move to the VM in 7h, and
-  the evaluator is removed in 7i (roadmap).
+- **BDD on the VM**: decided (2026-10-12): not in C. BDD is written in
+  Agentica as `std/bdd` and a runner program, with a child VM per
+  scenario; the VM gets only `Process.spawn_captured`, `Process.output`
+  and `Task.pending_count` (`docs/future/31-bdd-in-agentica.md` §31,
+  roadmap phase 21). Then the evaluator is removed in 7i (roadmap).

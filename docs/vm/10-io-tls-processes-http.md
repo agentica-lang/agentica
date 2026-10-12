@@ -529,8 +529,8 @@ split between a small C builtin module, `HttpWire`, and the Agentica module
 - **C (`HttpWire`)**, VM-only and std-only: the linker lets only modules
   embedded from `stdlib/` call it, and gives user code
   `CHECK-UNKNOWN-NAME` with a help that shows the `std/http` import
-  (`src/builtins.rkt` lists it in `std-only-modules` and
-  `vm-only-modules`; §30.5). It keeps what is byte-level, security-critical or shared
+  (`src/builtins.rkt` lists it in `std-only-modules`, and its builtins in
+  `vm-only-builtins`; §30.5, §30.8). It keeps what is byte-level, security-critical or shared
   across tasks: the head parser of 10.6 (`vm/http_parse.h`,
   `vm/http_pico.c`), the body decoder (`vm/http_body.c`) filling one
   `malloc`'d buffer per body, the UTF-8 check, the error answers before
