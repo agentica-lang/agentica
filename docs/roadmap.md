@@ -61,6 +61,7 @@ order.
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
 | 5 | **Mostly complete:** Bytecode VM core in C with the Boehm GC (`docs/vm.md` §12.2 items 1 to 8), the 7g benchmark script, 7h part 1 (event loop and files) and ranges (8a); small items stay open in 7c, 7e (loader validation for opcodes as they land) and 7f | Checked programs run on the VM with the same exit code, stdout, program stderr and diagnostic codes (black-box parity) |
 | 6 | **Next:** 7h tasks with one scheduler (N=1) on the structures split for N (`docs/vm.md` §10.2.3), with the fairness rule of §10.2.1 (long builtins charge the turn, never `--max-steps`) and the latency test of the 7h tasks item | Concurrent programs on the VM; timers and I/O stay responsive while other tasks compute |
+| 6.1 | VM tracing (14a, `future.md` §24.4): a small PR right after 7h processes, before TCP and TLS; a developer tool, not a language feature | Debug the rest of 7h (TCP, TLS, HTTP) with `AGENTICA_VM_TRACE` instead of hand-written `fprintf` |
 | 7 | 7h processes, then TCP and TLS, then binary data (phase 13, `future.md` §23; before UDP once UDP is planned), then HTTP; BDD on the VM; the differential tests and the independent process and network fixtures extended to the VM | Every example and CI smoke test runs on the VM; programs read and write binary numbers with `std/binary` |
 | 8 | Faster lists (8d): a persistent vector behind `List`, before any instruction-dispatch micro-optimization (7g); then the review of what the VM inherited from Racket (7k), next to the 7g hot spots | `push` stops copying the whole list; list-heavy programs stop being O(n²); the VM keeps Racket's rules only where they are good on their own |
 | 8.1 | VM layers (7l, `future.md` §21); after the tasks PR, next to 7k | The prerequisites of the JIT |
@@ -68,6 +69,7 @@ order.
 | 9.1 | JIT (7m, `future.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision | Hot functions run as native code with the same results |
 | 10 | Evaluation round: Agentica against typed Python on harder tasks (6c) | Evidence on whether agents do better in Agentica than in typed Python |
 | 11 | Decide with the results of steps 9 and 10: multicore schedulers (7h item, gated), a front-end rewrite (`future.md` §18, gated), and 7i (VM default, evaluator removed; after step 10, in parallel with the multicore decision) | Build multicore or a new front end only if the numbers ask for it; one backend |
+| 11.1 | Logging and debugging after 7i (phase 14, `future.md` §24): stack traces on runtime errors (14b), then `std/log` with the `--log-*` flags (14c) | Agents see the call stack of a runtime error; programs log with levels, fields and JSON lines |
 | 12 | Core data structures (phase 8): `Set[T]` and `Queue[T]` (may proceed in parallel with steps 6 to 11) | Write loops and algorithms the Ruby way, without workarounds |
 | 13 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 14 | Cross-language benchmarks (phase 12): the same small programs in Agentica (VM and evaluator), Ruby, Crystal and optionally Python. Round 1 (single-threaded; needs the 7g benchmark script (done), the real applications, faster lists (8d) and the VM `IO` library (`docs/vm.md` §12.2 item 6a, done)) goes before MCP; round 2 (concurrent programs) needs tasks on the VM (7h) and covers multicore only if the multicore schedulers land (step 11) | Honest speed numbers against Ruby and Crystal, and the VM hot spots to fix next |
@@ -1378,6 +1380,16 @@ Specified in [`future.md` section 23](future.md#23-binary-data). Order step 7: a
 - Not in this phase: `Bytes` (`future.md` §12.5), which this work does not replace; when `Bytes` lands, the `std/binary` API moves to it together with the `*_bytes` builtins. No mutable buffers or references.
 
 **Done when:** the Python vectors of 13a and 13b pass on both backends, what each reader returns writes back to the same bytes (a NaN pattern other than the canonical one aside), and the site page's examples run.
+
+## Phase 14: Logging and debugging
+
+Specified in [`future.md` section 24](future.md#24-logging-and-debugging). Three small PRs, on the VM only. 14a is order step 6.1, right after 7h processes and before TCP and TLS, to speed up debugging of the rest of 7h; 14b and 14c are order step 11.1, after 7i. 14b goes first: it adds no API, and agents get the most from it. 14c follows the library rule (after the order table): the module is Agentica code, and only the three settings are builtins, under its exception 1.
+
+- [ ] 14a VM tracing (`future.md` §24.4): `vm/trace.h` and `vm/trace.c`, `AGENTICA_VM_TRACE` with the categories `sched`, `io`, `proc`, `tls` (its trace points come with the TCP and TLS PR), `loader` and `gc`; one `write(2)` per `agc-trace` line; `make vm TRACE=0` compiles it out (built in the `vm-sanitizers` job); test helpers remove the variable; `tests/vm-trace-test.rkt` checks that tracing changes nothing but stderr. Docs: `docs/vm.md` and the development skill.
+- [ ] 14b Stack traces on runtime errors (`future.md` §24.3), always on in the plain, `--ai` and `--json` formats: names and places per frame, the tail-call mark, merged repeats, at most 20 lines, the spawn place of a failing task. Fixed expected stderr in the three formats. Docs: `grammar.md` §7, `docs/vm.md` §2.5 and §6.1, the programming skill's diagnostics reference.
+- [ ] 14c `std/log` (`future.md` §24.2): `stdlib/log.agc` (levels, `_with` fields as `Map[String, String]`, text and JSON lines, `Log.debug?`, `Log.time_text`), the `--log-level`, `--log-format` and `--log-time` flags on `agentica` and `agentica-vm`, the `System.log_level`, `System.log_format` and `System.log_time?` builtins, `IO.warn` in one `write(2)`, and "did you mean" help for `CHECK-IMPORT-NAME`. Tests with `--log-time none` and fixed expected stderr, whole lines from several tasks, and `Log.time_text` against Python `datetime` vectors. Docs: `grammar.md`, the programming skill (`references/log.md`), `site/content/library/log.md`, `docs/vm.md` §9.
+
+**Done when:** a VM developer can trace the scheduler, I/O, processes and TLS without editing C; a runtime error shows its call stack; and the site page's `std/log` examples run.
 
 ## Later extensions
 
