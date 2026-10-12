@@ -15,7 +15,7 @@ The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports 
 
 ### Shape: builtin modules, no grammar change
 
-Task is a builtin module over Racket primitives using function values (5j) and a generic opaque result type, with no new keywords. The channel proposal that stood here (`Channel.new()`, `send` returning `Void`, `recv` returning `T`) is replaced by the final design of [section 27.2](27-iteration-and-concurrency.md#272-channels): a bounded `Channel[T]` with `new(capacity)`, `send` and `recv` that take a timeout and return a `Result`, `close` and `closed?`. Its buffering, close, timeout and cancellation rules are decided there together, as this section asked, with the task cancellation of `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap)).
+Task is a builtin module over Racket primitives using function values (5j) and a generic opaque result type, with no new keywords. Channels are designed in [section 27.2](27-iteration-and-concurrency.md#272-channels): a bounded `Channel[T]` with `new(capacity)`, `send` and `recv` that take a timeout and return a `Result`, `close` and `closed?`. An earlier sketch here had an unbuffered `Channel.new()`, a `send` that returned `Void` and a `recv` that returned `T`; section 27 replaces it and decides the buffering, close, timeout and cancellation rules together, with the task cancellation of `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap)).
 
 - Task inputs travel through one argument and results through Task.await; channels (§27.2) provide repeated exchanges.
 - Immutable values can be shared safely, but ports, future sockets and contextual services are resources with state. They still need ownership or synchronization rules.
@@ -39,5 +39,7 @@ The evaluator prepares immutable function/struct tables once per evaluation, the
 
 - Channels are decided (§27.2). Whether a concrete application needs Process.poll_line stays open.
 - Whether measured CPU workloads justify parallel thread pools or places; default no. On the VM, CPU parallelism is the multicore schedulers (`docs/vm/10-io-multicore.md` §10.2.3, gated at roadmap order step 11), and `Task.map` (§27.1) is the form that would use it.
-- A public `Task.cancel` and a timeout on `Task.await` stay open: §27 adds only the per-item timeout of `Task.map` and the timeouts of channel calls, and each new form would be a second way to stop or wait for work. Returning from the entrypoint still cancels pending work.
+- A timeout on `Task.await` is planned in [section 27.3](27-iteration-and-concurrency.md#273-taskawait-with-a-timeout): `Task.await(task, timeout_ms) -> Result[T]`, prelude code over channels, which does not cancel the task.
+- A public `Task.cancel` stays open: §27 cancels only the timed-out items of `Task.map`, and a cancel call would be a second way to stop work. Returning from the entrypoint still cancels pending work.
+- Handles opened by a cancelled task stay open until the end of the run (§27.1). For long-running programs, such as servers, whether the VM should close them when the task is cancelled is open. Until then the skill teaches: open handles inside a `Task.map` item and close them with the block forms (`File.open` with a block, §25.9), do not share handles across items, and give a shared handle to one owner task.
 

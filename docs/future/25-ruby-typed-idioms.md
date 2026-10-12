@@ -443,7 +443,7 @@ Decided against by the one-way test: `while true` already does it. See 25.13.
 
 #### 25.12.7 Lazy enumerators and generators
 
-**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:** streams of unknown length without building lists. **Now in [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):** a lazy `Stream[T]` stays to evaluate later there (§27.3), with the criteria that would plan it (after the prelude of 25.6); generators with `yield` (`Enumerator.new`, fibers) are decided against (§27.4), since a task that sends into a channel (§27.2) is the producer, and `xs.lazy` gets a help.
+**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:** streams of unknown length without building lists. **Now in [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):** a lazy `Stream[T]` stays to evaluate later there (§27.4), with the criteria that would plan it (after the prelude of 25.6); generators with `yield` (`Enumerator.new`, fibers) are decided against (§27.5), since a task that sends into a channel (§27.2) is the producer, and `xs.lazy` gets a help.
 
 #### 25.12.8 Declarative hygienic macros
 
@@ -464,6 +464,7 @@ Each of these is decided; it gets a `help` that names the Agentica form where on
 - **Symbols:** `String` keys and enums cover them.
 - **`freeze` and `dup`:** every value is already immutable.
 - **`yield`:** the block is a named `Fn` parameter, called with `.call`.
+- **Generators and fibers** (`Enumerator.new`, `Fiber`): decided against in [section 27.5](27-iteration-and-concurrency.md#275-decided-against); a producer task that sends into a `Channel` is the generator.
 - **`{ |x| ... }` brace blocks:** they re-spell `do |x| ... end`, and `{` is already the map literal.
 - **Keyword arguments** (was 25.12.2): `connect("a", port: 8080)` would be a second way to pass an argument that can already be passed by position. Calls stay positional; `with` (25.3) and struct construction stay the only places with named arguments.
 - **`loop do ... end`** (was 25.12.3): `while true ... end` already does it, and `break` cannot leave a block, so it would be a statement that looks like a block. Section 11's help stays.
