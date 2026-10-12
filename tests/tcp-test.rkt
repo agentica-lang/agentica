@@ -64,9 +64,13 @@ AGC
          (check-equal? (run-cli-program (client-program "127.0.0.1" (hash-ref ports 'tcp) #f)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
          (check-equal? (run-cli-program (client-program "localhost" (hash-ref ports 'tls) #t)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
          (check-equal?
-          (run-program
+          (run-cli-program
            (format "def main() -> Void\n  IO.inspect(Result.ok?(TLS.connect(\"127.0.0.1\", ~a, ~s, 1000)))\nend\n"
-                   (hash-ref ports 'tls) (path->string ca-path))) "false\n"))))
+                   (hash-ref ports 'tls) (path->string ca-path))) "true\n")
+         (check-equal?
+          (run-cli-program
+           (format "def main() -> Void\n  IO.inspect(Result.ok?(TLS.connect(\"localhost\", ~a, \"\", 1000)))\nend\n"
+                   (hash-ref ports 'tls))) "false\n"))))
     (test-case "Node clients verify Agentica TCP and TLS listeners through the real CLI"
       (for ([secure? '(#f #t)])
         (with-program-server (server-program secure?)
