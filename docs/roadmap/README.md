@@ -14,50 +14,11 @@ tasks and processes are done, with small items still open in 7c
 (`tests/lower-test.rkt`), 7e (loader validation for opcodes as they land) and
 7f (the extra corpora). Ranges (8a) are done.
 
-The Racket evaluator is frozen. It runs only what the VM lacks: programs that
-use `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
-notice) and `agentica test`. The next work is the catch-up that removes those
-fallbacks: VM tracing (14a, done), TCP (done), then TLS (today's API), then
-HTTP ([phase 20](20-hybrid-http.md), hybrid and synchronous: C framing, the
-rest in Agentica as `std/http`), then BDD in Agentica ([phase 21](21-bdd-in-agentica.md),
-7h; [§31](../future/31-bdd-in-agentica.md#31-bdd-in-agentica)), then 7i deletes the evaluator. New features (phase 17's `Task.map` and channels
-first, then the streaming items of [phase 20](20-hybrid-http.md)
-([§30](../future/30-hybrid-http.md#30-http-on-the-vm-simple-synchronous-hybrid)),
-then `TlsContext` ([phase 19](19-tls-context.md),
-[§29](../future/29-tls-context.md#29-tls-contexts)), then default parameter values (15a), binary
-data, UDP, logging, crypto, then the strict diagnostics of phase 16 (no
-warnings: unused imports, unused variables, unreachable code and ignored
-`Result` values become errors), then the rest of phase 15's Ruby typed idioms) come
-after 7i and are VM-only; the prelude part of phase 15, and phase 17's prelude
-`Task.await` with a timeout (17c), wait for faster lists (8d). VM metrics for
-Prometheus (phase 18) are a VM-only tool after 7i too, and land before the
-server measurement (7j), which reads their GC and run-queue numbers. The later
-steps keep their order: faster lists (8d) before any instruction-dispatch
-micro-optimization (7g); the review of what the VM inherited from Racket (7k)
-and the VM layers (7l); a measurement of a small real server on the VM (7j)
-and the JIT (7m); an evaluation round against typed Python on harder tasks
-(6c); and then the decisions on the multicore schedulers (fully designed in
-`docs/vm/10-io-multicore.md` §10.2.3, and gated on that measurement) and on a
-front-end rewrite (`docs/future/18-front-end-language.md` §18, gated the same
-way).
-
-Sets and queues (8b, 8c) are unblocked (the VM has maps and closures) and can
-proceed in parallel with the steps above. Real applications follow, then round
-1 of the cross-language benchmarks (phase 12). Round 1 needs the 7g benchmark
-script (done), the real applications, faster lists (8d) and the VM `IO`
-library (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a, done); round 2 needs tasks on the VM
-(7h) and covers multicore only if it lands. Then MCP. Adapters and JSON inspection (phase 10) come after MCP:
-they are small language items, so they go before shared tables, which wait
-for a real program. 10a needs `.call` on the VM (7e PR 5e, done); 10b, 10d and
-10e, and the JSON part of 10c, need the VM JSON PR (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 7,
-done); 10e also needs 10b. Phase 10 checks the VM and the disk backend with two
-separate programs (see its "Done when"). Shared tables (phase 9) are on demand:
-they need tasks on the VM (7h) and start only when a real program needs them.
-Binary serialization (phase 11) is on demand too: it needs `Bytes`, generic
-structs (10c) and the JSON form of enums (10d). Real applications and MCP run on
-the VM, and their findings feed the VM's golden tests. Historical phase numbers below
-remain stable; this order governs pending work rather than their numeric
-order.
+The Racket evaluator is frozen and runs only what the VM still lacks (row
+7.1). The table below is the one source for the order of pending work and
+its dependencies; each row names its phases and the sections that specify
+them. Historical phase numbers remain stable; this order governs pending
+work rather than their numeric order.
 
 | Order | Next work | Outcome |
 |---|---|---|
