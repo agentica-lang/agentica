@@ -142,6 +142,7 @@ ifeq ($(TRACE),0)
 VM_CFLAGS += -DAGC_TRACE_BUILD=0
 endif
 VM_STAMP := build/vm/flags
+VM_TP_STAMP := $(VM_BUILD)/third-party-flags
 VM_YY := $(VM_BUILD)/yyjson.o
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
 UV_OBJS := $(patsubst %,$(VM_BUILD)/uv/%.o,$(UV_NAMES))
@@ -149,6 +150,10 @@ UV_OBJS := $(patsubst %,$(VM_BUILD)/uv/%.o,$(UV_NAMES))
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
 	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS)' > $@
+
+$(VM_TP_STAMP): FORCE
+	@mkdir -p $(VM_BUILD)
+	@echo '$(VM_CC) $(YY_CFLAGS) $(YY_DEFS) $(UV_DEFS)' | cmp -s - $@ || echo '$(VM_CC) $(YY_CFLAGS) $(YY_DEFS) $(UV_DEFS)' > $@
 
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
@@ -160,14 +165,14 @@ build/vm/gc.o: $(GC_DIR)/extra/gc.c $(GC_SRC) Makefile
 $(YY_DIR)/src/yyjson.c:
 	@echo "missing $(YY_DIR): run git submodule update --init" >&2; exit 1
 
-$(VM_YY): $(YY_DIR)/src/yyjson.c $(YY_DIR)/src/yyjson.h Makefile $(VM_STAMP)
+$(VM_YY): $(YY_DIR)/src/yyjson.c $(YY_DIR)/src/yyjson.h Makefile $(VM_TP_STAMP)
 	@mkdir -p $(VM_BUILD)
 	$(VM_CC) -std=c11 $(YY_CFLAGS) $(YY_DEFS) -c $< -o $@
 
 $(UV_DIR)/src/uv-common.c:
 	@echo "missing $(UV_DIR): run git submodule update --init" >&2; exit 1
 
-$(VM_BUILD)/uv/%.o: $(UV_DIR)/src/%.c $(UV_HDRS) Makefile $(VM_STAMP)
+$(VM_BUILD)/uv/%.o: $(UV_DIR)/src/%.c $(UV_HDRS) Makefile $(VM_TP_STAMP)
 	@mkdir -p $(dir $@)
 	$(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src -c $< -o $@
 
