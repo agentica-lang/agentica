@@ -1,6 +1,6 @@
 ## 7. Possible metatables: Ruby-style modules
 
-Exploratory only: no implementation or phase is assigned. Group shared behavior visually, then attach it to maps, lists, or records. Prefer Ruby's `module ... end`, `def ... end`, `self`, and `.extend(...)` over new spellings such as `defmod` or Elixir's `defmodule`. Borrow Elixir's immutable-value approach and keep static checking; adopting this syntax does not require classes or inheritance.
+**Status:** not planned: see [section 25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c). User types have no methods, and a struct of `Fn` fields with wrapper functions covers the same need by composition. The text below is kept as a record of the idea. Group shared behavior visually, then attach it to maps, lists, or records. Prefer Ruby's `module ... end`, `def ... end`, `self`, and `.extend(...)` over new spellings such as `defmod` or Elixir's `defmodule`. Borrow Elixir's immutable-value approach and keep static checking; adopting this syntax does not require classes or inheritance.
 
 Possible shape, deliberately Ruby-parsable rather than current Agentica syntax:
 
