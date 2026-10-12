@@ -157,7 +157,8 @@ An import path names a module without its extension: `"models"` loads
 spelling: a path that ends in `.agc` gives `CHECK-IMPORT-PATH` with a help that
 shows the path without it. An empty path, a path that ends in `/`, and a last
 part that contains a dot (`"models.rb"`, `"."`, `".."`) give `CHECK-IMPORT-PATH`
-too. Relative paths resolve from the importing file, not the working
+too. So a module file name has no dot apart from `.agc`: `json.tools.agc`
+cannot be imported; rename it, for example to `json_tools.agc`. Relative paths resolve from the importing file, not the working
 directory. Canonical paths identify files; each file is linked once. Cycles give
 `CHECK-IMPORT-CYCLE`; missing or unreadable imports give `CHECK-IMPORT-IO`, and
 invalid paths give `CHECK-IMPORT-PATH`. Each is located at the import.

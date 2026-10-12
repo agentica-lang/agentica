@@ -253,8 +253,10 @@
        (check-equal? out "util\n")))
     (for ([entry '(("lib/util.agc" "import \"lib/util\" as Util")
                    ("std/queue.agc" "import \"std/queue\" as Util")
-                   ("lib/util.rb" #f)
-                   ("lib/" #f)
+                   ("lib/util.rb" "import \"lib/util\" as Util to load lib/util.agc")
+                   ("a\"b.agc" "import \"a\\\"b\" as Util")
+                   ("json.tools.agc" #f)
+                   ("lib/" #f) (".." #f) ("." #f)
                    ("" #f))])
       (with-files
        (list (cons "lib/util.agc" "export def read() -> String\n  return \"util\"\nend\n\n")

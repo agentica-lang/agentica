@@ -55,19 +55,27 @@
                         (regexp-match? #rx":" part))))
           (bail 'CHECK-IMPORT-PATH "invalid library path" span)))
       (define (module-file path alias span)
+        (define (last-part text) (car (regexp-match #rx"[^/]*$" text)))
         (define (module-name? text)
-          (define name (car (regexp-match #rx"[^/]*$" text)))
+          (define name (last-part text))
           (not (or (string=? name "") (regexp-match? #rx"[.]" name))))
         (define stem (and (string-suffix? path ".agc")
                           (substring path 0 (- (string-length path) 4))))
+        (define guess (regexp-replace #rx"[.][^./]*$" path ""))
         (cond
           [(module-name? path) (string-append path ".agc")]
           [(and stem (module-name? stem))
            (bail 'CHECK-IMPORT-PATH "import paths name a module without the .agc extension" span
-                 #:help (format "write import \"~a\" as ~a" stem alias))]
-          [else
+                 #:help (format "write import ~s as ~a" stem alias))]
+          [(member (last-part path) '("" "." ".."))
+           (bail 'CHECK-IMPORT-PATH "import paths name a module file" span
+                 #:help (format "write import \"models\" as ~a to load models.agc" alias))]
+          [(module-name? guess)
            (bail 'CHECK-IMPORT-PATH "import paths name a module without an extension" span
-                 #:help (format "write import \"models\" as ~a to load models.agc" alias))]))
+                 #:help (format "write import ~s as ~a to load ~a.agc" guess alias guess))]
+          [else
+           (bail 'CHECK-IMPORT-PATH "a module file name has no dot apart from .agc" span
+                 #:help "rename the file so its name has no dot apart from .agc")]))
       (define (resolve-import key path span)
         (cond
           [(string-prefix? path "std/")

@@ -5,7 +5,9 @@ An import path names a module without its extension: `"models"` loads
 `models.agc`, and `"../lib/util"` loads `../lib/util.agc`. Never write the
 extension: `import "models.agc"` gives `CHECK-IMPORT-PATH` (the help shows the
 path without it), and so do an empty path, a path that ends in `/`, and a last
-part with a dot (`"models.rb"`). Relative paths resolve from the importing
+part with a dot (`"models.rb"`). So a module file name has no dot apart from
+`.agc`: `json.tools.agc` cannot be imported; rename it, for example to
+`json_tools.agc`. Relative paths resolve from the importing
 file, not the working directory. Canonical paths identify files; each file is linked once. Cycles give
 `CHECK-IMPORT-CYCLE`; missing or unreadable imports give `CHECK-IMPORT-IO`, and
 invalid paths give `CHECK-IMPORT-PATH`. Each is located at the import.
