@@ -11,6 +11,8 @@
 (for ([name (in-list '(#"LC_ALL" #"LANG"))])
   (environment-variables-set! (current-environment-variables) name #"C.UTF-8"))
 (environment-variables-set! (current-environment-variables) #"LC_MESSAGES" #f)
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
 
 (define (run-main-in-process #:environment [environment (current-environment-variables)]
                              #:input [input #""]

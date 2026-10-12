@@ -45,7 +45,7 @@ static void drop(void *data) {
   dropped++;
 }
 
-static const agc_io_kind kind = {slow_work, finished, expired, drop, false};
+static const agc_io_kind kind = {slow_work, finished, expired, drop, false, "test"};
 
 static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   task_data *t = calloc(1, sizeof(task_data));

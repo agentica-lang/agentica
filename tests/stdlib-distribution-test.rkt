@@ -7,6 +7,9 @@
 (define vm-name (if (eq? (system-type 'os) 'windows) "agentica-vm.exe" "agentica-vm"))
 (define-runtime-path dist-directory "../dist")
 
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (module+ test
   (test-case "distributed executable imports stdlib after its build checkout is deleted"
     (define directory (make-temporary-file "agentica-distribution~a" 'directory))

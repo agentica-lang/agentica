@@ -230,3 +230,50 @@ and cost one predictable branch each.
   against glibc 2.28 (pinned zig, checked by sha256), checks that floor with
   `objdump -T`, and ships it in `bin/` next to `agentica`.
 
+- **VM tracing (as built, roadmap 14a).** The rules are in
+  `docs/future/24-logging.md` §24.4; this note lists only what the code
+  chose. `vm/trace.h` holds `agc_trace` (category mask, descriptor, start
+  time), the category bits and `AGC_TRACE(trace, category, format, ...)`;
+  `vm/trace.c` holds `agc_trace_parse`, `agc_trace_message` (the
+  `unknown category` and `cannot open` lines) and `agc_trace_emit`, which
+  walks the format itself: numbers (`d`, `i`, `u`, `x` with `hh` to `j`,
+  `z`, `t`) go through `snprintf`, every `%s` and `%.*s` through the
+  escaper, and any other conversion (`%c`, `%p`, floats, widths, flags)
+  ends the line with `?`. A text value with a byte that is not part of a
+  valid UTF-8 sequence (a lone continuation byte, a cut lead byte) is
+  quoted, and each such byte is written as `\u00XX`, so a trace line is
+  always valid UTF-8. `vm/main.c`
+  reads both variables after the option checks and before
+  `agc_load_traced` (`agc_load` is the untraced form the tests and the
+  fuzzer call), opens the file with `O_NONBLOCK` and `O_NOFOLLOW` and takes
+  only a regular file owned by the VM's user (a FIFO, a device, a symlink
+  or another user's file gives the `cannot open` line, so start-up never
+  blocks), moves a trace descriptor that lands on 0, 1 or 2 to 3 or above (so a closed stderr stays closed), and stores the
+  struct in `agc_runtime`. With `AGENTICA_VM_TRACE_FILE` set, the
+  `unknown category` warning goes to the trace file, not to stderr; the
+  `cannot open` line goes to stderr. `proc` and the process guard keep a copy, since
+  libuv callbacks have no runtime pointer. Task ids come from the runtime's
+  `next_task_id` (main is 1); job and handle ids are resource ids from the
+  scheduler's registry. Event names: `sched` spawn, turn (`steps`, `cost`,
+  `why`), wake (`by=job|await|lock|stdin`), cancel, stall, fail, exit; `io`
+  start, done, timeout (`us` from the job start to its `done` callback,
+  `result=ok|error|value`; lock jobs have none, `lock_handoff` and
+  `lock_timeout` cover them), lock_wait, lock_handoff, lock_timeout, stdin,
+  poll (`mode=once|nowait`, `us` blocked; a `nowait` poll that found no
+  finished job writes nothing), close (`resources` left in the
+  registry, `settled`), hard_exit; `proc` spawn,
+  spawn_failed (`rc`, or `reason=unresolved` when the executable is not
+  found), exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
+  stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
+  `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
+  collect (`at=turn|end`). `tls` has no trace points yet. A cut line ends
+  with `...` after a whole escape or UTF-8 sequence; a cut inside a quoted
+  value closes the quote first (`"...`). `make vm TRACE=0` passes
+  `-DAGC_TRACE_BUILD=0` and `--version` then says `trace off`.
+  `vm/tests/trace_test.c` covers the escaper and the line buffer;
+  `tests/vm-trace-test.rkt` the whole runs.
+- On Linux, `main` first opens `/dev/null` onto any of descriptors 0, 1
+  and 2 that is closed, in the wrong direction (write-only for 0,
+  read-only for 1 and 2), so libuv never gets a low descriptor and trips
+  its assertion, while reads and writes on that stream still fail with
+  `EBADF` as before.

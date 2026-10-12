@@ -39,6 +39,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux each `read(0)` (with `poll` on `EAGAIN`) is a thread-pool job whose `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
 | `vm/task.c` | the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built"): `agc_vm_run` (setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each turn and ONCE when idle, the stall check), `agc_task_wake`, `agc_task_park`, and the `Task` builtins (`agc_task_builtins`: spawn with a per-task `Random` split, await with a FIFO of waiters and retry, sleep as a timer job, `sleep(0)` and fuzz sleeps yield) |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, the same formats as `src/diagnostic.rkt`; only the code must match |
+| `vm/trace.h`, `vm/trace.c` | VM tracing (`AGENTICA_VM_TRACE`, `docs/future/24-logging.md` §24.4, as built in `docs/vm/08-loader-and-cli.md` §9): the `agc_trace` struct, category bits, `AGC_TRACE_ON` and `AGC_TRACE`; `agc_trace_parse`, `agc_trace_message`, `agc_trace_format` (for the C test) and `agc_trace_emit` (one 512-byte stack line, one `write(2)`) |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
 | `vm/tests/loader_test.c` | one assert per loader rule (`type_tables(which)` builds one malformed Types section per case) |
 | `vm/tests/map_test.c` | HAMT: 20,000 keys, order, replacement, persistence, full hash collisions, shared 60-bit prefixes, delete (order, persistence, collision nodes, down to an empty map), a depth-1,000,000 nested map printed |
@@ -49,6 +50,8 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/tests/budget_test.c` | under `AGC_NO_GC`, an allocation past `agc_set_alloc_limit` longjmps once, and after `agc_release_all` no limit is set |
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm/02-reference-behavior.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
+| `vm/tests/trace_test.c` | the trace escaper and line buffer: numbers, empty and special text values, invalid UTF-8 bytes as `\u00XX`, lines cut at 512 bytes on a UTF-8 or escape boundary, the unknown-category warning |
+| `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; `gc` lines from `map-large` (skipped on a sanitizer build); a VM started with stderr or stdout closed; skips on a `TRACE=0` VM |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
@@ -62,6 +65,8 @@ git submodule update --init          # fetch bdwgc, yyjson and libuv after a clo
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
+make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
+AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests
@@ -194,6 +199,40 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   Windows. The `platforms.yml` workflow, run by hand, runs `make vm vm-test`
   and the diff and bytecode tests on `macos-15` and `windows-2025`, not the
   whole `make test`; run it before merging platform code.
+
+## Add a trace point
+
+`AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s", id, name)`,
+with `tr` a `const agc_trace *` (`&vm->rt->trace`, or the copy in a
+`malloc`'d struct whose libuv callbacks have no runtime). Lines are `event
+key=value ...`, at events only, never per instruction. When a trace needs
+work first (a clock read, a GC getter), guard it with `AGC_TRACE_ON` or put
+it in a small `trace_*` helper that returns early. Rules (a trace point
+must never crash or change the run):
+
+- The format is checked by `__attribute__((format(printf, ...)))`; only
+  `d`, `i`, `u`, `x`, `X` (with `hh`, `h`, `l`, `ll`, `z`, `j`, `t`), `%s`,
+  `%.*s` and `%%` are supported; anything else (`%c`, `%p`, floats, widths,
+  flags) still compiles but ends the line with `?`. `vm/tests/trace_test.c`
+  has one case per supported conversion; add one for any new conversion.
+- Text goes through the escaper (plain, or JSON-quoted when empty or when it
+  has a space, `=`, `"`, `\`, or a control byte). An `agc_string` or any
+  (pointer, length) data is `%.*s` with `agc_trace_len(bytes)`, never `%s`.
+  Trace only memory the code owns at that moment (trace a path before it is
+  freed).
+- No `FILE *`, stdio, locks, shared buffers, `malloc`, GC allocation or GC
+  callbacks; `agc_trace_emit` saves and restores `errno`.
+- Trace code only reads state: no steps, no turn cost, no change to when
+  tasks switch. Bookkeeping that exists only for a trace (a job's start
+  time) is set only when the category is on.
+- Never trace from a real signal handler or from a libuv pool `work`
+  function; libuv callbacks (`uv_signal_t` included) run on the loop thread
+  and may trace.
+- A new category gets a bit in `vm/trace.h` and a name in `category_names`
+  in `vm/trace.c`, the regex in `tests/vm-trace-test.rkt`, and the list in
+  `docs/vm/08-loader-and-cli.md` §9.
+- Every test file that starts the VM itself removes `AGENTICA_VM_TRACE` and
+  `AGENTICA_VM_TRACE_FILE` when it loads (the Makefile `unexport`s them).
 
 ## Linked programs
 

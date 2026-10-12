@@ -12,6 +12,9 @@
 (define wait-seconds 60)
 (define vm-file (build-path root "dist" "agentica-vm"))
 
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define (environment no-turn-cost?)
   (define env (environment-variables-copy (current-environment-variables)))
   (environment-variables-set! env #"AGENTICA_VM_TEST_NO_TURN_COST" (and no-turn-cost? #"1"))

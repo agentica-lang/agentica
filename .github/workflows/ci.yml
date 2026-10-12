@@ -54,7 +54,7 @@ jobs:
           else
             while IFS= read -r f; do
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/vm-trace-test.rkt|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"
@@ -250,8 +250,11 @@ jobs:
             exit 1
           fi
           make vm-lint
+      - run: |
+          make vm vm-test TRACE=0
+          dist/agentica-vm --version | grep -q 'trace off'
       - run: make vm vm-test
-      - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
-      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
+      - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt
+      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt
       - run: make vm-fuzz
       - run: make vm-gc-stress
