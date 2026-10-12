@@ -59,6 +59,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
+  process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
   task.c          # scheduler (run queue, turns, park and wake) and the Task builtins
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)

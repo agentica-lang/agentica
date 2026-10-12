@@ -1,6 +1,7 @@
 #lang racket
 
 (require (except-in rackunit check)
+         (only-in ffi/unsafe -> _fun _int get-ffi-obj)
          json
          racket/os
          racket/runtime-path
@@ -31,6 +32,9 @@
   (if vm-binary
       (path->complete-path vm-binary root)
       (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
+(define unix-kill (get-ffi-obj "kill" #f (_fun _int _int -> _int) (lambda () #f)))
+(define sigkill 9)
+(define sigterm 15)
 (define full-sweep-limit 2000)
 (define vm-turn-steps 2000)
 (define shard-count 4)
@@ -41,6 +45,8 @@
 (define extras-shard 4)
 (define fixture-input (make-parameter #""))
 (define fixture-args (make-parameter '()))
+(define fixture-allow-run (make-parameter #f))
+(define allow-run-prefix "process-")
 (define tmp-token "@tmp")
 (define tmp-root (make-parameter #f))
 (define tmp-count 0)
@@ -115,7 +121,7 @@
   (define out (open-output-string))
   (define err (open-output-string))
   (define result (evaluate checked #:out out #:err err #:in (open-input-bytes (fixture-input))
-                           #:args arguments #:max-steps limit))
+                           #:args arguments #:max-steps limit #:allow-run (fixture-allow-run)))
   (define text
     (cond
       [(not (diagnostic? result)) ""]
@@ -125,6 +131,12 @@
   (list (cond [(diagnostic? result) 1] [(exit-code? result) (exit-status (exit-code-code result))] [else 0])
         (get-output-string out)
         (string-append (get-output-string err) (if (diagnostic? result) (string-append text "\n") ""))))
+
+(define (bounded seconds thunk)
+  (define result 'timeout)
+  (define worker (thread (lambda () (set! result (thunk)))))
+  (unless (sync/timeout seconds worker) (kill-thread worker))
+  result)
 
 (define (run-process program #:input [input #""] #:timeout [timeout #f] . arguments)
   (define-values (process out in err) (apply subprocess #f #f #f program arguments))
@@ -148,7 +160,8 @@
 
 (define (run-vm bytecode limit #:style [style 'json] #:timeout [timeout #f] . extra)
   (apply run-process vm-file #:input (fixture-input) #:timeout timeout
-         (append (limit-options limit)
+         (append (allow-options)
+                 (limit-options limit)
                  (style-options style)
                  (list "--" (path->string bytecode))
                  (map string->bytes/utf-8 (fixture-args))
@@ -191,6 +204,9 @@
 (define (limit-options limit)
   (if limit (list "--max-steps" (number->string limit)) '()))
 
+(define (allow-options)
+  (if (fixture-allow-run) '("--allow-run") '()))
+
 (define (vm-batch name bytecode directory option-lists during)
   (define process #f)
   (define out #f)
@@ -223,7 +239,8 @@
                          (format "~a --foreground -k 5 ~a "
                                  (shell-quote (path->string timeout-program)) run-timeout)
                          "")
-                     (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) (tail tmp)
+                     (shell-quote (path->string vm-file)) (string-join (map shell-quote (append (allow-options) options)))
+                     (tail tmp)
                      (shell-quote (path->string input)) out-file err-file out-file err-file
                      (shell-quote (string-append base ".status")))
              port))))
@@ -363,7 +380,8 @@
     (define file (path-replace-extension program extension))
     (if (file-exists? file) (read-it file) default))
   (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
-                 [fixture-args (sidecar #".args" file->value '())])
+                 [fixture-args (sidecar #".args" file->value '())]
+                 [fixture-allow-run (string-prefix? name allow-run-prefix)])
     (test-case (format "~a matches the evaluator's exit code, stdout, stderr and diagnostic code under every --max-steps" name)
       (define limits (sweep-limits (total-steps checked)))
       (define text-styles '(plain ai))
@@ -519,7 +537,9 @@
           (check-equal? (first lowered) 1)
           (check-equal? (fourth (outcome lowered)) "LOWER-UNSUPPORTED")
           (delete-file unsupported)
-          (check-equal? (first (run-cli temp "--vm" "--allow-run" calls)) 2)
+          (define denied (path->string (build-path fixtures "spawn-denied.agc")))
+          (check-equal? (fourth (outcome (same #:style 'json "--json" denied))) "RUNTIME-UNWRAP-ERROR")
+          (check-equal? (first (same #:style 'json "--allow-run" "--json" denied)) 0)
           (define random (path->string (build-path fixtures "random.agc")))
           (check-equal? (first (same "--seed" "77" random)) 0)
           (check-equal? (first (same "--seed" "2147483648" random)) 2)
@@ -605,6 +625,116 @@
           (kill-thread watchdog)
           (release)
           (delete-file fifo))))
+
+    (test-case "Process.spawn searches PATH only and resolves a name with / against the working directory"
+      (define program (build-path work "path-lookup.agc"))
+      (display-to-file
+       (string-append
+        "def show(name: String) -> Void\n  case Process.spawn(name, [\"x\"], 60000)\n"
+        "    ok(p) ->\n      puts(\"#{name}: #{Process.read_line(p, 60000)} #{Process.wait(p, 60000)}\")\n"
+        "      Process.close(p)\n    error(message) -> puts(\"#{name}: #{message}\")\n  end\nend\n\n"
+        "def main() -> Void\n  show(\"agc-tool\")\n  show(\"./agc-tool\")\n  show(\"bin/agc-tool\")\n  show(\"bin\")\nend\n")
+       program)
+      (define bytecode (build-path work "path-lookup.agcb"))
+      (compile-file program bytecode)
+      (define folder (build-path work "lookup"))
+      (make-directory* (build-path folder "bin"))
+      (for ([file (list (build-path folder "agc-tool") (build-path folder "bin" "agc-tool"))])
+        (display-to-file "#!/bin/sh\necho \"ran $1\"\n" file)
+        (file-or-directory-permissions file #o755))
+      (define (expected found)
+        (list 0
+              (string-append "agc-tool: " (if found "ok(\"ran x\") ok(0)" "process: executable is unavailable")
+                             "\n./agc-tool: ok(\"ran x\") ok(0)\nbin/agc-tool: ok(\"ran x\") ok(0)\n"
+                             "bin: process: executable is unavailable\n")
+              ""))
+      (define none (path->string (build-path folder "none")))
+      (for ([search (list none (string-append ":" none) (string-append "bin:" none) (string-append ".:" none))])
+        (define env (environment-variables-copy (current-environment-variables)))
+        (environment-variables-set! env #"PATH" (string->bytes/utf-8 search))
+        (parameterize ([current-directory folder]
+                       [current-environment-variables env]
+                       [fixture-allow-run #t])
+          (define want (expected (or (string-prefix? search "bin:") (string-prefix? search ".:"))))
+          (check-equal? (bounded run-timeout (lambda () (run-racket (front-end program) #f))) want search)
+          (check-equal? (run-vm bytecode #f #:timeout run-timeout) want search)))
+      (delete-directory/files folder))
+
+    (test-case "agentica --vm stopped by SIGTERM kills the VM's running children"
+      (define program (build-path work "signal-children.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n")
+       program)
+      (define-values (driver out in err)
+        (parameterize ([current-environment-variables (cli-environment work vm-file)])
+          (subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file)
+                      "--vm" "--allow-run" (path->string program))))
+      (define pid #f)
+      (dynamic-wind
+        void
+        (lambda ()
+          (close-output-port in)
+          (set! pid (sync/timeout run-timeout (read-line-evt out)))
+          (check-pred string? pid)
+          (when (string? pid)
+            (check-true (directory-exists? (build-path "/proc" pid)))
+            (unix-kill (subprocess-pid driver) sigterm)
+            (check-not-false (sync/timeout run-timeout driver))
+            (check-false (directory-exists? (build-path "/proc" pid)))))
+        (lambda ()
+          (subprocess-kill driver #t)
+          (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
+            (unix-kill (string->number pid) sigkill))
+          (close-input-port out)
+          (close-input-port err))))
+
+    (test-case "a signal caught while the VM is blocked is not lost when the last child exits first"
+      (define program (build-path work "signal-pending.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n"
+        "  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\n  puts(\"survived\")\nend\n")
+       program)
+      (define bytecode (build-path work "signal-pending.agcb"))
+      (compile-file program bytecode)
+      (define-values (vm out in err) (subprocess #f #f #f vm-file "--allow-run" "--" (path->string bytecode)))
+      (define pid #f)
+      (dynamic-wind
+        void
+        (lambda ()
+          (close-output-port in)
+          (set! pid (sync/timeout run-timeout (read-line-evt out)))
+          (check-pred string? pid)
+          (when (string? pid)
+            (sleep 0.5)
+            (unix-kill (string->number pid) sigkill)
+            (sleep 0.3)
+            (unix-kill (subprocess-pid vm) sigterm)
+            (thread (lambda () (port->bytes out)))
+            (thread (lambda () (port->bytes err)))
+            (check-not-false (sync/timeout run-timeout vm))
+            (check-equal? (subprocess-status vm) (+ 128 sigterm))))
+        (lambda ()
+          (subprocess-kill vm #t)
+          (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
+            (unix-kill (string->number pid) sigkill)))))
+
+    (test-case "a child does not inherit descriptors the VM inherited"
+      (define program (build-path work "private-fds.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", "
+        "\"if [ -e /proc/self/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  Process.close(p)\nend\n")
+       program)
+      (define bytecode (build-path work "private-fds.agcb"))
+      (compile-file program bytecode)
+      (check-equal? (run-process "/bin/sh" #:timeout run-timeout "-c" "exec 7</dev/null; exec \"$0\" --allow-run -- \"$1\""
+                                 (path->string vm-file) (path->string bytecode))
+                    (list 0 "private\n" "")))
 
     (test-case "relative file paths use the raw bytes of a non-UTF-8 working directory"
       (define program (build-path work "raw-cwd.agc"))

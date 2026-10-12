@@ -1,6 +1,7 @@
 #lang racket
 
 (require file/sha1
+         (only-in ffi/unsafe -> _fun _int get-ffi-obj)
          json
          (only-in "ast.rkt" program-span)
          racket/os
@@ -47,6 +48,16 @@
   (with-handlers ([exn:fail:filesystem? void])
     (delete-file path)))
 
+(define unix-kill (get-ffi-obj "kill" #f (_fun _int _int -> _int) (lambda () #f)))
+(define sigterm 15)
+(define vm-grace-seconds 2)
+
+(define (stop-vm process)
+  (when (eq? (subprocess-status process) 'running)
+    (when unix-kill (unix-kill (subprocess-pid process) sigterm))
+    (unless (and unix-kill (sync/timeout vm-grace-seconds process))
+      (subprocess-kill process #t))))
+
 (define (run-vm-process vm bytecode-file options program-args)
   (define (stream port) (and (file-stream-port? port) port))
   (define stdout (current-output-port))
@@ -77,7 +88,7 @@
           [else #f])))
     (when (and failed? (eq? (subprocess-status process) 'running))
       (set! read-failed? #t)
-      (subprocess-kill process #t))
+      (stop-vm process))
     (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
   (and process
        (dynamic-wind
@@ -100,8 +111,7 @@
          (lambda ()
            (when feeder (kill-thread feeder))
            (when to-vm (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
-           (when (eq? (subprocess-status process) 'running)
-             (subprocess-kill process #t))))))
+           (parameterize-break #f (stop-vm process))))))
 
 (module+ main
   (define dump? #f)
@@ -141,8 +151,7 @@
      arguments))
   (when vm?
     (define unsupported
-      (or (and allow-run? "--allow-run")
-          (and dump? "--dump")
+      (or (and dump? "--dump")
           (and dump-ir? "--dump-ir")
           (and (pair? step-files) "--steps")
           (and (pair? raw-arguments) (member (car raw-arguments) '("test" "help" "check" "compile"))
@@ -272,6 +281,7 @@
      (define options
        (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
                (if seed (list "--seed" (number->string seed)) '())
+               (if allow-run? '("--allow-run") '())
                (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
      (define status
        (dynamic-wind
