@@ -40,7 +40,8 @@
 (define unix-kill (get-ffi-obj "kill" #f (_fun _int _int -> _int) (lambda () #f)))
 (define sigkill 9)
 (define sigterm 15)
-(define full-sweep-limit 2000)
+(define full-sweep-limit 200)
+(define sweep-head 100)
 (define runaway-limit 500)
 (define vm-turn-steps 2000)
 (define shard-count 4)
@@ -365,8 +366,8 @@
    (if (<= total full-sweep-limit)
        (range 1 (add1 total))
        (remove-duplicates
-        (append (range 1 301)
-                (range 300 total (quotient total 50))
+        (append (range 1 (add1 sweep-head))
+                (range sweep-head total (quotient total 50))
                 (list (sub1 total) total))))
    (list (last-limit expected-steps))))
 

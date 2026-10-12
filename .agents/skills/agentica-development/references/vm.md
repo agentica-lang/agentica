@@ -654,10 +654,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   and the parser of `vm/http_parse.h`, called only by `stdlib/http.agc`
   (the std-only guard). The `http-*` fixtures are their own peers (a TCP
   server task in the same program; only `main` prints); the std/http URL
-  parser costs about 500 steps per call, so they sit above the 2000-step
-  full sweep and are sampled. Put the other cases in `tests/vm-http-test.rkt`,
-  which starts one Python peer (`tests/fixtures/http-peer.py`: a
-  `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
+  parser costs about 500 steps per call, so the sweep samples them. Put the
+  other cases in `tests/vm-http-test.rkt`, which starts one Python peer
+  (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
   canned hostile responses) and runs three programs once. Python 3
   (standard library only) is required in CI, as Node is for TCP: with `CI`
   set the test fails without it, locally it prints a skip. picohttpparser
@@ -703,8 +702,10 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 - Checking out a branch without the submodule warns `unable to rmdir
   vm/third_party/bdwgc`; run `git submodule update --init` after switching
   back.
-- Step-limit sweeps on long programs are slow; the diff test samples above
-  2000 steps.
+- Each sweep limit is one VM start, and the start costs more than the run:
+  the diff test runs every limit only up to 200 steps; above that it runs 1
+  to 100, limits spaced steps / 50 apart, the steps minus 1 and the steps
+  (`sweep-limits` in `tests/vm-diff-common.rkt`).
 - Typed JSON: `user-tables` in `src/lower.rkt` gives each `ir-struct` its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and `src/bytecode.rkt` interns them into the
