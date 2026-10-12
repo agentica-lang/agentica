@@ -64,6 +64,12 @@ jobs:
         run: |
           set -o pipefail
           make vm vm-test
+          strip dist/agentica-vm
+          sections=$(LC_ALL=C readelf -SW dist/agentica-vm)
+          if grep -qE '[.](debug_info|symtab)[[:space:]]' <<< "$sections"; then
+            echo "dist/agentica-vm still has .debug_info or .symtab after strip" >&2
+            exit 1
+          fi
           newest=$(objdump -T dist/agentica-vm | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
           [ -n "$newest" ] || { echo "objdump found no GLIBC symbol versions in dist/agentica-vm" >&2; exit 1; }
           echo "dist/agentica-vm needs $newest"
