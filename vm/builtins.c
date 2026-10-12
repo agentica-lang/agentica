@@ -20,19 +20,19 @@ static void write_text(agc_vm *vm, FILE *stream, agc_value v, bool newline) {
 
 static agc_value builtin_puts(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  write_text(vm, vm->out, args[0], true);
+  write_text(vm, vm->rt->out, args[0], true);
   return agc_void();
 }
 
 static agc_value builtin_print(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  write_text(vm, vm->out, args[0], false);
+  write_text(vm, vm->rt->out, args[0], false);
   return agc_void();
 }
 
 static agc_value builtin_warn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  write_text(vm, vm->err, args[0], true);
+  write_text(vm, vm->rt->err, args[0], true);
   return agc_void();
 }
 
@@ -40,8 +40,8 @@ static agc_value builtin_inspect(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_value v = args[0];
   agc_string *s = agc_debug(vm, v);
-  agc_write(vm, vm->out, s->data, s->bytes);
-  agc_write(vm, vm->out, "\n", 1);
+  agc_write(vm, vm->rt->out, s->data, s->bytes);
+  agc_write(vm, vm->rt->out, "\n", 1);
   return v;
 }
 
@@ -50,23 +50,29 @@ static const char end_of_input[] = "IO.gets reached the end of input";
 static agc_value builtin_gets(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  agc_string *line = agc_input_line(vm);
-  if (line) return agc_result_value(true, agc_string_value(line));
+  agc_string *line = NULL;
+  agc_input_status status = agc_input_line(vm, &line);
+  if (status == AGC_INPUT_WAIT) return agc_void();
+  if (status == AGC_INPUT_OK) return agc_result_value(true, agc_string_value(line));
   size_t n = sizeof end_of_input - 1;
   return agc_result_value(false, agc_string_value(agc_make_string(end_of_input, n, n)));
 }
 
 static agc_value builtin_gets_bang(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
-  agc_string *line = agc_input_line(vm);
-  if (!line) agc_fail(vm, "RUNTIME-END-OF-INPUT", end_of_input, span);
+  agc_string *line = NULL;
+  agc_input_status status = agc_input_line(vm, &line);
+  if (status == AGC_INPUT_WAIT) return agc_void();
+  if (status != AGC_INPUT_OK) agc_fail(vm, "RUNTIME-END-OF-INPUT", end_of_input, span);
   return agc_string_value(line);
 }
 
 static agc_value builtin_read(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_string_value(agc_input_all(vm));
+  agc_string *text = NULL;
+  if (agc_input_all(vm, &text) == AGC_INPUT_WAIT) return agc_void();
+  return agc_string_value(text);
 }
 
 static agc_value text_error(const char *text) {
@@ -78,8 +84,10 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   (void)span;
   int64_t count = agc_as_int(vm, args[0]);
   if (count < 0 || count > AGC_MAX_READ_BYTES) return text_error("byte count must be between 0 and 1048576");
-  agc_list *bytes;
-  if (!agc_input_bytes(vm, (size_t)count, &bytes)) return text_error("input read failed");
+  agc_list *bytes = NULL;
+  agc_input_status status = agc_input_bytes(vm, (size_t)count, &bytes);
+  if (status == AGC_INPUT_WAIT) return agc_void();
+  if (status == AGC_INPUT_FAILED) return text_error("input read failed");
   return agc_result_value(true, agc_list_value(bytes));
 }
 
@@ -93,13 +101,16 @@ static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_eof(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_bool(agc_input_peek(vm) < 0);
+  int byte;
+  agc_input_status status = agc_input_peek(vm, &byte);
+  if (status == AGC_INPUT_WAIT) return agc_void();
+  return agc_bool(status == AGC_INPUT_EOF);
 }
 
 static agc_value builtin_args(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return vm->args;
+  return vm->rt->args;
 }
 
 static agc_value builtin_exit(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -360,61 +371,61 @@ static agc_value builtin_range_last(agc_vm *vm, agc_value *args, uint32_t span) 
 }
 
 static const agc_builtin table[] = {
-  {"puts", 1, builtin_puts, AGC_NATIVE_NONE},
-  {"IO.print", 1, builtin_print, AGC_NATIVE_NONE},
-  {"IO.warn", 1, builtin_warn, AGC_NATIVE_NONE},
-  {"IO.inspect", 1, builtin_inspect, AGC_NATIVE_NONE},
-  {"IO.gets", 0, builtin_gets, AGC_NATIVE_NONE},
-  {"IO.gets!", 0, builtin_gets_bang, AGC_NATIVE_NONE},
-  {"IO.read", 0, builtin_read, AGC_NATIVE_NONE},
-  {"IO.read_bytes", 1, builtin_read_bytes, AGC_NATIVE_NONE},
-  {"IO.flush", 0, builtin_flush, AGC_NATIVE_NONE},
-  {"IO.eof?", 0, builtin_eof, AGC_NATIVE_NONE},
-  {"System.args", 0, builtin_args, AGC_NATIVE_NONE},
-  {"System.exit", 1, builtin_exit, AGC_NATIVE_NONE},
-  {"String.from_int", 1, builtin_from_int, AGC_NATIVE_NONE},
-  {"String.from_float", 1, builtin_from_float, AGC_NATIVE_NONE},
-  {"List.concat", 2, builtin_list_concat, AGC_NATIVE_NONE},
-  {"Map.put", 3, builtin_map_put, AGC_NATIVE_NONE},
-  {"List.size", 1, builtin_list_size, AGC_NATIVE_NONE},
-  {"List.append", 2, builtin_list_append, AGC_NATIVE_NONE},
-  {"List.at", 2, builtin_list_at, AGC_NATIVE_NONE},
-  {"List.set", 3, builtin_list_set, AGC_NATIVE_NONE},
-  {"List.repeat", 2, builtin_list_repeat, AGC_NATIVE_NONE},
-  {"List.take", 2, builtin_list_take, AGC_NATIVE_NONE},
-  {"List.drop", 2, builtin_list_drop, AGC_NATIVE_NONE},
-  {"List.reverse", 1, builtin_list_reverse, AGC_NATIVE_NONE},
-  {"List.sort", 1, builtin_list_sort, AGC_NATIVE_NONE},
-  {"Map.has_key?", 2, builtin_map_has_key, AGC_NATIVE_NONE},
-  {"Map.size", 1, builtin_map_size, AGC_NATIVE_NONE},
-  {"Map.keys", 1, builtin_map_keys, AGC_NATIVE_NONE},
-  {"Map.values", 1, builtin_map_values, AGC_NATIVE_NONE},
-  {"Map.get", 2, builtin_map_get, AGC_NATIVE_NONE},
-  {"Map.get", 3, builtin_map_get_default, AGC_NATIVE_NONE},
-  {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE},
-  {"ok", 1, builtin_ok, AGC_NATIVE_NONE},
-  {"ok", 0, builtin_ok_void, AGC_NATIVE_NONE},
-  {"error", 1, builtin_error, AGC_NATIVE_NONE},
-  {"Result.ok?", 1, builtin_result_ok, AGC_NATIVE_NONE},
-  {"Result.unwrap!", 1, builtin_result_unwrap, AGC_NATIVE_NONE},
-  {"Result.unwrap_or", 2, builtin_result_unwrap_or, AGC_NATIVE_NONE},
-  {"Result.message", 1, builtin_result_message, AGC_NATIVE_NONE},
-  {"List.map", 2, NULL, AGC_NATIVE_MAP},
-  {"List.filter", 2, NULL, AGC_NATIVE_FILTER},
-  {"List.reduce", 3, NULL, AGC_NATIVE_REDUCE},
-  {"List.each", 2, NULL, AGC_NATIVE_EACH},
-  {"List.any?", 2, NULL, AGC_NATIVE_ANY},
-  {"List.all?", 2, NULL, AGC_NATIVE_ALL},
-  {"List.sort_by", 2, NULL, AGC_NATIVE_SORT_BY},
-  {"Range.size", 1, builtin_range_size, AGC_NATIVE_NONE},
-  {"Range.to_a", 1, builtin_range_to_a, AGC_NATIVE_NONE},
-  {"Range.include?", 2, builtin_range_include, AGC_NATIVE_NONE},
-  {"Range.first", 1, builtin_range_first, AGC_NATIVE_NONE},
-  {"Range.last", 1, builtin_range_last, AGC_NATIVE_NONE},
-  {"Range.each", 2, NULL, AGC_NATIVE_RANGE_EACH},
-  {"Int.times", 2, NULL, AGC_NATIVE_TIMES},
-  {"Int.upto", 3, NULL, AGC_NATIVE_UPTO},
-  {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO},
+  {"puts", 1, builtin_puts, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.print", 1, builtin_print, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.warn", 1, builtin_warn, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.inspect", 1, builtin_inspect, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"IO.gets", 0, builtin_gets, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.gets!", 0, builtin_gets_bang, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.read", 0, builtin_read, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.read_bytes", 1, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"IO.flush", 0, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"IO.eof?", 0, builtin_eof, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"System.args", 0, builtin_args, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"System.exit", 1, builtin_exit, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.from_int", 1, builtin_from_int, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.from_float", 1, builtin_from_float, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"List.concat", 2, builtin_list_concat, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Map.put", 3, builtin_map_put, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"List.size", 1, builtin_list_size, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"List.append", 2, builtin_list_append, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.at", 2, builtin_list_at, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"List.set", 3, builtin_list_set, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.repeat", 2, builtin_list_repeat, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.take", 2, builtin_list_take, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.drop", 2, builtin_list_drop, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.reverse", 1, builtin_list_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.sort", 1, builtin_list_sort, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Map.has_key?", 2, builtin_map_has_key, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Map.size", 1, builtin_map_size, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Map.keys", 1, builtin_map_keys, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Map.values", 1, builtin_map_values, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Map.get", 2, builtin_map_get, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Map.get", 3, builtin_map_get_default, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Map.delete", 2, builtin_map_delete, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"ok", 1, builtin_ok, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"ok", 0, builtin_ok_void, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"error", 1, builtin_error, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Result.ok?", 1, builtin_result_ok, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Result.unwrap!", 1, builtin_result_unwrap, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Result.unwrap_or", 2, builtin_result_unwrap_or, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Result.message", 1, builtin_result_message, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"List.map", 2, NULL, AGC_NATIVE_MAP, AGC_COST_NONE},
+  {"List.filter", 2, NULL, AGC_NATIVE_FILTER, AGC_COST_NONE},
+  {"List.reduce", 3, NULL, AGC_NATIVE_REDUCE, AGC_COST_NONE},
+  {"List.each", 2, NULL, AGC_NATIVE_EACH, AGC_COST_NONE},
+  {"List.any?", 2, NULL, AGC_NATIVE_ANY, AGC_COST_NONE},
+  {"List.all?", 2, NULL, AGC_NATIVE_ALL, AGC_COST_NONE},
+  {"List.sort_by", 2, NULL, AGC_NATIVE_SORT_BY, AGC_COST_NONE},
+  {"Range.size", 1, builtin_range_size, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Range.to_a", 1, builtin_range_to_a, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Range.include?", 2, builtin_range_include, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Range.first", 1, builtin_range_first, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Range.last", 1, builtin_range_last, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Range.each", 2, NULL, AGC_NATIVE_RANGE_EACH, AGC_COST_NONE},
+  {"Int.times", 2, NULL, AGC_NATIVE_TIMES, AGC_COST_NONE},
+  {"Int.upto", 3, NULL, AGC_NATIVE_UPTO, AGC_COST_NONE},
+  {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO, AGC_COST_NONE},
 };
 
 static const size_t table_count = sizeof table / sizeof table[0];
@@ -425,6 +436,7 @@ static const builtin_table tables[] = {
   {agc_number_builtins, &agc_number_builtin_count},
   {agc_json_builtins, &agc_json_builtin_count},
   {agc_file_builtins, &agc_file_builtin_count},
+  {agc_task_builtins, &agc_task_builtin_count},
 };
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {

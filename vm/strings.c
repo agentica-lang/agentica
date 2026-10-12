@@ -54,9 +54,9 @@ static size_t walk(const agc_string *s, size_t index, size_t from_index, size_t 
 }
 
 static void remember(agc_vm *vm, const agc_string *s, size_t index, size_t offset) {
-  vm->cursor = s;
-  vm->cursor_index = index;
-  vm->cursor_offset = offset;
+  vm->task->cursor = s;
+  vm->task->cursor_index = index;
+  vm->task->cursor_offset = offset;
 }
 
 size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index) {
@@ -67,12 +67,12 @@ size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index) {
     offset = s->bytes;
     cost = s->chars - index;
   }
-  if (vm->cursor == s) {
-    size_t ci = vm->cursor_index;
+  if (vm->task->cursor == s) {
+    size_t ci = vm->task->cursor_index;
     size_t gap = ci > index ? ci - index : index - ci;
     if (gap < cost) {
       from_index = ci;
-      offset = vm->cursor_offset;
+      offset = vm->task->cursor_offset;
     }
   }
   offset = walk(s, index, from_index, offset);
@@ -520,27 +520,27 @@ static agc_value builtin_to_float_bang(agc_vm *vm, agc_value *args, uint32_t spa
 }
 
 const agc_builtin agc_string_builtins[] = {
-  {"String.length", 1, builtin_length, AGC_NATIVE_NONE},
-  {"String.upcase", 1, builtin_upcase, AGC_NATIVE_NONE},
-  {"String.downcase", 1, builtin_downcase, AGC_NATIVE_NONE},
-  {"String.trim", 1, builtin_trim, AGC_NATIVE_NONE},
-  {"String.split", 2, builtin_split, AGC_NATIVE_NONE},
-  {"String.join", 2, builtin_join, AGC_NATIVE_NONE},
-  {"String.contains?", 2, builtin_contains, AGC_NATIVE_NONE},
-  {"String.starts_with?", 2, builtin_starts_with, AGC_NATIVE_NONE},
-  {"String.ends_with?", 2, builtin_ends_with, AGC_NATIVE_NONE},
-  {"String.replace", 3, builtin_replace, AGC_NATIVE_NONE},
-  {"String.slice", 3, builtin_slice, AGC_NATIVE_NONE},
-  {"String.index_of", 2, builtin_index_of, AGC_NATIVE_NONE},
-  {"String.at", 2, builtin_at, AGC_NATIVE_NONE},
-  {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE},
-  {"String.code", 1, builtin_code, AGC_NATIVE_NONE},
-  {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE},
-  {"String.from_bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE},
-  {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE},
-  {"String.to_int!", 1, builtin_to_int_bang, AGC_NATIVE_NONE},
-  {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE},
-  {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE},
+  {"String.length", 1, builtin_length, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.upcase", 1, builtin_upcase, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.downcase", 1, builtin_downcase, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.trim", 1, builtin_trim, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.split", 2, builtin_split, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.join", 2, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.contains?", 2, builtin_contains, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.starts_with?", 2, builtin_starts_with, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.ends_with?", 2, builtin_ends_with, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.replace", 3, builtin_replace, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.slice", 3, builtin_slice, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.index_of", 2, builtin_index_of, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.reverse", 1, builtin_reverse, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"String.from_bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.to_int!", 1, builtin_to_int_bang, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"String.to_float!", 1, builtin_to_float_bang, AGC_NATIVE_NONE, AGC_COST_SIZE},
 };
 
 const size_t agc_string_builtin_count = sizeof agc_string_builtins / sizeof agc_string_builtins[0];

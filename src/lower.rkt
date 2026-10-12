@@ -39,6 +39,8 @@
     [(list-type? type) (vm-type? (cadr type) user-types)]
     [(map-type? type) (vm-type? (caddr type) user-types)]
     [(result-type? type) (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
+    [(and (pair? type) (eq? (car type) 'Task))
+     (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
     [(and (pair? type) (memq (car type) '(Struct Enum)))
      (eq? (hash-ref user-types (cadr type) #f) (car type))]
     [(and (pair? type) (eq? (car type) 'Fn))
@@ -149,7 +151,8 @@
                       "JSON.decode" "JSON.schema"
                       "File.open" "File.read_bytes" "File.read_line" "File.write" "File.write_bytes" "File.flush"
                       "File.close" "File.read_text" "File.write_text" "File.append_text" "File.stat"
-                      "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"))
+                      "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"
+                      "Task.spawn" "Task.await" "Task.sleep"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))

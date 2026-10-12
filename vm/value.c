@@ -259,6 +259,23 @@ agc_value agc_handle_value(agc_resource *r) {
   return v;
 }
 
+agc_value agc_task_value(agc_task *t) {
+  agc_value v;
+  v.tag = AGC_T_TASK;
+  v.as.p = t;
+  return v;
+}
+
+uint64_t agc_value_units(agc_value v) {
+  switch (v.tag) {
+    case AGC_T_STRING: return ((const agc_string *)v.as.p)->bytes / AGC_COST_BYTES;
+    case AGC_T_LIST: return ((const agc_list *)v.as.p)->len;
+    case AGC_T_MAP: return ((const agc_map *)v.as.p)->size;
+    case AGC_T_JSON: return ((const agc_json *)v.as.p)->count;
+    default: return 0;
+  }
+}
+
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last) {
   *first = r->start;
   *last = r->end;
@@ -378,6 +395,11 @@ agc_json *agc_as_json(agc_vm *vm, agc_value v) {
 
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_HANDLE) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_task *agc_as_task(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_TASK) wrong_tag(vm);
   return v.as.p;
 }
 

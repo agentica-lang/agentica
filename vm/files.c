@@ -84,11 +84,8 @@ static agc_value error_of(const char *message) {
 }
 
 static const char *os_message(agc_vm *vm, int err) {
-  if (!vm->messages_tried) {
-    vm->messages_tried = true;
-    vm->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
-  }
-  return vm->messages_locale ? strerror_l(err, vm->messages_locale) : strerror(err);
+  locale_t messages = vm->rt->messages_locale;
+  return messages ? strerror_l(err, messages) : strerror(err);
 }
 
 static void put_system_error(agc_vm *vm, text *t, int err) {
@@ -205,12 +202,18 @@ void agc_files_init(agc_vm *vm) {
   text t = {0};
   put(&t, buf, len);
   if (len == 0 || buf[len - 1] != '/') puts_text(&t, "/");
-  vm->cwd = agc_make_string(t.data, t.len, 0);
+  vm->rt->cwd = agc_make_string(t.data, t.len, 0);
+  if (!vm->rt->messages_locale) vm->rt->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
+}
+
+void agc_files_close(agc_vm *vm) {
+  if (vm->rt->messages_locale) freelocale(vm->rt->messages_locale);
+  vm->rt->messages_locale = (locale_t)0;
 }
 
 static const agc_string *cwd_of(agc_vm *vm) {
-  if (!vm->cwd) agc_files_init(vm);
-  return vm->cwd;
+  if (!vm->rt->cwd) agc_files_init(vm);
+  return vm->rt->cwd;
 }
 
 static char *host_path(agc_vm *vm, const agc_string *s) {
@@ -646,7 +649,7 @@ static agc_value text_result(const op *o) {
 
 static uint32_t file_info_struct(agc_vm *vm) {
   static const char *const fields[] = {"kind", "size_bytes", "modified_seconds"};
-  const agc_program *p = vm->program;
+  const agc_program *p = vm->rt->program;
   for (uint32_t k = 0; k < p->struct_count; k++) {
     const agc_struct_def *d = &p->structs[k];
     if (d->name->bytes != 8 || memcmp(d->name->data, "FileInfo", 8) != 0 || d->count != 3) continue;
@@ -730,7 +733,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
 static const agc_io_kind file_io = {work, done, expired, drop};
 
 static void files_on(agc_vm *vm, uint32_t span) {
-  if (vm->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 
 static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
@@ -1024,29 +1027,31 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_file_builtins[] = {
-  {"File.open", 3, builtin_open, AGC_NATIVE_NONE},
-  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE},
-  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE},
-  {"File.write", 3, builtin_write, AGC_NATIVE_NONE},
-  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE},
-  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE},
-  {"File.close", 2, builtin_close, AGC_NATIVE_NONE},
-  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE},
-  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE},
-  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE},
-  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE},
-  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE},
-  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE},
-  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE},
-  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE},
-  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE},
+  {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
 #else
 void agc_files_init(agc_vm *vm) { (void)vm; }
 
-const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE}};
+void agc_files_close(agc_vm *vm) { (void)vm; }
+
+const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
 
 const size_t agc_file_builtin_count = 0;
 #endif
