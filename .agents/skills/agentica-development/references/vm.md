@@ -193,7 +193,11 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   includes `yyjson.h`. libuv (Linux only, `UV_NAMES` in the Makefile, the
   Linux list of its `CMakeLists.txt`) builds per mode into
   `$(VM_BUILD)/uv/*.o` with `-std=gnu11`, its own `UV_DEFS` and the mode's
-  `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`;
+  `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`. The
+  yyjson and libuv objects follow their own stamp,
+  `$(VM_BUILD)/third-party-flags` (`VM_CC`, `YY_CFLAGS`, `YY_DEFS`,
+  `UV_DEFS`), not `build/vm/flags`, so `TRACE` does not rebuild them; a
+  flag they need goes in that stamp;
   `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`,
   `vm/stream.c`, `vm/process.c` and `vm/tcp.c` include `uv.h`. Bumping libuv: check out the new tag inside
   `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
