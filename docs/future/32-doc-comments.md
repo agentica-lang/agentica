@@ -11,7 +11,7 @@ Checked at `650f689`:
 - A comment starts with `#` and ends at the end of the line (`docs/grammar.md:59`). The lexer drops it (`src/lexer.rkt:166-168`), so nothing after the lexer sees comments.
 - A line with only a comment counts as blank for the blank-line rule between declarations (`docs/grammar.md:146`, `PARSE-MISSING-BLANK-LINE` at `src/parser.rkt:114`).
 - `agentica help NAME [--json]` shows only builtins, from the catalog in `src/builtins.rkt` (`src/main.rkt:199-212`). It cannot show a function of a `std/` module or of a user file.
-- `stdlib/*.agc` documents itself with plain `#` comments, if at all (`stdlib/queue.agc:1`).
+- `stdlib/*.agc` documents itself with plain `#` comments, if at all (`stdlib/queue.agc:1`). The CLI holds a copy of each file in `stdlib-sources` (`src/stdlib.rkt:17`).
 - No `.agc` file in the repo has a line that starts with `##`, so the new rule of §32.2 breaks no existing program here.
 
 ### 32.2 Syntax
@@ -24,7 +24,7 @@ Checked at `650f689`:
   - a declaration: `def`, `struct`, `enum`, with or without `export`;
   - a field inside a `struct`;
   - a variant inside an `enum`.
-- The **module doc** is a doc block at the very start of the file, before any import or declaration, followed by a blank line. A file has at most one.
+- The **module doc** is the first doc block of the file when only blank lines and ordinary `#` comment lines come before it. A blank line must follow it. A `#` comment line right after it does not count as that blank line, so that case is `PARSE-DETACHED-DOC`. A file has at most one module doc.
 - Any other doc block is an error, `PARSE-DETACHED-DOC`, at its first line. That covers:
   - a doc block followed by a blank line (other than the module doc);
   - a doc block followed by an ordinary `#` comment line;
@@ -33,7 +33,7 @@ Checked at `650f689`:
   - a doc block at the end of the file.
 
   Agentica has no warnings (§26), so a detached doc is an error rather than a silent comment.
-- **Blank-line rule:** a doc line does not count as blank, because it belongs to the declaration after it. The blank line that `PARSE-MISSING-BLANK-LINE` asks for goes before the doc block:
+- **Blank-line rule:** a doc line does not count as blank, because it belongs to the declaration after it. The blank line that `PARSE-MISSING-BLANK-LINE` asks for goes before the doc block. When a doc block follows a declaration's `end` without a blank line, `PARSE-MISSING-BLANK-LINE` is reported at the doc block's first line.
 
 ```agentica
 ## Adds two numbers.
@@ -52,10 +52,10 @@ end
 ### 32.3 Content
 
 - The text is CommonMark. Tools print it as it is written, with the `##` markers removed.
-- The first paragraph is the **summary**: one sentence that says what the declaration does. `agentica doc` and `help` show it in lists. The rest is the description.
+- The first paragraph is the **summary**: one sentence that says what the declaration does. `agentica doc` and `help` show it in lists.
 - Code examples go in fenced blocks marked `agentica`. Phase 22 does not run them; doctests are an option to evaluate later (§32.8).
 - There are no tags. Parameter names, types and the result come from the signature. When a parameter needs explaining, the text names it in backticks.
-- Docs are optional. No diagnostic asks for them. One repo test (22a) requires a doc on every export of `stdlib/*.agc`.
+- Docs are optional. No diagnostic asks for them. One repo test (22a) requires a module doc in every `stdlib/*.agc` and a doc on each of its exports.
 - Example of a documented module:
 
 ```agentica
@@ -79,39 +79,54 @@ end
 
 - The lexer keeps doc lines instead of dropping them and emits one `DOC` token per doc block. The token carries the text and the span of the whole block. Inside parentheses, brackets or braces, where no `NL` is emitted, a doc line is still an error (`PARSE-DETACHED-DOC`).
 - The parser attaches each `DOC` token to the declaration, field or variant on the next line, or makes it the module doc.
-- The docs do not go into the existing AST structs. The parser returns them in a side table on `program`: a map from each documented declaration's span to its doc text, plus the module doc. So the checker, lowering, the bytecode and the frozen evaluator see the same AST as before, and the `.agcb` format does not change.
-- `src/modules.rkt` keeps each module's table, so the tools can read the docs of `std/` and imported modules.
+- The docs do not go into the existing AST structs. The parser returns them in a side table on `program`: a map from the span of each documented declaration, field or variant to its doc text, plus the module doc. So the checker, lowering, the bytecode and the frozen evaluator see the same AST as before, and the `.agcb` format does not change.
+- `agentica doc` and `help` read the table straight from the parser (§32.5), so `src/modules.rkt` does not change.
 
 ### 32.5 `agentica doc`
 
 - `agentica doc PATH` prints the exported API of one module as Markdown:
   1. the module doc;
-  2. then each exported declaration in source order, with its signature as written (a `def` line, or a `struct` or `enum` with its fields or variants) followed by its doc.
+  2. then each exported declaration in source order: its signature, its doc, and for a struct or enum its fields or variants with their docs.
 - An export without a doc is still listed, with its signature only.
 - `PATH` is a source file or a `std/` module name (`std/http`).
-- `agentica doc PATH --json` prints the same data as one JSON object:
-  - `module`: the path or name;
-  - `doc`: the module doc, or `null`;
-  - `items`: a list of objects with `kind` (`"function"`, `"struct"`, `"enum"`), `name`, `signature`, `doc` (or `null`), `span`, and for structs and enums `fields` or `variants`, each with its own `doc`.
+- **Parse only.** `agentica doc` lexes and parses one module. It does not link it, resolve its imports or type-check it, so it cannot fail on a dependency. For a `std/` name the source is the embedded copy in `stdlib-sources`.
+  - A lex or parse error gives that diagnostic and exit 1.
+  - An unknown file or `std/` module gives exit 2, as `help` does.
+- **Signatures.** A signature is one normalized line built from the AST, in the form of `builtin-signature` (`src/builtins.rkt:264-272`):
+  - a function: `add(a: Int, b: Int) -> Int`;
+  - a struct: `struct QueueState`;
+  - an enum: `enum Option[T]`.
 
-  The format is stable, so agents and a future site generator can read it.
-- The file is lexed, parsed and linked, but not type-checked. A file with a lex or parse error gives that one diagnostic and exit 1; unknown paths give exit 2, as `help` does.
+  Types are printed as written, so an import alias such as `Models.User` stays as it is.
+- `agentica doc PATH --json` prints the same data as one JSON object. The format is stable, so agents and a future site generator can read it. Each field means the same wherever it appears:
+  - top level: `{module, doc, items}`;
+  - `module`: `PATH` as the user typed it, a file path or a `std/` name;
+  - `doc`: the whole doc text with the `##` markers removed, or `null`. At the top level it is the module doc;
+  - `summary`: the first paragraph of `doc`, or `null`;
+  - `items`: one object per export, in source order: `{kind, name, signature, summary, doc, span}`;
+  - `kind`: `"function"`, `"struct"` or `"enum"`;
+  - `signature`: the line above;
+  - `span`: the declaration's span, the same object `diagnostic->jsexpr` uses (`src/diagnostic.rkt:130`): `{file, range: {start: {line, column}, end: {line, column}}}`;
+  - a function item also has `parameters`, a list of `{name, type}`, and `result`, its result type;
+  - a struct item also has `fields`: `[{name, type, doc}]`;
+  - an enum item also has `variants`: `[{name, payload: [type], doc}]`, with `payload` empty for a variant without one;
+  - every type is a string, printed as written.
 - Private declarations are left out. Their docs exist for readers of the code.
 
 ### 32.6 `agentica help` for `std/`
 
-- `agentica help std/http.get` (module path, `.`, export name) shows that function's signature and doc, in text or `--json`.
-- The JSON uses the same fields as the builtin help where they apply (`name`, `signature`, `description`), with `description` taken from the doc.
-- `agentica help std/http` lists the module's exports with their summaries.
-- An unknown name gives exit 2 with "did you mean" over that module's exports.
+- `agentica help std/http.get` (module path, `.`, export name) shows that function's signature and doc, in text or `--json`. It reads the module the same way as `agentica doc` (§32.5).
+- `agentica help std/MOD.NAME --json` uses the builtin help fields that apply (`src/builtins.rkt:274-283`): `name`, `arity`, `parameters`, `result` and `signature`, with `description` set to the whole doc (or `null`) and `summary` added (§32.5). It has no `effects`.
+- `agentica help std/http` lists the module's exports with their summaries. With `--json` it prints `{module, doc, items: [{kind, name, summary}]}`, with the fields of §32.5.
+- An unknown module or name gives exit 2, with "did you mean" over that module's exports for a name.
 - Builtins keep today's help, from the catalog.
 - User files are not covered: `agentica doc file.agc` serves them.
 
 ### 32.7 Order and the evaluator
 
-- **Why it can go before 7i.** "New features are VM-only and come after 7i" exists so that the frozen evaluator gets no new behaviour. Doc comments change only the lexer, the parser, `src/modules.rkt` and the CLI, and the AST that the evaluator reads keeps its shape (§32.4). So the user's request "as soon as possible" is met without touching the evaluator.
+- **Why it can go before 7i.** "New features are VM-only and come after 7i" exists so that the frozen evaluator gets no new behaviour. Doc comments change only the lexer, the parser and the CLI, and the AST that the evaluator reads keeps its shape (§32.4). So the user's request "as soon as possible" is met without touching the evaluator.
 - **When.**
-  - 22a and 22b go right after the PR that is open now (HTTP 20a) and the two small PRs queued behind it: trimming `AGENTS.md`, then the shorter golden sweep.
+  - 22a and 22b go after HTTP 20a (#118), the `AGENTS.md` trim and the shorter golden sweep.
   - They go before 20b.
   - 20a's `stdlib/http.agc` is documented in 22a.
 - **How the backends are affected.** Both backends run programs with doc comments the same way, because docs never reach them.

@@ -45,6 +45,6 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 31 | BDD in Agentica | [`31-bdd-in-agentica.md`](31-bdd-in-agentica.md) | Planned (roadmap phase 21, catch-up item 7h, before 7i) |
 | 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | Planned (roadmap phase 22, after HTTP 20a and before 20b) |
 
-New features are VM-only: they come after the evaluator is deleted (roadmap 7i) and get no Racket twin ([roadmap rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).
+New features are VM-only: they come after the evaluator is deleted (roadmap 7i; exceptions: HTTP 20a to 20d and doc comments, see the roadmap rules) and get no Racket twin ([roadmap rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).
 
 The rule "New library features: `std/` first" (a new pure library feature starts as a `std/` module written in Agentica, not as a builtin) lives in the roadmap: [`../roadmap/README.md`](../roadmap/README.md#new-library-features-std-first).

@@ -74,8 +74,8 @@ foundations below.
   path, as [phase 21](21-bdd-in-agentica.md) does for its own builtins.
 - A second exception, decided by the user on 2026-10-12: doc comments
   ([phase 22](22-doc-comments.md)) come before 7i. They change only the
-  lexer, the parser, the linker and the CLI; the AST the evaluator reads
-  keeps its shape, so the evaluator gets no new behaviour.
+  lexer, the parser and the CLI; the AST the evaluator reads keeps its
+  shape, so the evaluator gets no new behaviour.
 - The evaluator is frozen: it gets no new behaviour, only the fixes that keep
   the fallback running until 7i deletes it.
 
