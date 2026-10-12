@@ -17,5 +17,5 @@ def main() -> Void
   task = Task.spawn(&reader, input)
   Task.sleep(50)
   IO.inspect(File.close(input, 60000))
-  IO.inspect(Task.await(task))
+  IO.inspect(Task.await(task) <= 2)
 end

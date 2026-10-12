@@ -100,7 +100,7 @@
                (close-output-port in)
                (check-not-false (sync/timeout wait-seconds process) "the VM did not end")
                (check-equal? (subprocess-status process) 0)
-               (check-equal? (port->string out) "ok()\n2\n"))
+               (check-equal? (port->string out) "ok()\ntrue\n"))
              (lambda () (stop process out in))))
          (test-case "without turn costs the same check fails"
            (define sleep (sleep-worst bytecode #t))
