@@ -71,7 +71,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `tests/vm-tls-test.rkt` | the VM against independent peers (`tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`, certificates in `tests/fixtures/tls/` from `make-certs.sh`): a client against Node servers (one-byte records, abrupt EOF, a reset, 100,000-byte lines, the 1 MiB limit, a silent peer, wrong host, expired, self-signed, TLS 1.0/1.1 only, plain text, a stalled handshake), system trust through `SSL_CERT_FILE`, a Python TLS 1.2 server, a VM server with two Node clients (TLS 1.3 and 1.2), a Python client and a client that does not trust it; VM programs that are their own peers for handshake errors on both sides, timeouts and a pending handshake, and the end of a run with TLS work pending (`tls` trace); every case runs once (no step sweep), in about 5 s; needs Node and Python 3 in CI |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
 | `vm/third_party/picohttpparser` | picohttpparser submodule (MIT, the notice is at the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only `vm/http_pico.c` includes its header |
-| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue` |
+| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 1, 2, 3, 4; shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue` |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
@@ -658,10 +658,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   and the parser of `vm/http_parse.h`, called only by `stdlib/http.agc`
   (the std-only guard). The `http-*` fixtures are their own peers (a TCP
   server task in the same program; only `main` prints); the std/http URL
-  parser costs about 500 steps per call, so they sit above the 2000-step
-  full sweep and are sampled. Put the other cases in `tests/vm-http-test.rkt`,
-  which starts one Python peer (`tests/fixtures/http-peer.py`: a
-  `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
+  parser costs about 500 steps per call, so the sweep samples them. Put the
+  other cases in `tests/vm-http-test.rkt`, which starts one Python peer
+  (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
   canned hostile responses) and runs three programs once. Python 3
   (standard library only) is required in CI, as Node is for TCP: with `CI`
   set the test fails without it, locally it prints a skip. picohttpparser
@@ -707,8 +706,10 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 - Checking out a branch without the submodule warns `unable to rmdir
   vm/third_party/bdwgc`; run `git submodule update --init` after switching
   back.
-- Step-limit sweeps on long programs are slow; the diff test samples above
-  2000 steps.
+- Each sweep limit is one VM start, and the start costs more than the run:
+  the diff test runs every limit only up to 200 steps; above that it runs 1
+  to 100, limits spaced steps / 50 apart, the steps minus 1 and the steps
+  (`sweep-limits` in `tests/vm-diff-common.rkt`).
 - Typed JSON: `user-tables` in `src/lower.rkt` gives each `ir-struct` its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and `src/bytecode.rkt` interns them into the

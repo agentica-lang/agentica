@@ -34,9 +34,9 @@
   not stop with `RUNTIME-STEP-LIMIT`, by doubling and then bisection),
   which may be lower than T but at most T + max(10, T / 10), so
   over-charging fails while the 7k optimisations may cut steps. It sweeps
-  every limit from 1 to the VM's count when that is at most 2000; above
-  that (the call-depth program, about 60,000 steps) it sweeps 1 to 300, 50
-  evenly spaced limits, the count minus 1 and the count; then it adds the
+  every limit from 1 to the VM's count when that is at most 200; above
+  that it sweeps 1 to 100, the limits from 100 spaced count / 50 apart
+  (at most 50), the count minus 1 and the count; then it adds the
   larger of 2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`), with the
   golden's T. For each limit the
   VM must either give the golden outcome, or stop with exit 1 and
