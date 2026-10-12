@@ -1,6 +1,6 @@
 # VM benchmarks
 
-Speed numbers for the roadmap's 7g speed check. Phase 12 adds a cross-language section here later.
+Speed numbers for the roadmap's 7g speed check. The server measurement (roadmap 7j) adds a server section here, and phase 12 a cross-language section, later.
 
 ## How to run
 
@@ -18,6 +18,8 @@ python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners e
 | `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included |
 | `vm` | `racket src/main.rkt compile f.agc -o f.agcb`, then `dist/agentica-vm -- f.agcb` | only the VM run; compiling happens once, untimed |
 | `python` | the interpreter running the script (`sys.executable`) on `benchmarks/python/<name>.py SIZE` | the whole run, an idiomatic CPython version as an outside reference |
+
+The `vm` runner times only the VM on precompiled bytecode. A user who runs a source file with `agentica --vm f.agc` also pays for starting Racket, checking and compiling, which this table does not show. Runners that time that whole source → result path (`racket src/main.rkt --vm f.agc` and `dist/agentica --vm f.agc`) are planned next to the `vm` runner (roadmap 7g).
 
 For each program and runner it does one warm-up run under GNU `/usr/bin/time -f %M` for the peak RSS (without GNU time the RSS column shows `n/a`), then `--runs` timed runs (default 5), and reports the median and the minimum wall time. Every run must print the same stdout as the first runner that succeeded; a different output is a `mismatch`, and a `failed` or `mismatch` row (start-up rows included) makes the script exit 1. A program the VM cannot compile yet is reported as `unsupported` with a one-line summary of the `LOWER-UNSUPPORTED` diagnostic. `hello.agc` start-up is measured apart (`--no-startup` skips it).
 
@@ -116,9 +118,9 @@ At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are domin
 
 ### Reading
 
-- Start-up: the VM starts in about 1 ms and 2 MB; the evaluator needs 0.6 to 0.8 s and about 145 MB (Racket CS boot plus loading the front end), and the `raco exe` build is only slightly faster.
+- Start-up: the VM starts in about 1 ms and 2 MB on precompiled bytecode; the evaluator needs 0.6 to 0.8 s and about 145 MB (Racket CS boot plus loading the front end), and the `raco exe` build is only slightly faster. Running a source file on the VM (`agentica --vm f.agc`) still goes through that Racket front end, so its real start-up is the evaluator's plus the compile time, not 1 ms; the source → result runners of roadmap 7g will measure it.
 - Where it runs, the VM is about 45x to 60x faster than the evaluator per program at size 1, start-up included. Most of that gap is the evaluator's start-up: subtracting the `hello.agc` median leaves about 1.2 s for `arithmetic` (about 28x the VM), 0.35 s for `calls` (about 17x) and 0.15 s for `case` (about 7x), while `strings` is within the noise of start-up. Larger sizes are needed to compare the evaluator's run time itself.
 - Against CPython the VM is in the same range: as fast on `case`, 1.5x to 2x slower on `arithmetic`, `strings` and `calls` at size 20, with about a fifth of the memory. Instruction dispatch and Int arithmetic are the first hot-spot candidates for the next 7g item. The `strings` gap is weaker evidence, since the Python twin uses `"".join` rather than repeated `+`; profile before blaming string concatenation.
 - The evaluator, start-up included, is 14.5x to 74x slower than CPython on every program.
-- With the `List`/`Map` library (PR #80) the three real programs, `lists` and `maps` run on the VM in 31 to 94 ms at size 1, 11x to 39x faster than the evaluator with its start-up. `knight-tour` and `traveling-salesman` are about as fast as CPython; `maze-bfs`, `lists` and `maps` are 1.6x to 3.1x slower, which fits arrays copied on every `push`/`set` (persistent vectors come with 8d) and map puts that copy a HAMT path.
+- With the `List`/`Map` library (PR #80) the three real programs, `lists` and `maps` run on the VM in 31 to 94 ms at size 1, 11x to 39x faster than the evaluator with its start-up. `knight-tour` and `traveling-salesman` are about as fast as CPython; `maze-bfs`, `lists` and `maps` are 1.6x to 3.1x slower, which fits arrays copied on every `push`/`set`: `List.append` copies the whole array, so building a list with n pushes is O(n²) (persistent vectors come with 8d, which the roadmap puts before any dispatch micro-optimization) and map puts that copy a HAMT path.
 - `string-library` was added after this run with the `String` library on the VM (PR #81, `--runs 3`): at size 1 the evaluator takes 3.645 s, the VM 0.034 s (107x) and Python 0.045 s; at size 20 the VM takes 0.327 s and Python 0.103 s (1.9 MB against 9.3 MB). `at` over non-ASCII text is O(1) per call through the VM's string cursor (`docs/vm.md` §2.3); the Python twin uses `sum` over the characters and `str.find`.
