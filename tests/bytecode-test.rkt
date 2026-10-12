@@ -159,7 +159,6 @@
     (check-equal? (unsupported-at "def main() -> Void\n  r = JSON.decode(\"{}\", HttpServerOptions)\nend\n") '(2 7))
     (check-equal? (unsupported-at "struct Wrap\n  h: HttpServerOptions\n  n: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(Wrap))\nend\n") '(7 20))
     (check-equal? (unsupported-at "struct Wrap\n  h: HttpServerOptions\n  n: Int\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Wrap)\nend\n") '(7 25))
-    (check-equal? (unsupported-at "struct Wrap\n  info: FileInfo\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Wrap)\nend\n") '(6 25))
     (check-equal? (unsupported-at "def main() -> Void\n  c = HTTP.client_options()\nend\n") '(2 7))
     (check-equal? (unsupported-at "def main() -> Void\n  h = HttpServerOptions(header_timeout_ms: 1, idle_timeout_ms: 1, max_connections: 1, max_body_bytes: 1)\nend\n") '(2 7))
     (check-equal? (unsupported-at "struct S\n  j: HttpServerOptions\nend\n\ndef main() -> Void\n  s = S(j: HttpServerOptions(header_timeout_ms: 1, idle_timeout_ms: 1, max_connections: 1, max_body_bytes: 1))\nend\n")

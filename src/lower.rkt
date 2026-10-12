@@ -43,6 +43,7 @@
   (walk-ast declarations
             (lambda (node)
               (when (type-expression? node) (set! written (cons (type-expression-name node) written)))
+              (when (type-ref? node) (set! written (cons (type-ref-name node) written)))
               #f))
   (define named
     (for*/list ([entry (in-list builtin-structs)]
@@ -92,13 +93,15 @@
     [else (struct-names-in (last type))]))
 
 (define (decodable-structs structs)
-  (define names (map struct-decl-name structs))
+  (define names (append (map struct-decl-name structs) (map ir-struct-name builtin-structs)))
   (define candidates
-    (for*/hash ([declaration (in-list structs)]
+    (for*/fold ([table (for/hash ([entry (in-list builtin-structs)])
+                         (values (ir-struct-name entry) (ir-struct-types entry)))])
+               ([declaration (in-list structs)]
                 [types (in-value (for/list ([field (in-list (struct-decl-fields declaration))])
                                    (json-field-type (field-decl-type field) names)))]
                 #:when (andmap values types))
-      (values (struct-decl-name declaration) types)))
+      (hash-set table (struct-decl-name declaration) types)))
   (let loop ([table candidates])
     (define kept
       (for/hash ([(name types) (in-hash table)]
@@ -213,7 +216,11 @@
                   (found (diagnostic 'LOWER-UNSUPPORTED
                                      (format "this program needs the VM: ~a calls ~a, which only the VM runs, but ~a"
                                              (source-name (source-span-source span)) (call-name node) reason)
-                                     span)))
+                                     span
+                                     #:help (string-append
+                                             "a program that imports \"std/http\" runs only on the VM, even when it uses "
+                                             "only a pure helper such as header_values; keep HTTP and BDD builtins, "
+                                             "--legacy-eval and agentica test step files out of it"))))
                 #f))
     #f))
 
@@ -231,7 +238,7 @@
                    #:when (function-decl? declaration))
           declaration))
       (define-values (declared-structs enums) (user-tables (program-declarations program)))
-      (define structs (append declared-structs (used-builtin-structs types declarations)))
+      (define structs (append declared-structs (used-builtin-structs types (program-declarations program))))
       (define user-types (make-hash))
       (define struct-info (make-hash))
       (for ([entry (in-list structs)] [index (in-naturals)])
