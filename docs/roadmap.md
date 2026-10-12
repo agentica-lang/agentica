@@ -108,9 +108,10 @@ the programming reference contain the current signatures.
   1. Anything that touches the OS: files, stdin and stdout, processes,
      sockets, TLS, time, signals, random bytes from the OS. A program cannot
      make system calls.
-  2. Crypto. It always uses OpenSSL (`future.md` §20) and is never written in
-     Agentica: a constant-time compare is impossible in an interpreter, and
-     home-made crypto is a classic source of bugs.
+  2. Crypto: always through the TLS/crypto provider adapter (OpenSSL 3
+     today, `future.md` §20), never hand-written in Agentica: a constant-time
+     compare is impossible in an interpreter, and home-made crypto is a
+     classic source of bugs.
   3. Parsers of untrusted input that have mature libraries: JSON on yyjson
      and HTTP on picohttpparser stay as decided.
   4. Anything that needs its own memory layout in the runtime: `Bytes`, and
