@@ -265,7 +265,11 @@ the wait for a pooled connection, DNS, connect, the TLS handshake, the
 request and the whole response. The client keeps idle keep-alive connections
 per scheme, host and port, and calls wait in FIFO order for one of the
 `max_connections` slots. `close_client` closes them; a call in flight then
-fails with "http: client is closed".
+fails with "http: client is closed". A `GET`, `HEAD`, `OPTIONS`, `PUT` or
+`DELETE` sent on a reused keep-alive connection that the server had
+already closed is retried once on a new connection, within the same
+timeout, when no byte of a response arrived; `POST`, `PATCH` and other
+methods are never retried and return the error.
 
 URLs are `http://` or `https://` with a host, an optional port (1..65535)
 and an optional path and query; the fragment is dropped, user info is
@@ -277,13 +281,15 @@ and 5xx are normal responses. Errors are Results. Protocol and limit
 errors start with `http: `; connection errors keep the TCP and TLS texts
 (`tcp-connect: ...`, `ssl-connect: ...`, `error reading from stream port`,
 `error writing to stream port`), and a timeout is `network: operation timed
-out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`). `std/http` calls the
-internal module `HttpWire`, which no other module can name
-(`CHECK-UNKNOWN-NAME`). A program that reaches `HttpWire` cannot fall back
-to the legacy evaluator: when the program also needs the evaluator (it uses
-something the VM does not run yet, such as `HTTP` or `BDD`, it runs under `--legacy-eval`, or it is a step file of
-`agentica test`) it stops with `LOWER-UNSUPPORTED` at the first `HttpWire`
-call, exit 1, before anything runs.
+out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`).
+`std/http` calls the internal module `HttpWire`, which no other module can
+name (`CHECK-UNKNOWN-NAME`). Importing `std/http` makes the whole program
+VM-only, even when it calls only a pure helper such as `header_values`:
+when the program also needs the legacy evaluator (it uses something the VM
+does not run yet, such as `HTTP` or `BDD`, it runs under `--legacy-eval`,
+or it is a step file of `agentica test`) it stops with `LOWER-UNSUPPORTED`
+at the first `HttpWire` call in `std/http.agc`, with a help that says so,
+exit 1, before anything runs.
 
 ### Statements and blocks
 

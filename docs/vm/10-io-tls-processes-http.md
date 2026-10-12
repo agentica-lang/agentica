@@ -701,9 +701,18 @@ HttpWire.close_client(client: HttpClient) -> Void
 - `vm/http_client.c` (Linux; other platforms get a stub table) holds the
   pool: per origin (scheme, host, port) a list of idle connections, the
   number of open slots and a FIFO of waiting exchanges. A finished
-  exchange hands its connection, or its slot, straight to the first
-  waiter. Idle connections close after `idle_timeout_ms` (one timer per
-  client) or when the peer closes them.
+  exchange parks its connection as idle or frees its slot, and the first
+  waiter gets it. Idle connections close after `idle_timeout_ms` (one timer
+  per client; the clock is updated before each check) or when the peer
+  closes them. An origin with no open connection, no waiter and no
+  exchange is freed.
+- Retry: an exchange that leased an idle connection and then fails with
+  EOF, a read error or a write error before any response byte (no interim
+  response, nothing buffered) is retried once on a new connection, at the
+  head of the waiters and within the same timeout, when its method is
+  `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE`. This covers the race where
+  the server closes an idle keep-alive connection as the request is sent.
+  The request bytes are kept until the exchange ends for this.
 - Connections are tcp.c's: `vm/net.h` exports its connection object
   (`agc_conn_open`, `agc_conn_send`, `agc_conn_read`, ...) with a watch
   callback, so DNS, connect, TLS through memory BIOs and the close rules
@@ -720,12 +729,16 @@ HttpWire.close_client(client: HttpClient) -> Void
   complete exchange with no `Connection: close` on either side and a framed
   body. Header names are lowercased, values are decoded as Latin-1, and the
   body must be valid UTF-8.
-- After `HEAD`, 204 or 304 the connection is not kept when the response
-  still announced a body (a nonzero `Content-Length`, or chunked). A
-  connection freed while calls wait is parked as idle first and handed to
-  the first waiter by the client's timer 1 ms later, so bytes the server
-  sends late close it instead of reaching the next exchange. Idle
-  connections and the idle timer are unreferenced in libuv
+- After 204 or 304 the connection is not kept when the response still
+  announced a body (a nonzero `Content-Length`, or chunked). After `HEAD`
+  it is kept: no body follows a `HEAD` response whatever it announces
+  (RFC 9110 §9.3.2). Bytes already buffered when an exchange ends close
+  the connection. A connection freed while calls wait is parked as idle
+  and handed to the first waiter by the client's timer 1 ms later, so
+  bytes that arrive in that window close it first. This is a narrow guard,
+  not a promise: a call that leases an idle connection right away (two
+  calls in a row from one task) can still read bytes a server sends late.
+  Idle connections and the idle timer are unreferenced in libuv
   (`agc_conn_hold`), so a pool never hides a stalled run.
 - Over TLS, a close-delimited body must end with `close_notify`: tcp.c
   records whether the TLS layer closed before the TCP FIN
@@ -742,5 +755,6 @@ HttpWire.close_client(client: HttpClient) -> Void
 - `HttpResponse`, `Header`, `HttpClientOptions` and `FileInfo` carry their
   field types from `builtin-records`, so `JSON.encode`, `JSON.decode` and
   `JSON.schema` work on them on the VM (the `http-json` golden).
-- Turn cost (`AGC_COST_SIZE`): charged when the call ends, for the
-  request's headers and body and the response's body and header fields.
+- Turn cost (`AGC_COST_SIZE`): charged when the call ends, after the
+  exchange is freed, for the header list, the request's bytes (head and
+  body) and the response's body and header fields.

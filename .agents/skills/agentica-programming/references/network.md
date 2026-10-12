@@ -8,6 +8,11 @@ no constructor, equality, fields or JSON encoding; inspect prints their type
 in angle brackets. Handles belong to their evaluation and close when it ends.
 Network access needs no CLI permission flag.
 
+The builtin `HTTP` API below is still the documented one. The VM-only
+`std/http` client (`import "std/http" as Web`; `Web.get`, `Web.post`,
+`Web.request` return `Result[HttpResponse]` with a `String` body) replaces
+it later; see `modules.md`. Do not use both in one program.
+
 ```text
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.listen(host: String, port: Int) -> Result[Listener]

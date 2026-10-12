@@ -650,8 +650,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   socket code. Idle pooled connections and the idle timer are unreferenced
   (`agc_conn_hold`), so they never keep a stalled run alive; a connection
   freed while calls wait is parked first and handed over by a 1 ms
-  referenced timer, so bytes that arrive late close it instead of reaching
-  the next call. A close-delimited body over TLS needs `close_notify`
+  referenced timer (a narrow guard against late bytes, not a full one). An
+  idempotent call that fails on a reused connection before any response
+  byte is retried once on a new one (`retry`). A close-delimited body over TLS needs `close_notify`
   (`agc_conn_clean_eof`); a bare FIN gives "truncated HTTP body".
 - **Limits**: the 1 MiB per-call reads, HTTP framing limits and the other
   caps in the `docs/vm/10-io-tls-processes-http.md` limits table stay exactly as in the Racket
