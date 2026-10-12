@@ -1131,7 +1131,8 @@ typedef struct {
   the evaluator's, so a program that stays within the limit on the evaluator
   stays within it on the VM, with the same output; a
   runtime diagnostic carries one span and no stack trace, so the replaced
-  frames are not visible. Non-tail recursion keeps the limit and its span.
+  frames are not visible (stack traces are planned after 7i, `future.md`
+  §24.3, with a mark where a tail call removed frames). Non-tail recursion keeps the limit and its span.
   The evaluator is not changed: it goes away in 7i.
 - `steps_left` is an atomic `int64_t` in the runtime: the limit, or
   `INT64_MAX` without one. All tasks share it; a turn takes it in batches
