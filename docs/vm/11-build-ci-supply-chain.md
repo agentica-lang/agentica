@@ -23,26 +23,19 @@
   static data and to one-past-the-end pointers, at one extra byte per
   object. Nothing in the VM relies on it today; it is upstream's default and
   costs nothing measurable. libuv (7h) is built from its submodule into
-  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h) is linked
-  dynamically by default: `OPENSSL=system` checks `pkg-config
-  --atleast-version=3.0 libssl libcrypto` and links `-lssl -lcrypto`.
-  `OPENSSL=static` requires `OPENSSL_PREFIX`, unsets `PKG_CONFIG_PATH`,
-  sets `PKG_CONFIG_LIBDIR` to the prefix's `lib/pkgconfig`,
-  `lib64/pkgconfig` and `lib/<multiarch>/pkgconfig`, fails if `pkg-config
-  --exists libssl libcrypto` fails there or if `--variable=libdir` is
-  outside the prefix, and links `libssl.a` and `libcrypto.a` from that
-  `libdir` by full path, plus each other non-glibc library of libcrypto's
-  `Libs.private` as its `.a` archive by full path (a missing one is a
-  build error); only glibc's own flags stay (10.0). Both modes take `pkg-config --cflags` from the same
-  environment and compile with `-DOPENSSL_API_COMPAT=30000`. The recipe
-  for the `build/vm/flags` stamp runs `pkg-config` and writes the resolved
-  flags; the link recipe reads them back; nothing runs `pkg-config` at
-  Makefile parse time.
+  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL 3.5 LTS (7h) is built
+  from its submodule `vm/third_party/openssl` into
+  `$(VM_BUILD)/openssl/libssl.a` and `libcrypto.a`, static, per build mode
+  (10.0); the build needs Perl. `$(VM_BUILD)/openssl-flags` holds the key of
+  that build (compiler and its version, Configure options, OpenSSL flags,
+  `VERSION.dat` and the submodule commit; `make -s vm-openssl-key` prints
+  it), so a `TRACE` or VM flag change never rebuilds OpenSSL, and a
+  compiler, flag or version change always does. `make vm-openssl` builds
+  only the two archives.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
-  build needs no Racket. Output `dist/agentica-vm`. The compiler flags,
-  `OPENSSL`, `OPENSSL_PREFIX` and the resolved OpenSSL cflags and link
-  flags are recorded in `build/vm/flags`, so switching between a normal and
-  a sanitizer build, or between OpenSSL modes, always relinks.
+  build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
+  recorded in `build/vm/flags`, so switching between a normal and a
+  sanitizer build always relinks.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and
@@ -92,21 +85,20 @@
 - `make test` includes the VM tests. They first run `make -s vm`, so a stale
   `dist/agentica-vm` is rebuilt from its sources. They skip visibly when the
   VM cannot be built locally (no C compiler, the submodule is not checked
-  out, or no OpenSSL 3 development package or `pkg-config`) and fail in CI
+  out, or no Perl to build OpenSSL) and fail in CI
   (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
   `make vm` reads `SANITIZE` from the environment, so the sanitizer job sets
   `SANITIZE=1` once and the tests rebuild the sanitized VM.
-- Supply chain: pinned runner images; libgc, yyjson (and libuv and
-  picohttpparser from 7h) are git submodules pinned to a release tag,
+- Supply chain: pinned runner images; libgc, yyjson, libuv and OpenSSL
+  (and picohttpparser from 7h) are git submodules pinned to a release tag,
   upgraded only by bumping the submodule in a reviewed PR; CI checks out
   with `submodules: true`. `agentica-vm --version` and the release notes
   list the libgc, yyjson, libuv, picohttpparser and OpenSSL versions (for
-  OpenSSL, the one in use at run time); the release checklist says to
+  OpenSSL, the one linked in); the release checklist says to
   rebuild and release after any High or Critical advisory for libgc,
-  yyjson, libuv, picohttpparser or OpenSSL (or the other archives the
-  static build links, such as zlib and zstd). For OpenSSL that means the release artifacts,
-  which are built with `OPENSSL=static` (10.0); dynamic builds get OpenSSL
-  fixes from the distro.
+  yyjson, libuv, picohttpparser or OpenSSL. OpenSSL is static in every
+  build, so a fix reaches users only through a submodule bump and a new
+  release; the distro's OpenSSL is never used.
 
 CI matrix:
 
@@ -136,16 +128,21 @@ with the front end. The macOS and Windows jobs do not run the whole `make
 test`: the process and network tests are not portable yet. `.gitattributes`
 checks every text file out with LF (`.agcb` files are binary, and git
 detects the `string-inspect.agc` fixture as binary from its NUL bytes), so Windows sees the same sources,
-spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
-the platform's OpenSSL 3 development package, `libssl-dev` on Debian) to each
-job; these jobs use the default dynamic build. One Linux job (or the release
-workflow) also installs the `-dev` packages of libcrypto's
-`Libs.private` (on trixie `zlib1g-dev` and `libzstd-dev`), builds
-`OPENSSL=static OPENSSL_PREFIX=/usr`, checks `readelf -d` against the
-`NEEDED` allowlist of 10.0, and runs the TLS tests. The
-`test` job, after `make vm`, fails if
-`objdump -T dist/agentica-vm | rg -o 'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints
-anything. On macOS (paused),
-Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
-`lib/pkgconfig`.
+spans and output as Linux. 7h adds the libuv submodule to each job. Like
+libuv, OpenSSL is built and linked only on Linux for now; other systems
+get a stub adapter whose calls fail with "TLS needs Linux", and building
+it there will need Perl (MSYS2's `perl` on Windows) when those ports
+resume.
+
+OpenSSL takes a few minutes to build, so CI caches each mode's build
+directory (`build/vm/<mode>/openssl` and `openssl-flags`) with
+`actions/cache`, keyed by `openssl-<mode>-` and the hash of `make -s
+vm-openssl-key` for that mode: the `test` job caches the release mode,
+`vm-sanitizers` the sanitize and GC-stress modes, and a `warm-openssl` job
+on `master` pushes fills all three, since a pull request can restore only
+its own caches or `master`'s. A hit leaves the stamp unchanged, so make
+does not rebuild. The release workflow does not cache: it builds OpenSSL
+with the pinned `zig cc` against glibc 2.28, the `objdump -T` floor check
+covers OpenSSL's symbols too, it fails if `readelf -d` shows `libssl` or
+`libcrypto`, and the archive ships `licenses/openssl/LICENSE.txt`.
 

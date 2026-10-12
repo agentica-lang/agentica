@@ -34,7 +34,7 @@ src/
   parser.rkt      # parse: (listof token) -> program | diagnostic
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
-  evaluator.rkt   # frozen: runs only the fallback (TLS, HTTP, BDD, agentica test) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
+  evaluator.rkt   # frozen: runs only the fallback (HTTP, BDD, agentica test) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
   runtime-values.rkt # shared runtime values, results and immutable map updates
   task.rkt        # coroutine task results, supervision, global budget and cleanup
   json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
@@ -47,7 +47,7 @@ src/
   json-typed.rkt  # JSON.decode into declared structs and JSON.schema
   filesystem.rkt  # File, Dir and Path builtins
   process.rkt     # Process builtins (needs --allow-run)
-  network.rkt     # TCP and TLS sockets of the evaluator (TLS fallback only; the VM has vm/tcp.c)
+  network.rkt     # TCP and TLS sockets of the evaluator (HTTP fallback only; the VM has vm/tcp.c)
   http-wire.rkt   # HTTP/1.1 framing shared by client and server
   http-client.rkt # HTTP client with connection pool
   http-server.rkt # HTTP server
@@ -60,7 +60,8 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
-  tcp.c stream.c  # TCP builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c
+  tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c
+  tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
   task.c          # scheduler (run queue, turns, park and wake) and the Task builtins
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
@@ -68,6 +69,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
+  third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9, built static per mode into build/vm/<mode>/openssl (needs Perl)
 tests/
   <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
   diagnostic-test.rkt   # excerpt and caret format
@@ -200,4 +202,4 @@ Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S 
 |---|---|
 | `references/stages.md` | adding or renaming tokens, AST nodes or diagnostic codes; you need the token-kind table, the code list, the AST node list or a module's public API |
 | `references/runtime-notes.md` | changing the evaluator or a library area: Result and `try`, stdio, JSON, collections, modules, methods, interpolation, blocks, hints, enums, function values and BDD, tasks, TCP/TLS/HTTP, files, Void and processes |
-| `references/vm.md` | working on the bytecode VM: lowering, bytecode, `vm/` C code, Boehm GC, the loader, VM tests, fuzzing, or planning libuv/OpenSSL work |
+| `references/vm.md` | working on the bytecode VM: lowering, bytecode, `vm/` C code, Boehm GC, the loader, VM tests, fuzzing, or libuv/OpenSSL work |

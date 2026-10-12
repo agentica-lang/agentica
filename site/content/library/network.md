@@ -133,15 +133,15 @@ TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
 ```
 
-TLS sockets and listeners use the same `TCP` functions. `TLS.connect` checks
-the certificate and the host name; an empty `ca_file` uses the system's
-trusted certificates. `TLS.listen` takes PEM files for the certificate chain
-and the private key.
-
-TLS programs still run on the older evaluator, so until TLS moves to the
-bytecode VM a TLS socket keeps two old behaviors: a line over 1 MiB leaves the
-socket open in the middle of that line, and a call after a timeout waits out
-its own timeout instead of failing at once.
+TLS sockets and listeners use the same `TCP` functions, with the same limits
+and timeouts. `TLS.connect` uses TLS 1.2 or later and always checks the
+certificate and the host name (an IP address host is checked against the
+certificate's IP addresses). An empty `ca_file` uses the system's trusted
+certificates (`SSL_CERT_FILE` and `SSL_CERT_DIR` override them); a nonempty
+`ca_file` is a PEM file that replaces them. `TLS.listen` takes PEM files for
+the certificate chain and the private key, and fails when a file is bad or the
+key does not match. A peer that closes without TLS's closing message ends the
+stream like EOF.
 
 ```agentica {mode="check"}
 def main() -> Void

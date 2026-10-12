@@ -146,7 +146,7 @@ Split text; an empty separator gives characters.
 
 `agentica test` runs `.feature` specifications; see [BDD](/library/bdd/).
 
-Programs run on a bytecode VM. A program that uses `TLS`, `HTTP` or `BDD`
+Programs run on a bytecode VM. A program that uses `HTTP` or `BDD`
 runs on the older Racket evaluator instead, and `agentica` says so in
 one line on standard error (not with `--json`); `agentica test` uses that evaluator too.
 
