@@ -1,5 +1,9 @@
 # Bytecode VM development (phase 7)
 
+The VM's codename is Aurora (Aurora VM). Only the docs use it: the binary,
+the `AGENTICA_VM*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
+their names.
+
 `docs/vm/` is the contract: reference behavior, IR, bytecode format, value
 layout, loader rules, libraries and the PR plan. Its "Status" note says which
 subset runs today. This file is the working guide: where things live, how to

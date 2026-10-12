@@ -24,7 +24,7 @@ newer.
 ## Build
 
 The interpreter is a Racket front end in `src/` and a bytecode VM in C in
-`vm/`:
+`vm/` (codename Aurora; the binary is still `agentica-vm`):
 
 ```text
 source text -> lexer.rkt -> parser.rkt -> checker.rkt -> lower.rkt -> bytecode.rkt -> agentica-vm

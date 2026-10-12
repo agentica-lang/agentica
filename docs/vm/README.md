@@ -1,4 +1,4 @@
-# Agentica bytecode VM: design
+# Agentica bytecode VM (Aurora): design
 
 This document closes roadmap step 7b. It fixes the decisions that 7c
 (lowering), 7d (bytecode emitter) and 7e (VM core) build on, and the library
@@ -7,7 +7,8 @@ choices and safety rules that 7h and 7i need. The language does not change.
 evaluator (`src/evaluator.rkt`) is frozen and runs only the programs the VM
 cannot run yet (`TCP`, `TLS`, `HTTP`, `BDD`, and `agentica test`) until 7i
 deletes it. Roadmap step 7b lists each decision in one line; this document
-gives the details and reasons.
+gives the details and reasons. The VM's codename is Aurora (Aurora VM); the
+binary, environment variables and file names keep the `agentica` names.
 
 ## 1. Overview
 
