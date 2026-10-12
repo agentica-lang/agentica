@@ -147,7 +147,9 @@ server yet.
 - [ ] Specify dedicated SSE and Streamable HTTP behavior, then implement it over the existing HTTP/1.1 streaming APIs with independent interoperability tests.
 
 Task concurrency is already available for handling notifications while a
-client waits. Channels and `Process.poll_line` remain proposed in
+client waits. Channels are planned in phase 17
+([`docs/future/27-iteration-and-concurrency.md` §27.2](../future/27-iteration-and-concurrency.md#272-channels));
+`Process.poll_line` remains proposed in
 [`docs/future/08-concurrency.md` section 8](../future/08-concurrency.md#8-concurrency-and-parallelism). UUID, Base64
 and a Ruby-style `Regex` remain later utilities unless a real application
 establishes an earlier need.

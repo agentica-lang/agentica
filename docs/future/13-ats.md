@@ -2,7 +2,7 @@
 
 ATS (Agentica Table Storage) plays the role of Erlang's ETS. Values are immutable, so passing one to a task shares it without a copy. What is missing is shared mutable state: a counter, or a cache that fills while tasks run. Today a task can only hand back a new value through `Task.await`. A table is one mutable place that tasks share through a handle.
 
-A `Channel[T]` (§8) passes messages between tasks; a table is state that many tasks read and update. Each one waits for a program that needs it. `Table` becomes a reserved type and module name, a breaking change: a user `struct Table`, `enum Table` or `import ... as Table` becomes `CHECK-REDEFINED-NAME`, as §12 says for `Range`, `Set` and `Queue`.
+A `Channel[T]` ([§27.2](27-iteration-and-concurrency.md#272-channels)) passes messages between tasks; a table is state that many tasks read and update. Each one waits for a program that needs it. `Table` becomes a reserved type and module name, a breaking change: a user `struct Table`, `enum Table` or `import ... as Table` becomes `CHECK-REDEFINED-NAME`, as §12 says for `Range`, `Set` and `Queue`.
 
 ```agentica
 def count_visit(hits: Table[String, Int]) -> Void
@@ -27,7 +27,7 @@ end
 
   | Function | Result |
   |---|---|
-  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map` |
+  | `Table.new() -> Table[K, V]` | needs an expected type, like an empty `Map`; without one, `CHECK-EXPECTED-TYPE` (the general code of [§27.2](27-iteration-and-concurrency.md#272-channels)) |
   | `Table.put(t, k: K, v: V) -> Void` | insert or replace |
   | `Table.put_new(t, k: K, v: V) -> Bool` | insert only when the key is absent; `false` leaves the table unchanged (ETS `insert_new`) |
   | `Table.get(t, k: K) -> Result[V]`, `Table.has_key?(t, k: K) -> Bool` | |
