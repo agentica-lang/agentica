@@ -1,0 +1,22 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 281,
+  "stdout": [
+    "[ok(), ok(), ok(), error(\"filesystem: text exceeds 1048576 bytes\")]",
+    "error(\"filesystem: file exceeds 1048576 bytes\")",
+    "[1000000, 1000000, 97156, 0]",
+    "error(\"filesystem: line exceeds 1048576 bytes\")",
+    "1048575",
+    "ok(\"end\")",
+    "error(\"filesystem: end of file\")",
+    "[error(\"filesystem: text exceeds 1048576 bytes\"), ok()]",
+    "1048576",
+    "ok()",
+    "error(\"filesystem: file exceeds 1048576 bytes\")",
+    "1048576",
+    "error(\"filesystem: end of file\")",
+    ""
+  ],
+  "stderr": []
+}

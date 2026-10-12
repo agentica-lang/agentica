@@ -1,0 +1,29 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 145,
+  "stdout": [
+    "0.0",
+    "-7.0",
+    "9007199254740992.0",
+    "9223372036854776000.0",
+    "-9223372036854776000.0",
+    "12345.0",
+    "2",
+    "-2",
+    "0",
+    "0",
+    "1000000000000000000",
+    "-9223372036854775808",
+    "9223372036854774784",
+    "ok 1",
+    "error Int result is outside the 64-bit range",
+    "error Int result is outside the 64-bit range",
+    "error cannot convert +nan.0 to Int",
+    "error cannot convert +inf.0 to Int",
+    "error cannot convert -inf.0 to Int",
+    "ok 0",
+    ""
+  ],
+  "stderr": []
+}

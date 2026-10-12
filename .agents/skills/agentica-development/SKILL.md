@@ -1,6 +1,6 @@
 ---
 name: agentica-development
-description: "Develops the Agentica interpreter: the Racket pipeline (lexer, parser, checker, evaluator, libraries) and the C11 bytecode VM (lowering, bytecode, vm/ with the Boehm GC, loader safety, parity with the evaluator). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, and the Racket and C gotchas of this repo. Use when working in the agentica repository on src/, vm/, tests/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
+description: "Develops the Agentica interpreter: the Racket pipeline (lexer, parser, checker, evaluator, libraries) and the C11 bytecode VM (lowering, bytecode, vm/ with the Boehm GC, loader safety, golden tests; the VM is the default backend). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, and the Racket and C gotchas of this repo. Use when working in the agentica repository on src/, vm/, tests/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
 ---
 
 # Agentica development
@@ -34,7 +34,7 @@ src/
   parser.rkt      # parse: (listof token) -> program | diagnostic
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
-  evaluator.rkt   # evaluate: program -> 'nil | diagnostic (RUNTIME-); puts writes to current-output-port
+  evaluator.rkt   # frozen: runs only the fallback (TCP, TLS, HTTP, BDD, agentica test) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
   runtime-values.rkt # shared runtime values, results and immutable map updates
   task.rkt        # coroutine task results, supervision, global budget and cleanup
   json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
@@ -54,7 +54,7 @@ src/
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
-  main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, `compile -o`, or `--vm`: bytecode in a temp file run by dist/agentica-vm); exit 1 on a diagnostic, 2 on usage or a missing file
+  main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (the evaluator only on LOWER-UNSUPPORTED, with a notice, or with the hidden --legacy-eval; `check` only, --dump the tree, --dump-ir, `compile -o`); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
@@ -72,7 +72,7 @@ tests/
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
   bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, LOWER-UNSUPPORTED, compile exit codes
-  vm-diff-{1..4}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on the evaluator and dist/agentica-vm in three formats, with a --max-steps sweep
+  vm-diff-{1..4}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on dist/agentica-vm in three formats against their <name>.expected goldens (make goldens), with a --max-steps sweep
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
@@ -93,7 +93,7 @@ docs/
 | keyword, operator, or literal form | `src/lexer.rkt` lookup tables |
 | AST node | `src/ast.rkt` struct plus `provide`; construct it from `src/parser.rkt` |
 | syntax, statement, or expression form | `src/parser.rkt` |
-| builtin | `src/builtins.rkt` metadata; checker generic rule and evaluator implementation; exercise a real checked call |
+| builtin | `src/builtins.rkt` metadata; checker generic rule; the VM implementation (`vm-builtins` in `src/lower.rkt`, `vm/`, see `references/vm.md`) with a golden fixture; no evaluator twin (it is frozen); exercise a real checked call |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`; the VM toolchain adds `LOWER-` and `BYTECODE-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
 | language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |

@@ -124,9 +124,6 @@ true
 ```
 
 Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the
-same numbers every time. The bytecode VM (`agentica --vm`) also repeats a
-seeded run, but its numbers differ from the evaluator's for the same seed.
-On the VM each task has its own generator, split from its parent when it
-is spawned, so each task repeats its own numbers; on the evaluator all
-tasks share one generator.
+same numbers every time. Each task has its own generator, split from its
+parent when it is spawned, so each task repeats its own numbers.
 Do not use `Random` for secrets.

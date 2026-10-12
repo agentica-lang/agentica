@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - id: racket
         run: |
           dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
@@ -46,5 +48,5 @@ jobs:
             racket-zo-${{ github.job }}-9.3-
             racket-zo-test-9.3-
       - run: git ls-files -z | xargs -0 touch
-      - run: make build
+      - run: make build vm
       - run: raco test tests/site-examples-test.rkt

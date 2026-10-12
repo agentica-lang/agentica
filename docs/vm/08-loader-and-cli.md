@@ -131,8 +131,8 @@ and cost one predictable branch each.
   as a prefix. Paths over 260 characters fail with `_wopen` unless they use
   `\\?\` or the executable has a `longPathAware` manifest; 7h decides.
   `--schedulers N` (10.2.3) comes with the 7h multicore schedulers item;
-  `agentica --vm --schedulers N` passes it through, as it does `--seed`. A
-  differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
+  `agentica --schedulers N` passes it through, as it does `--seed`. A
+  golden test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
   (and libuv, picohttpparser and OpenSSL from 7h). For OpenSSL it prints the version in use:
@@ -149,7 +149,8 @@ and cost one predictable branch each.
   both.
   Arguments after the file are the program's `System.args`.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
-- `agentica --vm file.agc [args...]` (7i, landed for Linux). `src/main.rkt`
+- `agentica file.agc [args...]` runs on the VM by default (7i, Linux;
+  `--vm` is still accepted and does nothing). `src/main.rkt`
   runs the front end and `lower`, then writes the bytecode to
   `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
@@ -182,34 +183,52 @@ and cost one predictable branch each.
   driver's stdin fails, the thread stops the VM the same way and the driver reports
   `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
-  and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
-  `--vm` (exit 1). `--seed N` and `--allow-run` are passed to the VM.
-  `--steps`, `--dump`, `--dump-ir`, `check`, `compile`, `help` and `test`
-  exit 2 with `--vm does not support X`.
+  and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as usual
+  (exit 1). `--max-steps N`, `--seed N`, `--allow-run`, `--ai` and `--json`
+  are passed to the VM; a seeded run repeats on the VM, with other numbers
+  than the evaluator gave.
+- Fallback to the evaluator. When `lower` rejects the program with
+  `LOWER-UNSUPPORTED` (today only a call to a `TCP`, `TLS`, `HTTP` or `BDD`
+  builtin), the driver prints one line on stderr (in the plain and `--ai` modes;
+  never with `--json`, where the last stderr line stays the diagnostic),
+  `agentica: <the lowering's message>; running on the legacy evaluator` (for example `agentica: the VM
+  does not support the builtin HTTP.client_options yet; running on the
+  legacy evaluator`), and runs the checked program on the evaluator with the
+  same options. Other `LOWER-` and `BYTECODE-` diagnostics fail as usual.
+  The hidden `--legacy-eval` flag (not in the usage text) forces the
+  evaluator; only options before the file are read, so after the file it is
+  a program argument. `compile` and `--dump-ir` never fall back.
+  `agentica test` runs the step handlers and the programs under test on the
+  evaluator (the BDD driver passes `--legacy-eval`) until BDD runs on the VM.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is
   `agentica-vm` next to the executable (`run-file`, with symlinks
-  resolved). A missing or non-executable VM prints `agentica: cannot find
-  the VM at PATH` and exits 2 before the front end runs, so this error
-  wins over a program diagnostic. It does not use
-  `define-runtime-path`: `raco distribute` would then copy the VM into
-  `lib/` and fail when it is not built. Packaging the VM in `bin/` of the
-  release is a later 7i item.
+  resolved). The release archive has `agentica-vm` in `bin/` next to
+  `agentica`, so the same rule finds it there, also through a symlink on
+  `PATH`. A missing or non-executable VM prints `agentica: cannot find
+  the VM at PATH; run make vm or set AGENTICA_VM` and exits 2 after the
+  front end and the lowering, so a program diagnostic or the fallback wins;
+  the driver never falls back to the evaluator because the VM is missing.
+  It does not use `define-runtime-path`: `raco distribute` would then copy
+  the VM into `lib/` and fail when it is not built.
 - Future work: Windows (a kill-on-close job object instead of
   `PR_SET_PDEATHSIG`) and macOS (no parent-death signal; the closest safe
   thing is the delete-after-load flag alone, or a pipe the VM watches).
   On macOS the flag skips only the parent check: the `O_NOFOLLOW`,
   privacy and inode checks run on every non-Windows system. Windows skips
   both checks, and the VM may fail to delete its still-open input, but the
-  driver deletes it anyway. `--vm` is tested on Linux only.
+  driver deletes it anyway. The VM driver is tested on Linux only.
 - `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the
   driver must call `subprocess` from the main thread.
 - The hidden flag deletes its private input after loading, so it must not
   be reused for anything else.
-- `check`, `help` and `test` stay Racket commands; from 7h, BDD
-  handlers run on the VM. `make vm` builds `dist/agentica-vm` (`.exe` on Windows); in 7i the
-  release archive ships it in `bin/` next to `agentica`.
+- `check`, `help` and `test` stay Racket commands; when BDD runs on the VM
+  (7h), its handlers and the programs under test move there. `make vm`
+  builds `dist/agentica-vm` (`.exe` on Windows), and `make exe` and
+  `make test` build it first. The release workflow builds it with `zig cc`
+  against glibc 2.28 (pinned zig, checked by sha256), checks that floor with
+  `objdump -T`, and ships it in `bin/` next to `agentica`.
 
 - **VM tracing (as built, roadmap 14a).** The rules are in
   `docs/future/24-logging.md` §24.4; this note lists only what the code

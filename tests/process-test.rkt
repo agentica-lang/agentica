@@ -9,6 +9,9 @@
 (define-runtime-path main-file "../src/main.rkt")
 (define node (find-executable-path "node"))
 
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define (compile-program text)
   (define tokens (lex (source "process.agc" text)))
   (define parsed (if (diagnostic? tokens) tokens (parse tokens)))

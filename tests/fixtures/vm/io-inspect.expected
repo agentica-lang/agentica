@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 46,
+  "stdout": [
+    "41",
+    "42",
+    "\"tab\\tquote\\\"λ\"",
+    "tab\tquote\"λ",
+    "[Point(x: 1, y: 2.5)]",
+    "1",
+    "{\"a\": ok(1), \"b\": error(\"no\")}",
+    "error(\"no\")",
+    "nil",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

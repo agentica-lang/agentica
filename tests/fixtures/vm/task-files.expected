@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 100048,
+  "stdout": [
+    "ok()",
+    "20000",
+    "ok(\"from a task\")",
+    ""
+  ],
+  "stderr": []
+}

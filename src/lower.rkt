@@ -4,6 +4,7 @@
 
 (provide lower
          format-ir
+         vm-builtins
          (struct-out ir-program)
          (struct-out ir-struct)
          (struct-out ir-enum)

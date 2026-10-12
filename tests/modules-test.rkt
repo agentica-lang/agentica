@@ -7,6 +7,9 @@
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path example "../examples/json-modules.agc")
 
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define (with-files files run)
   (define directory (make-temporary-file "agentica-modules~a" 'directory))
   (dynamic-wind void

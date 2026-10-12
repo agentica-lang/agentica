@@ -268,6 +268,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Programs run on the bytecode VM by default: `agentica file.agc` compiles
+  in-process and runs `agentica-vm` with `--max-steps`, `--seed`,
+  `--allow-run`, `--ai`, `--json` and the program arguments. A program that
+  uses `TCP`, `TLS`, `HTTP` or `BDD` runs on the legacy Racket evaluator
+  after one notice line on stderr, none with `--json` (`agentica: the VM
+  does not support the builtin HTTP.get yet; running on the legacy
+  evaluator`); `agentica test` and the programs it drives stay on the
+  evaluator until BDD runs on the VM.
+  `--vm` is accepted and does nothing. A missing VM exits 2 with
+  `agentica: cannot find the VM at PATH`. Seeded `Random` values differ from
+  the evaluator's, each task has its own generator, and deep tail calls no
+  longer overflow. The evaluator is frozen and will be deleted (roadmap 7i).
+- `make test` and `make exe` build the VM first. The VM differential tests
+  are golden tests now: each fixture in `tests/fixtures/vm/` has a
+  `<name>.expected`, and `make goldens` rewrites them from the VM.
+- The Linux release archive ships `agentica-vm` in `bin/` next to
+  `agentica`, built against glibc 2.28, with the licenses of bdwgc, libuv,
+  yyjson and the Unicode data in `licenses/`.
+
 - `Process.spawn` looks up a bare command name (no `/`) in `PATH` and never
   adds the current directory (empty entries are skipped; an explicit `.`
   entry still works, as in the shell); a name with `/` is a path relative

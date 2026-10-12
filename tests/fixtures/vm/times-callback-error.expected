@@ -1,0 +1,12 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-DIVISION-BY-ZERO",
+  "steps": 29,
+  "stdout": [
+    "2",
+    "3",
+    "6",
+    ""
+  ],
+  "stderr": []
+}

@@ -4,8 +4,8 @@
 layout, loader rules, libraries and the PR plan. Its "Status" note says which
 subset runs today. This file is the working guide: where things live, how to
 widen the VM, and the rules every change keeps. When this guide and
-`docs/vm/` disagree, `docs/vm/` wins; when `docs/vm/` and
-`src/evaluator.rkt` disagree, the evaluator wins and the doc is fixed.
+`docs/vm/` disagree, `docs/vm/` wins. The VM is the default backend and the
+reference; the evaluator is frozen (it runs only the fallback until 7i).
 
 ## Pipeline and files
 
@@ -15,7 +15,7 @@ lower         (src/lower.rkt)     checked program -> IR, or LOWER-UNSUPPORTED / 
 ir->bytecode  (src/bytecode.rkt)  IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL
 write-bytecode                    the versioned .agcb file (magic, format version, Agentica version)
 vm/main.c     dist/agentica-vm [--max-steps N] [--seed N] [--allow-run] [--ai|--json] -- file.agcb [args...]
-src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file, then the VM
+src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then the VM (evaluator fallback on LOWER-UNSUPPORTED)
 ```
 
 | Path | Owns |
@@ -55,7 +55,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
-| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | differential tests against the evaluator, split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue.agc` |
+| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 2, 3, 4, 3, so shard 3 gets a double share on purpose because shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue.agc` |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
@@ -69,13 +69,15 @@ make vm vm-test TRACE=0              # trace points compiled out (still type-che
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
-make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the diff test
+make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests
+make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
 make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
 racket src/main.rkt --dump-ir prog.agc
-racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=path picks the binary
+racket src/main.rkt prog.agc         # front end + VM in one step (the default); AGENTICA_VM=path picks the binary
+racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 ```
 
 - CI runs `vm-sanitizers` (`make vm-lint`, ASan diff and bytecode tests, `make vm-fuzz`,
@@ -84,8 +86,20 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   bytecode, `src/version.rkt`, their tests and fixtures, the Makefile,
   `.gitmodules`, `.clang-tidy`, `ci.yml`). A new VM source or test file outside those paths must be added
   there.
-- `agentica --vm` (Linux only for now, `docs/vm/08-loader-and-cli.md` §9): `src/main.rkt`
-  writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
+- `agentica file.agc` runs on the VM by default (Linux only for now,
+  `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
+  `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
+  only `TCP`, `TLS`, `HTTP` and `BDD` builtins, which are not in
+  `vm-builtins` in `src/lower.rkt`; `tests/bytecode-test.rkt` checks that
+  every other catalog implementation is there) it prints `agentica: <the
+  lowering's message>; running on the legacy evaluator` on stderr (not with
+  `--json`) and runs the evaluator. Tests check the notice with
+  `fallback-notice?` (`tests/cli-in-process.rkt`): prefix, builtin name and
+  suffix, never the whole text. The hidden `--legacy-eval` flag (stripped by
+  `split-legacy-flag` from the options before the file) forces the
+  evaluator; `agentica test` and the BDD driver (`default-bdd-command` in
+  `src/bdd.rkt` adds `--legacy-eval`) stay on it until BDD runs on the VM.
+  Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`
   flag. The VM then deletes its input right after reading it; on Linux it
   first resets `SIGTERM` to its default, sets `PR_SET_PDEATHSIG` to
@@ -95,14 +109,17 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   The driver deletes the file too (VM never ran, failed early, break), and
   copies stdin/stdout/stderr through pipes only when they are not file
   streams. The VM is found by `AGENTICA_VM`, else `dist/` of the checkout
-  (module source path), else next to a `raco exe` executable; no
-  `define-runtime-path`, since `raco distribute` would copy the VM. Options
-  the VM lacks (`--steps`, `--dump`, ...) exit 2 with `--vm`
-  (`--max-steps`, `--seed` and `--allow-run` pass through); add them
-  to the pass-through list in `src/main.rkt` as the VM gains them.
-  `tests/vm-diff-4-test.rkt` compares `--vm` with the evaluator CLI (with
-  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), runs it
-  once in-process to cover the pipe path, and checks `--driver-pid`.
+  (module source path), else next to a `raco exe` executable (the release
+  archive has it in `bin/`); no `define-runtime-path`, since `raco
+  distribute` would copy the VM. A missing VM exits 2, never a silent
+  fallback. `--max-steps`, `--seed`, `--allow-run`, `--ai` and `--json`
+  pass through; add new options to the pass-through list in `src/main.rkt`
+  as the VM gains them. A catch-up PR (TCP, TLS, HTTP, BDD) adds its
+  builtins to `vm-builtins`, which removes the fallback by itself.
+  `tests/vm-diff-4-test.rkt` checks the CLI against the goldens (with
+  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), the fallback
+  notice, `--legacy-eval`, a missing VM, runs it once in-process to cover
+  the pipe path, and checks `--driver-pid`.
 
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
@@ -110,16 +127,30 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
 - The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
   file lock in `build/`, since they run in parallel), print `SKIP` locally
   when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
-  They run each fixture once on the evaluator and on the VM with `--json`
-  and compare exit code, stdout, stderr without the final JSON diagnostic
-  line, and the diagnostic code parsed from that line (`outcome`). One more
-  VM run each in the plain and `--ai` formats must match exit code, stdout
-  and program stderr, and name the same code (`check-text-format`). The
-  `--max-steps` sweep runs only the VM: each limit must give the full run's
-  outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr that
-  are prefixes of the full run's; once a limit finishes, larger ones must
-  too, and 2T + 100 (T the evaluator's step count) must finish
-  (`check-sweep`). The sweep cannot see an ignored limit: add a runaway
+  They run each fixture on the VM with `--json` and compare exit code,
+  stdout, stderr without the final JSON diagnostic line, and the diagnostic
+  code parsed from that line (`outcome`), with the fixture's golden
+  (`read-expected`; JSON with `exit`, `code`, and `stdout`/`stderr` as lists
+  of lines). One more VM run each in the plain and `--ai` formats must match
+  exit code, stdout and program stderr, and name the same code
+  (`check-text-format`). The `--max-steps` sweep: each limit must give the
+  golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr
+  that are prefixes of the golden's; once a limit finishes, larger ones must
+  too (`check-sweep`). Each golden records the fixture's step count T
+  (`"steps"`, the smallest limit that finishes); the VM's own count, found
+  by `total-steps`, may be lower but at most `T + max(10, T / 10)`
+  (`check-steps`, which catches over-charging), and the last sweep limit,
+  `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. A new
+  fixture needs its golden: run `make goldens`, read the new `.expected` by
+  hand, and commit it; a changed golden is a reviewed behaviour change.
+  `make goldens` refuses a run that timed out, died by a signal (status
+  129 to 159) or ends in `RUNTIME-INTERNAL`, and names `.expected` files
+  with no `.agc` next to them. The runaway fixtures in `step-limited/`
+  keep their golden at `--max-steps 500`, with no step count. Every program
+  the tests run gets `LC_ALL=C.UTF-8` and `LANG=C.UTF-8` (set when
+  `tests/cli-in-process.rkt` loads), so OS error text is the untranslated
+  C text; plain `C` would make Racket decode command-line arguments as
+  ASCII. The sweep cannot see an ignored limit: add a runaway
   program to `tests/fixtures/vm/step-limited/` for each new loop or call
   construct (it prints nothing after the loop). On Linux, sweep and runaway
   VM runs time out after 60 seconds (`timeout --foreground` in the batch
@@ -128,14 +159,13 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
   The VM runs of one fixture go through one `/bin/sh` script that writes each
   run's stdout, stderr and exit status to files (stdin from a file, arguments
-  quoted), since a process start from the Racket parent costs 12-35 ms; the
-  evaluator runs while the script does. A new costly fixture may need an
+  quoted), since a process start from the Racket parent costs 12-35 ms. A new costly fixture may need an
   entry in `heavy-fixtures` in `tests/vm-diff-common.rkt`. A fixture whose
-  name starts with `process-` runs with `--allow-run` on both backends
+  name starts with `process-` runs with `--allow-run`
   (`fixture-allow-run`); its children must be on every CI runner (`/bin/sh`,
   `cat`, `sleep`) and must end or be closed.
   Fixture stdin comes from a file; pipe stdin is covered by the large-input
-  test and the CLI `--vm` tests. `compile-file` mirrors the `compile`
+  test and the CLI tests. `compile-file` mirrors the `compile`
   pipeline of `src/main.rkt` and must follow it when that pipeline changes
   (shard 4 compares its bytes with the CLI `compile`).
   The batch script needs an `sh` on PATH (MSYS2 on Windows; untested while
@@ -206,7 +236,7 @@ must never crash or change the run):
 
 ## Linked programs
 
-Imports never reach the VM. `src/main.rkt` (`compile`, `--vm`) and
+Imports never reach the VM. `src/main.rkt` (`compile` and the default run) and
 `compile-file` in `tests/vm-diff-common.rkt` run `link-program`
 (`src/modules.rkt`) before `check`, so `lower` sees one program whose
 imported declarations carry `@N::` prefixes (display names drop them,
@@ -336,21 +366,22 @@ Rules for the C code:
 
 ## Rules every change keeps
 
-**Parity is black-box** (`docs/vm/README.md` §1). Same exit code, stdout and
-program stderr (`IO.warn`) of every run except one stopped by
-`--max-steps`, and diagnostic code as the evaluator; a runaway program stops with `RUNTIME-STEP-LIMIT` under
-`--max-steps`. Error strings a program prints are program data: when a
-library message changes, switch the fixtures that print it to printing
-only ok or error in the same PR. Message text,
-spans, stderr wording, OS error text, library `Result` error strings, exact
-step counts and the step-limit span, `Random` sequences and cross-task order
-may differ, but VM messages must stay clear for agents. Lowering may
-optimize (inline, fold constants, move or merge `STEP`s) as long as that
-holds. A deliberate difference in exit code, stdout or code goes into
-`docs/vm/` as a documented difference (for example a failed stdout write
-exits 1, out of memory exits 70, and the 2^24 register cap gives
-`RUNTIME-STACK-OVERFLOW`). New APIs the evaluator never had may be VM-only,
-tested with fixed expected output.
+**Goldens, not parity** (`docs/vm/README.md` §1). The VM is the reference:
+each fixture's golden holds its exit code, stdout, program stderr
+(`IO.warn`) and diagnostic code; a runaway program stops with
+`RUNTIME-STEP-LIMIT` under `--max-steps`. Catch-up work (TCP, TLS, HTTP,
+BDD) is tested with goldens and independent Node/Python peers, not against
+the evaluator; new features are VM-only and come after 7i; the evaluator is
+frozen. Error strings a program prints are program data: when a library
+message changes, switch the fixtures that print it to printing only ok or
+error in the same PR, or update their goldens on purpose. Message text,
+spans, stderr wording, OS error text, exact step counts and the step-limit
+span may change, but VM messages must stay clear for agents. Lowering may
+optimize (inline, fold constants, move or merge `STEP`s) as long as the
+goldens hold. Differences from the old evaluator in exit code, stdout or
+code are recorded in `docs/vm/` (for example a failed stdout write exits 1,
+out of memory exits 70, and the 2^24 register cap gives
+`RUNTIME-STACK-OVERFLOW`).
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, runs children only with its own
@@ -615,7 +646,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   U+FFFD (Racket ports); arguments decode each invalid byte to `?` and an
   incomplete sequence at the end to one `?` (Racket in a UTF-8 locale,
   through glibc `iconv`); the diff test checks this with `LC_ALL=C.UTF-8`.
-  The `--vm` driver copies a non-file stdin into the VM with a thread that
+  The driver copies a non-file stdin into the VM with a thread that
   it kills once the VM exits.
 - Closures: a `block-lit` becomes an extra IR function after the declared
   ones (`block@file:line:col`), lowered by a fresh `lower-function` context;

@@ -34,6 +34,7 @@ def build() -> None:
     runtime = ROOT / "dist" / "runtime"
     shutil.rmtree(runtime, ignore_errors=True)
     subprocess.run(["raco", "distribute", str(runtime), str(ROOT / "dist" / "agentica")], check=True)
+    shutil.copy2(ROOT / "dist" / "agentica-vm", runtime / "bin" / "agentica-vm")
 
 
 def clone_rootfs(template: Path, destination: Path) -> Path:
@@ -452,10 +453,12 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=1, help="runs in parallel")
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--chroot-root", type=Path,
-                        help="prepared minimal Firejail root filesystem")
+                        help="prepared minimal Firejail root filesystem; its glibc must run the host-built "
+                             "dist/agentica-vm (as new as the host's, or newer)")
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="pass one provider-auth environment variable to the agent; repeat as needed")
-    parser.add_argument("--sandbox", choices=["docker", "firejail"], default="docker")
+    parser.add_argument("--sandbox", choices=["docker", "firejail"], default="docker",
+                        help="firejail runs the host-built agentica-vm on the chroot's glibc")
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image; the default is built when missing")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
     args = parser.parse_args()
@@ -472,7 +475,7 @@ def main() -> None:
         validate_sandbox(args.chroot_root, args.agent)
     if not args.no_build:
         build()
-    if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
+    if not all((ROOT / "dist" / "runtime" / "bin" / name).is_file() for name in ("agentica", "agentica-vm")):
         raise SystemExit("dist/runtime is missing; rerun without --no-build")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"

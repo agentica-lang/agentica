@@ -3,46 +3,37 @@
 (require (except-in rackunit check)
          json
          racket/runtime-path
-         "cli-in-process.rkt"
-         "../src/checker.rkt"
-         "../src/diagnostic.rkt"
-         "../src/evaluator.rkt"
-         "../src/lexer.rkt"
-         "../src/parser.rkt"
-         "../src/source.rkt")
+         "cli-in-process.rkt")
 
 (define-runtime-path examples-dir "../examples")
 (define-runtime-path main-file "../src/main.rkt")
 
-(define (run-text text)
-  (define result #f)
-  (define output
-    (with-output-to-string
-      (lambda ()
-        (set! result
-              (let* ([lexed (lex (source "test.agc" text))]
-                     [parsed (if (diagnostic? lexed) lexed (parse lexed))]
-                     [checked (if (diagnostic? parsed) parsed (check parsed))])
-                (if (diagnostic? checked) checked (evaluate checked)))))))
-  (values output result))
-
 (define (run-text-io text input #:max-steps [max-steps #f])
-  (define result #f)
-  (define output
-    (with-output-to-string
+  (define file (make-temporary-file "agentica-example~a.agc"))
+  (display-to-file text file #:exists 'truncate)
+  (define result
+    (dynamic-wind
+      void
       (lambda ()
-        (set! result
-              (let* ([lexed (lex (source "test.agc" text))]
-                     [parsed (if (diagnostic? lexed) lexed (parse lexed))]
-                     [checked (if (diagnostic? parsed) parsed (check parsed))])
-                (if (diagnostic? checked)
-                    checked
-                    (evaluate checked #:in (open-input-string input) #:max-steps max-steps)))))))
-  (values output result))
+        (apply run-main-in-process #:input (string->bytes/utf-8 input)
+               (append '("--json") (if max-steps (list "--max-steps" (number->string max-steps)) '())
+                       (list (path->string file)))))
+      (lambda () (delete-file file))))
+  (define (code-from stderr)
+    (define lines (string-split stderr "\n"))
+    (define data (and (pair? lines) (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr (last lines)))))
+    (unless (and (hash? data) (string? (hash-ref data 'code #f)))
+      (error 'examples-test "exit ~a without a JSON diagnostic on stderr: ~s" (first result) stderr))
+    (string->symbol (hash-ref data 'code)))
+  (values (second result)
+          (if (zero? (first result)) (void) (code-from (third result)))))
+
+(define (run-text text)
+  (run-text-io text ""))
 
 (define (code-of body)
   (define-values (output result) (run-text (format "def main() -> Void\n~a\nend\n\n" body)))
-  (if (diagnostic? result) (diagnostic-code result) result))
+  result)
 
 (define (cli . arguments)
   (apply run-main-in-process arguments))
@@ -70,6 +61,15 @@
         (run-text (file->string (build-path examples-dir (car entry)))))
       (check-equal? result (void) (car entry))
       (check-equal? output (cdr entry) (car entry))))
+
+  (test-case "file, task and process examples give their expected output"
+    (define (example name) (path->string (build-path examples-dir name)))
+    (check-equal? (cli (example "concurrency.agc")) '(0 "42\n14\n" ""))
+    (check-equal? (cli (example "file-summary.agc") (example "hello.agc")) '(0 "39\n" ""))
+    (define tool (cli "--allow-run" (example "process-tool.agc")))
+    (check-equal? (first tool) 0 (third tool))
+    (check-regexp-match #rx"^Welcome to Racket v[0-9.]+ \\[cs\\]\\.\n$" (second tool))
+    (check-equal? (third tool) ""))
 
   (test-case "echo.agc reads and echoes standard input"
     (define-values (output result)

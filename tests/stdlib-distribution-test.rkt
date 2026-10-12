@@ -4,6 +4,11 @@
 
 (define-runtime-path source-directory "../src")
 (define-runtime-path library-directory "../stdlib")
+(define vm-name (if (eq? (system-type 'os) 'windows) "agentica-vm.exe" "agentica-vm"))
+(define-runtime-path dist-directory "../dist")
+
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
 
 (module+ test
   (test-case "distributed executable imports stdlib after its build checkout is deleted"
@@ -27,6 +32,7 @@
         (delete-file executable)
         (define relocated (build-path directory "relocated"))
         (rename-file-or-directory bundle relocated)
+        (copy-file (build-path dist-directory vm-name) (build-path relocated "bin" vm-name))
         (define program (build-path directory "program.agc"))
         (display-to-file
          "import \"std/queue.agc\" as Queue\ndef main() -> Void\n  q = Queue.push(Queue.new(), \"embedded\")\n  puts(Result.unwrap!(Queue.peek(q)))\nend\n\n"

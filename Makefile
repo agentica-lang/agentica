@@ -4,7 +4,7 @@ TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -15,10 +15,10 @@ build:
 # All tests, in parallel:      make test
 # A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"
 # More or fewer workers:       make test JOBS=8
-test: build
+test: build vm
 	$(RACO) test -j $(JOBS) $(TESTS)
 
-exe: build
+exe: build vm
 	mkdir -p dist
 	$(RACO) exe -o dist/agentica src/main.rkt
 
@@ -33,6 +33,9 @@ vm-latency: build vm
 
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+
+goldens: build vm
+	racket tests/vm-diff-common.rkt
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
 

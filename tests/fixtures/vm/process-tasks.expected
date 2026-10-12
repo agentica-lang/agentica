@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 259,
+  "stdout": [
+    "ok()",
+    "ok()",
+    "ok(0)",
+    "524288",
+    "alpha",
+    "beta",
+    ""
+  ],
+  "stderr": []
+}

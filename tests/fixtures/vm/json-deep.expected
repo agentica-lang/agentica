@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 284,
+  "stdout": [
+    "2049",
+    "true",
+    "true",
+    "ok(<Json>)",
+    ""
+  ],
+  "stderr": []
+}

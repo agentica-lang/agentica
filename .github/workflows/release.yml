@@ -12,8 +12,14 @@ permissions:
 jobs:
   build:
     runs-on: [self-hosted, linux, docker-runner]
+    env:
+      ZIG_VERSION: 0.15.2
+      ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+      VM_GLIBC: '2.28'
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - id: racket
         run: |
           dir="$RUNNER_TOOL_CACHE/racket-cs-9.3"
@@ -39,6 +45,56 @@ jobs:
               exit 1
             }
           fi
+      - id: zig
+        run: |
+          dir="$RUNNER_TOOL_CACHE/zig-$ZIG_VERSION"
+          if [ ! -x "$dir/zig" ] || [ "$(cat "$dir.sha256" 2>/dev/null)" != "$ZIG_SHA256" ]; then
+            archive="$RUNNER_TEMP/zig.tar.xz"
+            curl -sSfL "https://ziglang.org/download/$ZIG_VERSION/zig-x86_64-linux-$ZIG_VERSION.tar.xz" -o "$archive"
+            echo "$ZIG_SHA256  $archive" | sha256sum -c
+            rm -rf "$dir.tmp" "$dir" "$dir.sha256"
+            mkdir -p "$dir.tmp"
+            tar -xJf "$archive" -C "$dir.tmp" --strip-components=1
+            mv "$dir.tmp" "$dir"
+            echo "$ZIG_SHA256" > "$dir.sha256"
+            rm "$archive"
+          fi
+          echo "CC=$dir/zig cc -target x86_64-linux-gnu.$VM_GLIBC" >> "$GITHUB_ENV"
+      - name: Build the VM against glibc ${{ env.VM_GLIBC }}
+        run: |
+          set -o pipefail
+          make vm vm-test
+          strip dist/agentica-vm
+          sections=$(LC_ALL=C readelf -SW dist/agentica-vm)
+          if grep -qE '[.](debug_info|symtab)[[:space:]]' <<< "$sections"; then
+            echo "dist/agentica-vm still has .debug_info or .symtab after strip" >&2
+            exit 1
+          fi
+          newest=$(objdump -T dist/agentica-vm | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+          [ -n "$newest" ] || { echo "objdump found no GLIBC symbol versions in dist/agentica-vm" >&2; exit 1; }
+          echo "dist/agentica-vm needs $newest"
+          [ "$(printf '%s\n' "$newest" "GLIBC_$VM_GLIBC" | sort -V | tail -n 1)" = "GLIBC_$VM_GLIBC" ] || {
+            echo "dist/agentica-vm needs $newest, newer than GLIBC_$VM_GLIBC" >&2
+            exit 1
+          }
+          export LC_ALL=C
+          header=$(readelf -h dist/agentica-vm)
+          dynamic=$(readelf -d dist/agentica-vm)
+          segments=$(readelf -lW dist/agentica-vm)
+          symbols=$(objdump -T dist/agentica-vm)
+          grep -q 'Type:[[:space:]]*DYN' <<< "$header" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
+          grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
+          grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || { echo "dist/agentica-vm lacks BIND_NOW" >&2; exit 1; }
+          grep -q 'GNU_RELRO' <<< "$segments" || { echo "dist/agentica-vm lacks RELRO" >&2; exit 1; }
+          grep -q '__stack_chk_fail' <<< "$symbols" || { echo "dist/agentica-vm lacks the stack protector" >&2; exit 1; }
+          grep -qE '__(memcpy|read|vsnprintf)_chk' <<< "$symbols" || { echo "dist/agentica-vm lacks _FORTIFY_SOURCE" >&2; exit 1; }
+      - name: Golden tests on the release VM
+        env:
+          AGENTICA_VM_BINARY: dist/agentica-vm
+          AGENTICA_REQUIRE_VM: '1'
+        run: |
+          make build
+          raco test -j 2 tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
       - name: Build and smoke-test
         run: |
           make exe
@@ -50,21 +106,33 @@ jobs:
         run: |
           name="agentica-${{ steps.version.outputs.version }}-linux-x86_64"
           raco distribute "dist/$name" dist/agentica
-          "./dist/$name/bin/agentica" examples/hello.agc
-          "./dist/$name/bin/agentica" --version
-          "./dist/$name/bin/agentica" examples/queue.agc
+          cp dist/agentica-vm "dist/$name/bin/"
           cp LICENSE NOTICE "dist/$name/"
           share=$(racket -e '(require setup/dirs) (display (find-share-dir))')
-          mkdir -p "dist/$name/licenses/racket"
+          mkdir -p "dist/$name/licenses/"{racket,bdwgc,libuv,yyjson,unicode}
           cp "$share/LICENSE.txt" "$share/LICENSE-MIT.txt" "$share/LICENSE-APACHE.txt" \
             licenses/racket/ChezScheme-NOTICE "dist/$name/licenses/racket/"
+          sed -n '1,/covered by the GPL\./p' vm/third_party/bdwgc/README.QUICK > "dist/$name/licenses/bdwgc/NOTICE"
+          cp vm/third_party/libuv/LICENSE vm/third_party/libuv/LICENSE-extra "dist/$name/licenses/libuv/"
+          cp vm/third_party/yyjson/LICENSE "dist/$name/licenses/yyjson/"
+          cp licenses/unicode/LICENSE.txt "dist/$name/licenses/unicode/"
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
           listing=$(tar -tzf "dist/$name.tar.gz")
-          for f in LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
-            licenses/racket/LICENSE-APACHE.txt licenses/racket/ChezScheme-NOTICE; do
+          for f in bin/agentica bin/agentica-vm LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
+            licenses/racket/LICENSE-APACHE.txt licenses/racket/ChezScheme-NOTICE licenses/bdwgc/NOTICE \
+            licenses/libuv/LICENSE licenses/libuv/LICENSE-extra licenses/yyjson/LICENSE licenses/unicode/LICENSE.txt; do
             grep -qxF "$name/$f" <<< "$listing" || { echo "$name.tar.gz lacks $name/$f" >&2; exit 1; }
           done
+          unpacked="$RUNNER_TEMP/unpacked"
+          rm -rf "$unpacked" && mkdir -p "$unpacked"
+          tar -xzf "dist/$name.tar.gz" -C "$unpacked"
+          agentica="$unpacked/$name/bin/agentica"
+          "$agentica" examples/hello.agc
+          "$agentica" --version
+          "$agentica" examples/queue.agc
+          diff <("$agentica" --seed 7 tests/fixtures/vm/random.agc) <("$agentica" --seed 7 tests/fixtures/vm/random.agc)
+          rm -rf "$unpacked"
       - uses: actions/upload-artifact@v4
         with:
           name: agentica-linux-x86_64
