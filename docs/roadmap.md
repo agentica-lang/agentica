@@ -102,9 +102,14 @@ the programming reference contain the current signatures.
   hot (`make bench`, the server measurement 7j, or phase 12). Its `std/` API
   does not change, results and error strings included, so user code does not
   change; only step counts may (black-box parity). Before 7i the builtin also
-  needs its Racket twin.
-- Exceptions, which are builtins from day one (in C, and in Racket while the
-  evaluator has them):
+  needs its Racket twin. The new builtin is public (no internal helper
+  builtins, `docs/vm.md` §4.5). It goes in an existing builtin module whose
+  first parameter type fits (for example `List.read_u32_be(data, offset)`),
+  never under a module named like the `std/` module's documented import
+  alias, so the import keeps working. It is documented like any other
+  builtin, and the `std/` function becomes a one-line wrapper.
+- Exceptions, which are builtins from day one: in C, and in Racket as well,
+  unless the phase 7 rule for new APIs lets them be VM-only:
   1. Anything that touches the OS: files, stdin and stdout, processes,
      sockets, TLS, time, signals, random bytes from the OS. A program cannot
      make system calls.
