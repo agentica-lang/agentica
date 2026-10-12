@@ -14,8 +14,6 @@ typedef struct {
   size_t *fail;
 } finder;
 
-static agc_string empty_text = {0, 0};
-
 size_t agc_utf8_encode(uint32_t cp, char out[4]) {
   if (cp < 0x80) {
     out[0] = (char)cp;
@@ -327,7 +325,7 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *parts = agc_as_list(vm, args[0]);
   const agc_string *sep = agc_as_string(vm, args[1]);
-  if (parts->len == 0) return agc_string_value(&empty_text);
+  if (parts->len == 0) return agc_string_value(agc_new_string(0, 0));
   size_t bytes = agc_size_mul(parts->len - 1, sep->bytes), chars = agc_size_mul(parts->len - 1, sep->chars);
   for (size_t k = 0; k < parts->len; k++) {
     const agc_string *part = agc_as_string(vm, parts->items[k]);

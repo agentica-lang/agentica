@@ -8,7 +8,7 @@
 
 #define ALLOC_LIMIT ((size_t)256 << 20)
 
-static FILE *sink;
+static FILE *sink; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 int agc_fuzz_one(const uint8_t *data, size_t len) {
   agc_init();

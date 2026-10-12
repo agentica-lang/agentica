@@ -300,12 +300,10 @@ static agc_value builtin_result_unwrap_or(agc_vm *vm, agc_value *args, uint32_t 
   return r->ok ? r->value : args[1];
 }
 
-static agc_string empty_string = {0, 0};
-
 static agc_value builtin_result_message(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_result *r = agc_as_result(vm, args[0]);
-  if (r->ok) return agc_string_value(&empty_string);
+  if (r->ok) return agc_string_value(agc_new_string(0, 0));
   return r->value;
 }
 

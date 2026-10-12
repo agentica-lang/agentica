@@ -9,7 +9,8 @@ Checks: >
   bugprone-too-small-loop-variable,
   bugprone-integer-division,
   bugprone-suspicious-memset-usage,
-  bugprone-misplaced-widening-cast
+  bugprone-misplaced-widening-cast,
+  cppcoreguidelines-avoid-non-const-global-variables
 WarningsAsErrors: '*'
 HeaderFilterRegex: 'vm/agc\.h'
 CheckOptions:
