@@ -91,6 +91,10 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 - A statement starting with `name` is a binding when the next token is `=` or `:`; otherwise it is an expression.
 - Stray `NL` tokens are skipped at the top level and between statements (see the gotcha in `SKILL.md`).
 
+## `src/modules.rkt`
+
+`(load-program path)` links imports before `check`. The std-only guard lives in its name resolution: a two-part name whose module is in `std-only-modules` (`src/builtins.rkt`, today `HttpWire`) and that no import alias names is `CHECK-UNKNOWN-NAME`, with a help that shows `import "std/http" as Web`, unless the module was embedded from `stdlib/` (the `std/` sources of `src/stdlib.rkt`). A user file, a relative import and a `pkg/` module all get it. `HttpWire` is also left out of `help`, its JSON and every "did you mean" (`public-builtin-names`).
+
 ## `src/checker.rkt`
 
 `(check program) -> program | diagnostic`. Registration first, then bodies, stopping at the first error:
@@ -109,6 +113,7 @@ Design points: one `type-ref` covers `Int`, `List[Int]`, and `List[List[Int]]`; 
 ## `src/lower.rkt`
 
 `(lower program types) -> ir-program | diagnostic`. One `ir-function` per `function-decl` (index order = declaration order, `entry` = `main`). Slots: parameters first, then locals, which are resolved statically like the evaluator's `define!`/`assign!` and freed when their scope ends, then temporaries with a stack discipline so a call window is always the highest live slots. A new local is lowered straight into its slot; an assignment to an existing local goes through a temporary and `move`. Unsupported forms or types are `LOWER-UNSUPPORTED` at the node span; a Racket exception becomes `LOWER-INTERNAL` at the program span. A `method-call` or `field-access` with `resolved` set lowers its resolved node without a step and checks the outer node's type, because the synthetic call that `check-method` builds is not in the types table; a `typed-target` lowers its expression and checks its recorded type. `format-ir` is the `--dump-ir` text.
+Builtin records the VM knows (`builtin-structs`: `FileInfo`, `Header`, `HttpResponse`, `HttpClientOptions`, fields in record order) are appended to the program's structs when a checked type mentions them, with the records they need (`HttpResponse` needs `Header`); the C side finds them by name (`agc_builtin_struct`). `(check-vm-only program reason)` walks a checked program and returns a `LOWER-UNSUPPORTED` diagnostic ("this program needs the VM: ... but <reason>") at the first call in `vm-only-builtins`, or `#f`; `src/main.rkt` (the fallback and `--legacy-eval`) and `read-program` in `src/bdd-runner.rkt` call it before the evaluator gets a program, and only print it.
 
 ## `src/bytecode.rkt`
 
@@ -138,7 +143,7 @@ JSON.encode recursively writes runtime values in evaluator.rkt, preserving struc
 
 ## `src/builtins.rkt`
 
-One catalog of name, parameters, result, generic rule tag, implementation key, effects, and description. `builtin-ref`, `builtin-signature`, and `builtin->jsexpr` serve checker/runtime/help. Shared `type->string` and `did-you-mean` keep help and checking consistent. Effects are informational only. The catalog test exercises each entry with independent expected outputs; do not add test-only exports.
+One catalog of name, parameters, result, generic rule tag, implementation key, effects, and description. `std-only-modules` (`HttpWire`) lists modules only `stdlib/` may call (`std-only-name?`; `public-builtin-names` leaves them out for help and suggestions), and `vm-only-builtins` the builtins the evaluator cannot run (every `HttpWire` builtin; the evaluator has no implementation for them). `builtin-ref`, `builtin-signature`, and `builtin->jsexpr` serve checker/runtime/help. Shared `type->string` and `did-you-mean` keep help and checking consistent. Effects are informational only. The catalog test exercises each entry with independent expected outputs; do not add test-only exports.
 
 `builtin` has an automatic alternatives field, filled only during catalog initialization. `builtin-ref` optionally selects a signature by arity; checker and evaluator use the same selection. Map.get/2 returns Result[V]; Map.get/3 returns V with an eagerly evaluated default. Text help lists both signatures, and its JSON help carries overloads; single-signature JSON output is unchanged. List.repeat count errors are RUNTIME-INVALID-COUNT at the argument span, with a 1048576-element cap. List.set reuses RUNTIME-INDEX-OUT-OF-RANGE. Map.delete removes both hash storage and insertion-order keys.
 

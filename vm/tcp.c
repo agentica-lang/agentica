@@ -1,5 +1,4 @@
-#include "agc.h"
-#include "tls.h"
+#include "net.h"
 
 #ifdef __linux__
 #include <errno.h>
@@ -20,7 +19,7 @@
 
 typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_SEND } req_kind;
 
-typedef struct net net;
+typedef agc_conn net;
 typedef struct tcp_link tcp_link;
 typedef struct request request;
 
@@ -42,7 +41,7 @@ struct request {
   bool served;
 };
 
-struct net {
+struct agc_conn {
   agc_trace trace;
   uv_loop_t *loop;
   uv_getaddrinfo_t dns;
@@ -65,7 +64,9 @@ struct net {
   agc_tls_failure failure;
   uint8_t *cipher, *plain;
   size_t plain_at, plain_len;
-  bool secure, setting_up, handshaken, tls_failed, flushing, raw_eof;
+  bool secure, setting_up, handshaken, tls_failed, flushing, raw_eof, borrowed, clean_eof;
+  agc_conn_watch watch;
+  void *watcher;
 };
 
 static const char socket_closed[] = "network: socket is closed";
@@ -79,7 +80,7 @@ static void settle(net *n) {
   uv_freeaddrinfo(n->addrs);
   agc_inbuf_free(&n->in);
   agc_tls_free(n->tls);
-  agc_tls_config_free(n->config);
+  if (!n->borrowed) agc_tls_config_free(n->config);
   free(n->cipher);
   free(n->plain);
   free(n->ca_file);
@@ -115,6 +116,11 @@ static void ready(const request *q) {
   if (q && q->job) agc_io_ready(q->job);
 }
 
+static void notify(const net *n, const request *q) {
+  ready(q);
+  if (n->watch) n->watch(n->watcher);
+}
+
 static const char *kind_name(const net *n) { return n->listener ? "listener" : "socket"; }
 
 static void drop_links(net *n) {
@@ -148,9 +154,9 @@ static void shut_one(net *n, const char *why) {
   drop_links(n);
   n->reading = false;
   agc_inbuf_free(&n->in);
-  ready(n->opener);
-  ready(n->reader);
-  ready(n->writer);
+  notify(n, n->opener);
+  notify(n, n->reader);
+  notify(n, n->writer);
   for (const request *q = n->accepts; q; q = q->next) ready(q);
 }
 
@@ -275,7 +281,7 @@ static agc_value tls_failure(agc_vm *vm, const char *head, const agc_tls_failure
   return agc_result_value(false, agc_string_value(agc_utf8_decode((const uint8_t *)text, n_text, "?", true)));
 }
 
-static agc_value load_failure(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f) {
+agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f) {
   size_t size = agc_size_add(strlen(what), agc_size_add(strlen(path), 32));
   char *head = agc_alloc_atomic(size);
   snprintf(head, size, "%s: load failed from: \"%s\"", what, path);
@@ -284,10 +290,10 @@ static agc_value load_failure(agc_vm *vm, const char *what, const char *path, co
 
 static agc_value secure_error(agc_vm *vm, const net *n) {
   const agc_tls_failure *f = &n->failure;
-  if (f->code == AGC_TLS_ERR_BAD_CERT) return load_failure(vm, "ssl-load-certificate-chain!", n->cert_file, f);
+  if (f->code == AGC_TLS_ERR_BAD_CERT) return agc_tls_load_error(vm, "ssl-load-certificate-chain!", n->cert_file, f);
   if (f->code == AGC_TLS_ERR_BAD_KEY || f->code == AGC_TLS_ERR_KEY_MISMATCH)
-    return load_failure(vm, "ssl-load-private-key!", n->key_file, f);
-  if (f->code == AGC_TLS_ERR_BAD_CA) return load_failure(vm, "ssl-load-verify-source!", n->ca_file, f);
+    return agc_tls_load_error(vm, "ssl-load-private-key!", n->key_file, f);
+  if (f->code == AGC_TLS_ERR_BAD_CA) return agc_tls_load_error(vm, "ssl-load-verify-source!", n->ca_file, f);
   return tls_failure(vm, n->listener ? "ssl-make-server-context: setup failed" : "ssl-connect: connect failed", f);
 }
 
@@ -321,7 +327,7 @@ static void handshake_failed(net *n, agc_tls_status status) {
   stop_reading(n);
   AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake_error socket=%" PRIu64 " listener=%" PRIu64 " error=%s detail=%s",
             n->id, n->parent, agc_tls_error_name(n->failure.code), n->failure.detail);
-  ready(n->opener);
+  notify(n, n->opener);
 }
 
 static void flush(net *n, uv_write_cb wrote) {
@@ -349,7 +355,7 @@ static void flush(net *n, uv_write_cb wrote) {
     n->plain = NULL;
     n->plain_at = n->plain_len = 0;
   }
-  if (n->write_status < 0 || (!n->flushing && !n->plain)) ready(n->writer);
+  if (n->write_status < 0 || (!n->flushing && !n->plain)) notify(n, n->writer);
 }
 
 static void tls_wrote(uv_write_t *w, int status) {
@@ -378,6 +384,7 @@ static void decrypt(net *n) {
     if (got) agc_inbuf_got(&n->in, (int64_t)got, false);
     if (status == AGC_TLS_OK) continue;
     if (status == AGC_TLS_CLOSED || (status == AGC_TLS_WANT_READ && n->raw_eof)) n->in.eof = true;
+    if (status == AGC_TLS_CLOSED && !n->raw_eof) n->clean_eof = true;
     if (status == AGC_TLS_ERROR) {
       AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_read_error socket=%" PRIu64 " error=%s", n->id,
                 agc_tls_error_name(n->failure.code));
@@ -400,7 +407,7 @@ static void advance(net *n) {
     n->handshaken = true;
     AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake_done socket=%" PRIu64 " listener=%" PRIu64 " protocol=%s cipher=%s",
               n->id, n->parent, agc_tls_protocol(n->tls), agc_tls_cipher(n->tls));
-    ready(n->opener);
+    notify(n, n->opener);
   }
   decrypt(n);
   flush(n, tls_wrote);
@@ -436,8 +443,9 @@ static void tls_read_in(net *n, ssize_t got) {
   advance(n);
   const request *q = n->reader;
   bool done = n->handshaken && q && read_ready(n, q->kind);
-  if (got < 0 || n->tls_failed || (n->handshaken && (!q || done))) stop_reading(n);
+  if (got < 0 || n->tls_failed || (n->handshaken && ((!q && !n->watch) || done))) stop_reading(n);
   if (done) ready(q);
+  if (n->handshaken && n->watch) n->watch(n->watcher);
 }
 
 static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
@@ -452,8 +460,9 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : (int)-got);
   const request *q = n->reader;
   bool done = q && read_ready(n, q->kind);
-  if (got < 0 || !q || done) stop_reading(n);
+  if (got < 0 || (!q && !n->watch) || done) stop_reading(n);
   if (done) ready(q);
+  if (n->watch) n->watch(n->watcher);
 }
 
 static void start_reading(net *n) {
@@ -469,7 +478,7 @@ static void begin_tls(net *n, agc_tls *t) {
   n->tls = t;
   if (!t) {
     n->tls_failed = true;
-    ready(n->opener);
+    notify(n, n->opener);
     return;
   }
   n->cipher = malloc(CIPHER_SIZE);
@@ -599,7 +608,7 @@ static void bind_all(net *n) {
       for (const tcp_link *k = n->conn; k; k = k->next) count++;
       AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_listen listener=%" PRIu64 " host=%s port=%" PRId64 " addresses=%zu", n->id,
                 n->host, n->port, count);
-      ready(n->opener);
+      notify(n, n->opener);
       return;
     }
     n->error = rc;
@@ -610,7 +619,7 @@ static void bind_all(net *n) {
     else if (!bound || wanted || rc != UV_EADDRINUSE || ++tries >= BIND_TRIES)
       break;
   }
-  ready(n->opener);
+  notify(n, n->opener);
 }
 
 static void attempt(net *n, uv_connect_cb done) {
@@ -626,7 +635,7 @@ static void attempt(net *n, uv_connect_cb done) {
     n->error = rc;
     drop_link(k);
   }
-  ready(n->opener);
+  notify(n, n->opener);
 }
 
 static void connected(uv_connect_t *req, int status) {
@@ -643,7 +652,7 @@ static void connected(uv_connect_t *req, int status) {
       begin_tls(n, agc_tls_client(n->config, n->host, &n->failure));
       return;
     }
-    ready(n->opener);
+    notify(n, n->opener);
     return;
   }
   AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connect_error socket=%" PRIu64 " error=%d", n->id, -status);
@@ -658,13 +667,13 @@ static void resolved(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
   n->resolving = false;
   n->callbacks--;
   n->addrs = res;
-  if (n->closed || !n->opener) {
+  if (n->closed || (!n->opener && !n->watch)) {
     settle(n);
     return;
   }
   if (status < 0) {
     n->error = status;
-    ready(n->opener);
+    notify(n, n->opener);
     return;
   }
   n->resolved = true;
@@ -713,13 +722,13 @@ static void setup_done(uv_work_t *w, int status) {
     n->tls_failed = true;
     AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_setup_error %s=%" PRIu64 " error=%s", kind_name(n), n->id,
               agc_tls_error_name(n->failure.code));
-    ready(n->opener);
+    notify(n, n->opener);
     return;
   }
   int rc = resolve(n);
   if (rc) {
     n->error = rc;
-    ready(n->opener);
+    notify(n, n->opener);
   }
 }
 
@@ -1008,12 +1017,10 @@ static void wrote(uv_write_t *w, int status) {
   free(n->write_data);
   n->write_data = NULL;
   n->write_status = status;
-  ready(n->writer);
+  notify(n, n->writer);
 }
 
-static agc_value tls_send(agc_vm *vm, net *n, const agc_socket *sk, const uint8_t *data, size_t len, int64_t timeout,
-                          agc_value what) {
-  if (n->write_status < 0) return agc_system_error(vm, write_failed, -n->write_status);
+static void tls_queue(net *n, const uint8_t *data, size_t len) {
   if (len) {
     n->plain = malloc(len);
     if (!n->plain) agc_out_of_memory();
@@ -1022,6 +1029,12 @@ static agc_value tls_send(agc_vm *vm, net *n, const agc_socket *sk, const uint8_
   n->plain_at = 0;
   n->plain_len = len;
   flush(n, tls_wrote);
+}
+
+static agc_value tls_send(agc_vm *vm, net *n, const agc_socket *sk, const uint8_t *data, size_t len, int64_t timeout,
+                          agc_value what) {
+  if (n->write_status < 0) return agc_system_error(vm, write_failed, -n->write_status);
+  tls_queue(n, data, len);
   if (n->write_status < 0) return agc_system_error(vm, write_failed, -n->write_status);
   if (!n->flushing && !n->plain) return ok_value(agc_void());
   park(vm, n, REQ_SEND, agc_handle_value(sk->writer), timeout)->count = (size_t)agc_value_units(what);
@@ -1064,6 +1077,79 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return write_op(vm, args, false);
+}
+
+agc_conn *agc_conn_open(const agc_trace *trace, struct uv_loop_s *loop, uint64_t id, const char *host, int64_t port,
+                        agc_tls_config *config, agc_conn_watch watch, void *watcher) {
+  size_t len = strlen(host);
+  char *name = malloc(len + 1);
+  if (!name) agc_out_of_memory();
+  memcpy(name, host, len + 1);
+  net *n = make_net(trace, loop, name, port, false);
+  n->id = id;
+  n->users = 1;
+  n->watch = watch;
+  n->watcher = watcher;
+  n->secure = n->borrowed = config != NULL;
+  n->config = config;
+  AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connect socket=%" PRIu64 " host=%s port=%" PRId64, n->id, name, port);
+  int rc = resolve(n);
+  if (rc) n->error = rc;
+  return n;
+}
+
+void agc_conn_observe(agc_conn *c, agc_conn_watch watch, void *watcher) {
+  c->watch = watch;
+  c->watcher = watcher;
+}
+
+bool agc_conn_ready(const agc_conn *c) {
+  return !c->closed && c->conn && c->connected && !c->tls_failed && (!c->secure || c->handshaken);
+}
+
+bool agc_conn_failed(const agc_conn *c) { return c->closed || c->tls_failed || (!c->conn && c->error); }
+
+agc_value agc_conn_error(agc_vm *vm, const agc_conn *c) { return c->tls_failed ? secure_error(vm, c) : open_error(vm, c); }
+
+int agc_conn_send(agc_conn *c, const uint8_t *data, size_t len) {
+  if (c->closed) return UV_EPIPE;
+  if (c->tls) {
+    if (c->write_status >= 0) tls_queue(c, data, len);
+    return c->write_status < 0 ? c->write_status : 0;
+  }
+  c->write_status = 0;
+  int rc = agc_stream_write((uv_stream_t *)&c->conn->tcp, &c->write_req, &c->write_data, data, len, wrote);
+  if (rc < 0) c->write_status = rc;
+  return rc < 0 ? rc : 0;
+}
+
+bool agc_conn_sent(const agc_conn *c) { return c->tls ? !c->flushing && !c->plain : !c->write_data; }
+
+int agc_conn_write_status(const agc_conn *c) { return c->write_status; }
+
+bool agc_conn_clean_eof(const agc_conn *c) { return !c->secure || c->clean_eof; }
+
+void agc_conn_hold(agc_conn *c, bool hold) {
+  if (!c->conn || c->closed) return;
+  if (hold)
+    uv_ref((uv_handle_t *)&c->conn->tcp);
+  else
+    uv_unref((uv_handle_t *)&c->conn->tcp);
+}
+
+agc_inbuf *agc_conn_input(agc_conn *c) { return &c->in; }
+
+void agc_conn_read(agc_conn *c) { start_reading(c); }
+
+void agc_conn_shut(agc_conn *c, const char *why) {
+  c->watch = NULL;
+  shut(c, why);
+}
+
+void agc_conn_release(agc_conn *c) {
+  c->watch = NULL;
+  c->users--;
+  settle(c);
 }
 
 const agc_builtin agc_tcp_builtins[] = {

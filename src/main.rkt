@@ -205,10 +205,10 @@
       (eprintf "usage: agentica help NAME --json\n")
       (exit 2))
     (define name (cadr raw-arguments))
-    (define entry (builtin-ref name))
+    (define entry (and (not (std-only-name? name)) (builtin-ref name)))
     (unless entry
       (eprintf "agentica: unknown builtin ~a~a\n" name
-               (let ([suggestion (did-you-mean name (hash-keys builtins))])
+               (let ([suggestion (did-you-mean name (public-builtin-names))])
                  (if suggestion (string-append "; " suggestion) "")))
       (exit 2))
     (displayln (if (eq? style 'json)
@@ -254,6 +254,9 @@
     (define ir (lower checked types))
     (when (diagnostic? ir) (fail! ir))
     ir)
+  (define (refuse-vm-only reason)
+    (define refusal (check-vm-only checked reason))
+    (when refusal (fail! refusal)))
   (define (run-evaluator)
     (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
                              #:seed seed #:builtin-handler (make-bdd-service)))
@@ -311,11 +314,14 @@
                         (exit 2))])
        (call-with-output-file output-file #:exists 'truncate/replace
          (lambda (out) (void (write-bytes data out)))))]
-    [legacy? (run-evaluator)]
+    [legacy?
+     (refuse-vm-only "--legacy-eval runs it on the legacy evaluator")
+     (run-evaluator)]
     [else
      (define ir (lower checked types))
      (cond
        [(and (diagnostic? ir) (eq? (diagnostic-code ir) 'LOWER-UNSUPPORTED))
+        (refuse-vm-only (format "it must run on the legacy evaluator because ~a" (diagnostic-message ir)))
         (unless (eq? style 'json)
           (eprintf "agentica: ~a; running on the legacy evaluator\n" (diagnostic-message ir)))
         (run-evaluator)]

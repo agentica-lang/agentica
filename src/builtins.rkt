@@ -1,6 +1,7 @@
 #lang racket
 
-(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean)
+(provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean
+         std-only-modules std-only-name? public-builtin-names vm-only-builtins)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
@@ -88,6 +89,9 @@
                     ("HTTP.write_bytes" ((writer HttpWriter) (bytes (List Int)) (timeout_ms Int)) (Result Void) #f "HTTP.write_bytes" (network) "Write at most 1 MiB of bytes progressively and flush.")
                     ("HTTP.finish" ((writer HttpWriter) (trailers (List (Struct "Header"))) (timeout_ms Int)) (Result Void) #f "HTTP.finish" (network) "Finish the body, validating length and emitting chunked trailers.")
                     ("HTTP.respond" ((writer HttpWriter) (status Int) (headers (List (Struct "Header"))) (text String) (timeout_ms Int)) (Result Void) #f "HTTP.respond" (network) "Send and finish a complete UTF-8 response.")
+                    ("HttpWire.client" ((timeout_ms Int) (idle_timeout_ms Int) (max_connections Int) (max_body_bytes Int) (ca_file String)) (Result HttpClient) #f "HttpWire.client" (network) "Internal to std/http: make a client with its connection pool.")
+                    ("HttpWire.exchange" ((client HttpClient) (scheme String) (host String) (port Int) (method String) (target String) (headers (List (Struct "Header"))) (body String)) (Result (Struct "HttpResponse")) #f "HttpWire.exchange" (network) "Internal to std/http: send one whole request and read the whole response.")
+                    ("HttpWire.close_client" ((client HttpClient)) Void #f "HttpWire.close_client" (network) "Internal to std/http: close a client and its connections.")
                     ("BDD.run" ((feature_path String) (step_files (List String))) (Result Json) #f "BDD.run" (process) "Run features; the report ok field is the test verdict, not Result.ok?.")
                     ("BDD.step" ((pattern String) (handler (Fn (List String) Void))) Void #f "BDD.step" () "Register a step during handler main; supports {string} and {int} captures.")
                     ("BDD.doc_string" () String #f "BDD.doc_string" () "Read this step's Doc String; absence halts.")
@@ -216,6 +220,17 @@
         (list (builtin "HTTP.client" '((options (Struct "HttpClientOptions")))
                        '(Result HttpClient) #f "HTTP.client" '(network) (builtin-description entry)))))
     (values (car row) entry)))
+
+(define std-only-modules '("HttpWire"))
+
+(define (std-only-name? name)
+  (for/or ([module (in-list std-only-modules)])
+    (string-prefix? name (string-append module "."))))
+
+(define (public-builtin-names)
+  (filter (lambda (name) (not (std-only-name? name))) (hash-keys builtins)))
+
+(define vm-only-builtins '("HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"))
 
 (define (builtin-ref name [arity #f])
   (define entry (hash-ref builtins name #f))

@@ -87,3 +87,14 @@ user generics or blocking cross-task queue operations.
 The implementation uses Lists: push, pop, peek, size and empty? are O(n)
 with the current host list operations; new is O(1). No constant-time FIFO
 performance is promised.
+
+## HTTP client (`std/http`)
+
+`std/http` is the new HTTP client, written in Agentica. It runs only on the
+VM, and until the builtin `HTTP` module goes it is imported under another
+alias: `import "std/http" as Web`. It has `Web.client_options()`,
+`Web.client(options)`, `Web.get`, `Web.post`, `Web.request`,
+`Web.header_values` and `Web.close_client`; calls return
+`Result[HttpResponse]` with the whole body as a `String`. Importing it makes
+the program VM-only: do not mix it with `HTTP` or `BDD` builtins in one
+program (`LOWER-UNSUPPORTED`). Details are in `network.md`.

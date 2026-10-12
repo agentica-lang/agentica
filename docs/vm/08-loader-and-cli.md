@@ -202,6 +202,21 @@ and cost one predictable branch each.
   evaluator (the BDD driver passes `--legacy-eval`) until BDD runs on the VM,
   written in Agentica (roadmap phase 21, `docs/future/31-bdd-in-agentica.md`
   §31).
+- The refusal (20a, §30.8 of `docs/future/`). Some builtins run only on the
+  VM (`vm-only-builtins` in `src/builtins.rkt`: every `HttpWire` builtin,
+  which `std/http` calls). Before the evaluator gets a program, each place
+  that hands it one calls `check-vm-only` (`src/lower.rkt`), which walks
+  the checked program and returns a `LOWER-UNSUPPORTED` diagnostic at the
+  first VM-only call, or `#f`. Its message says why the evaluator would
+  run it: `this program needs the VM: std/http.agc calls HttpWire.client,
+  which only the VM runs, but ` and then `it must run on the legacy
+  evaluator because <the lowering's message>` (the fallback, checked
+  before its notice is printed), `--legacy-eval runs it on the legacy
+  evaluator`, or `agentica test runs step files on the legacy evaluator`
+  (`read-program` in `src/bdd-runner.rkt`). The callers print it and exit
+  1; nothing has run. The programs under test of `agentica test` go
+  through the `--legacy-eval` branch. The `agentica test` part goes with
+  21f, the rest with 7i.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is

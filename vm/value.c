@@ -300,6 +300,13 @@ agc_value agc_listener_value(agc_listener *l) {
   return v;
 }
 
+agc_value agc_http_client_value(agc_http_client *c) {
+  agc_value v;
+  v.tag = AGC_T_HTTP_CLIENT;
+  v.as.p = c;
+  return v;
+}
+
 uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
@@ -450,6 +457,11 @@ agc_socket *agc_as_socket(agc_vm *vm, agc_value v) {
 
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_LISTENER) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_HTTP_CLIENT) wrong_tag(vm);
   return v.as.p;
 }
 

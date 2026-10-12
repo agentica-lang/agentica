@@ -622,7 +622,34 @@ the I/O layer.
   before any timeout; another sends the short line `GET / HTTP/1\r\n`,
   which gets 505.
 
-### 10.7 HTTP on the VM: the hybrid split (planned, phase 20)
+#### 10.6.1 As built (20a)
+
+- `vm/http_parse.h` has no limits parameter: the limits are the constants
+  `AGC_HTTP_MAX_LINE` (8192), `AGC_HTTP_MAX_BLOCK` (65536) and
+  `AGC_HTTP_MAX_HEADERS` (100). The calls are
+  `agc_http_parse_request_head(buf, len, out, used, error)` and
+  `agc_http_parse_response_head(...)`, returning `AGC_HTTP_OK`,
+  `AGC_HTTP_INCOMPLETE` or `AGC_HTTP_ERROR` with an `agc_http_error`;
+  `agc_http_error_code` gives its status (400, 413, 431, 501, 505) and
+  `agc_http_error_text` its message. `agc_http_framing` turns a parsed head
+  into the body framing (`Content-Length`, chunked, or until close for a
+  response). A response head with status 100 to 199 is returned without
+  framing; the caller counts interim responses.
+- `vm/http_body.c` is the decoder of the last bullets, filling one buffer:
+  `agc_http_body_init(body, frame, length, limit)`, then
+  `agc_http_body_feed(body, data, len, used)` (NEED_MORE, DONE or ERROR)
+  and `agc_http_body_end` at EOF (DONE for a close-delimited body, else
+  "truncated"). A `Content-Length` body is reserved whole up front, after
+  the limit check. Trailers are checked and dropped.
+- Only `vm/http_pico.c` and the Makefile know picohttpparser; it is built
+  like yyjson, as one object (`build/vm/<config>/picohttpparser.o`).
+- Tests: `vm/tests/http_parse_test.c` runs the hostile list on the adapter
+  and the decoder (request and response heads; each body fed whole and
+  byte by byte); `tests/vm-http-test.rkt` sends the client-side cases from
+  a Python raw-socket peer (`tests/fixtures/http-peer.py`). The server-side
+  cases over a socket come with the server (20c).
+
+### 10.7 HTTP on the VM: the hybrid split (phase 20; the client is built)
 
 Planned in `docs/future/30-hybrid-http.md` §30 and roadmap phase 20. HTTP is
 split between a small C builtin module, `HttpWire`, and the Agentica module
@@ -657,3 +684,77 @@ split between a small C builtin module, `HttpWire`, and the Agentica module
 - **What is kept**: picohttpparser v1.4 behind the adapter, every check of
   10.6, the limits of 10.5 with saturating sizes, and the hostile-case list,
   run against the VM server and client by a Python raw-socket peer.
+
+#### 10.7.1 As built: the client (20a)
+
+`HttpWire` has the three client builtins; the server ones come in 20c.
+
+```text
+HttpWire.client(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String) -> Result[HttpClient]
+HttpWire.exchange(client: HttpClient, scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HttpWire.close_client(client: HttpClient) -> Void
+```
+
+- The client takes every option once, and `exchange` reads `timeout_ms`
+  and `max_body_bytes` from it, since `std/http` cannot read them back from
+  the opaque handle. `std/http` checks the option ranges first.
+- `vm/http_client.c` (Linux; other platforms get a stub table) holds the
+  pool: per origin (scheme, host, port) a list of idle connections, the
+  number of open slots and a FIFO of waiting exchanges. A finished
+  exchange parks its connection as idle or frees its slot, and the first
+  waiter gets it. Idle connections close after `idle_timeout_ms` (one timer
+  per client; the clock is updated before each check) or when the peer
+  closes them. An origin with no open connection, no waiter and no
+  exchange is freed.
+- Retry: an exchange that leased an idle connection and then fails with
+  EOF, a read error or a write error before any response byte (no interim
+  response, nothing buffered) is retried once on a new connection, at the
+  head of the waiters and within the same timeout, when its method is
+  `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE`. This covers the race where
+  the server closes an idle keep-alive connection as the request is sent.
+  The request bytes are kept until the exchange ends for this.
+- Connections are tcp.c's: `vm/net.h` exports its connection object
+  (`agc_conn_open`, `agc_conn_send`, `agc_conn_read`, ...) with a watch
+  callback, so DNS, connect, TLS through memory BIOs and the close rules
+  stay in one place. The client's `SSL_CTX` is built on the libuv pool on
+  the first HTTPS call and shared by its connections.
+- `exchange` checks the method, target, host and header bytes, adds `Host`
+  (the port only when it is not the scheme's default; an IPv6 host in
+  brackets) and `Content-Length` (when the body is not empty or the method
+  is `POST`, `PUT` or `PATCH`), and refuses user `Host`,
+  `Content-Length`, `Transfer-Encoding` and `Connection` headers. It writes
+  the request while it reads the response, so a server may answer (413, for
+  example) before the upload ends. Interim responses are skipped (at most
+  15); 101 is an error. The connection goes back to the pool only after a
+  complete exchange with no `Connection: close` on either side and a framed
+  body. Header names are lowercased, values are decoded as Latin-1, and the
+  body must be valid UTF-8.
+- After 204 or 304 the connection is not kept when the response still
+  announced a body (a nonzero `Content-Length`, or chunked). After `HEAD`
+  it is kept: no body follows a `HEAD` response whatever it announces
+  (RFC 9110 §9.3.2). Bytes already buffered when an exchange ends close
+  the connection. A connection freed while calls wait is parked as idle
+  and handed to the first waiter by the client's timer 1 ms later, so
+  bytes that arrive in that window close it first. This is a narrow guard,
+  not a promise: a call that leases an idle connection right away (two
+  calls in a row from one task) can still read bytes a server sends late.
+  Idle connections and the idle timer are unreferenced in libuv
+  (`agc_conn_hold`), so a pool never hides a stalled run.
+- Over TLS, a close-delimited body must end with `close_notify`: tcp.c
+  records whether the TLS layer closed before the TCP FIN
+  (`agc_conn_clean_eof`), and a bare FIN gives "http: truncated HTTP body".
+  OpenSSL cannot tell this itself here, since `SSL_OP_IGNORE_UNEXPECTED_EOF`
+  makes a bare FIN look like `close_notify` (both set
+  `SSL_RECEIVED_SHUTDOWN`).
+- One `timeout_ms` covers the call, from the wait for a slot to the last
+  body byte; on timeout the connection is closed and the call returns
+  "network: operation timed out". `close_client` closes idle connections
+  and fails every call in flight with "http: client is closed".
+- Errors are `http: ` plus the text of 10.6, or the network error text of
+  tcp.c for DNS, connect, TLS, read and write failures.
+- `HttpResponse`, `Header`, `HttpClientOptions` and `FileInfo` carry their
+  field types from `builtin-records`, so `JSON.encode`, `JSON.decode` and
+  `JSON.schema` work on them on the VM (the `http-json` golden).
+- Turn cost (`AGC_COST_SIZE`): charged when the call ends, after the
+  exchange is freed, for the header list, the request's bytes (head and
+  body) and the response's body and header fields.
