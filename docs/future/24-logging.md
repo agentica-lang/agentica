@@ -4,7 +4,7 @@
 
 - 14a, **VM tracing** (24.4): a developer tool inside `agentica-vm`, not a language feature. It comes right after 7h processes and before TCP and TLS, to make the rest of 7h faster to debug.
 - 14b, **stack traces on runtime errors** (24.3): after 7i.
-- 14c, **`std/log`** with the `--log-*` flags (24.2): after 7i.
+- 14c, **`std/log`** with the `--log-*` flags (24.2): after 7i and after default parameter values (15a, [section 25.1](25-ruby-typed-idioms.md#251-default-parameter-values)), which land first in the same order step.
 
 No grammar change. 14c adds three `System` builtins and a `std/` module; 14b changes only what the VM prints for a runtime diagnostic.
 
@@ -33,7 +33,7 @@ end
 
 def main() -> Void
   Log.info("server started")
-  Log.info_with("request done", {"path": "/items", "status": "200"})
+  Log.info("request done", {"path": "/items", "status": "200"})
   Log.debug("not shown at the default level")
   if Log.debug?()
     Log.debug("state: #{expensive_dump()}")
@@ -61,20 +61,16 @@ and with `--log-format json --log-time none`:
 **API:**
 
 ```text
-Log.debug(message: String) -> Void
-Log.info(message: String) -> Void
-Log.warn(message: String) -> Void
-Log.err(message: String) -> Void
-Log.debug_with(message: String, fields: Map[String, String]) -> Void
-Log.info_with(message: String, fields: Map[String, String]) -> Void
-Log.warn_with(message: String, fields: Map[String, String]) -> Void
-Log.err_with(message: String, fields: Map[String, String]) -> Void
+Log.debug(message: String, fields: Map[String, String] = {}) -> Void
+Log.info(message: String, fields: Map[String, String] = {}) -> Void
+Log.warn(message: String, fields: Map[String, String] = {}) -> Void
+Log.err(message: String, fields: Map[String, String] = {}) -> Void
 Log.debug?() -> Bool
 Log.time_text(ms: Int) -> String
 ```
 
 - **Levels** are `debug`, `info`, `warn` and `error`, in that order. A line is written when its level is at or above the run's level. The default level is `info`.
-- **Names.** `error` is reserved (24.1), so the error functions are `err` and `err_with`; the level is still called `error` in the output and in `--log-level`. User functions have no overloads, so the forms with fields are separate `_with` functions. (Once default parameter values ([section 25.1](25-ruby-typed-idioms.md#251-default-parameter-values)) land in 15a, roadmap item 15l gives `Log.info` and the other levels a `fields: Map[String, String] = {}` parameter and removes the `_with` functions, under the one-way rule of section 25; a breaking change, said in the changelog.) The 14c PR also adds a "did you mean" help to `CHECK-IMPORT-NAME`, made from the module's exported names, so `Log.error(...)` suggests `Log.err`.
+- **Names.** `error` is reserved (24.1), so the error function is `err`; the level is still called `error` in the output and in `--log-level`. Fields are an optional second parameter with the default `{}` ([section 25.1](25-ruby-typed-idioms.md#251-default-parameter-values), 15a, which lands before 14c), so there is one function per level and no separate `_with` form. The 14c PR also adds a "did you mean" help to `CHECK-IMPORT-NAME`, made from the module's exported names, so `Log.error(...)` suggests `Log.err`.
 - **Fields** are `Map[String, String]`. A map literal is short (`{"path": p, "status": "#{code}"}`), the text format needs strings anyway, and the map keeps its order, so the output order is the order the program wrote. `Json` was the other option: it keeps numbers as numbers in JSON lines, but every value needs `JSON.from`, and the text format has to turn it back into text. Numbers are strings in JSON lines; tools that need a number convert it.
 - **`Log.debug?()`** says whether debug lines are on. Only `debug` has one: it is the level that is off by default and where building the message costs most.
 - **`Log.time_text(ms)`** turns milliseconds since the Unix epoch into the text the log uses (`2026-10-12T10:15:02.345Z`). It is exported because programs need it too, and so that tests can check it with fixed inputs.
