@@ -36,7 +36,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/loop.c` | the event loop and the resource registry (`docs/vm.md` §10.2.2), the only file that includes `uv.h`: `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc` memory), `agc_io_start` (one `uv_queue_work` job plus a timeout timer per blocking call, `vm->parked`), `agc_io_park` (the scheduler: `uv_run(UV_RUN_ONCE)` until the job or the timer is done, then the request's `done` or `expired` half into the result register), `agc_io_close` (end of run: close handles and timers, free the loop; false while a job is stuck in the OS, and then `vm/main.c` flushes and `_exit`s so libuv's destructor does not join the pool); resources have a `kind` (native or job); non-Linux builds get stubs |
 | `vm/files.c` | the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only; `docs/vm.md` §2.8): argument checks in the evaluator's order, host paths (raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it fails, + `/` collapsing), `malloc`'d `op` requests whose `work` half runs in the libuv pool, Racket's messages (contract forms cut at 256 characters, `strerror_l` in the message locale, the byte string form for invalid UTF-8), `FileHandle` state with its read buffer or its 4096-byte write buffer (Racket's rule: append when it fits, else write pending and new bytes together; flush, close and the end of run write it), `owns_st` saying which request frees the state (open, close, or a handle request after its timeout), `Path.join` and `Path.resolve` as pure string code |
 | `vm/input.c` | the only stdin reader (`agc_input_*`): one growing buffer shared by `gets`, `read`, `read_bytes` and `eof?`, blocking `read` (Linux `poll` on `EAGAIN`), U+FFFD decoding of consumed bytes, a pending EOF after a peek; 7h replaces it with libuv reads |
-| `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, byte-for-byte like `src/diagnostic.rkt` |
+| `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, the same formats as `src/diagnostic.rkt`; only the code must match |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
 | `vm/tests/loader_test.c` | one assert per loader rule (`type_tables(which)` builds one malformed Types section per case) |
 | `vm/tests/map_test.c` | HAMT: 20,000 keys, order, replacement, persistence, full hash collisions, shared 60-bit prefixes, delete (order, persistence, collision nodes, down to an empty map), a depth-1,000,000 nested map printed |
@@ -100,8 +100,21 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
 - The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
   file lock in `build/`, since they run in parallel), print `SKIP` locally
   when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
-  They compare each fixture in the plain, `--ai` and `--json` formats, and
-  sweep `--max-steps` in the plain format. Fixtures are compiled in-process
+  They run each fixture once on the evaluator and on the VM with `--json`
+  and compare exit code, stdout, stderr without the final JSON diagnostic
+  line, and the diagnostic code parsed from that line (`outcome`). One more
+  VM run each in the plain and `--ai` formats must match exit code, stdout
+  and program stderr, and name the same code (`check-text-format`). The
+  `--max-steps` sweep runs only the VM: each limit must give the full run's
+  outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr that
+  are prefixes of the full run's; once a limit finishes, larger ones must
+  too, and 2T + 100 (T the evaluator's step count) must finish
+  (`check-sweep`). The sweep cannot see an ignored limit: add a runaway
+  program to `tests/fixtures/vm/step-limited/` for each new loop or call
+  construct (it prints nothing after the loop). On Linux, sweep and runaway
+  VM runs time out after 60 seconds (`timeout --foreground` in the batch
+  script, `#:timeout` in `run-process`); after the first timeout (124 or
+  137) the batch skips its remaining runs and records them as 124. Fixtures are compiled in-process
   (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
   The VM runs of one fixture go through one `/bin/sh` script that writes each
   run's stdout, stderr and exit status to files (stdin from a file, arguments
@@ -226,7 +239,7 @@ call in the module's file.
    `.gitattributes` marks them binary so CRLF survives) as its stdin and
    `name.args` (a Racket list of strings, read with `file->value`) as its
    program arguments when they exist; the diff test feeds both to the
-   evaluator and the VM, in every format and in the `--max-steps` sweep.
+   evaluator and the VM, and to the VM in the `--max-steps` sweep.
    An `.args` entry `@tmp` becomes a fresh empty directory per run (both
    backends, same name length), and that path is turned back into `@tmp`
    in the output before the comparison; file fixtures (`files-*`) use it
@@ -246,8 +259,9 @@ Rules for the C code:
   loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.
-- Fail at the span the evaluator uses (call span, or `span + 1 + i` for
-  argument `i`) with the evaluator's message text, copied verbatim.
+- Fail with the evaluator's diagnostic code, at the call span or `span + 1 + i`
+  for argument `i`, with a clear message (it need not be the evaluator's
+  text).
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
 - Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d
@@ -266,12 +280,21 @@ Rules for the C code:
 
 ## Rules every change keeps
 
-**Parity.** Same stdout, stderr, exit code, diagnostic code and span as the
-evaluator. Diagnostic messages are copied verbatim; `RUNTIME-INTERNAL` text is
-not compared. Each deliberate difference goes into `docs/vm.md` as a
-documented difference; `docs/vm.md` lists them (for example a failed stdout
-write exits 1, out of memory exits
-70, and the 2^24 register cap gives `RUNTIME-STACK-OVERFLOW`).
+**Parity is black-box** (`docs/vm.md` §1). Same exit code, stdout and
+program stderr (`IO.warn`) of every run except one stopped by
+`--max-steps`, and diagnostic code as the evaluator; a runaway program stops with `RUNTIME-STEP-LIMIT` under
+`--max-steps`. Error strings a program prints are program data: when a
+library message changes, switch the fixtures that print it to printing
+only ok or error in the same PR. Message text,
+spans, stderr wording, OS error text, library `Result` error strings, exact
+step counts and the step-limit span, `Random` sequences and cross-task order
+may differ, but VM messages must stay clear for agents. Lowering may
+optimize (inline, fold constants, move or merge `STEP`s) as long as that
+holds. A deliberate difference in exit code, stdout or code goes into
+`docs/vm.md` as a documented difference (for example a failed stdout write
+exits 1, out of memory exits 70, and the 2^24 register cap gives
+`RUNTIME-STACK-OVERFLOW`). New APIs the evaluator never had may be VM-only,
+tested with fixed expected output.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, runs children only with its own
@@ -360,7 +383,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   counter; per-task stack, registers and frame). Once tasks land, a
   builtin or opcode whose work grows with its input sets a turn cost
   (`docs/vm.md` §10.2.1, Builtins); it is taken from the turn only, never
-  from `steps_left`, so step counts stay equal to the evaluator. Only the
+  from `steps_left`, so it never changes how `--max-steps` stops a program. Only the
   scheduler that owns a loop calls `uv_run` on it. New code adds no
   mutable `static` or global variable in `vm/` (the exceptions are listed
   in `docs/vm.md` §10.2.3); state goes in the runtime, scheduler or task
