@@ -201,6 +201,8 @@ jobs:
         shell: bash
       - run: diff <(dist/agentica examples/concurrency.agc) <(dist/agentica --vm examples/concurrency.agc)
         shell: bash
+      - run: diff <(dist/agentica --allow-run examples/process-tool.agc) <(dist/agentica --vm --allow-run examples/process-tool.agc)
+        shell: bash
       - run: dist/agentica examples/queue.agc
 
   vm-sanitizers:

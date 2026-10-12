@@ -1,0 +1,32 @@
+def hold(p: Process) -> Result[String]
+  return Process.read_line(p, 5000)
+end
+
+def main() -> Void
+  p = Result.unwrap!(Process.spawn("cat", [], 5000))
+  IO.inspect(Process.read_line(p, 20))
+  IO.inspect(Process.wait(p, 5000))
+  IO.inspect(Process.close_stdin(p, 5000))
+  Process.close(p)
+  w = Result.unwrap!(Process.spawn("sh", ["-c", "sleep 5"], 5000))
+  IO.inspect(Process.send(w, String.join(List.repeat("z", 1048576), ""), 20))
+  IO.inspect(Process.wait(w, 5000))
+  q = Result.unwrap!(Process.spawn("sh", ["-c", "read x; echo \"bye $x\" >&2; exit 3"], 5000))
+  IO.inspect(Process.wait(q, 20))
+  reader = Task.spawn(&hold, q)
+  Task.sleep(50)
+  IO.inspect(Process.read_line(q, 20))
+  IO.inspect(Process.send(q, "go\n", 5000))
+  IO.inspect(Task.await(reader))
+  IO.inspect(Process.wait(q, 5000))
+  IO.warn("after wait")
+  r = Result.unwrap!(Process.spawn("cat", [], 5000))
+  Process.close(r)
+  IO.inspect(Process.wait(r, 5000))
+  IO.inspect(Process.read_line(r, 5000))
+  Process.close(r)
+  s = Result.unwrap!(Process.spawn("cat", [], 5000))
+  t = Task.spawn(&hold, s)
+  Task.sleep(20)
+  puts("done")
+end

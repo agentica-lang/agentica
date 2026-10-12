@@ -141,8 +141,7 @@
      arguments))
   (when vm?
     (define unsupported
-      (or (and allow-run? "--allow-run")
-          (and dump? "--dump")
+      (or (and dump? "--dump")
           (and dump-ir? "--dump-ir")
           (and (pair? step-files) "--steps")
           (and (pair? raw-arguments) (member (car raw-arguments) '("test" "help" "check" "compile"))
@@ -272,6 +271,7 @@
      (define options
        (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
                (if seed (list "--seed" (number->string seed)) '())
+               (if allow-run? '("--allow-run") '())
                (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
      (define status
        (dynamic-wind

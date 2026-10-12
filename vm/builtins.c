@@ -437,6 +437,7 @@ static const builtin_table tables[] = {
   {agc_json_builtins, &agc_json_builtin_count},
   {agc_file_builtins, &agc_file_builtin_count},
   {agc_task_builtins, &agc_task_builtin_count},
+  {agc_process_builtins, &agc_process_builtin_count},
 };
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {
