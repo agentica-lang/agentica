@@ -6,12 +6,13 @@ def wait_accept(listener: Listener) -> Bool
   return Result.ok?(TCP.accept(listener, 60000))
 end
 
-def flood(socket: Socket) -> Result[Void]
-  chunk = String.join(List.repeat("abcdefgh", 1048576), "")
-  chunk = chunk + chunk
-  chunk = chunk + chunk
-  chunk = chunk + chunk
-  return TCP.send(socket, chunk, 60000)
+struct Flood
+  socket: Socket
+  chunk: String
+end
+
+def flood(job: Flood) -> Result[Void]
+  return TCP.send(job.socket, job.chunk, 60000)
 end
 
 def main() -> Void
@@ -21,9 +22,13 @@ def main() -> Void
   silent = Result.unwrap!(TCP.accept(listener, 5000))
   source = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
   sink = Result.unwrap!(TCP.accept(listener, 5000))
+  chunk = String.join(List.repeat("abcdefgh", 1048576), "")
+  chunk = chunk + chunk
+  chunk = chunk + chunk
+  chunk = chunk + chunk
   Task.spawn(&hold, quiet)
   Task.spawn(&wait_accept, listener)
-  Task.spawn(&flood, source)
+  Task.spawn(&flood, Flood(socket: source, chunk: chunk))
   Task.sleep(20)
   IO.inspect(silent)
   IO.inspect(sink)

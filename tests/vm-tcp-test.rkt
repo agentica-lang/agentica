@@ -92,6 +92,7 @@ def main() -> Void
   IO.inspect(TCP.recv_bytes(pieces, 4, 5000))
   TCP.close(pieces)
   reset = Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000))
+  Result.unwrap!(TCP.send(reset, "x", 5000))
   IO.inspect(TCP.read_line(reset, 5000))
   TCP.close(reset)
   long = Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000))

@@ -33,7 +33,7 @@ const handlers = {
     next();
   },
   reset(socket) {
-    socket.resetAndDestroy();
+    socket.once('data', () => socket.resetAndDestroy());
   },
   partial(socket) {
     socket.write('partial', () => setTimeout(() => socket.resetAndDestroy(), 50));
