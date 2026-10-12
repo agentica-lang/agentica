@@ -155,7 +155,11 @@ OSSL_BUILD := $(VM_BUILD)/openssl
 OSSL_STAMP := $(VM_BUILD)/openssl-flags
 OSSL_OPTS := no-shared no-tests no-docs no-apps no-module no-dso no-engine no-legacy no-autoload-config no-async no-comp \
   no-ssl3 no-dtls no-srp no-quic no-ui-console no-cmp no-ts no-ct no-ocsp no-http no-deprecated
-OSSL_KEY = { echo '$(VM_CC) | $(OSSL_OPTS) | $(OSSL_CFLAGS)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; git -C $(OSSL_DIR) rev-parse HEAD 2>/dev/null || true; }
+OSSL_ENV := env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL -u MAKEOVERRIDES -u CC -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS -u LDLIBS
+OSSL_CONFIGURE = $(OSSL_ENV) CC='$(VM_CC)' perl $(CURDIR)/$(OSSL_DIR)/Configure $(OSSL_OPTS) $(OSSL_CFLAGS)
+OSSL_SUBMAKE = $(OSSL_ENV) make -C $(OSSL_BUILD) CC='$(VM_CC)' build_libs
+OSSL_RECIPE = $(subst ','\'',$(subst $(CURDIR)/,,$(OSSL_CONFIGURE) | $(OSSL_SUBMAKE)))
+OSSL_KEY = { echo '$(OSSL_RECIPE)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; git -C $(OSSL_DIR) rev-parse HEAD 2>/dev/null || true; }
 VM_OSSL := $(if $(UV_NAMES),$(OSSL_BUILD)/libssl.a $(OSSL_BUILD)/libcrypto.a)
 OSSL_INC := $(if $(UV_NAMES),-I $(OSSL_BUILD)/include -I $(OSSL_DIR)/include)
 VM_CFLAGS += $(OSSL_INC)
@@ -209,9 +213,8 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 	@perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { echo "building OpenSSL needs perl 5 with its core modules (Debian: perl)" >&2; exit 1; }
 	rm -rf $(OSSL_BUILD)
 	mkdir -p $(OSSL_BUILD)
-	cd $(OSSL_BUILD) && env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS -u LDLIBS CC='$(VM_CC)' \
-	  perl $(CURDIR)/$(OSSL_DIR)/Configure $(OSSL_OPTS) $(OSSL_CFLAGS) > configure.log 2>&1 || { cat configure.log; exit 1; }
-	$(MAKE) -C $(OSSL_BUILD) -j $(JOBS) build_libs > $(OSSL_BUILD)/build.log 2>&1 || { tail -n 40 $(OSSL_BUILD)/build.log; exit 1; }
+	cd $(OSSL_BUILD) && $(OSSL_CONFIGURE) > configure.log 2>&1 || { cat configure.log; exit 1; }
+	$(OSSL_SUBMAKE) -j $(JOBS) > $(OSSL_BUILD)/build.log 2>&1 || { tail -n 40 $(OSSL_BUILD)/build.log; exit 1; }
 	touch $@
 
 $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a

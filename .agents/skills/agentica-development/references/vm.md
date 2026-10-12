@@ -75,7 +75,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 git submodule update --init          # fetch bdwgc, yyjson, libuv and openssl after a clone or a bump
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; OpenSSL built once per mode, needs Perl)
 make vm-openssl                      # only build/vm/<mode>/openssl/libssl.a and libcrypto.a
-make -s vm-openssl-key               # the OpenSSL build key (compiler, options, flags, version, commit); CI caches by its hash
+make -s vm-openssl-key               # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
@@ -514,8 +514,11 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   clang `-g -fno-omit-frame-pointer` without `-fsanitize` for the
   sanitizer build: a non-instrumented OpenSSL; ASan's interceptors still
   check the buffers we hand it), output in `configure.log` and
-  `build.log`. `$(VM_BUILD)/openssl-flags` is the key (`make -s
-  vm-openssl-key`), rewritten only when it changes, and the archives depend
+  `build.log`; both commands run under `env -u` for the make and compiler
+  variables, and the sub-make is a plain `make` (never `$(MAKE)`, so
+  `make -n` skips it). `$(VM_BUILD)/openssl-flags` is the key (`make -s
+  vm-openssl-key`: the two command lines, compiler version, OpenSSL
+  version and commit), rewritten only when it changes, and the archives depend
   only on it, so `TRACE` and VM flag changes never rebuild OpenSSL and a
   restored CI cache is up to date; after editing OpenSSL sources by hand,
   remove `$(VM_BUILD)/openssl`. Init with `OPENSSL_INIT_NO_LOAD_CONFIG |

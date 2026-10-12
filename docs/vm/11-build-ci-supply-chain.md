@@ -27,9 +27,9 @@
   from its submodule `vm/third_party/openssl` into
   `$(VM_BUILD)/openssl/libssl.a` and `libcrypto.a`, static, per build mode
   (10.0); the build needs Perl. `$(VM_BUILD)/openssl-flags` holds the key of
-  that build (compiler and its version, Configure options, OpenSSL flags,
-  `VERSION.dat` and the submodule commit; `make -s vm-openssl-key` prints
-  it), so a `TRACE` or VM flag change never rebuilds OpenSSL, and a
+  that build (the Configure and sub-make command lines, the compiler
+  version, `VERSION.dat` and the submodule commit; `make -s vm-openssl-key`
+  prints it), so a `TRACE` or VM flag change never rebuilds OpenSSL, and a
   compiler, flag or version change always does. `make vm-openssl` builds
   only the two archives.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
@@ -134,8 +134,9 @@ get a stub adapter whose calls fail with "TLS needs Linux", and building
 it there will need Perl (MSYS2's `perl` on Windows) when those ports
 resume.
 
-OpenSSL takes a few minutes to build, so CI caches each mode's build
-directory (`build/vm/<mode>/openssl` and `openssl-flags`) with
+OpenSSL takes a few minutes to build, so CI caches each mode's
+`build/vm/<mode>/openssl/include`, `libssl.a`, `libcrypto.a` and the
+`openssl-flags` stamp with
 `actions/cache`, keyed by `openssl-<mode>-` and the hash of `make -s
 vm-openssl-key` for that mode: the `test` job caches the release mode,
 `vm-sanitizers` the sanitize and GC-stress modes, and a `warm-openssl` job

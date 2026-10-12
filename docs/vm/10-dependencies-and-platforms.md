@@ -46,8 +46,13 @@ an OpenSSL development package.
 - Build: the rule for `$(VM_BUILD)/openssl/libcrypto.a` runs OpenSSL's
   `Configure` out of tree in `$(VM_BUILD)/openssl/` with the mode's
   compiler (`VM_CC`: `cc`, `clang` for `SANITIZE=1`, `zig cc` in the
-  release) and `CFLAGS`, `CPPFLAGS` and `LDFLAGS` cleared, then `make
-  build_libs` there with `-j $(JOBS)`. Its output goes to `configure.log`
+  release), then `make build_libs` there with `-j $(JOBS)` and the same
+  `CC` (`OSSL_CONFIGURE` and `OSSL_SUBMAKE`). Both run under `env -u` for
+  `MAKEFLAGS`, `MFLAGS`, `MAKELEVEL`, `MAKEOVERRIDES`, `CC`, `CFLAGS`,
+  `CPPFLAGS`, `CXXFLAGS`, `LDFLAGS` and `LDLIBS`, so nothing from the
+  parent make or its command line leaks in; the flags come only from
+  Configure's own and `OSSL_CFLAGS`. The sub-make is a plain `make`, not
+  `$(MAKE)`, so `make -n` does not run it. Its output goes to `configure.log`
   and `build.log` in that directory; a failure prints their tail. It
   needs Perl 5 with its core modules for `Configure` (on Debian the
   `perl` package; `perl-base` alone lacks `IPC::Cmd`). The rule stops with
@@ -70,13 +75,18 @@ an OpenSSL development package.
   interceptors, so an overflow of a buffer our code hands to OpenSSL is
   still caught there; and an instrumented OpenSSL would make its build
   and every TLS test in the sanitizer job much slower.
-- Stamp: `$(VM_BUILD)/openssl-flags` holds the compiler, the options, the
-  mode's flags, the first line of `$(VM_CC) --version`, the
-  submodule's `VERSION.dat` and its commit. It is rewritten only when that text changes,
+- Stamp: `$(VM_BUILD)/openssl-flags` holds the Configure and sub-make
+  command lines (without the checkout path and `-j`), so they carry the
+  compiler, the options and the mode's flags, then the first line of
+  `$(VM_CC) --version`, the submodule's `VERSION.dat` and its commit. A
+  change to the recipe changes the key, which rebuilds locally and misses
+  the CI cache. It is rewritten only when that text changes,
   and the libraries depend only on it (not on the OpenSSL source files'
   times), so toggling `TRACE` or touching sources never rebuilds OpenSSL,
   and a CI cache restore is up to date. `make vm-openssl-key` prints the
-  same text; CI hashes it into the cache key (11). `make vm-openssl`
+  same text; CI hashes it into the cache key (11) and caches only
+  `include/`, `libssl.a`, `libcrypto.a` and the stamp, which is all the
+  VM build reads. `make vm-openssl`
   builds only the libraries. After editing OpenSSL
   sources by hand, remove `$(VM_BUILD)/openssl` to rebuild.
 - Headers: `vm/*.c` see `-I $(VM_BUILD)/openssl/include -I

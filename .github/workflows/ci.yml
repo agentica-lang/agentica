@@ -143,7 +143,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/release/openssl
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - run: make vm-openssl
@@ -151,7 +153,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/sanitize/openssl
+            build/vm/sanitize/openssl/include
+            build/vm/sanitize/openssl/libssl.a
+            build/vm/sanitize/openssl/libcrypto.a
             build/vm/sanitize/openssl-flags
           key: openssl-sanitize-${{ hashFiles('build/openssl-key-sanitize') }}
       - run: make vm-openssl SANITIZE=1
@@ -159,7 +163,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/gcstress/openssl
+            build/vm/gcstress/openssl/include
+            build/vm/gcstress/openssl/libssl.a
+            build/vm/gcstress/openssl/libcrypto.a
             build/vm/gcstress/openssl-flags
           key: openssl-gcstress-${{ hashFiles('build/openssl-key-gcstress') }}
       - run: make vm-openssl GC_STRESS=1
@@ -218,7 +224,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/release/openssl
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - run: make vm vm-test
@@ -302,14 +310,18 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/sanitize/openssl
+            build/vm/sanitize/openssl/include
+            build/vm/sanitize/openssl/libssl.a
+            build/vm/sanitize/openssl/libcrypto.a
             build/vm/sanitize/openssl-flags
           key: openssl-sanitize-${{ hashFiles('build/openssl-key-sanitize') }}
       - run: mkdir -p build && make -s vm-openssl-key GC_STRESS=1 SANITIZE=0 > build/openssl-key-gcstress
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/gcstress/openssl
+            build/vm/gcstress/openssl/include
+            build/vm/gcstress/openssl/libssl.a
+            build/vm/gcstress/openssl/libcrypto.a
             build/vm/gcstress/openssl-flags
           key: openssl-gcstress-${{ hashFiles('build/openssl-key-gcstress') }}
       - run: command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
