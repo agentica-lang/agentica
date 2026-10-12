@@ -17,8 +17,9 @@
 - Stdin may be a TTY, pipe or file: `uv_guess_handle` picks the reader, and a
   file (`UV_FILE`) uses a `uv_fs_read` path. Stdout and stderr stay on
   blocking stdio.
-- Files open with `O_NONBLOCK`, then `fstat` checks the kind. The libuv thread
-  pool keeps its default size (4, `UV_THREADPOOL_SIZE`); this is documented.
+- Files open with `O_NONBLOCK`, then `fstat` checks the kind. The VM never
+  sets the libuv thread pool size: it is libuv's default (4) unless
+  `UV_THREADPOOL_SIZE` is set when the VM starts (10.2.1).
 - Thread-pool threads never touch GC memory. Requests and handles are
   `malloc`'d, and `uv_fs` buffers are `malloc`'d copies. The GC object that owns a handle sits in the owning scheduler's resource
   registry (a GC object, like the registries in `src/process.rkt` and
@@ -301,14 +302,23 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   timed-out job stays registered until its work ends; then its `drop` half
   frees it and the file state it owns, which closes the descriptor.
 - **Thread-pool threads** only run the `work` half: system calls on
-  `malloc` memory. The libuv pool keeps its default size (4,
-  `UV_THREADPOOL_SIZE`). `UV_USE_IO_URING` is set to `0` (unless already
+  `malloc` memory. `UV_USE_IO_URING` is set to `0` (unless already
   set) before the loop is created, so libuv uses its plain thread pool and
   epoll. Boehm is built without thread support (until 10.2.3) and never
   sees these threads. `agc_io_start` blocks `SIGINT`, `SIGTERM` and
   `SIGHUP` around `uv_queue_work`, so the pool threads (made on the first
   call) start with them blocked and only the loop thread runs libuv's
   handler for them (10.4).
+- **Pool size.** The VM never sets it; libuv's own `UV_THREADPOOL_SIZE`
+  does (no `AGENTICA_*` variable). libuv reads it once, when the first
+  `uv_queue_work` creates the pool, so it must be in the environment when
+  the VM starts; changing it later has no effect. The default is 4 and
+  libuv caps it at 1024. There is one pool per process, shared by every
+  loop (10.2.3). It runs file I/O (stdin reads too), DNS (`getaddrinfo`)
+  and the TLS setup jobs that load CA, certificate and key files, so long
+  or many concurrent file reads, or slow DNS, queue behind each other.
+  Raise it when a program keeps more of these calls in flight at once
+  than the pool has threads, or uses FIFOs or devices that may block.
 - **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
   check, then blocking for reads and writes in the pool).
 - **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
@@ -391,7 +401,8 @@ inherited descriptor non-blocking, which leaks into the parent's open file
 description (a shell's terminal) when the VM is killed. One read is in
 flight at a time; a second reader parks in the input's FIFO. A read stuck
 at the end of the run is handled like a stuck file job (`_exit`). A stdin
-read shares the pool with file jobs, so four stuck file calls delay it.
+read shares the pool with file jobs, so stuck file calls that fill the
+pool (four by default) delay it.
 Non-Linux builds keep the blocking read.
 
 How tasks extended it (10.2.1): `agc_io_park` became the place where a task
