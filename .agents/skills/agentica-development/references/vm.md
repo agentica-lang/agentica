@@ -1,10 +1,10 @@
 # Bytecode VM development (phase 7)
 
-`docs/vm.md` is the contract: reference behavior, IR, bytecode format, value
+`docs/vm/` is the contract: reference behavior, IR, bytecode format, value
 layout, loader rules, libraries and the PR plan. Its "Status" note says which
 subset runs today. This file is the working guide: where things live, how to
 widen the VM, and the rules every change keeps. When this guide and
-`docs/vm.md` disagree, `docs/vm.md` wins; when `docs/vm.md` and
+`docs/vm/` disagree, `docs/vm/` wins; when `docs/vm/` and
 `src/evaluator.rkt` disagree, the evaluator wins and the doc is fixed.
 
 ## Pipeline and files
@@ -21,7 +21,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | Path | Owns |
 |---|---|
 | `vm/agc.h` | shared types, `agc_opcode` (same order as `opcodes` in `src/bytecode.rkt`) |
-| `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm.md` §8), including the struct and enum tables (one variant array sized by a first pass, one shared empty value per nullary variant) and the Types section (`load_types`: kinds, back-pointing List/Map entries at most 1024 deep, struct records with unique `json_name`s and `field_types`) |
+| `vm/loader.c` | full validation of untrusted `.agcb` input (`docs/vm/08-loader-and-cli.md` §8), including the struct and enum tables (one variant array sized by a first pass, one shared empty value per nullary variant) and the Types section (`load_types`: kinds, back-pointing List/Map entries at most 1024 deep, struct records with unique `json_name`s and `field_types`) |
 | `vm/value.c` | allocation (and the GC stress hook), checked accessors, String allocation, UTF-8 checks, OOM/abort handlers |
 | `vm/map.c` | maps: SipHash-1-3 over the value tag word then the key bytes keyed by `vm->hash_key` (set by `agc_vm_init`, then from OS entropy in `vm/main.c`: `getrandom`, then `/dev/urandom`, else the fixed key), the persistent HAMT (`agc_map_put`, `agc_map_get`, `agc_map_delete`, and `_hash` variants that take a given hash, for tests), and `agc_map_keys` (insertion order from the reversed key list) |
 | `vm/text.c` | text and debug forms (`agc_text`, `agc_debug`; lists, maps, structs, enums and Results through one explicit `agc_alloc`'d stack and a growing String, names from the program's tables), `agc_concat`, and `agc_write_form`, the one Racket `write` escaper for Strings |
@@ -30,24 +30,24 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/interp.c` | one turn of the current task (`agc_run_turn`, returns yield, parked or done) and the budgets: the "next stop" counter of `STEP` over the turn and the batch taken from the runtime's atomic `steps_left` (`agc_turn_begin`, `agc_turn_finish`, the slow path), the turn-cost apply path after `CALL_BUILTIN`, between callbacks and after `CONCAT`, `TO_TEXT`, `INSPECT`, `EQ`, `NE`, `SAME`, `MAP`, `MAP_GET` (`agc_charge`, `agc_charge_bytes`; skipped with `AGENTICA_VM_TEST_NO_TURN_COST=1`); frames, registers, call depth, `TAIL_CALL` frame replacement, `TRY` (returns an error like `RETURN`; one that would empty the call stack is `RUNTIME-INTERNAL`), Int rules, `CLOSURE`/`CALL_VALUE`, and the resumable `List` callback builtins (native frames, `agc_native` state, the `sort_by` merge sort) |
 | `vm/builtins.c` | builtin table matched by implementation key and arity from the import table; `tables[]` chains each library's own table |
 | `vm/numbers.c` | `Float`, `Time` and `Random` builtins (`agc_number_builtins`) |
-| `vm/random.c` | xoshiro256** seeded with splitmix64, both public domain (`agc_random_seed`, `agc_random_next`, `agc_random_float`, `agc_random_int`; `docs/vm.md` §7.4) |
-| `vm/json.c` | `Json` (`agc_json` nodes, 5.1) and the `JSON` builtins (`agc_json_builtins`): `agc_json_parse` (the Racket control-character pass, top-level numbers and literals by hand, strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack; `docs/vm.md` §2.6), `agc_json_encode` (the one `write-json` writer, for `JSON.encode` and the text form of a Json) and `agc_json_from` (builders), both over one explicit stack |
-| `vm/json_typed.c` | `agc_json_decode` and `agc_json_schema` (`docs/vm.md` §2.7): one explicit frame stack over the Json tree and the type table, the error path built from the frames only on failure; schema marks the types and structs reachable from the target with a queue, then builds their schemas in index order. The buffer, stack growth and ASCII helpers are `agc_json_put`, `agc_json_grow` and `agc_json_ascii` from `vm/json.c`. The builtins in `vm/json.c` find the struct by its linked name (`json_name`) |
-| `vm/loop.c` | the event loop and the resource registry (`docs/vm.md` §10.2.2), with `vm/process.c` the only files that include `uv.h`: `agc_io_init` (the `UV_USE_IO_URING=0` setenv at start-up; returns whether it set it), `agc_io_uv` (the scheduler's `uv_loop_t`, for handle code), `agc_io_ready` (completes an `external` job from a libuv callback), `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc` memory; a job keeps its registry slot index, fixed when an entry moves), `agc_io_start` (one `uv_queue_work` job plus an optional timer per blocking call; a kind without `work` is a timer only; parks the current task through `r->task` and `task->parked`), `agc_io_poll` (`uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes their tasks), `agc_io_finish` (the request's `done` or `expired` half when the parked task runs again; it first releases a handle the request held, handing it to the head waiter as `next_owner`), `agc_handle_wait` (the per-handle FIFO lock: take it as `next_owner` or when free, else queue and park with retry on a timer-only job at the task's own deadline), `agc_io_close` (end of run: close handles and timers, free the loop; false while a job is stuck in the OS, and then `vm/main.c` flushes and `_exit`s so libuv's destructor does not join the pool); resources have a `kind` (native or job); non-Linux builds get stubs |
-| `vm/files.c` | the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only; `docs/vm.md` §2.8): argument checks in the evaluator's order (for a handle: arguments and timeout, then the lock, then open and mode), host paths (raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it fails, + `/` collapsing), `malloc`'d `op` requests whose `work` half runs in the libuv pool, Racket's messages (contract forms cut at 256 characters, `strerror_l` in the message locale, the byte string form for invalid UTF-8), `FileHandle` state with its read buffer or its 4096-byte write buffer (Racket's rule: append when it fits, else write pending and new bytes together; flush, close and the end of run write it), `owns_st` saying which request frees the state (open, close, or a handle request after its timeout), `Path.join` and `Path.resolve` as pure string code |
-| `vm/process.c` | the `Process` builtins (`agc_process_builtins`, Linux only; `docs/vm.md` §10.4): a GC `agc_process` with the registered `state` resource and two unregistered lock records (`reader`, `writer`) for `agc_handle_wait`; a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes from `uv_pipe` given with `UV_INHERIT_FD`), the stdout buffer and the pending requests, freed when its user count (resource and requests) and handle count (close callbacks) reach zero; requests park on `external` jobs that pipe, write and exit callbacks ready with `agc_io_ready`; stdout is read only while a reader waits, 4 KiB at a time (more only for a bigger `read_bytes`); stderr is forwarded in its read callback; one close path (`SIGKILL`, then `waitpid` with `WNOHANG` until a 1 s `CLOCK_MONOTONIC` deadline, shared by one cleanup of all children, which kills them all first; a failed kill or a child still alive keeps the `uv_process_t` open for libuv to reap; a failed kill in `Process.close` is `RUNTIME-PROCESS-CLOSE`) for `close`, stream timeouts and the end of run; the per-run guard (a registered resource, `vm->process_guard`): the list of running children and `uv_signal_t` watchers for `SIGINT`/`SIGTERM`/`SIGHUP`, started before the first `uv_spawn` and stopped when the last child is reaped, each stop under blocked signals with a check of libuv's `caught_signals` against `dispatched_signals` so a caught signal is raised, never lost; the first spawn marks inherited descriptors above 2 close-on-exec; executable lookup (`PATH` only for a bare name, the working directory for a name with `/`) |
+| `vm/random.c` | xoshiro256** seeded with splitmix64, both public domain (`agc_random_seed`, `agc_random_next`, `agc_random_float`, `agc_random_int`; `docs/vm/05-values-execution-builtins.md` §7.4) |
+| `vm/json.c` | `Json` (`agc_json` nodes, 5.1) and the `JSON` builtins (`agc_json_builtins`): `agc_json_parse` (the Racket control-character pass, top-level numbers and literals by hand, strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack; `docs/vm/02-reference-behavior.md` §2.6), `agc_json_encode` (the one `write-json` writer, for `JSON.encode` and the text form of a Json) and `agc_json_from` (builders), both over one explicit stack |
+| `vm/json_typed.c` | `agc_json_decode` and `agc_json_schema` (`docs/vm/02-reference-behavior.md` §2.7): one explicit frame stack over the Json tree and the type table, the error path built from the frames only on failure; schema marks the types and structs reachable from the target with a queue, then builds their schemas in index order. The buffer, stack growth and ASCII helpers are `agc_json_put`, `agc_json_grow` and `agc_json_ascii` from `vm/json.c`. The builtins in `vm/json.c` find the struct by its linked name (`json_name`) |
+| `vm/loop.c` | the event loop and the resource registry (`docs/vm/10-io-scheduler.md` §10.2.2), with `vm/process.c` the only files that include `uv.h`: `agc_io_init` (the `UV_USE_IO_URING=0` setenv at start-up; returns whether it set it), `agc_io_uv` (the scheduler's `uv_loop_t`, for handle code), `agc_io_ready` (completes an `external` job from a libuv callback), `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc` memory; a job keeps its registry slot index, fixed when an entry moves), `agc_io_start` (one `uv_queue_work` job plus an optional timer per blocking call; a kind without `work` is a timer only; parks the current task through `r->task` and `task->parked`), `agc_io_poll` (`uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes their tasks), `agc_io_finish` (the request's `done` or `expired` half when the parked task runs again; it first releases a handle the request held, handing it to the head waiter as `next_owner`), `agc_handle_wait` (the per-handle FIFO lock: take it as `next_owner` or when free, else queue and park with retry on a timer-only job at the task's own deadline), `agc_io_close` (end of run: close handles and timers, free the loop; false while a job is stuck in the OS, and then `vm/main.c` flushes and `_exit`s so libuv's destructor does not join the pool); resources have a `kind` (native or job); non-Linux builds get stubs |
+| `vm/files.c` | the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only; `docs/vm/02-reference-behavior.md` §2.8): argument checks in the evaluator's order (for a handle: arguments and timeout, then the lock, then open and mode), host paths (raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it fails, + `/` collapsing), `malloc`'d `op` requests whose `work` half runs in the libuv pool, Racket's messages (contract forms cut at 256 characters, `strerror_l` in the message locale, the byte string form for invalid UTF-8), `FileHandle` state with its read buffer or its 4096-byte write buffer (Racket's rule: append when it fits, else write pending and new bytes together; flush, close and the end of run write it), `owns_st` saying which request frees the state (open, close, or a handle request after its timeout), `Path.join` and `Path.resolve` as pure string code |
+| `vm/process.c` | the `Process` builtins (`agc_process_builtins`, Linux only; `docs/vm/10-io-tls-processes-http.md` §10.4): a GC `agc_process` with the registered `state` resource and two unregistered lock records (`reader`, `writer`) for `agc_handle_wait`; a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes from `uv_pipe` given with `UV_INHERIT_FD`), the stdout buffer and the pending requests, freed when its user count (resource and requests) and handle count (close callbacks) reach zero; requests park on `external` jobs that pipe, write and exit callbacks ready with `agc_io_ready`; stdout is read only while a reader waits, 4 KiB at a time (more only for a bigger `read_bytes`); stderr is forwarded in its read callback; one close path (`SIGKILL`, then `waitpid` with `WNOHANG` until a 1 s `CLOCK_MONOTONIC` deadline, shared by one cleanup of all children, which kills them all first; a failed kill or a child still alive keeps the `uv_process_t` open for libuv to reap; a failed kill in `Process.close` is `RUNTIME-PROCESS-CLOSE`) for `close`, stream timeouts and the end of run; the per-run guard (a registered resource, `vm->process_guard`): the list of running children and `uv_signal_t` watchers for `SIGINT`/`SIGTERM`/`SIGHUP`, started before the first `uv_spawn` and stopped when the last child is reaped, each stop under blocked signals with a check of libuv's `caught_signals` against `dispatched_signals` so a caught signal is raised, never lost; the first spawn marks inherited descriptors above 2 close-on-exec; executable lookup (`PATH` only for a bare name, the working directory for a name with `/`) |
 | `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux each `read(0)` (with `poll` on `EAGAIN`) is a thread-pool job whose `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
-| `vm/task.c` | the scheduler (`docs/vm.md` §10.2.1, "As built"): `agc_vm_run` (setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each turn and ONCE when idle, the stall check), `agc_task_wake`, `agc_task_park`, and the `Task` builtins (`agc_task_builtins`: spawn with a per-task `Random` split, await with a FIFO of waiters and retry, sleep as a timer job, `sleep(0)` and fuzz sleeps yield) |
+| `vm/task.c` | the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built"): `agc_vm_run` (setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each turn and ONCE when idle, the stall check), `agc_task_wake`, `agc_task_park`, and the `Task` builtins (`agc_task_builtins`: spawn with a per-task `Random` split, await with a FIFO of waiters and retry, sleep as a timer job, `sleep(0)` and fuzz sleeps yield) |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, the same formats as `src/diagnostic.rkt`; only the code must match |
 | `vm/fuzz.c`, `vm/fuzz_main.c` | `agc_fuzz_one` and the mutation driver (not in the release binary) |
 | `vm/tests/loader_test.c` | one assert per loader rule (`type_tables(which)` builds one malformed Types section per case) |
 | `vm/tests/map_test.c` | HAMT: 20,000 keys, order, replacement, persistence, full hash collisions, shared 60-bit prefixes, delete (order, persistence, collision nodes, down to an empty map), a depth-1,000,000 nested map printed |
 | `vm/tests/random_test.c` | the generator: a seed repeats, seeds differ, `Random.float` and `Random.int` bounds (full Int range too), rough uniformity, `low > high` |
-| `vm/tests/float_text_test.c` | Float text against values printed by Racket (`docs/vm.md` §2.2) |
+| `vm/tests/float_text_test.c` | Float text against values printed by Racket (`docs/vm/02-reference-behavior.md` §2.2) |
 | `vm/tests/string_test.c` | UTF-8 helpers over every code point, case mapping (special cases, final sigma), KMP search on repetitive text, Int and Float parsing edge cases with the bits Racket gives |
 | `vm/tests/json_test.c` | the sign of zero (`-0.0`, `-1e-500`), escapes, key order and dedupe on 5,000 keys, depth-1,000,000 arrays and objects parsed and encoded, a deep list through `JSON.from` (100,000 under ASan's `AGC_NO_GC`, 1,000 under `AGC_GC_STRESS`); parse statuses and number edge cases live in the `json-*` fixtures |
 | `vm/tests/budget_test.c` | under `AGC_NO_GC`, an allocation past `agc_set_alloc_limit` longjmps once, and after `agc_release_all` no limit is set |
-| `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
+| `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm/02-reference-behavior.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
@@ -79,7 +79,7 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   bytecode, `src/version.rkt`, their tests and fixtures, the Makefile,
   `.gitmodules`, `.clang-tidy`, `ci.yml`). A new VM source or test file outside those paths must be added
   there.
-- `agentica --vm` (Linux only for now, `docs/vm.md` §9): `src/main.rkt`
+- `agentica --vm` (Linux only for now, `docs/vm/08-loader-and-cli.md` §9): `src/main.rkt`
   writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`
   flag. The VM then deletes its input right after reading it; on Linux it
@@ -184,7 +184,7 @@ call in the module's file.
 
 ## Widen the subset (new form or opcode)
 
-1. Read the matching rules in `docs/vm.md` §2 (reference behavior) and §3.3
+1. Read the matching rules in `docs/vm/02-reference-behavior.md` §2 (reference behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
    (lowering). Probe the evaluator with small programs when a detail is not
    written down, and write the finding into §2.
 2. `src/lower.rkt`: lower the form. Emit one IR `step` exactly where the
@@ -206,7 +206,7 @@ call in the module's file.
 5. `vm/interp.c`: implement it with checked accessors only.
 6. Add a fixture to `tests/fixtures/vm/` for each new runtime code or span;
    the diff test sweeps `--max-steps` over it.
-7. Update the "Status" note and any rule that changed in `docs/vm.md`, tick
+7. Update the "Status" note and any rule that changed in `docs/vm/`, tick
    the roadmap items, and keep this guide current.
 
 ## Add a C builtin
@@ -263,7 +263,7 @@ call in the module's file.
    task runs again. A builtin that must wait and then re-check (stdin,
    `Task.await`) calls `agc_task_park(vm, true)` (retry): `CALL_BUILTIN`
    keeps the arguments and re-runs the call on wake. Every table entry
-   has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm.md`
+   has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md`
    §10.2.1, "As built"): a builtin whose work grows with its input takes
    `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
    `steps_left` for that. State goes in `vm->rt` (shared runtime),
@@ -297,7 +297,7 @@ Rules for the C code:
 
 ## Rules every change keeps
 
-**Parity is black-box** (`docs/vm.md` §1). Same exit code, stdout and
+**Parity is black-box** (`docs/vm/README.md` §1). Same exit code, stdout and
 program stderr (`IO.warn`) of every run except one stopped by
 `--max-steps`, and diagnostic code as the evaluator; a runaway program stops with `RUNTIME-STEP-LIMIT` under
 `--max-steps`. Error strings a program prints are program data: when a
@@ -308,7 +308,7 @@ step counts and the step-limit span, `Random` sequences and cross-task order
 may differ, but VM messages must stay clear for agents. Lowering may
 optimize (inline, fold constants, move or merge `STEP`s) as long as that
 holds. A deliberate difference in exit code, stdout or code goes into
-`docs/vm.md` as a documented difference (for example a failed stdout write
+`docs/vm/` as a documented difference (for example a failed stdout write
 exits 1, out of memory exits 70, and the 2^24 register cap gives
 `RUNTIME-STACK-OVERFLOW`). New APIs the evaluator never had may be VM-only,
 tested with fixed expected output.
@@ -335,11 +335,11 @@ instructions. A file that loads may still compute wrong values or end with
   `vm/agc.h` (*checked* by
   `cppcoreguidelines-avoid-non-const-global-variables`; function-local
   `static` variables are not caught). State goes in `agc_vm`; constant data
-  is `const`. The exceptions of `docs/vm.md` §10.2.3 take
+  is `const`. The exceptions of `docs/vm/10-io-multicore.md` §10.2.3 take
   `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`.
   `vm/tests/.clang-tidy` turns the check off for the C tests.
 - No prototypes of `static` functions: define each helper before its first use, so files read bottom-up and the `agc_*` functions usually come last (*checked*); only unavoidable mutual recursion may have one.
-- No value-driven C recursion (`docs/vm.md` §7.3; *checked* by
+- No value-driven C recursion (`docs/vm/05-values-execution-builtins.md` §7.3; *checked* by
   `misc-no-recursion` within one file only: recursion across files through
   `agc_*` calls is not caught). Depth bounded by a constant or `log n` (HAMT
   levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
@@ -388,22 +388,22 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   index keeps the old commit otherwise), rebuild, and run the sanitizer and
   diff tests.
 
-## Later phases (read `docs/vm.md` §10 before starting them)
+## Later phases (read §10, `docs/vm/10-*.md`, before starting them)
 
-- **libuv (7h, in: loop, files and tasks)**: `docs/vm.md` §10.2.2 describes the
+- **libuv (7h, in: loop, files and tasks)**: `docs/vm/10-io-scheduler.md` §10.2.2 describes the
   loop with its run queue; only the scheduler (`vm/task.c`, through `agc_io_poll`) calls
   `uv_run`, and libuv callbacks only set flags (tasks will also queue the
   task). N=1 today; the design target is N scheduler threads (M:N,
-  `docs/vm.md` §10.2.3, gated in the roadmap order on the server
+  `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the server
   measurement and the evaluation round), built on split structures
   (read-only runtime; per-scheduler loop, run queue, registry and turn
   counter; per-task stack, registers and frame). Once tasks land, a
   builtin or opcode whose work grows with its input sets a turn cost
-  (`docs/vm.md` §10.2.1, Builtins); it is taken from the turn only, never
+  (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins); it is taken from the turn only, never
   from `steps_left`, so it never changes how `--max-steps` stops a program. Only the
   scheduler that owns a loop calls `uv_run` on it. New code adds no
   mutable `static` or global variable in `vm/` (the exceptions are listed
-  in `docs/vm.md` §10.2.3); state goes in the runtime, scheduler or task
+  in `docs/vm/10-io-multicore.md` §10.2.3); state goes in the runtime, scheduler or task
   struct, and lazy init uses `pthread_once` or runs at start-up.
   Handles and requests are `malloc`'d; the GC object that owns one stays in
   its scheduler's resource registry until its `uv_close` callback, and
@@ -440,7 +440,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints anything;
   newer features are found at run time. Without `libssl-dev` all VM tests
   skip locally. `--version` prints the OpenSSL version in use
-  (`docs/vm.md` 10.0, 10.3).
+  (`docs/vm/10-dependencies-and-platforms.md` 10.0, `docs/vm/10-io-tls-processes-http.md` 10.3).
 - **HTTP (7h)**: parity is black-box. Well-formed messages: same status,
   headers, body and `Result` ok or error. Malformed input: both reject
   (server error status and close, client error `Result`); the code may
@@ -478,8 +478,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   otherwise; trailers checked with the header rules; no
   `phr_decode_chunked`), so bodies stream and are never buffered whole.
   Tests target the adapter and check rejections and the codes that must
-  match, not messages (`docs/vm.md` 10.6).
-- **Processes (7h, in on Linux)**: `vm/process.c`, `docs/vm.md` §10.4. The
+  match, not messages (`docs/vm/10-io-tls-processes-http.md` 10.6).
+- **Processes (7h, in on Linux)**: `vm/process.c`, `docs/vm/10-io-tls-processes-http.md` §10.4. The
   VM resolves the executable itself (`PATH` only for a bare name, never the
   working directory) and passes the absolute path to `uv_spawn`; never
   verbatim arguments; all three stdio piped; `UV_USE_IO_URING` is dropped
@@ -494,7 +494,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   signal tests in `tests/vm-diff-common.rkt` signal the driver and the VM
   with libc `kill` through the FFI and bound every wait.
 - **Limits**: the 1 MiB per-call reads, HTTP framing limits and the other
-  caps in the `docs/vm.md` limits table stay exactly as in the Racket
+  caps in the `docs/vm/10-io-tls-processes-http.md` limits table stay exactly as in the Racket
   sources.
 
 ## Gotchas
@@ -504,7 +504,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   text, a top-level number or literal stops early (`01` is unexpected
   content, `truex` invalid), the finite check comes after the trailing
   check, a mantissa of zeros is `0.0` whatever its sign, and duplicate
-  keys keep the last value (`docs/vm.md` §2.6). yyjson reads numbers as
+  keys keep the last value (`docs/vm/02-reference-behavior.md` §2.6). yyjson reads numbers as
   raw text so the VM converts them itself; never turn on its `ALLOW_*`
   flags or its writer. Bumping yyjson: check out the new tag inside
   `vm/third_party/yyjson`, `git add vm/third_party/yyjson`, and rerun the
@@ -512,12 +512,12 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 
 - `Random` differs from the evaluator by design: the VM uses xoshiro256**
   and the evaluator Racket's `random`, so seeded sequences differ between
-  backends (`docs/vm.md` §7.4). A `Random` fixture prints only what both
+  backends (`docs/vm/05-values-execution-builtins.md` §7.4). A `Random` fixture prints only what both
   share (counts of in-range values, `[0, 1)` checks), never drawn
   numbers.
 - Float text is not `printf("%.17g")` or "first `%.*e` that round-trips":
   Racket breaks exact ties upward and uses the asymmetric interval at powers
-  of two. Keep `agc_float_text` as `docs/vm.md` §2.2 describes it, and add
+  of two. Keep `agc_float_text` as `docs/vm/02-reference-behavior.md` §2.2 describes it, and add
   any new tricky value to `vm/tests/float_text_test.c` with the text Racket
   prints.
 
@@ -536,7 +536,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   type kind, loader rules and a format bump.
 - Struct and enum table names are display names: `write-bytecode` passes
   the linked name through `display-name` (`builtins.rkt`), as the
-  evaluator does when printing (`docs/vm.md` §2.4). The lowerer keeps the
+  evaluator does when printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
   unique linked names as its keys and in `format-ir`. Variant ids are global in file order;
   struct ids and field indexes follow declaration order. Generic enums need
   nothing special: type arguments exist only in the checker.
@@ -558,7 +558,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   callee's count first, then `memmove`s the argument window to `R[0..]`
   (windows overlap). It does not touch the depth, so on the VM deep tail
   recursion runs while the evaluator gives `RUNTIME-STACK-OVERFLOW`
-  (documented in `docs/vm.md` §6.1). Fixtures that must overflow need a
+  (documented in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
   non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); a
   fixture that tail-recurses past 10000 differs from the evaluator, so the
   deep case lives in the VM-only test in `tests/vm-diff-common.rkt`. The loader
@@ -651,7 +651,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   run (`make vm-gc-stress`), not ASan.
 - Racket `write` prints the joiners U+200C, U+200D and U+E0020 to U+E007F
   raw only after a raw non-blank character, so the debug form has state;
-  see `docs/vm.md` §2.3 before touching `agc_write_form`.
+  see `docs/vm/02-reference-behavior.md` §2.3 before touching `agc_write_form`.
 - `--max-steps` bounds instructions, not bytes: string ops cost in
   proportion to their size.
 - Portability: keep platform code in `vm/main.c` (`open_input`, `wmain`)
@@ -681,7 +681,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   by repeated concatenation, and search with the KMP finder in
   `vm/strings.c`, not a naive loop. Racket's `String.trim` is `\s` only
   (five ASCII bytes); case mapping is the tables plus final sigma
-  (`docs/vm.md` §2.3), and a new contextual case rule must come with a
+  (`docs/vm/02-reference-behavior.md` §2.3), and a new contextual case rule must come with a
   generator check, not by hand. Float text goes to `strtod` only after
   the evaluator's pattern check.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`,

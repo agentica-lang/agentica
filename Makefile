@@ -26,7 +26,7 @@ exe: build
 bench: build vm
 	python3 benchmarks/run.py $(BENCH_ARGS)
 
-# Task wake latency next to busy tasks (docs/vm.md 10.2.1), alone so it has the CPU to itself
+# Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
 vm-latency: build vm
 	$(RACO) test tests/vm-latency-test.rkt
 
@@ -62,7 +62,7 @@ site: site-sass
 site-serve: site-sass
 	hugo server --source site
 
-# The C VM (docs/vm.md section 11). libgc is built from the pinned submodule.
+# The C VM (docs/vm/11-build-ci-supply-chain.md section 11). libgc is built from the pinned submodule.
 # make vm                 dist/agentica-vm
 # make vm-test            C tests in vm/tests/
 # make vm SANITIZE=1      clang with ASan and UBSan, no libgc

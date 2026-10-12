@@ -5,7 +5,7 @@ description: "Develops the Agentica interpreter: the Racket pipeline (lexer, par
 
 # Agentica development
 
-Agentica is a Racket bootstrap for a small statically typed language. The grammar is `docs/grammar.md`; planned syntax is in `docs/future.md`; the phases and the active checklist are `docs/roadmap.md`.
+Agentica is a Racket bootstrap for a small statically typed language. The grammar is `docs/grammar.md`; planned syntax is in `docs/future/`; the phases and the active checklist are `docs/roadmap/`.
 
 Read the active phase in the roadmap before adding code. Implement only what that phase asks for: the roadmap explicitly forbids placeholder modules and empty nodes for later phases.
 
@@ -53,7 +53,7 @@ src/
   http-server.rkt # HTTP server
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
-  bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm.md 4.6; the C loader is the only reader
+  bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
   main.rkt        # thin CLI driver: lex, parse, link, check, then run (or `check` only, --dump the tree, --dump-ir, `compile -o`, or `--vm`: bytecode in a temp file run by dist/agentica-vm); exit 1 on a diagnostic, 2 on usage or a missing file
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
@@ -81,9 +81,9 @@ tests/
 examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth
-  future.md    # planned syntax, not implemented
-  roadmap.md   # phases and the active checklist
-  vm.md        # bytecode VM design (phase 7): IR, bytecode, C values, safety rules, PR plan
+  future/      # planned syntax, not implemented (one file per section)
+  roadmap/     # phases and the active checklist (README.md: current order and rules)
+  vm/          # bytecode VM design (phase 7): IR, bytecode, C values, safety rules, PR plan
 ```
 
 ## Where new code goes
@@ -96,7 +96,7 @@ docs/
 | builtin | `src/builtins.rkt` metadata; checker generic rule and evaluator implementation; exercise a real checked call |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`; the VM toolchain adds `LOWER-` and `BYTECODE-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
-| language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap.md`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
+| language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
 | test | `tests/<stage>-test.rkt` |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/agc.h` (same order), `vm/loader.c`, `vm/interp.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
 | VM builtin | `src/lower.rkt` (accept the call, emit `call-builtin` with the catalog implementation key and arity), `vm/builtins.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
@@ -182,7 +182,7 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 ## Bytecode VM (phase 7)
 
-The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm.md` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep black-box parity with the evaluator (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`.
+The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm/` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep black-box parity with the evaluator (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm/README.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`.
 
 Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners evaluator,exe,vm,python`) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart. It is outside `make test` and CI; record new numbers in `docs/vm-benchmarks.md`. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
 
