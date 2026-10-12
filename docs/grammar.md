@@ -653,7 +653,7 @@ Random.int(min: Int, max: Int) -> Int
 Random.float() -> Float
 ```
 
-`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. Seeded sequences come from the VM's generator; a program that falls back to the legacy evaluator (it uses `TCP`, `TLS`, `HTTP` or `BDD`) repeats too, with other values. `agentica --seed N test` passes the seed to step handlers and to the programs under test. Each task has its own generator (on the legacy evaluator, tasks share one): the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
+`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. Seeded sequences come from the VM's generator; a program that falls back to the legacy evaluator (it uses `TLS`, `HTTP` or `BDD`) repeats too, with other values. `agentica --seed N test` passes the seed to step handlers and to the programs under test. Each task has its own generator (on the legacy evaluator, tasks share one): the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
 
 - `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both use Racket's buffered input port.
 - `IO.read_bytes(count)` waits for exactly `count` bytes or EOF and returns a list of integers in `0 .. 255`, with no UTF-8 decoding. A short final read succeeds; EOF before any bytes is `ok([])`. Zero returns `ok([])` without consuming input, even before EOF. Counts must be `0 .. 1048576` (1 MiB per call), bounding eager allocation; invalid counts return an error without consuming input. Input-port failures also return an error. Larger streams can be processed in multiple reads.
@@ -820,7 +820,11 @@ TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
 ```
 
-Listen on port zero for an assigned port. TLS listeners and sockets use the
+Listen on port zero for an assigned port. Listen binds every address the
+host resolves to, all on one port (`localhost` takes both `127.0.0.1` and
+`::1` clients); addresses the system cannot use, such as IPv6 on a host
+without it, are skipped. Ports are 1..65535 for connect and 0..65535 for
+listen. A host containing NUL is an error. TLS listeners and sockets use the
 same TCP operations. TLS verifies certificates and hostnames with TLS 1.2 or
 later; an empty CA path uses system trust, a nonempty path selects a PEM CA.
 The server takes a PEM certificate chain and private key.
@@ -828,14 +832,22 @@ The server takes a PEM certificate chain and private key.
 Timeouts are positive milliseconds and cover the whole operation, including
 lock waits. Read and write directions have independent locks; coordinate
 which task reads a stream and the order of writes. Timing out an active I/O
-operation closes that socket. Waiting for a lock alone does not close it.
+operation closes that socket, and later calls on it fail at once with
+`network: socket is closed`. Waiting for a lock alone does not close it.
 Failures return Results; explicit close is idempotent.
 
 Send encodes UTF-8 and flushes. Byte values must be 0..255, at most 1 MiB per
 send_bytes call. recv_bytes accepts 1..1048576, returns available data up to
 that count, and returns ok([]) at EOF. TCP supplies a stream, not messages.
 read_line handles fragmented UTF-8, strips LF or CRLF, accepts a final line
-without a terminator, and errors on empty EOF or a line over 1 MiB.
+without a terminator at EOF, and errors on empty EOF, on a read error (a
+connection reset in the middle of a line is an error, not a line) and on a
+line over 1 MiB, which also closes the socket.
+
+Temporary exception until TLS moves to the VM: TLS sockets run on the
+legacy evaluator, where a line over 1 MiB leaves the socket open in the
+middle of that line, and a call after a timed-out read or write waits out
+its own timeout instead of failing at once.
 
 Builtin records are immutable and use the existing named-field constructors:
 
@@ -1047,7 +1059,7 @@ unknown function "totl"
   = help: did you mean "total"?
 ```
 
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `TCP`, `TLS`, `HTTP` or `BDD`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `TLS`, `HTTP` or `BDD`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
 
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 

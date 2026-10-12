@@ -5,9 +5,14 @@ description: TCP and TLS sockets, an HTTP/1.1 client and an HTTP/1.1 server.
 ---
 
 Network functions return a `Result` and take timeouts in milliseconds. Sockets,
-servers and clients are handles: they cannot be printed or compared, and they
-are closed when the program ends. Most examples here open real connections,
-so they are checked but not run.
+servers and clients are handles: `IO.inspect` prints only their type (such as
+`<Socket>` or `<Listener>`), they cannot be compared, and they are closed when
+the program ends. Most examples here open real connections, so they are
+checked but not run.
+
+A timeout covers the whole call, including the wait for another task using
+the same socket. When a read or write times out, the socket is closed, and
+later calls on it fail at once with `network: socket is closed`.
 
 ## TCP
 
@@ -19,6 +24,9 @@ TCP.local_port(listener: Listener) -> Int
 ```
 
 Listens for connections. Port `0` picks a free port; `local_port` tells which.
+The listener takes every address the host name stands for, on the same port:
+`"localhost"` accepts clients of both `127.0.0.1` and `::1`. Ports go from 0
+to 65535 here and from 1 to 65535 in `connect`.
 
 ```agentica
 def main() -> Void
@@ -58,8 +66,11 @@ TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
 TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 ```
 
-`send` writes text. `read_line` reads one line without its line ending. This
-program talks to itself, using a task for the server side:
+`send` writes text. `read_line` reads one line without its line ending (LF or
+CRLF). A last line without a line ending counts when the other side closes;
+`read_line` returns an error at the end of input, when the connection breaks
+(even in the middle of a line), and for a line over 1 MiB, which also closes
+the socket. This program talks to itself, using a task for the server side:
 
 ```agentica
 def echo_once(listener: Listener) -> Result[Void]
@@ -126,6 +137,11 @@ TLS sockets and listeners use the same `TCP` functions. `TLS.connect` checks
 the certificate and the host name; an empty `ca_file` uses the system's
 trusted certificates. `TLS.listen` takes PEM files for the certificate chain
 and the private key.
+
+TLS programs still run on the older evaluator, so until TLS moves to the
+bytecode VM a TLS socket keeps two old behaviors: a line over 1 MiB leaves the
+socket open in the middle of that line, and a call after a timeout waits out
+its own timeout instead of failing at once.
 
 ```agentica {mode="check"}
 def main() -> Void

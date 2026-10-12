@@ -28,7 +28,7 @@ typedef struct {
 | Range | `agc_range { int64_t start, end; bool exclusive; }` (`GC_MALLOC_ATOMIC`), tag `AGC_T_RANGE`, immutable. Text and debug form `1..5` or `1...5` (`agc_scalar_text`; the longest form is 43 bytes, so `AGC_SCALAR_TEXT` is 48). `agc_range_bounds` gives the first and last included values and whether the range is non-empty, with no overflow for `...` (the end is above the start). `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW` and `Range.to_a` above 1048576 values with `RUNTIME-INVALID-COUNT`, both at the receiver's span (`span + 1`), as the evaluator does; `first` and `last` of an empty range give `error("the range is empty")`. |
 | Function value | `agc_fn { uint32_t function, n; agc_value captured[]; }` (`GC_MALLOC`), tag `AGC_T_FN`. `&name` is a value with `n = 0`. Text and debug form `<Fn>` (the checker never lets a program print one). |
 | Json | `agc_json { kind; agc_value scalar; size_t count; agc_json_member *members; }` (`GC_MALLOC`), tag `AGC_T_JSON`: null, bool, int64, big integer (a String with its decimal text; parsed integers may exceed Int until extracted), double, string, array (`scalar` is a List of Json values, which `JSON.list` returns without a copy), object (`members`, `{ agc_string *key; agc_value value; }` sorted by key bytes). Objects are built by collecting pairs, then one stable sort and dedupe with the last value winning, which is the order `write-json` prints; `JSON.get` is a binary search. Text form: the JSON text; debug form `<Json>`. |
-| Handle (7h) | `{ uint32_t kind; void *resource; }` for Task, Socket, Listener, HTTP values, FileHandle, Process. |
+| Handle (7h) | `{ uint32_t kind; void *resource; }` for Task, Socket, Listener, HTTP values, FileHandle, Process. As built, each kind has its own tag and GC record: `Socket` is `agc_socket` and `Listener` is `agc_listener` (10.3.1). |
 
 ### 5.2 Safety rules for values
 
@@ -167,7 +167,7 @@ builtins copy what they need into their GC state.
 7e: `IO`, `puts`, `print`, `gets`, `gets!`, `System`, `String`, `List`,
 `Map`, `Float`, `Time`, `Random`, `ok`, `error`, `Result.*`, and `JSON`
 (parse, extract, encode, builders, typed decode, schema: pure C, no event
-loop). 7h: files (done on Linux, 2.8, 10.2.2), tasks (done, 10.2.1), processes, TCP, TLS,
+loop). 7h: files (done on Linux, 2.8, 10.2.2), tasks (done, 10.2.1), processes (done, 10.4), TCP (done, 10.3.1), TLS,
 HTTP, BDD.
 
 ### 7.3 Builtin safety and streams

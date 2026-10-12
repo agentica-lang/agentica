@@ -30,7 +30,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_STOP_SIGNALS 3
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER
 } agc_tag;
 
 typedef struct {
@@ -166,6 +166,22 @@ struct agc_resource {
 typedef struct {
   agc_resource *state, *reader, *writer;
 } agc_process;
+
+typedef struct {
+  agc_resource *state, *reader, *writer;
+} agc_socket;
+
+typedef struct {
+  agc_resource *state;
+  int64_t port;
+} agc_listener;
+
+typedef struct {
+  uint8_t *data;
+  size_t start, end, cap, scanned;
+  bool eof;
+  int error;
+} agc_inbuf;
 
 typedef struct agc_registry agc_registry;
 typedef struct agc_loop agc_loop;
@@ -371,6 +387,8 @@ agc_value agc_json_value(agc_json *j);
 agc_value agc_handle_value(agc_resource *r);
 agc_value agc_task_value(agc_task *t);
 agc_value agc_process_value(agc_process *p);
+agc_value agc_socket_value(agc_socket *s);
+agc_value agc_listener_value(agc_listener *l);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -386,6 +404,8 @@ agc_json *agc_as_json(agc_vm *vm, agc_value v);
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
 agc_task *agc_as_task(agc_vm *vm, agc_value v);
 agc_process *agc_as_process(agc_vm *vm, agc_value v);
+agc_socket *agc_as_socket(agc_vm *vm, agc_value v);
+agc_listener *agc_as_listener(agc_vm *vm, agc_value v);
 char *agc_cstr(const agc_string *s);
 uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
@@ -480,6 +500,8 @@ extern const agc_builtin agc_task_builtins[];
 extern const size_t agc_task_builtin_count;
 extern const agc_builtin agc_process_builtins[];
 extern const size_t agc_process_builtin_count;
+extern const agc_builtin agc_tcp_builtins[];
+extern const size_t agc_tcp_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 uint64_t agc_resource_id(agc_vm *vm);
@@ -503,6 +525,24 @@ void agc_files_close(agc_vm *vm);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
+
+struct uv_stream_s;
+struct uv_write_s;
+agc_value agc_error_value(const char *message);
+agc_value agc_stream_bad_timeout(void);
+agc_value agc_stream_timed_out(void);
+agc_resource *agc_new_lock(agc_vm *vm);
+bool agc_stream_lock(agc_vm *vm, agc_resource *lock, int64_t *timeout, agc_value *result);
+size_t agc_inbuf_pending(const agc_inbuf *b);
+void agc_inbuf_free(agc_inbuf *b);
+bool agc_inbuf_ready(agc_inbuf *b, bool line, size_t count);
+size_t agc_inbuf_want(const agc_inbuf *b, bool line, size_t count);
+uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
+void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
+agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
+agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
+int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,
+                     size_t len, void (*done)(struct uv_write_s *req, int status));
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,

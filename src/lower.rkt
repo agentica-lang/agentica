@@ -22,7 +22,7 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String Range Json FileHandle Process))
+(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener))
 
 (define file-info (ir-struct "FileInfo" '("kind" "size_bytes" "modified_seconds") #f))
 
@@ -155,7 +155,9 @@
                       "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"
                       "Task.spawn" "Task.await" "Task.sleep"
                       "Process.spawn" "Process.send" "Process.send_bytes" "Process.read_line" "Process.read_bytes"
-                      "Process.close_stdin" "Process.wait" "Process.close"))
+                      "Process.close_stdin" "Process.wait" "Process.close"
+                      "TCP.connect" "TCP.listen" "TCP.accept" "TCP.local_port" "TCP.close_listener"
+                      "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"))
 
 (define (referenced-names node)
   (define seen (make-hasheq))

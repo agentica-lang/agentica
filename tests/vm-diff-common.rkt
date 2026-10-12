@@ -18,7 +18,10 @@
 (provide shard-count
          run-shard
          vm-file
-         vm-built?)
+         vm-built?
+         compile-file
+         run-process
+         run-timeout)
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")

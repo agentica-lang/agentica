@@ -37,8 +37,8 @@
   (list (subprocess-status process) stdout-text stderr-text))
 
 (module+ test
-  (test-case "every builtin outside TCP, TLS, HTTP and BDD runs on the VM"
-    (define fallback-modules '("TCP" "TLS" "HTTP" "BDD"))
+  (test-case "every builtin outside TLS, HTTP and BDD runs on the VM"
+    (define fallback-modules '("TLS" "HTTP" "BDD"))
     (for* ([entry (in-hash-values builtins)]
            [variant (in-list (cons entry (builtin-alternatives entry)))])
       (define key (builtin-implementation variant))

@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs TCP on Linux: every `TCP` function (`connect`,
+  `listen`, `accept`, `local_port`, `close_listener`, `send`, `send_bytes`,
+  `recv_bytes`, `read_line`, `close`), so TCP programs no longer fall back to
+  the legacy evaluator (`TLS`, `HTTP` and `BDD` still do). Each call parks
+  only its own task; reads and writes have their own locks, and one timeout
+  covers the lock wait and the operation. Connect tries every address of the
+  host in order; listen binds every address of the host on one port, so a
+  listener on `localhost` takes both `127.0.0.1` and `::1` clients.
+  Returning from `main`, `System.exit`, a runtime error or the step limit
+  close every socket and listener, also while tasks wait on them. The `io`
+  trace category shows connects, listens, accepts and closes. TCP on the VM
+  is Linux only: on other platforms the VM has no `TCP` builtins, so TCP
+  programs no longer run there (as with processes). `grammar.md` now spells
+  out what the evaluator left open: a `read_line` over 1 MiB closes the
+  socket; after a timed-out read or write closed a socket, the next call
+  says "socket is closed" at once instead of waiting out its timeout; a
+  connection reset in the middle of a line is an error, not a line; ports
+  are 1..65535 for connect and 0..65535 for listen; a host with a NUL byte
+  is an error. TLS sockets, still on the evaluator, keep the old long-line
+  and timeout behavior until TLS moves to the VM. Sockets use `TCP_NODELAY`.
+
 - `agentica-vm` traces its internals for VM developers:
   `AGENTICA_VM_TRACE=sched,io,proc,loader,gc` (or `all`) writes one
   `agc-trace` line per event (task spawns, turns and wakes, I/O jobs and
@@ -268,6 +289,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Process.read_line` and `Process.read_bytes`, like `TCP.read_line` and
+  `TCP.recv_bytes`, charge a turn cost by the size they return, and
+  `Process.send` and `send_bytes` by the size they write, also when the call
+  waits; `Process.read_line` returns the read error instead of a partial
+  line when the pipe fails in the middle of a line.
+
 - Programs run on the bytecode VM by default: `agentica file.agc` compiles
   in-process and runs `agentica-vm` with `--max-steps`, `--seed`,
   `--allow-run`, `--ai`, `--json` and the program arguments. A program that
@@ -348,6 +375,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   import aliases with those names no longer check.
 
 ### Fixed
+
+- `make vm` links `-lm`, so the VM builds with `CC=clang` too.
 
 - `agentica-vm` started with stdin, stdout or stderr closed (`2>&-`) no
   longer aborts on a libuv assertion: on Linux it first fills the closed

@@ -283,6 +283,24 @@ and loader asserts for spans in a second source. No format bump.
     backends, and CI diffs `examples/process-tool.agc` on both. No format
     bump: the `Process` builtins are new import keys only.
 
+11. **7h TCP** (done, Linux). Every `TCP` builtin with `Socket` and
+    `Listener` values (10.3.1) in `vm/tcp.c`, with the stream helpers it
+    shares with processes in `vm/stream.c`; the `TCP` fallback is gone
+    (`TLS` keeps it). The `tcp-*` fixtures are their own peers (a
+    listener and its clients in one program, only `main` prints):
+    `tcp-echo` (lines, fragmented UTF-8, CRLF, bytes, EOF), `tcp-errors`
+    (argument checks, timeouts, closed sockets and listeners, a refused
+    connect), `tcp-limits` (a 1 MiB line and one byte over),
+    `tcp-tasks` (two clients at once, a lock-wait timeout that keeps
+    the socket open), `tcp-exit` (`main` returns while tasks wait on a
+    read, an accept and a full send buffer). `tests/vm-tcp-test.rkt`
+    runs the VM against independent Node peers
+    (`tests/fixtures/tcp-peer.js`: fragments, reset, a long line, a
+    silent peer, a refused port, two concurrent clients of a VM server)
+    and checks with the `io` trace that every socket closes at exit.
+    `tests/tcp-test.rkt` runs its TCP client through the CLI, so on the
+    VM. No format bump: the `TCP` builtins are new import keys only.
+
 7e is done when every example runs on the VM with the same results, except
 those that need files, processes, tasks or the network by name:
 `file-summary`, `process-tool`, `concurrency`, `tcp_echo`, `http_get` and

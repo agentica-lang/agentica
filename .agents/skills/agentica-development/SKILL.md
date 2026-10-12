@@ -34,7 +34,7 @@ src/
   parser.rkt      # parse: (listof token) -> program | diagnostic
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
-  evaluator.rkt   # frozen: runs only the fallback (TCP, TLS, HTTP, BDD, agentica test) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
+  evaluator.rkt   # frozen: runs only the fallback (TLS, HTTP, BDD, agentica test) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
   runtime-values.rkt # shared runtime values, results and immutable map updates
   task.rkt        # coroutine task results, supervision, global budget and cleanup
   json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
@@ -47,7 +47,7 @@ src/
   json-typed.rkt  # JSON.decode into declared structs and JSON.schema
   filesystem.rkt  # File, Dir and Path builtins
   process.rkt     # Process builtins (needs --allow-run)
-  network.rkt     # TCP and TLS sockets
+  network.rkt     # TCP and TLS sockets of the evaluator (TLS fallback only; the VM has vm/tcp.c)
   http-wire.rkt   # HTTP/1.1 framing shared by client and server
   http-client.rkt # HTTP client with connection pool
   http-server.rkt # HTTP server
@@ -60,6 +60,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
+  tcp.c stream.c  # TCP builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c
   task.c          # scheduler (run queue, turns, park and wake) and the Task builtins
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
@@ -76,6 +77,7 @@ tests/
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
+  vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 examples/               # small programs per feature; README.md lists them
