@@ -189,8 +189,9 @@ and cost one predictable branch each.
   than the evaluator gave.
 - Fallback to the evaluator. When `lower` rejects the program with
   `LOWER-UNSUPPORTED` (today only a call to a `TCP`, `TLS`, `HTTP` or `BDD`
-  builtin), the driver prints one line on stderr, `agentica: <the lowering's
-  message>; running on the legacy evaluator` (for example `agentica: the VM
+  builtin), the driver prints one line on stderr (in the plain and `--ai` modes;
+  never with `--json`, where the last stderr line stays the diagnostic),
+  `agentica: <the lowering's message>; running on the legacy evaluator` (for example `agentica: the VM
   does not support the builtin HTTP.client_options yet; running on the
   legacy evaluator`), and runs the checked program on the evaluator with the
   same options. Other `LOWER-` and `BYTECODE-` diagnostics fail as usual.

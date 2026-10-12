@@ -1047,7 +1047,7 @@ unknown function "totl"
   = help: did you mean "total"?
 ```
 
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object.
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `TCP`, `TLS`, `HTTP` or `BDD`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
 
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 

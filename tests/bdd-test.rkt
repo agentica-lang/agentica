@@ -1,6 +1,6 @@
 #lang racket
 
-(require rackunit json racket/runtime-path "../src/bdd-runner.rkt")
+(require rackunit json racket/runtime-path "../src/bdd-runner.rkt" (only-in "cli-in-process.rkt" fallback-notice?))
 
 (define-runtime-path handlers "bdd/handlers.agc")
 (define-runtime-path custom "bdd/specs/custom.feature")
@@ -158,8 +158,7 @@
                                  (path->string custom) (path->string handlers)) driver)
         (define builtin (cli (path->string driver)))
         (check-equal? (car builtin) 0)
-        (check-equal? (caddr builtin)
-                      "agentica: the VM does not support the builtin BDD.run yet; running on the legacy evaluator\n")
+        (check-true (fallback-notice? (caddr builtin) "BDD.run") (caddr builtin))
         (check-equal? (hash-ref (string->jsexpr (cadr builtin)) 'passed) 4)
         (for ([style '("--ai" "plain")])
           (define text (apply cli (append (if (equal? style "plain") '() (list style))

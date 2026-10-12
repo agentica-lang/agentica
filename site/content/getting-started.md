@@ -148,7 +148,7 @@ Split text; an empty separator gives characters.
 
 Programs run on a bytecode VM. A program that uses `TCP`, `TLS`, `HTTP` or
 `BDD` runs on the older Racket evaluator instead, and `agentica` says so in
-one line on standard error; `agentica test` uses that evaluator too.
+one line on standard error (not with `--json`); `agentica test` uses that evaluator too.
 
 ## Next
 

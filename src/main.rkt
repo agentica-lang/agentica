@@ -316,7 +316,8 @@
      (define ir (lower checked types))
      (cond
        [(and (diagnostic? ir) (eq? (diagnostic-code ir) 'LOWER-UNSUPPORTED))
-        (eprintf "agentica: ~a; running on the legacy evaluator\n" (diagnostic-message ir))
+        (unless (eq? style 'json)
+          (eprintf "agentica: ~a; running on the legacy evaluator\n" (diagnostic-message ir)))
         (run-evaluator)]
        [(diagnostic? ir) (fail! ir)]
        [else (run-on-vm ir)])]))
