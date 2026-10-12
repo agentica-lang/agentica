@@ -1,0 +1,27 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 2824,
+  "stdout": [
+    "200",
+    "\"hello\"",
+    "[\"one\", \"two\"]",
+    "ok(HttpResponse(status: 201, headers: [Header(name: \"transfer-encoding\", value: \"chunked\")], body: \"abcde\"))",
+    "ok(HttpResponse(status: 200, headers: [Header(name: \"connection\", value: \"close\")], body: \"until close\"))",
+    "ok(HttpResponse(status: 200, headers: [Header(name: \"content-length\", value: \"2\")], body: \"ok\"))",
+    "error(\"http: client is closed\")",
+    "GET /a?b=1 HTTP/1.1",
+    "Host: 127.0.0.1:PORT",
+    "DELETE / HTTP/1.1",
+    "Host: 127.0.0.1:PORT",
+    "X-Id: 7",
+    "POST /form HTTP/1.1",
+    "Host: 127.0.0.1:PORT",
+    "Content-Length: 6",
+    "ping",
+    "GET /again HTTP/1.1",
+    "Host: 127.0.0.1:PORT",
+    ""
+  ],
+  "stderr": []
+}

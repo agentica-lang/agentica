@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "Time" "Random" "Range")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "HttpWire" "Time" "Random" "Range")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -325,7 +325,7 @@
           [else (loop (cdr frames))])))
 
     (define (visible-names)
-      (append (append-map hash-keys scopes) (hash-keys functions) (hash-keys builtins)))
+      (append (append-map hash-keys scopes) (hash-keys functions) (public-builtin-names)))
 
     (define (reserve-constructor! name span)
       (when (member name '("ok" "error"))
@@ -975,7 +975,7 @@
               (format "unknown function \"~a\"" (display-name name))
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
-                         (did-you-mean name (hash-keys functions) #:shared (hash-keys builtins)))))
+                         (did-you-mean name (hash-keys functions) #:shared (public-builtin-names)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))
       (define arguments (call-args expression))

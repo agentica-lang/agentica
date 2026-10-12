@@ -1,8 +1,9 @@
 #lang racket
 
-(require "ast.rkt" "builtins.rkt" "diagnostic.rkt" "source.rkt")
+(require "ast.rkt" "builtins.rkt" "builtin-types.rkt" "diagnostic.rkt" "source.rkt")
 
 (provide lower
+         check-vm-only
          format-ir
          vm-builtins
          (struct-out ir-program)
@@ -22,15 +23,35 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener))
+(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient))
 
-(define file-info (ir-struct "FileInfo" '("kind" "size_bytes" "modified_seconds") #f))
+(define builtin-structs
+  (for/list ([name (in-list '("FileInfo" "Header" "HttpResponse" "HttpClientOptions"))])
+    (define fields (hash-ref builtin-records name))
+    (ir-struct name (map car fields) (map cdr fields))))
 
-(define (mentions-file-info? type)
+(define builtin-struct-needs (hash "HttpResponse" '("Header")))
+
+(define (mentions-struct? type name)
   (cond
-    [(equal? type '(Struct "FileInfo")) #t]
-    [(pair? type) (ormap mentions-file-info? type)]
+    [(equal? type (list 'Struct name)) #t]
+    [(pair? type) (for/or ([part (in-list type)]) (mentions-struct? part name))]
     [else #f]))
+
+(define (used-builtin-structs types declarations)
+  (define written '())
+  (walk-ast declarations
+            (lambda (node)
+              (when (type-expression? node) (set! written (cons (type-expression-name node) written)))
+              (when (type-ref? node) (set! written (cons (type-ref-name node) written)))
+              #f))
+  (define named
+    (for*/list ([entry (in-list builtin-structs)]
+                #:when (or (member (ir-struct-name entry) written)
+                           (for/or ([type (in-hash-values types)]) (mentions-struct? type (ir-struct-name entry)))))
+      (ir-struct-name entry)))
+  (define wanted (append named (append-map (lambda (name) (hash-ref builtin-struct-needs name '())) named)))
+  (filter (lambda (entry) (member (ir-struct-name entry) wanted)) builtin-structs))
 
 (define max-list-chunk 255)
 (define max-map-chunk 255)
@@ -72,13 +93,15 @@
     [else (struct-names-in (last type))]))
 
 (define (decodable-structs structs)
-  (define names (map struct-decl-name structs))
+  (define names (append (map struct-decl-name structs) (map ir-struct-name builtin-structs)))
   (define candidates
-    (for*/hash ([declaration (in-list structs)]
+    (for*/fold ([table (for/hash ([entry (in-list builtin-structs)])
+                         (values (ir-struct-name entry) (ir-struct-types entry)))])
+               ([declaration (in-list structs)]
                 [types (in-value (for/list ([field (in-list (struct-decl-fields declaration))])
                                    (json-field-type (field-decl-type field) names)))]
                 #:when (andmap values types))
-      (values (struct-decl-name declaration) types)))
+      (hash-set table (struct-decl-name declaration) types)))
   (let loop ([table candidates])
     (define kept
       (for/hash ([(name types) (in-hash table)]
@@ -158,24 +181,48 @@
                       "Process.close_stdin" "Process.wait" "Process.close"
                       "TCP.connect" "TCP.listen" "TCP.accept" "TCP.local_port" "TCP.close_listener"
                       "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"
-                      "TLS.connect" "TLS.listen"))
+                      "TLS.connect" "TLS.listen"
+                      "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"))
 
-(define (referenced-names node)
+(define (walk-ast node visit)
   (define seen (make-hasheq))
-  (define found (make-hash))
-  (define names '())
   (let walk ([node node])
     (cond
-      [(name-ref? node)
-       (unless (hash-ref found (name-ref-name node) #f)
-         (hash-set! found (name-ref-name node) #t)
-         (set! names (cons (name-ref-name node) names)))]
+      [(visit node) (void)]
       [(pair? node) (walk (car node)) (walk (cdr node))]
       [(and (struct? node) (not (hash-ref seen node #f)))
        (hash-set! seen node #t)
        (for ([field (in-vector (struct->vector node) 1)]) (walk field))]
-      [else (void)]))
+      [else (void)])))
+
+(define (referenced-names node)
+  (define found (make-hash))
+  (define names '())
+  (walk-ast node
+            (lambda (node)
+              (and (name-ref? node)
+                   (unless (hash-ref found (name-ref-name node) #f)
+                     (hash-set! found (name-ref-name node) #t)
+                     (set! names (cons (name-ref-name node) names)))
+                   #t)))
   (reverse names))
+
+(define (check-vm-only program reason)
+  (let/ec found
+    (walk-ast program
+              (lambda (node)
+                (when (and (call? node) (member (call-name node) vm-only-builtins))
+                  (define span (call-span node))
+                  (found (diagnostic 'LOWER-UNSUPPORTED
+                                     (format "this program needs the VM: ~a calls ~a, which only the VM runs, but ~a"
+                                             (source-name (source-span-source span)) (call-name node) reason)
+                                     span
+                                     #:help (string-append
+                                             "a program that imports \"std/http\" runs only on the VM, even when it uses "
+                                             "only a pure helper such as header_values; keep HTTP and BDD builtins, "
+                                             "--legacy-eval and agentica test step files out of it"))))
+                #f))
+    #f))
 
 (define (lower program types)
   (let/ec return
@@ -191,10 +238,7 @@
                    #:when (function-decl? declaration))
           declaration))
       (define-values (declared-structs enums) (user-tables (program-declarations program)))
-      (define structs
-        (if (for/or ([type (in-hash-values types)]) (mentions-file-info? type))
-            (append declared-structs (list file-info))
-            declared-structs))
+      (define structs (append declared-structs (used-builtin-structs types (program-declarations program))))
       (define user-types (make-hash))
       (define struct-info (make-hash))
       (for ([entry (in-list structs)] [index (in-naturals)])

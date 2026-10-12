@@ -187,6 +187,9 @@
                         [else (function-decl? declaration)])
                 (bail 'CHECK-TYPE-MISMATCH "wrong kind of imported declaration" span))
               (identity target member)]
+             [(and (std-only-name? name) (not (string? key)))
+              (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span
+                    #:help (format "~a is internal to std/http; use import \"std/http\" as Web" alias))]
              ;; Unknown calls belong to the checker, including misspelled
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]

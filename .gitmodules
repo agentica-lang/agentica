@@ -11,3 +11,6 @@
 	path = vm/third_party/openssl
 	url = https://github.com/openssl/openssl.git
 	shallow = true
+[submodule "vm/third_party/picohttpparser"]
+	path = vm/third_party/picohttpparser
+	url = https://github.com/h2o/picohttpparser.git

@@ -439,6 +439,7 @@ static const builtin_table tables[] = {
   {agc_task_builtins, &agc_task_builtin_count},
   {agc_process_builtins, &agc_process_builtin_count},
   {agc_tcp_builtins, &agc_tcp_builtin_count},
+  {agc_http_builtins, &agc_http_builtin_count},
 };
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {
@@ -449,4 +450,20 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
     }
   }
   return NULL;
+}
+
+uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {
+  const agc_program *p = vm->rt->program;
+  for (uint32_t k = 0; k < p->struct_count; k++) {
+    const agc_struct_def *d = &p->structs[k];
+    if (d->name->bytes != strlen(name) || memcmp(d->name->data, name, d->name->bytes) != 0 || d->count != count) continue;
+    bool same = true;
+    for (uint32_t f = 0; f < count; f++)
+      same = same && d->fields[f]->bytes == strlen(fields[f]) && memcmp(d->fields[f]->data, fields[f], d->fields[f]->bytes) == 0;
+    if (same) return k;
+  }
+  size_t size = agc_size_add(strlen(name), 48);
+  char *message = agc_alloc_atomic(size);
+  snprintf(message, size, "invalid bytecode: the %s struct is missing", name);
+  agc_fail(vm, "RUNTIME-INTERNAL", message, 0);
 }
