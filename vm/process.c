@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +44,7 @@ struct watch {
 };
 
 struct guard {
+  agc_trace trace;
   watch watches[AGC_STOP_SIGNALS];
   proc *first;
   size_t running, handles;
@@ -52,6 +54,7 @@ struct guard {
 };
 
 struct proc {
+  agc_trace trace;
   uv_process_t process;
   uv_pipe_t in, out, err;
   uv_write_t write_req;
@@ -123,6 +126,7 @@ static void guard_stop(guard *g, int sig) {
     if (!sig && h->caught_signals != h->dispatched_signals) sig = agc_stop_signals[k];
     uv_signal_stop(h);
   }
+  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "guard_stop raise=%d", sig);
   if (sig) raise(sig);
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
 }
@@ -175,13 +179,18 @@ static void reap(proc *p, const struct timespec *deadline) {
     pid_t pid = waitpid(p->process.pid, &status, WNOHANG);
     if (pid == p->process.pid) {
       finished(p, WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status));
+      AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d status=%" PRId64, (int)pid, p->status);
       return;
     }
     if (pid < 0 && errno == ECHILD) {
       finished(p, p->status);
+      AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d status=%" PRId64 " gone=1", (int)p->process.pid, p->status);
       return;
     }
-    if (!deadline || past(deadline)) return;
+    if (!deadline || past(deadline)) {
+      AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)p->process.pid);
+      return;
+    }
     nanosleep(&pause, NULL);
   }
 }
@@ -189,9 +198,11 @@ static void reap(proc *p, const struct timespec *deadline) {
 static int shut(proc *p, const struct timespec *deadline) {
   if (p->closed) return 0;
   p->closed = true;
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "close pid=%d running=%d", (int)p->process.pid, p->running ? 1 : 0);
   int err = 0;
   if (p->running) {
     err = uv_process_kill(&p->process, SIGKILL);
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "kill pid=%d rc=%d", (int)p->process.pid, err);
     reap(p, err ? NULL : deadline);
   }
   if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
@@ -218,8 +229,11 @@ static void close_children(guard *g) {
     g->reaping = true;
     deadline_in(&g->deadline);
   }
-  for (proc *p = g->first; p; p = p->run_next)
-    if (p->running && !p->closed) uv_process_kill(&p->process, SIGKILL);
+  for (proc *p = g->first; p; p = p->run_next) {
+    if (!p->running || p->closed) continue;
+    int rc = uv_process_kill(&p->process, SIGKILL);
+    AGC_TRACE(&g->trace, AGC_TRACE_PROC, "kill pid=%d rc=%d", (int)p->process.pid, rc);
+  }
   for (proc *p = g->first, *next = NULL; p; p = next) {
     next = p->run_next;
     shut(p, &g->deadline);
@@ -342,7 +356,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   return error_of(timed_out);
 }
 
-static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true};
+static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process"};
 
 static void wrote(uv_write_t *w, int status) {
   proc *p = OWNER(w, write_req);
@@ -354,6 +368,7 @@ static void wrote(uv_write_t *w, int status) {
 
 static void exited(uv_process_t *h, int64_t status, int signal) {
   proc *p = OWNER(h, process);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "exit pid=%d status=%" PRId64 " signal=%d", (int)h->pid, status, signal);
   finished(p, signal ? 128 + signal : status);
   if (p->closed) close_handle((uv_handle_t *)&p->process, closed_process);
   notify_waits(p);
@@ -361,6 +376,7 @@ static void exited(uv_process_t *h, int64_t status, int signal) {
 
 static void interrupted(uv_signal_t *h, int signum) {
   guard *g = ((watch *)(void *)h)->owner;
+  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "signal sig=%d running=%zu", signum, g->running);
   g->signal = signum;
   close_children(g);
   guard_stop(g, signum);
@@ -376,10 +392,12 @@ static void link_child(guard *g, proc *p) {
   if (g->running++) return;
   for (size_t k = 0; k < AGC_STOP_SIGNALS; k++)
     if (g->watches[k].usable) uv_signal_start(&g->watches[k].handle, interrupted, agc_stop_signals[k]);
+  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "guard_start watchers=%zu", g->handles);
 }
 
 static void release_guard(void *native) {
   guard *g = native;
+  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "guard_cleanup running=%zu", g->running);
   close_children(g);
   guard_stop(g, 0);
   g->released = true;
@@ -407,6 +425,7 @@ static guard *guard_of(agc_vm *vm, uv_loop_t *loop) {
   agc_resource *r = agc_register(vm, NULL, release_guard);
   guard *g = calloc(1, sizeof(guard));
   if (!g) agc_out_of_memory();
+  g->trace = vm->rt->trace;
   for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
     watch *w = &g->watches[k];
     w->owner = g;
@@ -433,7 +452,12 @@ static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   if (n > 0 && !p->forward_failed &&
       (fwrite(buf->base, 1, (size_t)n, p->forward) != (size_t)n || fflush(p->forward) != 0))
     p->forward_failed = true;
+  if (n > 0)
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr pid=%d bytes=%zd failed=%d", (int)p->process.pid, n,
+              p->forward_failed ? 1 : 0);
   if (n >= 0) return;
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stderr error=%d", (int)p->process.pid,
+            n == UV_EOF ? 0 : (int)-n);
   uv_read_stop(s);
   p->err_done = true;
   notify_waits(p);
@@ -488,6 +512,8 @@ static void read_out(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   } else if (n < 0) {
     p->out_error = (int)-n;
   }
+  if (n < 0)
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stdout error=%d", (int)p->process.pid, p->out_error);
   request *q = p->reader;
   bool ready = q && read_ready(p, q->kind, q->count);
   if (n < 0 || !q || ready) stop_reading(p);
@@ -615,8 +641,9 @@ static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **e
   return rc;
 }
 
-static agc_resource *new_lock(void) {
+static agc_resource *new_lock(agc_vm *vm) {
   agc_resource *lock = agc_alloc(sizeof(agc_resource));
+  lock->id = agc_resource_id(vm);
   lock->slot = SIZE_MAX;
   lock->context = agc_void();
   return lock;
@@ -636,8 +663,8 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!valid) return error_of("process: command must be nonempty and arguments cannot contain NUL");
   if (timeout <= 0) return error_of(bad_timeout);
   agc_process *pr = agc_alloc(sizeof(agc_process));
-  pr->reader = new_lock();
-  pr->writer = new_lock();
+  pr->reader = new_lock(vm);
+  pr->writer = new_lock(vm);
   uv_loop_t *loop = agc_io_uv(vm);
   guard *g = guard_of(vm, loop);
   char *path = resolve(vm, command);
@@ -646,8 +673,13 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   char **env = vm->rt->drop_uring_env ? child_env() : NULL;
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
+  p->trace = vm->rt->trace;
   p->forward = vm->rt->err;
   int rc = start_child(loop, g, p, argv, env);
+  if (rc)
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, rc);
+  else
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn pid=%d path=%s args=%zu", (int)p->process.pid, path, list->len);
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
   free(env);
@@ -760,6 +792,7 @@ static agc_value builtin_close_stdin(agc_vm *vm, agc_value *args, uint32_t span)
   if (!locked(vm, pr->writer, &timeout, &result)) return result;
   proc *p = live(pr);
   if (!p) return error_of(closed_text);
+  if (!p->in_closed) AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stdin", (int)p->process.pid);
   p->in_closed = true;
   close_handle((uv_handle_t *)&p->in, closed_in);
   return ok_void();

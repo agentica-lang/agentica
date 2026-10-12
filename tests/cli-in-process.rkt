@@ -6,6 +6,9 @@
 
 (define-runtime-path main-file "../src/main.rkt")
 
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define (run-main-in-process #:environment [environment (current-environment-variables)]
                              #:input [input #""]
                              #:port [port (open-input-bytes input)]

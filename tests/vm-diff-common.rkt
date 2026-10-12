@@ -38,6 +38,10 @@
 (define full-sweep-limit 2000)
 (define vm-turn-steps 2000)
 (define shard-count 4)
+
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define heavy-fixtures
   '(("tail-calls.agc" . 1) ("files-large.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
     ("callback-overflow.agc" . 3) ("results.agc" . 3) ("list-chunks.agc" . 3)))

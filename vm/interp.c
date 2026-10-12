@@ -53,8 +53,9 @@ void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
              stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
 }
 
-agc_task *agc_new_task(void) {
+agc_task *agc_new_task(agc_vm *vm) {
   agc_task *t = agc_alloc(sizeof(agc_task));
+  t->id = atomic_fetch_add(&vm->rt->next_task_id, 1);
   t->state = AGC_TASK_READY;
   t->result = agc_void();
   return t;
@@ -71,8 +72,10 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   rt->args = agc_list_value(agc_new_list(0));
+  atomic_init(&rt->next_task_id, 1);
+  agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
-  vm->main = vm->task = agc_new_task();
+  vm->main = vm->task = agc_new_task(vm);
   agc_random_seed(&vm->task->random, 0);
 }
 
@@ -114,6 +117,7 @@ static void end_turn_now(agc_vm *vm) {
 void agc_turn_begin(agc_vm *vm) {
   vm->turn_left = AGC_TURN_STEPS;
   vm->batch = 0;
+  vm->turn_cost_used = 0;
   vm->yield = false;
   take_steps(vm, AGC_TURN_STEPS);
   set_counter(vm);
@@ -152,6 +156,7 @@ static bool apply_cost(agc_vm *vm) {
   int64_t c = vm->task->turn_cost;
   vm->task->turn_cost = 0;
   if (vm->rt->no_turn_cost) return false;
+  vm->turn_cost_used = vm->turn_cost_used < INT64_MAX - c ? vm->turn_cost_used + c : INT64_MAX;
   sync_budget(vm);
   vm->turn_left = vm->turn_left > INT64_MIN + c ? vm->turn_left - c : INT64_MIN;
   if (vm->turn_left <= 0) {

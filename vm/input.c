@@ -1,6 +1,7 @@
 #include "agc.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -111,6 +112,8 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
   read_request *q = data;
   agc_input *in = &vm->rt->in;
   in->reading = false;
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "stdin bytes=%" PRId64 " status=%s", q->got > 0 ? (int64_t)q->got : 0,
+            q->got > 0 ? "data" : q->got == 0 ? "eof" : "error");
   if (q->got > 0) {
     reserve(in, (size_t)q->got);
     memcpy(in->buf + in->end, q->data, (size_t)q->got);
@@ -120,13 +123,13 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
     in->eof_seq++;
   }
   free(q);
-  agc_task_wake_all(vm, &in->waiters, &in->waiters_tail);
+  agc_task_wake_all(vm, &in->waiters, &in->waiters_tail, "stdin");
   return agc_void();
 }
 
 static void read_drop(void *data) { free(data); }
 
-static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false};
+static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin"};
 
 static int start_read(agc_vm *vm, agc_input *in) {
   if (in->reading) {

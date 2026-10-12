@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "trace.h"
+
 #define AGC_FORMAT_VERSION 3
 #define AGC_MAX_FILE_BYTES ((size_t)256 * 1024 * 1024)
 #define AGC_MAX_DEPTH 10000
@@ -150,6 +152,7 @@ typedef struct agc_resource agc_resource;
 
 struct agc_resource {
   size_t slot;
+  uint64_t id;
   agc_resource_kind kind;
   void *native;
   agc_release_fn release;
@@ -174,6 +177,7 @@ typedef struct {
   agc_value (*expired)(agc_vm *vm, void *data, agc_value context);
   void (*drop)(void *data);
   bool external;
+  const char *name;
 } agc_io_kind;
 
 typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
@@ -280,6 +284,10 @@ typedef struct {
 } agc_input;
 
 typedef struct {
+  uint64_t collections, heap, free, since;
+} agc_gc_info;
+
+typedef struct {
   const agc_program *program;
   FILE *out, *err;
   agc_value args;
@@ -290,6 +298,8 @@ typedef struct {
 #endif
   uint64_t hash_key[2];
   _Atomic int64_t steps_left;
+  _Atomic uint64_t next_task_id;
+  agc_trace trace;
   agc_outcome outcome;
   agc_input in;
 } agc_runtime;
@@ -301,6 +311,7 @@ typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
 typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status;
 
 struct agc_task {
+  uint64_t id;
   agc_value *regs;
   size_t reg_capacity;
   agc_frame *frames;
@@ -326,7 +337,8 @@ struct agc_vm {
   agc_registry *registry;
   agc_loop *loop;
   agc_resource *process_guard;
-  int64_t next_stop, stop_set, turn_left, batch;
+  int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
+  uint64_t tasks_done, gc_seen;
   bool yield;
   jmp_buf fail;
 };
@@ -340,6 +352,7 @@ size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
 void agc_out_of_memory(void);
 unsigned agc_gc_version(void);
+bool agc_gc_stats(agc_gc_info *info);
 
 agc_value agc_void(void);
 agc_value agc_nil(void);
@@ -469,6 +482,7 @@ extern const agc_builtin agc_process_builtins[];
 extern const size_t agc_process_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
+uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 void agc_unregister(agc_vm *vm, agc_resource *r);
@@ -491,15 +505,17 @@ agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
+bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
+                     const agc_trace *trace);
 
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
-agc_task *agc_new_task(void);
+agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, agc_value arg, uint32_t span);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
-void agc_task_wake(agc_vm *vm, agc_task *t);
+void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
-void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail);
+void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
 void agc_turn_begin(agc_vm *vm);
 bool agc_turn_charge(agc_vm *vm);

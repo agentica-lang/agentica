@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,7 @@
 
 struct agc_registry {
   size_t count, cap;
+  uint64_t next_id;
   agc_resource **items;
 };
 
@@ -30,6 +32,7 @@ struct agc_io_job {
   agc_loop *loop;
   job *ready_next;
   size_t slot;
+  uint64_t started_ns, ended_ns;
   bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued;
 };
 #endif
@@ -38,6 +41,8 @@ static agc_registry *registry_of(agc_vm *vm) {
   if (!vm->registry) vm->registry = agc_alloc(sizeof(agc_registry));
   return vm->registry;
 }
+
+uint64_t agc_resource_id(agc_vm *vm) { return ++registry_of(vm)->next_id; }
 
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   agc_registry *reg = registry_of(vm);
@@ -57,6 +62,7 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   r->holder = NULL;
   r->next_owner = NULL;
   r->waiters = r->waiters_tail = NULL;
+  r->id = agc_resource_id(vm);
   r->slot = reg->count;
   reg->items[reg->count++] = r;
   return r;
@@ -84,6 +90,7 @@ static void run_work(uv_work_t *req) {
 }
 
 static void mark_ready(job *j) {
+  if (j->started_ns && !j->ended_ns) j->ended_ns = agc_trace_now();
   if (j->queued) return;
   j->queued = true;
   j->ready_next = NULL;
@@ -166,7 +173,7 @@ static void drain(agc_vm *vm) {
       agc_resource *r = reg->items[j->slot];
       agc_task *t = r->task;
       r->task = NULL;
-      if (t) agc_task_wake(vm, t);
+      if (t) agc_task_wake(vm, t, "job");
     }
     j = next;
   }
@@ -210,6 +217,12 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   r->kind = AGC_RESOURCE_JOB;
   r->context = context;
   j->slot = r->slot;
+  const agc_trace *tr = &vm->rt->trace;
+  if (AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
+    j->started_ns = agc_trace_now();
+    AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s task=%" PRIu64 " timeout_ms=%" PRId64, r->id,
+              kind->name, vm->task->id, timeout_ms);
+  }
   if (timeout_ms >= 0) {
     uv_update_time(&loop->uv);
     uv_timer_init(&loop->uv, &j->timer);
@@ -240,7 +253,11 @@ void agc_io_ready(agc_io_job *j) {
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
   if (!vm->loop || !uv_loop_alive(&vm->loop->uv)) return false;
+  const agc_trace *tr = &vm->rt->trace;
+  uint64_t before = AGC_TRACE_ON(tr, AGC_TRACE_IO) ? agc_trace_now() : 0;
   uv_run(&vm->loop->uv, wait ? UV_RUN_ONCE : UV_RUN_NOWAIT);
+  AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, wait ? "once" : "nowait",
+            (agc_trace_now() - before) / 1000u);
   drain(vm);
   return true;
 }
@@ -252,7 +269,7 @@ static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL, false};
+static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL, false, "lock"};
 
 static uint64_t loop_now(agc_vm *vm) {
   agc_loop *loop = loop_of(vm);
@@ -269,7 +286,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     t->lock_deadline = 0;
     if (handle->next_owner == t) {
       handle->next_owner = NULL;
-      agc_task_wake_all(vm, &handle->waiters, &handle->waiters_tail);
+      agc_task_wake_all(vm, &handle->waiters, &handle->waiters_tail, "lock");
     }
     if (!deadline) return AGC_LOCK_TAKEN;
     if (now >= deadline) return AGC_LOCK_TIMEOUT;
@@ -283,12 +300,25 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
   if (now >= deadline) {
     t->lock_deadline = 0;
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_timeout handle=%" PRIu64 " task=%" PRIu64, handle->id, t->id);
     return AGC_LOCK_TIMEOUT;
   }
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_wait handle=%" PRIu64 " task=%" PRIu64 " wait_ms=%" PRIu64, handle->id,
+            t->id, deadline - now);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
   agc_io_start(vm, &lock_io, NULL, agc_void(), (int64_t)(deadline - now));
   agc_task_park(vm, true);
   return AGC_LOCK_WAIT;
+}
+
+static void trace_finish(agc_vm *vm, const agc_resource *r, const job *j, bool done, agc_value result) {
+  const agc_trace *tr = &vm->rt->trace;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns) return;
+  uint64_t end = j->ended_ns ? j->ended_ns : agc_trace_now();
+  uint64_t us = end > j->started_ns ? (end - j->started_ns) / 1000u : 0;
+  const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
+  AGC_TRACE(tr, AGC_TRACE_IO, "%s job=%" PRIu64 " kind=%s us=%" PRIu64 " result=%s", done ? "done" : "timeout", r->id,
+            j->kind->name, us, outcome);
 }
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
@@ -308,18 +338,21 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
       if (next) {
         agc_task_remove(&handle->waiters, &handle->waiters_tail, next);
         handle->next_owner = next;
-        agc_task_wake(vm, next);
+        AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_handoff handle=%" PRIu64 " task=%" PRIu64, handle->id, next->id);
+        agc_task_wake(vm, next, "lock");
       }
     }
   }
   agc_value result;
-  if ((j->kind->work || j->kind->external) ? j->work_done : j->timer_fired) {
+  bool done = (j->kind->work || j->kind->external) ? j->work_done : j->timer_fired;
+  if (done) {
     void *data = j->data;
     j->data = NULL;
     result = j->kind->done(vm, data, context);
   } else {
     result = j->kind->expired(vm, j->data, context);
   }
+  trace_finish(vm, r, j, done, result);
   if (j->kind->external) j->work_done = true;
   sweep(vm);
   return result;
@@ -340,7 +373,7 @@ static void release_handles(agc_vm *vm) {
   }
 }
 
-bool agc_io_close(agc_vm *vm) {
+static bool close_all(agc_vm *vm) {
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
     if (!j) continue;
@@ -359,6 +392,12 @@ bool agc_io_close(agc_vm *vm) {
   free(vm->loop);
   vm->loop = NULL;
   return true;
+}
+
+bool agc_io_close(agc_vm *vm) {
+  bool settled = close_all(vm);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "close left=%zu settled=%d", registry_count(vm), settled ? 1 : 0);
+  return settled;
 }
 #else
 bool agc_io_init(void) { return false; }

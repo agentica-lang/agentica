@@ -1,6 +1,7 @@
 RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
+unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
 .PHONY: build test exe clean test-bdd bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode site site-serve site-sass dup-check dup-baseline FORCE
@@ -66,6 +67,7 @@ site-serve: site-sass
 # make vm                 dist/agentica-vm
 # make vm-test            C tests in vm/tests/
 # make vm SANITIZE=1      clang with ASan and UBSan, no libgc
+# make vm TRACE=0         compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
@@ -75,9 +77,9 @@ GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 UV_DIR := vm/third_party/libuv
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/process.c vm/interp.c vm/task.c vm/diag.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/process.c vm/interp.c vm/task.c vm/diag.c vm/trace.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
-VM_DEPS := $(VM_SRC) vm/agc.h src/version.rkt
+VM_DEPS := $(VM_SRC) vm/agc.h vm/trace.h src/version.rkt
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -132,6 +134,9 @@ VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/release
 YY_CFLAGS := -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 FUZZ_RUNS ?= 100000
+endif
+ifeq ($(TRACE),0)
+VM_CFLAGS += -DAGC_TRACE_BUILD=0
 endif
 VM_STAMP := build/vm/flags
 VM_YY := $(VM_BUILD)/yyjson.o
