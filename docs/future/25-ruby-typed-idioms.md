@@ -1,17 +1,19 @@
 ## 25. Ruby typed idioms
 
-**Status:** Part A (25.1 to 25.11) is planned (roadmap phase 15, order step 7.4), after 7i deletes the evaluator (order 7.2). Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12.
+**Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator (order 7.2): 25.1 to 25.5, 25.9 and 25.10 at order step 7.4, and the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12.
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms that models already know, with the rule of [section 11](11-ruby-ergonomics.md#11-ruby-style-ergonomics): accept a form when it is real Ruby (or a typed version of it) or when it makes Agentica consistent with itself, and keep static checking and immutable values. Three limits do not move: no OOP (no classes, no inheritance, no user methods on user types), no user generics, and values stay immutable.
 
+**Principle: one way to do each thing.** Strictness wins, so agents are precise. A Ruby form is worth adding only when it does not create a second way to write something the language already has. Where it would, it is not accepted: the parser or the checker gives a diagnostic whose help shows the canonical form. This sharpens section 11's rule, [Which forms to accept](11-ruby-ergonomics.md#11-ruby-style-ergonomics). That is why `unless` and statement modifiers (second ways to write `if`) and new method aliases are in Part C, and why each Part A item that overlaps an existing form names the canonical one.
+
 **How Part A lands.**
 
-- Everything here comes after 7i deletes the evaluator (order 7.2). Each item changes the front end (`src/lexer.rkt`, `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`, and runs on the C VM. No item touches `src/evaluator.rkt`.
-- Most items are sugar that `lower.rkt` turns into code the VM already runs, so the bytecode format and the VM do not change. Three items change the VM, and two of them bump the bytecode format version, since any change to the layout or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.4 widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a prelude flag on functions, argument spans on prelude calls, the error-span rule and the prelude-only builtin `__fail_arg` (format version bump); and 25.11 appends one `Float` builtin (no bump).
+- Everything here comes after 7i deletes the evaluator (order 7.2); the prelude part (25.6, 25.11) also waits for faster lists (8d, order step 8), because its cost contract needs them. Each item changes the front end (`src/lexer.rkt`, `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`, and runs on the C VM. No item touches `src/evaluator.rkt`.
+- Most items are sugar that `lower.rkt` turns into code the VM already runs, so the bytecode format and the VM do not change. Three items change the VM, and two of them bump the bytecode format version, since any change to the layout or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.4 widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a prelude flag on functions, argument spans on prelude calls, a name-only source entry per prelude file, the error-span rule and the prelude-only builtin `__fail_arg` (format version bump); and 25.11 appends one `Float` builtin (no bump).
 - Library work follows the roadmap rule [New library features: `std/` first](../roadmap/README.md#new-library-features-std-first): pure computation is written in Agentica, and C is only for its exceptions. 25.6 and 25.11 need one small mechanism for this, the compiler prelude (25.6).
 - Each item is its own PR, with the grammar (`docs/grammar.md`), the programming skill (`.agents/skills/agentica-programming/SKILL.md` and the matching `references/` file), the site page, the development skill's notes and tests. When an item lands, its text moves to `grammar.md` and is deleted here.
 - **Tests** in each PR: parser, lexer and checker tests that assert the diagnostic code and span (`tests/parser-test.rkt`, `tests/lexer-test.rkt`, `tests/checker-test.rkt`, `tests/modules-test.rkt`); the golden fixtures (`tests/fixtures/vm/*.expected`: exit code, stdout, stderr and diagnostic code on the VM); and the runnable `agentica` blocks of the site page, which `tests/site-examples-test.rkt` checks.
-- **Evaluation.** Section 11's rule holds: before the programming skill teaches a new form as the main style, an evaluation round with a second model checks that agents use it well (`tests/eval/run.py`). For 25.8 the round is a precondition: it does not ship without it.
+- **Evaluation.** Section 11's rule holds: before the programming skill teaches a new form as the main style, an evaluation round with a second model checks that agents use it well (`tests/eval/run.py`).
 
 | § | Item | Layers | New diagnostic codes |
 |---|---|---|---|
@@ -20,12 +22,12 @@ Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 | 25.3 | `value.with(field: x)` | parser, checker, lowering | none |
 | 25.4 | Value equality for data | checker, VM `EQ`/`NE` | none |
 | 25.5 | Standalone lambdas | parser, checker, lowering | none |
-| 25.6 | More Enumerable methods | catalog, prelude, checker, lowering, VM error spans | none |
-| 25.7 | `unless` | lexer, parser | none |
-| 25.8 | Statement modifiers | parser, checker | `CHECK-MODIFIER-BINDING` |
+| 25.6 | More Enumerable methods (after 8d) | catalog, prelude, checker, lowering, VM error spans | none |
+| 25.7 | `unless`: moved to Part C | | |
+| 25.8 | Statement modifiers: moved to Part C | | |
 | 25.9 | `File.open` with a block | catalog, checker, lowering | none |
 | 25.10 | Heredocs `<<~NAME` | lexer | `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT` |
-| 25.11 | `format` | checker, prelude, lowering, one builtin | `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC` |
+| 25.11 | `format` (after 8d) | checker, prelude, lowering, one builtin | `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC` |
 
 ### 25.1 Default parameter values
 
@@ -63,7 +65,7 @@ The parser takes any expression after `=`, so the checker can give a clear diagn
 
 **`std/log`:** `std/log` ([section 24](24-logging.md#242-stdlog), 14c) lands first, at order step 7.3, with its `_with` functions. A later PR may add defaults to `std/log` once 15a lands, for example `def info(message: String, fields: Map[String, String] = {}) -> Void`.
 
-**Tests:** parsing and spans; each code; `each_line("a.txt", 50)` with no block, which passes `50` to `f` and gives `CHECK-TYPE-MISMATCH`, not `CHECK-ARITY`; `CHECK-ARITY` with a range; `[]` and `{}` typed by the parameter; a block after defaulted parameters; a call through an import alias; a golden fixture with calls that leave out 0, 1 and 2 arguments. **Docs:** `grammar.md` (the `parameter` rule; "Functions and entry point" drops "no default values"), the programming skill (`SKILL.md`, functions), `site/content/tour/functions.md`.
+**Tests:** parsing and spans; each code; `each_line("a.txt", 50)` with no block, which passes `50` to `f` and gives `CHECK-TYPE-MISMATCH`, not `CHECK-ARITY`; `CHECK-ARITY` with a range; `[]` and `{}` typed by the parameter; a block after defaulted parameters; a call through an import alias; a golden fixture with calls that leave out 0, 1 and 2 arguments. **Docs:** `grammar.md` (the `parameter` rule; "Functions and entry point" drops "no default values"), the programming skill (`SKILL.md`, functions, and `references/diagnostics.md` for the new codes), `site/content/tour/functions.md`.
 
 ### 25.2 Re-exports
 
@@ -131,14 +133,16 @@ def main() -> Void
 end
 ```
 
-**Syntax:** `postfix_expr` gets one more form, `".", "with", "(", named_arguments, ")"`. `with` is not a reserved word; it has this meaning only after a `.` and before `(`, and its arguments are always named.
+**Syntax:** `postfix_expr` gets one more form, `".", "with", "(", named_arguments, ")"`. `with` is not a reserved word; it has this meaning only after a `.` and before `(` in the postfix loop, and its arguments are always named. `Alias.with(...)` (a `TYPE_NAME` before the dot) stays a module call, since a module call is parsed as a primary, not in the postfix loop.
+
+**One way:** `with` is the canonical way to change some fields of an existing value; a constructor with every field is the way to build a new one. The checker does not reject a constructor that copies fields by hand, since it cannot tell intent, but the skill teaches `with`.
 
 **Checker rules:**
 
 - The receiver must be a struct (`CHECK-UNKNOWN-METHOD` on any other type, with a help for structs). Each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given at most once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take the field type).
 - At least one field: `ana.with()` is `CHECK-ARITY`. A positional argument (`ana.with(31)`) is `PARSE-UNEXPECTED-TOKEN`, with a help that shows `with(age: 31)`.
 - `with` builds a new value of the struct's type, so it follows the rules of construction: for a type that another module keeps private, it gives the same diagnostic as constructing it. With generic structs (15.3) the type arguments stay, so a field's new value has the same type as before: `.with(` always parses as the update, and each field is checked after the struct's type arguments are substituted.
-- A field named `with` whose type is `Fn[...]`, or a type parameter of a generic struct (15.3, which could be an `Fn`), is `CHECK-REDEFINED-NAME`. The rule is added here, in advance, so that calling `Fn` fields without `.call` (10a, §15.1) stays a non-breaking change; otherwise `user.with(...)` would clash with calling an `Fn` field without `.call` (15.1). A data field named `with` stays valid, so a JSON object with a `"with"` key still decodes into a struct; `value.with` without parentheses reads that field, and `value.with(...)` is always the update.
+- A field named `with` whose type is `Fn[...]` is `CHECK-REDEFINED-NAME`. (A field named `with` whose type is a type parameter is banned where generic structs land, [section 15.3](15-adapters-and-json-inspection.md#153-generic-structs), roadmap 10c.) The rule is added here, in advance, so that calling `Fn` fields without `.call` (10a, §15.1) stays a non-breaking change; otherwise `user.with(...)` would clash with calling an `Fn` field without `.call` (15.1). A data field named `with` stays valid, so a JSON object with a `"with"` key still decodes into a struct; `value.with` without parentheses reads that field, and `value.with(...)` is always the update.
 - **Named arguments appear only here and in struct construction** (`User(name: ..., age: ...)`). Calls to functions stay positional; keyword arguments are in Part B.
 
 **Lowering:** the receiver is evaluated once, then the new values left to right; `lower.rkt` builds a new struct with today's construction instruction, reading the fields that do not change from the receiver. No VM change.
@@ -171,9 +175,9 @@ Lists, maps and Results are in this item because a struct with a `tags: List[Str
 
 **VM:** the `EQ` and `NE` opcodes compare structs, enums, lists, maps and Results by value, with an explicit stack (no C recursion, so deep values cannot overflow the C stack), and charge a turn cost for their work as they already do for long strings (`docs/vm/10-io-scheduler.md` §10.2.1). The checker has already ruled out `Fn` and handles, so the VM never meets them there. The alternative, one equality function per type generated by `lower.rkt`, was not chosen: it needs a function per struct, list and map type used with `==`, while the VM already knows the shape of every value. `case` patterns are unchanged.
 
-**Format version:** the wider `EQ` and `NE` change what an opcode means, so this PR bumps the bytecode format version (`docs/vm/03-ir-and-bytecode.md` §4: any change to an opcode's meaning bumps it). No old file can hold struct or list equality, since the checker rejected it, but the rule is about meaning, not about which files exist, and the front end and the VM always ship together anyway, so the bump costs nothing.
+**Format version:** the wider `EQ` and `NE` change what an opcode means, so this PR bumps the bytecode format version (`docs/vm/03-ir-and-bytecode.md` §4: any change to an opcode's meaning bumps it). No old file can hold struct or list equality, since the checker rejected it, but the rule is about meaning, not about which files exist, and the front end and the VM always ship together anyway, so the bump costs nothing. The alternative to a bump was a new opcode (`EQ_DEEP`) next to the old ones; the bump was chosen because the front end and the VM ship together, and one opcode is simpler than two.
 
-**Tests:** checker tests for each kind and for a struct with an `Fn` field (code and secondary span); golden fixtures for nested structs, lists of structs, maps in another order, enums, Results, `ok() == ok()`, a NaN field; a deep recursive value for the explicit stack (a `struct Node` with `children: List[Node]`, 100,000 levels deep, built with a loop); a C test of the opcode. **Docs:** `grammar.md` ("Operators": "The core has no list or struct equality" changes, and "Maps": "There is no map equality" changes), the programming skill, `site/content/tour/structs.md`, `lists.md` and `maps.md`, `docs/vm/03-ir-and-bytecode.md` (the `EQ` and `NE` opcodes).
+**Tests:** checker tests for each kind and for a struct with an `Fn` field (code and secondary span); golden fixtures for nested structs, lists of structs, maps in another order, enums, Results, `ok() == ok()`, a NaN field; a deep recursive value for the explicit stack (a `struct Node` with `children: List[Node]`, 100,000 levels deep, built with a loop); a C test of the opcode. **Docs:** `grammar.md` ("Operators": "The core has no list or struct equality" changes; "Maps": "There is no map equality" changes; "Result and propagation": "Results have no equality" changes), the programming skill, `site/content/tour/structs.md`, `lists.md` and `maps.md`, `docs/vm/03-ir-and-bytecode.md` §4.2 (`EQ` and `NE` on these pairs are no longer `RUNTIME-INTERNAL`).
 
 ### 25.5 Standalone lambdas
 
@@ -197,7 +201,7 @@ end
 - Parameters must be annotated, unless there is an expected `Fn` type (an annotated variable, a parameter, a field, a return). With neither, `CHECK-BLOCK-TYPE`, as for a block.
 - The result type comes from the expected `Fn` if there is one, or else from the body, as for `map`. As for `map`, `try` needs a known result type, so it works only with an expected `Fn` (the second example).
 - A lambda cannot call itself (it has no name); recursion uses `def`.
-- Not accepted, each with a help that shows `lambda do |x: Int| ... end`: `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`. The hint row for `lambda do ... end` in `grammar.md` §7 goes away.
+- Not accepted, each with a help that shows `lambda do |x: Int| ... end`: `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`. The §7 hint row for `fn(x: Int) ...`, `lambda do ... end` and a `do` block with no call changes, and is not removed: `lambda do` leaves it, and `fn(x: Int)` and a `do` block with no call now get a help that shows `lambda do |x: Int| ... end`.
 
 **Lowering:** the same closure as a block passed to a call; no VM change.
 
@@ -208,8 +212,6 @@ end
 **What exists today:** `List` has `size`, `append` (`push`), `set`, `repeat`, `reverse`, `map`, `filter`, `reduce`, `concat`, `take`, `drop`, `at`, `sort`, `sort_by`, `each`, `any?` and `all?`; `Range` has `size`, `to_a`, `include?`, `each`, `first` and `last`; `Map` has `has_key?`, `keys`, `values`, `size`, `put`, `get` and `delete` (`grammar.md`, `src/builtins.rkt`). `tally` and `zip` do not exist yet. This item adds the missing ones:
 
 ```text
-List.select(list: List[A], f: Fn[A, Bool]) -> List[A]                 # alias of List.filter
-List.reject(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]
 List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
 List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
@@ -217,54 +219,50 @@ List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
 List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.each_slice(list: List[A], size: Int) -> List[List[A]]
-List.each_slice(list: List[A], size: Int, f: Fn[List[A], Void]) -> Void
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]       # K is Int or String
 List.tally(list: List[K]) -> Map[K, Int]                              # K is Int or String
 List.uniq(list: List[K]) -> List[K]                                   # K is Int or String
 List.sum(list: List[N]) -> N                                          # N is Int or Float
 List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]                # O is Int, Float or String
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]
-Range.select(r: Range, f: Fn[Int, Bool]) -> List[Int]
-Range.reject(r: Range, f: Fn[Int, Bool]) -> List[Int]
-Range.map(r: Range, f: Fn[Int, B]) -> List[B]
-Range.find(r: Range, f: Fn[Int, Bool]) -> Result[Int]
-Range.sum(r: Range) -> Int
 Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void
-Map.select(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
-Map.reject(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
+Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
 ```
 
 **Rules:**
 
 - All are methods by the existing rule (`xs.find do |x| ... end`), keep their inputs, run callbacks once per element left to right (`find`, `take_while` and `drop_while` stop where the answer is known), and use the caller's step budget.
-- `select` is an alias of `filter` in the alias table, like `push` for `append`; `filter` stays.
+- **No new aliases.** Each method has one name. Where Ruby has two names, the one Agentica already has wins: `filter` (not `select`), `map` (not `collect`), `find` (not `detect`), `reduce` (not `inject`). The other name is `CHECK-UNKNOWN-METHOD` with a help that names the canonical method, in the foreign-habit hint table of `grammar.md` §7. The aliases that section 11.2 already shipped (`length`, `push`, `strip`, `to_i`, ...) stay as they are; no new ones are added.
+- **No second ways.** `reject` is not added: it is `filter` with `!` (help: `xs.filter do |x| !cond end`). The `Range` methods that Ruby's `Enumerable` gives (`select`, `map`, `find`, `sum`) are not added: they are `r.to_a` and then the `List` method (help: `(1..5).to_a.map do ... end`). `each_slice` has no block form: it returns the slices, and a block after it is `CHECK-BLOCK-TARGET` with a help that shows `xs.each_slice(2).each do |pair| ... end`.
 - Ruby returns `nil` from `find`, `min_by` and `max_by` when nothing matches; here they return `error("not found")` or `error("the list is empty")`, like `Range.first`. Ties in `min_by` and `max_by` go to the first element.
 - `partition` returns two lists, `[yes, no]`, since there are no tuples (12.5); with destructuring (Part B) it would read like Ruby.
-- `each_slice(n)` without a block returns the slices; with a block it calls it on each. `n < 1` is `RUNTIME-INVALID-COUNT`. The last slice may be shorter.
+- `each_slice(n)` returns the slices. `n < 1` is `RUNTIME-INVALID-COUNT`. The last slice may be shorter.
 - `group_by` and `tally` keep the order in which keys first appear; `uniq` keeps the first copy of each value. The restrictions on `K`, `N` and `O` match the map key types and `List.sort_by`'s key types; another type is `CHECK-TYPE-MISMATCH`, as for `sort`.
-- `sum` of an empty list is `0` or `0.0`; an `Int` sum that does not fit is `RUNTIME-INTEGER-OVERFLOW`. Section 5's planned `List.sum` is this one. `Range.sum` uses the same rule, without building a list.
-- The `Range` functions that return a list have the 1048576-value limit of `Range.to_a`. The limit applies to the list the function returns, not to the size of the range. `Range.map` knows its result size, so it checks the limit before the first block call: `(1..2000000).map do |i| i end` fails with `RUNTIME-INVALID-COUNT` at the receiver, as `Range.to_a` does, and the block never runs. `select` and `reject` count while they build: `(1..10000000).select do |i| i % 1000000 == 0 end` works and returns 10 values, and one whose result passes 1048576 values fails when the 1048577th value is added. `Range.sum` builds no list and has no limit.
-- `Map.each`, `select` and `reject` go in insertion order; their blocks take two parameters (`do |k, v|`).
+- `sum` of an empty list is `0` or `0.0`; an `Int` sum that does not fit is `RUNTIME-INTEGER-OVERFLOW`. Section 5's planned `List.sum` is this one.
+- `Map.each` and `Map.filter` go in insertion order; their blocks take two parameters (`do |k, v|`).
 - **Not here:** `zip` needs tuples to be typed (`List[(A, B)]`); it waits for them (12.5, and destructuring in Part B). `List.member?` is already planned in section 5. `count` stays out (section 5 keeps `size` as the only count).
 
 **Where the code lives: the compiler prelude.** By the std-first rule these are Agentica code, not C. But a `std/` module cannot hold them today, for two reasons: a user function cannot be generic, and a user function cannot be called as a method. So this item adds one small mechanism, the **compiler prelude**:
 
 1. Each function above has a normal entry in the builtin catalog (`src/builtins.rkt`): signature with the catalog's type variables, help text, and a mark that its body is a prelude function. The checker checks calls against the entry like any builtin (methods are resolved by receiver type in `resolve-method`, `src/checker.rkt`), so call sites, methods, aliases, blocks and `agentica help` work as for `List.map`. Nothing new for users.
-2. The bodies live in `stdlib/prelude/list.agc` (and `range.agc`, `map.agc`), written in Agentica on the existing builtins. Only prelude files may use the catalog's type variables (`A`, `B`, `K`, ...); user code still cannot. The checker checks a prelude body with each type variable as an opaque type: a value of type `A` can be stored, put in a list, a map value or a Result, returned, and passed to an `Fn` that takes `A`, and nothing else. A variable restricted to a short list of types (`K` is `Int` or `String`) may have one body per allowed type, and the catalog entry names the body for each type: `List.sum` has `sum_int` and `sum_float`, since `0` and `0.0` and the two additions differ. A body that works for every allowed type (`uniq`, which only uses the value as a map key) may be one body, checked once per allowed type.
+2. The bodies live in `stdlib/prelude/list.agc` (and `map.agc`), written in Agentica on the existing builtins. Only prelude files may use the catalog's type variables (`A`, `B`, `K`, ...); user code still cannot. The checker checks a prelude body with each type variable as an opaque type: a value of type `A` can be stored, put in a list, a map value or a Result, returned, and passed to an `Fn` that takes `A`, and nothing else. A variable restricted to a short list of types (`K` is `Int` or `String`) may have one body per allowed type, and the catalog entry names the body for each type: `List.sum` has `sum_int` and `sum_float`, since `0` and `0.0` and the two additions differ. A body that works for every allowed type (`uniq`, which only uses the value as a map key) may be one body, checked once per allowed type.
 3. **Always linked, checked once.** The linker cannot know which prelude functions a program uses: methods and `format` are resolved by the checker, after linking. So the prelude modules are always linked into every program. They are checked once, when the compiler is built, and the result is cached with the embedded source (as `embed-source` embeds `std/` files in `src/stdlib.rkt`), so checking a user program does not pay for them. `lower.rkt` emits only the prelude functions reachable from the checked program (one copy per allowed type that is used, for restricted ones) and calls them like user functions. Prelude files are not importable through `std/`, and their names cannot clash with user names.
 
 **Runtime errors inside prelude code** must look like errors of a builtin, never of a file the user did not write:
 
-- A runtime diagnostic raised while a prelude function runs is reported at the user's call site, or at the argument the builtin rule names (as `List.take` reports `RUNTIME-INVALID-COUNT` at its count argument). For this, `lower.rkt` gives a call to a prelude function the call span and the argument spans, as `call-builtin` already has (`docs/vm/03-ir-and-bytecode.md`), and marks prelude functions in the bytecode. When the VM raises a diagnostic in a prelude frame, it takes the span from the innermost frame that is not a prelude frame.
+- A runtime diagnostic raised while a prelude function runs is reported at the user's call site, or at the argument the builtin rule names (as `List.take` reports `RUNTIME-INVALID-COUNT` at its count argument). For this, `lower.rkt` gives a call to a prelude function the call span and the argument spans, as `call-builtin` already has (`docs/vm/03-ir-and-bytecode.md`), and marks prelude functions in the bytecode. When the VM raises a diagnostic in a prelude frame, it uses the call site of the outermost frame of the innermost run of prelude frames: the call the user wrote. Example: user code calls `each_with_index` (prelude), which calls the user's block, which calls `xs.each_slice(0)` (prelude). The innermost run of prelude frames is `each_slice` alone, so the error points at the `each_slice` call inside the block, not at `each_with_index`.
 - Prelude frames are skipped in stack traces (14b, [section 24.3](24-logging.md#243-stack-traces-on-runtime-errors)), like native frames. A user block called from a prelude function keeps its own frame, so an error in the block shows the block and then the user's call.
-- A prelude-only intrinsic, `__fail_arg(code, index, message)`, raises the given `RUNTIME-` code at argument `index` of the current prelude call. The current prelude call is the outermost prelude frame, the call the user wrote: the frame just above the innermost frame that is not a prelude frame, as in the span rule (a prelude function may call another one, and the error still points at the user's call). `each_slice` uses it for `RUNTIME-INVALID-COUNT` when `n < 1` (argument 1), and the `Range` functions for the limit (argument 0, the receiver). Only prelude files may use it, as with the type variables; in user code the name is `CHECK-UNKNOWN-NAME`.
+- A prelude-only intrinsic, `__fail_arg(code, index, message)`, raises the given `RUNTIME-` code at argument `index` of the current prelude call. The current prelude call is the outermost frame of the innermost run of prelude frames, as in the span rule: the call the user wrote, even when one prelude function calls another. `each_slice` uses it for `RUNTIME-INVALID-COUNT` when `n < 1` (argument 1). Only prelude files may use it, as with the type variables; in user code the name is `CHECK-UNKNOWN-NAME`.
 - An overflow inside a prelude body (`sum`) is raised by the VM's own add instruction, so it is reported at the user's call by the first rule.
 - **No tail calls into the prelude.** A call from user code to a prelude function always lowers to `call`, never `tail-call`, as `call-builtin` never is one: a tail call would replace the user's frame, and the span rule would lose the user's call. `return xs.each_slice(0)` in a user function reports the error at that call. A tail call from one prelude function to another may stay, since the frame it replaces is also a prelude frame.
 
-**Cost contract.** Every prelude function is O(n) in its input, plus its callbacks, and each callback runs once per element (`find`, `take_while` and `drop_while` stop early). The bodies never `push` (`List.append` copies the list), index (`xs[i]`, `List.at`) or `concat` onto a growing first list in a loop. Two techniques give O(n):
+**Cost contract, and why the prelude waits for 8d.** Every prelude function is O(n) in its input, plus its callbacks, and each callback runs once per element (`find`, `take_while` and `drop_while` stop early). On today's VM, lists are flat arrays: `LIST_GET` is O(1), but `List.append`, `List.concat`, `List.take` and `List.drop` copy (`builtin_list_concat` copies both lists, and `take` and `drop` go through `list_slice`). So any Agentica loop that builds a list one element at a time is O(n²) today, whatever the technique. Until faster lists (8d) land, the existing native `List.map`, `List.filter` and `List.reduce` stay the only list builders, and the prelude does not start.
 
-- Build on the native list builtins where they fit: `select` is `filter`, `reject` is `filter` with `!`, `flat_map` is a `map` then one `reduce` of `concat`s in reverse order, `each_with_index` walks with `reduce` and a counter.
-- Otherwise build the result in reverse by prepending, `acc = List.concat([x], acc)`, which is O(1) because `List.concat` costs the length of its first list, then `List.reverse` once at the end. When faster lists (8d) change these costs, the prelude switches to `push`, which then costs O(log32 n); the cost contract stays.
+After 8d, a list is a persistent vector ([section 12.4](12-data-structures.md#124-faster-lists)): `push` (`List.append`), `set` and indexing are O(log32 n), near constant. Section 12.4 states nothing for the other list operations, so the prelude counts `concat`, `take`, `drop`, `reverse`, `sort` and `sort_by` as O(n), as today. The bodies:
+
+- build their result with `push` in one pass, or on `map`, `filter` and `reduce` where they fit (`each_with_index` walks with `reduce` and a counter);
+- read with indexing or `List.at` where needed;
+- never call `concat`, `take`, `drop`, `reverse`, `sort` or `sort_by` inside a loop or a callback; once, outside any loop, they are fine.
 
 The `grammar.md` table lists each function's cost, as it does for today's list operations.
 
@@ -273,73 +271,28 @@ The `grammar.md` table lists each function's cost, as it does for today's list o
 - `src/bytecode.rkt` writes a prelude flag on each function, and the call span and argument spans on each call to a prelude function (as `call-builtin` already carries several spans).
 - `__fail_arg` is a builtin in the VM's builtin table, called with `call-builtin`, not a new opcode: that is the simplest, since a builtin can already read the current frames and raise a diagnostic, and the interpreter loop does not change. It is the one exception to "no internal helper builtins" (`docs/vm/03-ir-and-bytecode.md` §4.5), and the loader guards it.
 - The loader (`vm/loader.c`) checks the flag (0 or 1) and rejects a file that calls `__fail_arg` from a function without the prelude flag (`docs/vm/08-loader-and-cli.md`).
-- The VM uses the flag for the span rule above and for skipping frames in stack traces.
-- Prelude source is not embedded in the bytecode's Sources section. Prelude instructions carry no source of their own: `lower.rkt` gives them the span of the user's call (the call site of the outermost prelude frame), since the span rule never shows a prelude span anyway.
+- **Static spans.** Prelude source text is not embedded. Each prelude file gets one entry in the Sources section with its name (`<prelude>/list.agc`) and empty text, and one span on it, `1:1-1:1`; that span is each prelude function's declaration span and the span of all its instructions. The loader accepts it as it is: an empty text has one line of length 0, and column 1 is valid (`docs/vm/08-loader-and-cli.md`, "Spans"). Span index 0 was the other choice, but it is the program's span and would point into user code.
+- **The VM always replaces that span at run time** with the span rule above. Every reader of an instruction's span applies the rule when the frame is a prelude frame: `RUNTIME-STEP-LIMIT` at a `STEP` (including the extra spans `s + k` of a merged step), `RUNTIME-INTERNAL`, every other runtime diagnostic (`agc_fail`), 14a tracing where a trace line names a place, and 14b stack traces (which skip prelude frames). A test runs a prelude function with `--max-steps` small enough to stop inside it and checks the span.
 
-These, with the span rule, are the only VM changes of this item: the prelude flag, the argument spans on prelude calls, and `__fail_arg`.
+These, with the span rule, are the only VM changes of this item: the prelude flag, the argument spans on prelude calls, the name-only sources, and `__fail_arg`.
 
 This is not user generics: only files that ship with the compiler use type variables, and only behind catalog signatures. A function moves to C later only when a measurement shows it is hot, as the std-first rule says; its catalog entry stays the same.
 
-**Tests:** each function on lists of `Int`, `String` and structs, empty lists and the edge cases above, golden fixtures, the site examples, and checker tests for the restricted type variables and for a prelude body that misuses an opaque type. Runtime errors, with fixed expected stderr (span and stack): `each_slice(0)` (count error at the argument), an `Int` `sum` that overflows (at the call), a `Range.map` over the limit (at the receiver, block not run), a `Range.select` whose result passes the limit (at the receiver), and a `Range.select` over a larger range whose result is small (works), and an error inside the user's block reached through a prelude function (the block's frame, then the user's call; no prelude frame). `return xs.each_slice(0)` inside a user function (the error at that call, not lost to a tail call). Cost: a golden fixture runs each function on a 100,000-element list and records the step count, so a body that loops more than once per element changes the golden; and a test reads the prelude sources and rejects `push`, `List.append`, `List.at` and indexing inside a loop, since a copying builtin in a loop is quadratic in time but not in steps. A test that `__fail_arg` in user code is `CHECK-UNKNOWN-NAME`, and a loader test that rejects a file calling it from a function without the prelude flag. **Docs:** `grammar.md` (the `List`, `Range` and `Map` tables and the alias table), the programming skill (`references/builtins.md`), `site/content/library/list.md`, `range.md` and `map.md`, the development skill (the prelude), `docs/vm/03-ir-and-bytecode.md` (the prelude flag, the call spans, `__fail_arg` and the format version) and `docs/vm/08-loader-and-cli.md` (the loader checks).
+**Tests:** each function on lists of `Int`, `String` and structs, empty lists and the edge cases above, golden fixtures, the site examples, and checker tests for the restricted type variables and for a prelude body that misuses an opaque type. Runtime errors, with fixed expected stderr (span and stack): `each_slice(0)` (count error at the argument), an `Int` `sum` that overflows (at the call), and an error inside the user's block reached through a prelude function (the block's frame, then the user's call; no prelude frame). `return xs.each_slice(0)` inside a user function (the error at that call, not lost to a tail call). Cost: a golden fixture runs each function on a 100,000-element list and records the step count, so a body that loops more than once per element changes the golden; and a test reads the prelude sources and rejects `concat`, `take`, `drop`, `reverse`, `sort` and `sort_by` inside a loop, a block or a callback, since an O(n) builtin in a loop is quadratic in time but not in steps. Checker tests for the hints: `select`, `collect`, `detect`, `inject` and `reject` (`CHECK-UNKNOWN-METHOD` with the canonical name), and a block after `each_slice` (`CHECK-BLOCK-TARGET`). The nested case of the span rule (user, `each_with_index`, block, `each_slice(0)`). A test that `__fail_arg` in user code is `CHECK-UNKNOWN-NAME`, and a loader test that rejects a file calling it from a function without the prelude flag. **Docs:** `grammar.md` (the `List` and `Map` tables with each function's cost, and the §7 hint table), the programming skill (`references/builtins.md`), `site/content/library/list.md` and `map.md`, the development skill (the prelude), `docs/vm/03-ir-and-bytecode.md` (the prelude flag, the call spans, `__fail_arg` and the format version) and `docs/vm/08-loader-and-cli.md` (the loader checks).
 
-### 25.7 `unless`
+### 25.7 `unless` (moved to Part C)
 
-```agentica
-unless File.stat(path, 1000).ok?
-  puts("missing: #{path}")
-end
-```
+Decided against by the one-way principle: `unless c` is a second way to write `if !c`. See 25.13 for the hint that replaces it.
 
-**Syntax:**
+### 25.8 Statement modifiers (moved to Part C)
 
-```ebnf
-statement        = (* ...today's forms, plus: *)
-                 | unless_statement ;
-unless_statement = "unless", expression, NL, block,
-                   [ "else", NL, block ], "end", NL ;
-```
-
-`unless` becomes a reserved word. The condition is `Bool` (`CHECK-TYPE-MISMATCH` otherwise), and the statement means `if !cond`. Diagnostics keep the span on the user's condition, and their message talks about `unless`, never about a `!` the user did not write. `else` is allowed, because Ruby allows it and the parser only swaps the two blocks; rejecting it would need its own diagnostic. `elsif` inside `unless` is `PARSE-UNEXPECTED-TOKEN`, as in Ruby, with a help that says to use `if`. `until` is not part of this item.
-
-**Lowering:** none; the parser builds an `if` node with the condition negated and the spans of the source. No new codes.
-
-**Tests:** parser tests (with and without `else`, `elsif` rejected, spans), a checker test for a non-`Bool` condition that asserts the span is the condition's, a golden fixture. **Docs:** `grammar.md` (statements, reserved words), the programming skill, `site/content/tour/control-flow.md`.
-
-### 25.8 Statement modifiers
-
-```agentica
-def first_even(xs: List[Int]) -> Result[Int]
-  for x in xs
-    next unless x % 2 == 0
-    return ok(x)
-  end
-  return error("none")
-end
-
-def report(verbose: Bool, total: Int) -> Void
-  puts("total: #{total}") if verbose
-end
-```
-
-This reverses a decision of section 11, whose "Which forms to accept" paragraph lists statement modifiers among the Ruby forms that do not fit. Agents write them often (`break if x`, `return x if c`), and today they get a help. **Precondition:** by section 11's rule, an evaluation round with a second model must show that agents use them well before this item ships; if the round shows new mistakes (for example modifiers on assignments that introduce a variable), the item changes or stays out.
-
-**Syntax:**
-
-```ebnf
-statement        = simple_statement, [ modifier ], NL
-                 | (* ...the compound statements as today *) ;
-modifier         = ( "if" | "unless" ), expression ;
-```
-
-The one-line case arm and the one-line block body take a modifier too (`1 -> puts("one") if verbose`). A modifier after a compound statement (`end if x`) and the loop modifiers (`x += 1 while c`, `until`) are `PARSE-UNEXPECTED-TOKEN`; the loop ones keep a help that shows a `while` loop. `return if c` is a `return` without a value: `if` and `unless` cannot start an expression, so the parser stops there. `break` and `next` are loop control when the next token is a newline or a modifier (`if` or `unless`); today only a newline makes them loop control (`grammar.md`, "Statements and blocks"), since they are not reserved words and can name variables, so `break if done` must not parse as a variable `break` followed by something else.
-
-**Checker rules:** `S if c` means `if c` / `S` / `end`, and `S unless c` means the same with `!c`. The condition is `Bool`. A modifier on an assignment may update a variable that is already visible (`x = 0 if reset`, `count += 1 if ok`), but may not introduce one: `CHECK-MODIFIER-BINDING` at the name, since the variable would exist only inside the hidden `if`. A non-`Void` block whose last statement has a modifier does not give a value on every path (`CHECK-MISSING-RETURN`, as today).
-
-**Lowering:** none; the parser builds the `if` node. **Tests:** each statement kind with both modifiers, `CHECK-MODIFIER-BINDING`, the rejected forms, `return` without a value, a golden fixture. **Docs:** `grammar.md` (statements; the rule for when `break` and `next` are loop control; the line "There are no statement modifiers" and the §7 hint rows for `break if x` and `puts(x) if ok` change), the programming skill, `site/content/tour/control-flow.md`, and section 11's paragraph.
+Decided against by the one-way principle: `S if c` is a second way to write an `if` statement. Section 11's rejection stays, with its help. See 25.13.
 
 ### 25.9 `File.open` with a block
 
 Ruby's `File.open(path) do |f| ... end` closes the file when the block ends. This is the real use of Ruby's `ensure`, and here it replaces it.
+
+**One way:** the block form is the canonical way to read or write a file through a handle, and the programming skill and the site teach it. Manual `File.open` and `File.close` stay only for a handle that lives beyond one block, such as one shared with tasks. The whole-file helpers (`File.read_text`, `File.write_text`) stay for reading or writing a whole file at once.
 
 ```agentica
 def count_lines(path: String) -> Result[Int]
@@ -399,7 +352,7 @@ end
 
 The value is `"Usage: tool [options]\n\n  --verbose   print more\nExit code 0 on success.\n"` for `name = "tool"`.
 
-**Lexer only.** The lexer turns a heredoc into the same string token (with interpolation parts) as a normal string literal, so the parser, checker, lowering and VM do not change.
+**Lexer, and two small checks.** The lexer turns a heredoc into string tokens with interpolation parts, like a normal string literal, but of their own kind: `heredoc-string` (and the interpolation kinds with a heredoc flag), so later stages can tell a heredoc apart. The parser treats it as a string primary; lowering and the VM do not change.
 
 - **Start:** `<<~` followed directly by an uppercase name (`[A-Z][A-Z0-9_]*`). The rest of the line is lexed as usual (`puts(<<~TEXT)` works); the body starts on the next line. Several heredocs on one line take their bodies one after the other, in order, as in Ruby.
 - **End:** a line with only optional spaces and the same name. The body lines and the end line produce no `NL` tokens; the line that holds `<<~NAME` ends with its `NL` as usual.
@@ -409,9 +362,9 @@ The value is `"Usage: tool [options]\n\n  --verbose   print more\nExit code 0 on
 - **Inside parentheses:** `foo(<<~A, x)` works, and so does `foo(<<~A,` with the next argument on the line after the end line: inside delimiters no `NL` is emitted, the body is read when the opener line ends, and the call goes on after the end line, as in Ruby.
 - **Escapes and interpolation** are those of a normal string: `\n`, `\r`, `\t`, `\"`, `\\`, `\#`, and `#{...}`, which must end on its line; a bad escape is `LEX-INVALID-ESCAPE`. A `"` needs no escape. The indentation is removed from the source text before escapes and interpolation, so an interpolated value is never re-indented.
 - **Errors:** end of file before the end line is `LEX-UNTERMINATED-HEREDOC` at `<<~NAME`. A name that is not uppercase (`<<~text`) is `LEX-UNEXPECTED-CHAR` at `<<~`, with a help that shows `<<~TEXT`. Only the squiggly form exists: `<<NAME`, `<<-NAME` and the quoted forms (`<<~'NAME'`) are `LEX-UNEXPECTED-CHAR` with a help that shows `<<~NAME` (and `\#` for text without interpolation). Every other `<<` keeps today's tokens (two `<`). Ruby's push, `xs << x`, gets a new §7 hint row: `xs = xs.push(x)`.
-- `case` patterns and `import` paths still take plain string literals only.
+- `case` patterns and `import` paths take plain string literals only: a heredoc there is `PARSE-UNEXPECTED-TOKEN`, with a help to use a `"..."` literal. `format` rejects a heredoc format string with `CHECK-FORMAT-LITERAL` (25.11), because spans inside a heredoc are not exact columns of a one-line literal.
 
-**Tests:** in `tests/lexer-test.rkt`: indentation, blank lines, interpolation and escapes, two heredocs on one line, a heredoc inside a call, the three codes with their spans; a golden fixture; a site example. **Docs:** `grammar.md` (Literals: "no multiline strings" changes; the §7 hint row for `xs << x`), the programming skill (`SKILL.md`), `site/content/tour/strings.md`.
+**Tests:** in `tests/lexer-test.rkt`: indentation, blank lines, interpolation and escapes, two heredocs on one line, a heredoc inside a call, the three codes with their spans, a heredoc as a `case` pattern and an import path; a golden fixture; a site example. **Docs:** `grammar.md` (Literals: "no multiline strings" changes; the §7 hint row for `xs << x`), the programming skill (`SKILL.md`, and `references/diagnostics.md` for the new codes), `site/content/tour/strings.md`.
 
 ### 25.11 `format`
 
@@ -436,21 +389,21 @@ Flags: `0` pads numbers with zeros after the sign (`%05d` of `-42` is `-0042`); 
 **Checker rules:**
 
 - `format` is a top-level name like `puts`, handled by the checker: the number of arguments depends on the literal, so it has no single catalog signature. Only the function name is reserved: a user `def format` is `CHECK-REDEFINED-NAME`, a breaking change accepted before 1.0. Variables, parameters and fields named `format` stay valid, since `format(...)` is a call and a variable is not callable.
-- The first argument must be a plain string literal, without `#{...}`: `CHECK-FORMAT-LITERAL` otherwise, with a help to use interpolation for text that is built at run time.
+- The first argument must be a plain one-line string literal, without `#{...}` and not a heredoc: `CHECK-FORMAT-LITERAL` otherwise, with a help to use interpolation for text that is built at run time.
 - A bad conversion (unknown type, an unknown flag, a `%` at the end, `precision` on `d`, `x` or `s`, `0` on `s`, a width or precision out of range) is `CHECK-FORMAT-SPEC`, with the span of the conversion inside the literal.
 - A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type is `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its conversion.
 - `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows `format(...)`.
 - `agentica help format` shows a help entry like a builtin's: the form `format(fmt: String literal, args...) -> String`, the conversions and flags, and an example. `agentica help format --json` has the same fields as a builtin (name, signature, effects: none, description), with the arity given as "1 or more".
 
-**Where the code lives.** By the std-first rule, padding, decimal and hex text are Agentica code in a prelude file, `stdlib/prelude/format.agc` (25.6; these functions use no type variables). One part is a builtin under exception 5 of the rule: `Float.to_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise `RUNTIME-INVALID-COUNT`; NaN and the infinities give Ruby's `NaN`, `Inf` and `-Inf`), because correct decimal rounding of a binary `Float` needs exact arithmetic that would be fragile in Agentica; the VM calls `snprintf` with `%.*f`, and it is a public builtin, also a method (`x.to_fixed(2)`). The `Int` bit builtins of phase 13 are not needed: hex is written with division and `%`, and the smallest `Int` (`-9223372036854775808`, whose magnitude does not fit in `Int`) is a special case for `%d` with zero padding (`%021d`) as well as for `%x`.
+**Where the code lives.** It waits for 8d with the prelude (25.6). By the std-first rule, padding, decimal and hex text are Agentica code in a prelude file, `stdlib/prelude/format.agc` (25.6; these functions use no type variables). One part is a builtin under exception 5 of the rule: `Float.to_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise `RUNTIME-INVALID-COUNT`; NaN and the infinities give Ruby's `NaN`, `Inf` and `-Inf`), because correct decimal rounding of a binary `Float` needs exact arithmetic that would be fragile in Agentica; the VM calls `snprintf` with `%.*f`, and it is a public builtin, also a method (`x.to_fixed(2)`). The `Int` bit builtins of phase 13 are not needed: hex is written with division and `%`, and the smallest `Int` (`-9223372036854775808`, whose magnitude does not fit in `Int`) is a special case for `%d` with zero padding (`%021d`) as well as for `%x`.
 
 **Lowering:** `lower.rkt` turns each call into a concatenation of the literal parts and calls to the prelude functions, one per conversion, so no format string is parsed at run time. No VM change other than the new builtin.
 
-**Tests:** checker tests for each code with spans inside the literal; golden fixtures for every type, flag, width and precision, negative numbers, the smallest `Int`, NaN and the infinities, `%%`; `Float.to_fixed` (NaN and the infinities included) against vectors from a checked-in Python script (standard library only), including halfway cases such as `0.125` and `2.675`. **Docs:** `grammar.md` (builtin functions, §7 hints), the programming skill (`references/builtins.md`), `site/content/library/string.md` and `numbers.md`.
+**Tests:** checker tests for each code with spans inside the literal; golden fixtures for every type, flag, width and precision, negative numbers, the smallest `Int`, NaN and the infinities, `%%`; `Float.to_fixed` (NaN and the infinities included) against vectors from a checked-in Python script (standard library only), including halfway cases such as `0.125` and `2.675`. **Docs:** `grammar.md` (builtin functions, §7 hints), the programming skill (`references/builtins.md`, and `references/diagnostics.md` for the new codes), `site/content/library/string.md` and `numbers.md`.
 
 ### 25.12 To evaluate later (Part B)
 
-These may help, but each needs more design, a real program that asks for it, or another feature first. None is planned; each needs its own spec before a phase takes it.
+These may help, but each needs more design, a real program that asks for it, or another feature first. None is planned; each needs its own spec before a phase takes it, and each must also pass the one-way principle (top of this section) before it is planned.
 
 #### 25.12.1 `case/in` pattern matching
 
@@ -499,6 +452,9 @@ Each of these is decided; it gets a `help` that names the Agentica form where on
 - **Symbols:** `String` keys and enums cover them.
 - **`freeze` and `dup`:** every value is already immutable.
 - **`yield`:** the block is a named `Fn` parameter, called with `.call`.
+- **`unless`** (was 25.7): a second way to write `if !c`. `unless c` stays a name followed by an expression, so the parser gives `PARSE-UNEXPECTED-TOKEN` with a help that shows `if !c ... end`. `unless` is not a reserved word.
+- **Statement modifiers** (was 25.8): `return x if c`, `break if c`, `puts(x) if v` are a second way to write `if`. Section 11's rejection stays as it is, with its existing help (`if x`, then the statement on its own line, then `end`).
+- **New method aliases** (`select`, `collect`, `detect`, `inject`) and **second ways** (`reject`, the `Range` Enumerable methods, the block form of `each_slice`): see 25.6; each gets `CHECK-UNKNOWN-METHOD` (or `CHECK-BLOCK-TARGET`) with the canonical form.
 - **`*args` and `**opts` splats:** a `List` or a struct parameter, and defaults (25.1).
 - **`%w[...]`:** a list literal.
 - **`raise`/`rescue`/`ensure`:** errors are `Result` values with `try`; `File.open` with a block (25.9) covers `ensure`.
