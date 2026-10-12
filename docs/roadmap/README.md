@@ -19,8 +19,10 @@ use `TCP`, `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
 notice) and `agentica test`. The next work is the catch-up that removes those
 fallbacks: VM tracing (14a), then TCP and TLS, then HTTP, then BDD on the VM
 (7h). Then 7i deletes the evaluator. New features (default parameter values
-(15a) first, then binary data, UDP, logging, crypto, then the rest of phase
-15's Ruby typed idioms) come after 7i and are VM-only; the prelude part of
+(15a) first, then binary data, UDP, logging, crypto, then the strict
+diagnostics of phase 16 (no warnings: unused imports, unused variables,
+unreachable code and ignored `Result` values become errors), then the rest
+of phase 15's Ruby typed idioms) come after 7i and are VM-only; the prelude part of
 phase 15 waits for faster lists (8d). VM metrics for Prometheus (phase 18)
 are a VM-only tool after 7i too, and land before the server measurement (7j),
 which reads their GC and run-queue numbers. The later steps keep their order:
@@ -63,7 +65,7 @@ order.
 | 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4), then TCP and TLS, then HTTP, then BDD on the VM (7h); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
 | 7.2 | 7i: delete the evaluator and its runtime modules; the Racket front end (lexer, parser, checker, lowering, bytecode) stays | One backend |
 | 7.3 | New features, VM-only: default parameter values first (15a, `docs/future/25-ruby-typed-idioms.md` §25.1; front end only, so `std/log` can use them), then binary data (phase 13, `docs/future/23-binary-data.md` §23), then UDP, then logging and debugging (14b stack traces, then 14c `std/log`, `docs/future/24-logging.md` §24), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`) | Programs read and write binary numbers with `std/binary` and send UDP; agents see the call stack of a runtime error; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
-| 7.4 | New features, VM-only (cont.): Ruby typed idioms (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A, one way to do each thing): re-exports, `with`, value equality, lambdas, `File.open` with a block, heredocs (15b to 15e, 15i, 15j); one small PR each | Agents write the Ruby forms they know, still checked, immutable and with one canonical form |
+| 7.4 | New features, VM-only (cont.): strict diagnostics first (phase 16, `docs/future/26-strict-diagnostics.md` §26, no warnings: `CHECK-UNUSED-IMPORT`, `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`, `CHECK-UNUSED-RESULT`, in the order 16a, 16c, 16b, 16d; front end only, each PR migrates the repo's programs); then Ruby typed idioms (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A, one way to do each thing): re-exports, `with`, value equality, lambdas, `File.open` with a block, heredocs (15b to 15e, 15i, 15j); one small PR each | Unused imports, unused variables, unreachable code and ignored `Result` values are errors, and there are no warnings; agents write the Ruby forms they know, still checked, immutable and with one canonical form |
 | 7.5 | VM metrics (phase 18, `docs/future/28-vm-metrics.md` §28), VM-only, no language change: 18a metrics derived from the VM's own state and the `.prom` file, 18b the `GET /metrics` endpoint, 18c the enabled-only hooks with the overhead check; it needs only 7i (not the HTTP stack), and goes before the server measurement (7j) | Prometheus scrapes a running VM and Grafana graphs its GC, tasks, run-queue delay and I/O; batch runs leave their exit code and totals for node_exporter; nothing costs anything while nobody asks |
 | 8 | Faster lists (8d): a persistent vector behind `List`, before any instruction-dispatch micro-optimization (7g); then the review of what the VM inherited from Racket (7k), next to the 7g hot spots | `push` stops copying the whole list; list-heavy programs stop being O(n²); the VM keeps Racket's rules only where they are good on their own |
 | 8.1 | VM layers (7l, `docs/future/21-vm-layers.md` §21); after the tasks PR, next to 7k | The prerequisites of the JIT |
@@ -159,6 +161,7 @@ This file holds what matters now: the order above and the general rules. Each op
 | [`13-binary-data.md`](13-binary-data.md) | Phase 13: binary data |
 | [`14-logging.md`](14-logging.md) | Phase 14: logging and debugging |
 | [`15-ruby-typed-idioms.md`](15-ruby-typed-idioms.md) | Phase 15: Ruby typed idioms |
+| [`16-strict-diagnostics.md`](16-strict-diagnostics.md) | Phase 16: strict diagnostics (no warnings) |
 | [`18-vm-metrics.md`](18-vm-metrics.md) | Phase 18: VM metrics (Prometheus) |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
