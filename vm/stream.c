@@ -92,6 +92,13 @@ uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want) {
   return b->data + b->end;
 }
 
+bool agc_inbuf_clip(agc_inbuf *b, size_t limit) {
+  if (agc_inbuf_pending(b) <= limit) return false;
+  b->end = b->start + limit;
+  if (b->scanned > limit) b->scanned = limit;
+  return true;
+}
+
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof) {
   if (n > 0)
     b->end += (size_t)n;

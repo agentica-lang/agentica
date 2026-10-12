@@ -35,6 +35,8 @@
                     ("Process.close_stdin" ((p Process) (timeout_ms Int)) (Result Void) #f "Process.close_stdin" (subprocess) "Close stdin idempotently after flushing.")
                     ("Process.wait" ((p Process) (timeout_ms Int)) (Result Int) #f "Process.wait" (subprocess) "Wait for exit and stderr forwarding; timeout preserves the child.")
                     ("Process.close" ((p Process)) Void #f "Process.close" (subprocess) "Kill and reap the child and close its streams idempotently.")
+                    ("Process.spawn_captured" ((command String) (args (List String)) (dir String) (timeout_ms Int)) (Result Process) #f "Process.spawn_captured" (subprocess) "Start an executable in dir with stdout and stderr kept in 1 MiB buffers; VM only.")
+                    ("Process.output" ((p Process) (timeout_ms Int)) (Result (Struct "ProcessOutput")) #f "Process.output" (subprocess) "Wait for both captured streams to end; return unread stdout, all stderr and the truncated mark.")
                     ("Task.spawn" ((function (Fn A R)) (argument A)) (Task R) task-spawn "Task.spawn" (concurrency) "Start a named function with one argument in a lightweight task.")
                     ("Task.await" ((task (Task R))) R task-await "Task.await" (concurrency) "Wait for a task and return its cached result; task failures terminate the execution.")
                     ("Task.sleep" ((milliseconds Int)) Void #f "Task.sleep" (concurrency) "Suspend this task for nonnegative milliseconds; zero yields execution.")
@@ -230,7 +232,8 @@
 (define (public-builtin-names)
   (filter (lambda (name) (not (std-only-name? name))) (hash-keys builtins)))
 
-(define vm-only-builtins '("HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"))
+(define vm-only-builtins '("HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
+                           "Process.spawn_captured" "Process.output"))
 
 (define (builtin-ref name [arity #f])
   (define entry (hash-ref builtins name #f))

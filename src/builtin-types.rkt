@@ -16,7 +16,8 @@
                               ("max_connections" . Int) ("max_body_bytes" . Int) ("ca_file" . String))
         "HttpServerOptions" '(("header_timeout_ms" . Int) ("idle_timeout_ms" . Int)
                               ("max_connections" . Int) ("max_body_bytes" . Int))
-        "FileInfo" '(("kind" . String) ("size_bytes" . Int) ("modified_seconds" . Int))))
+        "FileInfo" '(("kind" . String) ("size_bytes" . Int) ("modified_seconds" . Int))
+        "ProcessOutput" '(("stdout" . String) ("stderr" . String) ("truncated" . Bool))))
 
 (define builtin-field-order
   (for/hash ([(name fields) (in-hash builtin-records)])
