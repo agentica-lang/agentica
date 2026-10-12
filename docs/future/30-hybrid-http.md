@@ -2,7 +2,7 @@
 
 **Status:** planned (roadmap phase 20), decided by the user on 2026-10-12. Two parts:
 
-- **Simple HTTP** (20a to 20d, 30.1 to 30.10) is the HTTP catch-up of order step 7.1 ([the order table](../roadmap/README.md#current-implementation-order)): after TLS on the VM and before BDD in Agentica ([section 31](31-bdd-in-agentica.md#31-bdd-in-agentica), roadmap [phase 21](../roadmap/21-bdd-in-agentica.md)). It runs HTTP on the VM and removes the `HTTP` fallback. It also changes the API on purpose, with the user's decision: a call sends a whole request and gets a whole response, a handler returns a whole response, and there is no streaming. That is a breaking change made during the catch-up (30.8).
+- **Simple HTTP** (20a to 20d, 30.1 to 30.10) is the HTTP catch-up of order step 7.1 ([the order table](../roadmap/README.md#current-implementation-order)): after TLS on the VM; 20a comes before BDD in Agentica ([section 31](31-bdd-in-agentica.md#31-bdd-in-agentica), roadmap [phase 21](../roadmap/21-bdd-in-agentica.md)), and 20b to 20d after it, then 7i (decided by the user on 2026-10-13). It runs HTTP on the VM and removes the `HTTP` fallback. It also changes the API on purpose, with the user's decision: a call sends a whole request and gets a whole response, a handler returns a whole response, and there is no streaming. That is a breaking change made during the catch-up (30.8).
 - **Streaming** (20e to 20g, 30.11) is a new feature, VM-only, at order step 7.4: after phase 17 (`Task.map` and channels, §27), since it is built on `Channel[T]` (§27.2), and right before `TlsContext` (§29, phase 19).
 
 **What is asked for:** HTTP on the VM, written as much as possible in Agentica (`std/` first), with C only where it must be: byte-level work, security-critical parsing and hot paths. And an API that is synchronous and very simple: one call, one whole message.
@@ -233,7 +233,7 @@ Consequences:
   - the fallback branch of `src/main.rkt` (`src/main.rkt:318`), for any `LOWER-UNSUPPORTED`, not only an `HTTP` one (until 20d: `std/http` beside a builtin `HTTP` call; until 21f: beside a `BDD` call);
   - the `--legacy-eval` branch of `src/main.rkt`, which is also how `agentica test` runs a program under test today (`src/bdd.rkt:21`);
   - `read-program` in `src/bdd-runner.rkt` (`src/bdd-runner.rkt:20`), which loads step files into the evaluator for `agentica test` and `BDD.run`.
-- **How long.** The `agentica test` part ends with 21f ([phase 21](../roadmap/21-bdd-in-agentica.md)), which replaces that path with the VM runner and `src/bdd-driver.rkt`, deletes `src/bdd-runner.rkt`, and stops passing `--legacy-eval` (§31.12). After 21f nothing triggers the fallback, but its branch and `--legacy-eval` stay until 7i, and so does the check in both. The repository's BDD features do not use HTTP.
+- **How long.** The `agentica test` part ends with 21f ([phase 21](../roadmap/21-bdd-in-agentica.md)), which replaces that path with the VM runner and `src/bdd-driver.rkt`, deletes `src/bdd-runner.rkt`, and stops passing `--legacy-eval` (§31.12). After 21f only a builtin `HTTP` call still triggers the fallback, until 20d; then nothing does, but its branch and `--legacy-eval` stay until 7i, and so does the check in both. The repository's BDD features do not use HTTP.
 
 ### 30.9 What the old C-only design drops
 

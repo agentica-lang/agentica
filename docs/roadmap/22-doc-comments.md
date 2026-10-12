@@ -1,6 +1,6 @@
 ## Phase 22: Doc comments
 
-Specified in [`docs/future/32-doc-comments.md` section 32](../future/32-doc-comments.md#32-doc-comments). Phase 22 is front end only: the lexer, the parser and the CLI. It does not change the evaluator, lowering or the VM, so it goes before 7i (§32.7): after HTTP 20a (#118), the `AGENTS.md` trim and the shorter golden sweep, and before 20b. It has two PRs. Each one has its own tests and docs.
+Specified in [`docs/future/32-doc-comments.md` section 32](../future/32-doc-comments.md#32-doc-comments). Phase 22 is front end only: the lexer, the parser and the CLI. It does not change lowering or the VM. It comes after 7i, as the first new feature (order step 7.2a, §32.7). It has two PRs. Each one has its own tests and docs.
 
 - [ ] **22a: `##` doc comments (§32.2 to §32.4).**
   - **Lexer** (`src/lexer.rkt`): one `DOC` token per doc block, with its text and span. `##` after code on a line stays an ordinary comment.
@@ -9,7 +9,7 @@ Specified in [`docs/future/32-doc-comments.md` section 32](../future/32-doc-comm
     - stores the docs in a side table on `program`, from the span of each documented declaration, field or variant to its doc, so the existing AST structs keep their shape;
     - reports `PARSE-DETACHED-DOC` at the first line of any other block;
     - doc lines do not count as blank for `PARSE-MISSING-BLANK-LINE`; a doc block right after a declaration's `end` gives that error at the doc block's first line.
-  - **Stdlib:** every `stdlib/*.agc` gets a module doc and a doc on every export (`queue.agc`, and `http.agc` from 20a).
+  - **Stdlib:** every `stdlib/*.agc` gets a module doc and a doc on every export (`queue.agc`, and `http.agc`).
   - **Tests:**
     - `tests/lexer-test.rkt`: `DOC` tokens and spans, `##` after code, `###`, `##` inside strings.
     - `tests/parser-test.rkt`:
