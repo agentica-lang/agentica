@@ -1,6 +1,7 @@
 #lang racket
 
 (require (except-in rackunit check)
+         (only-in ffi/unsafe -> _fun _int get-ffi-obj)
          json
          racket/os
          racket/runtime-path
@@ -31,6 +32,9 @@
   (if vm-binary
       (path->complete-path vm-binary root)
       (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
+(define unix-kill (get-ffi-obj "kill" #f (_fun _int _int -> _int) (lambda () #f)))
+(define sigkill 9)
+(define sigterm 15)
 (define full-sweep-limit 2000)
 (define vm-turn-steps 2000)
 (define shard-count 4)
@@ -127,6 +131,12 @@
   (list (cond [(diagnostic? result) 1] [(exit-code? result) (exit-status (exit-code-code result))] [else 0])
         (get-output-string out)
         (string-append (get-output-string err) (if (diagnostic? result) (string-append text "\n") ""))))
+
+(define (bounded seconds thunk)
+  (define result 'timeout)
+  (define worker (thread (lambda () (set! result (thunk)))))
+  (unless (sync/timeout seconds worker) (kill-thread worker))
+  result)
 
 (define (run-process program #:input [input #""] #:timeout [timeout #f] . arguments)
   (define-values (process out in err) (apply subprocess #f #f #f program arguments))
@@ -638,42 +648,93 @@
                              "\n./agc-tool: ok(\"ran x\") ok(0)\nbin/agc-tool: ok(\"ran x\") ok(0)\n"
                              "bin: process: executable is unavailable\n")
               ""))
-      (define path (or (getenv "PATH") ""))
-      (for ([search (list path (string-append ":" path) (string-append "bin:" path))])
+      (define none (path->string (build-path folder "none")))
+      (for ([search (list none (string-append ":" none) (string-append "bin:" none) (string-append ".:" none))])
         (define env (environment-variables-copy (current-environment-variables)))
         (environment-variables-set! env #"PATH" (string->bytes/utf-8 search))
         (parameterize ([current-directory folder]
                        [current-environment-variables env]
                        [fixture-allow-run #t])
-          (define want (expected (string-prefix? search "bin:")))
-          (check-equal? (run-racket (front-end program) #f) want search)
-          (check-equal? (run-vm bytecode #f) want search)))
+          (define want (expected (or (string-prefix? search "bin:") (string-prefix? search ".:"))))
+          (check-equal? (bounded run-timeout (lambda () (run-racket (front-end program) #f))) want search)
+          (check-equal? (run-vm bytecode #f #:timeout run-timeout) want search)))
       (delete-directory/files folder))
 
-    (test-case "a signal to the VM kills and reaps its running children before the VM ends"
+    (test-case "agentica --vm stopped by SIGTERM kills the VM's running children"
       (define program (build-path work "signal-children.agc"))
       (display-to-file
        (string-append
-        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"sh\", [\"-c\", \"echo $$; exec sleep 60\"], 60000))\n"
-        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  while true\n  end\nend\n")
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n")
        program)
-      (define bytecode (build-path work "signal-children.agcb"))
-      (compile-file program bytecode)
-      (define-values (vm out in err) (subprocess #f #f #f vm-file "--allow-run" "--" (path->string bytecode)))
+      (define-values (driver out in err)
+        (parameterize ([current-environment-variables (cli-environment work vm-file)])
+          (subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file)
+                      "--vm" "--allow-run" (path->string program))))
+      (define pid #f)
       (dynamic-wind
         void
         (lambda ()
           (close-output-port in)
-          (define pid (read-line out))
-          (check-true (directory-exists? (build-path "/proc" pid)))
-          (subprocess-kill vm #f)
-          (subprocess-wait vm)
-          (check-equal? (subprocess-status vm) 130)
-          (check-false (directory-exists? (build-path "/proc" pid))))
+          (set! pid (sync/timeout run-timeout (read-line-evt out)))
+          (check-pred string? pid)
+          (when (string? pid)
+            (check-true (directory-exists? (build-path "/proc" pid)))
+            (unix-kill (subprocess-pid driver) sigterm)
+            (check-not-false (sync/timeout run-timeout driver))
+            (check-false (directory-exists? (build-path "/proc" pid)))))
         (lambda ()
-          (subprocess-kill vm #t)
+          (subprocess-kill driver #t)
+          (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
+            (unix-kill (string->number pid) sigkill))
           (close-input-port out)
           (close-input-port err))))
+
+    (test-case "a signal caught while the VM is blocked is not lost when the last child exits first"
+      (define program (build-path work "signal-pending.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n"
+        "  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\n  puts(\"survived\")\nend\n")
+       program)
+      (define bytecode (build-path work "signal-pending.agcb"))
+      (compile-file program bytecode)
+      (define-values (vm out in err) (subprocess #f #f #f vm-file "--allow-run" "--" (path->string bytecode)))
+      (define pid #f)
+      (dynamic-wind
+        void
+        (lambda ()
+          (close-output-port in)
+          (set! pid (sync/timeout run-timeout (read-line-evt out)))
+          (check-pred string? pid)
+          (when (string? pid)
+            (sleep 0.5)
+            (unix-kill (string->number pid) sigkill)
+            (sleep 0.3)
+            (unix-kill (subprocess-pid vm) sigterm)
+            (thread (lambda () (port->bytes out)))
+            (thread (lambda () (port->bytes err)))
+            (check-not-false (sync/timeout run-timeout vm))
+            (check-equal? (subprocess-status vm) (+ 128 sigterm))))
+        (lambda ()
+          (subprocess-kill vm #t)
+          (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
+            (unix-kill (string->number pid) sigkill)))))
+
+    (test-case "a child does not inherit descriptors the VM inherited"
+      (define program (build-path work "private-fds.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", "
+        "\"if [ -e /proc/self/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  Process.close(p)\nend\n")
+       program)
+      (define bytecode (build-path work "private-fds.agcb"))
+      (compile-file program bytecode)
+      (check-equal? (run-process "/bin/sh" #:timeout run-timeout "-c" "exec 7</dev/null; exec \"$0\" --allow-run -- \"$1\""
+                                 (path->string vm-file) (path->string bytecode))
+                    (list 0 "private\n" "")))
 
     (test-case "relative file paths use the raw bytes of a non-UTF-8 working directory"
       (define program (build-path work "raw-cwd.agc"))

@@ -8,7 +8,7 @@ def main() -> Void
   IO.inspect(Process.wait(p, 5000))
   IO.inspect(Process.close_stdin(p, 5000))
   Process.close(p)
-  w = Result.unwrap!(Process.spawn("sh", ["-c", "sleep 5"], 5000))
+  w = Result.unwrap!(Process.spawn("sh", ["-c", "exec sleep 5"], 5000))
   IO.inspect(Process.send(w, String.join(List.repeat("z", 1048576), ""), 20))
   IO.inspect(Process.wait(w, 5000))
   q = Result.unwrap!(Process.spawn("sh", ["-c", "read x; echo \"bye $x\" >&2; exit 3"], 5000))
