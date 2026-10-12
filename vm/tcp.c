@@ -12,19 +12,19 @@
 #define BIND_TRIES 8
 #define PORT_TEXT 8
 #define NET(ptr, field) ((net *)(void *)((char *)(ptr) - offsetof(net, field)))
-#define LINK(ptr, field) ((link *)(void *)((char *)(ptr) - offsetof(link, field)))
+#define TCP_LINK(ptr, field) ((tcp_link *)(void *)((char *)(ptr) - offsetof(tcp_link, field)))
 
 typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_SEND } req_kind;
 
 typedef struct net net;
-typedef struct link link;
+typedef struct tcp_link tcp_link;
 typedef struct request request;
 
-struct link {
+struct tcp_link {
   uv_tcp_t tcp;
   uv_connect_t connect;
   net *owner;
-  link *next;
+  tcp_link *next;
   bool backlog;
 };
 
@@ -43,7 +43,7 @@ struct net {
   uv_loop_t *loop;
   uv_getaddrinfo_t dns;
   uv_write_t write_req;
-  link *link, *chosen;
+  tcp_link *conn, *chosen;
   struct addrinfo *addrs, *next_addr;
   char *host;
   int64_t port;
@@ -72,19 +72,19 @@ static void settle(net *n) {
 }
 
 static void link_closed(uv_handle_t *h) {
-  link *k = LINK(h, tcp);
+  tcp_link *k = TCP_LINK(h, tcp);
   net *n = k->owner;
   free(k);
   n->callbacks--;
   settle(n);
 }
 
-static void drop_link(link *k) {
+static void drop_link(tcp_link *k) {
   if (!uv_is_closing((uv_handle_t *)&k->tcp)) uv_close((uv_handle_t *)&k->tcp, link_closed);
 }
 
-static link *new_link(net *n) {
-  link *k = calloc(1, sizeof(link));
+static tcp_link *new_link(net *n) {
+  tcp_link *k = calloc(1, sizeof(tcp_link));
   if (!k) agc_out_of_memory();
   k->owner = n;
   uv_tcp_init(n->loop, &k->tcp);
@@ -99,11 +99,11 @@ static void ready(const request *q) {
 static const char *kind_name(const net *n) { return n->listener ? "listener" : "socket"; }
 
 static void drop_links(net *n) {
-  for (link *k = n->link, *next; k; k = next) {
+  for (tcp_link *k = n->conn, *next; k; k = next) {
     next = k->next;
     drop_link(k);
   }
-  n->link = n->chosen = NULL;
+  n->conn = n->chosen = NULL;
 }
 
 static void shut(net *n, const char *why) {
@@ -213,7 +213,7 @@ static agc_value open_error(agc_vm *vm, const net *n) {
   return net_error(vm, n, found ? "tcp-connect: connection failed" : "tcp-connect: host not found", n->error);
 }
 
-static void read_port(net *n, const link *k) {
+static void read_port(net *n, const tcp_link *k) {
   struct sockaddr_storage address;
   int len = sizeof address;
   if (uv_tcp_getsockname(&k->tcp, (struct sockaddr *)&address, &len)) return;
@@ -232,7 +232,7 @@ static request *next_accept(net *n) {
 
 static void serve(net *n) {
   if (n->chosen || !n->accepts) return;
-  link *k = n->link;
+  tcp_link *k = n->conn;
   while (k && !k->backlog) k = k->next;
   if (!k) return;
   request *q = next_accept(n);
@@ -242,7 +242,7 @@ static void serve(net *n) {
 }
 
 static void incoming(uv_stream_t *server, int status) {
-  link *k = LINK(server, tcp);
+  tcp_link *k = TCP_LINK(server, tcp);
   net *n = k->owner;
   if (status < 0) {
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", n->id, -status);
@@ -270,15 +270,15 @@ static int listen_on(net *n, const struct addrinfo *a, int64_t port) {
   if (port >= 0 && address.ss_family == AF_INET) ((struct sockaddr_in *)&address)->sin_port = htons((uint16_t)port);
   if (port >= 0 && address.ss_family == AF_INET6) ((struct sockaddr_in6 *)&address)->sin6_port = htons((uint16_t)port);
   unsigned flags = a->ai_family == AF_INET6 && n->addrs->ai_next ? UV_TCP_IPV6ONLY : 0;
-  link *k = new_link(n);
+  tcp_link *k = new_link(n);
   int rc = uv_tcp_bind(&k->tcp, (const struct sockaddr *)&address, flags);
   if (!rc) rc = uv_listen((uv_stream_t *)&k->tcp, BACKLOG, incoming);
   if (rc) {
     drop_link(k);
     return rc;
   }
-  k->next = n->link;
-  n->link = k;
+  k->next = n->conn;
+  n->conn = k;
   return 0;
 }
 
@@ -287,7 +287,7 @@ static int bind_from(net *n, const struct addrinfo *first, bool *bound) {
   int rc = listen_on(n, first, -1);
   if (rc) return rc;
   *bound = true;
-  read_port(n, n->link);
+  read_port(n, n->conn);
   for (const struct addrinfo *a = first->ai_next; a; a = a->ai_next) {
     if (seen(n->addrs, a)) continue;
     rc = listen_on(n, a, n->port);
@@ -305,7 +305,7 @@ static void bind_all(net *n) {
     int rc = bind_from(n, a, &bound);
     if (!rc) {
       size_t count = 0;
-      for (const link *k = n->link; k; k = k->next) count++;
+      for (const tcp_link *k = n->conn; k; k = k->next) count++;
       AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_listen listener=%" PRIu64 " host=%s port=%" PRId64 " addresses=%zu", n->id,
                 n->host, n->port, count);
       ready(n->opener);
@@ -326,10 +326,10 @@ static void attempt(net *n, uv_connect_cb done) {
   while (n->next_addr) {
     const struct addrinfo *a = n->next_addr;
     n->next_addr = a->ai_next;
-    link *k = new_link(n);
+    tcp_link *k = new_link(n);
     int rc = uv_tcp_connect(&k->connect, &k->tcp, a->ai_addr, done);
     if (!rc) {
-      n->link = k;
+      n->conn = k;
       return;
     }
     n->error = rc;
@@ -339,7 +339,7 @@ static void attempt(net *n, uv_connect_cb done) {
 }
 
 static void connected(uv_connect_t *req, int status) {
-  link *k = LINK(req, connect);
+  tcp_link *k = TCP_LINK(req, connect);
   net *n = k->owner;
   if (n->closed) return;
   if (status == 0) {
@@ -351,7 +351,7 @@ static void connected(uv_connect_t *req, int status) {
   }
   AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connect_error socket=%" PRIu64 " error=%d", n->id, -status);
   n->error = status;
-  n->link = NULL;
+  n->conn = NULL;
   drop_link(k);
   attempt(n, connected);
 }
@@ -416,11 +416,11 @@ static agc_value accept_done(agc_vm *vm, request *q, net *l) {
   if (q->error) return agc_system_error(vm, "tcp-accept: accept failed", -q->error);
   if (!q->served) return agc_error_value(listener_closed);
   q->served = false;
-  link *from = l->chosen;
+  tcp_link *from = l->chosen;
   l->chosen = NULL;
   from->backlog = false;
   net *c = new_net(vm, NULL, 0, false);
-  link *k = new_link(c);
+  tcp_link *k = new_link(c);
   int rc = uv_accept((uv_stream_t *)&from->tcp, (uv_stream_t *)&k->tcp);
   if (rc) {
     drop_link(k);
@@ -429,7 +429,7 @@ static agc_value accept_done(agc_vm *vm, request *q, net *l) {
     return failed;
   }
   serve(l);
-  c->link = k;
+  c->conn = k;
   c->connected = true;
   uv_tcp_nodelay(&k->tcp, 1);
   agc_socket *sk = new_socket(vm, c);
@@ -439,7 +439,7 @@ static agc_value accept_done(agc_vm *vm, request *q, net *l) {
 
 static agc_value opened(agc_vm *vm, const request *q, agc_value context) {
   net *n = q->n;
-  if (n->link && !n->closed && (n->listener || n->connected)) {
+  if (n->conn && !n->closed && (n->listener || n->connected)) {
     if (!n->listener) return ok_value(context);
     agc_listener *lv = agc_as_listener(vm, context);
     lv->port = n->port;
@@ -580,13 +580,13 @@ static net *live(const agc_socket *sk) {
 
 static void stop_reading(net *n) {
   if (!n->reading) return;
-  uv_read_stop((uv_stream_t *)&n->link->tcp);
+  uv_read_stop((uv_stream_t *)&n->conn->tcp);
   n->reading = false;
 }
 
 static void alloc_in(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
   (void)suggested;
-  net *n = LINK(h, tcp)->owner;
+  net *n = TCP_LINK(h, tcp)->owner;
   const request *q = n->reader;
   size_t size = agc_inbuf_want(&n->in, !q || q->kind != REQ_BYTES, q ? q->count : 0);
   uint8_t *room = agc_inbuf_room(&n->in, size);
@@ -599,7 +599,7 @@ static bool read_ready(net *n, req_kind kind) {
 
 static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
   (void)buf;
-  net *n = LINK(s, tcp)->owner;
+  net *n = TCP_LINK(s, tcp)->owner;
   agc_inbuf_got(&n->in, got, got == UV_EOF);
   if (got < 0)
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : (int)-got);
@@ -611,7 +611,7 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
 
 static void start_reading(net *n) {
   if (n->reading || n->in.eof || n->in.error) return;
-  int rc = uv_read_start((uv_stream_t *)&n->link->tcp, alloc_in, read_in);
+  int rc = uv_read_start((uv_stream_t *)&n->conn->tcp, alloc_in, read_in);
   if (rc)
     n->in.error = -rc;
   else
@@ -677,7 +677,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, bool text) {
   net *n = live(sk);
   if (!n) return agc_error_value(socket_closed);
   n->write_status = 0;
-  int rc = agc_stream_write((uv_stream_t *)&n->link->tcp, &n->write_req, &n->write_data, data, len, wrote);
+  int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, wrote);
   if (rc < 0) return agc_system_error(vm, write_failed, -rc);
   if (rc == 0) return ok_value(agc_void());
   park(vm, n, REQ_SEND, agc_handle_value(sk->writer), timeout)->count = (size_t)agc_value_units(args[1]);

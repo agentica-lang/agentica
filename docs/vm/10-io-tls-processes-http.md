@@ -55,7 +55,7 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   `TCP.local_port` still answers after `close_listener`, as in the
   evaluator.
 - **State.** One `malloc`'d `net` serves sockets and listeners: the
-  `uv_getaddrinfo_t`, the `uv_write_t`, its links (a `malloc`'d
+  `uv_getaddrinfo_t`, the `uv_write_t`, its links (`tcp_link`, a `malloc`'d
   `uv_tcp_t` with its `uv_connect_t`; callbacks find the `net` through
   it; a socket has one, a listener one per bound address), the address
   list, the input buffer and the pending requests (the
@@ -100,8 +100,10 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   connection per handle and stops watching it. When `uv_accept` fails,
   libuv no longer watches that handle, so the VM closes the listener:
   that accept returns the error and every other waiting accept returns
-  "network: listener is closed". A timed-out accept leaves the listener
-  open.
+  "network: listener is closed". An accept error that libuv reports
+  through the connection callback goes to the head waiter; when no task
+  is waiting in `TCP.accept`, it is traced (`tcp_accept_error`) and
+  dropped. A timed-out accept leaves the listener open.
 - **Reads.** `recv_bytes` checks 1..1048576 first; then, as for
   `read_line`: the timeout, the reader lock, and that the socket is open.
   The socket is read only while a reader waits (`uv_read_start`, then
