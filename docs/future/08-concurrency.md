@@ -1,6 +1,6 @@
 ## 8. Concurrency and parallelism
 
-Lightweight I/O tasks are implemented before networking in phase 5j2. Their normative API lives in grammar.md: Task.spawn takes Fn[A, R] and one argument and returns Task[R]; Task.await returns R; Task.sleep takes nonnegative milliseconds. Channels and CPU parallelism remain proposals. Supporting multiple connections is the concrete reason to prepare evaluator isolation before TCP and HTTP.
+Lightweight I/O tasks are implemented before networking in phase 5j2. Their normative API lives in grammar.md: Task.spawn takes Fn[A, R] and one argument and returns Task[R]; Task.await returns R; Task.sleep takes nonnegative milliseconds. Channels and `Task.map` (bounded concurrency over a list) are planned in [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections) (roadmap phase 17); CPU parallelism remains a proposal. Supporting multiple connections is the concrete reason to prepare evaluator isolation before TCP and HTTP.
 
 ### Racket building blocks
 
@@ -15,16 +15,9 @@ The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports 
 
 ### Shape: builtin modules, no grammar change
 
-Task is a builtin module over Racket primitives using function values (5j) and a generic opaque result type, with no new keywords. The remaining channel proposal is:
+Task is a builtin module over Racket primitives using function values (5j) and a generic opaque result type, with no new keywords. The channel proposal that stood here (`Channel.new()`, `send` returning `Void`, `recv` returning `T`) is replaced by the final design of [section 27.2](27-iteration-and-concurrency.md#272-channels): a bounded `Channel[T]` with `new(capacity)`, `send` and `recv` that take a timeout and return a `Result`, `close` and `closed?`. Its buffering, close, timeout and cancellation rules are decided there together, as this section asked, with the task cancellation of `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap)).
 
-```text
-Channel.new() -> Channel[T]
-Channel.send(c: Channel[T], v: T) -> Void
-Channel.recv(c: Channel[T]) -> T
-```
-
-- Named functions have no closures. Task inputs travel through one argument and results through Task.await; future channels could provide repeated exchanges.
-- Channel[T] would be a builtin opaque generic. Buffering, close, timeout and cancellation rules must be decided together.
+- Task inputs travel through one argument and results through Task.await; channels (§27.2) provide repeated exchanges.
 - Immutable values can be shared safely, but ports, future sockets and contextual services are resources with state. They still need ownership or synchronization rules.
 - Task diagnostics already terminate the whole evaluation, even when unawaited; Result.error remains a normal result.
 
@@ -44,7 +37,7 @@ The evaluator prepares immutable function/struct tables once per evaluation, the
 
 ### Open decisions
 
-- Whether a concrete application needs channels or Process.poll_line.
-- Whether measured CPU workloads justify parallel thread pools or places; default no.
-- Whether to expose task timeouts or explicit cancellation. Current await has no timeout; returning from the entrypoint cancels pending work.
+- Channels are decided (§27.2). Whether a concrete application needs Process.poll_line stays open.
+- Whether measured CPU workloads justify parallel thread pools or places; default no. On the VM, CPU parallelism is the multicore schedulers (`docs/vm/10-io-multicore.md` §10.2.3, gated at roadmap order step 11), and `Task.map` (§27.1) is the form that would use it.
+- A public `Task.cancel` and a timeout on `Task.await` stay open: §27 adds only the per-item timeout of `Task.map` and the timeouts of channel calls, and each new form would be a second way to stop or wait for work. Returning from the entrypoint still cancels pending work.
 

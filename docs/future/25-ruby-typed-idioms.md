@@ -443,7 +443,7 @@ Decided against by the one-way test: `while true` already does it. See 25.13.
 
 #### 25.12.7 Lazy enumerators and generators
 
-**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:** streams of unknown length without building lists. **Why not now:** it needs a way to suspend a computation; it should come after tasks and the multicore decision, which may give channels (§8). **Open questions:** whether a channel or a task covers the real use cases.
+**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:** streams of unknown length without building lists. **Now in [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):** a lazy `Stream[T]` stays to evaluate later there (§27.3), with the criteria that would plan it (after the prelude of 25.6); generators with `yield` (`Enumerator.new`, fibers) are decided against (§27.4), since a task that sends into a channel (§27.2) is the producer, and `xs.lazy` gets a help.
 
 #### 25.12.8 Declarative hygienic macros
 
