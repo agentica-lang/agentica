@@ -115,7 +115,6 @@ void agc_turn_begin(agc_vm *vm) {
   vm->turn_left = AGC_TURN_STEPS;
   vm->batch = 0;
   vm->yield = false;
-  vm->task->turn_cost = 0;
   take_steps(vm, AGC_TURN_STEPS);
   set_counter(vm);
 }
@@ -162,6 +161,8 @@ static bool apply_cost(agc_vm *vm) {
   set_counter(vm);
   return false;
 }
+
+bool agc_turn_charge(agc_vm *vm) { return vm->task->turn_cost && apply_cost(vm); }
 
 static void ensure_registers(agc_vm *vm, agc_task *t, size_t needed, uint32_t span) {
   if (needed <= t->reg_capacity) return;
@@ -223,6 +224,7 @@ static void finish_native(agc_vm *vm, agc_value result) {
   frame->native = NULL;
   t->frame_count--;
   t->regs[base] = result;
+  if (t->turn_cost) apply_cost(vm);
 }
 
 static bool key_less(agc_vm *vm, agc_value a, agc_value b) {

@@ -821,6 +821,8 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, agc_void(), timeout);
 }
 
+static bool busy(agc_vm *vm, agc_value handle) { return agc_handle_wait(vm, agc_as_handle(vm, handle)); }
+
 static file_state *usable(agc_vm *vm, agc_value handle, int64_t timeout, bool reading, agc_value *failure) {
   file_state *st = agc_as_handle(vm, handle)->native;
   if (timeout <= 0) {
@@ -839,6 +841,7 @@ static file_state *usable(agc_vm *vm, agc_value handle, int64_t timeout, bool re
 
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
+  if (busy(vm, args[0])) return agc_void();
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 1 || (uint64_t)count > LIMIT) return error_of("filesystem: max_bytes must be between 1 and 1048576");
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -853,6 +856,7 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
 
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
+  if (busy(vm, args[0])) return agc_void();
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value failure;
   file_state *st = usable(vm, args[0], timeout, true, &failure);
@@ -892,6 +896,7 @@ static agc_value write_bytes(agc_vm *vm, agc_value handle, const uint8_t *data, 
 
 static agc_value builtin_write(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
+  if (busy(vm, args[0])) return agc_void();
   const agc_string *content = agc_as_string(vm, args[1]);
   if (content->bytes > LIMIT) return error_of("filesystem: text exceeds 1048576 bytes");
   return write_bytes(vm, args[0], (const uint8_t *)content->data, content->bytes, agc_as_int(vm, args[2]));
@@ -899,6 +904,7 @@ static agc_value builtin_write(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_write_list(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
+  if (busy(vm, args[0])) return agc_void();
   const agc_list *values = agc_as_list(vm, args[1]);
   bool valid = values->len <= LIMIT;
   for (size_t k = 0; valid && k < values->len; k++) {
@@ -913,6 +919,7 @@ static agc_value builtin_write_list(agc_vm *vm, agc_value *args, uint32_t span) 
 
 static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
+  if (busy(vm, args[0])) return agc_void();
   agc_value failure;
   int64_t timeout = agc_as_int(vm, args[1]);
   file_state *st = usable(vm, args[0], timeout, false, &failure);
@@ -923,6 +930,7 @@ static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
+  if (busy(vm, args[0])) return agc_void();
   agc_resource *r = agc_as_handle(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
   if (timeout <= 0) return error_of(bad_timeout);

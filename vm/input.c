@@ -118,16 +118,11 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
     in->end += (size_t)q->got;
   } else {
     in->got = q->got == 0 ? 0 : -1;
+    in->eof_readers = 1;
+    for (const agc_task *t = in->waiters; t; t = t->next) in->eof_readers++;
   }
   free(q);
-  agc_task *t = in->waiters;
-  in->waiters = in->waiters_tail = NULL;
-  while (t) {
-    agc_task *next = t->next;
-    t->next = NULL;
-    agc_task_wake(vm, t);
-    t = next;
-  }
+  agc_task_wake_all(vm, &in->waiters, &in->waiters_tail);
   return agc_void();
 }
 
@@ -137,13 +132,7 @@ static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop};
 
 static int start_read(agc_vm *vm, agc_input *in) {
   if (in->reading) {
-    agc_task *t = vm->task;
-    t->next = NULL;
-    if (in->waiters_tail)
-      in->waiters_tail->next = t;
-    else
-      in->waiters = t;
-    in->waiters_tail = t;
+    agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
     agc_task_park(vm, true);
     return FILL_WAIT;
   }
@@ -185,7 +174,10 @@ static int fill(agc_vm *vm) {
   if (in->fd < 0) return 0;
   if (in->got != GOT_NONE) {
     int got = in->got;
-    in->got = GOT_NONE;
+    if (got == 0 && in->eof_readers > 1)
+      in->eof_readers--;
+    else
+      in->got = GOT_NONE;
     return got;
   }
   return start_read(vm, in);

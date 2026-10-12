@@ -144,14 +144,18 @@ typedef void (*agc_release_fn)(void *native);
 
 typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
 
-typedef struct {
+typedef struct agc_resource agc_resource;
+
+struct agc_resource {
   size_t slot;
   agc_resource_kind kind;
   void *native;
   agc_release_fn release;
   agc_value context;
   agc_task *task;
-} agc_resource;
+  agc_resource *holder;
+  agc_task *waiters, *waiters_tail;
+};
 
 typedef struct agc_registry agc_registry;
 typedef struct agc_loop agc_loop;
@@ -261,7 +265,7 @@ typedef struct {
   bool flush_out, pending_eof, reading;
   int got;
   uint8_t *buf;
-  size_t start, end, cap, scanned;
+  size_t start, end, cap, scanned, eof_readers;
   agc_task *waiters, *waiters_tail;
 } agc_input;
 
@@ -447,6 +451,7 @@ extern const size_t agc_task_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
+bool agc_handle_wait(agc_vm *vm, agc_resource *handle);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
 void agc_io_init(void);
@@ -465,7 +470,10 @@ void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, agc_value arg, uint32_
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
 void agc_task_wake(agc_vm *vm, agc_task *t);
 void agc_task_park(agc_vm *vm, bool retry);
+void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
+void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail);
 void agc_turn_begin(agc_vm *vm);
+bool agc_turn_charge(agc_vm *vm);
 void agc_turn_finish(agc_vm *vm);
 agc_turn_result agc_run_turn(agc_vm *vm);
 agc_outcome agc_vm_run(agc_vm *vm);

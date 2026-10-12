@@ -53,6 +53,8 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   r->release = release;
   r->context = agc_void();
   r->task = NULL;
+  r->holder = NULL;
+  r->waiters = r->waiters_tail = NULL;
   r->slot = reg->count;
   reg->items[reg->count++] = r;
   return r;
@@ -69,6 +71,13 @@ void agc_unregister(agc_vm *vm, agc_resource *r) {
 #endif
   reg->items[reg->count] = NULL;
   r->slot = SIZE_MAX;
+}
+
+bool agc_handle_wait(agc_vm *vm, agc_resource *handle) {
+  if (!handle->holder) return false;
+  agc_task_enqueue(&handle->waiters, &handle->waiters_tail, vm->task);
+  agc_task_park(vm, true);
+  return true;
 }
 
 #ifdef __linux__
@@ -193,6 +202,7 @@ void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value con
     if (!j->timer_closing) close_timer(j);
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue file work", 0);
   }
+  if (agc_is(context, AGC_T_HANDLE)) agc_as_handle(vm, context)->holder = r;
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
@@ -214,6 +224,13 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   agc_value context = r->context;
   r->context = agc_void();
   j->consumed = true;
+  if (agc_is(context, AGC_T_HANDLE)) {
+    agc_resource *handle = agc_as_handle(vm, context);
+    if (handle->holder == r) {
+      handle->holder = NULL;
+      agc_task_wake_all(vm, &handle->waiters, &handle->waiters_tail);
+    }
+  }
   agc_value result;
   if (j->work_done && (j->kind->work || j->timer_fired)) {
     void *data = j->data;
@@ -226,24 +243,37 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   return result;
 }
 
-bool agc_io_close(agc_vm *vm) {
+static bool held(const agc_resource *r) {
+  const agc_resource *h = r->holder;
+  return h && h->slot != SIZE_MAX && h->native && !((const job *)h->native)->work_done;
+}
+
+static void release_handles(agc_vm *vm) {
   agc_registry *reg = vm->registry;
   for (size_t k = reg ? reg->count : 0; k-- > 0;) {
     agc_resource *r = reg->items[k];
-    if (r->kind == AGC_RESOURCE_JOB) {
-      job *j = r->native;
-      j->consumed = true;
-      close_timer(j);
-      continue;
-    }
+    if (r->kind == AGC_RESOURCE_JOB || held(r)) continue;
     if (r->native) r->release(r->native);
     r->native = NULL;
     agc_unregister(vm, r);
   }
+}
+
+bool agc_io_close(agc_vm *vm) {
+  agc_registry *reg = vm->registry;
+  for (size_t k = reg ? reg->count : 0; k-- > 0;) {
+    agc_resource *r = reg->items[k];
+    if (r->kind != AGC_RESOURCE_JOB) continue;
+    job *j = r->native;
+    j->consumed = true;
+    close_timer(j);
+  }
+  release_handles(vm);
   if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
   vm->loop->ready = vm->loop->ready_tail = NULL;
   sweep(vm);
+  release_handles(vm);
   if (vm->registry && vm->registry->count) return false;
   if (uv_loop_close(&vm->loop->uv) != 0) return false;
   free(vm->loop);

@@ -23,6 +23,26 @@ void agc_task_wake(agc_vm *vm, agc_task *t) {
   if (t->state == AGC_TASK_PARKED) enqueue(vm, t);
 }
 
+void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t) {
+  t->next = NULL;
+  if (*tail)
+    (*tail)->next = t;
+  else
+    *head = t;
+  *tail = t;
+}
+
+void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail) {
+  agc_task *t = *head;
+  *head = *tail = NULL;
+  while (t) {
+    agc_task *next = t->next;
+    t->next = NULL;
+    agc_task_wake(vm, t);
+    t = next;
+  }
+}
+
 void agc_task_park(agc_vm *vm, bool retry) {
   vm->task->parking = true;
   vm->task->retry = retry;
@@ -35,19 +55,10 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frames = NULL;
   t->frame_capacity = 0;
   t->cursor = NULL;
-  agc_task *w = t->waiters;
-  t->waiters = t->waiters_tail = NULL;
-  while (w) {
-    agc_task *next = w->next;
-    w->next = NULL;
-    agc_task_wake(vm, w);
-    w = next;
-  }
+  agc_task_wake_all(vm, &t->waiters, &t->waiters_tail);
 }
 
 static void resume(agc_vm *vm, agc_task *t) {
-  vm->task = t;
-  t->state = AGC_TASK_RUNNING;
   if (t->parked) {
     agc_value result = agc_io_finish(vm, t);
     if (!t->retry) t->regs[t->park_reg] = result;
@@ -66,9 +77,11 @@ agc_outcome agc_vm_run(agc_vm *vm) {
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
         continue;
       }
-      resume(vm, t);
+      vm->task = t;
+      t->state = AGC_TASK_RUNNING;
       agc_turn_begin(vm);
-      agc_turn_result r = agc_run_turn(vm);
+      resume(vm, t);
+      agc_turn_result r = agc_turn_charge(vm) ? AGC_TURN_YIELD : agc_run_turn(vm);
       agc_turn_finish(vm);
       if (r == AGC_TURN_DONE) {
         if (t == vm->main) break;
@@ -95,13 +108,7 @@ static agc_value builtin_await(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_task *target = agc_as_task(vm, args[0]);
   if (target->state == AGC_TASK_DONE) return target->result;
-  agc_task *t = vm->task;
-  t->next = NULL;
-  if (target->waiters_tail)
-    target->waiters_tail->next = t;
-  else
-    target->waiters = t;
-  target->waiters_tail = t;
+  agc_task_enqueue(&target->waiters, &target->waiters_tail, vm->task);
   agc_task_park(vm, true);
   return agc_void();
 }

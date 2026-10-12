@@ -1720,6 +1720,14 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     `Task.sleep(n)` starts a timer-only job (`agc_io_kind` with no `work`
     half) and parks. Under `no_files` (the fuzzer) every sleep yields, so
     a mutant never waits on a clock.
+  - A turn cost charged where no apply path follows is applied at the
+    next one: the cost of a resumable builtin's last step (the sort in
+    `sort_by`) right after its native frame finishes, and the cost of a
+    parked task's `done` half (a big `Dir.list` sort) right after the
+    turn begins, so the task may yield before it runs anything.
+  - Stdin EOF: when a read in flight returns EOF, every task waiting for
+    that read sees the EOF once (`eof_readers`), so a second reader on a
+    TTY does not block for another Ctrl-D.
   - `Task.await` of a running task appends the caller to that task's
     FIFO of waiters and parks with *retry*: when the target finishes, the
     waiters are queued in order and each re-runs its `CALL_BUILTIN`,
@@ -1808,7 +1816,25 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   the pool threads and would wait for that read. The flush of a handle's
   write buffer at the end of run is a blocking write, so it can block on a
   FIFO whose reader stopped reading, as Racket's flush in
-  `filesystem-close-all!` does (parity).
+  `filesystem-close-all!` does (parity). A handle whose operation is still
+  running in the pool (`main` returned while a child task's read was in
+  flight) is not released: the job still uses its state. It is released
+  after the loop's last run once that job's work is done; otherwise it
+  stays registered, `agc_io_close` returns false, and the process ends
+  with `_exit` as above.
+- **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a
+  `holder` (the job resource of the operation in flight on it) and a FIFO
+  of waiting tasks, both on the GC `agc_resource`, never in `malloc`
+  memory. `agc_io_start` sets `holder` when its context is a handle; every
+  handle builtin (`read_bytes`, `read_line`, `write`, `write_bytes`,
+  `flush`, `close`) first calls `agc_handle_wait`, which parks the task
+  with retry in the FIFO while the handle is held. `agc_io_finish` clears
+  `holder` and wakes the waiters in order before the `done` or `expired`
+  half runs, so `close` waits for the operation in flight, two readers
+  never share the read buffer, and buffered writes keep their order. On a
+  timeout, `expired` hands the state to the stuck operation and closes the
+  handle (`native` is NULL), so the waiters get "file handle is closed" on
+  retry and never touch the state the stuck work still uses.
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
   never touch the file system; a file builtin (`Path.cwd` and
   `Path.resolve` too, since they read the current directory) then ends the
@@ -1838,9 +1864,9 @@ today only set flags, also put the task at the back of the run queue;
 when the task runs again, the same completion code calls `done` or
 `expired` and stores the result. The scheduler calls `uv_run` with
 `UV_RUN_NOWAIT` between turns and `UV_RUN_ONCE` only when the run queue is
-empty. Handles also get a per-handle lock (the evaluator's semaphore)
-once two tasks can share one. It is a task-level lock: waiters park in a
-FIFO, and it is never an OS mutex. With N>1 (10.2.3) each scheduler has its own
+empty. Handles got a per-handle lock (the evaluator's semaphore), as
+built above. It is a task-level lock: waiters park in a FIFO, and it is
+never an OS mutex. With N>1 (10.2.3) each scheduler has its own
 loop, and an operation on a handle owned by another scheduler goes through
 the I/O hand-off.
 
