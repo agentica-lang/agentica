@@ -8,6 +8,13 @@ Every file function takes a timeout in milliseconds and returns a `Result`.
 Text is UTF-8. One call reads or writes at most 1 MiB. Programs use the file
 permissions of the user who runs them.
 
+File calls run on a pool of threads, 4 by default, which DNS lookups and
+loading TLS certificates share. When a program keeps many file calls going
+at once in several tasks, or reads FIFOs or devices that may block, later
+calls wait for a free thread. To raise the size, set the `UV_THREADPOOL_SIZE`
+environment variable (at most 1024) when you start the program, for example
+`UV_THREADPOOL_SIZE=16 agentica app.agc`; setting it later has no effect.
+
 The examples on this page touch the disk, so they are checked but not run
 here.
 
