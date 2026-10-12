@@ -40,6 +40,11 @@ that count, and returns ok([]) at EOF. TCP supplies a stream, not messages.
 read_line handles fragmented UTF-8, strips LF or CRLF, accepts a final line
 without a terminator, and errors on empty EOF or a line over 1 MiB.
 
+`TCP` programs run on the VM. There a line over 1 MiB also closes the socket,
+and so does a timed-out read or write; the next call on it returns
+`network: socket is closed` at once. A program that uses `TLS` or `HTTP` runs
+on the legacy evaluator.
+
 Builtin records are immutable and use the existing named-field constructors:
 
 | Record | Fields |

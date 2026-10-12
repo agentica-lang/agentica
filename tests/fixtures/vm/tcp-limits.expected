@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 103,
+  "stdout": [
+    "1048576",
+    "ok()",
+    "error(\"network: line exceeds 1048576 bytes\")",
+    "error(\"network: socket is closed\")",
+    "ok()",
+    "error(\"network: end of input\")",
+    ""
+  ],
+  "stderr": []
+}

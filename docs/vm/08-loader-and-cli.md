@@ -188,7 +188,7 @@ and cost one predictable branch each.
   are passed to the VM; a seeded run repeats on the VM, with other numbers
   than the evaluator gave.
 - Fallback to the evaluator. When `lower` rejects the program with
-  `LOWER-UNSUPPORTED` (today only a call to a `TCP`, `TLS`, `HTTP` or `BDD`
+  `LOWER-UNSUPPORTED` (today only a call to a `TLS`, `HTTP` or `BDD`
   builtin), the driver prints one line on stderr (in the plain and `--ai` modes;
   never with `--json`, where the last stderr line stays the diagnostic),
   `agentica: <the lowering's message>; running on the legacy evaluator` (for example `agentica: the VM
@@ -261,7 +261,12 @@ and cost one predictable branch each.
   `lock_timeout` cover them), lock_wait, lock_handoff, lock_timeout, stdin,
   poll (`mode=once|nowait`, `us` blocked; a `nowait` poll that found no
   finished job writes nothing), close (`resources` left in the
-  registry, `settled`), hard_exit; `proc` spawn,
+  registry, `settled`), hard_exit, and the TCP events of 10.3.1:
+  tcp_connect (`socket`, `host`, `port`), tcp_connected, tcp_connect_error
+  (`error`, one per failed address), tcp_listen (`listener`, `host`, the
+  bound `port`), tcp_accept (`listener`, the new `socket`),
+  tcp_accept_error, tcp_eof (`error=0` at EOF), tcp_close (`socket` or
+  `listener`, `why=close|timeout|line|failed|exit`); `proc` spawn,
   spawn_failed (`rc`, or `reason=unresolved` when the executable is not
   found), exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
   stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;

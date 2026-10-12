@@ -80,14 +80,14 @@ GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 UV_DIR := vm/third_party/libuv
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/process.c vm/interp.c vm/task.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/stream.c vm/process.c vm/tcp.c vm/interp.c vm/task.c vm/diag.c vm/trace.c
 GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h vm/trace.h src/version.rkt
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
 VM_HARDEN_LDFLAGS := $(VM_PIE) -Wl,-z,relro,-z,now
-VM_LIBS := -lpthread
+VM_LIBS := -lpthread -lm
 VM_ENTRY :=
 ifeq ($(OS),Windows_NT)
 ifeq ($(origin CC),default)

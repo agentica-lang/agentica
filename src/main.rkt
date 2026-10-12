@@ -137,7 +137,7 @@
      #:program "agentica"
      #:argv (list->vector argv)
      #:usage-help
-     "Programs run on the bytecode VM. A program that uses TCP, TLS, HTTP or BDD"
+     "Programs run on the bytecode VM. A program that uses TLS, HTTP or BDD"
      "runs on the legacy evaluator, with a notice on stderr, and so does agentica test."
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]

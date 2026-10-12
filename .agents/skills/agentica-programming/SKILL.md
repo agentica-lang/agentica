@@ -10,7 +10,7 @@ Agentica is Ruby with static types: Ruby-like syntax, checked before running, wi
 ## Write and verify
 
 1. Save the requested program as a `.agc` file. It needs one `main() -> Void`.
-2. Check and run it with `agentica program.agc`; it runs on the bytecode VM, and a program that uses `TCP`, `TLS`, `HTTP` or `BDD` runs on the older evaluator after one notice line on stderr. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm` and `--dump-ir` prints the lowered IR; both report `LOWER-UNSUPPORTED` for `TCP`, `TLS`, `HTTP` and `BDD`.
+2. Check and run it with `agentica program.agc`; it runs on the bytecode VM, and a program that uses `TLS`, `HTTP` or `BDD` runs on the older evaluator after one notice line on stderr. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm` and `--dump-ir` prints the lowered IR; both report `LOWER-UNSUPPORTED` for `TLS`, `HTTP` and `BDD`.
 3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) and often a `help` line with the fix.
 4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
@@ -117,7 +117,7 @@ Leave a blank line after the `end` of every `def`, `struct` and `enum` before th
 
 - Every parameter and the return type need an annotation.
 - Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no user methods, nested functions, default arguments, or overloading; closures are written as blocks (see "Blocks and closures").
-- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); tail calls (`return f(...)`) do not count toward the depth limit, except in a program that uses `TCP`, `TLS`, `HTTP` or `BDD`, which runs on the evaluator.
+- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); tail calls (`return f(...)`) do not count toward the depth limit, except in a program that uses `TLS`, `HTTP` or `BDD`, which runs on the evaluator.
 - A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
 - `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
 

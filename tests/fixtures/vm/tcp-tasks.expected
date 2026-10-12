@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 193,
+  "stdout": [
+    "hello alpha",
+    "hello beta",
+    "error(\"network: operation timed out\")",
+    "ok()",
+    "ok(\"ping\")",
+    "ok(\"pong\")",
+    ""
+  ],
+  "stderr": []
+}

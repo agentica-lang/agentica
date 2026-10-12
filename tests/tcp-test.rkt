@@ -58,11 +58,11 @@ AGC
 
 (module+ test
   (when (node-available?)
-    (test-case "TCP and verified TLS interoperate with Node bytes and fragmented UTF-8"
+    (test-case "TCP and verified TLS interoperate with Node bytes and fragmented UTF-8 through the real CLI"
       (with-peers
        (lambda (ports)
-         (check-equal? (run-program (client-program "127.0.0.1" (hash-ref ports 'tcp) #f)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
-         (check-equal? (run-program (client-program "localhost" (hash-ref ports 'tls) #t)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
+         (check-equal? (run-cli-program (client-program "127.0.0.1" (hash-ref ports 'tcp) #f)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
+         (check-equal? (run-cli-program (client-program "localhost" (hash-ref ports 'tls) #t)) "ñ😀\n[97, 98, 99]\nfalse\nfalse\n")
          (check-equal?
           (run-program
            (format "def main() -> Void\n  IO.inspect(Result.ok?(TLS.connect(\"127.0.0.1\", ~a, ~s, 1000)))\nend\n"

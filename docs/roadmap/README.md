@@ -15,10 +15,10 @@ tasks and processes are done, with small items still open in 7c
 7f (the extra corpora). Ranges (8a) are done.
 
 The Racket evaluator is frozen. It runs only what the VM lacks: programs that
-use `TCP`, `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
+use `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
 notice) and `agentica test`. The next work is the catch-up that removes those
-fallbacks: VM tracing (14a), then TCP and TLS, then HTTP, then BDD on the VM
-(7h). Then 7i deletes the evaluator. New features (binary data, UDP, logging,
+fallbacks: VM tracing (14a, done), TCP (done), then TLS, then HTTP, then BDD
+on the VM (7h). Then 7i deletes the evaluator. New features (binary data, UDP, logging,
 crypto) come after 7i and are VM-only. The later steps keep their order:
 faster lists (8d) before any instruction-dispatch micro-optimization (7g);
 the review of what the VM inherited from Racket (7k) and the VM layers (7l);
@@ -56,7 +56,7 @@ order.
 | 5 | **Mostly complete:** Bytecode VM core in C with the Boehm GC (`docs/vm/12-testing-and-pr-plan.md` §12.2 items 1 to 8), the 7g benchmark script, 7h part 1 (event loop and files) and ranges (8a); small items stay open in 7c, 7e (loader validation for opcodes as they land) and 7f | Checked programs run on the VM with the evaluator's exit code, stdout, program stderr and diagnostic codes, now recorded as golden outputs |
 | 6 | **Complete:** 7h tasks with one scheduler (N=1) on the structures split for N (`docs/vm/10-io-multicore.md` §10.2.3), with the fairness rule of §10.2.1 (long builtins charge the turn, never `--max-steps`) and the latency test of the 7h tasks item | Concurrent programs on the VM; timers and I/O stay responsive while other tasks compute |
 | 7 | **Complete:** the VM is the default backend (7i, first item): `agentica file.agc` runs on the VM; programs that use `TCP`, `TLS`, `HTTP` or `BDD`, and `agentica test`, fall back to the evaluator; the differential tests became golden tests; the release ships `agentica-vm` | One backend for almost every program; CI runs each test once |
-| 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4), then TCP and TLS, then HTTP, then BDD on the VM (7h); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
+| 7.1 | **Next, catch-up:** 7h processes (done), then VM tracing (14a, `docs/future/24-logging.md` §24.4, done), then TCP (done), then TLS, then HTTP, then BDD on the VM (7h); each PR removes its fallback | Every example, CI smoke test and `agentica test` runs on the VM |
 | 7.2 | 7i: delete the evaluator and its runtime modules; the Racket front end (lexer, parser, checker, lowering, bytecode) stays | One backend |
 | 7.3 | New features, VM-only: binary data (phase 13, `docs/future/23-binary-data.md` §23), then UDP, then logging and debugging (14b stack traces, then 14c `std/log`, `docs/future/24-logging.md` §24), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`) | Programs read and write binary numbers with `std/binary` and send UDP; agents see the call stack of a runtime error; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
 | 8 | Faster lists (8d): a persistent vector behind `List`, before any instruction-dispatch micro-optimization (7g); then the review of what the VM inherited from Racket (7k), next to the 7g hot spots | `push` stops copying the whole list; list-heavy programs stop being O(n²); the VM keeps Racket's rules only where they are good on their own |

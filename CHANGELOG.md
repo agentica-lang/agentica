@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs TCP on Linux: every `TCP` function (`connect`,
+  `listen`, `accept`, `local_port`, `close_listener`, `send`, `send_bytes`,
+  `recv_bytes`, `read_line`, `close`), so TCP programs no longer fall back to
+  the legacy evaluator (`TLS`, `HTTP` and `BDD` still do). Each call parks
+  only its own task; reads and writes have their own locks, and one timeout
+  covers the lock wait and the operation. Connect tries every address of the
+  host in order. Returning from `main`, `System.exit`, a runtime error or the
+  step limit close every socket and listener, also while tasks wait on them.
+  The `io` trace category shows connects, listens, accepts and closes.
+  Differences from the legacy evaluator: a `read_line` over 1 MiB closes the
+  socket; after a timed-out read or write closed a socket, the next call
+  says "socket is closed" at once instead of waiting out its timeout; a host
+  with a NUL byte is an error; sockets use `TCP_NODELAY`.
+
 - `agentica-vm` traces its internals for VM developers:
   `AGENTICA_VM_TRACE=sched,io,proc,loader,gc` (or `all`) writes one
   `agc-trace` line per event (task spawns, turns and wakes, I/O jobs and
@@ -348,6 +362,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   import aliases with those names no longer check.
 
 ### Fixed
+
+- `make vm` links `-lm`, so the VM builds with `CC=clang` too.
 
 - `agentica-vm` started with stdin, stdout or stderr closed (`2>&-`) no
   longer aborts on a libuv assertion: on Linux it first fills the closed

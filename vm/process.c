@@ -15,7 +15,6 @@
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
-#define READ_AHEAD ((size_t)4096)
 #define ERR_CHUNK 4096
 #define REAP_SECONDS 1
 #define REAP_STEP_NS 100000L
@@ -62,30 +61,23 @@ struct proc {
   guard *g;
   proc *run_prev, *run_next;
   size_t users, handles;
-  bool linked, running, exited, err_done, out_eof, in_closed, closed, reading, forward_failed;
-  int out_error, write_status;
+  bool linked, running, exited, err_done, in_closed, closed, reading, forward_failed;
+  int write_status;
   int64_t status;
-  uint8_t *buf, *write_data;
-  size_t start, end, cap;
+  uint8_t *write_data;
+  agc_inbuf out_buf;
   request *reader, *writer, *waits;
   uint8_t err_buf[ERR_CHUNK];
 };
 
 static const char closed_text[] = "process: process is closed";
-static const char timed_out[] = "network: operation timed out";
-static const char bad_timeout[] = "network: timeout must be positive milliseconds";
 static const char write_failed[] = "error writing to stream port";
-
-static agc_value error_of(const char *message) {
-  size_t n = strlen(message);
-  return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
-}
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
 static void settle(proc *p) {
   if (p->users || p->handles) return;
-  free(p->buf);
+  agc_inbuf_free(&p->out_buf);
   free(p->write_data);
   free(p);
 }
@@ -144,8 +136,6 @@ static void unlink_child(proc *p) {
   guard_stop(g, g->signal);
   guard_settle(g);
 }
-
-static size_t pending(const proc *p) { return p->end - p->start; }
 
 static bool wait_over(const proc *p) { return p->closed || (p->exited && p->err_done); }
 
@@ -209,9 +199,7 @@ static int shut(proc *p, const struct timespec *deadline) {
   close_handle((uv_handle_t *)&p->in, closed_in);
   close_handle((uv_handle_t *)&p->out, closed_out);
   close_handle((uv_handle_t *)&p->err, closed_err);
-  free(p->buf);
-  p->buf = NULL;
-  p->start = p->end = p->cap = 0;
+  agc_inbuf_free(&p->out_buf);
   if (p->reader) agc_io_ready(p->reader->job);
   if (p->writer) agc_io_ready(p->writer->job);
   notify_waits(p);
@@ -278,54 +266,17 @@ static void drop_request(void *data) {
   settle(p);
 }
 
-static bool line_ready(const proc *p) {
-  size_t have = pending(p);
-  size_t window = have < LIMIT + 1 ? have : LIMIT + 1;
-  if (have > LIMIT || p->out_eof || p->out_error) return true;
-  return window && memchr(p->buf + p->start, '\n', window);
-}
-
 static bool read_ready(const proc *p, req_kind kind, size_t count) {
-  if (p->closed) return true;
-  if (kind == REQ_LINE) return line_ready(p);
-  return pending(p) >= count || p->out_eof || p->out_error;
-}
-
-static agc_value take_line(agc_vm *vm, proc *p) {
-  size_t have = pending(p);
-  size_t window = have < LIMIT + 1 ? have : LIMIT + 1;
-  const uint8_t *data = have ? p->buf + p->start : NULL;
-  const uint8_t *lf = window ? memchr(data, '\n', window) : NULL;
-  size_t len = have, consume = have;
-  if (lf) {
-    len = (size_t)(lf - data);
-    consume = len + 1;
-    if (len && data[len - 1] == '\r') len--;
-  } else if (have > LIMIT) {
-    close_proc(p);
-    return error_of("process: line exceeds 1048576 bytes");
-  } else if (have == 0) {
-    if (p->out_error) return agc_system_error(vm, "error reading from stream port", p->out_error);
-    return error_of("process: end of input");
-  }
-  p->start += consume;
-  size_t chars;
-  if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(data, len);
-  return agc_result_value(true, agc_string_value(agc_make_string((const char *)data, len, chars)));
-}
-
-static agc_value take_bytes(agc_vm *vm, proc *p, size_t count) {
-  size_t n = pending(p) < count ? pending(p) : count;
-  if (n == 0 && count > 0 && p->out_error) return agc_system_error(vm, "error reading from stream port", p->out_error);
-  agc_list *l = agc_new_list(n);
-  for (size_t k = 0; k < n; k++) l->items[k] = agc_int(p->buf[p->start + k]);
-  p->start += n;
-  return agc_result_value(true, agc_list_value(l));
+  return p->closed || agc_inbuf_ready(&p->out_buf, kind == REQ_LINE, count);
 }
 
 static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
-  if (p->closed) return error_of(closed_text);
-  return kind == REQ_LINE ? take_line(vm, p) : take_bytes(vm, p, count);
+  if (p->closed) return agc_error_value(closed_text);
+  if (kind != REQ_LINE) return agc_inbuf_bytes(vm, &p->out_buf, count);
+  bool over;
+  agc_value line = agc_inbuf_line(vm, &p->out_buf, "process: line exceeds 1048576 bytes", "process: end of input", &over);
+  if (over) close_proc(p);
+  return line;
 }
 
 static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
@@ -337,7 +288,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
     result = take(vm, p, q->kind, q->count);
   } else if (p->closed) {
-    result = error_of(closed_text);
+    result = agc_error_value(closed_text);
   } else if (q->kind == REQ_WAIT) {
     result = agc_result_value(true, agc_int(p->status));
   } else {
@@ -353,7 +304,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   unlink_request(q);
   if (q->kind != REQ_WAIT) close_proc(q->p);
-  return error_of(timed_out);
+  return agc_stream_timed_out();
 }
 
 static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process"};
@@ -463,37 +414,13 @@ static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   notify_waits(p);
 }
 
-static size_t read_size(const proc *p) {
-  const request *q = p->reader;
-  size_t have = pending(p);
-  if (q && q->kind == REQ_BYTES && q->count > have && q->count - have > READ_AHEAD) return q->count - have;
-  return READ_AHEAD;
-}
-
-static bool make_room(proc *p, size_t want) {
-  if (p->start == p->end) p->start = p->end = 0;
-  if (p->cap - p->end >= want) return true;
-  size_t used = pending(p);
-  if (p->start) {
-    memmove(p->buf, p->buf + p->start, used);
-    p->start = 0;
-    p->end = used;
-    if (p->cap - used >= want) return true;
-  }
-  size_t cap = p->cap ? p->cap : READ_AHEAD;
-  while (cap - used < want) cap = agc_size_mul(cap, 2);
-  uint8_t *bigger = realloc(p->buf, cap);
-  if (!bigger) return false;
-  p->buf = bigger;
-  p->cap = cap;
-  return true;
-}
-
 static void alloc_out(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
   (void)suggested;
   proc *p = OWNER(h, out);
-  size_t size = read_size(p);
-  *buf = make_room(p, size) ? uv_buf_init((char *)p->buf + p->end, (unsigned)size) : uv_buf_init(NULL, 0);
+  const request *q = p->reader;
+  size_t size = agc_inbuf_want(&p->out_buf, !q || q->kind != REQ_BYTES, q ? q->count : 0);
+  uint8_t *room = agc_inbuf_room(&p->out_buf, size);
+  *buf = room ? uv_buf_init((char *)room, (unsigned)size) : uv_buf_init(NULL, 0);
 }
 
 static void stop_reading(proc *p) {
@@ -505,15 +432,9 @@ static void stop_reading(proc *p) {
 static void read_out(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   (void)buf;
   proc *p = OWNER(s, out);
-  if (n > 0) {
-    p->end += (size_t)n;
-  } else if (n == UV_EOF) {
-    p->out_eof = true;
-  } else if (n < 0) {
-    p->out_error = (int)-n;
-  }
+  agc_inbuf_got(&p->out_buf, n, n == UV_EOF);
   if (n < 0)
-    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stdout error=%d", (int)p->process.pid, p->out_error);
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stdout error=%d", (int)p->process.pid, p->out_buf.error);
   request *q = p->reader;
   bool ready = q && read_ready(p, q->kind, q->count);
   if (n < 0 || !q || ready) stop_reading(p);
@@ -521,10 +442,10 @@ static void read_out(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
 }
 
 static void start_reading(proc *p) {
-  if (p->reading || p->out_eof || p->out_error) return;
+  if (p->reading || p->out_buf.eof || p->out_buf.error) return;
   int rc = uv_read_start((uv_stream_t *)&p->out, alloc_out, read_out);
   if (rc)
-    p->out_error = -rc;
+    p->out_buf.error = -rc;
   else
     p->reading = true;
 }
@@ -641,17 +562,9 @@ static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **e
   return rc;
 }
 
-static agc_resource *new_lock(agc_vm *vm) {
-  agc_resource *lock = agc_alloc(sizeof(agc_resource));
-  lock->id = agc_resource_id(vm);
-  lock->slot = SIZE_MAX;
-  lock->context = agc_void();
-  return lock;
-}
-
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  if (!vm->rt->allow_run) return error_of("process: spawning requires --allow-run");
+  if (!vm->rt->allow_run) return agc_error_value("process: spawning requires --allow-run");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[2]);
@@ -660,17 +573,17 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
     const agc_string *arg = agc_as_string(vm, list->items[k]);
     valid = valid && !memchr(arg->data, 0, arg->bytes);
   }
-  if (!valid) return error_of("process: command must be nonempty and arguments cannot contain NUL");
-  if (timeout <= 0) return error_of(bad_timeout);
+  if (!valid) return agc_error_value("process: command must be nonempty and arguments cannot contain NUL");
+  if (timeout <= 0) return agc_stream_bad_timeout();
   agc_process *pr = agc_alloc(sizeof(agc_process));
-  pr->reader = new_lock(vm);
-  pr->writer = new_lock(vm);
+  pr->reader = agc_new_lock(vm);
+  pr->writer = agc_new_lock(vm);
   uv_loop_t *loop = agc_io_uv(vm);
   guard *g = guard_of(vm, loop);
   char *path = resolve(vm, command);
   if (!path) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=unresolved");
-    return error_of("process: executable is unavailable");
+    return agc_error_value("process: executable is unavailable");
   }
   char **argv = child_args(vm, path, list);
   char **env = vm->rt->drop_uring_env ? child_env() : NULL;
@@ -695,17 +608,6 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_result_value(true, agc_process_value(pr));
 }
 
-static bool locked(agc_vm *vm, agc_resource *lock, int64_t *timeout, agc_value *result) {
-  if (*timeout <= 0) {
-    *result = error_of(bad_timeout);
-    return false;
-  }
-  agc_lock_status status = agc_handle_wait(vm, lock, timeout);
-  if (status == AGC_LOCK_TAKEN) return true;
-  *result = status == AGC_LOCK_WAIT ? agc_void() : error_of(timed_out);
-  return false;
-}
-
 static proc *live(const agc_process *pr) {
   proc *p = pr->state->native;
   return p && !p->closed ? p : NULL;
@@ -714,9 +616,9 @@ static proc *live(const agc_process *pr) {
 static agc_value read_op(agc_vm *vm, agc_value handle, req_kind kind, size_t count, int64_t timeout) {
   agc_process *pr = agc_as_process(vm, handle);
   agc_value result;
-  if (!locked(vm, pr->reader, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, pr->reader, &timeout, &result)) return result;
   proc *p = live(pr);
-  if (!p) return error_of(closed_text);
+  if (!p) return agc_error_value(closed_text);
   if (read_ready(p, kind, count)) return take(vm, p, kind, count);
   request *q = new_request(p, kind);
   q->count = count;
@@ -735,37 +637,21 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   int64_t count = agc_as_int(vm, args[1]);
-  if (count < 0 || (uint64_t)count > LIMIT) return error_of("process: count must be 0..1048576");
+  if (count < 0 || (uint64_t)count > LIMIT) return agc_error_value("process: count must be 0..1048576");
   return read_op(vm, args[0], REQ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
 static agc_value write_op(agc_vm *vm, agc_value handle, uint8_t *data, size_t len, int64_t timeout) {
   agc_process *pr = agc_as_process(vm, handle);
   agc_value result;
-  if (!locked(vm, pr->writer, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, pr->writer, &timeout, &result)) return result;
   proc *p = live(pr);
-  if (!p) return error_of(closed_text);
-  if (p->in_closed) return error_of("process: stdin is closed");
-  size_t done = 0;
-  while (done < len) {
-    uv_buf_t b = uv_buf_init((char *)data + done, (unsigned)(len - done));
-    int n = uv_try_write((uv_stream_t *)&p->in, &b, 1);
-    if (n == UV_EAGAIN) break;
-    if (n < 0) return agc_system_error(vm, write_failed, -n);
-    done += (size_t)n;
-  }
-  if (done == len) return ok_void();
-  p->write_data = malloc(len - done);
-  if (!p->write_data) agc_out_of_memory();
-  memcpy(p->write_data, data + done, len - done);
-  uv_buf_t rest = uv_buf_init((char *)p->write_data, (unsigned)(len - done));
+  if (!p) return agc_error_value(closed_text);
+  if (p->in_closed) return agc_error_value("process: stdin is closed");
   p->write_status = 0;
-  int rc = uv_write(&p->write_req, (uv_stream_t *)&p->in, &rest, 1, wrote);
-  if (rc) {
-    free(p->write_data);
-    p->write_data = NULL;
-    return agc_system_error(vm, write_failed, -rc);
-  }
+  int rc = agc_stream_write((uv_stream_t *)&p->in, &p->write_req, &p->write_data, data, len, wrote);
+  if (rc < 0) return agc_system_error(vm, write_failed, -rc);
+  if (rc == 0) return ok_void();
   request *q = new_request(p, REQ_SEND);
   p->writer = q;
   q->job = agc_io_start(vm, &process_io, q, agc_handle_value(pr->writer), timeout);
@@ -775,7 +661,7 @@ static agc_value write_op(agc_vm *vm, agc_value handle, uint8_t *data, size_t le
 static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_string *text = agc_as_string(vm, args[1]);
-  if (text->bytes > LIMIT) return error_of("process: send exceeds 1048576 bytes");
+  if (text->bytes > LIMIT) return agc_error_value("process: send exceeds 1048576 bytes");
   return write_op(vm, args[0], (uint8_t *)text->data, text->bytes, agc_as_int(vm, args[2]));
 }
 
@@ -783,7 +669,7 @@ static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   (void)span;
   const agc_list *values = agc_as_list(vm, args[1]);
   uint8_t *data = agc_byte_list(vm, values, LIMIT);
-  if (!data) return error_of("process: bytes must be 0..255 and at most 1048576 per call");
+  if (!data) return agc_error_value("process: bytes must be 0..255 and at most 1048576 per call");
   return write_op(vm, args[0], data, values->len, agc_as_int(vm, args[2]));
 }
 
@@ -792,9 +678,9 @@ static agc_value builtin_close_stdin(agc_vm *vm, agc_value *args, uint32_t span)
   agc_process *pr = agc_as_process(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value result;
-  if (!locked(vm, pr->writer, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, pr->writer, &timeout, &result)) return result;
   proc *p = live(pr);
-  if (!p) return error_of(closed_text);
+  if (!p) return agc_error_value(closed_text);
   if (!p->in_closed) AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stdin", (int)p->process.pid);
   p->in_closed = true;
   close_handle((uv_handle_t *)&p->in, closed_in);
@@ -805,9 +691,9 @@ static agc_value builtin_wait(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_process *pr = agc_as_process(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout <= 0) return error_of(bad_timeout);
+  if (timeout <= 0) return agc_stream_bad_timeout();
   proc *p = live(pr);
-  if (!p) return error_of(closed_text);
+  if (!p) return agc_error_value(closed_text);
   if (wait_over(p)) return agc_result_value(true, agc_int(p->status));
   request *q = new_request(p, REQ_WAIT);
   q->next = p->waits;

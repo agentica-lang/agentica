@@ -4,7 +4,7 @@
          "../src/checker.rkt" "../src/lexer.rkt" "../src/parser.rkt" "../src/source.rkt"
          "../src/evaluator.rkt" "../src/diagnostic.rkt" "../src/network.rkt")
 
-(provide with-peers run-program with-program-server node-client node-available? fixture-path ca-path cert-path key-path)
+(provide with-peers run-program run-cli-program with-program-server node-client node-available? fixture-path ca-path cert-path key-path)
 
 (define-runtime-path fixture-path "fixtures/network-peer.js")
 (define-runtime-path ca-path "fixtures/tls/ca.pem")
@@ -32,6 +32,31 @@
   (when (diagnostic? result) (error 'network-program "~a" (format-diagnostic result)))
   (check-equal? result (void))
   (get-output-string output))
+
+(define (cli-command file)
+  (if (getenv "AGENTICA_TEST_EXECUTABLE")
+      (list (string->path (getenv "AGENTICA_TEST_EXECUTABLE")) file)
+      (list (find-executable-path "racket") main-path file)))
+
+(define (run-cli-program text)
+  (compile-program text)
+  (define file (make-temporary-file "agentica-network-~a.agc"))
+  (dynamic-wind
+    void
+    (lambda ()
+      (call-with-output-file file #:exists 'truncate (lambda (port) (display text port)))
+      (define-values (process output input errors) (apply subprocess #f #f #f (cli-command file)))
+      (close-output-port input)
+      (define error-text #f)
+      (define reader (thread (lambda () (set! error-text (port->string errors)))))
+      (define text-output (network-timed 30000 (lambda () (port->string output))))
+      (thread-wait reader)
+      (subprocess-wait process)
+      (close-input-port output)
+      (close-input-port errors)
+      (check-equal? (subprocess-status process) 0 error-text)
+      text-output)
+    (lambda () (delete-file file))))
 
 (define (with-peers thunk)
   (define cust (make-custodian))
@@ -74,10 +99,7 @@
     (lambda ()
       (call-with-output-file file #:exists 'truncate (lambda (port) (display text port)))
       (parameterize ([current-custodian cust])
-        (define-values (child output input errors)
-          (if (getenv "AGENTICA_TEST_EXECUTABLE")
-              (subprocess #f #f #f (string->path (getenv "AGENTICA_TEST_EXECUTABLE")) file)
-              (subprocess #f #f #f (find-executable-path "racket") main-path file)))
+        (define-values (child output input errors) (apply subprocess #f #f #f (cli-command file)))
         (set! process child)
         (define line (network-timed 10000 (lambda () (read-line output))))
         (when (eof-object? line) (error 'server "CLI failed: ~a" (port->string errors)))

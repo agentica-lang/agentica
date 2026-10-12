@@ -5,7 +5,7 @@ This document closes roadmap step 7b. It fixes the decisions that 7c
 choices and safety rules that 7h and 7i need. The language does not change.
 `grammar.md` stays the contract. The VM is the default backend; the Racket
 evaluator (`src/evaluator.rkt`) is frozen and runs only the programs the VM
-cannot run yet (`TCP`, `TLS`, `HTTP`, `BDD`, and `agentica test`) until 7i
+cannot run yet (`TLS`, `HTTP`, `BDD`, and `agentica test`) until 7i
 deletes it. Roadmap step 7b lists each decision in one line; this document
 gives the details and reasons. The VM's codename is Aurora (Aurora VM). Only
 the docs use it: the binary (`agentica-vm`), the `AGENTICA_VM*` variables, the
@@ -117,7 +117,10 @@ turns and turn costs, per-task `Random`, and stdin, file jobs and sleeps
 that park only their own task (10.2.1 to 10.2.3, "As built"), and the
 processes PR of 7h: every `Process` builtin (`Process.spawn`, `send`,
 `send_bytes`, `read_line`, `read_bytes`, `close_stdin`, `wait`, `close`)
-and `Process` values, behind the VM's own `--allow-run` (10.4). Runtime diagnostics come in the plain,
+and `Process` values, behind the VM's own `--allow-run` (10.4), and the TCP
+PR of 7h: every `TCP` builtin (`TCP.connect`, `listen`, `accept`,
+`local_port`, `close_listener`, `send`, `send_bytes`, `recv_bytes`,
+`read_line`, `close`) with `Socket` and `Listener` values (10.3.1). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -154,6 +157,6 @@ The design is split by topic. Section numbers stay as they were, so a reference 
 | 10, 10.0, 10.1 | Dependencies and platforms, linking OpenSSL, libuv | [`10-dependencies-and-platforms.md`](10-dependencies-and-platforms.md) |
 | 10.2, 10.2.1, 10.2.2 | Rules for 7h, the scheduler, the loop | [`10-io-scheduler.md`](10-io-scheduler.md) |
 | 10.2.3 | Multicore: M:N schedulers | [`10-io-multicore.md`](10-io-multicore.md) |
-| 10.3 to 10.6 | TLS, processes, limits the C runtime keeps, HTTP parsing | [`10-io-tls-processes-http.md`](10-io-tls-processes-http.md) |
+| 10.3 to 10.6 | TLS, TCP (10.3.1), processes, limits the C runtime keeps, HTTP parsing | [`10-io-tls-processes-http.md`](10-io-tls-processes-http.md) |
 | 11 | Build, CI and supply chain | [`11-build-ci-supply-chain.md`](11-build-ci-supply-chain.md) |
 | 12, 13 | Testing and first PRs (12.2 is the PR plan); open questions | [`12-testing-and-pr-plan.md`](12-testing-and-pr-plan.md) |
