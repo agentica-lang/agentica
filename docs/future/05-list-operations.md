@@ -5,7 +5,7 @@ The collection module is `List`, keeping `List.size`; the earlier `Enum` proposa
 Remaining callback operations depend on function values (section 4, phase 5j): `List.any?` and `List.all?`. Without closures, a function cannot capture variables; extra state travels through parameters or the accumulator.
 
 ```text
-List.sum(list: List[Int]) -> Int
+List.sum(list: List[N]) -> N        # N is Int or Float; see section 25.6
 List.member?(list: List[T], item: T) -> Bool
 List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
 List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
