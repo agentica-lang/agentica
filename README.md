@@ -175,3 +175,21 @@ IO.gets (and top-level gets) returns Result[String]; IO.gets! (and gets!) is the
 
 The maze accepts rectangular grids with 1–32 rows and columns. `.` is open and `#` is blocked; only horizontal and vertical steps are allowed. Start and goal use `row * width + column` and must be open, in-range cells. The example above returns `{"found":true,"distance":4,"path":[0,3,4,5,2]}`. An unreachable goal returns `{"found":false,"distance":-1,"path":[]}`; invalid input returns `{"error":"invalid input"}`. Start equal to goal returns distance zero and a one-cell path. The queue uses numeric keys and deletes consumed entries; `Map.delete` maintains insertion order in O(n), so this example demonstrates the API rather than a queue with constant-time operations.
 
+## License
+
+Agentica is licensed under the Apache License 2.0 with the LLVM exception
+(SPDX: `Apache-2.0 WITH LLVM-exception`). See [`LICENSE`](LICENSE) and
+[`NOTICE`](NOTICE).
+
+- If you redistribute Agentica, as source or binaries, changed or not, keep
+  `LICENSE` and `NOTICE` with it.
+- The license does not cover programs you write in Agentica. If compiling or
+  bundling your program embeds portions of the Agentica runtime (for example
+  the VM in a single-file binary), the LLVM exception lets you ship that
+  program without Agentica's `LICENSE` and `NOTICE`.
+- Third-party components keep their own licenses: the Boehm GC (`bdwgc`,
+  MIT-style), yyjson (MIT) and libuv (MIT), vendored as git submodules in
+  `vm/third_party/` with their license files, and the planned picohttpparser
+  (MIT) and OpenSSL 3 (Apache-2.0) (`docs/vm.md` section 10). The LLVM
+  exception covers only Agentica's own code; their notices still apply
+  wherever they are shipped.

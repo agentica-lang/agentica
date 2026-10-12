@@ -1518,7 +1518,9 @@ reasons: Apache-2.0 adds an attribution duty (its `LICENSE.txt`, and a
 `NOTICE` file if one is present; OpenSSL 3.0 to 3.5 have none), and the
 default build does not ship it at all, since it is linked dynamically. It
 is linked statically only in release artifacts that include its
-`LICENSE.txt` (10.0).
+`LICENSE.txt` (10.0). Agentica itself is `Apache-2.0 WITH LLVM-exception`,
+and releases ship its `LICENSE` and `NOTICE` alongside the third-party
+licenses.
 
 ### 10.0 Linking OpenSSL
 
