@@ -27,7 +27,7 @@ Interpolation and the `\#` escape are in `grammar.md`.
 
 Blocks, closures, `List.each`, `List.any?` and `List.all?` are in `grammar.md`.
 
-Still open: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), now planned in [section 25.5](25-ruby-typed-idioms.md#255-standalone-lambdas). `{ |x| }` blocks and methods on user types are decided against ([section 25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c)).
+Nothing is open here: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`) are planned in [section 25.5](25-ruby-typed-idioms.md#255-standalone-lambdas); `{ |x| }` blocks and methods on user types are decided against ([section 25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c)).
 
 ### 11.5 Hints for foreign habits
 

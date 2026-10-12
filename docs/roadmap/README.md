@@ -18,14 +18,15 @@ The Racket evaluator is frozen. It runs only what the VM lacks: programs that
 use `TCP`, `TLS`, `HTTP` or `BDD` (the CLI falls back to it with a one-line
 notice) and `agentica test`. The next work is the catch-up that removes those
 fallbacks: VM tracing (14a), then TCP and TLS, then HTTP, then BDD on the VM
-(7h). Then 7i deletes the evaluator. New features (binary data, UDP, logging,
-crypto, then the Ruby typed idioms of phase 15) come after 7i and are
-VM-only; the prelude part of phase 15 waits for faster lists (8d). The later
-steps keep their order: faster lists (8d) before any instruction-dispatch
-micro-optimization (7g); the review of what the VM inherited from Racket (7k)
-and the VM layers (7l); a measurement of a small real server on the VM (7j)
-and the JIT (7m); an evaluation round against typed Python on harder tasks
-(6c); and then the decisions on the multicore schedulers (fully designed in
+(7h). Then 7i deletes the evaluator. New features (default parameter values
+(15a) first, then binary data, UDP, logging, crypto, then the rest of phase
+15's Ruby typed idioms) come after 7i and are VM-only; the prelude part of
+phase 15 waits for faster lists (8d). The later steps keep their order:
+faster lists (8d) before any instruction-dispatch micro-optimization (7g);
+the review of what the VM inherited from Racket (7k) and the VM layers (7l);
+a measurement of a small real server on the VM (7j) and the JIT (7m); an
+evaluation round against typed Python on harder tasks (6c); and then the
+decisions on the multicore schedulers (fully designed in
 `docs/vm/10-io-multicore.md` §10.2.3, and gated on that measurement) and on a
 front-end rewrite (`docs/future/18-front-end-language.md` §18, gated the same
 way).
