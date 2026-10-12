@@ -68,6 +68,19 @@ def plain?(text: String, digits_only: Bool) -> Bool
   return true
 end
 
+def ipv6?(text: String) -> Bool
+  if not String.contains?(text, ":")
+    return false
+  end
+  for c in String.split(text, "")
+    code = String.code(c)
+    if not ((code >= 48 and code <= 58) or (code >= 65 and code <= 70) or (code >= 97 and code <= 102) or code == 46)
+      return false
+    end
+  end
+  return true
+end
+
 def bad_url() -> Result[Target]
   return error("http: the URL must be http:// or https:// with a host, and without user info")
 end
@@ -98,6 +111,9 @@ def parse_url(url: String) -> Result[Target]
       return bad_url()
     end
     host = String.slice(authority, 1, close - 1)
+    if not ipv6?(host)
+      return bad_url()
+    end
     after = rest_of(authority, close + 1)
     if after != ""
       if after == ":" or not String.starts_with?(after, ":")

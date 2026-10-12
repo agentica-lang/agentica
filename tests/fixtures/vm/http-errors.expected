@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4133,
+  "steps": 4300,
   "stdout": [
     "error(\"http: every option must be positive\")",
     "error(\"http: max_connections must be at most 65536\")",
@@ -13,6 +13,7 @@
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
     "error(\"http: the port must be 1..65535\")",
     "error(\"http: the port must be 1..65535\")",
+    "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
     "error(\"http: the URL must be http:// or https:// with a host, and without user info\")",
     "error(\"http: Host, Content-Length, Transfer-Encoding and Connection are set by the client\")",

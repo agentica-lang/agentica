@@ -30,7 +30,7 @@ def main() -> Void
   server = Task.spawn(&serve, listener)
   pool = Result.unwrap!(Web.client(options(1, 16)))
   IO.inspect(pool)
-  for url in ["ftp://x/", "http://", "http://u@h/", "http://h:/", "http://h:0/", "http://h:123456/", "http://[::1/", "http://h x/"]
+  for url in ["ftp://x/", "http://", "http://u@h/", "http://h:/", "http://h:0/", "http://h:123456/", "http://[::1/", "http://[example.com]/", "http://h x/"]
     IO.inspect(Web.get(pool, url))
   end
   IO.inspect(Web.request(pool, "GET", "http://127.0.0.1:#{port}/", [Header(name: "Host", value: "x")], ""))
