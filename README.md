@@ -200,6 +200,8 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception
   - libuv (`vm/third_party/libuv`): MIT, with BSD-2-Clause and ISC parts in
     its `LICENSE-extra`;
   - yyjson (`vm/third_party/yyjson`): MIT;
+  - the Unicode character data in `vm/unicode_data.c` (generated from the
+    Unicode Character Database): Unicode License v3;
   - picohttpparser: MIT (planned);
   - OpenSSL 3: Apache-2.0 (planned);
   - Racket CS (MIT or Apache-2.0) and the Chez Scheme it embeds
