@@ -1490,7 +1490,9 @@ libc and `libssl.so.3`/`libcrypto.so.3`. All other libraries stay static.
 The dynamic build is the default for local builds, CI and distro packages;
 every downloadable release artifact (the `dist/` archive and the single
 file) is built with `OPENSSL=static`, so it needs only libc (on an older
-glibc baseline, `future.md` §18).
+glibc baseline, `future.md` §18). The release baseline is Debian bookworm
+or newer, whose `libssl-dev` has the OpenSSL 3 static archives (glibc
+2.36); an older baseline would need a built OpenSSL prefix.
 
 - `make vm` (default `OPENSSL=system`) finds the system OpenSSL 3 with
   `pkg-config libssl libcrypto` and links `-lssl -lcrypto`. A missing
@@ -2088,7 +2090,7 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 | HTTP start and header line | 8192 bytes | `wire-line`, `http-wire.rkt` |
 | HTTP header block | 65536 bytes | `http-wire.rkt` |
 | HTTP headers | 100 | `http-wire.rkt` |
-| HTTP interim responses | 16 | `http-wire.rkt` |
+| HTTP interim responses | 15 accepted, the 16th fails | `read-response-head`, `http-wire.rkt` |
 | `max_connections` | at most 65536 | `http-client.rkt` |
 | HTTP body | `max_body_bytes`, 413 | `http-wire.rkt` |
 | Process launch | `--allow-run` | `process.rkt` |
@@ -2103,11 +2105,33 @@ written `size > limit - total`. A hermetic test sends over-long values.
 Parity with the evaluator is black-box: the exit code, the stdout of
 finished programs, the diagnostic code, and the HTTP status or `Result`
 error kind must match; message text, spans, step counts and library error
-strings may differ. So the VM does not copy `src/http-wire.rkt` check by
-check. picohttpparser validates the head; that is why it is a dependency
-(and its SSE4.2 path later, `future.md` §19). It sits behind our own small
-adapter, so it can be swapped later (for example for llhttp), the same way
-libuv stays inside the I/O layer.
+strings may differ. For HTTP this means:
+
+- Well-formed messages: the VM and the evaluator agree on the status, the
+  headers, the body, and whether a `Result` is ok or an error.
+- Malformed or hostile input: both reject it. A server answers with an
+  error status and closes the connection; a client request call returns an
+  error `Result` (the "error kind" in this section; its message text is
+  free). The exact 4xx or 5xx code may differ, except these, which must
+  match: 413 (body over the limit), 431 (too many headers, or a line or
+  head over its size limit), 505 (an HTTP version the evaluator rejects
+  with 505) and 501 (`CONNECT`).
+- The VM does not copy evaluator quirks (for example 431 for a bad chunk
+  terminator byte), and it does not have to report the first failing line
+  in the evaluator's order.
+- Documented differences: picohttpparser's RFC 9112 leniencies, one
+  leading empty line before a request and runs of spaces in the start line,
+  are accepted. They do not make framing ambiguous. The reason phrase
+  accepts what picohttpparser accepts; control bytes in a reason phrase
+  give a client error on the VM.
+- Framing rules stay strict: `Content-Length` with `Transfer-Encoding`,
+  duplicate `Content-Length`, bad chunk sizes and obs-fold are rejected.
+
+The VM does not copy `src/http-wire.rkt` check by check. picohttpparser
+validates the head; that is why it is a dependency (and its SSE4.2 path
+later, `future.md` §19). It sits behind our own small adapter, so it can be
+swapped later (for example for llhttp), the same way libuv stays inside
+the I/O layer.
 
 - `vm/http_parse.h` holds our types only: a parsed head struct (method,
   target, version, status, reason, and the headers with their count, all
@@ -2117,64 +2141,66 @@ libuv stays inside the I/O layer.
   with the bytes consumed, INCOMPLETE, or ERROR with our own error enum.
 - Only `vm/http_pico.c` includes `picohttpparser.h`. No picohttpparser type
   or return code leaks out of it.
-- The adapter calls picohttpparser without `last_len`: each call parses
-  the whole buffered head again (at most 64 KiB, 10.5). So a bad start line
-  returns -1 as soon as its line is complete, before the head is complete.
-  On INCOMPLETE the caller reads more and calls again with the grown
-  buffer.
-- A -1 from picohttpparser maps to one error kind: 400 "invalid HTTP
-  request head" for a server, and the client `Result` error kind "invalid
-  HTTP response head" for a response.
+- The adapter calls picohttpparser without `last_len`, and only when the
+  newly read bytes complete a line (contain LF). Each call parses the whole
+  buffered head again. A head is at most the start line (8192 bytes plus
+  CRLF) and 64 KiB of headers (10.5), and it has at most about 100 lines
+  (the start line, 100 headers and the blank line) before the pre-scan
+  stops it, so parsing work is bounded by lines × head size. On INCOMPLETE
+  the caller reads more and calls again with the grown buffer.
+- A -1 from picohttpparser maps to one error: 400 "invalid HTTP request
+  head" for a server, and an error `Result` ("invalid HTTP response head")
+  for a client.
 - The adapter checks more than picohttpparser, all on our own pre-scan or
   on picohttpparser's output:
   - The pre-scan (one pass over newly read bytes) checks the line and
-    block size limits (10.5), rejects bare LF (kept strict against
+    head size limits (431), rejects bare LF (kept strict against
     smuggling), and counts header lines: once the count passes 100 it
     returns 431, before picohttpparser runs.
-  - The start-line version is classified before a -1 is trusted: any
-    `HTTP/<digits and dots>` that is not `HTTP/1.1` gives 505, as in the
-    evaluator; a malformed version gives 400.
+  - Once the start line is complete, the adapter checks its shape itself:
+    `METHOD SP+ TARGET SP+ HTTP/digit.digit` for a request,
+    `HTTP/digit.digit SP+ 3DIGIT` for a response. So a complete bad start
+    line always fails at once, even where picohttpparser would still
+    return -2 for short input.
+  - The version: an `HTTP/digit.digit` that the evaluator answers with 505
+    gives 505.
   - Request target: origin form (`/...`), or `*` with `OPTIONS`; only bytes
     33 to 126; anything else is 400.
   - Method: token characters only (400); `CONNECT` gives 501.
   - obs-fold lines (picohttpparser returns a header with `name == NULL`)
     are rejected with 400.
-  - Responses: `HTTP/1.1` only, status 100 to 599, 101 rejected, at most 16
-    interim responses; these fail as client `Result` error kinds.
+  - Responses: `HTTP/1.1` only, status 100 to 599, 101 rejected, at most
+    15 interim responses (the 16th fails); these give an error `Result`.
   - The `Host` rules, and the body framing and smuggling rules.
-- The parser runs only when the newly read bytes complete a line (contain
-  LF). Each call reparses at most 64 KiB, and a head has at most about 100
-  lines (the start line, 100 headers and the blank line) before the
-  pre-scan stops it, so parsing work is bounded by lines ×
-  head size (at most 100 × 64 KiB). Errors surface per complete line, like
-  the evaluator's `wire-line`.
 - The body is never buffered whole by the parsing layer. Our own body
   decoder, `vm/http_body.c` (no third-party code), is an incremental state
   machine. It is set up with the framing (`Content-Length` n, chunked, or
   until close for responses) and the `max_body_bytes` limit; then
   `feed(buf, len)` returns the bytes consumed, zero or more body slices
-  pointing into the input, and NEED_MORE, DONE or ERROR (413, invalid chunk
-  size, invalid chunk terminator, ...). Chunk sizes accumulate with
-  saturation; `phr_decode_chunked` is not used, since it knows no limits.
-  `HttpBody`, `HTTP.request_stream` and `HttpWriter` read and write through
-  it chunk by chunk, so a large upload or download never sits whole in
-  memory. Trailer lines are checked by the body decoder with the header
-  rules (token names, value bytes, the forbidden trailer list, and the size
-  and count limits), as `http-wire.rkt`'s `read-headers` with `#:trailers?
-  #t`. The encoder that writes chunked output is ours too. Swapping the
-  head parser leaves the body decoder unchanged.
+  pointing into the input, and NEED_MORE, DONE or ERROR: 413 over the
+  limit, 431 for an over-long chunk-size or trailer line, and 400 for every
+  other malformed body. Chunk sizes accumulate with saturation;
+  `phr_decode_chunked` is not used, since it knows no limits. `HttpBody`,
+  `HTTP.request_stream` and `HttpWriter` read and write through it chunk by
+  chunk, so a large upload or download never sits whole in memory. Trailer
+  lines are checked by the body decoder with the header rules (token
+  names, value bytes, the forbidden trailer list, and the size and count
+  limits), as `http-wire.rkt`'s `read-headers` with `#:trailers? #t`. The
+  encoder that writes chunked output is ours too. Swapping the head parser
+  leaves the body decoder unchanged.
 - Tests target the adapter interface, so a replacement parser must pass the
   same tests: a C unit test in `vm/tests/`, and fixed, deterministic hostile
-  cases run on both backends that check status codes and error kinds, not
-  message text: `Content-Length` with `Transfer-Encoding`, duplicate
-  `Content-Length`, huge chunk sizes, bare LF, over-long lines and blocks,
-  100 headers accepted and 101 and 150 rejected with 431, `HTTP/1.0` and
-  `HTTP/2.0` (505) and a malformed version (400), absolute-form and
-  non-ASCII targets (400), `*` without `OPTIONS` (400), a bad method token
-  (400), `CONNECT` (501), an obs-fold line (400), bad trailers, and on the
-  client side `HTTP/1.0` responses, status 99 and 600, a 101 response and
-  17 interim responses. One case sends a complete bad start line ending in
-  CRLF and leaves the socket open: it gets 400 before any timeout.
+  cases run on both backends. They check that both reject (and the code
+  where it must match), not message text: `Content-Length` with
+  `Transfer-Encoding`, duplicate `Content-Length`, huge chunk sizes (413),
+  bare LF, over-long lines and heads (431), 100 headers accepted and 101
+  and 150 rejected with 431, `HTTP/2.0` (505), a malformed version,
+  absolute-form and non-ASCII targets, `*` without `OPTIONS`, a bad method
+  token, `CONNECT` (501), an obs-fold line, bad trailers, and on the client
+  side `HTTP/1.0` responses, status 99 and 600, a 101 response, and 15
+  interim responses accepted and 16 rejected. One case sends a complete bad
+  start line ending in CRLF and leaves the socket open: it is rejected
+  before any timeout; another sends the short line `GET / HTTP/1\r\n`.
 
 ## 11. Build, CI and supply chain
 

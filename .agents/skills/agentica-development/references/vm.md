@@ -394,27 +394,34 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   features are found at run time. Without `libssl-dev` all VM tests skip
   locally.
   `--version` prints the OpenSSL version in use (`docs/vm.md` 10.0, 10.3).
-- **HTTP (7h)**: parity is black-box (status codes and `Result` error
-  kinds match the evaluator, message text may differ). picohttpparser
-  (submodule `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the
-  baseline without `-msse4.2`) parses and validates start lines and
-  headers, behind `vm/http_parse.h` (our head struct with byte slices,
+- **HTTP (7h)**: parity is black-box. Well-formed messages: same status,
+  headers, body and `Result` ok or error. Malformed input: both reject
+  (server error status and close, client error `Result`); the code may
+  differ except 413, 431, 505 and 501. No copying of evaluator quirks or
+  its order of failing lines; picohttpparser's leniencies are documented
+  differences; framing stays strict. picohttpparser (submodule
+  `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the baseline
+  without `-msse4.2`) parses and validates start lines and headers, behind
+  `vm/http_parse.h` (our head struct with byte slices,
   `agc_http_parse_request_head`/`agc_http_parse_response_head` returning
   OK with bytes consumed, INCOMPLETE or ERROR with our error enum). Only
   `vm/http_pico.c` includes `picohttpparser.h`. It is called without
-  `last_len` and only when new bytes complete a line (work at most 100
-  lines × 64 KiB); a -1 is 400 "invalid HTTP request head" or the client
-  error kind "invalid HTTP response head". A pre-scan checks size limits,
-  bare LF and the header count (431 past 100, before pico runs). On pico's
-  output: version (non-1.1 `HTTP/x` 505, malformed 400), target (origin
-  form or `*` with `OPTIONS`, bytes 33–126), method token, `CONNECT` 501,
-  obs-fold (`name == NULL`) 400, response version, status 100–599, no 101,
-  at most 16 interim responses, `Host`, framing and smuggling. The body
-  goes through our incremental decoder `vm/http_body.c` (`feed` returns
-  bytes consumed, body slices, and NEED_MORE, DONE or ERROR; trailers
-  checked with the header rules; no `phr_decode_chunked`), so bodies
-  stream and are never buffered whole. Tests target the adapter and check
-  statuses, not messages (`docs/vm.md` 10.6).
+  `last_len` and only when new bytes complete a line (head at most the
+  8192-byte start line plus 64 KiB of headers); a -1 is 400 or a client
+  error `Result`. A pre-scan checks size limits (431), bare LF and the
+  header count (431 past 100, before pico runs). The adapter checks the
+  shape of a complete start line itself, so it fails at once. On pico's
+  output: version (505 as the evaluator), target (origin form or `*` with
+  `OPTIONS`, bytes 33–126), method token, `CONNECT` 501, obs-fold
+  (`name == NULL`), response version, status 100–599, no 101, 15 interim
+  responses accepted and the 16th fails, `Host`, framing and smuggling.
+  The body goes through our incremental decoder `vm/http_body.c` (`feed`
+  returns bytes consumed, body slices, and NEED_MORE, DONE or ERROR: 413
+  over the limit, 431 for an over-long chunk-size or trailer line, 400
+  otherwise; trailers checked with the header rules; no
+  `phr_decode_chunked`), so bodies stream and are never buffered whole.
+  Tests target the adapter and check rejections and the codes that must
+  match, not messages (`docs/vm.md` 10.6).
 - **Processes (7h)**: the VM resolves the executable itself; on Windows only
   `.exe`/`.com`, case-insensitive; never verbatim arguments; all three stdio
   piped.
