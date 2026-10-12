@@ -43,6 +43,7 @@ jobs:
           "./dist/$name/bin/agentica" examples/hello.agc
           "./dist/$name/bin/agentica" --version
           "./dist/$name/bin/agentica" examples/queue.agc
+          cp LICENSE NOTICE "dist/$name/"
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
           tar -tzf "dist/$name.tar.gz" >/dev/null
