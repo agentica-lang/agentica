@@ -24,7 +24,7 @@ first PRs copied it; that is a description of today's VM, not a rule, and
 designs kept only to copy Racket's text or counts may be simplified. For
 example, the HTTP adapter does not need to map parser failures onto
 `http-wire.rkt`'s exact messages, only onto the same diagnostic or `Result`
-error kind. The turn cost (10.2.1) stays: it is there for fairness, not
+error kind (10.6). The turn cost (10.2.1) stays: it is there for fairness, not
 for parity. With black-box parity the compiler may also optimize freely as
 long as exit code, stdout and diagnostic codes stay the same: inlining,
 constant folding, common subexpression elimination, loop-invariant code
@@ -2146,7 +2146,7 @@ written `size > limit - total`. A hermetic test sends over-long values.
 
 ### 10.6 HTTP parsing
 
-Parity with the evaluator is black-box: the exit code, the stdout of
+Parity with the evaluator is black-box (1): the exit code, the stdout of
 finished programs, the diagnostic code, and the HTTP status or `Result`
 error kind must match; message text, spans, step counts and library error
 strings may differ. For HTTP this means:
