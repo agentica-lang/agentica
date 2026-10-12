@@ -126,7 +126,7 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
 
 static void read_drop(void *data) { free(data); }
 
-static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop};
+static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false};
 
 static int start_read(agc_vm *vm, agc_input *in) {
   if (in->reading) {

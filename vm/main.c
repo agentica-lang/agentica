@@ -133,7 +133,8 @@ static void seed_map_hash(agc_vm *vm) {
 
 #ifdef __linux__
 static bool bind_to_driver(int64_t driver) {
-  if (prctl(PR_SET_PDEATHSIG, SIGKILL) != 0) return false;
+  signal(SIGTERM, SIG_DFL);
+  if (prctl(PR_SET_PDEATHSIG, SIGTERM) != 0) return false;
   return (int64_t)getppid() == driver;
 }
 #else
@@ -153,7 +154,8 @@ static agc_value program_args(int argc, char **argv, int first) {
   return agc_list_value(list);
 }
 
-static const char usage[] = "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--ai|--json] -- <file.agcb> [args...]\n";
+static const char usage[] =
+  "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--allow-run] [--ai|--json] -- <file.agcb> [args...]\n";
 
 static int usage_error(void) {
   fputs(usage, stderr);
@@ -229,7 +231,7 @@ static int run(int argc, char **argv) {
   agc_style style = AGC_STYLE_PLAIN;
   int64_t driver = 0;
   uint32_t seed = 0;
-  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false;
+  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false, allow_run = false;
   int i = 1;
   while (i < argc) {
     const char *arg = argv[i];
@@ -252,6 +254,11 @@ static int run(int argc, char **argv) {
       bool json = arg[2] == 'j';
       if (!once(json ? &seen_json : &seen_ai, arg)) return 2;
       style = json ? AGC_STYLE_JSON : AGC_STYLE_AI;
+      i++;
+      continue;
+    }
+    if (strcmp(arg, "--allow-run") == 0) {
+      if (!once(&allow_run, arg)) return 2;
       i++;
       continue;
     }
@@ -308,9 +315,11 @@ static int run(int argc, char **argv) {
     return 2;
   }
 
-  agc_io_init();
+  bool own_uring_env = agc_io_init();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  vm->rt->allow_run = allow_run;
+  vm->rt->drop_uring_env = own_uring_env;
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");

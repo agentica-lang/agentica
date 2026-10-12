@@ -5,6 +5,7 @@
 #include <string.h>
 
 #ifdef __linux__
+#include <signal.h>
 #include <uv.h>
 #endif
 
@@ -14,14 +15,14 @@ struct agc_registry {
 };
 
 #ifdef __linux__
-typedef struct job job;
+typedef struct agc_io_job job;
 
 struct agc_loop {
   uv_loop_t uv;
   job *ready, *ready_tail;
 };
 
-struct job {
+struct agc_io_job {
   uv_work_t work;
   uv_timer_t timer;
   const agc_io_kind *kind;
@@ -171,11 +172,34 @@ static void drain(agc_vm *vm) {
   }
 }
 
-void agc_io_init(void) { setenv("UV_USE_IO_URING", "0", 0); }
+const int agc_stop_signals[AGC_STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
+
+void agc_io_block_stop(sigset_t *saved) {
+  sigset_t block;
+  sigemptyset(&block);
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) sigaddset(&block, agc_stop_signals[k]);
+  pthread_sigmask(SIG_BLOCK, &block, saved);
+}
+
+static int queue_work(agc_loop *loop, job *j) {
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+  int rc = uv_queue_work(&loop->uv, &j->work, run_work, work_finished);
+  pthread_sigmask(SIG_SETMASK, &saved, NULL);
+  return rc;
+}
+
+bool agc_io_init(void) {
+  if (getenv("UV_USE_IO_URING")) return false;
+  setenv("UV_USE_IO_URING", "0", 1);
+  return true;
+}
 
 const char *agc_uv_version(void) { return uv_version_string(); }
 
-void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
+
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
@@ -194,8 +218,8 @@ void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value con
     j->timer_closing = j->timer_closed = true;
   }
   if (!kind->work) {
-    j->work_done = true;
-  } else if (uv_queue_work(&loop->uv, &j->work, run_work, work_finished) != 0) {
+    j->work_done = !kind->external;
+  } else if (queue_work(loop, j) != 0) {
     j->work_done = true;
     j->consumed = true;
     if (!j->timer_closing) close_timer(j);
@@ -205,6 +229,13 @@ void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value con
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
+  return j;
+}
+
+void agc_io_ready(agc_io_job *j) {
+  if (j->consumed || j->work_done) return;
+  j->work_done = true;
+  mark_ready(j);
 }
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
@@ -221,7 +252,7 @@ static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL};
+static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL, false};
 
 static uint64_t loop_now(agc_vm *vm) {
   agc_loop *loop = loop_of(vm);
@@ -282,13 +313,14 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
     }
   }
   agc_value result;
-  if (j->work_done && (j->kind->work || j->timer_fired)) {
+  if ((j->kind->work || j->kind->external) ? j->work_done : j->timer_fired) {
     void *data = j->data;
     j->data = NULL;
     result = j->kind->done(vm, data, context);
   } else {
     result = j->kind->expired(vm, j->data, context);
   }
+  if (j->kind->external) j->work_done = true;
   sweep(vm);
   return result;
 }
@@ -313,6 +345,7 @@ bool agc_io_close(agc_vm *vm) {
     job *j = job_at(vm, k);
     if (!j) continue;
     j->consumed = true;
+    if (j->kind->external) j->work_done = true;
     close_timer(j);
   }
   release_handles(vm);
@@ -328,17 +361,19 @@ bool agc_io_close(agc_vm *vm) {
   return true;
 }
 #else
-void agc_io_init(void) {}
+bool agc_io_init(void) { return false; }
 
 const char *agc_uv_version(void) { return NULL; }
 
-void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
   (void)kind;
   (void)data;
   (void)context;
   (void)timeout_ms;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
+
+void agc_io_ready(agc_io_job *j) { (void)j; }
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
   (void)vm;

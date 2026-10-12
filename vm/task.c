@@ -135,7 +135,7 @@ static agc_value slept(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind sleep_io = {NULL, slept, slept, NULL};
+static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false};
 
 static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t ms = agc_as_int(vm, args[0]);

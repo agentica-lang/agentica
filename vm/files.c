@@ -160,7 +160,7 @@ static size_t byte_escape(const uint8_t *data, size_t len, size_t at, char out[5
   return 1 + (size_t)n;
 }
 
-static agc_value utf8_error(const uint8_t *data, size_t len) {
+agc_value agc_utf8_error(const uint8_t *data, size_t len) {
   text t = {0};
   text form = {0};
   puts_text(&t, "bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\n  byte string: ");
@@ -216,7 +216,7 @@ static const agc_string *cwd_of(agc_vm *vm) {
   return vm->rt->cwd;
 }
 
-static char *host_path(agc_vm *vm, const agc_string *s) {
+char *agc_host_path(agc_vm *vm, const agc_string *s) {
   const agc_string *cwd = s->data[0] == '/' ? NULL : cwd_of(vm);
   text t = {0};
   for (size_t part = 0; part < 2; part++) {
@@ -607,10 +607,10 @@ static void drop(void *data) {
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
-static agc_value io_error(agc_vm *vm, const op *o) {
+agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
   text t = {0};
-  puts_text(&t, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port");
-  put_system_error(vm, &t, o->err);
+  puts_text(&t, what);
+  put_system_error(vm, &t, err);
   return error_text(&t);
 }
 
@@ -636,14 +636,16 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_EOF: return error_of("filesystem: end of file");
     case FS_LONG_LINE: return error_of("filesystem: line exceeds 1048576 bytes");
     case FS_MKDIR: return os_error(vm, "make-directory: cannot make directory", o->path, o->fail_at, o->err);
-    default: return io_error(vm, o);
+    default:
+      return agc_system_error(vm, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port",
+                              o->err);
   }
 }
 
 static agc_value text_result(const op *o) {
   if (o->out_len > LIMIT) return error_of("filesystem: file exceeds 1048576 bytes");
   size_t chars;
-  if (!agc_utf8_chars(o->out, o->out_len, &chars)) return utf8_error(o->out, o->out_len);
+  if (!agc_utf8_chars(o->out, o->out_len, &chars)) return agc_utf8_error(o->out, o->out_len);
   return agc_result_value(true, agc_string_value(agc_make_string((const char *)o->out, o->out_len, chars)));
 }
 
@@ -730,7 +732,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return error_of(timed_out);
 }
 
-static const agc_io_kind file_io = {work, done, expired, drop};
+static const agc_io_kind file_io = {work, done, expired, drop, false};
 
 static void files_on(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
@@ -746,7 +748,7 @@ static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return contract_error(who, expected, path);
   op *o = new_op(kind);
-  o->path = host_path(vm, path);
+  o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), timeout);
 }
 
@@ -769,7 +771,7 @@ static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind 
   if (!o->in) agc_out_of_memory();
   if (content->bytes) memcpy(o->in, content->data, content->bytes);
   o->in_len = content->bytes;
-  o->path = host_path(vm, path);
+  o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), timeout);
 }
 
@@ -815,7 +817,7 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   }
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
   op *o = new_op(kind);
-  o->path = host_path(vm, path);
+  o->path = agc_host_path(vm, path);
   o->st = new_state(kind == OP_OPEN_READ, kind != OP_OPEN_READ);
   o->owns_st = true;
   return start(vm, o, agc_void(), timeout);
@@ -911,14 +913,8 @@ static agc_value builtin_write(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_write_list(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   const agc_list *values = agc_as_list(vm, args[1]);
-  bool valid = values->len <= LIMIT;
-  for (size_t k = 0; valid && k < values->len; k++) {
-    int64_t b = agc_as_int(vm, values->items[k]);
-    valid = b >= 0 && b <= 255;
-  }
-  if (!valid) return error_of("network: bytes must be 0..255 and at most 1048576 per call");
-  uint8_t *data = agc_alloc_atomic(values->len ? values->len : 1);
-  for (size_t k = 0; k < values->len; k++) data[k] = (uint8_t)agc_as_int(vm, values->items[k]);
+  const uint8_t *data = agc_byte_list(vm, values, LIMIT);
+  if (!data) return error_of("network: bytes must be 0..255 and at most 1048576 per call");
   return write_bytes(vm, args[0], data, values->len, agc_as_int(vm, args[2]));
 }
 

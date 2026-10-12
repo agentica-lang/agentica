@@ -35,6 +35,7 @@ jobs:
   changes:
     if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 10
     outputs:
       vm: ${{ steps.vm.outputs.vm }}
     steps:
@@ -64,6 +65,7 @@ jobs:
   warm-cache:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - id: racket
@@ -93,6 +95,7 @@ jobs:
   warm-unicode:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - id: racket
@@ -133,6 +136,7 @@ jobs:
   test:
     if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 45
     env:
       AGENTICA_REQUIRE_VM: '1'
     steps:
@@ -201,12 +205,15 @@ jobs:
         shell: bash
       - run: diff <(dist/agentica examples/concurrency.agc) <(dist/agentica --vm examples/concurrency.agc)
         shell: bash
+      - run: diff <(dist/agentica --allow-run examples/process-tool.agc; echo "exit $?") <(dist/agentica --vm --allow-run examples/process-tool.agc; echo "exit $?")
+        shell: bash
       - run: dist/agentica examples/queue.agc
 
   vm-sanitizers:
     needs: changes
     if: ${{ !cancelled() && github.event_name != 'push' && needs.changes.outputs.vm != 'false' }}
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 75
     env:
       AGENTICA_REQUIRE_VM: '1'
       SANITIZE: '1'
