@@ -3,6 +3,4 @@ Copyright 2026 Johanderson Mogollon
 
 This product includes software developed by Johanderson Mogollon.
 
-Third-party components keep their own licenses: the libraries under
-vm/third_party/ (git submodules) carry their own license files, and OpenSSL
-is linked as described in docs/vm.md section 10.0.
+Third-party licenses: see README.md (source) and licenses/ (release archives).

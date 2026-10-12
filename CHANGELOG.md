@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - License: Agentica is `Apache-2.0 WITH LLVM-exception` (`LICENSE`, `NOTICE`).
+  Release archives include `LICENSE` and `NOTICE`, and Racket's licenses
+  with Chez Scheme's `NOTICE` in `licenses/racket/`.
 
 - The bytecode VM runs every `File`, `Dir` and `Path` builtin on Linux
   (`File.open`, `read_bytes`, `read_line`, `write`, `write_bytes`, `flush`,

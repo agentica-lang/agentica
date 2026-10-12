@@ -182,14 +182,26 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception
 [`NOTICE`](NOTICE).
 
 - If you redistribute Agentica, as source or binaries, changed or not, keep
-  `LICENSE` and `NOTICE` with it.
-- The license does not cover programs you write in Agentica. If compiling or
-  bundling your program embeds portions of the Agentica runtime (for example
-  the VM in a single-file binary), the LLVM exception lets you ship that
-  program without Agentica's `LICENSE` and `NOTICE`.
-- Third-party components keep their own licenses: the Boehm GC (`bdwgc`,
-  MIT-style), yyjson (MIT) and libuv (MIT), vendored as git submodules in
-  `vm/third_party/` with their license files, and the planned picohttpparser
-  (MIT) and OpenSSL 3 (Apache-2.0) (`docs/vm.md` section 10). The LLVM
-  exception covers only Agentica's own code; their notices still apply
-  wherever they are shipped.
+  `LICENSE` and `NOTICE` with it and mark files you changed (Apache-2.0
+  section 4 has the full conditions).
+- Programs you write in Agentica are yours; this license does not cover
+  them. When compiling your program puts parts of Agentica into the compiled
+  output (for example an imported `std/` module linked into your `.agcb`),
+  the LLVM exception lets you ship that output without Agentica's `LICENSE`
+  and `NOTICE`. Shipping Agentica itself with your program (`agentica`,
+  `agentica-vm`) is redistribution: keep `LICENSE` and `NOTICE` with it. If
+  you combine Agentica with GPLv2 software and a court finds a part of this
+  license in conflict with GPLv2, the exception also lets you set that part
+  aside for the combined software.
+- Third-party components keep their own licenses, and the LLVM exception
+  does not cover them; their notices apply wherever they are shipped:
+  - the Boehm GC (`vm/third_party/bdwgc`): the Boehm-GC license, with its
+    notice in `README.QUICK`;
+  - libuv (`vm/third_party/libuv`): MIT, with BSD-2-Clause and ISC parts in
+    its `LICENSE-extra`;
+  - yyjson (`vm/third_party/yyjson`): MIT;
+  - picohttpparser: MIT (planned);
+  - OpenSSL 3: Apache-2.0 (planned);
+  - Racket CS (MIT or Apache-2.0) and the Chez Scheme it embeds
+    (Apache-2.0), bundled in the release archives, which ship their
+    license files and Chez Scheme's `NOTICE` in `licenses/racket/`.
