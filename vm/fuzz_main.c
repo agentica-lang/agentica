@@ -15,10 +15,10 @@
 #define AGC_FUZZ_DEATH 1
 #endif
 
-static uint64_t state = 0x9E3779B97F4A7C15u;
-static const uint8_t *current;
-static size_t current_len;
-static long current_index = -1;
+static uint64_t state = 0x9E3779B97F4A7C15u; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static const uint8_t *current; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static size_t current_len; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static long current_index = -1; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 static uint64_t next_random(void) {
   state ^= state << 13;

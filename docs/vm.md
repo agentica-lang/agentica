@@ -1821,30 +1821,31 @@ concurrently. The design follows BEAM.
   Boehm's suspend and restart signals.
 - **No mutable global state in `vm/`.** Every mutable `static` or global
   variable goes into the runtime, scheduler or task struct. Lazy one-time
-  init uses `pthread_once` or happens at start-up. What `vm/` has today:
-  - Exceptions that stay: the `AGC_NO_GC` block tracking in `vm/value.c`
-    (fuzz and test builds only, single-threaded); the fuzz harness statics
-    in `vm/fuzz.c` and `vm/fuzz_main.c`; `wide_args` in `vm/main.c`
-    (Windows), set once before any scheduler starts.
-  - The `ready` flag in `agc_init` (`vm/value.c`) moves to start-up or uses
-    `pthread_once`.
+  init uses `pthread_once` or happens at start-up. `make vm-lint` enforces
+  this with clang-tidy's `cppcoreguidelines-avoid-non-const-global-variables`
+  on `vm/*.c` and `vm/agc.h` (`vm/tests/.clang-tidy` turns it off for the C
+  tests); the check does not see function-local `static` variables. What
+  `vm/` has today:
+  - Exceptions that stay, each with
+    `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`: the
+    `AGC_NO_GC` block tracking in `vm/value.c` (fuzz and test builds only,
+    single-threaded); the fuzz harness statics in `vm/fuzz.c` and
+    `vm/fuzz_main.c`; `wide_args` in `vm/main.c` (Windows), set once before
+    any scheduler starts.
+  - `agc_init` (`vm/value.c`) asks Boehm (`GC_is_init_called`) instead of
+    keeping a `ready` flag.
   - The GC-stress counter in `vm/value.c` (`AGC_GC_STRESS`, a test build
-    only) becomes `_Atomic` or per thread.
-  - `empty_string` (`vm/builtins.c`) and `empty_text` (`vm/strings.c`)
-    become `const` with a const-correct API, or are replaced by a fresh
-    zero-length value; no casts that drop `const`.
-  - The SipHash keys in `vm/map.c` (set from OS entropy at start-up) move
-    into the runtime as read-only data.
-  - `messages_locale` and `messages_tried` in `vm/files.c` (the locale for
-    OS error text, made lazily on first use) are made once at start-up, or
-    with `pthread_once`, and kept in the runtime as read-only data.
+    only) is `_Atomic`.
+  - `Result.message` of an `Ok` and `String.join` of an empty list make a
+    fresh empty string; the shared `empty_string` and `empty_text` are gone.
+  - The SipHash keys are `hash_key` in `agc_vm`, set by `agc_vm_init` and,
+    from OS entropy, by `vm/main.c` before the run.
+  - The locale for OS error text (`vm/files.c`) is `messages_locale` in
+    `agc_vm`, made on first use.
   - `setenv("UV_USE_IO_URING", "0", 0)` in `vm/loop.c` runs when the first
-    loop is made; `setenv` is not thread-safe, so it moves to start-up,
-    before any scheduler thread exists.
-
-  The tasks PR does these moves. A follow-up PR enforces this with clang-tidy's
-  `cppcoreguidelines-avoid-non-const-global-variables` in `make vm-lint`;
-  it excludes `vm/tests/*` and the fuzz files, or lists them as exceptions.
+    loop is made; `setenv` is not thread-safe, so the tasks PR moves it to
+    start-up, before any scheduler thread exists. The tasks PR also moves
+    the `agc_vm` fields above to the shared runtime or the scheduler.
 - **Values are immutable**, so tasks on different schedulers share them
   without locks. Any in-place mutation inside the VM (caches, updates in
   place when a value is known to be unique, the faster lists of roadmap 8d)

@@ -291,6 +291,13 @@ instructions. A file that loads may still compute wrong values or end with
   `agc.h` and enum constants start with `AGC_`; file-local macros are plain
   upper case.
 - File-local helpers and data are `static` (*checked*).
+- No mutable global or file-scope `static` variable in `vm/*.c` and
+  `vm/agc.h` (*checked* by
+  `cppcoreguidelines-avoid-non-const-global-variables`; function-local
+  `static` variables are not caught). State goes in `agc_vm`; constant data
+  is `const`. The exceptions of `docs/vm.md` §10.2.3 take
+  `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`.
+  `vm/tests/.clang-tidy` turns the check off for the C tests.
 - No prototypes of `static` functions: define each helper before its first use, so files read bottom-up and the `agc_*` functions usually come last (*checked*); only unavoidable mutual recursion may have one.
 - No value-driven C recursion (`docs/vm.md` §7.3; *checked* by
   `misc-no-recursion` within one file only: recursion across files through

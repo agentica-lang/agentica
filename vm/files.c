@@ -57,9 +57,6 @@ static const char bad_timeout[] = "network: timeout must be positive millisecond
 static const char complete_who[] = "path->complete-path";
 static const char complete_expected[] = "(or/c path-string? path-for-some-system?)";
 
-static locale_t messages_locale;
-static bool messages_tried;
-
 static void put(text *t, const char *data, size_t len) {
   if (agc_size_add(t->len, len) > t->cap) {
     size_t cap = t->cap ? t->cap : 128;
@@ -87,32 +84,32 @@ static agc_value error_of(const char *message) {
   return error_text(&t);
 }
 
-static const char *os_message(int err) {
-  if (!messages_tried) {
-    messages_tried = true;
-    messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
+static const char *os_message(agc_vm *vm, int err) {
+  if (!vm->messages_tried) {
+    vm->messages_tried = true;
+    vm->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
   }
-  return messages_locale ? strerror_l(err, messages_locale) : strerror(err);
+  return vm->messages_locale ? strerror_l(err, vm->messages_locale) : strerror(err);
 }
 
-static void put_system_error(text *t, int err) {
+static void put_system_error(agc_vm *vm, text *t, int err) {
   char number[32];
   puts_text(t, "\n  system error: ");
-  puts_text(t, os_message(err));
+  puts_text(t, os_message(vm, err));
   int n = snprintf(number, sizeof number, "; errno=%d", err);
   put(t, number, (size_t)n);
 }
 
-static void put_os_error(text *t, const char *path, size_t path_len, int err) {
+static void put_os_error(agc_vm *vm, text *t, const char *path, size_t path_len, int err) {
   puts_text(t, "\n  path: ");
   put(t, path, path_len);
-  put_system_error(t, err);
+  put_system_error(vm, t, err);
 }
 
-static agc_value os_error(const char *what, const char *path, size_t path_len, int err) {
+static agc_value os_error(agc_vm *vm, const char *what, const char *path, size_t path_len, int err) {
   text t = {0};
   puts_text(&t, what);
-  put_os_error(&t, path, path_len, err);
+  put_os_error(vm, &t, path, path_len, err);
   return error_text(&t);
 }
 
@@ -608,23 +605,23 @@ static void drop(void *data) {
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
-static agc_value io_error(const op *o) {
+static agc_value io_error(agc_vm *vm, const op *o) {
   text t = {0};
   puts_text(&t, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port");
-  put_system_error(&t, o->err);
+  put_system_error(vm, &t, o->err);
   return error_text(&t);
 }
 
-static agc_value common_error(const op *o) {
+static agc_value common_error(agc_vm *vm, const op *o) {
   size_t path_len = o->path ? strlen(o->path) : 0;
   switch (o->status) {
     case FS_NOT_REGULAR: return error_of(not_regular);
     case FS_TOO_BIG: return error_of("filesystem: file exceeds 1048576 bytes");
     case FS_OPEN:
-      if (o->kind == OP_LIST) return os_error("directory-list: could not open directory", o->path, path_len, o->err);
+      if (o->kind == OP_LIST) return os_error(vm, "directory-list: could not open directory", o->path, path_len, o->err);
       if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ)
-        return os_error("open-input-file: cannot open input file", o->path, path_len, o->err);
-      return os_error("open-output-file: error opening file", o->path, path_len, o->err);
+        return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
+      return os_error(vm, "open-output-file: error opening file", o->path, path_len, o->err);
     case FS_IS_DIR: {
       text t = {0};
       puts_text(&t, "open-output-file: path is a directory\n  path: ");
@@ -636,8 +633,8 @@ static agc_value common_error(const op *o) {
     case FS_LINK: return error_of("filesystem: path is not a regular file or directory");
     case FS_EOF: return error_of("filesystem: end of file");
     case FS_LONG_LINE: return error_of("filesystem: line exceeds 1048576 bytes");
-    case FS_MKDIR: return os_error("make-directory: cannot make directory", o->path, o->fail_at, o->err);
-    default: return io_error(o);
+    case FS_MKDIR: return os_error(vm, "make-directory: cannot make directory", o->path, o->fail_at, o->err);
+    default: return io_error(vm, o);
   }
 }
 
@@ -698,7 +695,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   }
   agc_value result;
   if (o->status != FS_OK) {
-    result = common_error(o);
+    result = common_error(vm, o);
   } else {
     switch (o->kind) {
       case OP_READ_TEXT:

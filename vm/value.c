@@ -19,9 +19,9 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 static const char oom_line[] = "agentica-vm: out of memory\n";
 
 #ifdef AGC_NO_GC
-static void **owned;
-static size_t owned_count, owned_cap, owned_bytes, limit_bytes;
-static jmp_buf *on_limit;
+static void **owned; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static size_t owned_count, owned_cap, owned_bytes, limit_bytes; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static jmp_buf *on_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 #endif
 
 void agc_out_of_memory(void) {
@@ -49,9 +49,7 @@ static void on_gc_abort(const char *message) {
 
 void agc_init(void) {
 #ifndef AGC_NO_GC
-  static bool ready = false;
-  if (ready) return;
-  ready = true;
+  if (GC_is_init_called()) return;
   GC_INIT();
   GC_set_oom_fn(on_gc_oom);
   GC_set_abort_func(on_gc_abort);
@@ -108,7 +106,7 @@ void agc_release_all(void) {
 
 #ifdef AGC_GC_STRESS
 static void stress(void) {
-  static unsigned count;
+  static _Atomic unsigned count;
   if (++count % 64 == 0) GC_gcollect();
 }
 #else

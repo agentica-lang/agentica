@@ -1,6 +1,9 @@
 #ifndef AGC_H
 #define AGC_H
 
+#ifdef __linux__
+#include <locale.h>
+#endif
 #include <setjmp.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -268,6 +271,11 @@ struct agc_vm {
   agc_resource *parked;
   agc_string *cwd;
   bool no_files;
+#ifdef __linux__
+  locale_t messages_locale;
+  bool messages_tried;
+#endif
+  uint64_t hash_key[2];
   agc_outcome outcome;
   jmp_buf fail;
 };
@@ -327,7 +335,6 @@ agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
 agc_fn *agc_new_fn(uint32_t function, uint32_t n);
 
-void agc_map_seed(uint64_t k0, uint64_t k1);
 uint64_t agc_key_hash(agc_vm *vm, agc_value key);
 agc_map *agc_new_map(void);
 agc_map *agc_map_put(agc_vm *vm, const agc_map *m, agc_value key, agc_value value);
