@@ -27,7 +27,8 @@ entries are skipped), but a relative entry such as `.` or `bin` is looked up
 under the current folder, as in the shell. A command with `/` is a path,
 relative to the current folder unless it starts with `/`, so a program in the
 current folder runs as `"./tool"`. A name that is not found gives
-`error("process: executable is unavailable")`.
+`error("process: executable is unavailable")`. On Windows only `.exe` and
+`.com` programs can be spawned.
 
 A file that is found but cannot run (no execute permission, say) is an error
 from `spawn`.

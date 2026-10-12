@@ -60,7 +60,8 @@
                          "--json" "--max-steps" "5000000" "--seed" "1" (path->string file)))
   (define last-line (and (= status 1) (pair? (string-split stderr "\n")) (last (string-split stderr "\n"))))
   (define data (and last-line (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr last-line))))
-  (values (and (hash? data) (string->symbol (hash-ref data 'code)))
+  (values status
+          (and (hash? data) (string->symbol (hash-ref data 'code)))
           stdout
           stderr))
 
@@ -118,17 +119,20 @@
                (check-false (hash-ref following "output" #f) (format "~a: a check-only block has an output block" where))
                (hash-update! counts 'check add1 0)]
               [else
-               (define-values (code output stderr)
+               (define-values (status code output stderr)
                  (run-program file (block-text b) (hash-ref following "input" "")))
                (cond
                  [expect
-                  (check-equal? code (string->symbol expect) (format "~a: expected ~a, got ~a" where expect stderr))]
+                  (check-equal? status 1 (format "~a: expected exit 1, stderr: ~a" where stderr))
+                  (check-equal? code (string->symbol expect) (format "~a: expected ~a, stderr: ~a" where expect stderr))]
                  [else
+                  (check-true (or (= status 0) (equal? stderr ""))
+                              (format "~a: exit ~a, stderr: ~a" where status stderr))
                   (check-false code (format "~a: ~a" where stderr))])
                (check-true (or (and expect #t) (hash-has-key? following "output"))
                            (format "~a: a run block needs an output block" where))
                (when (or (not expect) (hash-has-key? following "output"))
-                 (check-equal? output (hash-ref following "output" "") where))
+                 (check-equal? output (hash-ref following "output" "") (format "~a, stderr: ~a" where stderr)))
                (hash-update! counts 'run add1 0)])
             (loop (cdr rest) b)]
            [(equal? (block-lang b) "sh") (loop (cdr rest) previous)]

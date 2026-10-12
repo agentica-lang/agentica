@@ -2,6 +2,7 @@
 
 (require (except-in rackunit check)
          racket/runtime-path
+         "../src/builtins.rkt"
          "../src/bytecode.rkt"
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
@@ -33,6 +34,15 @@
   (list (subprocess-status process) stdout-text stderr-text))
 
 (module+ test
+  (test-case "every builtin outside TCP, TLS, HTTP and BDD runs on the VM"
+    (define fallback-modules '("TCP" "TLS" "HTTP" "BDD"))
+    (for* ([entry (in-hash-values builtins)]
+           [variant (in-list (cons entry (builtin-alternatives entry)))])
+      (define key (builtin-implementation variant))
+      (define module (car (string-split key ".")))
+      (unless (member module fallback-modules)
+        (check-not-false (member key vm-builtins) (format "~a is not in vm-builtins" key)))))
+
   (test-case "adjacent steps merge into one STEP with one span each"
     (define program (ir->bytecode (lower-text "def main() -> Void\n  puts(\"hi\")\nend\n")))
     (define main (list-ref (bc-program-functions program) (bc-program-entry program)))

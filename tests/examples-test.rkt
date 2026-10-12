@@ -19,10 +19,14 @@
                (append '("--json") (if max-steps (list "--max-steps" (number->string max-steps)) '())
                        (list (path->string file)))))
       (lambda () (delete-file file))))
+  (define (code-from stderr)
+    (define lines (string-split stderr "\n"))
+    (define data (and (pair? lines) (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr (last lines)))))
+    (unless (and (hash? data) (string? (hash-ref data 'code #f)))
+      (error 'examples-test "exit ~a without a JSON diagnostic on stderr: ~s" (first result) stderr))
+    (string->symbol (hash-ref data 'code)))
   (values (second result)
-          (if (zero? (first result))
-              (void)
-              (string->symbol (hash-ref (string->jsexpr (last (string-split (third result) "\n"))) 'code)))))
+          (if (zero? (first result)) (void) (code-from (third result)))))
 
 (define (run-text text)
   (run-text-io text ""))
@@ -57,6 +61,15 @@
         (run-text (file->string (build-path examples-dir (car entry)))))
       (check-equal? result (void) (car entry))
       (check-equal? output (cdr entry) (car entry))))
+
+  (test-case "file, task and process examples give their expected output"
+    (define (example name) (path->string (build-path examples-dir name)))
+    (check-equal? (cli (example "concurrency.agc")) '(0 "42\n14\n" ""))
+    (check-equal? (cli (example "file-summary.agc") (example "hello.agc")) '(0 "39\n" ""))
+    (define tool (cli "--allow-run" (example "process-tool.agc")))
+    (check-equal? (first tool) 0 (third tool))
+    (check-regexp-match #rx"^Welcome to Racket v[0-9.]+ \\[cs\\]\\.\n$" (second tool))
+    (check-equal? (third tool) ""))
 
   (test-case "echo.agc reads and echoes standard input"
     (define-values (output result)

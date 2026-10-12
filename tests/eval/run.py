@@ -453,10 +453,12 @@ def main() -> None:
     parser.add_argument("--jobs", type=int, default=1, help="runs in parallel")
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--chroot-root", type=Path,
-                        help="prepared minimal Firejail root filesystem")
+                        help="prepared minimal Firejail root filesystem; its glibc must run the host-built "
+                             "dist/agentica-vm (as new as the host's, or newer)")
     parser.add_argument("--pass-env", action="append", default=[], metavar="NAME",
                         help="pass one provider-auth environment variable to the agent; repeat as needed")
-    parser.add_argument("--sandbox", choices=["docker", "firejail"], default="docker")
+    parser.add_argument("--sandbox", choices=["docker", "firejail"], default="docker",
+                        help="firejail runs the host-built agentica-vm on the chroot's glibc")
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image; the default is built when missing")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
     args = parser.parse_args()
