@@ -114,7 +114,10 @@ resource registry (10.2.2) with every `File`, `Dir` and `Path` builtin
 `FileInfo` record (2.8), and the tasks PR of 7h: `Task.spawn`,
 `Task.await` and `Task.sleep` on one scheduler (N=1) with a run queue,
 turns and turn costs, per-task `Random`, and stdin, file jobs and sleeps
-that park only their own task (10.2.1 to 10.2.3, "As built"). Runtime diagnostics come in the plain,
+that park only their own task (10.2.1 to 10.2.3, "As built"), and the
+processes PR of 7h: every `Process` builtin (`Process.spawn`, `send`,
+`send_bytes`, `read_line`, `read_bytes`, `close_stdin`, `wait`, `close`)
+and `Process` values, behind the VM's own `--allow-run` (10.4). Runtime diagnostics come in the plain,
 `--ai` and `--json` formats. The lowerer rejects everything else with
 `LOWER-UNSUPPORTED` at the node's span (3.5) instead of guessing. Each later
 PR widens the subset; this document describes the full design, and the notes
@@ -1413,8 +1416,8 @@ and cost one predictable branch each.
 
 - `agentica compile file.agc -o file.agcb` (7d) runs the front end and writes
   bytecode.
-- `agentica-vm [--max-steps N] [--seed N] [--ai|--json] -- file.agcb
-  [args...]` (7e; `--allow-run` joins in 7h). The option parser is hand
+- `agentica-vm [--max-steps N] [--seed N] [--allow-run] [--ai|--json] --
+  file.agcb [args...]` (7e; `--allow-run` since the 7h processes PR). The option parser is hand
   written: it stops at the first non-option and honors `--`. Option values are
   checked with exit code 2, as in `src/main.rkt`. Callers
   always pass `--` before the file. A test checks that `--allow-run` after the
@@ -1433,7 +1436,7 @@ and cost one predictable branch each.
   in the default dynamic build that is the loaded library's
   `OpenSSL_version(OPENSSL_VERSION)`, not the headers it was built with.
 - In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
-  (7.4), `--ai`, `--json` and `--`. `--ai` and `--json` may both appear; the last one
+  (7.4), `--ai`, `--json`, `--allow-run` (10.4) and `--`. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
   exits 1 for every option error it raises itself (a repeated option, an
@@ -1471,9 +1474,9 @@ and cost one predictable branch each.
   `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
-  `--vm` (exit 1). `--seed N` is passed to the VM. `--allow-run`, `--steps`, `--dump`,
-  `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with
-  `--vm does not support X`.
+  `--vm` (exit 1). `--seed N` and `--allow-run` are passed to the VM.
+  `--steps`, `--dump`, `--dump-ir`, `check`, `compile`, `help` and `test`
+  exit 2 with `--vm does not support X`.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is
@@ -1998,10 +2001,19 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   closed" and never touches the state the stuck work still uses. Wait
   lists link tasks through `wait_next`, apart from the run queue's
   `next`, since a waiter woken by its timer is in both until it runs.
+- **External jobs (processes PR).** A kind with `external` set has no
+  `work` half: nothing runs in the pool. A libuv callback on the loop
+  thread (a pipe read, a finished write, a child's exit) completes it with
+  `agc_io_ready`, which marks the work done and puts the job on the ready
+  list like a pool job; a second call, or one after the job was taken, does
+  nothing. The timer, the `done` and `expired` halves, the lock hand-off
+  and `drop` are the same as for pool jobs, and `agc_io_close` marks an
+  external job done when it takes it at the end of the run.
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
   never touch the file system; a file builtin (`Path.cwd` and
   `Path.resolve` too, since they read the current directory) then ends the
-  run with `RUNTIME-INTERNAL`. It still calls `agc_io_close` before
+  run with `RUNTIME-INTERNAL`. It never sets `--allow-run`, so `Process.spawn`
+  returns its error and no child starts. It still calls `agc_io_close` before
   `agc_release_all`, on the normal path and after the allocation limit, so
   a loop or a resource would never outlive the mutant.
 
@@ -2200,7 +2212,9 @@ measurement shows CPU-bound work that one scheduler cannot serve.
     `AGC_NO_GC` block tracking in `vm/value.c` (fuzz and test builds only,
     single-threaded); the fuzz harness statics in `vm/fuzz.c` and
     `vm/fuzz_main.c`; `wide_args` in `vm/main.c` (Windows), set once before
-    any scheduler starts.
+    any scheduler starts; the block-scope `extern char **environ` in
+    `vm/process.c`, read (never written) when `Process.spawn` builds a
+    child's environment.
   - `agc_init` (`vm/value.c`) asks Boehm (`GC_is_init_called`) instead of
     keeping a `ready` flag.
   - The GC-stress counter in `vm/value.c` (`AGC_GC_STRESS`, a test build
@@ -2216,6 +2230,9 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   - `setenv("UV_USE_IO_URING", "0", 0)` in `vm/loop.c` runs when the first
     loop is made; `setenv` is not thread-safe, so the tasks PR moved it to
     start-up (`agc_io_init`, called by `vm/main.c` before any loop exists).
+    `agc_io_init` returns whether it set the variable; `vm/main.c` keeps
+    that in the shared runtime (`drop_uring_env`) for `Process.spawn`
+    (10.4).
     The tasks PR also moved the `agc_vm` fields above to the shared
     runtime or the scheduler.
 - **Values are immutable**, so tasks on different schedulers share them
@@ -2285,8 +2302,11 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 - `--allow-run` is the VM's own flag, checked inside `Process.spawn` at call
   time for every task and handler, as `current-process-allowed?` does.
 - The VM resolves the executable itself, with one rule shared with Racket
-  (PATH or a path relative to the working directory), and passes the absolute
-  path to `uv_spawn`. All three stdio streams are pipes.
+  and written in `grammar.md` (Processes): a command that contains `/`
+  resolves against the program's working directory; a bare name is looked
+  up in each `PATH` entry in order and never in the working directory
+  (empty entries are skipped). It passes the absolute path to `uv_spawn`.
+  All three stdio streams are pipes.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - The file loop sets `UV_USE_IO_URING=0` in the VM's own environment
   (10.2.2). The processes PR must not pass it on: it removes it from the
@@ -2295,8 +2315,90 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   and reject names with a trailing dot or space or any `:`. Both backends use this same
   allowlist: the Racket check in `process.rkt` (`windows-runnable-name?`)
   applies it to the last component of the resolved path, and the VM must do
-  the same. Whether the current directory is searched is decided once in
-  `grammar.md` before 7h.
+  the same when its process code is ported to Windows. On Windows the
+  evaluator also searches the current directory before `PATH` (Racket's
+  `find-executable-path`); the VM's port must not.
+
+**As built (processes PR, Linux).** `vm/process.c` holds the eight
+`Process` builtins; only it and `vm/loop.c` include `uv.h`. Other systems
+get an empty table, so the lowerer's keys fail at load as unknown imports.
+
+- **Values.** A `Process` value (`AGC_T_PROCESS`, printed `<Process>`) is
+  a GC `agc_process` with three `agc_resource` pointers: `state`, the
+  registered resource whose `native` is the `malloc`'d process state, and
+  two lock records, `reader` and `writer`, that are never registered and
+  only carry the lock fields of 10.2.2. `read_line` and `read_bytes` take
+  the reader lock, `send`, `send_bytes` and `close_stdin` the writer lock,
+  through `agc_handle_wait`, as the evaluator's two semaphores; `wait` and
+  `close` take neither. So a reader parked on a silent child never blocks
+  a writer, and a lock-wait timeout leaves the process running (the
+  evaluator's `network-timed` around a semaphore).
+- **Spawn.** Checks in the evaluator's order (`--allow-run`, a nonempty
+  command and no NUL, the timeout), resolution as above (a path that does
+  not exist or is a directory is "executable is unavailable"), then three
+  real pipes made with `uv_pipe` and given to the child with
+  `UV_INHERIT_FD` (libuv's `UV_CREATE_PIPE` makes socketpairs, which some
+  programs treat differently), and the parent's ends opened with
+  `uv_pipe_open`. Every descriptor is close-on-exec, so a child sees only
+  0, 1 and 2. `argv[0]` is the resolved path. The child's environment is
+  the VM's, without `UV_USE_IO_URING` when `drop_uring_env` says the VM set
+  it. A failed `uv_spawn` (`EACCES`, `ENOEXEC`) is an error `Result`
+  with the OS text (`agc_system_error`).
+- **State.** The `malloc`'d `proc` holds the `uv_process_t`, the three
+  `uv_pipe_t`, one `uv_write_t`, the stdout buffer, and the pending
+  requests (one reader, one writer, a list of waits). Callbacks find it with
+  `offsetof`. It is freed when its resource was released, every request
+  that points to it was dropped, and the close callback of each of its
+  libuv handles ran (a user count and a handle count), so no callback ever
+  sees freed memory.
+- **Operations park only their task** on external jobs (10.2.2) with the
+  call's timeout on the job's timer. Reads start `uv_read_start` on stdout
+  only while a reader waits and stop as soon as its line or bytes are
+  buffered (or at EOF or an error), so a child that writes much more than
+  the program reads blocks on its pipe, as with Racket's pipe. A write
+  first tries `uv_try_write`; the rest is copied and sent with `uv_write`,
+  and the task parks until its callback. `wait` returns at once when the
+  child has exited and its stderr reached EOF; otherwise it parks on a job
+  that `exit_cb` or the stderr EOF readies. A timed-out read or write
+  closes the process, as the evaluator does; a timed-out `wait` leaves the
+  child running.
+- **Stderr** is read all the time and each chunk is written and flushed to
+  the program's stderr in the read callback, so it reaches the user in
+  order with `IO.warn` output and without waiting for a builtin. If that
+  write fails, the rest is read and dropped.
+- **Close.** `Process.close`, a timed-out read or write, and the end of
+  the run (`agc_io_close` releases every resource, also after
+  `System.exit`, a runtime error or the step limit) all go through one
+  close: if the child still runs, `SIGKILL` and a blocking `waitpid` (it
+  cannot block for long after `SIGKILL`), then `uv_close` on its
+  handles. libuv's own reap later finds no child and does nothing. The
+  waiting reader, writer and waits are readied and see "process is
+  closed". A second `close` does nothing, and any other operation after
+  it returns "process is closed", as in the evaluator. So no child
+  outlives a run that ends normally and no zombie or pipe stays behind.
+- **Signals.** While a child runs, its process state watches `SIGINT`,
+  `SIGTERM` and `SIGHUP` with `uv_signal_t` handles (not for a signal the
+  VM started with ignored, as under `nohup`). libuv's own handler only
+  writes to a pipe, so nothing runs in signal context. On the loop thread
+  the callback closes that process (kill and reap) and raises the signal
+  again: while another child's watcher is left, libuv catches it and that
+  watcher runs next; after the last one, libuv has put back the default
+  action and the VM ends by the signal, as it would without children. The
+  watchers close when the child exits, so a program with no running child
+  keeps the default actions. The loop runs between turns, so a CPU-bound
+  task delays this by at most one turn. A VM killed by `SIGKILL`, or ended
+  by the out-of-memory exit (70, 6.3), leaves its children running (they
+  get EOF or `EPIPE` when they next touch a pipe); `agentica --vm` kills
+  the VM that way when its stdin thread fails (9).
+- **Black-box differences.** A file that exists but cannot be executed
+  (no execute permission, a bad format) is an error `Result` from
+  `Process.spawn` on the VM; the evaluator returns a process that writes
+  `exec failed` to stderr and exits 1. After a read or write timeout
+  closes a process, the evaluator's dead stream thread keeps that
+  direction's semaphore, so a later read (or write) in the same direction
+  waits its whole timeout and returns "network: operation timed out"; the
+  VM returns "process: process is closed" at once (an evaluator bug, not
+  copied). Error texts of failed system calls follow `agc_system_error`.
 
 ### 10.5 Limits the C runtime keeps
 
@@ -2853,6 +2955,16 @@ and loader asserts for spans in a second source. No format bump.
    (`tests/vm-latency-test.rkt`, `make vm-latency`) with its
    `AGENTICA_VM_TEST_NO_TURN_COST=1` counter-check. No format bump: the
    Task builtins are new import keys only.
+
+10. **7h processes** (done, Linux). Every `Process` builtin behind the VM's
+    own `--allow-run`, which `agentica --vm` now passes through (10.4).
+    External jobs complete from libuv callbacks (10.2.2). The harness runs
+    fixtures named `process-*` with `--allow-run` on both sides; they spawn
+    `/bin/sh` and `cat` (`process-streams`, `process-limits`,
+    `process-timeouts`, `process-tasks`), and `spawn-denied` checks the
+    error without the flag. A CLI test checks the `PATH` rule on both
+    backends, and CI diffs `examples/process-tool.agc` on both. No format
+    bump: the `Process` builtins are new import keys only.
 
 7e is done when every example runs on the VM with the same results, except
 those that need files, processes, tasks or the network by name:
