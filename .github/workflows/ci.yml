@@ -38,6 +38,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       vm: ${{ steps.vm.outputs.vm }}
+      trace: ${{ steps.vm.outputs.trace }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,20 +48,28 @@ jobs:
           EVENT: ${{ github.event_name }}
         run: |
           vm=false
+          trace=false
           if [ "$EVENT" != pull_request ]; then
             vm=true
+            trace=true
           elif ! files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
             vm=true
+            trace=true
           else
             while IFS= read -r f; do
+              case "$f" in
+                vm/trace.*|vm/tests/trace_test.c)
+                  trace=true ;;
+              esac
               case "$f" in
                 vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/vm-trace-test.rkt|tests/vm-tcp-test.rkt|tests/fixtures/tcp-peer.js|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"
           fi
-          echo "vm=$vm"
+          echo "vm=$vm trace=$trace"
           echo "vm=$vm" >> "$GITHUB_OUTPUT"
+          echo "trace=$trace" >> "$GITHUB_OUTPUT"
 
   warm-cache:
     if: github.event_name == 'push'
@@ -253,7 +262,8 @@ jobs:
             exit 1
           fi
           make vm-lint
-      - run: |
+      - if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.trace == 'true'
+        run: |
           make vm vm-test TRACE=0
           dist/agentica-vm --version | grep -q 'trace off'
       - run: make vm vm-test

@@ -1,3 +1,12 @@
+/*
+ * Aurora, the Agentica bytecode VM.
+ *
+ * Aurora is the VM's codename, used in docs only. The binary stays
+ * agentica-vm, and the AGENTICA_VM* variables, the agc_ prefix, .agcb and
+ * vm/ keep their names. This file is the entry point: it reads the command
+ * line, loads a .agcb file, runs it and maps the outcome to an exit code.
+ * The design is in docs/vm/README.md.
+ */
 #ifdef _WIN32
 #define _CRT_RAND_S
 #endif
