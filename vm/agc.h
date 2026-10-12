@@ -30,7 +30,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_STOP_SIGNALS 3
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT
 } agc_tag;
 
 typedef struct {
@@ -175,6 +175,10 @@ typedef struct {
   agc_resource *state;
   int64_t port;
 } agc_listener;
+
+typedef struct {
+  agc_resource *state;
+} agc_http_client;
 
 typedef struct {
   uint8_t *data;
@@ -389,6 +393,7 @@ agc_value agc_task_value(agc_task *t);
 agc_value agc_process_value(agc_process *p);
 agc_value agc_socket_value(agc_socket *s);
 agc_value agc_listener_value(agc_listener *l);
+agc_value agc_http_client_value(agc_http_client *c);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -406,6 +411,7 @@ agc_task *agc_as_task(agc_vm *vm, agc_value v);
 agc_process *agc_as_process(agc_vm *vm, agc_value v);
 agc_socket *agc_as_socket(agc_vm *vm, agc_value v);
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v);
+agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
 char *agc_cstr(const agc_string *s);
 uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
@@ -502,6 +508,9 @@ extern const agc_builtin agc_process_builtins[];
 extern const size_t agc_process_builtin_count;
 extern const agc_builtin agc_tcp_builtins[];
 extern const size_t agc_tcp_builtin_count;
+extern const agc_builtin agc_http_builtins[];
+extern const size_t agc_http_builtin_count;
+uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 uint64_t agc_resource_id(agc_vm *vm);

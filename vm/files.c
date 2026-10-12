@@ -651,16 +651,7 @@ static agc_value text_result(const op *o) {
 
 static uint32_t file_info_struct(agc_vm *vm) {
   static const char *const fields[] = {"kind", "size_bytes", "modified_seconds"};
-  const agc_program *p = vm->rt->program;
-  for (uint32_t k = 0; k < p->struct_count; k++) {
-    const agc_struct_def *d = &p->structs[k];
-    if (d->name->bytes != 8 || memcmp(d->name->data, "FileInfo", 8) != 0 || d->count != 3) continue;
-    bool same = true;
-    for (uint32_t f = 0; f < 3; f++)
-      same = same && d->fields[f]->bytes == strlen(fields[f]) && memcmp(d->fields[f]->data, fields[f], strlen(fields[f])) == 0;
-    if (same) return k;
-  }
-  agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: the FileInfo struct is missing", 0);
+  return agc_builtin_struct(vm, "FileInfo", fields, 3);
 }
 
 static agc_value stat_result(agc_vm *vm, const op *o) {
