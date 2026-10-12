@@ -122,18 +122,23 @@ static void close_timer(job *j) {
   uv_close((uv_handle_t *)&j->timer, timer_closed);
 }
 
+static size_t registry_count(const agc_vm *vm) { return vm->registry ? vm->registry->count : 0; }
+
+static job *job_at(const agc_vm *vm, size_t k) {
+  const agc_resource *r = vm->registry->items[k];
+  return r->kind == AGC_RESOURCE_JOB ? r->native : NULL;
+}
+
 static void sweep(agc_vm *vm) {
-  agc_registry *reg = vm->registry;
-  for (size_t k = reg ? reg->count : 0; k-- > 0;) {
-    agc_resource *r = reg->items[k];
-    if (r->kind != AGC_RESOURCE_JOB) continue;
-    job *j = r->native;
-    if (!j->consumed || !j->work_done) continue;
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    job *j = job_at(vm, k);
+    if (!j || !j->consumed || !j->work_done) continue;
     if (j->data) {
       j->kind->drop(j->data);
       j->data = NULL;
     }
     if (!j->timer_closed) continue;
+    agc_resource *r = vm->registry->items[k];
     free(j);
     r->native = NULL;
     agc_unregister(vm, r);
@@ -249,9 +254,8 @@ static bool held(const agc_resource *r) {
 }
 
 static void release_handles(agc_vm *vm) {
-  agc_registry *reg = vm->registry;
-  for (size_t k = reg ? reg->count : 0; k-- > 0;) {
-    agc_resource *r = reg->items[k];
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    agc_resource *r = vm->registry->items[k];
     if (r->kind == AGC_RESOURCE_JOB || held(r)) continue;
     if (r->native) r->release(r->native);
     r->native = NULL;
@@ -260,11 +264,9 @@ static void release_handles(agc_vm *vm) {
 }
 
 bool agc_io_close(agc_vm *vm) {
-  agc_registry *reg = vm->registry;
-  for (size_t k = reg ? reg->count : 0; k-- > 0;) {
-    agc_resource *r = reg->items[k];
-    if (r->kind != AGC_RESOURCE_JOB) continue;
-    job *j = r->native;
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    job *j = job_at(vm, k);
+    if (!j) continue;
     j->consumed = true;
     close_timer(j);
   }
@@ -274,7 +276,7 @@ bool agc_io_close(agc_vm *vm) {
   vm->loop->ready = vm->loop->ready_tail = NULL;
   sweep(vm);
   release_handles(vm);
-  if (vm->registry && vm->registry->count) return false;
+  if (registry_count(vm)) return false;
   if (uv_loop_close(&vm->loop->uv) != 0) return false;
   free(vm->loop);
   vm->loop = NULL;
