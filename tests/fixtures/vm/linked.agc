@@ -1,6 +1,6 @@
-import "lib/inventory.agc" as Inv
-import "lib/stock.agc" as Stock
-import "pkg/text/pad.agc" as Pad
+import "lib/inventory" as Inv
+import "lib/stock" as Stock
+import "pkg/text/pad" as Pad
 
 def main() -> Void
   items = [Stock.Item(name: "pen", count: 0), Stock.Item(name: "ink", count: 3)]

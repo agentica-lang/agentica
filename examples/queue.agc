@@ -1,4 +1,4 @@
-import "std/queue.agc" as Queue
+import "std/queue" as Queue
 
 def main() -> Void
   q = Queue.new()

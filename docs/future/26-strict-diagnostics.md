@@ -37,8 +37,8 @@ The codes keep the `CHECK-` prefix, also for the linker's code, as the linker's 
 ### 26.1 Unused imports
 
 ```agentica
-import "text.agc" as Text
-import "json_util.agc" as JsonUtil
+import "text" as Text
+import "json_util" as JsonUtil
 
 def main() -> Void
   puts(Text.shout("hi"))
@@ -51,9 +51,9 @@ end
 app.agc:2:27 error[CHECK-UNUSED-IMPORT]
 the import alias "JsonUtil" is never used
 
-2 | import "json_util.agc" as JsonUtil
+2 | import "json_util" as JsonUtil
   |                           ^^^^^^^^
-  = help: remove import "json_util.agc" as JsonUtil
+  = help: remove import "json_util" as JsonUtil
 ```
 
 **Rule:** an import whose alias is never used in its file is `CHECK-UNUSED-IMPORT`, at the alias.
@@ -73,15 +73,15 @@ the import alias "JsonUtil" is never used
 - `import-decl` (`src/ast.rkt:54`) gains an `alias-span` field, filled by the parser from the alias token (`src/parser.rkt:128`); today the node has only the span of the whole line.
 - `visit` (`src/modules.rkt:102`) keeps, per file, the set of aliases used. `resolve` marks an alias in its `target` branch, when the lookup at `:157` finds it.
 - After every file is rewritten (the `append-map` that builds the merged `program`, `src/modules.rkt:266`), the linker walks the files in link order (the root first) and, in each file, the imports in source order, and fails at the first alias that was never marked.
-- **A mistyped alias is not an unused import.** In `import "text.agc" as Text` with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real mistake is the call. `resolve` sends a two-part function name whose first part is not an alias to the checker unchanged, so the checker can report it with its stable code (the comment at `src/modules.rkt:169`). So while rewriting, `resolve` also records, per file, the two-part function names whose first part is not an alias of that file and that are not builtins (`builtin-ref`; `IO.inspect` and `String.length` are valid calls of that shape). When a file has any, the unused-import check skips that file, and the checker reports the call as `CHECK-UNKNOWN-NAME`, as today, with its "did you mean" help over functions and builtins.
+- **A mistyped alias is not an unused import.** In `import "text" as Text` with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real mistake is the call. `resolve` sends a two-part function name whose first part is not an alias to the checker unchanged, so the checker can report it with its stable code (the comment at `src/modules.rkt:169`). So while rewriting, `resolve` also records, per file, the two-part function names whose first part is not an alias of that file and that are not builtins (`builtin-ref`; `IO.inspect` and `String.length` are valid calls of that shape). When a file has any, the unused-import check skips that file, and the checker reports the call as `CHECK-UNKNOWN-NAME`, as today, with its "did you mean" help over functions and builtins.
 - **An alias used without its member.** An import alias is never a name on its own: the linker already forbids an alias that collides with a declaration of the file or a builtin type name (`src/modules.rkt:128`), so a one-part type or enum name equal to an alias is always a mistake, most often a missing member. Two shapes reach `resolve` as one-part names:
-  - a type, construction or type expression: `u: User`, a parameter `def show(u: User)`, `User(name: "Ana")` (a `construct`), or `User` alone as a value (a `type-expression`), all with `import "user.agc" as User`; these come as one-part `'type` names;
-  - an enum variant without the enum's name: with `import "domain.agc" as Domain`, the call `Domain.Some(1)` and the pattern `Domain.Some(x)`. The parser reads them as the variant `Some` of an enum named `Domain`, so they come as one-part `'enum` names.
+  - a type, construction or type expression: `u: User`, a parameter `def show(u: User)`, `User(name: "Ana")` (a `construct`), or `User` alone as a value (a `type-expression`), all with `import "user" as User`; these come as one-part `'type` names;
+  - an enum variant without the enum's name: with `import "domain" as Domain`, the call `Domain.Some(1)` and the pattern `Domain.Some(x)`. The parser reads them as the variant `Some` of an enum named `Domain`, so they come as one-part `'enum` names.
 
   Today `resolve` treats such a name as a declaration of the file (its last branch, `identity`), and the checker reports `CHECK-UNKNOWN-TYPE` (for the enum call, "unknown enum") or `CHECK-PATTERN-TYPE` (for the pattern). The alias is never marked, so 26.1 alone would add a wrong "remove import" error. So when `resolve` gets a one-part `'type` or `'enum` name that is an import alias of the file, the linker stops right away with `CHECK-IMPORT-NAME` at that span. The help shows the missing member: `write User.<Type>` or `write Domain.<Enum>.Some(...)`. When the imported module exports a declaration with that name, the help names it (`write User.User`); for a variant, when exactly one exported enum has a variant of that name, the help names the enum (`write Domain.Option.Some(...)`). This is better than today's diagnostics even without the unused-import rule, so it can land in the 16a PR as its own small change.
 - **Order.** Errors found while rewriting come first: an unknown or private imported name (`CHECK-IMPORT-NAME`) in a file is reported before an unused import. A mistyped alias in a call is not a rewriting error; it is the checker's `CHECK-UNKNOWN-NAME`, and the rule above keeps the unused import from hiding it. Apart from that case, every linker error comes before every checker error, since the linker runs first.
 
-**Help idea:** `remove import "json_util.agc" as JsonUtil`, which names the whole line, as in the example above. There is no "use it" hint: the linker cannot know what the code meant to call.
+**Help idea:** `remove import "json_util" as JsonUtil`, which names the whole line, as in the example above. There is no "use it" hint: the linker cannot know what the code meant to call.
 
 **Tests** (`tests/modules-test.rkt`): an unused alias in the root (code and the alias's span); an unused alias in an imported file and in a `std/` import; an alias used only in a type annotation, only in a pattern, only as `&Alias.f`, only in a construction, and only in a function that is never called (all valid); two unused imports (the first is reported); a file imported by two files where only one uses its own alias; an unknown imported name (`Text.nope()`) and an unused import in the same file (`CHECK-IMPORT-NAME` wins); a misspelled alias in a call (`Txet.shout("hi")`) next to the import it was meant to use (`CHECK-UNKNOWN-NAME` at the call, not `CHECK-UNUSED-IMPORT`); an alias used without its member, each `CHECK-IMPORT-NAME` at it and not `CHECK-UNUSED-IMPORT`: an annotation (`u: User`), a parameter type (`def show(u: User)`) and a construction (`User(name: "Ana")`), with the help that names `User.User` when the module exports `User` and `User.<Type>` when it does not, and an enum variant as a value (`Domain.Some(1)`) and as a pattern (`Domain.Some(x)`), with the help that names `Domain.Option.Some`; a valid builtin call such as `IO.inspect(x)` next to an unused import (still `CHECK-UNUSED-IMPORT`); with 15b, a facade that only re-exports. An `{expect="CHECK-UNUSED-IMPORT"}` block on the modules page, and the CLI check (`--json`, exit 1, the code).
 

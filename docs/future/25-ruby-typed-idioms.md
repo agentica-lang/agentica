@@ -78,8 +78,8 @@ Like Elixir's `defdelegate`, a module can pass on a name it imports, so a small 
 
 ```agentica
 # web.agc
-import "url.agc" as Url
-import "http_parts.agc" as Parts
+import "url" as Url
+import "http_parts" as Parts
 
 export Url.parse
 export Url.Address
@@ -87,7 +87,7 @@ export Parts.header_value
 ```
 
 ```agentica
-import "web.agc" as Web
+import "web" as Web
 
 def main() -> Void
   case Web.parse("http://localhost:8080/a")

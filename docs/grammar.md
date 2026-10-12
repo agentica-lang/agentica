@@ -151,8 +151,14 @@ Struct, enum, and function declarations appear only at the top level. There are 
 
 ### File modules and imports
 
-Each file is a module. Use `import "models.agc" as Models` at the top level.
-Relative paths ending in .agc resolve from the importing file, not the working
+Each file is a module. Use `import "models" as Models` at the top level.
+An import path names a module without its extension: `"models"` loads
+`models.agc`, and `"../lib/util"` loads `../lib/util.agc`. There is one
+spelling: a path that ends in `.agc` gives `CHECK-IMPORT-PATH` with a help that
+shows the path without it. An empty path, a path that ends in `/`, and a last
+part that contains a dot (`"models.rb"`, `"."`, `".."`) give `CHECK-IMPORT-PATH`
+too. So a module file name has no dot apart from `.agc`: `json.tools.agc`
+cannot be imported; rename it, for example to `json_tools.agc`. Relative paths resolve from the importing file, not the working
 directory. Canonical paths identify files; each file is linked once. Cycles give
 `CHECK-IMPORT-CYCLE`; missing or unreadable imports give `CHECK-IMPORT-IO`, and
 invalid paths give `CHECK-IMPORT-PATH`. Each is located at the import.
@@ -175,12 +181,12 @@ blocks, or receiver attachment. `as` is contextual in imports, not reserved.
 
 #### Standard library and external libraries
 
-All import paths end in `.agc`. Two prefixes select library resolution:
+Two prefixes select library resolution:
 
-- `import "std/queue.agc" as Queue` loads the standard library embedded at
+- `import "std/queue" as Queue` loads the standard library embedded at
   build time. No stdlib installation, environment variable, or repository
   checkout is needed at runtime. Local files and external roots cannot shadow it.
-- `import "pkg/acme/tools.agc" as Tools` searches for `acme/tools.agc` in:
+- `import "pkg/acme/tools" as Tools` searches for `acme/tools.agc` in:
   1. `agc_libs/` beside the root program (not beside each dependency or in cwd).
   2. Absolute roots in `AGENTICA_PATH`, in listed order.
   3. `$XDG_DATA_HOME/agentica/lib/`, defaulting to
@@ -207,7 +213,7 @@ External modules may use ordinary relative imports for their dependencies.
 
 #### String queue
 
-`std/queue.agc` is a non-native library written in Agentica. Its exported
+`std/queue` (the file `std/queue.agc`) is a non-native library written in Agentica. Its exported
 immutable records are `QueueState(items: List[String])` and
 `Popped(value: String, remaining: QueueState)`.
 

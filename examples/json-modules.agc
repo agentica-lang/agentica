@@ -1,4 +1,4 @@
-import "modules/json-tools.agc" as Tools
+import "modules/json-tools" as Tools
 
 def main() -> Void
   args = Result.unwrap!(JSON.decode("{\"left\":20,\"right\":22}", Tools.AddArgs))

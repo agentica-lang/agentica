@@ -20,7 +20,7 @@ Checked at `0c2e3b0`:
 - Isolation today comes from the evaluator: a handler that divides by zero, calls `System.exit` or loops forever fails only its scenario (`tests/bdd/handlers.agc:30-41`, `tests/bdd-test.rkt:92-119`).
 - What the VM has today and this plan uses: closures and blocks stored in structs and lists; `std/` modules embedded at build time (`src/stdlib.rkt:17-18`), whose relative imports stay inside `std/` (`src/modules.rkt:79-82`); `Map`, `JSON.*` (parse, encode, decode into structs, builders), `File.read_text`, `File.stat`, `Dir.list`, `Path.join` and `Path.resolve`, `System.args`, `System.exit`, `Time.monotonic_ms`, tasks, and every `Process` builtin behind `--allow-run` (`docs/vm/10-io-tls-processes-http.md` §10.4).
 - What the VM lacks for BDD: a child's stderr is always forwarded to the VM's own stderr (`forward_err`, `vm/process.c:403-416`), so a program cannot read it; a child always runs in the VM's working directory (`uv_process_options_t` in `vm/process.c:532`, no `cwd`); a child's stdout is read only on request, so a child that writes a lot while nobody reads blocks; and a program cannot see whether tasks are still running (the VM knows: `pending_tasks`, `vm/task.c:129-132`). JSON values cannot list their keys (`JSON.kind` and friends are phase 10).
-- The `BDD` alias is reserved today: `import "std/bdd.agc" as BDD` gives `CHECK-REDEFINED-NAME` while the builtin module exists.
+- The `BDD` alias is reserved today: `import "std/bdd" as BDD` gives `CHECK-REDEFINED-NAME` while the builtin module exists.
 
 ### 31.2 Shape
 
@@ -153,7 +153,7 @@ agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [-
 **What the driver does** (`src/bdd-driver.rkt`, new; `src/main.rkt` only parses and calls it):
 
 1. Parse the options (the code of `src/main.rkt:166-196`). Usage errors print a report with `RUNTIME-BDD-USAGE` and exit 2.
-2. Compile the step program (front end, lowering, bytecode). A front-end or `LOWER-` diagnostic is a file error of the step program in the report, exit 1; a file that cannot be read is `RUNTIME-BDD-INFRA`, exit 2. Compile the runner from its embedded root (`import "std/bdd/runner.agc" as Runner`, then `Runner.main()`).
+2. Compile the step program (front end, lowering, bytecode). A front-end or `LOWER-` diagnostic is a file error of the step program in the report, exit 1; a file that cannot be read is `RUNTIME-BDD-INFRA`, exit 2. Compile the runner from its embedded root (`import "std/bdd/runner" as Runner`, then `Runner.main()`).
 3. Write both `.agcb` files into a private temporary directory (mode 0700), and delete it on every path, interrupts included. The VM loads them by path; they are not the one-shot private input of the normal run (`docs/vm/08-loader-and-cli.md` §9).
 4. Run the runner VM with `--allow-run` (and `--seed N`), with one argument: the configuration as JSON (`vm`, `steps_bytecode`, `steps_source`, `agentica` as a command list, `paths`, `style`, `allow_run`, `seeded`, `seed`), decoded with `JSON.decode` into a struct. The VM path is found as for a normal run (`AGENTICA_VM`, then next to the executable or the checkout). The `agentica` command is the one `default-bdd-command` finds today (`racket` and `src/main.rkt`, or the packaged executable), without `--legacy-eval`. The driver removes `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` (§28, phase 18) from the runner VM's environment, so every child, scenario VMs and programs under test included, inherits the cleaned environment; the runner and the children need no code for it.
 5. Capture the runner's stdout and stderr. If the runner exits 0, 1 or 2 with an empty stderr, print its stdout and exit with its code. Otherwise (a bug in the runner, a missing VM) print a report with one `RUNTIME-BDD-INFRA` file error that names the runner's diagnostic, and exit 2.
@@ -173,7 +173,7 @@ The plain and `--ai` formats are those of `format-bdd-report` (`src/bdd-runner.r
 ### 31.7 The `std/bdd` API
 
 ```ruby
-import "std/bdd.agc" as BDD
+import "std/bdd" as BDD
 ```
 
 `BDD` stops being a builtin module in 21f, in the same PR that adds `std/bdd.agc`, so the alias is free (31.1). The module needs no generics: handlers are `Fn` values of one fixed type, state values are `Json`.
@@ -213,7 +213,7 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 Example, `tests/bdd/handlers.agc` after 21f (shortened):
 
 ```ruby
-import "std/bdd.agc" as BDD
+import "std/bdd" as BDD
 
 def save_number(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return BDD.set(ctx, "number", Result.unwrap!(JSON.parse(args[0])))
@@ -279,7 +279,7 @@ Nothing else goes in C: `vm/` gets no BDD code, and `agentica-vm` gets no BDD fl
 
 | Today | After 21f |
 |---|---|
-| `BDD` is a builtin module, reserved | `import "std/bdd.agc" as BDD`; `BDD` is free as a name and an alias |
+| `BDD` is a builtin module, reserved | `import "std/bdd" as BDD`; `BDD` is free as a name and an alias |
 | `BDD.run(feature_path, step_files) -> Result[Json]` | Removed. Run suites with `agentica test`; from a program, `Process.spawn` of `agentica test --json` (needs `--allow-run`) |
 | `BDD.step(pattern, Fn[List[String], Void]) -> Void`, registered in `main` | `BDD.step(pattern, Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step`, collected in a list passed to `BDD.run(steps)` at the end of `main` |
 | `BDD.doc_string()`, `BDD.table()`, `BDD.get(name)` | the same with `ctx` first |
@@ -308,7 +308,7 @@ Feature files do not change: the Gherkin subset, the predefined steps and the re
 - The programming skill: `references/bdd.md` (API, step program, diagnostics table with the changed meanings), `references/tasks.md` and `references/processes.md` (the new builtins, the BDD notes), the "When to read a reference" row, and `SKILL.md` where it lists `BDD` as a builtin module.
 - The site: `site/content/library/bdd.md` (step programs are `{mode="check"}` blocks, since run directly they exit 2), `process.md`, `task.md`, `getting-started.md` (no evaluator notice for `test`).
 - The development skill (`stages.md`, `runtime-notes.md`: where BDD lives now), `AGENTS.md` (the fallback list, Layout), `README.md`, and `CHANGELOG.md` under **Changed** (breaking: the list above) and **Removed** (`BDD.run`, the `BDD` builtins).
-- The checker gives a help on `BDD.` without the import: "import \"std/bdd.agc\" as BDD".
+- The checker gives a help on `BDD.` without the import: "import \"std/bdd\" as BDD".
 
 ### 31.11 Tests
 
