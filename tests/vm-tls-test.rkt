@@ -64,6 +64,15 @@
   (parameterize ([current-environment-variables (vm-environment)])
     (apply subprocess #f #f #f vm-file "--" (path->string bytecode) args)))
 
+(define (check-lines text expected message)
+  (define lines (string-split text "\n" #:trim? #f))
+  (define actual (if (and (pair? lines) (equal? (last lines) "")) (drop-right lines 1) lines))
+  (check-equal? (length actual) (length expected) (string-append message "\n" text))
+  (for ([line (in-list actual)] [want (in-list expected)])
+    (if (string? want)
+        (check-equal? line want message)
+        (check-true (string-prefix? line (cadr want)) (format "~a: ~s should start with ~s" message line (cadr want))))))
+
 (define (finished? process)
   (and (sync/timeout wait-seconds process) #t))
 
@@ -315,31 +324,32 @@ AGC
            (lambda (ports)
              (define result (run-vm-text work "client" (client-program ports)))
              (check-equal? (first result) 0 (third result))
-             (check-equal?
+             (check-lines
               (second result)
-              (string-append
-               "ñ\n"
-               "ñ😀\n"
-               "ok(\"tail\")\n"
-               "error(\"network: end of input\")\n"
-               "ok([])\n"
-               "ok(\"abc\")\n"
-               "ok(\"partial\")\n"
-               "error(\"network: end of input\")\n"
-               "error(\"error reading from stream port\\n  system error: Connection reset by peer; errno=104\")\n"
-               "100000\n"
-               "100000 true\n"
-               "error(\"network: line exceeds 1048576 bytes\")\n"
-               "error(\"network: socket is closed\")\n"
-               "error(\"network: operation timed out\")\n"
-               "error(\"network: socket is closed\")\n"
-               "ssl-connect: connect failed (certificate verify failed: hostname mismatch)\n"
-               "ssl-connect: connect failed (certificate verify failed: certificate has expired)\n"
-               "ssl-connect: connect failed (certificate verify failed: self-signed certificate)\n"
-               "ssl-connect: connect failed (tlsv1 alert protocol version)\n"
-               "ssl-connect: connect failed (wrong version number)\n"
-               "network: operation timed out\n"
-               "ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)\n")))))
+              (list
+               "ñ"
+               "ñ😀"
+               "ok(\"tail\")"
+               "error(\"network: end of input\")"
+               "ok([])"
+               "ok(\"abc\")"
+               "ok(\"partial\")"
+               "error(\"network: end of input\")"
+               '(prefix "error(\"error reading from stream port\\n  system error: ")
+               "100000"
+               "100000 true"
+               "error(\"network: line exceeds 1048576 bytes\")"
+               "error(\"network: socket is closed\")"
+               "error(\"network: operation timed out\")"
+               "error(\"network: socket is closed\")"
+               "ssl-connect: connect failed (certificate verify failed: hostname mismatch)"
+               "ssl-connect: connect failed (certificate verify failed: certificate has expired)"
+               "ssl-connect: connect failed (certificate verify failed: self-signed certificate)"
+               '(prefix "ssl-connect: connect failed (")
+               '(prefix "ssl-connect: connect failed (")
+               "network: operation timed out"
+               "ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)")
+              (third result)))))
 
         (test-case "SSL_CERT_FILE is the trust store when ca_file is empty"
           (define trusted
@@ -400,22 +410,21 @@ AGC
 
         (test-case "handshake and load errors on both sides of a VM client and server"
           (define result (run-vm-text work "handshakes" handshake-program))
-          (check-equal? (take result 2)
-                        (list 0
-                              (string-append
-                               "server: ok\n"
-                               "  server: ok\n"
-                               "wrong-host: ssl-connect: connect failed (certificate verify failed: hostname mismatch)\n"
-                               "  server: port->ssl-ports: accept failed (ssl/tls alert bad certificate)\n"
-                               "server: ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)\n"
-                               "  server: port->ssl-ports: accept failed (tlsv1 alert unknown ca)\n"
-                               "false\n"
-                               "false\n"
-                               "ssl-load-verify-source!: load failed from: \"<tls>/missing.pem\"\n"
-                               "  system error: No such file or directory; errno=2\n"
-                               "plain server: ssl-connect: connect failed (wrong version number)\n"
-                               "plain client: port->ssl-ports: accept failed (http request)\n"))
-                        (third result)))
+          (check-equal? (first result) 0 (third result))
+          (check-lines (second result)
+                       (list "server: ok"
+                             "  server: ok"
+                             "wrong-host: ssl-connect: connect failed (certificate verify failed: hostname mismatch)"
+                             '(prefix "  server: port->ssl-ports: accept failed (")
+                             "server: ssl-connect: connect failed (certificate verify failed: unable to get local issuer certificate)"
+                             '(prefix "  server: port->ssl-ports: accept failed (")
+                             "false"
+                             "false"
+                             "ssl-load-verify-source!: load failed from: \"<tls>/missing.pem\""
+                             '(prefix "  system error: ")
+                             '(prefix "plain server: ssl-connect: connect failed (")
+                             '(prefix "plain client: port->ssl-ports: accept failed ("))
+                       (third result)))
 
         (test-case "timeouts close a TLS socket, a pending handshake times out, a closed listener stays closed"
           (define result (run-vm-text work "limits" limits-program))

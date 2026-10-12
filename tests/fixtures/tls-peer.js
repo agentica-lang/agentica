@@ -37,11 +37,11 @@ const secure = {
     };
     next();
   }],
-  abrupt: [pair('server'), socket => {
-    socket.write('abc\npartial', () => socket._parent.destroy());
+  abrupt: [pair('server'), (socket, raw) => {
+    socket.write('abc\npartial', () => raw.destroy());
   }],
-  reset: [pair('server'), socket => {
-    socket.once('data', () => socket._parent.resetAndDestroy());
+  reset: [pair('server'), (socket, raw) => {
+    socket.once('data', () => raw.resetAndDestroy());
   }],
   big: [pair('server'), socket => {
     lines(socket, line => socket.write(`${line.length} ${line === 'b'.repeat(line.length)}\n`));
@@ -78,12 +78,13 @@ async function listen(server) {
 async function servers() {
   const ports = {};
   for (const [name, [options, handler]] of Object.entries(secure)) {
-    const server = tls.createServer(options, socket => {
+    const secureContext = tls.createSecureContext(options);
+    ports[name] = await listen(net.createServer(raw => {
+      raw.on('error', () => {});
+      const socket = new tls.TLSSocket(raw, { isServer: true, secureContext });
       socket.on('error', () => {});
-      handler(socket);
-    });
-    server.on('tlsClientError', () => {});
-    ports[name] = await listen(server);
+      socket.once('secure', () => handler(socket, raw));
+    }));
   }
   for (const [name, handler] of Object.entries(plain)) {
     ports[name] = await listen(net.createServer(socket => {
