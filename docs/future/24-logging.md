@@ -226,9 +226,12 @@ One write keeps a trace line whole against other whole-line writers. On stderr t
 - **`loader`:** file size and format version, the size of each table (sources, spans, constants, builtins, functions, structs, types, enums, variants), the reason a file is rejected (the same text as the error), and the load time.
 - **`gc`:** at the end of a turn and at the end of the run, when `GC_get_gc_no()` has changed since the last line: the collection count, heap size, free bytes, and bytes allocated since the last collection, all from Boehm's getters. Not a collection callback: `GC_set_on_collection_event` has no user data, so it would need a global. Boehm's own `GC_PRINT_STATS=1` gives more detail. Under `AGC_NO_GC` (ASan builds) this category writes nothing.
 
+**Tracing and metrics.** Tracing writes every event of one run for a developer to read. Totals and gauges that Prometheus scrapes and Grafana graphs (GC collections and heap, tasks, run-queue delay, I/O) are VM metrics, planned in [section 28](28-vm-metrics.md) (roadmap phase 18). Metrics share tracing's rules and its trace points: a hook sits at a trace point and shares its one test (§28.4, §28.10).
+
 ### 24.5 Not planned
 
 - Log files, rotation, syslog, sampling, per-module levels, `Json` field values, and log configuration through environment variables.
 - Lazy log arguments or a block form (24.2).
 - A flag to turn stack traces off, and a stack of the parent task at spawn time.
 - VM tracing as a language feature, or trace lines on stdout.
+- Totals or counters in the tracer: those are metrics (§28).

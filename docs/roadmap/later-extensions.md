@@ -19,7 +19,7 @@
 - [x] Check generic constructor inference, enum and builtin Result exhaustiveness, wildcard requirements for non-enums, and unreachable arms.
 - [x] Add parser, checker, evaluator, and module-linker regression tests; move normative syntax to `grammar.md` and mirror it in the programming reference and development skill.
 - [ ] Define normative designs for interpolation, generics, methods, FFI, async, or actors before implementing them. Modules/imports have an explicit place in the current implementation order; error propagation is already implemented in 5e.
-- [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels and CPU parallelism remain unscheduled; [`docs/future/08-concurrency.md` section 8](../future/08-concurrency.md#8-concurrency-and-parallelism) records their remaining decisions.
+- [x] Complete lightweight I/O concurrency before networking in phase 5j2. Channels are planned in phase 17 ([`docs/future/27-iteration-and-concurrency.md` §27.2](../future/27-iteration-and-concurrency.md#272-channels)); CPU parallelism remains unscheduled, and [`docs/future/08-concurrency.md` section 8](../future/08-concurrency.md#8-concurrency-and-parallelism) records its remaining decisions.
 
 ### Open decisions
 
