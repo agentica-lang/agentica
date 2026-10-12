@@ -16,7 +16,7 @@
 #define LIMIT ((size_t)1048576)
 #define READ_AHEAD ((size_t)4096)
 #define ERR_CHUNK 4096
-#define REAP_STEPS 10000
+#define REAP_SECONDS 1
 #define REAP_STEP_NS 100000L
 #define URING_ENV "UV_USE_IO_URING="
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
@@ -46,7 +46,8 @@ struct guard {
   watch watches[AGC_STOP_SIGNALS];
   proc *first;
   size_t running, handles;
-  bool released;
+  struct timespec deadline;
+  bool released, reaping;
   int signal;
 };
 
@@ -156,9 +157,20 @@ static void finished(proc *p, int64_t status) {
   if (p->linked) unlink_child(p);
 }
 
-static void reap(proc *p, int steps) {
+static void deadline_in(struct timespec *t) {
+  clock_gettime(CLOCK_MONOTONIC, t);
+  t->tv_sec += REAP_SECONDS;
+}
+
+static bool past(const struct timespec *t) {
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return now.tv_sec > t->tv_sec || (now.tv_sec == t->tv_sec && now.tv_nsec >= t->tv_nsec);
+}
+
+static void reap(proc *p, const struct timespec *deadline) {
   struct timespec pause = {0, REAP_STEP_NS};
-  for (int k = 0;; k++) {
+  for (;;) {
     int status = 0;
     pid_t pid = waitpid(p->process.pid, &status, WNOHANG);
     if (pid == p->process.pid) {
@@ -169,18 +181,18 @@ static void reap(proc *p, int steps) {
       finished(p, p->status);
       return;
     }
-    if (k >= steps) return;
+    if (!deadline || past(deadline)) return;
     nanosleep(&pause, NULL);
   }
 }
 
-static int close_proc(proc *p) {
+static int shut(proc *p, const struct timespec *deadline) {
   if (p->closed) return 0;
   p->closed = true;
   int err = 0;
   if (p->running) {
     err = uv_process_kill(&p->process, SIGKILL);
-    reap(p, err ? 0 : REAP_STEPS);
+    reap(p, err ? NULL : deadline);
   }
   if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
   close_handle((uv_handle_t *)&p->in, closed_in);
@@ -195,8 +207,28 @@ static int close_proc(proc *p) {
   return err;
 }
 
+static int close_proc(proc *p) {
+  struct timespec deadline;
+  deadline_in(&deadline);
+  return shut(p, &deadline);
+}
+
+static void close_children(guard *g) {
+  if (!g->reaping) {
+    g->reaping = true;
+    deadline_in(&g->deadline);
+  }
+  for (proc *p = g->first; p; p = p->run_next)
+    if (p->running && !p->closed) uv_process_kill(&p->process, SIGKILL);
+  for (proc *p = g->first, *next = NULL; p; p = next) {
+    next = p->run_next;
+    shut(p, &g->deadline);
+  }
+}
+
 static void release_proc(void *native) {
   proc *p = native;
+  if (p->g) close_children(p->g);
   close_proc(p);
   p->users--;
   settle(p);
@@ -325,13 +357,6 @@ static void exited(uv_process_t *h, int64_t status, int signal) {
   finished(p, signal ? 128 + signal : status);
   if (p->closed) close_handle((uv_handle_t *)&p->process, closed_process);
   notify_waits(p);
-}
-
-static void close_children(guard *g) {
-  for (proc *p = g->first, *next = NULL; p; p = next) {
-    next = p->run_next;
-    close_proc(p);
-  }
 }
 
 static void interrupted(uv_signal_t *h, int signum) {
