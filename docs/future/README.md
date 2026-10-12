@@ -31,7 +31,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 17 | Optional and nullable JSON fields | [`17-optional-json-fields.md`](17-optional-json-fields.md) | Planned (roadmap 10e) |
 | 18 | Front-end implementation language | [`18-front-end-language.md`](18-front-end-language.md) | Deferred decision |
 | 19 | SIMD in the VM | [`19-simd.md`](19-simd.md) | On demand |
-| 20 | Crypto module | [`20-crypto.md`](20-crypto.md) | Planned after 7i (roadmap order step 7.3) |
+| 20 | Crypto module | [`20-crypto.md`](20-crypto.md) | Planned after 7i (roadmap order step 7.5) |
 | 21 | VM layers | [`21-vm-layers.md`](21-vm-layers.md) | Planned (roadmap 7l) |
 | 22 | JIT | [`22-jit.md`](22-jit.md) | Required (roadmap 7m) |
 | 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Planned (roadmap phase 13) |
