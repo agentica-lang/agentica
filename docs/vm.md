@@ -15,7 +15,9 @@ stdout and program stderr (what the program itself writes, as with
 one stopped by `--max-steps`, and on failure the same diagnostic code
 (`RUNTIME-INDEX-OUT-OF-RANGE`, say); a runaway program must stop with
 `RUNTIME-STEP-LIMIT` under `--max-steps`, and a program the evaluator runs
-in T steps must finish on the VM under a limit of 2T + 100. Everything else may differ: diagnostic message text
+in T steps must finish on the VM under a limit of the larger of 2T + 100
+and T + 4000 (two task turns, so a run with tasks does not depend on when
+Racket first switches threads). Everything else may differ: diagnostic message text
 and span, the VM's own stderr wording, OS error text, the error strings of
 library `Result`s (HTTP, files, processes), exact step counts and the
 step-limit span, `Random` sequences, and cross-task order. An error string
@@ -1855,9 +1857,11 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     `sort_by`) right after its native frame finishes, and the cost of a
     parked task's `done` half (a big `Dir.list` sort) right after the
     turn begins, so the task may yield before it runs anything.
-  - Stdin EOF: when a read in flight returns EOF, every task waiting for
-    that read sees the EOF once (`eof_readers`), so a second reader on a
-    TTY does not block for another Ctrl-D.
+  - Stdin EOF: each read that returns EOF bumps the input's `eof_seq`, and
+    each task keeps the last `eof_seq` it has seen (`input_seen`; a spawn
+    starts at the current one). A task that needs more input and has not
+    seen the latest EOF gets it once, so every task that waited for that
+    read sees the EOF and a TTY reader never blocks for a second Ctrl-D.
   - `Task.await` of a running task appends the caller to that task's
     FIFO of waiters and parks with *retry*: when the target finishes, the
     waiters are queued in order and each re-runs its `CALL_BUILTIN`,
@@ -1955,18 +1959,35 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   stays registered, `agc_io_close` returns false, and the process ends
   with `_exit` as above.
 - **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a
-  `holder` (the job resource of the operation in flight on it) and a FIFO
-  of waiting tasks, both on the GC `agc_resource`, never in `malloc`
-  memory. `agc_io_start` sets `holder` when its context is a handle; every
-  handle builtin (`read_bytes`, `read_line`, `write`, `write_bytes`,
-  `flush`, `close`) first calls `agc_handle_wait`, which parks the task
-  with retry in the FIFO while the handle is held. `agc_io_finish` clears
-  `holder` and wakes the waiters in order before the `done` or `expired`
-  half runs, so `close` waits for the operation in flight, two readers
-  never share the read buffer, and buffered writes keep their order. On a
+  `holder` (the job resource of the operation in flight on it), a
+  `next_owner` task and a FIFO of waiting tasks, all on the GC
+  `agc_resource`, never in `malloc` memory. `agc_io_start` sets `holder`
+  when its context is a handle. Every handle builtin (`read_bytes`,
+  `read_line`, `write`, `write_bytes`, `flush`, `close`) first checks its
+  arguments and timeout, then calls `agc_handle_wait`, and only then checks
+  that the handle is open and has the right mode, as the evaluator does
+  inside its semaphore. `agc_handle_wait` gives the lock to the task when
+  it is the `next_owner`, or when there is no holder and no `next_owner`;
+  otherwise the task joins the FIFO and parks with retry on a timer-only
+  job that ends at its own deadline (set from its `timeout_ms` at the
+  first wait and kept across retries). At the deadline the task leaves
+  the FIFO and the builtin returns the timeout error; the handle stays
+  open, as with the evaluator's `network-timed` around the semaphore.
+  Release is a FIFO hand-off, never a free-for-all: `agc_io_finish`
+  clears `holder` before the `done` or `expired` half runs, pops the
+  head waiter, makes it `next_owner` and wakes only it, so the releasing
+  task cannot take the handle back in the same turn (a looping reader
+  next to `File.close` ends, as with Racket's fair semaphore). When the
+  `next_owner` takes the lock it wakes the rest, which re-run and queue
+  again in order behind it; that also covers an owner whose call ends
+  without a job (a buffered write, a closed handle). So `close` waits
+  for the operation in flight, two readers take turns and never share
+  the read buffer, and buffered writes keep their order. On an operation
   timeout, `expired` hands the state to the stuck operation and closes the
-  handle (`native` is NULL), so the waiters get "file handle is closed" on
-  retry and never touch the state the stuck work still uses.
+  handle (`native` is NULL), so the next owner gets "file handle is
+  closed" and never touches the state the stuck work still uses. Wait
+  lists link tasks through `wait_next`, apart from the run queue's
+  `next`, since a waiter woken by its timer is in both until it runs.
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
   never touch the file system; a file builtin (`Path.cwd` and
   `Path.resolve` too, since they read the current directory) then ends the
@@ -2012,7 +2033,8 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 - **Schedulers.** N scheduler threads. The default is
   `uv_available_parallelism()`, which respects CPU affinity; `--schedulers
   N` sets it, capped at 1024, and 0, negative or non-numeric values exit 2
-  like other bad VM flags. `--schedulers 1` gives deterministic runs.
+  like other bad VM flags. `--schedulers 1` gives the N=1 order (which still
+  depends on timer and pool timing).
   `--seed` does not imply `--schedulers 1`: a repeatable run needs
   `--schedulers 1` given explicitly; at N>1 only each task's random values
   repeat (7.4).
@@ -2594,14 +2616,16 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   limits. The test finds each program's total step count T with the
   evaluator and sweeps every limit from 1 to T when T is at most 2000;
   above that (the call-depth program, about 60,000 steps) it sweeps 1 to
-  300, 50 evenly spaced limits, T - 1 and T; then it adds 2T + 100. For
+  300, 50 evenly spaced limits, T - 1 and T; then it adds the larger of
+  2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`, so a task fixture
+  does not depend on when Racket first preempts a thread). For
   each limit the VM must either give the full run's outcome, or stop with
   exit 1 and `RUNTIME-STEP-LIMIT` with a stdout and stderr that are
   prefixes of the evaluator's full run. Once the VM finishes at one limit
-  it must finish at every larger one, and it must finish at 2T + 100. The
+  it must finish at every larger one, and it must finish at that last limit. The
   evaluator runs once per program, not once per limit. This allows other
   step counts and spans but catches a wrong code, extra output, and
-  over-charging (not finishing by 2T + 100). It cannot catch an ignored
+  over-charging (not finishing by the last limit). It cannot catch an ignored
   limit, since these programs finish anyway: the runaway programs in
   `tests/fixtures/vm/step-limited/` do (`while true`, non-tail recursion,
   a self tail call, mutual tail calls, a `while true` whose body is only dead
