@@ -18,7 +18,9 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   `uv_async_t` are `malloc`'d, pointed to by the scheduler struct, and freed
   after `uv_loop_close` at shutdown: pool threads and other schedulers write
   to them, so they are never GC memory. Tasks are green VM stacks, as
-  in 10.2.1, and reductions and turns stay as they are there.
+  in 10.2.1, and reductions and turns stay as they are there. The libuv
+  thread pool is one per process, shared by every scheduler's loop; its
+  size is still `UV_THREADPOOL_SIZE` (10.2.1).
 - **Work stealing.** A scheduler whose queue is empty steals from the queues
   of others. It takes only ready tasks; a parked task stays with the
   scheduler that owns what it waits on. A steal makes the thief the task's

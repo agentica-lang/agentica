@@ -40,7 +40,11 @@ buffered (4096 bytes per handle) until it overflows, `File.flush`,
 `File.close` or the end of the run, so a write error may show there. FIFOs
 and devices count as files, but the VM reads and writes them with blocking
 calls: a FIFO with no peer may give EOF or an error instead of a timeout,
-and a stuck call keeps one of libuv's 4 pool threads. Errors are Results. `File.stat` follows symlinks and
+and a stuck call keeps one of libuv's pool threads. File calls, stdin
+reads, DNS lookups and TLS certificate loading share that one pool per
+process: 4 threads by default. Set `UV_THREADPOOL_SIZE` (up to 1024) in the
+environment before starting the program to raise it, when many file calls
+run at once or may block; changing it later has no effect. Errors are Results. `File.stat` follows symlinks and
 returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`;
 directory sizes are zero. `Dir.list` returns immediate entry names sorted by
 name. `Dir.mkdir` creates parents and succeeds when the directory exists.

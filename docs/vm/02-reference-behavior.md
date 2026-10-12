@@ -471,7 +471,8 @@ out read: the evaluator waits on them with Racket's nonblocking ports, while
 the VM does a blocking read or write on a thread-pool thread. So a FIFO with
 no peer can give `ok("")`, `ok([])`, end of file or an `ENXIO` error on the
 VM where the evaluator times out. A timed-out VM job keeps its pool thread
-until the OS call returns, and libuv's pool has 4 threads, so four calls
-stuck on FIFOs or devices make every later file call in the run time out. `JSON.decode` and `JSON.schema` of `FileInfo` stay
+until the OS call returns, and libuv's pool has 4 threads by default
+(`UV_THREADPOOL_SIZE`, 10.2.1), so that many calls stuck on FIFOs or
+devices make every later file call in the run time out. `JSON.decode` and `JSON.schema` of `FileInfo` stay
 `LOWER-UNSUPPORTED`.
 
