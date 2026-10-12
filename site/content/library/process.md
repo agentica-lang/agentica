@@ -15,9 +15,6 @@ waits takes a timeout in milliseconds. Programs that are still running are
 stopped when your program ends. The examples here start real programs, so they
 are checked but not run.
 
-On the VM (Linux), pass the flag the same way: `agentica --vm --allow-run
-tool.agc`.
-
 ## Process.spawn
 
 ```text
@@ -30,13 +27,10 @@ entries are skipped), but a relative entry such as `.` or `bin` is looked up
 under the current folder, as in the shell. A command with `/` is a path,
 relative to the current folder unless it starts with `/`, so a program in the
 current folder runs as `"./tool"`. A name that is not found gives
-`error("process: executable is unavailable")`. On Windows the evaluator also
-looks in the current folder before `PATH`, and only `.exe` and `.com`
-programs can be spawned.
+`error("process: executable is unavailable")`.
 
 A file that is found but cannot run (no execute permission, say) is an error
-from `spawn` on the VM; on the evaluator, `spawn` succeeds and the program
-writes the failure to standard error and exits with a nonzero code.
+from `spawn`.
 
 ```agentica {mode="check"}
 def main() -> Void

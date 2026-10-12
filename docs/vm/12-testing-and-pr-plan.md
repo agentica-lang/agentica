@@ -9,53 +9,63 @@
   `tests/bytecode-test.rkt` checks step merging, that the opcode list matches
   `vm/agc.h`, that an out-of-subset program gets `LOWER-UNSUPPORTED`, and the
   `compile` exit codes; `tests/lower-test.rkt` comes with the wider lowering.
-- `tests/vm-diff-*-test.rkt` (from the first VM PR, completed in 7f; four
-  shards of `tests/vm-diff-common.rkt`) run each
-  program on the evaluator in-process (as `tests/examples-test.rkt` does,
-  formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm` with
-  `--json`, and compare exit code, stdout, the program's own stderr and
-  the diagnostic code (black-box parity, 1). With `--json` the diagnostic
-  is the last stderr line: it is parsed as JSON for the code and removed
-  before stderr is compared. Each fixture also runs once on the VM in the
-  plain and `--ai` formats: exit code and stdout must equal the full run's,
-  stderr must start with the full run's program stderr, and the rest must
-  name the same code (`error[CODE]` or an `[CODE]` line) or be empty when
-  there is no diagnostic. Inputs: `examples/`, `tests/eval/tasks/*` reference
-  solutions and hidden cases, and `tests/fixtures/vm/` with one program per
-  runtime code and error span.
-- Every program also runs on the VM under a sweep of `--max-steps`
-  limits. The test finds each program's total step count T with the
-  evaluator and sweeps every limit from 1 to T when T is at most 2000;
+- `tests/vm-diff-*-test.rkt` (from the first VM PR, completed in 7f, golden
+  tests since the VM became the default; four shards of
+  `tests/vm-diff-common.rkt`) run each fixture of `tests/fixtures/vm/` on
+  `dist/agentica-vm` with `--json` and compare the exit code, stdout, the
+  program's own stderr and the diagnostic code with its golden,
+  `<name>.expected` (1). A golden is JSON: `exit`, `code` (a string or
+  `null`), and `stdout` and `stderr` as lists of lines, one per line, so a
+  diff reads well. With `--json` the diagnostic is the last stderr line: it
+  is parsed as JSON for the code and removed before stderr is compared.
+  Each fixture also runs once in the plain and `--ai` formats: exit code
+  and stdout must equal the golden's, stderr must start with the golden's
+  program stderr, and the rest must name the same code (`error[CODE]` or an
+  `[CODE]` line) or be empty when there is no diagnostic. A fixture's
+  `<name>.stdin` is its stdin and `<name>.args` its arguments, and a fixture
+  named `process-*` runs with `--allow-run`. `make goldens` (the `main`
+  submodule of `tests/vm-diff-common.rkt`) rewrites every golden from the
+  VM; a PR that changes behaviour on purpose commits the new goldens, and
+  the reviewer reads their diff. The goldens were first generated from the
+  evaluator; the VM matched every one.
+- Every fixture also runs under a sweep of `--max-steps` limits. The test
+  finds the fixture's total step count T on the VM (the smallest limit
+  that does not stop with `RUNTIME-STEP-LIMIT`, by doubling and then
+  bisection) and sweeps every limit from 1 to T when T is at most 2000;
   above that (the call-depth program, about 60,000 steps) it sweeps 1 to
   300, 50 evenly spaced limits, T - 1 and T; then it adds the larger of
-  2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`, so a task fixture
-  does not depend on when Racket first preempts a thread). For
-  each limit the VM must either give the full run's outcome, or stop with
-  exit 1 and `RUNTIME-STEP-LIMIT` with a stdout and stderr that are
-  prefixes of the evaluator's full run. Once the VM finishes at one limit
-  it must finish at every larger one, and it must finish at that last limit. The
-  evaluator runs once per program, not once per limit. This allows other
-  step counts and spans but catches a wrong code, extra output, and
-  over-charging (not finishing by the last limit). It cannot catch an ignored
-  limit, since these programs finish anyway: the runaway programs in
-  `tests/fixtures/vm/step-limited/` do (`while true`, non-tail recursion,
-  a self tail call, mutual tail calls, a `while true` whose body is only dead
-  code, a `while` inside a `List.each` block, a loop inside a
-  closure called through a function value, and the counting builtins).
-  Each must stop with exit 1 and `RUNTIME-STEP-LIMIT` on both backends at
-  every tested limit, their stdouts and program stderrs must be prefixes
-  of one another, and neither may print what follows the loop. On Linux every
-  VM run in the sweep and the runaway test has a 60-second timeout
-  (`timeout --foreground -k 5 60` in the batch script, so the VM stays in
-  the batch's process group; `#:timeout` in `run-process`), so a VM that
-  ignores the limit fails with the fixture and limit named instead of
-  hanging. After the first run in a batch that times out (status 124 or
+  2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`). For each limit the
+  VM must either give the golden outcome, or stop with exit 1 and
+  `RUNTIME-STEP-LIMIT` with a stdout and stderr that are prefixes of the
+  golden's. Once the VM finishes at one limit it must finish at every larger
+  one, and it must finish at that last limit. This catches a wrong code,
+  extra output, and a limit that is not monotonic. It cannot catch an
+  ignored limit, since these programs finish anyway: the runaway programs
+  in `tests/fixtures/vm/step-limited/` do (`while true`, non-tail
+  recursion, a self tail call, mutual tail calls, a `while true` whose body
+  is only dead code, a `while` inside a `List.each` block, a loop inside a
+  closure called through a function value, a task that spins, and the
+  counting builtins). Their goldens hold the outcome at `--max-steps 500`;
+  at the limits 1 to 5, 50 and 500 each must stop with exit 1 and
+  `RUNTIME-STEP-LIMIT`, with a stdout and program stderr that are prefixes
+  of the golden's (equal at 500), and none may print what follows the loop.
+  On Linux every VM run in the sweep and the runaway test has a 60-second
+  timeout (`timeout --foreground -k 5 60` in the batch script, so the VM
+  stays in the batch's process group; `#:timeout` in `run-process`), so a
+  VM that ignores the limit fails with the fixture and limit named instead
+  of hanging. After the first run in a batch that times out (status 124 or
   137) the script skips the rest and records them as 124 with empty
   output, so a hanging VM costs one timeout per fixture, not one per
-  limit. The inputs are
-  `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
-  step test. `Random` fixtures print only what both backends share, since
-  seeded sequences differ by design (7.4).
+  limit. This covers 2.1 and 4.4, so the IR needs no step test. `Random`
+  fixtures print only what does not depend on the generator's numbers,
+  since seeded sequences differ by backend (7.4).
+- The fourth shard also runs the extras: the CLI on the VM (styles, the
+  fallback to the evaluator with its notice, `--legacy-eval`, a missing or
+  non-executable VM, `--seed`, stdin, `System.args`), the `--driver-pid`
+  rules, signals, inherited descriptors, PATH lookup, a stuck FIFO, a
+  non-UTF-8 working directory, invalid UTF-8 arguments, deep tail calls,
+  long strings, a large generated input checked against a line splitter
+  written in the test, and a CRLF program under a non-ASCII path.
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
   (values picked from a 708k-value comparison with Racket, 2.2) and the
   `tests/fixtures/vm/float-text.agc` differential fixture. Write escapes
@@ -65,7 +75,7 @@
   `vm/tests/text_test.c` checks the range lookup at every range edge, a few
   debug forms, and that the debug form of every adjacent pair of scalar
   values is valid UTF-8 with an exact character count; the
-  `string-inspect` fixture compares with the evaluator. Split, trim and
+  `string-inspect` fixture has a golden. Split, trim and
   case mapping join with the `String` library. `make vm-test` builds every
   `vm/tests/<name>_test.c` listed in `VM_TESTS`.
 - Extreme Int corpus under UBSan: `INT64_MIN`, -1, 0, n, n+1, `INT64_MAX` for
@@ -86,9 +96,9 @@
   `enums-case` fixture builds one and walks it with `case`.
 - File programs (7h) are hermetic: a fixture whose `.args` holds `@tmp`
   gets a new empty directory under the shard's work directory for every
-  run, evaluator and VM alike (directory names have the same length, so
-  cut forms match), the argument is replaced by its path, the path is
-  replaced back by `@tmp` in stdout and stderr before the comparison, and
+  run (directory names have the same length, so cut forms match), the
+  argument is replaced by its path, the path is replaced back by `@tmp` in
+  stdout and stderr before the comparison with the golden, and
   the directory is deleted afterwards. The fixtures use long timeouts, so
   a loaded machine does not turn a slow write into a timeout.
 - Tasks, processes and network programs join in 7h, with the independent
