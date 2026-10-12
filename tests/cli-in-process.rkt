@@ -1,10 +1,16 @@
 #lang racket/base
 
-(require racket/runtime-path)
+(require racket/runtime-path
+         racket/string)
 
-(provide run-main-in-process)
+(provide run-main-in-process
+         fallback-notice?)
 
 (define-runtime-path main-file "../src/main.rkt")
+
+(for ([name (in-list '(#"LC_ALL" #"LANG"))])
+  (environment-variables-set! (current-environment-variables) name #"C.UTF-8"))
+(environment-variables-set! (current-environment-variables) #"LC_MESSAGES" #f)
 
 (define (run-main-in-process #:environment [environment (current-environment-variables)]
                              #:input [input #""]
@@ -30,3 +36,7 @@
             0)))
       (lambda () (custodian-shutdown-all custodian))))
   (list status (get-output-string out) (get-output-string err)))
+
+(define (fallback-notice? text builtin)
+  (and (regexp-match? #rx"^agentica: [^\n]*; running on the legacy evaluator\n$" text)
+       (string-contains? text builtin)))

@@ -95,7 +95,7 @@ def scaled_source(name: str, size: int, workdir: Path) -> Path:
 
 def runners(selected: list[str]) -> dict[str, list[str]]:
     available = {
-        "evaluator": ["racket", str(MAIN)],
+        "evaluator": ["racket", str(MAIN), "--legacy-eval"],
         "exe": [str(EXE)] if EXE.exists() else None,
         "vm": [str(VM), "--"] if VM.exists() else None,
         "python": [sys.executable],

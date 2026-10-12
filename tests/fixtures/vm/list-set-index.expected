@@ -1,0 +1,10 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INDEX-OUT-OF-RANGE",
+  "steps": 18,
+  "stdout": [
+    "[1, 2, 9]",
+    ""
+  ],
+  "stderr": []
+}

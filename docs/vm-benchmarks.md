@@ -14,12 +14,12 @@ python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners e
 
 | Runner | Command | What is timed |
 |---|---|---|
-| `evaluator` | `racket src/main.rkt f.agc` | the whole run, start-up included |
-| `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included |
+| `evaluator` | `racket src/main.rkt --legacy-eval f.agc` | the whole run on the frozen evaluator, start-up included |
+| `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included; since the VM became the default this is the source → result path on the VM (Racket front end, then `agentica-vm`), so tables recorded before that time the evaluator |
 | `vm` | `racket src/main.rkt compile f.agc -o f.agcb`, then `dist/agentica-vm -- f.agcb` | only the VM run; compiling happens once, untimed |
 | `python` | the interpreter running the script (`sys.executable`) on `benchmarks/python/<name>.py SIZE` | the whole run, an idiomatic CPython version as an outside reference |
 
-The `vm` runner times only the VM on precompiled bytecode. A user who runs a source file with `agentica --vm f.agc` also pays for starting Racket, checking and compiling, which this table does not show. Runners that time that whole source → result path (`racket src/main.rkt --vm f.agc` and `dist/agentica --vm f.agc`) are planned next to the `vm` runner (roadmap 7g).
+The `vm` runner times only the VM on precompiled bytecode. A user who runs a source file with `agentica f.agc` also pays for starting Racket, checking and compiling; the `exe` runner shows that whole path now that the VM is the default.
 
 For each program and runner it does one warm-up run under GNU `/usr/bin/time -f %M` for the peak RSS (without GNU time the RSS column shows `n/a`), then `--runs` timed runs (default 5), and reports the median and the minimum wall time. Every run must print the same stdout as the first runner that succeeded; a different output is a `mismatch`, and a `failed` or `mismatch` row (start-up rows included) makes the script exit 1. A program the VM cannot compile yet is reported as `unsupported` with a one-line summary of the `LOWER-UNSUPPORTED` diagnostic. `hello.agc` start-up is measured apart (`--no-startup` skips it).
 

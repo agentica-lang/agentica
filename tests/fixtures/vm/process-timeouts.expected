@@ -1,0 +1,26 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 136,
+  "stdout": [
+    "error(\"network: operation timed out\")",
+    "error(\"process: process is closed\")",
+    "error(\"process: process is closed\")",
+    "error(\"network: operation timed out\")",
+    "error(\"process: process is closed\")",
+    "error(\"network: operation timed out\")",
+    "error(\"network: operation timed out\")",
+    "ok()",
+    "error(\"process: end of input\")",
+    "ok(3)",
+    "error(\"process: process is closed\")",
+    "error(\"process: process is closed\")",
+    "done",
+    ""
+  ],
+  "stderr": [
+    "bye go",
+    "after wait",
+    ""
+  ]
+}

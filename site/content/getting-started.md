@@ -139,14 +139,16 @@ Split text; an empty separator gives characters.
 | Option | Does |
 |---|---|
 | `--max-steps N` | stops the program after `N` steps (`RUNTIME-STEP-LIMIT`) |
-| `--seed N` | makes `Random` repeat the same numbers (with `--vm`, other numbers than without it) |
+| `--seed N` | makes `Random` repeat the same numbers |
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
 | `--version` | prints the version |
 
 `agentica test` runs `.feature` specifications; see [BDD](/library/bdd/).
-There is also an experimental bytecode compiler and VM for a small part of the
-language; it is not covered here.
+
+Programs run on a bytecode VM. A program that uses `TCP`, `TLS`, `HTTP` or
+`BDD` runs on the older Racket evaluator instead, and `agentica` says so in
+one line on standard error (not with `--json`); `agentica test` uses that evaluator too.
 
 ## Next
 

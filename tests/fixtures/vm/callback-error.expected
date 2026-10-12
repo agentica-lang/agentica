@@ -1,0 +1,12 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-DIVISION-BY-ZERO",
+  "steps": 41,
+  "stdout": [
+    "at 4",
+    "at 2",
+    "at 0",
+    ""
+  ],
+  "stderr": []
+}
