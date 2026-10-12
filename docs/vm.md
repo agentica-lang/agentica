@@ -1156,18 +1156,25 @@ callback. Non-GC resources are registered before any call that can fail.
 Locals live across `setjmp` are `volatile`.
 
 Cleanup (kill and reap children, flush and close files, close sockets) runs
-on every exit path: normal end, `System.exit`, diagnostics, out of memory,
-and SIGINT/SIGTERM/SIGHUP (through `uv_signal_t`; console control events on
-Windows). On Windows the VM also puts itself and its children in a
-kill-on-close job object, which covers crashes.
+when the run ends normally, on `System.exit`, on diagnostics and on the step
+limit (`agc_io_close`). While a child runs, `SIGINT`, `SIGTERM` and `SIGHUP`
+kill and reap the children before the VM ends by that signal (through
+`uv_signal_t`, 10.4); files are not flushed then. The out-of-memory and GC
+abort exits (6.3) and `SIGKILL` run no cleanup and leave children running.
+Windows is not built yet: there the plan is console control events and a
+kill-on-close job object for the VM and its children, which would also
+cover crashes.
 
 ### 6.3 Out of memory and GC aborts
 
 At startup the VM sets `GC_set_oom_fn` and `GC_set_abort_func`. Their
-handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
+handlers allocate nothing, `write(2, ...)` the fixed
 line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
 GC error`) and call `_Exit(70)` (no atexit handlers, no stdio flush, so
-buffered stdout is lost). Racket has no matching diagnostic, so this is a
+buffered stdout is lost). They do not kill child processes: that would need
+a global list of children, and the VM keeps none (10.2.3). A child then
+sees EOF or `EPIPE` on its pipes and is left to end by itself (10.4).
+Racket has no matching diagnostic, so this is a
 documented difference (the exit code differs). It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
 so libgc warnings (such as `Repeated allocation of very large block`) never
 reach the program's stderr.
@@ -1450,10 +1457,12 @@ and cost one predictable branch each.
   runs the front end and `lower`, then writes the bytecode to
   `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
-  runs the VM as `agentica-vm [--max-steps N] [--seed N] [--ai|--json] --driver-pid
+  runs the VM as `agentica-vm [--max-steps N] [--seed N] [--allow-run] [--ai|--json] --driver-pid
   PID -- file [args...]`. `--driver-pid` is a hidden VM flag (not in the
-  usage text). On Linux the VM first calls `prctl(PR_SET_PDEATHSIG,
-  SIGKILL)` and then checks that `getppid()` is `PID`; if not, the driver
+  usage text). On Linux the VM first sets `SIGTERM` back to its default
+  action, calls `prctl(PR_SET_PDEATHSIG, SIGTERM)` (`SIGTERM`, not
+  `SIGKILL`, so the VM kills its children before it ends, 10.4) and then
+  checks that `getppid()` is `PID`; if not, the driver
   is already gone, so it prints a message and exits 2 without touching the
   input (Racket's `subprocess` cannot run code between fork and exec, so
   the check closes that race). Then it opens the input with `O_NOFOLLOW`
@@ -1464,13 +1473,17 @@ and cost one predictable branch each.
   close and the VM's open; these checks refuse a swapped file. After those
   checks it deletes the input, but only if the path still names the file it
   opened (same device and inode). The driver deletes the file too, when the
-  VM never ran or failed before loading, and on a break. When a driver
+  VM never ran or failed before loading, and on a break. On a break
+  (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver) the driver stops a
+  running VM with `SIGTERM`, waits up to 2 seconds for it to end, and only
+  then sends `SIGKILL`; the VM's watchers kill its children in that
+  time (10.4). When a driver
   output port is not a file stream (rackunit, captured output) it copies
   that stream through a pipe, and a non-file stdin is copied into the VM's
   stdin by a thread that stops when the VM exits. The thread reads ahead
   of what the program consumes, so on a non-file stdin shared with other
   code the driver may take bytes the program never read. If reading the
-  driver's stdin fails, the thread kills the VM and the driver reports
+  driver's stdin fails, the thread stops the VM the same way and the driver reports
   `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as without
@@ -1948,7 +1961,10 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   `UV_THREADPOOL_SIZE`). `UV_USE_IO_URING` is set to `0` (unless already
   set) before the loop is created, so libuv uses its plain thread pool and
   epoll. Boehm is built without thread support (until 10.2.3) and never
-  sees these threads.
+  sees these threads. `agc_io_start` blocks `SIGINT`, `SIGTERM` and
+  `SIGHUP` around `uv_queue_work`, so the pool threads (made on the first
+  call) start with them blocked and only the loop thread runs libuv's
+  handler for them (10.4).
 - **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
   check, then blocking for reads and writes in the pool).
 - **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
@@ -2304,8 +2320,10 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 - The VM resolves the executable itself, with one rule shared with Racket
   and written in `grammar.md` (Processes): a command that contains `/`
   resolves against the program's working directory; a bare name is looked
-  up in each `PATH` entry in order and never in the working directory
-  (empty entries are skipped). It passes the absolute path to `uv_spawn`.
+  up in each `PATH` entry in order. The VM never adds the working
+  directory itself: empty entries are skipped, and an explicit relative
+  entry such as `.` or `bin` resolves against the working directory, as in
+  the shell. It passes the absolute path to `uv_spawn`.
   All three stdio streams are pipes.
   `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - The file loop sets `UV_USE_IO_URING=0` in the VM's own environment
@@ -2333,17 +2351,23 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   `close` take neither. So a reader parked on a silent child never blocks
   a writer, and a lock-wait timeout leaves the process running (the
   evaluator's `network-timed` around a semaphore).
-- **Spawn.** Checks in the evaluator's order (`--allow-run`, a nonempty
-  command and no NUL, the timeout), resolution as above (a path that does
-  not exist or is a directory is "executable is unavailable"), then three
-  real pipes made with `uv_pipe` and given to the child with
-  `UV_INHERIT_FD` (libuv's `UV_CREATE_PIPE` makes socketpairs, which some
-  programs treat differently), and the parent's ends opened with
-  `uv_pipe_open`. Every descriptor is close-on-exec, so a child sees only
-  0, 1 and 2. `argv[0]` is the resolved path. The child's environment is
-  the VM's, without `UV_USE_IO_URING` when `drop_uring_env` says the VM set
-  it. A failed `uv_spawn` (`EACCES`, `ENOEXEC`) is an error `Result`
-  with the OS text (`agc_system_error`).
+- **Spawn.** Checks in the evaluator's order (`--allow-run` before any
+  work on the arguments, then a nonempty command and no NUL, then the
+  timeout), resolution as above (a path that does not exist or is a
+  directory is "executable is unavailable"), then three real pipes made
+  with `uv_pipe` and given to the child with `UV_INHERIT_FD` (libuv's
+  `UV_CREATE_PIPE` makes socketpairs, which some programs treat
+  differently), and the parent's ends opened with `uv_pipe_open`. The
+  first spawn of a run also marks every descriptor the VM inherited above
+  2 close-on-exec (a walk over `/proc/self/fd` with `fcntl`;
+  `close_range` is not declared under the VM's `_POSIX_C_SOURCE` build),
+  and the VM opens its own descriptors close-on-exec, so a child sees only
+  0, 1 and 2, as with the evaluator. `argv[0]` is the resolved path. The
+  child's environment is the VM's, without `UV_USE_IO_URING` when
+  `drop_uring_env` says the VM set it. A failed `uv_spawn` (`EACCES`,
+  `ENOEXEC`) is an error `Result` with the OS text (`agc_system_error`).
+  `Process.spawn` charges a turn cost by the size of its arguments
+  (`AGC_COST_SIZE`, 10.2.1).
 - **State.** The `malloc`'d `proc` holds the `uv_process_t`, the three
   `uv_pipe_t`, one `uv_write_t`, the stdout buffer, and the pending
   requests (one reader, one writer, a list of waits). Callbacks find it with
@@ -2354,14 +2378,17 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
 - **Operations park only their task** on external jobs (10.2.2) with the
   call's timeout on the job's timer. Reads start `uv_read_start` on stdout
   only while a reader waits and stop as soon as its line or bytes are
-  buffered (or at EOF or an error), so a child that writes much more than
-  the program reads blocks on its pipe, as with Racket's pipe. A write
-  first tries `uv_try_write`; the rest is copied and sent with `uv_write`,
-  and the task parks until its callback. `wait` returns at once when the
-  child has exited and its stderr reached EOF; otherwise it parks on a job
-  that `exit_cb` or the stderr EOF readies. A timed-out read or write
-  closes the process, as the evaluator does; a timed-out `wait` leaves the
-  child running.
+  buffered (or at EOF or an error). Each read asks for 4 KiB, or for what
+  a `read_bytes` still needs when that is more, so the VM reads at most
+  about 4 KiB past what the program asked for, like the evaluator's 4 KiB
+  port buffer, and a child that writes much more than the program reads
+  blocks on its pipe as it does there. A write first tries
+  `uv_try_write`; the rest is copied and sent with `uv_write`, and the
+  task parks until its callback. `wait` returns at once when the child has
+  exited and its stderr reached EOF; otherwise it parks on a job that
+  `exit_cb` or the stderr EOF readies. A timed-out read or write closes
+  the process, as the evaluator does; a timed-out `wait` leaves the child
+  running.
 - **Stderr** is read all the time and each chunk is written and flushed to
   the program's stderr in the read callback, so it reaches the user in
   order with `IO.warn` output and without waiting for a builtin. If that
@@ -2369,36 +2396,75 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
 - **Close.** `Process.close`, a timed-out read or write, and the end of
   the run (`agc_io_close` releases every resource, also after
   `System.exit`, a runtime error or the step limit) all go through one
-  close: if the child still runs, `SIGKILL` and a blocking `waitpid` (it
-  cannot block for long after `SIGKILL`), then `uv_close` on its
-  handles. libuv's own reap later finds no child and does nothing. The
-  waiting reader, writer and waits are readied and see "process is
-  closed". A second `close` does nothing, and any other operation after
-  it returns "process is closed", as in the evaluator. So no child
-  outlives a run that ends normally and no zombie or pipe stays behind.
-- **Signals.** While a child runs, its process state watches `SIGINT`,
-  `SIGTERM` and `SIGHUP` with `uv_signal_t` handles (not for a signal the
-  VM started with ignored, as under `nohup`). libuv's own handler only
-  writes to a pipe, so nothing runs in signal context. On the loop thread
-  the callback closes that process (kill and reap) and raises the signal
-  again: while another child's watcher is left, libuv catches it and that
-  watcher runs next; after the last one, libuv has put back the default
-  action and the VM ends by the signal, as it would without children. The
-  watchers close when the child exits, so a program with no running child
-  keeps the default actions. The loop runs between turns, so a CPU-bound
-  task delays this by at most one turn. A VM killed by `SIGKILL`, or ended
-  by the out-of-memory exit (70, 6.3), leaves its children running (they
-  get EOF or `EPIPE` when they next touch a pipe); `agentica --vm` kills
-  the VM that way when its stdin thread fails (9).
-- **Black-box differences.** A file that exists but cannot be executed
-  (no execute permission, a bad format) is an error `Result` from
-  `Process.spawn` on the VM; the evaluator returns a process that writes
-  `exec failed` to stderr and exits 1. After a read or write timeout
-  closes a process, the evaluator's dead stream thread keeps that
-  direction's semaphore, so a later read (or write) in the same direction
-  waits its whole timeout and returns "network: operation timed out"; the
-  VM returns "process: process is closed" at once (an evaluator bug, not
-  copied). Error texts of failed system calls follow `agc_system_error`.
+  close. If the child still runs, it sends `SIGKILL` and polls `waitpid`
+  with `WNOHANG` every 0.1 ms for at most 1 second; a child normally dies
+  within the first polls. A child in uninterruptible sleep (a hung
+  network file system, say) can outlast that bound: then, and when the
+  kill fails (`EPERM`, for example a child that became another user
+  through `sudo`), the VM does not wait. It keeps the `uv_process_t` open
+  so that libuv reaps the child when it ends and `exit_cb` closes the
+  handle. A failed kill in `Process.close` ends the run with
+  `RUNTIME-PROCESS-CLOSE`, as the evaluator's failed cleanup does; inside
+  a timed-out read or write the timeout error stands. If such a child is
+  still there at the end of the run, `uv_loop_close` fails and the VM ends
+  with `_exit` (10.2.2), leaving that child to `init`. Otherwise the pipes
+  are closed at once; libuv's own reap later finds no child and does
+  nothing. The waiting reader, writer and waits are readied and see
+  "process is closed". A second `close` does nothing, and any other
+  operation after it returns "process is closed", as in the evaluator. So
+  no child outlives a run that ends normally and no zombie or pipe stays
+  behind.
+- **Signals.** The first spawn of a run makes a guard with one
+  `uv_signal_t` each for `SIGINT`, `SIGTERM` and `SIGHUP` (not for a
+  signal the VM started with ignored, as under `nohup`), registered as a
+  resource so the end of the run releases it. The guard keeps a list of
+  the running children and starts its watchers before the first child's
+  `uv_spawn`, so a signal that comes during a spawn is seen once the
+  child is listed; it stops them when the last running child is reaped,
+  so a program with no running child keeps the default actions (and the
+  scheduler's stall check). libuv's own handler only writes to a pipe, so
+  nothing runs in signal context. When a watcher runs on the loop thread,
+  it kills and reaps every running child and raises the signal again
+  after stopping the watchers, so the VM ends by that signal as it would
+  without children. Stopping a watcher could drop a signal that libuv
+  caught but had not dispatched yet (it discards the queued message of a
+  stopped watcher), so every stop blocks the three signals on the loop
+  thread, compares the watcher's `caught_signals` with its
+  `dispatched_signals` (fields of the pinned libuv's `uv_signal_t`), and
+  when one was caught it raises it before unblocking: the VM then ends by
+  it once the children are gone. The pool threads keep the three signals
+  blocked (10.2.2), so no handler runs on another thread while the loop
+  thread stops the watchers. The loop runs between turns, so a CPU-bound
+  task or a blocking write to stdout delays the cleanup by at most one
+  turn or that write. A VM killed by `SIGKILL`, or ended by the
+  out-of-memory exit (70, 6.3), leaves its children running (they get EOF
+  or `EPIPE` when they next touch a pipe). `agentica --vm` stops the VM
+  with `SIGTERM` and kills it only after 2 seconds (9).
+- **Black-box differences.**
+  - A file that exists but cannot be executed (no execute permission, a
+    bad format) is an error `Result` from `Process.spawn` on the VM; the
+    evaluator returns a process that writes `exec failed` to stderr and
+    exits 1.
+  - After a read or write timeout closes a process, the evaluator's dead
+    stream thread keeps that direction's semaphore, so a later read (or
+    write) in the same direction waits its whole timeout and returns
+    "network: operation timed out"; the VM returns "process: process is
+    closed" at once (an evaluator bug, not copied).
+  - A `read_line` or `read_bytes` pending in another task when the
+    process is closed (by `Process.close`, or by a send that timed out)
+    returns "process: process is closed" on the VM; the evaluator returns
+    Racket's port error ("read-byte: input port is closed" and similar).
+  - When forwarding the child's stderr fails (the program's stderr is
+    `/dev/full`, say), the evaluator's forwarding thread fails and kills
+    the child; the VM drops the rest of that stderr and keeps the child.
+  - libuv resets signals 1 to 31 to their default action in the child, so
+    a signal the VM inherited as ignored (`nohup`) is not ignored in its
+    children; Racket's children keep it ignored. The VM does not patch
+    libuv for this.
+  - `Process.spawn` checks its timeout but does not apply it to the
+    lookup and start, which run without a timer; the evaluator runs them
+    under it. Only timing can differ.
+  - Error texts of failed system calls follow `agc_system_error`.
 
 ### 10.5 Limits the C runtime keeps
 

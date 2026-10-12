@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Each call parks only its own task; reads and writes have their own locks;
   child stderr goes straight to the program's stderr. `Process.close`, the
   end of the run (also after `System.exit`, a runtime error or the step
-  limit) and `SIGINT`, `SIGTERM` or `SIGHUP` to the VM kill and reap every
-  running child. `examples/process-tool.agc` now runs on the VM.
+  limit) and `SIGINT`, `SIGTERM` or `SIGHUP` to the VM or to `agentica --vm`
+  kill and reap every running child. Children see only stdin, stdout and
+  stderr. `examples/process-tool.agc` now runs on the VM.
 
 - The bytecode VM runs tasks: `Task.spawn`, `Task.await` and `Task.sleep`
   on one scheduler with a FIFO run queue on the libuv loop. Tasks take
@@ -259,10 +260,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `Process.spawn` looks up a bare command name (no `/`) only in `PATH`, never
-  in the current directory; a name with `/` is a path relative to the
-  working directory (`grammar.md`, Processes). On the VM, a file that is
-  found but cannot be executed is an error `Result` from `spawn`.
+- `Process.spawn` looks up a bare command name (no `/`) in `PATH` and never
+  adds the current directory (empty entries are skipped; an explicit `.`
+  entry still works, as in the shell); a name with `/` is a path relative
+  to the working directory (`grammar.md`, Processes). On the VM, a file
+  that is found but cannot be executed is an error `Result` from `spawn`.
+- `agentica --vm` now stops the VM with `SIGTERM` (then `SIGKILL` after 2
+  seconds) when it is interrupted, and the VM's parent-death signal is
+  `SIGTERM`, so the VM can kill its children first.
 - Breaking: `Range` is now a reserved type and module name. A user
   `struct Range`, `enum Range` or `import ... as Range` is
   `CHECK-REDEFINED-NAME`; rename it.

@@ -25,9 +25,11 @@ Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Pr
 ```
 
 Starts a program. A name with no `/`, such as `"echo"`, is looked up in each
-`PATH` folder in order, never in the current folder. A command with `/` is a
-path, relative to the current folder unless it starts with `/`, so a program
-in the current folder runs as `"./tool"`. A name that is not found gives
+`PATH` folder in order. The current folder is never added (empty `PATH`
+entries are skipped), but a relative entry such as `.` or `bin` is looked up
+under the current folder, as in the shell. A command with `/` is a path,
+relative to the current folder unless it starts with `/`, so a program in the
+current folder runs as `"./tool"`. A name that is not found gives
 `error("process: executable is unavailable")`. On Windows the evaluator also
 looks in the current folder before `PATH`, and only `.exe` and `.com`
 programs can be spawned.
