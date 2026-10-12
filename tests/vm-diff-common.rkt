@@ -602,6 +602,18 @@
           (check-equal? (first compiled) 1)
           (check-equal? (fourth (outcome compiled)) "LOWER-UNSUPPORTED")
           (delete-file unsupported)
+          (define vm-only (build-path temp "vm-only.agc"))
+          (display-to-file
+           "import \"std/http\" as Web\n\ndef main() -> Void\n  puts(\"ran\")\n  c = HTTP.client_options()\n  pool = Web.client(Web.client_options())\nend\n"
+           vm-only)
+          (for ([arguments (list (list "--json" (path->string vm-only)) (list "--legacy-eval" "--json" (path->string vm-only)))])
+            (define refused (apply run-cli temp arguments))
+            (check-equal? (take refused 2) (list 1 "") (format "~a" arguments))
+            (define diagnostic (string->jsexpr (third refused)))
+            (check-equal? (hash-ref diagnostic 'code) "LOWER-UNSUPPORTED")
+            (check-equal? (hash-ref diagnostic 'file) "std/http.agc")
+            (check-true (string-prefix? (hash-ref diagnostic 'message) "this program needs the VM: std/http.agc calls HttpWire.client")))
+          (delete-file vm-only)
           (define deep (build-path temp "deep.agc"))
           (display-to-file
            (string-append

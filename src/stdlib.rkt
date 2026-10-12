@@ -15,4 +15,5 @@
 
 ;; Explicit registry: only shipped modules are available through std/.
 (define stdlib-sources
-  (hash "std/queue.agc" (embed-source "queue.agc")))
+  (hash "std/queue.agc" (embed-source "queue.agc")
+        "std/http.agc" (embed-source "http.agc")))

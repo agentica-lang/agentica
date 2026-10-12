@@ -107,6 +107,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_PROCESS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Process>");
   if (agc_is(v, AGC_T_SOCKET)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Socket>");
   if (agc_is(v, AGC_T_LISTENER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Listener>");
+  if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpClient>");
   if (agc_is(v, AGC_T_RANGE)) {
     const agc_range *r = agc_as_range(vm, v);
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",

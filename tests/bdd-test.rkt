@@ -82,6 +82,26 @@
         (check-equal? (hash-ref report 'failed) 1))
       (lambda () (delete-directory/files directory))))
 
+  (test-case "a step file that reaches a VM-only builtin is refused before the evaluator runs it"
+    (define directory (make-temporary-file "agentica-bdd-vm-only~a" 'directory))
+    (dynamic-wind void
+      (lambda ()
+        (define feature-path (build-path directory "web.feature"))
+        (define step-path (build-path directory "steps.agc"))
+        (display-to-file "Feature: Web\nScenario: runs\nThen it ran\n" feature-path)
+        (display-to-file
+         (string-append "import \"std/http\" as Web\n\ndef main() -> Void\n"
+                        "  BDD.step(\"it ran\") do |args|\n    BDD.assert(true, \"ran\")\n  end\n"
+                        "  pool = Web.client(Web.client_options())\nend\n\n")
+         step-path)
+        (define report (run-bdd (list feature-path) #:steps (list step-path)))
+        (check-equal? (hash-ref report 'passed) 0)
+        (check-equal? (hash-ref report 'exit_code) 1)
+        (define problem (hash-ref (car (hash-ref report 'files)) 'error))
+        (check-equal? (hash-ref problem 'code) "LOWER-UNSUPPORTED")
+        (check-regexp-match #rx"HttpWire[.]client" (hash-ref problem 'message)))
+      (lambda () (delete-directory/files directory))))
+
   (test-case "custom handlers receive arguments and share only scenario-local state"
     (define report (run-bdd (list custom (build-path (path-only custom) "." "custom.feature")) #:steps (list handlers)))
     (check-true (hash-ref report 'ok))

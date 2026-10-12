@@ -11,6 +11,7 @@
         "Request" '(("method" . String) ("target" . String) ("path" . String)
                     ("headers" . (List (Struct "Header"))) ("body" . HttpBody))
         "Response" '(("status" . Int) ("headers" . (List (Struct "Header"))) ("body" . HttpBody))
+        "HttpResponse" '(("status" . Int) ("headers" . (List (Struct "Header"))) ("body" . String))
         "HttpClientOptions" '(("timeout_ms" . Int) ("idle_timeout_ms" . Int)
                               ("max_connections" . Int) ("max_body_bytes" . Int) ("ca_file" . String))
         "HttpServerOptions" '(("header_timeout_ms" . Int) ("idle_timeout_ms" . Int)

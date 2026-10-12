@@ -62,6 +62,9 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
   tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c
   tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
+  net.h           # tcp.c's connection object (agc_conn) for other C modules
+  http_parse.h http_pico.c http_body.c  # HTTP head adapter (the only file that includes picohttpparser) and body decoder
+  http_client.c   # HttpWire client builtins: the pool, called only by stdlib/http.agc (Linux)
   task.c          # scheduler (run queue, turns, park and wake) and the Task builtins
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
@@ -69,6 +72,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
+  third_party/picohttpparser # picohttpparser submodule pinned to v1.4 (HTTP heads)
   third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9, built static per mode into build/vm/<mode>/openssl (needs Perl)
 tests/
   <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
@@ -80,6 +84,7 @@ tests/
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
+  vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 examples/               # small programs per feature; README.md lists them
