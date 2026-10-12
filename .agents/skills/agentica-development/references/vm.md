@@ -358,12 +358,13 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   measurement and the evaluation round), built on split structures
   (read-only runtime; per-scheduler loop, run queue, registry and turn
   counter; per-task stack, registers and frame). Once tasks land, a
-  builtin whose work grows with its input sets a turn cost
+  builtin or opcode whose work grows with its input sets a turn cost
   (`docs/vm.md` §10.2.1, Builtins); it is taken from the turn only, never
-  from `steps_left`, so step counts stay equal to the evaluator. Only the scheduler that owns a loop calls `uv_run` on it. New code
-  adds no mutable `static` or global variable in `vm/` (the exceptions are
-  listed in `docs/vm.md` §10.2.3); state goes in the runtime, scheduler or
-  task struct, and lazy init uses `pthread_once` or runs at start-up.
+  from `steps_left`, so step counts stay equal to the evaluator. Only the
+  scheduler that owns a loop calls `uv_run` on it. New code adds no
+  mutable `static` or global variable in `vm/` (the exceptions are listed
+  in `docs/vm.md` §10.2.3); state goes in the runtime, scheduler or task
+  struct, and lazy init uses `pthread_once` or runs at start-up.
   Handles and requests are `malloc`'d; the GC object that owns one stays in
   its scheduler's resource registry until its `uv_close` callback, and
   request buffers stay owned by the request until its callback. All

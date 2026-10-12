@@ -1091,9 +1091,10 @@ typedef struct {
 - `steps_left` is an `int64_t`: the limit, or `INT64_MAX` without one. All
   tasks share it. `STEP` is one compare and one subtraction on a "next stop"
   counter; before 7h it is just `steps_left`, and from 7h it also covers the
-  turn budget (10.2.1). Long builtins charge their work to the turn only,
-  never to `steps_left` (10.2.1, Builtins). With N schedulers, `steps_left` is one atomic
-  counter that each scheduler takes from in batches (10.2.1, Quotas).
+  turn budget (10.2.1). Long builtins and opcodes charge their work to the
+  turn only, never to `steps_left` (10.2.1, Builtins). With N schedulers,
+  `steps_left` is one atomic counter that each scheduler takes from in
+  batches (10.2.1, Quotas).
 
 ### 6.2 Failure, exit and cleanup
 
@@ -1545,10 +1546,11 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   carried over to the next turn. If it crosses `--max-steps`, the task fails
   at the span of 4.2 instead (see "One counter for both budgets"). To the
   program the scheduler is preemptive; inside the VM it switches only at a
-  `STEP`, a safe point, or right after a builtin whose turn cost spent the
-  turn (see "Builtins"; the next instruction is a safe point too). Every
-  loop passes a `STEP`: backward jumps land on one, and every function that
-  calls starts with one (8), so a `TAIL_CALL` loop passes it too. A task also leaves its turn when it blocks.
+  `STEP`, a safe point, or right after a builtin or opcode whose turn cost
+  spent the turn (see "Builtins"; the next instruction is a safe point
+  too). Every loop passes a `STEP`: backward jumps land on one, and every
+  function that calls starts with one (8), so a `TAIL_CALL` loop passes it
+  too. A task also leaves its turn when it blocks.
 - **Builtins.** No builtin's C code is stopped halfway. A resumable builtin
   (4.3: `map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) can be
   switched out only between its callbacks. Any other builtin finishes in its
@@ -1573,6 +1575,18 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   list in one turn. The counting builtins (`Range.each`, `Int.times`,
   `upto`, `downto`) have no list to bound them, so each callback call
   charges one step through the same check as `STEP` and is a switch point.
+  Some opcodes also do work that grows with their operands, outside
+  `CALL_BUILTIN`: `CONCAT` copies both strings, `TO_TEXT` and `INSPECT`
+  build the text of a whole value (interpolation, `to_s`, `inspect`,
+  `puts` of a big list), and `EQ`, `NE` and `SAME` compare whole strings
+  (`==` on big strings, String literal patterns in `case`; the checker
+  allows `==` only on scalars, strings and ranges). They leave a turn cost
+  in the same per-task field, with the same units (one per 64 bytes
+  copied, built or compared), and it is applied after the instruction
+  through the same path (below). The other
+  opcodes do constant work, or work bounded by their operand count
+  (`LIST`, `MAP`, `STRUCT`, `CLOSURE`, at most 255 items), and charge
+  nothing.
 - **One counter for both budgets.** `STEP` counts down one "next stop"
   counter. It is set to `min(turn_left, steps_left)` when a turn starts and
   after each sync (below), and the value it was set to is kept. The fast
@@ -1586,20 +1600,31 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   if `turn_left <= 0`; it resumes at the next instruction. Otherwise the
   counter is set again.
   A turn cost of c units is applied by `CALL_BUILTIN` after the builtin
-  returns (and by a native frame between two callbacks), and only when c >
-  0: the builtin leaves c in a per-task field that is 0 by default, so a
-  constant builtin pays one compare on the builtin path and nothing on
-  `STEP`. The apply path syncs as above, then takes c from `turn_left`
-  only. If `turn_left <= 0`, the task yields at the next instruction, with
-  the builtin's result already in its register; otherwise the counter is
-  set again to `min(turn_left, steps_left)`. The sync cannot fail: the
-  counter is never above `steps_left`, so the steps spent fit in it.
+  returns, by a native frame between two callbacks, and by the opcodes of
+  "Builtins" after their work, and only when c > 0. The builtin or opcode
+  leaves c in a per-task field that is 0 by default; the apply path reads
+  it and sets it back to 0 before it charges, so a cost is charged once. A
+  builtin or opcode that fails through `agc_fail` (`longjmp`) never reaches
+  the apply path: the run ends (6.2), and a field left non-zero is dropped,
+  since the field is also cleared when a turn starts. A constant builtin
+  pays one compare on the builtin path and nothing on `STEP`. The apply
+  path syncs as above, then takes c from `turn_left` only. If
+  `turn_left <= 0`, the task yields at the next instruction, with the
+  result already in its register; otherwise the counter is set again to
+  `min(turn_left, steps_left)`. The sync cannot fail: the counter is never
+  above `steps_left`, so the steps spent fit in it.
   `steps_left` never sees c. Like the extra of a merged `STEP n`, a turn
   cost past the end of the turn is not carried over to the next turn. The
   other way, setting the counter to 0 so that the next `STEP` takes the
   slow path, was not chosen: the slow path would have to tell that forced
   stop from a real one and keep the steps spent somewhere else, and the
   task would yield only at the next `STEP`, not right after the builtin.
+  So that the 7h latency test can show it fails without the rule, a test
+  environment variable, `AGENTICA_VM_NO_TURN_COST=1`, read once at start-up into the
+  runtime config, makes the apply path skip the charge. It changes only
+  when tasks switch, never output, step counts or diagnostics, so every
+  build honors it and the CI `test` job uses the normal `make vm` binary;
+  it is for tests only and not documented for users.
   With N schedulers, `steps_left` in this bullet is the scheduler's batch
   (Quotas): the sync takes spent steps out of the batch, not the atomic
   counter, and a turn cost touches neither. The turn-cost path checks the
@@ -1617,10 +1642,11 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   N=1 this is the plain check that `uv_run` reports no active handles; for
   N>1 see 10.2.3, Stall check. With the turn costs of "Builtins", a ready
   timer or I/O event waits at most for the turns of the tasks queued ahead
-  of it, each about one turn budget plus the last builtin call of that
-  turn. A test in the 7h tasks PR (roadmap) checks it: while one task loops
-  on CPU and one calls a long builtin, a `Task.sleep` wake and a stdin pipe
-  read must stay within a generous measured limit.
+  of it, each about one turn budget plus the last builtin call or opcode
+  of that turn. A test in the 7h tasks PR (roadmap) checks it: while one
+  task loops on CPU, one calls a long builtin and one runs a `CONCAT`-heavy
+  loop, a `Task.sleep` wake and a stdin pipe read must stay within a
+  generous measured limit.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
     6.1), as today. Preemption never changes what is charged, and turn
@@ -1904,17 +1930,18 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   persistent structure installed with compare-and-swap (as the evaluator
   does with `box-cas!`).
 - **Order of work.** First the tasks PR on these split structures with N=1;
-  then, if the gate above opens, the multicore schedulers item (N>1, work stealing, Boehm threads, the
-  I/O hand-off, and a stress test of the task fixtures with
+  then, if the gate above opens, the multicore schedulers item (N>1, work
+  stealing, Boehm threads, the I/O hand-off, and a stress test of the task
+  fixtures with
   `--schedulers 4`, under TSan when available; TSan does not get along with
   Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build with
   `-fsanitize=thread` that never calls `agc_set_alloc_limit`, so the
   `AGC_NO_GC` block tracking stays off. ASan and TSan, both without GC,
   cover memory errors and data races in the scheduler code; the
   GC-threaded build is covered only by a GC-stress run with
-  `--schedulers 4`); then round 2 of the
-  benchmarks covers multicore (roadmap phase 12) if it landed. Multicore does not block
-  7i: the evaluator cannot run in parallel anyway. The parity rule stays:
+  `--schedulers 4`); then round 2 of the benchmarks covers multicore
+  (roadmap phase 12) if it landed. Multicore does not block 7i: the
+  evaluator cannot run in parallel anyway. The parity rule stays:
   with N=1, output, counts and spans match the evaluator. The differential,
   bytecode and golden tests, the `--max-steps` sweep and the seeded runs
   all run the VM with `--schedulers 1`.
