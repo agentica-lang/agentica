@@ -1005,7 +1005,7 @@ name: set to Ana
 **The goal is distribution: one binary to download.** Measured on Linux x86_64 with Racket CS 9.3:
 
 - `raco exe --orig-exe` on `src/main.rkt` gives one self-contained ELF file (about 68 MB, about 14 MB as `.tar.xz`). It runs in a clean `debian:trixie-slim` container without Racket. Plain `raco exe` (today's `make exe`) is only a 17 MB starter that needs an installed Racket. `raco distribute` (today's `release.yml`) is 66 MB in 3 files and ships no VM.
-- The C VM is 207 KB with libgc linked statically and needs only libc. Built on trixie it needs `GLIBC_2.38` (`__isoc23_strtol`), so release builds need an older glibc baseline or must avoid the C23 `strtol` variants. musl (Alpine) needs a separate build.
+- The C VM is 207 KB with libgc linked statically and needs only libc. With TLS (7h) the default build also needs the system `libssl.so.3`/`libcrypto.so.3`; the single-file release builds the VM with `OPENSSL=static` (`docs/vm.md` 10.0) and ships OpenSSL's license and NOTICE text. Built on trixie it needs `GLIBC_2.38` (`__isoc23_strtol`), so release builds need an older glibc baseline or must avoid the C23 `strtol` variants. musl (Alpine) needs a separate build.
 - A proof embedded the VM bytes in the Racket executable and wrote them to `~/.cache/agentica/<hash>/agentica-vm` on the first `--vm` run: one file, +144 KB, and it worked in the clean container. A later step could use `memfd_create` (Linux) to avoid writing to disk and to work with `noexec` home directories. Loading the VM as a shared library through the FFI was judged too risky (two garbage collectors, clashes over `exit` and stdio).
 - Startup is about 570–630 ms in every mode (`check`, run, `--vm`); Racket boot dominates.
 
@@ -1044,7 +1044,7 @@ No rewrite decision is taken now.
 
 ## 20. Crypto module
 
-**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library. If it lands after 7i, it is VM only.
+**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library, linked the same way (dynamic by default, `OPENSSL=static` as an option, `docs/vm.md` 10.0). If it lands after 7i, it is VM only.
 
 **Sketch** (names are not final):
 

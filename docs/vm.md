@@ -1384,7 +1384,9 @@ and cost one predictable branch each.
   differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
-  (and libuv and OpenSSL from 7h).
+  (and libuv and OpenSSL from 7h). For OpenSSL it prints the version in use:
+  in the default dynamic build that is the loaded library's
+  `OpenSSL_version(OPENSSL_VERSION)`, not the headers it was built with.
 - In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
   (7.4), `--ai`, `--json` and `--`. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
@@ -1468,7 +1470,34 @@ opens files, picks `\\?\` prefixes or a `longPathAware` manifest.
 | Boehm GC | 7e | Vendored: git submodule `vm/third_party/bdwgc`, pinned to tag v8.2.12. `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically (with `-lpthread` on Linux and macOS). No system package. |
 | yyjson | 7 (JSON) | Vendored: git submodule `vm/third_party/yyjson` (MIT, its `LICENSE` stays in the submodule), pinned to tag 0.13.0. Only the reader: `make vm` compiles `src/yyjson.c` into its own object (`$(VM_BUILD)/yyjson.o`, with the sanitizers in a `SANITIZE=1` build but without `-Werror`) with the writer, incremental reader, file API, JSON Pointer/Patch, non-standard extensions and its own float conversion disabled. Its reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers; the document is freed right after the copy into GC nodes (2.6). Under `AGC_NO_GC` it allocates through `agc_alloc_atomic` instead (freeing is a no-op), so the fuzzer's per-mutant limit counts it. The encoder is our own (2.4), since yyjson's writer formats floats and escapes differently. |
 | libuv | 7h | Vendored the same way: git submodule `vm/third_party/libuv` from `https://github.com/libuv/libuv` (MIT, its `LICENSE` stays in the submodule), pinned to tag v1.53.0. `make vm` compiles its Linux sources (the list in its `CMakeLists.txt`) per build mode into `$(VM_BUILD)/uv/` with its own defines (`-std=gnu11 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64`), the mode's flags (the sanitizers in `SANITIZE=1`, no `-Werror`), and links `$(VM_BUILD)/libuv.a` statically with `-ldl -lrt`. Linux only for now; macOS and Windows builds leave it out and have no file builtins. No system package. |
-| OpenSSL 3 | 7h | Static `libssl.a`/`libcrypto.a` from the platform package managers (Debian, Homebrew, MSYS2). |
+| OpenSSL 3 | 7h | Dynamic by default, static as an option (10.0). `make vm` (`OPENSSL=system`) finds the system OpenSSL 3 with `pkg-config libssl libcrypto` and links `-lssl -lcrypto`; `make vm OPENSSL=static OPENSSL_PREFIX=/path` links `lib/libssl.a` and `lib/libcrypto.a` from that prefix. Not vendored: no submodule. |
+
+### 10.0 Linking OpenSSL
+
+The default build links OpenSSL 3 dynamically, so `dist/agentica-vm` needs
+libc and `libssl.so.3`/`libcrypto.so.3`. All other libraries stay static.
+
+- `make vm` (default `OPENSSL=system`) finds the system OpenSSL 3 with
+  `pkg-config libssl libcrypto` and links `-lssl -lcrypto`. A missing
+  OpenSSL, or one older than 3.0, stops the build with a clear error.
+- Why dynamic: security fixes come with the distro's `libssl.so.3`, with no
+  VM release; the system OpenSSL knows its own CA store (`OPENSSLDIR`); the
+  binary is smaller and CI does not build OpenSSL; we do not ship OpenSSL
+  code (Apache-2.0, outside the MIT-or-freer rule for vendored code); and the
+  OpenSSL 3.x ABI is stable.
+- `make vm OPENSSL=static` links a static OpenSSL 3, for the single-file
+  release or minimal containers (Alpine, distroless). `OPENSSL_PREFIX=/path`
+  names a prefix with `lib/libssl.a` and `lib/libcrypto.a` (for example
+  OpenSSL built with `no-shared`). There is no vendored OpenSSL submodule
+  unless the release workflow needs one later.
+- A static OpenSSL's built-in paths point at the build machine, so the
+  static build finds the CA store itself (10.3).
+- The static release ships OpenSSL's license and NOTICE text (Apache-2.0).
+  This is an accepted exception to the vendored-code rule, for the static
+  release only.
+- Rejected for now: loading OpenSSL with `dlopen` only when a program uses
+  TLS. It is more complex, so the default VM needs libssl even for programs
+  without TLS.
 
 ### 10.1 Event loop: libuv, not libevent
 
@@ -1953,13 +1982,17 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 - OpenSSL 3, which Racket's `openssl` module also uses. Initialize with
   `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`.
 - With an empty `ca_file`, use system trust like
-  `ssl-secure-client-context`: on Linux, `SSL_CERT_FILE`/`SSL_CERT_DIR`, then
-  well-known bundle paths (`/etc/ssl/certs/ca-certificates.crt`,
+  `ssl-secure-client-context`. On Linux the default dynamic build calls
+  `SSL_CTX_set_default_verify_paths`, which uses the system OpenSSL's own CA
+  store (`OPENSSLDIR`) and honors `SSL_CERT_FILE`/`SSL_CERT_DIR`. The
+  `OPENSSL=static` build (10.0) honors `SSL_CERT_FILE`/`SSL_CERT_DIR`, else
+  probes well-known bundle paths (`/etc/ssl/certs/ca-certificates.crt`,
   `/etc/pki/tls/certs/ca-bundle.crt`, ...), because a static OpenSSL's
-  built-in paths point at the build machine; on Windows only the `ROOT` store,
-  on macOS only the Keychain anchors, never `set_default_verify_paths`. A
-  non-empty `ca_file` replaces system trust. Trust-store usage and disallowed
-  lists are honored only as far as Racket honors them.
+  built-in paths point at the build machine. On Windows only the `ROOT`
+  store, on macOS only the Keychain anchors, never
+  `set_default_verify_paths`. A non-empty `ca_file` replaces system trust.
+  Trust-store usage and disallowed lists are honored only as far as Racket
+  honors them.
 - Per connection: `SSL_set1_host`, SNI set, IP literals through
   `X509_VERIFY_PARAM_set1_ip_asc`. There is no `SSL_VERIFY_NONE` path.
 - Hermetic tests: wrong hostname, self-signed server without `ca_file`, and a
@@ -2029,8 +2062,11 @@ written `size > limit - total`. A hermetic test sends over-long values.
   static data and to one-past-the-end pointers, at one extra byte per
   object. Nothing in the VM relies on it today; it is upstream's default and
   costs nothing measurable. libuv (7h) is built from its submodule into
-  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h)
-  comes through `pkg-config --atleast-version` and its static archive path.
+  `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL (7h) is linked
+  dynamically by default: `OPENSSL=system` checks `pkg-config
+  --atleast-version=3.0 libssl libcrypto` and links `-lssl -lcrypto`;
+  `OPENSSL=static` links `libssl.a` and `libcrypto.a` from
+  `OPENSSL_PREFIX` (10.0).
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
   build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
   recorded in `build/vm/flags`, so switching between a normal and a sanitizer
@@ -2091,8 +2127,10 @@ written `size > limit - total`. A hermetic test sends over-long values.
   submodules pinned to a release tag, upgraded only by bumping the submodule
   in a reviewed PR; CI checks out with `submodules: true`. `agentica-vm
   --version` and the release notes list the libgc, yyjson, libuv and OpenSSL
-  versions; the release checklist says to rebuild and release after any High
-  or Critical advisory for libgc, yyjson, libuv or OpenSSL.
+  versions (for OpenSSL, the one in use at run time); the release checklist
+  says to rebuild and release after any High or Critical advisory for libgc,
+  yyjson or libuv, and for OpenSSL only for the static release: the default
+  dynamic build gets OpenSSL fixes from the distro.
 
 CI matrix:
 
@@ -2123,7 +2161,9 @@ test`: the process and network tests are not portable yet. `.gitattributes`
 checks every text file out with LF (`.agcb` files are binary, and git
 detects the `string-inspect.agc` fixture as binary from its NUL bytes), so Windows sees the same sources,
 spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
-the platform's OpenSSL package) to each job.
+the platform's OpenSSL 3 development package, `libssl-dev` on Debian) to each
+job; these jobs use the default dynamic build. One Linux job (or the release
+workflow) builds `OPENSSL=static` and runs the TLS tests.
 
 ## 12. Testing and first PRs
 

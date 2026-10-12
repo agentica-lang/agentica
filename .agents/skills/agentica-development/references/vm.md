@@ -369,7 +369,12 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   its scheduler's resource registry until its `uv_close` callback, and
   request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
-- **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
+- **OpenSSL 3 (7h)**: linked dynamically by default (`OPENSSL=system`,
+  `pkg-config libssl libcrypto`, `-lssl -lcrypto`, an error before 3.0);
+  `OPENSSL=static OPENSSL_PREFIX=/path` for the single-file release, which
+  then reads `SSL_CERT_FILE`/`SSL_CERT_DIR` or probes the distro CA paths
+  (`docs/vm.md` 10.0, 10.3). `--version` prints the version in use.
+  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`;
   system trust from the Windows ROOT store or the macOS Keychain (never
   `set_default_verify_paths` there); a non-empty `ca_file` replaces system
   trust; `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
