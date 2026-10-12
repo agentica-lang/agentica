@@ -313,7 +313,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 
 static void trace_finish(agc_vm *vm, const agc_resource *r, const job *j, bool done, agc_value result) {
   const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns) return;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns || j->kind == &lock_io) return;
   uint64_t end = j->ended_ns ? j->ended_ns : agc_trace_now();
   uint64_t us = end > j->started_ns ? (end - j->started_ns) / 1000u : 0;
   const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
@@ -396,7 +396,7 @@ static bool close_all(agc_vm *vm) {
 
 bool agc_io_close(agc_vm *vm) {
   bool settled = close_all(vm);
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "close left=%zu settled=%d", registry_count(vm), settled ? 1 : 0);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "close resources=%zu settled=%d", registry_count(vm), settled ? 1 : 0);
   return settled;
 }
 #else

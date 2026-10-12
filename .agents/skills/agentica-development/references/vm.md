@@ -51,7 +51,7 @@ src/main.rkt  agentica --vm file.agc: all of the above through a 0600 temp file,
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm/02-reference-behavior.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
 | `vm/tests/trace_test.c` | the trace escaper and line buffer: numbers, empty and special text values, lines cut at 512 bytes on a UTF-8 boundary, the unknown-category warning |
-| `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines |
+| `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; a VM started with stderr or stdout closed; skips on a `TRACE=0` VM |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |

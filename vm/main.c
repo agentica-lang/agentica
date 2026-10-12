@@ -168,7 +168,7 @@ static int private_trace_fd(int fd) {
 static void fill_standard_fds(void) {
   for (int fd = 0; fd <= 2; fd++) {
     if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) continue;
-    int opened = open("/dev/null", fd == 0 ? O_RDONLY : O_WRONLY);
+    int opened = open("/dev/null", fd == 0 ? O_WRONLY : O_RDONLY);
     if (opened < 0 || opened == fd) continue;
     dup2(opened, fd);
     close(opened);

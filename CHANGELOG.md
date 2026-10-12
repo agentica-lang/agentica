@@ -331,8 +331,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `agentica-vm` started with stdin, stdout or stderr closed (`2>&-`) no
-  longer aborts on a libuv assertion: on Linux it opens `/dev/null` onto
-  the closed descriptor first.
+  longer aborts on a libuv assertion: on Linux it first fills the closed
+  descriptor with `/dev/null` opened the other way round, so reads and
+  writes on it still fail as before (a program that prints with stdout
+  closed still ends with `RUNTIME-INTERNAL`).
 
 - A file handle closed by a timeout no longer holds its lock in the
   evaluator: later operations give `filesystem: file handle is closed` at

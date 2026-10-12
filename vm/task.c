@@ -118,7 +118,7 @@ static void trace_gc(agc_vm *vm, const char *when) {
 static void trace_end(agc_vm *vm) {
   const agc_trace *tr = &vm->rt->trace;
   const agc_outcome *o = &vm->rt->outcome;
-  uint64_t task = vm->task ? vm->task->id : 0;
+  uint64_t task = vm->task && vm->task->state == AGC_TASK_RUNNING ? vm->task->id : 0;
   if (o->kind == AGC_FAILED)
     AGC_TRACE(tr, AGC_TRACE_SCHED, "fail task=%" PRIu64 " code=%s", task, o->code);
   else if (o->kind == AGC_EXITED)

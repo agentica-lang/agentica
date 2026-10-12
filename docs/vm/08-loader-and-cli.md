@@ -232,8 +232,10 @@ and cost one predictable branch each.
   scheduler's registry. Event names: `sched` spawn, turn (`steps`, `cost`,
   `why`), wake (`by=job|await|lock|stdin`), cancel, stall, fail, exit; `io`
   start, done, timeout (`us` from the job start to its `done` callback,
-  `result=ok|error|value`), lock_wait, lock_handoff, lock_timeout, stdin,
-  poll (`mode=once|nowait`, `us` blocked), close, hard_exit; `proc` spawn,
+  `result=ok|error|value`; lock jobs have none, `lock_handoff` and
+  `lock_timeout` cover them), lock_wait, lock_handoff, lock_timeout, stdin,
+  poll (`mode=once|nowait`, `us` blocked), close (`resources` left in the
+  registry, `settled`), hard_exit; `proc` spawn,
   spawn_failed, exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
   stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
   `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
@@ -244,5 +246,7 @@ and cost one predictable branch each.
   `vm/tests/trace_test.c` covers the escaper and the line buffer;
   `tests/vm-trace-test.rkt` the whole runs.
 - On Linux, `main` first opens `/dev/null` onto any of descriptors 0, 1
-  and 2 that is closed, so a VM started with `2>&-` runs normally instead
-  of hitting libuv's assertion on a low descriptor.
+  and 2 that is closed, in the wrong direction (write-only for 0,
+  read-only for 1 and 2), so libuv never gets a low descriptor and trips
+  its assertion, while reads and writes on that stream still fail with
+  `EBADF` as before.

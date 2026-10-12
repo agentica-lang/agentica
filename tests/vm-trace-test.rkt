@@ -48,16 +48,7 @@
                          (path->string (build-path fixtures (string-append name ".agc"))) "-o" (path->string out))))
   out)
 
-(define (run-vm bytecode #:env [settings '()] #:stdin [stdin-file #f] #:allow-run [allow-run? #f])
-  (define env (environment-variables-copy (current-environment-variables)))
-  (for ([setting settings]) (environment-variables-set! env (car setting) (cdr setting)))
-  (define stdin (and stdin-file (open-input-file stdin-file)))
-  (define-values (process out in err)
-    (parameterize ([current-environment-variables env])
-      (apply subprocess #f stdin #f vm-file
-             (append (if allow-run? '("--allow-run") '()) (list "--" (path->string bytecode))))))
-  (when in (close-output-port in))
-  (when stdin (close-input-port stdin))
+(define (finish process out err)
   (define out-bytes #f)
   (define err-bytes #f)
   (define readers (list (thread (lambda () (set! out-bytes (port->bytes out))))
@@ -67,8 +58,45 @@
   (for ([t readers]) (sync/timeout wait-seconds t))
   (close-input-port out)
   (close-input-port err)
-  (check-true (and finished #t) (format "~a finished within ~a s" bytecode wait-seconds))
+  (check-true (and finished #t) (format "the VM finished within ~a s" wait-seconds))
   (list (subprocess-status process) out-bytes err-bytes))
+
+(define (trace-built?)
+  (define-values (process out in err) (subprocess #f #f #f vm-file "--version"))
+  (close-output-port in)
+  (not (regexp-match? #rx#"trace off" (second (finish process out err)))))
+
+(define (fixture-args name tmp)
+  (define file (build-path fixtures (string-append name ".args")))
+  (if (file-exists? file)
+      (for/list ([arg (file->value file)])
+        (if (equal? arg "@tmp") (path->string tmp) arg))
+      '()))
+
+(define (fresh-directory dir)
+  (delete-directory/files dir #:must-exist? #f)
+  (make-directory* dir))
+
+(define (run-vm bytecode #:env [settings '()] #:stdin [stdin-file #f] #:allow-run [allow-run? #f]
+                #:args [args '()] #:tmp [tmp #f])
+  (when tmp (fresh-directory tmp))
+  (define env (environment-variables-copy (current-environment-variables)))
+  (for ([setting settings]) (environment-variables-set! env (car setting) (cdr setting)))
+  (define stdin (and stdin-file (open-input-file stdin-file)))
+  (define-values (process out in err)
+    (parameterize ([current-environment-variables env])
+      (apply subprocess #f stdin #f vm-file
+             (append (if allow-run? '("--allow-run") '()) (list "--" (path->string bytecode)) args))))
+  (when in (close-output-port in))
+  (when stdin (close-input-port stdin))
+  (finish process out err))
+
+(define (run-closed redirect bytecode stdin-file)
+  (define-values (process out in err)
+    (subprocess #f #f #f (find-executable-path "sh") "-c" (format "exec \"$0\" -- \"$1\" ~a <\"$2\"" redirect)
+                vm-file bytecode stdin-file))
+  (close-output-port in)
+  (finish process out err))
 
 (define (trace-lines file)
   (if (file-exists? file)
@@ -81,6 +109,8 @@
 (define cases
   (list (list "task-stdin" "task-stdin.stdin" #f '("loader" "sched" "io"))
         (list "process-streams" #f #t '("loader" "sched" "io" "proc"))
+        (list "files-handles" #f #f '("loader" "sched" "io"))
+        (list "task-file-shared" #f #f '("loader" "sched" "io"))
         (list "task-fail" #f #f '("loader" "sched"))))
 
 (module+ test
@@ -90,6 +120,7 @@
      (if (getenv "AGENTICA_REQUIRE_VM")
          (error 'vm-trace "the VM must build when AGENTICA_REQUIRE_VM is set")
          (displayln "SKIP VM trace tests: make vm failed"))]
+    [(not (trace-built?)) (displayln "SKIP VM trace tests: the VM was built with TRACE=0")]
     [else
      (define work (make-temporary-directory "agentica-trace~a"))
      (dynamic-wind
@@ -100,10 +131,12 @@
            (test-case (format "~a: tracing to a file changes no exit code, stdout or stderr" name)
              (define bytecode (compile-fixture name work))
              (define stdin-file (and stdin (build-path fixtures stdin)))
-             (define plain (run-vm bytecode #:stdin stdin-file #:allow-run allow-run?))
+             (define tmp (build-path work (string-append name "-tmp")))
+             (define args (fixture-args name tmp))
+             (define plain (run-vm bytecode #:stdin stdin-file #:allow-run allow-run? #:args args #:tmp tmp))
              (define file (build-path work (string-append name ".trace")))
              (define traced
-               (run-vm bytecode #:stdin stdin-file #:allow-run allow-run?
+               (run-vm bytecode #:stdin stdin-file #:allow-run allow-run? #:args args #:tmp tmp
                        #:env (list (cons #"AGENTICA_VM_TRACE" #"all")
                                    (cons #"AGENTICA_VM_TRACE_FILE" (path->bytes file)))))
              (check-equal? traced plain)
@@ -130,22 +163,15 @@
            (check-equal? status (first plain))
            (check-equal? out (second plain))
            (check-equal? err (bytes-append #"agc-trace cannot open " (path->bytes missing) #"\n" (third plain))))
+         (define stdin-file (build-path fixtures "task-stdin.stdin"))
+         (define stdin-bytecode (build-path work "task-stdin.agcb"))
+         (define stdin-plain (run-vm stdin-bytecode #:stdin stdin-file))
          (test-case "a VM started with stderr closed runs normally"
-           (define stdin-file (build-path fixtures "task-stdin.stdin"))
-           (define bytecode (build-path work "task-stdin.agcb"))
-           (match-define (list status out _) (run-vm bytecode #:stdin stdin-file))
-           (define-values (process sh-out sh-in sh-err)
-             (subprocess #f #f #f (find-executable-path "sh") "-c" "exec \"$0\" -- \"$1\" 2>&- <\"$2\""
-                         vm-file bytecode stdin-file))
-           (close-output-port sh-in)
-           (define closed-out #f)
-           (define reader (thread (lambda () (set! closed-out (port->bytes sh-out)))))
-           (define finished (sync/timeout wait-seconds process))
-           (unless finished (subprocess-kill process #t))
-           (sync/timeout wait-seconds reader)
-           (close-input-port sh-out)
-           (close-input-port sh-err)
-           (check-true (and finished #t))
-           (check-equal? (subprocess-status process) status)
-           (check-equal? closed-out out)))
+           (match-define (list status out _) (run-closed "2>&-" stdin-bytecode stdin-file))
+           (check-equal? status (first stdin-plain))
+           (check-equal? out (second stdin-plain)))
+         (test-case "a VM started with stdout closed fails to write as before"
+           (match-define (list status _ err) (run-closed ">&-" stdin-bytecode stdin-file))
+           (check-equal? status 1)
+           (check-true (regexp-match? #rx#"RUNTIME-INTERNAL" err))))
        (lambda () (delete-directory/files work #:must-exist? #f)))]))
