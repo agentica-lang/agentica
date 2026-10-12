@@ -1,6 +1,6 @@
 ## 26. Strict diagnostics
 
-**Status:** planned (roadmap phase 16), after 7i deletes the evaluator (order 7.2), as the first items of order step 7.4, before the phase 15 items of that step, in the order 26.1, 26.3, 26.2, 26.4 (roadmap 16a, 16c, 16b, 16d). Decided by the user on 2026-10-12; 26.4 was added after review the same day.
+**Status:** planned (roadmap phase 16), after 7i deletes the evaluator (order 7.2), as the first items of order step 7.6, before the phase 15 items of that step, in the order 26.1, 26.3, 26.2, 26.4 (roadmap 16a, 16c, 16b, 16d). Decided by the user on 2026-10-12; 26.4 was added after review the same day.
 
 This section adds four errors that other languages give as warnings, or do not check at all: an unused import, an unused variable, unreachable code and an ignored `Result`. The checks are small and need no new syntax; the decision behind them is the principle below.
 
@@ -62,7 +62,7 @@ the import alias "JsonUtil" is never used
 
 **What counts as a use.** Every place where `resolve` finds the alias in the file's imports (the `target` branch of `resolve`, after `(hash-ref (hash-ref imports key) alias #f)` at `src/modules.rkt:157`; the alias is marked there), for any kind of name: a call (`Text.shout(...)`, also without parentheses), a function value (`&Text.shout`), a type in an annotation, a parameter, a field or a JSON type argument (`Models.User`), a construction (`Models.User(name: "Ana")`), an enum variant as a value or a pattern (`Domain.Option.Some(x)`), and an enum type (`Domain.Option[Int]`). A use inside a function that is never called still counts: the rule is about the file's text, not about what runs.
 
-**Re-exports** ([section 25.2](25-ruby-typed-idioms.md#252-re-exports), roadmap 15b): `export Url.parse` counts as a use of `Url`. A facade file that only re-exports is the main use of re-exports, and it must not need a fake call to keep its imports. 15b lands after this item (both at order step 7.4), so 15b marks the alias as used when it resolves a re-export, and its tests include a facade that only re-exports.
+**Re-exports** ([section 25.2](25-ruby-typed-idioms.md#252-re-exports), roadmap 15b): `export Url.parse` counts as a use of `Url`. A facade file that only re-exports is the main use of re-exports, and it must not need a fake call to keep its imports. 15b lands after this item (both at order step 7.6), so 15b marks the alias as used when it resolves a re-export, and its tests include a facade that only re-exports.
 
 **No side effects to keep.** An import has no effect besides its names: a module has no top-level statements and no module state (`grammar.md`, "File modules and imports"). So removing an unused import never changes what a program does.
 
@@ -238,7 +238,7 @@ These are not planned. Each one would need its own decision against the principl
 
 A scan of the repo found what the table shows. It was a throwaway script on the real lexer, parser, linker and checker: it applies the four rules to every node of the AST (interpolation parts included), and counts a hit only when the program passes today or when its present error would come after the new one (a test that expects an earlier error is not affected). It read the `.agc` files of `examples/`, `stdlib/`, `benchmarks/` and `tests/`, the `agentica` blocks of `site/content`, the examples of the programming skill, and the Agentica programs written inline in the Racket tests: string literals, and the `check-ok` programs of `tests/checker-test.rkt` that its `main-with` helper builds. For 26.4 it used a copy of the checker that records every dropped `Result` instead of stopping; it read the same sources, except the inline programs that import other inline files, and three `site/content/tour/modules.md` blocks that import other blocks (read by hand: none drops a `Result`). It does not replace running `make test` in each PR.
 
-Files that land after this scan and before phase 16 must be counted again by each PR: the `std/` modules of order step 7.3, `std/binary` (phase 13) and `std/log` (14c), with their site pages and tests, matter to 26.1, 26.2 and 26.4.
+Files that land after this scan and before phase 16 must be counted again by each PR: the programs of phase 17 (order step 7.3: `Task.map` and channels, [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections)), with their golden fixtures, checker tests, `tests/vm-task-map-test.rkt` and site pages; the programs of HTTP streaming and `TlsContext` (order step 7.4); and the `std/` modules of order step 7.5, `std/binary` (phase 13) and `std/log` (14c), with their site pages and tests; they matter to 26.1, 26.2 and 26.4.
 
 | Where | 26.1 imports | 26.2 variables | 26.3 unreachable | 26.4 results |
 |---|---|---|---|---|
