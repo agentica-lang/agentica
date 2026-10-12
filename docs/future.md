@@ -1005,7 +1005,7 @@ name: set to Ana
 **The goal is distribution: one binary to download.** Measured on Linux x86_64 with Racket CS 9.3:
 
 - `raco exe --orig-exe` on `src/main.rkt` gives one self-contained ELF file (about 68 MB, about 14 MB as `.tar.xz`). It runs in a clean `debian:trixie-slim` container without Racket. Plain `raco exe` (today's `make exe`) is only a 17 MB starter that needs an installed Racket. `raco distribute` (today's `release.yml`) is 66 MB in 3 files and ships no VM.
-- The C VM is 207 KB with libgc linked statically and needs only libc. With TLS (7h) the default build also needs the system `libssl.so.3`/`libcrypto.so.3`; every release artifact, the single file included, builds the VM with `OPENSSL=static` (`docs/vm.md` 10.0) and ships OpenSSL's `LICENSE.txt`. Built on trixie it needs `GLIBC_2.38` (`__isoc23_strtol`), so release builds need an older glibc baseline or must avoid the C23 `strtol` variants. musl (Alpine) needs a separate build.
+- The C VM is 207 KB with libgc linked statically and needs only libc. With TLS (7h) the default build also needs the system `libssl.so.3`/`libcrypto.so.3`; every release artifact, the single file included, builds the VM with `OPENSSL=static` (`docs/vm.md` 10.0), so it needs only glibc's own libraries, and ships OpenSSL's `LICENSE.txt`. Built on trixie it needs `GLIBC_2.38` (`__isoc23_strtol`), so release builds need an older glibc baseline or must avoid the C23 `strtol` variants. musl (Alpine) needs a separate build.
 - A proof embedded the VM bytes in the Racket executable and wrote them to `~/.cache/agentica/<hash>/agentica-vm` on the first `--vm` run: one file, +144 KB, and it worked in the clean container. A later step could use `memfd_create` (Linux) to avoid writing to disk and to work with `noexec` home directories. Loading the VM as a shared library through the FFI was judged too risky (two garbage collectors, clashes over `exit` and stdio).
 - Startup is about 570–630 ms in every mode (`check`, run, `--vm`); Racket boot dominates.
 
@@ -1045,7 +1045,7 @@ No rewrite decision is taken now.
 
 ## 20. Crypto module
 
-**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library, linked the same way (dynamic by default, `OPENSSL=static` as an option, `docs/vm.md` 10.0). The VM needs only OpenSSL 3.0 and never calls 3.1+ symbols directly: newer features such as Argon2id (3.2) are found at run time, and when `EVP_KDF_fetch` returns `NULL` the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
+**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library, linked the same way (dynamic by default, `OPENSSL=static` as an option, `docs/vm.md` 10.0). The VM needs only OpenSSL 3.0.0 and calls only symbols of the `OPENSSL_3.0.0` version node (CI checks it with `objdump -T`): newer features such as Argon2id and `OSSL_set_max_threads` (3.2) are found at run time, and when `EVP_KDF_fetch` returns `NULL` the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
 
 **Sketch** (names are not final):
 
@@ -1061,7 +1061,7 @@ Crypto.open(key: Bytes, sealed: Bytes) -> Result[Bytes]
 ```
 
 - Hex and Base64 encoding go here only if no other module has them by then.
-- Password hashing uses Argon2id (in OpenSSL since 3.2) with scrypt as the fallback; the hash string carries its parameters, so verify needs no settings.
+- `password_hash` uses Argon2id when the OpenSSL in use has it (3.2 or later), else scrypt; the hash string carries its algorithm and parameters, so verify needs no settings. `password_verify` of an Argon2id hash on OpenSSL older than 3.2 returns an error `Result`. `OSSL_set_max_threads` (3.2) is looked up at run time too; without it Argon2 runs single-threaded.
 - AEAD is AES-256-GCM or ChaCha20-Poly1305. The nonce rule is fixed by the module: `seal` makes a random nonce for each call and puts it in front of the output, so a user never picks or reuses one. `open` fails with `error(...)` on a wrong key or changed data.
 - No low-level primitives: no raw block ciphers, no ECB, no unauthenticated modes.
 - Errors are `Result` values. Hashes and HMAC have no effect label; `random_bytes`, `password_hash` and `seal` use the existing `random` label.

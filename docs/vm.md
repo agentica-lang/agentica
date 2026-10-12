@@ -1384,7 +1384,7 @@ and cost one predictable branch each.
   differential test runs a copy named `cálculo-λ-日本-𝔸.agcb`, and a CRLF
   program under a non-ASCII directory.
 - `agentica-vm --version` prints the VM version and the versions of libgc
-  (and libuv and OpenSSL from 7h). For OpenSSL it prints the version in use:
+  (and libuv, picohttpparser and OpenSSL from 7h). For OpenSSL it prints the version in use:
   in the default dynamic build that is the loaded library's
   `OpenSSL_version(OPENSSL_VERSION)`, not the headers it was built with.
 - In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
@@ -1489,8 +1489,9 @@ The default build links OpenSSL 3 dynamically, so `dist/agentica-vm` needs
 libc and `libssl.so.3`/`libcrypto.so.3`. All other libraries stay static.
 The dynamic build is the default for local builds, CI and distro packages;
 every downloadable release artifact (the `dist/` archive and the single
-file) is built with `OPENSSL=static`, so it needs only libc (on an older
-glibc baseline, `future.md` §18). The release baseline is Debian bookworm
+file) is built with `OPENSSL=static`, so it needs only glibc's own
+libraries (libc, libm and the dynamic loader; on an older glibc baseline,
+`future.md` §18). The release baseline is Debian bookworm
 or newer, whose `libssl-dev` has the OpenSSL 3 static archives (glibc
 2.36); an older baseline would need a built OpenSSL prefix.
 
@@ -1523,11 +1524,15 @@ or newer, whose `libssl-dev` has the OpenSSL 3 static archives (glibc
   if `pkg-config --variable=libdir` for `libssl` or `libcrypto` is not
   inside `OPENSSL_PREFIX`. The VM links the two archives by full path, in
   that `libdir` (so the `.pc` files decide `lib`, `lib64` or the multiarch
-  directory), plus the flags of `pkg-config --static --libs-only-l
-  --libs-only-other libssl libcrypto` with `-lssl` and `-lcrypto` removed
-  (leaving, for example, `-ldl -pthread`). The static CI or release job
-  checks that `readelf -d` of the VM shows no `NEEDED` entry for libssl or
-  libcrypto.
+  directory). `pkg-config --static --libs-only-l --libs-only-other libssl
+  libcrypto` lists the rest. On Debian, `libcrypto.a` needs `-lz -lzstd`;
+  those are linked as archives by full path too (`libz.a` and `libzstd.a`
+  from `zlib1g-dev` and `libzstd-dev`, found with `pkg-config
+  --variable=libdir zlib libzstd` in the same environment). Only glibc's
+  own flags (such as `-ldl`, `-pthread`, `-lm`) stay as they are. The
+  static CI or release job checks `readelf -d` of the VM against an
+  allowlist: `NEEDED` may only name libc, libm and the dynamic loader
+  (`ld-linux`), plus libpthread, libdl and librt on an old glibc.
 - Both modes take `pkg-config --cflags libssl libcrypto` from the same
   `pkg-config` environment as their link flags.
 - `pkg-config` never runs when the Makefile is parsed (no parse-time
@@ -1536,13 +1541,16 @@ or newer, whose `libssl-dev` has the OpenSSL 3 static archives (glibc
   `build/vm/flags` stamp runs `pkg-config` and writes the resolved cflags
   and link flags there, with `OPENSSL` and `OPENSSL_PREFIX`; the link
   recipe reads them back. A change of mode, prefix or flags relinks.
-- The VM needs only OpenSSL 3.0 and loads with any 3.x. It never calls a
-  symbol that exists only in 3.1 or later. `-DOPENSSL_API_COMPAT=30000`
-  only hides deprecated API; what enforces 3.0-only symbols is a check in
-  the normal dynamic CI `test` job, after `make vm`: `objdump -T` of the VM
-  shows no `OPENSSL_3.[1-9]` symbol version. Newer features (Argon2id needs
-  3.2) are found at run time: if `EVP_KDF_fetch` returns `NULL`, the call
-  returns an error `Result` that names the missing feature.
+- The VM needs only OpenSSL 3.0.0 and loads with any 3.x. It calls only
+  symbols of the `OPENSSL_3.0.0` version node; OpenSSL also has later
+  nodes inside 3.0 (`OPENSSL_3.0.3`, `3.0.8`, `3.0.9`, for example
+  `OPENSSL_strcasecmp`) and in 3.1 and later. `-DOPENSSL_API_COMPAT=30000`
+  only hides deprecated API; what enforces the rule is a check in the
+  normal dynamic CI `test` job, after `make vm`: it fails if
+  `objdump -T dist/agentica-vm | rg -o 'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints anything. Newer features
+  (Argon2id and `OSSL_set_max_threads` need 3.2) are found at run time: if
+  `EVP_KDF_fetch` returns `NULL`, the call returns an error `Result` that
+  names the missing feature.
 - A static OpenSSL's built-in paths point at the build machine, so the
   static build finds the CA store itself (10.3).
 - Static release artifacts ship OpenSSL's `LICENSE.txt` (and its `NOTICE`
@@ -2033,15 +2041,22 @@ measurement shows CPU-bound work that one scheduler cannot serve.
 
 ### 10.3 TLS
 
-- OpenSSL 3, which Racket's `openssl` module also uses. Initialize with
-  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`.
+- OpenSSL 3, which Racket's `openssl` module also uses. The default
+  dynamic build initializes without `OPENSSL_INIT_NO_LOAD_CONFIG`, so
+  OpenSSL loads the system `openssl.cnf` as it does for Racket, and the
+  distro's hardening applies. The `OPENSSL=static` build initializes with
+  `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG, NULL)`, since its
+  configuration path points at the build machine, and sets explicit
+  minimums (TLS 1.2, security level 2); this is a documented difference of
+  the static build.
 - With an empty `ca_file`, use system trust like
   `ssl-secure-client-context`, matching Racket: the CA file and the CA
   directory are two sources, and each is replaced on its own. On Linux the
-  default dynamic build always calls `SSL_CTX_set_default_verify_paths`:
-  the file is `SSL_CERT_FILE` or else OpenSSL's built-in file, and the
-  directory is `SSL_CERT_DIR` or else its built-in directory (both under
-  `OPENSSLDIR`). The `OPENSSL=static` build (10.0) cannot use its built-in
+  default dynamic build loads exactly Racket's sources: the file is
+  `SSL_CERT_FILE` or else `X509_get_default_cert_file()`, the directory is
+  `SSL_CERT_DIR` or else `X509_get_default_cert_dir()` (both under
+  `OPENSSLDIR`), loaded with `SSL_CTX_load_verify_file` and
+  `SSL_CTX_load_verify_dir` (3.0 API; no store URI). The `OPENSSL=static` build (10.0) cannot use its built-in
   paths, which point at the build machine: the file is `SSL_CERT_FILE` or
   else the first existing file of a list of distro bundles
   (`/etc/ssl/certs/ca-certificates.crt`,
@@ -2051,7 +2066,7 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   bundle probing is the one documented difference; on a normal host the
   evaluator and the dynamic VM both use OpenSSL's defaults. On Windows only
   the `ROOT` store, on macOS only the Keychain anchors, never
-  `set_default_verify_paths`. A non-empty `ca_file` replaces system trust.
+  OpenSSL's default paths. A non-empty `ca_file` replaces system trust.
   Trust-store usage and disallowed lists are honored only as far as Racket
   honors them.
 - Per connection: `SSL_set1_host`, SNI set, IP literals through
@@ -2113,9 +2128,10 @@ strings may differ. For HTTP this means:
   error status and closes the connection; a client request call returns an
   error `Result` (the "error kind" in this section; its message text is
   free). The exact 4xx or 5xx code may differ, except these, which must
-  match: 413 (body over the limit), 431 (too many headers, or a line or
-  head over its size limit), 505 (an HTTP version the evaluator rejects
-  with 505) and 501 (`CONNECT`).
+  match: 413 (body over the limit), 431 (too many headers or trailers, or
+  a line, head or trailer block over its size limit), 505 (an HTTP version
+  the evaluator rejects with 505) and 501 (`CONNECT`, and any
+  `Transfer-Encoding` other than one `chunked`).
 - The VM does not copy evaluator quirks (for example 431 for a bad chunk
   terminator byte), and it does not have to report the first failing line
   in the evaluator's order.
@@ -2125,7 +2141,11 @@ strings may differ. For HTTP this means:
   accepts what picohttpparser accepts; control bytes in a reason phrase
   give a client error on the VM.
 - Framing rules stay strict: `Content-Length` with `Transfer-Encoding`,
-  duplicate `Content-Length`, bad chunk sizes and obs-fold are rejected.
+  conflicting `Content-Length` values (400), bad chunk sizes and obs-fold
+  are rejected. Equal duplicate `Content-Length` values (the header twice,
+  or `5, 5`) are accepted as one, like the evaluator (RFC 9110 §8.6).
+  `Transfer-Encoding` other than one `chunked` (`gzip`, `gzip, chunked`,
+  two `Transfer-Encoding` headers) gives 501.
 
 The VM does not copy `src/http-wire.rkt` check by check. picohttpparser
 validates the head; that is why it is a dependency (and its SSE4.2 path
@@ -2156,14 +2176,17 @@ the I/O layer.
   - The pre-scan (one pass over newly read bytes) checks the line and
     head size limits (431), rejects bare LF (kept strict against
     smuggling), and counts header lines: once the count passes 100 it
-    returns 431, before picohttpparser runs.
-  - Once the start line is complete, the adapter checks its shape itself:
-    `METHOD SP+ TARGET SP+ HTTP/digit.digit` for a request,
-    `HTTP/digit.digit SP+ 3DIGIT` for a response. So a complete bad start
-    line always fails at once, even where picohttpparser would still
-    return -2 for short input.
-  - The version: an `HTTP/digit.digit` that the evaluator answers with 505
-    gives 505.
+    returns 431, before picohttpparser runs. Before a request, the
+    pre-scan and the start-line check skip one leading CRLF, matching the
+    documented leniency, so the header count is not off by one.
+  - Once the start line is complete, and before picohttpparser runs, the
+    adapter checks it itself with the evaluator's shape. A request is
+    `METHOD SP+ TARGET SP+ VERSION`, a response `VERSION SP+ 3DIGIT`. A
+    version of the form `HTTP/[0-9.]+` gives 505 unless it is exactly
+    `HTTP/1.1` (so `HTTP/1`, `HTTP/2`, `HTTP/1.10` and `HTTP/2.0` give
+    505); any other bad shape gives 400. So a complete bad start line
+    always fails at once, even where picohttpparser would still return -2
+    for short input.
   - Request target: origin form (`/...`), or `*` with `OPTIONS`; only bytes
     33 to 126; anything else is 400.
   - Method: token characters only (400); `CONNECT` gives 501.
@@ -2171,15 +2194,18 @@ the I/O layer.
     are rejected with 400.
   - Responses: `HTTP/1.1` only, status 100 to 599, 101 rejected, at most
     15 interim responses (the 16th fails); these give an error `Result`.
-  - The `Host` rules, and the body framing and smuggling rules.
+  - The `Host` rules, and the body framing and smuggling rules above
+    (conflicting `Content-Length` 400, unsupported `Transfer-Encoding`
+    501).
 - The body is never buffered whole by the parsing layer. Our own body
   decoder, `vm/http_body.c` (no third-party code), is an incremental state
   machine. It is set up with the framing (`Content-Length` n, chunked, or
   until close for responses) and the `max_body_bytes` limit; then
   `feed(buf, len)` returns the bytes consumed, zero or more body slices
   pointing into the input, and NEED_MORE, DONE or ERROR: 413 over the
-  limit, 431 for an over-long chunk-size or trailer line, and 400 for every
-  other malformed body. Chunk sizes accumulate with saturation;
+  limit, 431 for an over-long chunk-size or trailer line or for trailers
+  over the block-size or count limit, and 400 for every other malformed
+  body. Chunk sizes accumulate with saturation;
   `phr_decode_chunked` is not used, since it knows no limits. `HttpBody`,
   `HTTP.request_stream` and `HttpWriter` read and write through it chunk by
   chunk, so a large upload or download never sits whole in memory. Trailer
@@ -2192,15 +2218,21 @@ the I/O layer.
   same tests: a C unit test in `vm/tests/`, and fixed, deterministic hostile
   cases run on both backends. They check that both reject (and the code
   where it must match), not message text: `Content-Length` with
-  `Transfer-Encoding`, duplicate `Content-Length`, huge chunk sizes (413),
-  bare LF, over-long lines and heads (431), 100 headers accepted and 101
-  and 150 rejected with 431, `HTTP/2.0` (505), a malformed version,
-  absolute-form and non-ASCII targets, `*` without `OPTIONS`, a bad method
-  token, `CONNECT` (501), an obs-fold line, bad trailers, and on the client
+  `Transfer-Encoding`, conflicting `Content-Length` (400), equal duplicate
+  `Content-Length` twice and as `5, 5` (accepted), `Transfer-Encoding:
+  gzip`, `gzip, chunked` and two `Transfer-Encoding` headers (501), huge
+  chunk sizes (413), bare LF, over-long lines and heads (431), 100 headers
+  accepted and 101 and 150 rejected with 431, trailers over the line,
+  block-size or count limit (431), `HTTP/1`, `HTTP/2`, `HTTP/1.10` and
+  `HTTP/2.0` (505), a malformed version, a leading CRLF before a request
+  with 100 headers (accepted), absolute-form and non-ASCII targets, `*`
+  without `OPTIONS`, a bad method token, `CONNECT` (501), an obs-fold line,
+  bad trailers, and on the client
   side `HTTP/1.0` responses, status 99 and 600, a 101 response, and 15
   interim responses accepted and 16 rejected. One case sends a complete bad
   start line ending in CRLF and leaves the socket open: it is rejected
-  before any timeout; another sends the short line `GET / HTTP/1\r\n`.
+  before any timeout; another sends the short line `GET / HTTP/1\r\n`,
+  which gets 505.
 
 ## 11. Build, CI and supply chain
 
@@ -2300,13 +2332,15 @@ the I/O layer.
   (`AGENTICA_REQUIRE_VM=1`), as `AGENTS.md` requires.
   `make vm` reads `SANITIZE` from the environment, so the sanitizer job sets
   `SANITIZE=1` once and the tests rebuild the sanitized VM.
-- Supply chain: pinned runner images; libgc, yyjson (and libuv and picohttpparser from 7h) are git
-  submodules pinned to a release tag, upgraded only by bumping the submodule
-  in a reviewed PR; CI checks out with `submodules: true`. `agentica-vm
-  --version` and the release notes list the libgc, yyjson, libuv and OpenSSL
-  versions (for OpenSSL, the one in use at run time); the release checklist
-  says to rebuild and release after any High or Critical advisory for libgc,
-  yyjson, libuv or OpenSSL. For OpenSSL that means the release artifacts,
+- Supply chain: pinned runner images; libgc, yyjson (and libuv and
+  picohttpparser from 7h) are git submodules pinned to a release tag,
+  upgraded only by bumping the submodule in a reviewed PR; CI checks out
+  with `submodules: true`. `agentica-vm --version` and the release notes
+  list the libgc, yyjson, libuv, picohttpparser and OpenSSL versions (for
+  OpenSSL, the one in use at run time); the release checklist says to
+  rebuild and release after any High or Critical advisory for libgc,
+  yyjson, libuv, picohttpparser or OpenSSL (or the zlib and zstd archives
+  of the static build). For OpenSSL that means the release artifacts,
   which are built with `OPENSSL=static` (10.0); dynamic builds get OpenSSL
   fixes from the distro.
 
@@ -2341,10 +2375,12 @@ detects the `string-inspect.agc` fixture as binary from its NUL bytes), so Windo
 spans and output as Linux. 7h adds the libuv submodule and OpenSSL (`pkgconf` plus
 the platform's OpenSSL 3 development package, `libssl-dev` on Debian) to each
 job; these jobs use the default dynamic build. One Linux job (or the release
-workflow) builds `OPENSSL=static`, checks that `readelf -d` shows no
-libssl or libcrypto `NEEDED` entry, and runs the TLS tests. The `test` job,
-after `make vm`, checks that `objdump -T` of its dynamic VM shows no
-`OPENSSL_3.[1-9]` symbol version. On macOS (paused),
+workflow) also installs `zlib1g-dev` and `libzstd-dev`, builds
+`OPENSSL=static OPENSSL_PREFIX=/usr`, checks `readelf -d` against the
+`NEEDED` allowlist (libc, libm, `ld-linux`), and runs the TLS tests. The
+`test` job, after `make vm`, fails if
+`objdump -T dist/agentica-vm | rg -o 'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints
+anything. On macOS (paused),
 Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
 `lib/pkgconfig`.
 

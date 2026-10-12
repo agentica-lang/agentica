@@ -369,35 +369,42 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   its scheduler's resource registry until its `uv_close` callback, and
   request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
-- **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`.
-  Linux trust as in Racket, file and directory each replaced on its own:
-  the dynamic build always calls `SSL_CTX_set_default_verify_paths`; the
-  static build uses `SSL_CERT_FILE` or else the first existing distro CA
-  bundle, and `SSL_CERT_DIR` or else no directory.
-  Windows: the ROOT store; macOS: the Keychain anchors (never
-  `set_default_verify_paths` there). A non-empty `ca_file` replaces system
-  trust. `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
+- **OpenSSL 3 (7h)**: the dynamic build initializes without
+  `OPENSSL_INIT_NO_LOAD_CONFIG` (the system `openssl.cnf` applies, as for
+  Racket); the static build passes it and sets TLS 1.2 and security level
+  2 as minimums. Linux trust as in Racket, file and directory each replaced
+  on its own: dynamic loads `SSL_CERT_FILE` or else
+  `X509_get_default_cert_file()` with `SSL_CTX_load_verify_file`, and
+  `SSL_CERT_DIR` or else `X509_get_default_cert_dir()` with
+  `SSL_CTX_load_verify_dir`; static uses `SSL_CERT_FILE` or else the first
+  existing distro CA bundle, and `SSL_CERT_DIR` or else no directory.
+  Windows: the ROOT store; macOS: the Keychain anchors (never OpenSSL's
+  default paths there). A non-empty `ca_file` replaces system trust.
+  `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
   Linking: dynamic by default (`OPENSSL=system`, `pkg-config libssl
   libcrypto`, `-lssl -lcrypto`); the build fails for a missing or pre-3.0
   OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for release artifacts:
   `OPENSSL_PREFIX` required (CI and releases: `/usr`, Debian's static
   archives), `PKG_CONFIG_PATH` unset, `PKG_CONFIG_LIBDIR` limited to the
-  prefix (`lib`, `lib64`, multiarch) and `libdir` checked inside it, the archives linked by full
-  path plus `pkg-config --static --libs-only-l --libs-only-other` without
-  `-lssl -lcrypto`, archives from `pkg-config --variable=libdir`, and
-  `readelf -d` shows no libssl/libcrypto `NEEDED`. The OpenSSL settings
-  and resolved cflags and link flags are written to `build/vm/flags` by its
+  prefix (`lib`, `lib64`, multiarch) and `libdir` checked inside it,
+  `libssl.a`, `libcrypto.a`, `libz.a` and `libzstd.a` linked by full path
+  (only glibc's own flags stay), and `readelf -d` checked against a
+  `NEEDED` allowlist (libc, libm, `ld-linux`). The OpenSSL settings and
+  resolved cflags and link flags are written to `build/vm/flags` by its
   stamp recipe and read back by the link recipe; no parse-time
-  `pkg-config`. Only 3.0 symbols are called
-  directly: `-DOPENSSL_API_COMPAT=30000` only hides deprecated API, and the
-  CI `test` job checks `objdump -T` for no `OPENSSL_3.[1-9]`; newer
-  features are found at run time. Without `libssl-dev` all VM tests skip
-  locally.
-  `--version` prints the OpenSSL version in use (`docs/vm.md` 10.0, 10.3).
+  `pkg-config`. Only `OPENSSL_3.0.0` symbols are called:
+  `-DOPENSSL_API_COMPAT=30000` only hides deprecated API, and the CI
+  `test` job fails if `objdump -T dist/agentica-vm | rg -o
+  'OPENSSL_3\.[0-9.]+' | rg -v '^OPENSSL_3\.0\.0$'` prints anything;
+  newer features are found at run time. Without `libssl-dev` all VM tests
+  skip locally. `--version` prints the OpenSSL version in use
+  (`docs/vm.md` 10.0, 10.3).
 - **HTTP (7h)**: parity is black-box. Well-formed messages: same status,
   headers, body and `Result` ok or error. Malformed input: both reject
   (server error status and close, client error `Result`); the code may
-  differ except 413, 431, 505 and 501. No copying of evaluator quirks or
+  differ except 413, 431 (also trailers), 505 and 501 (`CONNECT`, and any
+  `Transfer-Encoding` but one `chunked`). Equal duplicate `Content-Length`
+  is accepted; conflicting values give 400. No copying of evaluator quirks or
   its order of failing lines; picohttpparser's leniencies are documented
   differences; framing stays strict. picohttpparser (submodule
   `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the baseline
@@ -409,15 +416,18 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `last_len` and only when new bytes complete a line (head at most the
   8192-byte start line plus 64 KiB of headers); a -1 is 400 or a client
   error `Result`. A pre-scan checks size limits (431), bare LF and the
-  header count (431 past 100, before pico runs). The adapter checks the
-  shape of a complete start line itself, so it fails at once. On pico's
-  output: version (505 as the evaluator), target (origin form or `*` with
+  header count (431 past 100, before pico runs), skipping one leading CRLF
+  before a request. Before pico, the adapter checks a complete start line
+  with the evaluator's shape: `HTTP/[0-9.]+` other than exactly `1.1`
+  gives 505 (`GET / HTTP/1` too), other bad shapes 400, so it fails at
+  once. On pico's output: target (origin form or `*` with
   `OPTIONS`, bytes 33–126), method token, `CONNECT` 501, obs-fold
   (`name == NULL`), response version, status 100–599, no 101, 15 interim
   responses accepted and the 16th fails, `Host`, framing and smuggling.
   The body goes through our incremental decoder `vm/http_body.c` (`feed`
   returns bytes consumed, body slices, and NEED_MORE, DONE or ERROR: 413
-  over the limit, 431 for an over-long chunk-size or trailer line, 400
+  over the limit, 431 for an over-long chunk-size or trailer line or
+  trailers over their limits, 400
   otherwise; trailers checked with the header rules; no
   `phr_decode_chunked`), so bodies stream and are never buffered whole.
   Tests target the adapter and check rejections and the codes that must
