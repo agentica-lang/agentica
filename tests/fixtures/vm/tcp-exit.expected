@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 73,
+  "stdout": [
+    "<Socket>",
+    "<Socket>",
+    "done",
+    ""
+  ],
+  "stderr": []
+}

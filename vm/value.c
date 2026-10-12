@@ -286,6 +286,20 @@ agc_value agc_process_value(agc_process *p) {
   return v;
 }
 
+agc_value agc_socket_value(agc_socket *s) {
+  agc_value v;
+  v.tag = AGC_T_SOCKET;
+  v.as.p = s;
+  return v;
+}
+
+agc_value agc_listener_value(agc_listener *l) {
+  agc_value v;
+  v.tag = AGC_T_LISTENER;
+  v.as.p = l;
+  return v;
+}
+
 uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
@@ -426,6 +440,16 @@ agc_task *agc_as_task(agc_vm *vm, agc_value v) {
 
 agc_process *agc_as_process(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_PROCESS) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_socket *agc_as_socket(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_SOCKET) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_listener *agc_as_listener(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_LISTENER) wrong_tag(vm);
   return v.as.p;
 }
 

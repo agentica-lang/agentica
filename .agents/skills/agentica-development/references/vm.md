@@ -37,9 +37,11 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/random.c` | xoshiro256** seeded with splitmix64, both public domain (`agc_random_seed`, `agc_random_next`, `agc_random_float`, `agc_random_int`; `docs/vm/05-values-execution-builtins.md` §7.4) |
 | `vm/json.c` | `Json` (`agc_json` nodes, 5.1) and the `JSON` builtins (`agc_json_builtins`): `agc_json_parse` (the Racket control-character pass, top-level numbers and literals by hand, strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack; `docs/vm/02-reference-behavior.md` §2.6), `agc_json_encode` (the one `write-json` writer, for `JSON.encode` and the text form of a Json) and `agc_json_from` (builders), both over one explicit stack |
 | `vm/json_typed.c` | `agc_json_decode` and `agc_json_schema` (`docs/vm/02-reference-behavior.md` §2.7): one explicit frame stack over the Json tree and the type table, the error path built from the frames only on failure; schema marks the types and structs reachable from the target with a queue, then builds their schemas in index order. The buffer, stack growth and ASCII helpers are `agc_json_put`, `agc_json_grow` and `agc_json_ascii` from `vm/json.c`. The builtins in `vm/json.c` find the struct by its linked name (`json_name`) |
-| `vm/loop.c` | the event loop and the resource registry (`docs/vm/10-io-scheduler.md` §10.2.2), with `vm/process.c` the only files that include `uv.h`: `agc_io_init` (the `UV_USE_IO_URING=0` setenv at start-up; returns whether it set it), `agc_io_uv` (the scheduler's `uv_loop_t`, for handle code), `agc_io_ready` (completes an `external` job from a libuv callback), `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc` memory; a job keeps its registry slot index, fixed when an entry moves), `agc_io_start` (one `uv_queue_work` job plus an optional timer per blocking call; a kind without `work` is a timer only; parks the current task through `r->task` and `task->parked`), `agc_io_poll` (`uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes their tasks), `agc_io_finish` (the request's `done` or `expired` half when the parked task runs again; it first releases a handle the request held, handing it to the head waiter as `next_owner`), `agc_handle_wait` (the per-handle FIFO lock: take it as `next_owner` or when free, else queue and park with retry on a timer-only job at the task's own deadline), `agc_io_close` (end of run: close handles and timers, free the loop; false while a job is stuck in the OS, and then `vm/main.c` flushes and `_exit`s so libuv's destructor does not join the pool); resources have a `kind` (native or job); non-Linux builds get stubs |
+| `vm/loop.c` | the event loop and the resource registry (`docs/vm/10-io-scheduler.md` §10.2.2), with `vm/stream.c`, `vm/process.c` and `vm/tcp.c` the only files that include `uv.h`: `agc_io_init` (the `UV_USE_IO_URING=0` setenv at start-up; returns whether it set it), `agc_io_uv` (the scheduler's `uv_loop_t`, for handle code), `agc_io_ready` (completes an `external` job from a libuv callback), `agc_register`/`agc_unregister` (GC `agc_resource` objects owning `malloc` memory; a job keeps its registry slot index, fixed when an entry moves), `agc_io_start` (one `uv_queue_work` job plus an optional timer per blocking call; a kind without `work` is a timer only; parks the current task through `r->task` and `task->parked`), `agc_io_poll` (`uv_run` NOWAIT or ONCE, then the ready list of finished jobs wakes their tasks), `agc_io_finish` (the request's `done` or `expired` half when the parked task runs again; it first releases a handle the request held, handing it to the head waiter as `next_owner`), `agc_handle_wait` (the per-handle FIFO lock: take it as `next_owner` or when free, else queue and park with retry on a timer-only job at the task's own deadline), `agc_io_close` (end of run: close handles and timers, free the loop; false while a job is stuck in the OS, and then `vm/main.c` flushes and `_exit`s so libuv's destructor does not join the pool); resources have a `kind` (native or job); non-Linux builds get stubs |
 | `vm/files.c` | the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, Linux only; `docs/vm/02-reference-behavior.md` §2.8): argument checks in the evaluator's order (for a handle: arguments and timeout, then the lock, then open and mode), host paths (raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it fails, + `/` collapsing), `malloc`'d `op` requests whose `work` half runs in the libuv pool, Racket's messages (contract forms cut at 256 characters, `strerror_l` in the message locale, the byte string form for invalid UTF-8), `FileHandle` state with its read buffer or its 4096-byte write buffer (Racket's rule: append when it fits, else write pending and new bytes together; flush, close and the end of run write it), `owns_st` saying which request frees the state (open, close, or a handle request after its timeout), `Path.join` and `Path.resolve` as pure string code |
 | `vm/process.c` | the `Process` builtins (`agc_process_builtins`, Linux only; `docs/vm/10-io-tls-processes-http.md` §10.4): a GC `agc_process` with the registered `state` resource and two unregistered lock records (`reader`, `writer`) for `agc_handle_wait`; a `malloc`'d `proc` with the `uv_process_t`, three `uv_pipe_t` (real pipes from `uv_pipe` given with `UV_INHERIT_FD`), the stdout buffer and the pending requests, freed when its user count (resource and requests) and handle count (close callbacks) reach zero; requests park on `external` jobs that pipe, write and exit callbacks ready with `agc_io_ready`; stdout is read only while a reader waits, 4 KiB at a time (more only for a bigger `read_bytes`); stderr is forwarded in its read callback; one close path (`SIGKILL`, then `waitpid` with `WNOHANG` until a 1 s `CLOCK_MONOTONIC` deadline, shared by one cleanup of all children, which kills them all first; a failed kill or a child still alive keeps the `uv_process_t` open for libuv to reap; a failed kill in `Process.close` is `RUNTIME-PROCESS-CLOSE`) for `close`, stream timeouts and the end of run; the per-run guard (a registered resource, `vm->process_guard`): the list of running children and `uv_signal_t` watchers for `SIGINT`/`SIGTERM`/`SIGHUP`, started before the first `uv_spawn` and stopped when the last child is reaped, each stop under blocked signals with a check of libuv's `caught_signals` against `dispatched_signals` so a caught signal is raised, never lost; the first spawn marks inherited descriptors above 2 close-on-exec; executable lookup (`PATH` only for a bare name, the working directory for a name with `/`) |
+| `vm/stream.c` | what processes and TCP share (`docs/vm/10-io-tls-processes-http.md` §10.3.1): `agc_inbuf` (one `malloc`'d input buffer with EOF and a sticky read error; `agc_inbuf_room` for libuv's alloc callback, `agc_inbuf_got` for its read callback, `agc_inbuf_ready`, `agc_inbuf_want` for the read size: 4 KiB or what a byte read still needs), `agc_inbuf_line` (LF in the first 1 MiB + 1 bytes, searched once per byte through `scanned`, CRLF stripped, a final line only at EOF, the read error when bytes without LF end in an error, the caller's texts for too long and end of input; it says when the line was too long so the caller closes) and `agc_inbuf_bytes`, `agc_stream_write` (`uv_try_write`, then one `uv_write` of a `malloc`'d copy in buffers of at most 1 GiB; 0 written, 1 queued, or a libuv error), `agc_new_lock` and `agc_stream_lock` (an unregistered lock record, and the timeout check plus `agc_handle_wait`), `agc_error_value` and the `network:` timeout texts |
+| `vm/tcp.c` | the `TCP` builtins (`agc_tcp_builtins`, Linux only; §10.3.1): one `malloc`'d `net` for a socket or a listener (users: the resource and each request; callbacks: a DNS lookup in flight and one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its `uv_connect_t` that finds the `net` through `owner`), registered when the call starts so the end of the run always closes it; requests park on `external` jobs (`park`): connect resolves with `uv_getaddrinfo` and tries each address with a fresh link (`attempt` takes its callback as an argument, so no prototype is needed), listen binds every resolved address on one port (one link per address, chained through `next`; `bind_all` retries a port-0 listen when a later address finds the port taken), accept is one FIFO for all links whose head is marked served by a link's connection callback (`chosen`) and calls `uv_accept` in its `done` half (a failed `uv_accept` closes the listener, since libuv stops watching that link), reads and writes use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is the one close (trace `why`), and wakes every waiting request; `no_files` (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL` |
 | `vm/input.c` | the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or FAILED): one growing buffer in the runtime shared by `gets`, `read`, `read_bytes` and `eof?`; on Linux each `read(0)` (with `poll` on `EAGAIN`) is a thread-pool job whose `done` half appends the bytes and wakes the readers waiting in the input's FIFO, and the builtin re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek; non-Linux keeps a blocking read |
 | `vm/task.c` | the scheduler (`docs/vm/10-io-scheduler.md` §10.2.1, "As built"): `agc_vm_run` (setjmp, FIFO run queue, one turn per task, `uv_run` NOWAIT after each turn and ONCE when idle, the stall check), `agc_task_wake`, `agc_task_park`, and the `Task` builtins (`agc_task_builtins`: spawn with a per-task `Random` split, await with a FIFO of waiters and retry, sleep as a timer job, `sleep(0)` and fuzz sleeps yield) |
 | `vm/diag.c` | the plain, `--ai` and `--json` diagnostic formats, the same formats as `src/diagnostic.rkt`; only the code must match |
@@ -55,6 +57,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/tests/text_test.c` | write-escape range lookup, String debug forms (`docs/vm/02-reference-behavior.md` §2.3), list text, a depth-1,000,000 list and a depth-1,000,000 enum/struct chain (hand-built `agc_program` tables): deep enough to overflow an 8 MB C stack if the printer recursed; 1,000 under `AGC_GC_STRESS`, where the point is GC safety while printing |
 | `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
 | `vm/tests/trace_test.c` | the trace escaper and line buffer: numbers, empty and special text values, invalid UTF-8 bytes as `\u00XX`, lines cut at 512 bytes on a UTF-8 or escape boundary, the unknown-category warning |
+| `tests/vm-tcp-test.rkt` | the VM against Node peers (`tests/fixtures/tcp-peer.js`): a client reading fragments, EOF, a reset, a 1 MiB + 1 line, a silent peer (timeout) and a refused port; a VM server with two concurrent Node clients; `main` returning while tasks wait on a read, an accept and a full send buffer, with the `io` trace showing every socket closed (`why=exit`) and `close resources=0 settled=1`, and the peer seeing the close. Uses `compile-file`, `run-process` and `vm-file` from `tests/vm-diff-common.rkt`, so `AGENTICA_VM_BINARY` picks the sanitizer or GC-stress binary |
 | `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; `gc` lines from `map-large` (skipped on a sanitizer build); a VM started with stderr or stdout closed; skips on a `TRACE=0` VM |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
@@ -87,13 +90,14 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 - CI runs `vm-sanitizers` (`make vm-lint`, ASan diff and bytecode tests, `make vm-fuzz`,
   `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
   in the `changes` job of `.github/workflows/ci.yml` (`vm/`, lowering,
-  bytecode, `src/version.rkt`, their tests and fixtures, the Makefile,
+  bytecode, `src/version.rkt`, their tests and fixtures (`tests/vm-tcp-test.rkt`
+  and `tests/fixtures/tcp-peer.js` too; the job sets up Node for them), the Makefile,
   `.gitmodules`, `.clang-tidy`, `ci.yml`). A new VM source or test file outside those paths must be added
   there.
 - `agentica file.agc` runs on the VM by default (Linux only for now,
   `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
   `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
-  only `TCP`, `TLS`, `HTTP` and `BDD` builtins, which are not in
+  only `TLS`, `HTTP` and `BDD` builtins, which are not in
   `vm-builtins` in `src/lower.rkt`; `tests/bytecode-test.rkt` checks that
   every other catalog implementation is there) it prints `agentica: <the
   lowering's message>; running on the legacy evaluator` on stderr (not with
@@ -190,8 +194,8 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   Linux list of its `CMakeLists.txt`) builds per mode into
   `$(VM_BUILD)/uv/*.o` with `-std=gnu11`, its own `UV_DEFS` and the mode's
   `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`;
-  `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`
-  includes `uv.h`. Bumping libuv: check out the new tag inside
+  `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`,
+  `vm/stream.c`, `vm/process.c` and `vm/tcp.c` include `uv.h`. Bumping libuv: check out the new tag inside
   `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
   `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
 - Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
@@ -305,7 +309,8 @@ call in the module's file.
    as `Header` or a struct that contains one, is `LOWER-UNSUPPORTED`), and
    every `File.*`, `Dir.*` and `Path.*` builtin (with `FileHandle` in
    `value-types` and `FileInfo` appended to the struct table when a checked
-   type mentions it) are
+   type mentions it), every `Process.*` builtin, and every `TCP.*` builtin
+   (with `Process`, `Socket` and `Listener` in `value-types`) are
    accepted; everything else is
    `LOWER-UNSUPPORTED`; the lowerer also emits `List.concat` and `Map.put`
    for list and map literals above 255 elements; the loader rejects `MAP`
@@ -341,7 +346,8 @@ call in the module's file.
    `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
    `steps_left` for that. State goes in `vm->rt` (shared runtime),
    `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files`
-   first in file builtins, so the fuzzer never touches the disk.
+   first in file builtins and in `TCP.connect` and `TCP.listen`, so the
+   fuzzer never touches the disk or the network.
 
 Rules for the C code:
 
@@ -479,9 +485,15 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   mutable `static` or global variable in `vm/` (the exceptions are listed
   in `docs/vm/10-io-multicore.md` §10.2.3); state goes in the runtime, scheduler or task
   struct, and lazy init uses `pthread_once` or runs at start-up.
-  Handles and requests are `malloc`'d; the GC object that owns one stays in
-  its scheduler's resource registry until its `uv_close` callback, and
-  request buffers stay owned by the request until its callback. All
+  Handles and requests are `malloc`'d and must stay owned until their
+  `uv_close` callback: either the GC object that owns one stays in its
+  scheduler's resource registry until then, or the `malloc`'d native
+  state counts its pending close callbacks (and its users) and frees
+  itself only when both reach zero. With such a count, `close` may
+  unregister the resource at once, as `Process.close` and `TCP.close`
+  do: the native state outlives the handle, and `agc_io_close` runs
+  `uv_run` NOWAIT so the callbacks still fire at the end of the run.
+  Request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
 - **OpenSSL 3 (7h)**: the dynamic build initializes without
   `OPENSSL_INIT_NO_LOAD_CONFIG` (the system `openssl.cnf` applies, as for
@@ -567,6 +579,20 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   another thread; keep that when adding new ways into the libuv pool. The
   signal tests in `tests/vm-diff-common.rkt` signal the driver and the VM
   with libc `kill` through the FFI and bound every wait.
+- **TCP (7h, in on Linux)**: `vm/tcp.c`, `docs/vm/10-io-tls-processes-http.md`
+  §10.3.1. `TLS` stays `LOWER-UNSUPPORTED`, so a TLS program falls back as a
+  whole and the VM never sees a TLS socket; the TLS PR builds on `net`.
+  The `tcp-*` fixtures are their own peers (a listener and its client tasks
+  in one program) and print only from `main` after its awaits, so output and
+  step counts do not depend on timing; `recv_bytes` returns what has
+  arrived, so a fixture reads bytes only after the writer is done (await it
+  first). Network tests bind 127.0.0.1 port 0 and use Node peers; no name
+  that needs DNS beyond `/etc/hosts`. A connect timeout has no hermetic test
+  (it needs an address that drops SYNs); it was checked by hand. A fixture
+  that needs a write to stay parked sends one String far bigger than the
+  loopback buffers (64 MiB), never a loop of sends: the number of sends
+  that complete depends on the kernel's buffer sizes, and so would the
+  step count.
 - **Limits**: the 1 MiB per-call reads, HTTP framing limits and the other
   caps in the `docs/vm/10-io-tls-processes-http.md` limits table stay exactly as in the Racket
   sources.

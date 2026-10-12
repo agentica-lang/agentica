@@ -10,7 +10,7 @@
 
 **Primitives in C, helpers in Agentica.** The concurrency primitives are a small set of C builtins: `Task.spawn`, `Task.await`, `Task.sleep`, `Channel` (27.2) and `Task.map` (27.1). Higher-level concurrency helpers, such as `Task.await` with a timeout (27.3) and future ones such as "the first of several tasks" or "all settled", are written in Agentica in the compiler prelude (§25.6) over those primitives, as the [std-first rule](../roadmap/README.md#new-library-features-std-first) asks; they go in the prelude, not in `std/`, because they need the catalog's type variables. Each future helper still needs its own spec and must pass the one-way test. `Task.map` stays a C builtin because it must cancel timed-out items, which no primitive can do, and because it lands at order step 7.3, before the prelude (27.1, "Where it lives").
 
-**One way for each job.** After this section, the programming skill teaches these forms, and only these, for each job:
+**One way for each job.** After this section, the programming skill teaches these forms, and only these, for each job. The skill updates of 17a and 17b teach only the rows whose forms exist when they land; each later item adds its own row:
 
 | Job | The one form |
 |---|---|
@@ -19,7 +19,7 @@
 | Run the same I/O for each item of a list, at most N at a time, each with a timeout | `Task.map` (27.1) |
 | Long-lived workers, producer and consumer, a flow of unknown length, results in the order they end | tasks and a `Channel` (27.2) |
 | Wait for a task's result, for at most N ms | `Task.await(task, timeout_ms)` (27.3); the task keeps running after a timeout |
-| Read a big file line by line | `File.open` with a block (§25.9) and a `while` loop over `File.read_line` |
+| Read a big file line by line | `File.open` with a block (§25.9, once 15i lands) and a `while` loop over `File.read_line` |
 | An endless sequence | a `while` loop |
 | State that several tasks update | one owner task that receives messages on a channel (27.5); a shared table (§13) when a program needs it |
 

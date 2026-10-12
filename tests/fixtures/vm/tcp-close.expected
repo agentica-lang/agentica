@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 66,
+  "stdout": [
+    "error(\"network: socket is closed\")",
+    "error(\"network: listener is closed\")",
+    "error(\"network: end of input\")",
+    ""
+  ],
+  "stderr": []
+}

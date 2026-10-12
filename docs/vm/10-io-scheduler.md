@@ -362,7 +362,9 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   `next`, since a waiter woken by its timer is in both until it runs.
 - **External jobs (processes PR).** A kind with `external` set has no
   `work` half: nothing runs in the pool. A libuv callback on the loop
-  thread (a pipe read, a finished write, a child's exit) completes it with
+  thread (a pipe or socket read, a finished write, a child's exit, a
+  DNS answer, a connect or an incoming connection; the TCP builtins of
+  10.3.1 use them too) completes it with
   `agc_io_ready`, which marks the work done and puts the job on the ready
   list like a pool job; a second call, or one after the job was taken, does
   nothing. The timer, the `done` and `expired` halves, the lock hand-off
