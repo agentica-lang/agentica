@@ -24,7 +24,7 @@
 
 typedef struct _stat64 file_info;
 
-static wchar_t **wide_args;
+static wchar_t **wide_args; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 #else
 #include <unistd.h>
 
@@ -119,7 +119,7 @@ static uint64_t entropy_seed(void) {
   return seed;
 }
 
-static void seed_map_hash(void) {
+static void seed_map_hash(agc_vm *vm) {
   uint8_t key[16];
   if (!os_entropy(key, sizeof key)) return;
   uint64_t k0 = 0, k1 = 0;
@@ -127,7 +127,8 @@ static void seed_map_hash(void) {
     k0 |= (uint64_t)key[k] << (8 * k);
     k1 |= (uint64_t)key[8 + k] << (8 * k);
   }
-  agc_map_seed(k0, k1);
+  vm->hash_key[0] = k0;
+  vm->hash_key[1] = k1;
 }
 
 #ifdef __linux__
@@ -307,9 +308,9 @@ static int run(int argc, char **argv) {
     return 2;
   }
 
-  seed_map_hash();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  seed_map_hash(vm);
   agc_files_init(vm);
   agc_random_seed(&vm->random, seen_seed ? seed : entropy_seed());
   vm->args = program_args(argc, argv, i + 1);

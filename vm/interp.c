@@ -58,6 +58,8 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   vm->err = err;
   vm->steps_left = max_steps;
   vm->in.fd = -1;
+  vm->hash_key[0] = 0x0706050403020100ULL;
+  vm->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   agc_random_seed(&vm->random, 0);
   vm->args = agc_list_value(agc_new_list(0));
 }
