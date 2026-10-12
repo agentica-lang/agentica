@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 162,
+  "stdout": [
+    "name? 0: \"plain\"",
+    "1: \"crlf\"",
+    "2: \"bare\"",
+    "3: \"cr-crlf\"",
+    "4: \"\"",
+    "5: \"\"",
+    "6: \"bad �� end\"",
+    "7: \"������ 😀 €\"",
+    "8: \"��\"",
+    "9: \"last ���\"",
+    "IO.gets reached the end of input",
+    "error(\"IO.gets reached the end of input\")",
+    "true",
+    "\"\"",
+    ""
+  ],
+  "stderr": []
+}

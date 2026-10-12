@@ -1,6 +1,7 @@
 # Agentica
 
-Interpreter for the Agentica language, written in Racket. Agentica is Ruby
+Interpreter for the Agentica language: a Racket front end and a bytecode VM
+in C. Agentica is Ruby
 with static types: Ruby-like syntax, checked before running, with immutable
 values. The language is defined in [`docs/grammar.md`](docs/grammar.md); the
 self-contained reference for agents writing Agentica is the
@@ -15,21 +16,31 @@ User documentation (a guide, a language tour and the library) is published at
 
 ## Requirements
 
-Racket CS 9.3 or newer. No other dependencies.
+Racket CS 9.3 or newer, and a C11 compiler (gcc or clang) and `make` to build
+the VM from the vendored submodules. The release archive for Linux x86-64
+needs neither: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or
+newer.
 
 ## Build
 
-The interpreter is a pipeline of modules in `src/`:
+The interpreter is a Racket front end in `src/` and a bytecode VM in C in
+`vm/`:
 
 ```text
-source text -> lexer.rkt -> parser.rkt -> checker.rkt -> evaluator.rkt
-               tokens       AST           checked AST    runs main()
+source text -> lexer.rkt -> parser.rkt -> checker.rkt -> lower.rkt -> bytecode.rkt -> agentica-vm
+               tokens       AST           checked AST    VM IR        .agcb bytes     runs main()
 ```
 
-`main.rkt` is the command-line driver. There is nothing to install; compile
-the modules to bytecode once:
+`main.rkt` is the command-line driver: it compiles in-process and runs
+`dist/agentica-vm`. The Racket evaluator (`evaluator.rkt`) is frozen and runs
+only programs the VM cannot run yet: those that use `TCP`, `TLS`, `HTTP` or
+`BDD`, which fall back to it with a one-line notice on stderr, and
+`agentica test`. There is nothing to install; build the VM (it needs the git
+submodules: `git submodule update --init`) and compile the modules to
+bytecode once:
 
 ```sh
+make vm
 raco make src/main.rkt
 ```
 
@@ -42,18 +53,21 @@ A `Makefile` wraps the common commands:
 | Command      | Does                                                        |
 | ------------ | ----------------------------------------------------------- |
 | `make build` | `raco make src/main.rkt`                                    |
-| `make test`  | `raco test tests/`                                          |
-| `make exe`   | build, then `raco exe -o dist/agentica src/main.rkt`        |
+| `make vm`    | build the VM, `dist/agentica-vm`                            |
+| `make test`  | build the VM, then `raco test tests/`                       |
+| `make goldens` | rewrite the expected outcomes in `tests/fixtures/vm/` from the VM |
+| `make exe`   | build `src/` and the VM, then `raco exe -o dist/agentica src/main.rkt` |
 | `make clean` | remove every `compiled/` directory and `dist/`              |
 
-The `exe` target gives a single executable (`dist/agentica examples/hello.agc`).
-It needs the Racket installation on the machine; use `raco distribute` to
-bundle the runtime. `compiled/` and `dist/` are in `.gitignore`.
+The `exe` target gives an executable (`dist/agentica examples/hello.agc`) that
+runs `dist/agentica-vm` next to it. It needs the Racket installation on the
+machine; use `raco distribute` to bundle the runtime, and copy `agentica-vm`
+into its `bin/`, as the release archive does. `compiled/` and `dist/` are in `.gitignore`.
 
 ## Usage
 
 ```sh
-racket src/main.rkt [--vm] [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <file.agc>
+racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <file.agc>
 racket src/main.rkt help String.to_int --json
 ```
 
@@ -74,8 +88,8 @@ racket src/main.rkt examples/hello.agc
 | `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
 | `--seed N` | Seed `Random` with N (0..2147483647) so runs repeat; `agentica test` passes it to handlers and programs under test. Without it, each run is seeded from OS randomness. |
 | `--dump-ir` | Print the lowered VM IR instead of running it (VM subset only; see `docs/vm/`). |
-| `--vm` | Run the program on the bytecode VM instead of the evaluator (tested on Linux only; elsewhere the VM has no guard against outliving the driver: macOS skips only the parent check, while the `O_NOFOLLOW`, privacy and inode checks run on every non-Windows system, and Windows skips both checks). The driver compiles to a temporary bytecode file and runs `dist/agentica-vm`, found next to the `agentica` executable, or in `dist/` of the checkout for `racket src/main.rkt`; `AGENTICA_VM=path` picks another VM. Passes `--max-steps`, `--seed` (a seeded VM run repeats, but its `Random` values differ from the evaluator's), `--ai`, `--json` and program arguments; `--allow-run`, `--steps`, `--dump`, `--dump-ir`, `check`, `compile`, `help` and `test` exit 2 with `--vm`. Programs outside the VM subset fail with `LOWER-UNSUPPORTED`. |
-| `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). The VM runs a growing subset of the language; programs outside it fail with `LOWER-UNSUPPORTED`. |
+| `--vm` | Accepted and ignored: programs run on the bytecode VM by default (tested on Linux only; elsewhere the VM has no guard against outliving the driver: macOS skips only the parent check, while the `O_NOFOLLOW`, privacy and inode checks run on every non-Windows system, and Windows skips both checks). The driver compiles to a temporary bytecode file and runs `agentica-vm`, found next to the `agentica` executable (`bin/` of the release archive), or in `dist/` of the checkout for `racket src/main.rkt`; `AGENTICA_VM=path` picks another VM, and a missing VM exits 2. It passes `--max-steps`, `--seed` (a seeded run repeats, with other `Random` values than the old evaluator), `--allow-run`, `--ai`, `--json` and program arguments. A program that uses `TCP`, `TLS`, `HTTP` or `BDD` runs on the legacy evaluator after one notice line on stderr (not with `--json`; `agentica: the VM does not support the builtin HTTP.get yet; running on the legacy evaluator`), and so does `agentica test`. |
+| `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). Programs that use `TCP`, `TLS`, `HTTP` or `BDD` fail with `LOWER-UNSUPPORTED`. |
 
 Use `--allow-run` before the command or source file to enable `Process.spawn`; spawning is disabled by default. `main()` now returns `Void`, and side-effect APIs return `Void` or `Result[Void]`. Use `ok()` for successful completion; `nil` remains data and JSON null. `racket src/main.rkt --allow-run examples/process-tool.agc` demonstrates tool execution and exit checks.
 
@@ -207,3 +221,7 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception
   - Racket CS (MIT or Apache-2.0) and the Chez Scheme it embeds
     (Apache-2.0), bundled in the release archives, which ship their
     license files and Chez Scheme's `NOTICE` in `licenses/racket/`.
+
+  The release archives ship these notices in `licenses/`: `bdwgc/NOTICE`,
+  `libuv/LICENSE` and `LICENSE-extra`, `yyjson/LICENSE`,
+  `unicode/LICENSE.txt` (also in this repository) and `racket/`.

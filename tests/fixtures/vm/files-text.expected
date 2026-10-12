@@ -1,0 +1,29 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 330,
+  "stdout": [
+    "ok()",
+    "ok()",
+    "ok()",
+    "ok(\"alpha\\nβeta\\r\\n\")",
+    "ok()",
+    "ok(\"short\")",
+    "ok(\"\")",
+    "file 5 true",
+    "directory 0",
+    "error(\"filesystem: path does not exist\")",
+    "ok()",
+    "ok()",
+    "ok()",
+    "ok()",
+    "ok([\"10\", \"9\", \"Alpha\", \"_x\", \"a\", \"fresh.txt\", \"notes.txt\", \"zeta\", \"émile\"])",
+    "ok([\"b\"])",
+    "ok([\"c\", \"d\"])",
+    "ok(\"émile\")",
+    "ok(\"short\")",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

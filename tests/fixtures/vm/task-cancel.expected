@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 276,
+  "stdout": [
+    "main returns",
+    ""
+  ],
+  "stderr": []
+}

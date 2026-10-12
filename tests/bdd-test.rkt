@@ -1,6 +1,6 @@
 #lang racket
 
-(require rackunit json racket/runtime-path "../src/bdd-runner.rkt")
+(require rackunit json racket/runtime-path "../src/bdd-runner.rkt" (only-in "cli-in-process.rkt" fallback-notice?))
 
 (define-runtime-path handlers "bdd/handlers.agc")
 (define-runtime-path custom "bdd/specs/custom.feature")
@@ -158,7 +158,7 @@
                                  (path->string custom) (path->string handlers)) driver)
         (define builtin (cli (path->string driver)))
         (check-equal? (car builtin) 0)
-        (check-equal? (caddr builtin) "")
+        (check-true (fallback-notice? (caddr builtin) "BDD.run") (caddr builtin))
         (check-equal? (hash-ref (string->jsexpr (cadr builtin)) 'passed) 4)
         (for ([style '("--ai" "plain")])
           (define text (apply cli (append (if (equal? style "plain") '() (list style))
@@ -173,5 +173,5 @@
         (display-to-file "Feature: failure\nScenario: fail\nThen an assertion fails\n" failure-file)
         (display-to-file (format "def main() -> Void\n  result = BDD.run(~s, [~s])\n  IO.inspect(Result.ok?(result))\n  report = Result.unwrap!(result)\n  IO.inspect(Result.unwrap!(JSON.bool(Result.unwrap!(JSON.get(report, \"ok\")))))\nend\n\n"
                                  (path->string failure-file) (path->string handlers)) driver #:exists 'truncate)
-        (check-equal? (cli (path->string driver)) '(0 "true\nfalse\n" "")))
+        (check-equal? (cli "--legacy-eval" (path->string driver)) '(0 "true\nfalse\n" "")))
       (lambda () (delete-directory/files directory)))))

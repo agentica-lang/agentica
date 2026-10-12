@@ -1,16 +1,16 @@
 ## 25. Ruby typed idioms
 
-**Status:** Part A (25.1 to 25.11) is planned (roadmap phase 15), after 7i. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12.
+**Status:** Part A (25.1 to 25.11) is planned (roadmap phase 15, order step 7.4), after 7i deletes the evaluator (order 7.2). Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12.
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms that models already know, with the rule of [section 11](11-ruby-ergonomics.md#11-ruby-style-ergonomics): accept a form when it is real Ruby (or a typed version of it) or when it makes Agentica consistent with itself, and keep static checking and immutable values. Three limits do not move: no OOP (no classes, no inheritance, no user methods on user types), no user generics, and values stay immutable.
 
 **How Part A lands.**
 
-- Everything here comes after 7i, when the Racket evaluator is gone. Each item changes the front end (`src/lexer.rkt`, `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`, and runs on the C VM. No item touches `src/evaluator.rkt`.
-- Most items are sugar that `lower.rkt` turns into code the VM already runs, so the bytecode format and the VM do not change. The exceptions are said in each item: 25.4 changes the VM's `EQ` and `NE` opcodes, and 25.11 adds one `Float` builtin.
+- Everything here comes after 7i deletes the evaluator (order 7.2). Each item changes the front end (`src/lexer.rkt`, `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`, and runs on the C VM. No item touches `src/evaluator.rkt`.
+- Most items are sugar that `lower.rkt` turns into code the VM already runs, so the bytecode format and the VM do not change. The exceptions are said in each item: 25.4 changes the VM's `EQ` and `NE` opcodes, 25.6 adds a prelude mark on functions and its error-span rule, and 25.11 adds one `Float` builtin.
 - Library work follows the roadmap rule [New library features: `std/` first](../roadmap/README.md#new-library-features-std-first): pure computation is written in Agentica, and C is only for its exceptions. 25.6 and 25.11 need one small mechanism for this, the compiler prelude (25.6).
 - Each item is its own PR, with the grammar (`docs/grammar.md`), the programming skill (`.agents/skills/agentica-programming/SKILL.md` and the matching `references/` file), the site page, the development skill's notes and tests. When an item lands, its text moves to `grammar.md` and is deleted here.
-- **Tests** in each PR: parser, lexer and checker tests that assert the diagnostic code and span (`tests/parser-test.rkt`, `tests/lexer-test.rkt`, `tests/checker-test.rkt`, `tests/modules-test.rkt`); golden fixtures with fixed exit code, stdout, stderr and diagnostic code on the VM (after 7i the differential tests are golden tests, `docs/roadmap/07-vm.md` 7i); and the runnable `agentica` blocks of the site page, which `tests/site-examples-test.rkt` checks.
+- **Tests** in each PR: parser, lexer and checker tests that assert the diagnostic code and span (`tests/parser-test.rkt`, `tests/lexer-test.rkt`, `tests/checker-test.rkt`, `tests/modules-test.rkt`); the golden fixtures (`tests/fixtures/vm/*.expected`: exit code, stdout, stderr and diagnostic code on the VM); and the runnable `agentica` blocks of the site page, which `tests/site-examples-test.rkt` checks.
 - **Evaluation.** Section 11's rule holds: before the programming skill teaches a new form as the main style, an evaluation round with a second model checks that agents use it well (`tests/eval/run.py`). For 25.8 the round is a precondition: it does not ship without it.
 
 | § | Item | Layers | New diagnostic codes |
@@ -20,7 +20,7 @@ Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms
 | 25.3 | `value.with(field: x)` | parser, checker, lowering | none |
 | 25.4 | Value equality for data | checker, VM `EQ`/`NE` | none |
 | 25.5 | Standalone lambdas | parser, checker, lowering | none |
-| 25.6 | More Enumerable methods | catalog, prelude, linker, lowering | none |
+| 25.6 | More Enumerable methods | catalog, prelude, checker, lowering, VM error spans | none |
 | 25.7 | `unless` | lexer, parser | none |
 | 25.8 | Statement modifiers | parser, checker | `CHECK-MODIFIER-BINDING` |
 | 25.9 | `File.open` with a block | catalog, checker, lowering | none |
@@ -51,7 +51,7 @@ The parser takes any expression after `=`, so the checker can give a clear diagn
 **Checker rules:**
 
 - **Defaults only at the end.** After a parameter with a default, every parameter has a default, except a last parameter of type `Fn[...]`, which may stay without one so a block can still fill it: `def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void`. Anything else is `CHECK-DEFAULT-ORDER` at the parameter without a default.
-- **A default is a constant:** an `Int`, `Float` or `String` literal (a minus sign allowed before a number; no `#{...}` in the string), `true`, `false`, `nil`, `[]` or `{}`. Anything else (a call, a variable, `&name`, a struct, an interpolated string) is `CHECK-DEFAULT-VALUE` at the expression, with a help that says to make the parameter required.
+- **A default is a constant:** an `Int`, `Float` or `String` literal (a minus sign allowed before a number; no `#{...}` in the string), `true`, `false`, `nil`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, or `Log.Level.Info` through an import alias). Anything else (a call, a variable, `&name`, a struct, an interpolated string) is `CHECK-DEFAULT-VALUE` at the expression, with a help that says to make the parameter required.
 - **Its type** is checked against the parameter type, like an initializer: `[]` and `{}` take the parameter type as their expected type, and a mismatch is `CHECK-TYPE-MISMATCH` at the default.
 - **Fresh at each call.** The default is built at each call; no call shares a value with another. Since values are immutable, Python's shared mutable default cannot happen anyway.
 - **Calls** to a function with `N` required parameters and `M` in all take `N` to `M` arguments; otherwise `CHECK-ARITY`, whose message says the range ("expects 1 to 2 arguments"). Arguments fill parameters from the left. When the last parameter is a `Fn` without a default, the block, or else the last argument, always goes to it, and the other arguments fill the parameters before it from the left: with `each_line` above, `each_line("a.txt") do |l| ... end` and `each_line("a.txt", 50, &show)` both work.
@@ -102,8 +102,8 @@ There is no clash with today's grammar: `export` is followed only by `def`, `str
 
 **Rules**, all in the linker (`src/modules.rkt`):
 
-- The alias must be an import of this file (`CHECK-UNKNOWN-NAME` otherwise, as for a call through an unknown alias), and the name must be exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help that 14c adds).
-- The name joins this module's exports. It must not collide with a declaration of this file or another re-export (`CHECK-REDEFINED-NAME`).
+- The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with the help "unknown module alias", decided in the linker. The name must be exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help that 14c adds).
+- The name joins this module's exports. The export entry keeps the original module's key (its canonical path) and name, not this file's, so the importer resolves to the original declaration. It must not collide with a declaration of this file or another re-export (`CHECK-REDEFINED-NAME`).
 - Inside the file, the name is still `Url.parse`: a re-export adds no local name.
 - It is the same declaration, not a copy. A program that imports both `web.agc` and `url.agc` sees `Web.Address` and `Url.Address` as one type. A chain (a re-export of a re-export) leads to the original declaration; a cycle cannot happen, since import cycles are already `CHECK-IMPORT-CYCLE`. A re-exported enum brings its variants (`Web.Option.Some(x)`).
 - Re-exports, like imports, may follow each other and the imports without a blank line.
@@ -138,7 +138,7 @@ end
 - The receiver must be a struct (`CHECK-UNKNOWN-METHOD` on any other type, with a help for structs). Each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given at most once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take the field type).
 - At least one field: `ana.with()` is `CHECK-ARITY`. A positional argument (`ana.with(31)`) is `PARSE-UNEXPECTED-TOKEN`, with a help that shows `with(age: 31)`.
 - `with` builds a new value of the struct's type, so it follows the rules of construction: for a type that another module keeps private, it gives the same diagnostic as constructing it. With generic structs (15.3) the type arguments stay, so a field's new value has the same type as before.
-- A field named `with` is `CHECK-REDEFINED-NAME`. Otherwise `user.with(...)` would clash with calling an `Fn` field without `.call` (15.1). Today no example uses such a field.
+- A field named `with` whose type is `Fn[...]` is `CHECK-REDEFINED-NAME`; otherwise `user.with(...)` would clash with calling an `Fn` field without `.call` (15.1). A data field named `with` stays valid, so a JSON object with a `"with"` key still decodes into a struct; `value.with` without parentheses reads that field, and `value.with(...)` is always the update.
 - **Named arguments appear only here and in struct construction** (`User(name: ..., age: ...)`). Calls to functions stay positional; keyword arguments are in Part B.
 
 **Lowering:** the receiver is evaluated once, then the new values left to right; `lower.rkt` builds a new struct with today's construction instruction, reading the fields that do not change from the receiver. No VM change.
@@ -161,6 +161,8 @@ puts(a.with(age: 31) != b)      # true
 - `Int`, `Float`, `Bool`, `String`, `Nil` or `Range`, as today;
 - a struct whose field types all have equality, or an enum whose payload types all have equality: same type, and the fields (or the variant and its payloads) equal one by one, in declared order;
 - `List[T]`, `Map[K, V]` or `Result[T]` whose element types have equality: lists of the same length with equal elements in order; maps with the same keys and equal values, in any order (as Ruby's `Hash#==`); Results with the same tag and equal payloads (`error` compares the message).
+
+A struct may hold itself through a list or an enum (`children: List[Node]`). The check assumes yes on a cycle: while it decides whether `Node` has equality, `Node` counts as having it, so the answer depends only on the other fields. A generic enum's equality depends on its type arguments: `Option[Int]` has it, `Option[Fn[Int, Int]]` does not; a user enum is checked per use, with its type arguments filled in.
 
 Lists, maps and Results are in this item because a struct with a `tags: List[String]` field is common, and struct equality without them would rarely apply. `Json`, `Fn`, `Task` and handles (files, sockets, processes, HTTP values) have no equality.
 
@@ -244,13 +246,22 @@ Map.reject(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
 
 **Where the code lives: the compiler prelude.** By the std-first rule these are Agentica code, not C. But a `std/` module cannot hold them today, for two reasons: a user function cannot be generic, and a user function cannot be called as a method. So this item adds one small mechanism, the **compiler prelude**:
 
-1. Each function above has a normal entry in the builtin catalog (`src/builtins.rkt`): signature with the catalog's type variables, help text, and a mark that its body is a prelude function. The checker checks calls against the entry like any builtin, so call sites, methods, aliases, blocks and `agentica help` work as for `List.map`. Nothing new for users.
-2. The bodies live in `stdlib/prelude/list.agc` (and `range.agc`, `map.agc`), written in Agentica on the existing builtins. Only prelude files may use the catalog's type variables (`A`, `B`, `K`, ...); user code still cannot. The checker checks a prelude body once with each type variable as an opaque type: a value of type `A` can be stored, put in a list, returned, and passed to an `Fn` that takes `A`, and nothing else. A variable restricted to a short list of types (`K` is `Int` or `String`) is checked once per allowed type, so the body may use it as a map key or add it.
-3. The linker adds a prelude file to a program only when the program uses one of its functions, and `lower.rkt` compiles the used functions as ordinary functions (one copy per allowed type that is used, for the restricted ones) and calls them like user functions. The VM does not change. Prelude files are not importable through `std/` and their names cannot clash with user names.
+1. Each function above has a normal entry in the builtin catalog (`src/builtins.rkt`): signature with the catalog's type variables, help text, and a mark that its body is a prelude function. The checker checks calls against the entry like any builtin (methods are resolved by receiver type in `resolve-method`, `src/checker.rkt`), so call sites, methods, aliases, blocks and `agentica help` work as for `List.map`. Nothing new for users.
+2. The bodies live in `stdlib/prelude/list.agc` (and `range.agc`, `map.agc`), written in Agentica on the existing builtins. Only prelude files may use the catalog's type variables (`A`, `B`, `K`, ...); user code still cannot. The checker checks a prelude body with each type variable as an opaque type: a value of type `A` can be stored, put in a list, returned, and passed to an `Fn` that takes `A`, and nothing else. A variable restricted to a short list of types (`K` is `Int` or `String`) may have one body per allowed type, and the catalog entry names the body for each type: `List.sum` has `sum_int` and `sum_float`, since `0` and `0.0` and the two additions differ. A body that works for every allowed type (`uniq`, which only uses the value as a map key) may be one body, checked once per allowed type.
+3. **Always linked, checked once.** The linker cannot know which prelude functions a program uses: methods and `format` are resolved by the checker, after linking. So the prelude modules are always linked into every program. They are checked once, when the compiler is built, and the result is cached with the embedded source (as `embed-source` embeds `std/` files in `src/stdlib.rkt`), so checking a user program does not pay for them. `lower.rkt` emits only the prelude functions reachable from the checked program (one copy per allowed type that is used, for restricted ones) and calls them like user functions. Prelude files are not importable through `std/`, and their names cannot clash with user names.
+
+**Runtime errors inside prelude code** must look like errors of a builtin, never of a file the user did not write:
+
+- A runtime diagnostic raised while a prelude function runs is reported at the user's call site, or at the argument the builtin rule names (as `List.take` reports `RUNTIME-INVALID-COUNT` at its count argument). For this, `lower.rkt` gives a call to a prelude function the call span and the argument spans, as `call-builtin` already has (`docs/vm/03-ir-and-bytecode.md`), and marks prelude functions in the bytecode. When the VM raises a diagnostic in a prelude frame, it takes the span from the innermost frame that is not a prelude frame.
+- Prelude frames are skipped in stack traces (14b, [section 24.3](24-logging.md#243-stack-traces-on-runtime-errors)), like native frames. A user block called from a prelude function keeps its own frame, so an error in the block shows the block and then the user's call.
+- A prelude-only intrinsic, `__fail_arg(code, index, message)`, raises the given `RUNTIME-` code at argument `index` of the current prelude call: `each_slice` uses it for `RUNTIME-INVALID-COUNT` when `n < 1`, and the `Range` functions for the 1048576-value limit. Only prelude files may use it, as with the type variables; in user code the name is `CHECK-UNKNOWN-NAME`.
+- An overflow inside a prelude body (`sum`) is raised by the VM's own add instruction, so it is reported at the user's call by the first rule.
+
+These are the only VM changes of this item: the prelude mark on functions and the span rule above, plus `__fail_arg`.
 
 This is not user generics: only files that ship with the compiler use type variables, and only behind catalog signatures. A function moves to C later only when a measurement shows it is hot, as the std-first rule says; its catalog entry stays the same.
 
-**Tests:** each function on lists of `Int`, `String` and structs, empty lists and the edge cases above, golden fixtures, the site examples, and checker tests for the restricted type variables and for a prelude body that misuses an opaque type. **Docs:** `grammar.md` (the `List`, `Range` and `Map` tables and the alias table), the programming skill (`references/builtins.md`), `site/content/library/list.md`, `range.md` and `map.md`, and the development skill (the prelude).
+**Tests:** each function on lists of `Int`, `String` and structs, empty lists and the edge cases above, golden fixtures, the site examples, and checker tests for the restricted type variables and for a prelude body that misuses an opaque type. Runtime errors, with fixed expected stderr (span and stack): `each_slice(0)` (count error at the argument), an `Int` `sum` that overflows (at the call), a `Range` function over the 1048576-value limit (at the receiver), and an error inside the user's block reached through a prelude function (the block's frame, then the user's call; no prelude frame). A test that `__fail_arg` in user code is `CHECK-UNKNOWN-NAME`.
 
 ### 25.7 `unless`
 
@@ -318,13 +329,19 @@ def count_lines(path: String) -> Result[Int]
     while true
       case File.read_line(f, 1000)
         ok(_) -> count += 1
-        error(_) -> break
+        error(message) ->
+          if message == "filesystem: end of file"
+            break
+          end
+          return error(message)
       end
     end
     ok(count)
   end
 end
 ```
+
+There is no `File.eof?` today, and `File.read_line` returns an error both at the end of the file and for invalid UTF-8, so the example tells them apart by the error text the VM gives at the end (`filesystem: end of file`) and returns any other error. A `File.eof?(handle, timeout_ms)` builtin, like `IO.eof?`, would make this cleaner; it is a separate small item.
 
 **API:** one more arity of the existing builtin (the catalog already has arity overloads, `Map.get`):
 
@@ -368,8 +385,11 @@ The value is `"Usage: tool [options]\n\n  --verbose   print more\nExit code 0 on
 - **Start:** `<<~` followed directly by an uppercase name (`[A-Z][A-Z0-9_]*`). The rest of the line is lexed as usual (`puts(<<~TEXT)` works); the body starts on the next line. Several heredocs on one line take their bodies one after the other, in order, as in Ruby.
 - **End:** a line with only optional spaces and the same name. The body lines and the end line produce no `NL` tokens; the line that holds `<<~NAME` ends with its `NL` as usual.
 - **Indentation:** the smallest number of leading spaces among the body lines that are not blank is removed from every line. A blank line (spaces only) becomes an empty line. A tab in a line's leading whitespace is `LEX-HEREDOC-INDENT`, with a help to use spaces, because tab widths make the result unclear. Each body line ends with `\n`, the last included.
+- **Token order.** At the place of `<<~NAME`, the lexer emits the heredoc's tokens: one `string` token without interpolation, or `interp-start`, the tokens of each `#{...}` expression, `interp-middle` and `interp-end`, as for a normal string. Then come the tokens of the rest of the opener line, then its `NL` (when outside delimiters), then the tokens after the end line. So the parser sees one string primary where `<<~NAME` stands.
+- **Spans.** The string piece tokens (`string`, `interp-start`, `interp-middle`, `interp-end`) all take the span of `<<~NAME`, so every node that `span-from` builds in `src/parser.rkt` (the start of its first token to the end of the last consumed token) stays on the opener line, with start before end. The tokens inside `#{...}` keep their real line and column in the body: the lexer finds the indentation with a first pass over the body lines, then lexes each line from its real position after the indentation, so the indentation is cut from the text, not from the source positions. These spans lie after their parent's span, so spans are not monotonic here: a child may lie outside its parent. The PR checks that no code assumes a child span lies inside its parent's (diagnostics print each span on its own line, which works).
+- **Inside parentheses:** `foo(<<~A, x)` works, and so does `foo(<<~A,` with the next argument on the line after the end line: inside delimiters no `NL` is emitted, the body is read when the opener line ends, and the call goes on after the end line, as in Ruby.
 - **Escapes and interpolation** are those of a normal string: `\n`, `\r`, `\t`, `\"`, `\\`, `\#`, and `#{...}`, which must end on its line; a bad escape is `LEX-INVALID-ESCAPE`. A `"` needs no escape. The indentation is removed from the source text before escapes and interpolation, so an interpolated value is never re-indented.
-- **Errors:** end of file before the end line is `LEX-UNTERMINATED-HEREDOC` at `<<~NAME`. Only the squiggly form exists: `<<NAME`, `<<-NAME` and the quoted forms (`<<~'NAME'`) are `LEX-UNEXPECTED-CHAR` with a help that shows `<<~NAME` (and `\#` for text without interpolation).
+- **Errors:** end of file before the end line is `LEX-UNTERMINATED-HEREDOC` at `<<~NAME`. A name that is not uppercase (`<<~text`) is `LEX-UNEXPECTED-CHAR` at `<<~`, with a help that shows `<<~TEXT`. Only the squiggly form exists: `<<NAME`, `<<-NAME` and the quoted forms (`<<~'NAME'`) are `LEX-UNEXPECTED-CHAR` with a help that shows `<<~NAME` (and `\#` for text without interpolation).
 - `case` patterns and `import` paths still take plain string literals only.
 
 **Tests:** in `tests/lexer-test.rkt`: indentation, blank lines, interpolation and escapes, two heredocs on one line, a heredoc inside a call, the three codes with their spans; a golden fixture; a site example. **Docs:** `grammar.md` (Literals: "no multiline strings" changes), the programming skill (`SKILL.md`), `site/content/tour/strings.md`.
@@ -390,23 +410,23 @@ puts(format("%-8s|%6.2f|%03d|%x", "apple", 2.5, 7, 255))   # apple   |  2.50|007
 | `s` | any value with `to_s` | its `to_s`, as `puts` writes it |
 | `%%` | none | a `%` |
 
-Flags: `0` pads numbers with zeros after the sign (`%05d` of `-42` is `-0042`); `-` pads on the right. `width` is 1 to 1000 and counts characters as `String.length` does. `precision` is 0 to 50 and only for `f`. An `Int` for `%f` is not converted (`n.to_f`, as everywhere).
+Flags: `0` pads numbers with zeros after the sign (`%05d` of `-42` is `-0042`); `-` pads on the right with spaces. With both (`%-05d`), `0` is ignored, as in C and Ruby. Other flags (`+`, space, `#`) are `CHECK-FORMAT-SPEC`. `width` is 1 to 1000 and counts characters as `String.length` does. `precision` is 0 to 50 and only for `f`. An `Int` for `%f` is not converted (`n.to_f`, as everywhere).
 
 **The format string must be a literal, checked at compile time.** The checker cannot check a format string that is only known at run time, so the choice was a literal checked by the compiler or a format string at run time that returns a `Result[String]`. The literal is chosen: the checker then knows how many arguments there are and their types, so a mistake is a compile error with a span inside the string, the result is a plain `String`, and nearly all real format strings are literals. A program that needs a format chosen at run time picks between literals.
 
 **Checker rules:**
 
-- `format` is a top-level name like `puts`, handled by the checker: the number of arguments depends on the literal, so it has no single catalog signature. It becomes a reserved name (`CHECK-REDEFINED-NAME` for a user `def format`; a breaking change, accepted before 1.0).
+- `format` is a top-level name like `puts`, handled by the checker: the number of arguments depends on the literal, so it has no single catalog signature. Only the function name is reserved: a user `def format` is `CHECK-REDEFINED-NAME`, a breaking change accepted before 1.0. Variables, parameters and fields named `format` stay valid, since `format(...)` is a call and a variable is not callable.
 - The first argument must be a plain string literal, without `#{...}`: `CHECK-FORMAT-LITERAL` otherwise, with a help to use interpolation for text that is built at run time.
-- A bad conversion (unknown type, a `%` at the end, `precision` on `d`, `x` or `s`, `0` on `s`, a width or precision out of range) is `CHECK-FORMAT-SPEC`, with the span of the conversion inside the literal.
+- A bad conversion (unknown type, an unknown flag, a `%` at the end, `precision` on `d`, `x` or `s`, `0` on `s`, a width or precision out of range) is `CHECK-FORMAT-SPEC`, with the span of the conversion inside the literal.
 - A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type is `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its conversion.
 - `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows `format(...)`.
 
-**Where the code lives.** By the std-first rule, padding, decimal and hex text are Agentica code in a prelude file, `stdlib/prelude/format.agc` (25.6; these functions use no type variables). One part is a builtin under exception 5 of the rule: `Float.to_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise `RUNTIME-INVALID-COUNT`), because correct decimal rounding of a binary `Float` needs exact arithmetic that would be fragile in Agentica; the VM calls `snprintf` with `%.*f`, and it is a public builtin, also a method (`x.to_fixed(2)`). The `Int` bit builtins of phase 13 are not needed: hex is written with division and `%`, and the smallest `Int` is handled as a special case.
+**Where the code lives.** By the std-first rule, padding, decimal and hex text are Agentica code in a prelude file, `stdlib/prelude/format.agc` (25.6; these functions use no type variables). One part is a builtin under exception 5 of the rule: `Float.to_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise `RUNTIME-INVALID-COUNT`; NaN and the infinities give Ruby's `NaN`, `Inf` and `-Inf`), because correct decimal rounding of a binary `Float` needs exact arithmetic that would be fragile in Agentica; the VM calls `snprintf` with `%.*f`, and it is a public builtin, also a method (`x.to_fixed(2)`). The `Int` bit builtins of phase 13 are not needed: hex is written with division and `%`, and the smallest `Int` is handled as a special case.
 
 **Lowering:** `lower.rkt` turns each call into a concatenation of the literal parts and calls to the prelude functions, one per conversion, so no format string is parsed at run time. No VM change other than the new builtin.
 
-**Tests:** checker tests for each code with spans inside the literal; golden fixtures for every type, flag, width and precision, negative numbers, the smallest `Int`, NaN and the infinities, `%%`; `Float.to_fixed` against vectors from a checked-in Python script (standard library only), including halfway cases such as `0.125` and `2.675`. **Docs:** `grammar.md` (builtin functions, §7 hints), the programming skill (`references/builtins.md`), `site/content/library/string.md` and `numbers.md`.
+**Tests:** checker tests for each code with spans inside the literal; golden fixtures for every type, flag, width and precision, negative numbers, the smallest `Int`, NaN and the infinities, `%%`; `Float.to_fixed` (NaN and the infinities included) against vectors from a checked-in Python script (standard library only), including halfway cases such as `0.125` and `2.675`. **Docs:** `grammar.md` (builtin functions, §7 hints), the programming skill (`references/builtins.md`), `site/content/library/string.md` and `numbers.md`.
 
 ### 25.12 To evaluate later (Part B)
 

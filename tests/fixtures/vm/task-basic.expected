@@ -1,0 +1,20 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 123,
+  "stdout": [
+    "Item(value: 42)",
+    "Item(value: 42)",
+    "Item(value: 14)",
+    "<Task>",
+    "[<Task>, <Task>]",
+    "error(\"normal result\")",
+    "error(\"normal result\")",
+    "nil",
+    "task 3 ran",
+    "105",
+    "done",
+    ""
+  ],
+  "stderr": []
+}

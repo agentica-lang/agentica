@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 122,
+  "stdout": [
+    "2",
+    "ok(\"a\")",
+    "a QueueState(items: [\"b\"])",
+    "error(\"queue is empty\")",
+    "false",
+    ""
+  ],
+  "stderr": []
+}

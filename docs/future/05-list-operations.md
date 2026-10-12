@@ -1,6 +1,6 @@
 ## 5. Remaining `List` operations
 
-The collection module is `List`, keeping `List.size`; the earlier `Enum` proposal is superseded. Phase 5n already implements `List.append`, `List.set`, `List.repeat`, `List.reverse`, `List.concat/take/drop/at`, `List.map/filter/reduce`, `List.sort/sort_by`, and `Map.values/get/delete`. Their current contracts live in `grammar.md` and the programming reference. Knight-tour and small traveling-salesman examples exercise construction, persistent updates, and nested lists. Operations below remain planned, not part of the implemented core.
+The collection module is `List`, keeping `List.size`; the earlier `Enum` proposal is superseded. Phase 5n already implements `List.append`, `List.set`, `List.repeat`, `List.reverse`, `List.concat/take/drop/at`, `List.map/filter/reduce`, `List.sort/sort_by`, and `Map.values/get/delete`. Their current contracts live in `grammar.md` and the programming reference. Knight-tour and small traveling-salesman examples exercise construction, persistent updates, and nested lists. Operations below remain planned, not part of the implemented core. `List.sum` and more Enumerable methods are now planned in [section 25.6](25-ruby-typed-idioms.md#256-more-enumerable-methods).
 
 Remaining callback operations depend on function values (section 4, phase 5j): `List.any?` and `List.all?`. Without closures, a function cannot capture variables; extra state travels through parameters or the accumulator.
 
@@ -14,7 +14,7 @@ List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
 Planned rules:
 
 - Generic builtins, no user generics. Collection operations preserve their inputs.
-- `List.member?` requires primitive equality.
+- `List.member?` requires primitive equality; wider equality (structs, lists, maps, enums, Results) is planned in [section 25.4](25-ruby-typed-idioms.md#254-value-equality-for-data).
 - Callbacks require exact parameter and return types.
 - `List.size` remains the count operation; no duplicate `count` alias is planned.
 - Linked-list operations remain linear; repeated append costs O(n²). A persistent vector is a later optimization.

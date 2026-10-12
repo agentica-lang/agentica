@@ -1,0 +1,10 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INTEGER-OVERFLOW",
+  "steps": 13,
+  "stdout": [
+    "-9223372036854775808..-1",
+    ""
+  ],
+  "stderr": []
+}
