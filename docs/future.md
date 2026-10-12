@@ -4,7 +4,7 @@ Status: proposals only. This document is not normative; implemented language beh
 
 Working rule: when a phase of the [`roadmap.md`](roadmap.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred.
+Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred. Section 19 (SIMD in the VM) is an implementation proposal with no language change.
 
 ## 2. Landed: enums and pattern matching
 
@@ -198,7 +198,7 @@ Lightweight I/O tasks are implemented before networking in phase 5j2. Their norm
 | Places, `place-channel` | `racket/place` | Real multicore | One VM per place; messages serialized; heavy |
 | Futures | `racket/future` | Limited | Parallel only for a safe value subset; finicky performance; not proposed |
 
-The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). In the evaluator, add CPU parallelism only after measuring a concrete workload and reviewing shared state. The VM is designed for multicore from its first tasks PR (`docs/vm.md` §10.2.3).
+The implementation uses ordinary coroutine threads. Racket CS 9.3 also supports parallel thread pools; places are not the only multicore option. See [Racket threads](https://docs.racket-lang.org/reference/threads.html). In the evaluator, add CPU parallelism only after measuring a concrete workload and reviewing shared state. The VM is designed for multicore from its first tasks PR (`docs/vm.md` §10.2.3), but N>1 schedulers are gated: the roadmap builds them only if the server measurement asks for it (roadmap order step 11).
 
 ### Shape: builtin modules, no grammar change
 
@@ -1011,7 +1011,7 @@ name: set to Ana
 
 **Near-term path, without a rewrite:** release one Linux file built with `raco exe --orig-exe`, with the VM embedded, on an older glibc baseline. `compile` plus `agentica-vm` already avoid Racket at run time. What is missing is that `--vm` compiles to a new temporary file on each run (`src/main.rkt`); it should reuse a cached `.agcb` keyed by the source and the compiler version.
 
-**When to look again:** a single file does not need a rewrite. The remaining reasons to change the front-end language are startup time and binary size. Look again once the grammar is stable, and only if those measurements still hurt.
+**When to look again:** a single file does not need a rewrite. The remaining reasons to change the front-end language are startup time and binary size. Look again once the grammar is stable, and only if those measurements still hurt. The roadmap takes this decision in its order step 11, with the source → result start-up (the 7g runners and the server measurement, 7j) and the typed-Python evaluation round (6c); like the multicore schedulers, a rewrite starts only if those numbers call for it.
 
 **Options then:**
 
@@ -1020,3 +1020,47 @@ name: set to Ana
 - Less suited: Go, which has no sum types.
 
 No rewrite decision is taken now.
+
+## 19. SIMD in the VM
+
+**Status:** on demand. It starts only if profiling (the server measurement, roadmap 7j, or the cross-language benchmarks, phase 12) shows time spent in the routines below. No language change.
+
+**Targets:** AVX2 first, then AVX-512 on x86-64; NEON on ARM later. AVX-512 can lower the clock speed on some Intel CPUs, so a routine uses it only where it was measured faster than AVX2.
+
+**Candidates:**
+
+1. Strings (`vm/strings.c`, `vm/text.c`): UTF-8 validation, code point counting (`length`), char index to byte offset (`at`, `slice`), search (`index_of`, `contains?`, `split`, `replace`), and ASCII `upcase`/`downcase`.
+2. The JSON encoder (`vm/json.c`): scanning a string for quotes, backslashes and control characters before escaping.
+3. Comparing and copying: call libc `memcpy`, `memcmp` and `memchr` in place of hand-written byte loops. glibc already picks AVX2 or AVX-512 versions at run time, so this needs no build change and can land at any time.
+4. Sorting `List[Int]` and `List[Float]` with an AVX-512 sort (for example Intel's x86-simd-sort, BSD-3-Clause, which fits the dependency policy), only if faster lists (8d) add unboxed Int or Float storage. Today list items are boxed 16-byte values, so a vector sort does not apply.
+
+**Not useful:** instruction dispatch, the builtins that take a callback, the HAMT (it already uses POPCNT), SipHash (kept as it is for its resistance to hash flooding), and the GC.
+
+**Build:**
+
+- The default release build stays at baseline x86-64. A SIMD routine is a function compiled with `__attribute__((target("avx2")))` or `target("avx512bw")`, picked once at start-up with `__builtin_cpu_supports` and kept in the read-only runtime data.
+- Opt-in flags for local builds skip the run-time choice: `make vm MARCH=x86-64-v3` (AVX2) or `MARCH=x86-64-v4` (AVX-512).
+- Every SIMD routine keeps its scalar version. The C tests and the differential tests run both: a test-only switch forces the scalar path, so each path is checked on the same inputs (non-ASCII text, invalid UTF-8, lengths around the vector width).
+
+## 20. Crypto module
+
+**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL 3 library. If it lands after 7i, it is VM only.
+
+**Sketch** (names are not final):
+
+```text
+Crypto.sha256(data: Bytes) -> Bytes          # also sha512; blake2b if needed
+Crypto.hmac_sha256(key: Bytes, data: Bytes) -> Bytes
+Crypto.equal?(a: Bytes, b: Bytes) -> Bool     # constant time
+Crypto.random_bytes(n: Int) -> Result[Bytes]  # OS-backed CSPRNG
+Crypto.password_hash(password: String) -> Result[String]
+Crypto.password_verify(password: String, hash: String) -> Result[Bool]
+Crypto.seal(key: Bytes, plain: Bytes) -> Result[Bytes]   # AEAD
+Crypto.open(key: Bytes, sealed: Bytes) -> Result[Bytes]
+```
+
+- Hex and Base64 encoding go here only if no other module has them by then.
+- Password hashing uses Argon2id (in OpenSSL since 3.2) with scrypt as the fallback; the hash string carries its parameters, so verify needs no settings.
+- AEAD is AES-256-GCM or ChaCha20-Poly1305. The nonce rule is fixed by the module: `seal` makes a random nonce for each call and puts it in front of the output, so a user never picks or reuses one. `open` fails with `error(...)` on a wrong key or changed data.
+- No low-level primitives: no raw block ciphers, no ECB, no unauthenticated modes.
+- Errors are `Result` values. Hashes and HMAC have no effect label; `random_bytes`, `password_hash` and `seal` use the existing `random` label.

@@ -6,29 +6,50 @@ This roadmap turns the core specification in [`grammar.md`](grammar.md) into a u
 
 The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
-Ruby-style ergonomics are implemented. The next priority is the bytecode VM
-(phase 7): the design in `docs/vm.md` (7b), the 7e vertical slice, the
-Float and Strings PRs, the macOS and Windows CI, the Lists PR, the
-structs, enums and `case` PR, the Result PR, the Maps PR, the closures PR and
-the IO and System PR (`docs/vm.md` §12.2 items 1 to 4, 5a to 5e and 6a) are
-done; the other widening PRs of §12.2 come next. Core data structures (phase 8) come next;
-ranges and queues are unblocked now that the VM has closures (7e PR 5e) and can
-proceed in parallel with the rest of phase 7, and sets need the VM maps (7e PR 5d). Real
-applications follow, then round 1 of the cross-language benchmarks (phase 12,
-once 7g, 8d and the VM `IO` library are done; round 2 runs whenever tasks land on the VM, 7h), then
-MCP. Adapters and JSON inspection (phase 10) come after MCP: they are small
-language items, so they go before shared tables, which wait for a real program.
-10a needs `.call` on the VM (7e PR 5e); 10b, 10d and 10e,
-and the JSON part of 10c, need the VM JSON PR (`docs/vm.md` §12.2 item 7); 10e also
-needs 10b. Phase 10 checks
-the VM and the disk backend with two separate programs (see its "Done when").
-Shared tables (phase 9) are
-on demand: they need tasks on the VM (7h) and start only when a real program
-needs them. Binary serialization (phase 11) is on demand too: it needs
-`Bytes`, generic structs (10c) and the JSON form of enums (10d). Real applications and MCP keep
-running on the Racket evaluator meanwhile, and their findings feed the VM's
-differential tests. Historical phase numbers below remain stable; this order
-governs pending work rather than their numeric order.
+Ruby-style ergonomics are implemented. The bytecode VM core runs every example
+except those that need processes, tasks or the network: the design (7b),
+lowering, bytecode and the VM (`docs/vm.md` §12.2 items 1 to 8), the 7g
+benchmark script and 7h part 1 (event loop and files) are done, with small
+items still open in 7c (`tests/lower-test.rkt`), 7e (loader validation for
+opcodes as they land) and 7f (the extra differential inputs and corpora).
+Ranges (8a) are done on both backends.
+
+An outside review changed the pending order. The benchmarks time only the VM
+running precompiled bytecode, while `agentica --vm file.agc` still starts
+Racket, checks and compiles; `List.append` copies the whole array, so building
+a list with `push` is O(n²); one scheduler with a fair turn rule is the next
+big step, and multicore is not yet shown to be needed; and it is not yet shown
+that agents do better in Agentica than in typed Python. So the next work is:
+tasks on the VM with one scheduler (N=1) and a fairness rule that also covers
+long builtins (7h, `docs/vm.md` §10.2.1); then processes, TCP/TLS and HTTP on
+the VM (7h); then faster lists (8d), before any instruction-dispatch
+micro-optimization (7g); then a measurement of a small real server on the VM,
+with a source → result start-up runner (7j); then an evaluation round against
+typed Python on harder tasks (6c). Those results decide three things: the
+multicore schedulers (fully designed in `docs/vm.md` §10.2.3, and gated on
+that measurement), a front-end rewrite (`future.md` §18, gated the same way),
+and the switch to the VM with the evaluator removed (7i), which does not
+depend on multicore and may proceed after 6c, in parallel with the multicore
+decision.
+
+Sets and queues (8b, 8c) are unblocked (the VM has maps and closures) and can
+proceed in parallel with the steps above. Real applications follow, then round
+1 of the cross-language benchmarks (phase 12). Round 1 needs the 7g benchmark
+script (done), the real applications, faster lists (8d) and the VM `IO`
+library (`docs/vm.md` §12.2 item 6a, done); round 2 needs tasks on the VM
+(7h) and covers multicore only if it lands. Then MCP. Adapters and JSON inspection (phase 10) come after MCP:
+they are small language items, so they go before shared tables, which wait
+for a real program. 10a needs `.call` on the VM (7e PR 5e, done); 10b, 10d and
+10e, and the JSON part of 10c, need the VM JSON PR (`docs/vm.md` §12.2 item 7,
+done); 10e also needs 10b. Phase 10 checks the VM and the disk backend with two
+separate programs (see its "Done when"). Shared tables (phase 9) are on demand:
+they need tasks on the VM (7h) and start only when a real program needs them.
+Binary serialization (phase 11) is on demand too: it needs `Bytes`, generic
+structs (10c) and the JSON form of enums (10d). Real applications and MCP keep
+running on the Racket evaluator until the VM covers what they use, and their
+findings feed the VM's differential tests. Historical phase numbers below
+remain stable; this order governs pending work rather than their numeric
+order.
 
 | Order | Next work | Outcome |
 |---|---|---|
@@ -36,16 +57,24 @@ governs pending work rather than their numeric order.
 | 2 | **Complete:** Typed JSON (5f2) and builders/schemas (5i) | Handle structured input and construct replies |
 | 3 | **Complete:** Modules and imports, including embedded `std/` and external `pkg/` resolution | Split larger programs across files |
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
-| 5 | **Next:** Bytecode VM in C with the Boehm GC (phase 7): the vertical slice is in; widen it PR by PR (`docs/vm.md` §12.2) | Run checked programs much faster, with the same output and diagnostics |
-| 6 | Core data structures (phase 8): ranges first (may start after 7e PR 5e), then `Set[T]` and `Queue[T]` | Write loops and algorithms the Ruby way, without workarounds |
-| 7 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
-| 8 | Cross-language benchmarks (phase 12): the same small programs in Agentica (VM and evaluator), Ruby, Crystal and optionally Python. Only round 1 (single-threaded; needs the 7g benchmark script, real applications, 8d and the VM `IO` library, `docs/vm.md` §12.2 item 6a, done) goes before MCP; round 2 (concurrent programs) runs once tasks land on the VM (7h) and covers multicore after the 7h multicore schedulers item (`docs/vm.md` §10.2.3) | Honest speed numbers against Ruby and Crystal, and the VM hot spots to fix next |
-| 9 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
-| 10 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums, optional and nullable JSON fields | Write adapters and read JSON of unknown shape without workarounds |
-| 11 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
-| 12 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
+| 5 | **Mostly complete:** Bytecode VM core in C with the Boehm GC (`docs/vm.md` §12.2 items 1 to 8), the 7g benchmark script, 7h part 1 (event loop and files) and ranges (8a); small items stay open in 7c, 7e (loader validation for opcodes as they land) and 7f | Checked programs run on the VM with the same output and diagnostics |
+| 6 | **Next:** 7h tasks with one scheduler (N=1) on the structures split for N (`docs/vm.md` §10.2.3), with the fairness rule of §10.2.1 (long builtins charge the turn, never `--max-steps`) and the latency test of the 7h tasks item | Concurrent programs on the VM; timers and I/O stay responsive while other tasks compute |
+| 7 | 7h processes, then TCP and TLS, then HTTP; BDD on the VM; the differential tests and the independent process and network fixtures extended to the VM | Every example and CI smoke test runs on the VM |
+| 8 | Faster lists (8d): a persistent vector behind `List`, before any instruction-dispatch micro-optimization (7g) | `push` stops copying the whole list; list-heavy programs stop being O(n²) |
+| 9 | Server measurement on the VM (7j), with the source → result runner (7g) | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
+| 10 | Evaluation round: Agentica against typed Python on harder tasks (6c) | Evidence on whether agents do better in Agentica than in typed Python |
+| 11 | Decide with the results of steps 9 and 10: multicore schedulers (7h item, gated), a front-end rewrite (`future.md` §18, gated), and 7i (VM default, evaluator removed; after step 10, in parallel with the multicore decision) | Build multicore or a new front end only if the numbers ask for it; one backend |
+| 12 | Core data structures (phase 8): `Set[T]` and `Queue[T]` (may proceed in parallel with steps 6 to 11) | Write loops and algorithms the Ruby way, without workarounds |
+| 13 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
+| 14 | Cross-language benchmarks (phase 12): the same small programs in Agentica (VM and evaluator), Ruby, Crystal and optionally Python. Round 1 (single-threaded; needs the 7g benchmark script (done), the real applications, faster lists (8d) and the VM `IO` library (`docs/vm.md` §12.2 item 6a, done)) goes before MCP; round 2 (concurrent programs) needs tasks on the VM (7h) and covers multicore only if the multicore schedulers land (step 11) | Honest speed numbers against Ruby and Crystal, and the VM hot spots to fix next |
+| 15 | MCP examples (5m), then Streamable HTTP | Build protocol clients and servers on the proven foundations |
+| 16 | Adapters and JSON inspection (phase 10 goes before phase 9): call `Fn` fields without `.call`, `JSON.kind`, generic structs, JSON for enums, optional and nullable JSON fields | Write adapters and read JSON of unknown shape without workarounds |
+| 17 | (On demand) Shared tables (phase 9): `Table[K, V]`; needs tasks on the VM (7h); starts when a real program needs it | Share a cache or a counter that tasks update |
+| 18 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
+| 19 | (On demand) SIMD in the VM (`future.md` §19): AVX2 first, with run-time dispatch and a scalar fallback; only after profiling (7j or phase 12) shows time in string, JSON or copy routines | Faster string and JSON work without changing the release baseline |
+| 20 | (On demand) `Crypto` module (`future.md` §20): hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes` and TLS on the VM (7h) | Sign, hash and encrypt without calling out to other tools |
 
-After steps 1–2, target everyday scripts and automation. After steps 7 and 9
+After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs.
 Keep diagnostics, behavior tests, grammar, and the self-contained programming
 reference part of every phase.
@@ -1042,6 +1071,17 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 **Complete when:** the prototype provides evidence about whether Agentica's syntax and diagnostics help agents write and repair programs.
 
+### Phase 6c: Agentica against typed Python
+
+Round 1 (`docs/eval-6a.md`) found that Agentica used about 4x the tokens of Python, on tasks too easy to separate the arms by accuracy, against an untyped Python arm. It is not yet shown that agents do better in Agentica than in Python. Repeat the comparison with the current language, harder tasks and a typed Python arm. Order step 10: after the server measurement (7j), before the decisions of step 11.
+
+- [ ] Typed Python arm in `tests/eval/run.py`: the agent writes Python with type hints, and a static checker in the eval image checks them; the agent can run it, as it runs `agentica check`. The checker (for example mypy) and its version are chosen in the eval PR and pinned in `tests/eval/Dockerfile`. A solution that fails the checker counts as a failing run.
+- [ ] Harder tasks under `tests/eval/tasks/`, each with hidden tests and reference solutions in Agentica and typed Python (both pass the hidden tests and their checker): modify an existing program of a few hundred lines; introduce a type change that crosses a program (a field type, an enum variant, or a Result in place of a plain value, followed through every use); add error handling to a program that halts on bad input; repair a broken integration (for example an HTTP client or server with the wrong JSON shape, or a file pipeline with a wrong path or format). Integration tasks stay hermetic: localhost, port 0, fixtures in the task directory.
+- [ ] Run the Agentica skill arm and the typed Python arm with the same model and budget, with enough reps per cell that the spread between reps is smaller than the differences reported (round 1 had too few). Measure hidden tests passed, tokens, repair attempts (failing check or run calls) and time, as in 6a, and separate type errors from logic errors. Runs of the Python checker count as check calls, like `agentica check`: a failing checker run is a repair attempt, and tokens and repairs are compared with the checker calls included on both sides.
+- [ ] Record the results in a new section of `docs/eval-results.md`, with the skill commit, the checker version and the model.
+
+**Done when:** the results show, per task kind, whether agents pass more hidden tests or spend fewer tokens and repairs in Agentica than in typed Python, and the findings are listed as follow-up work (language, diagnostics or skill) before order step 11 decides.
+
 ## Ruby-style ergonomics
 
 Specified in [`future.md` section 11](future.md#11-ruby-style-ergonomics). Agents write Ruby and Python habits (`docs/eval-diagnostics.md`); accept the Ruby forms that keep static checking and immutable values. One pull request per step, each stacked on the previous one and moving its part of section 11 into `grammar.md` and the programming reference.
@@ -1164,17 +1204,18 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 - [x] Compare three runners on the same inputs: the Racket evaluator, the VM, and an idiomatic CPython version of each program as an outside reference.
 - [x] Measure start-up time separately (`hello.agc`) for `racket src/main.rkt`, `dist/agentica` and the VM.
 - [x] Record the numbers, machine and tool versions in `docs/vm-benchmarks.md`.
-- [ ] Fix the largest VM hot spots (instruction dispatch, list/map representation, string indexing); merge steps across pure instructions only if profiling asks for it.
+- [ ] Source → result runner: the `vm` runner times only `dist/agentica-vm` on precompiled bytecode (about 1 ms to start), but `agentica --vm file.agc` still starts Racket, checks and compiles. Add runners that time the whole path from a source file to its output, front-end start-up included: `racket src/main.rkt --vm f.agc` and `dist/agentica --vm f.agc` (when `dist/agentica` exists), next to the bytecode-only `vm` runner, for `hello.agc` and every program; record them in `docs/vm-benchmarks.md`. Small, so it may land any time; the server measurement (7j) needs it.
+- [ ] Fix the largest VM hot spots, lists first: `List.append` (`push`) in `vm/builtins.c` copies the whole array, so building a list with n pushes is O(n²) (the evaluator too); the persistent vector of 8d fixes it (order step 8). Instruction dispatch, string indexing and other micro-optimizations come only after 8d, and only if profiling asks for them; merge steps across pure instructions only if profiling asks for it.
 
-**Done when:** the numbers show whether the VM is worth finishing; decide here before 7h.
+**Done when:** the numbers show whether the VM is worth finishing. The first numbers (done) showed it is. The open items follow the order: the source → result runner before the server measurement (7j, order step 9), and the hot spots after faster lists (8d, order step 8).
 
 ### 7h: Runtime services on the VM
 
 - [x] Event loop on libuv and the resource registry, following the rules in `docs/vm.md` section 10.2. libuv is vendored as a git submodule from `https://github.com/libuv/libuv`, pinned to a recent release tag and built from source, not taken from system packages. (libuv v1.53.0, built by the Makefile and linked statically on Linux; one task for now, `docs/vm.md` 10.2.2.)
 - [x] Files and paths. (Every `File`, `Dir` and `Path` builtin with the evaluator's messages, `FileHandle` and `FileInfo`, Linux; `docs/vm.md` 2.8.)
-- [ ] Lightweight tasks: reduction-based scheduler and I/O fairness (`docs/vm.md` section 10.2.1), `Task.spawn/await/sleep`, shared step budget, cancellation on return. It runs N=1 (one scheduler) but on the structures split for N schedulers (`docs/vm.md` section 10.2.3): shared read-only runtime, per-scheduler loop, run queue, registry and turn counter, per-task stack, registers and frame, the step budget as an atomic counter taken in batches, and no mutable global state in `vm/`. Document in the programming skill's tasks reference the per-task `Random` split (`docs/vm.md` §7.4) and that `--seed` alone does not make a multi-task run repeatable at N>1.
-- [ ] Multicore schedulers (`docs/vm.md` section 10.2.3), its own PR after the tasks PR: N>1 with `--schedulers N` (default: the number of cores), work stealing of ready tasks, Boehm built for threads (`GC_THREADS`, `PARALLEL_MARK`, `THREAD_LOCAL_ALLOC`), the I/O hand-off to the loop that owns a handle, `agentica --vm --schedulers N` passing the flag through, and a stress test that runs the task fixtures with `--schedulers 4`, under TSan when available (an `AGC_NO_GC`-style build with `-fsanitize=thread`, since TSan does not get along with Boehm's stop-the-world; it never calls `agc_set_alloc_limit`, so the block tracking stays off) as a `make vm-tsan` target, added to the `vm-sanitizers` job and its path list in `.github/workflows/ci.yml` and to the Commands section of `AGENTS.md`. ASan and TSan (both without GC) cover memory errors and data races in the scheduler code; the GC-threaded build is covered only by a GC-stress run with `--schedulers 4`. Update `docs/grammar.md` and the programming skill's tasks reference (CPU parallelism on the VM, `--schedulers`). It does not block 7i (the evaluator cannot run in parallel anyway); with N=1 the parity rule stays, and the differential, golden and seeded tests and the `--max-steps` sweep run with `--schedulers 1`. After the evaluator is removed, site examples, example smoke tests and BDD runs that use tasks run with `--schedulers 1`, or must not depend on cross-task order.
-- [ ] Processes, behind the VM's own `--allow-run` flag; before this, decide in `grammar.md` whether the current directory is searched.
+- [ ] Lightweight tasks: reduction-based scheduler and I/O fairness (`docs/vm.md` section 10.2.1), `Task.spawn/await/sleep`, shared step budget, cancellation on return. Order step 6, the next work. Long builtins that are not resumable (`List.sort` on a big list, `String.join`, `JSON.encode` of a big value), and opcodes whose work grows with their operands (`CONCAT`, `TO_TEXT`, `INSPECT`, `EQ`, `NE`, `SAME`, and `MAP_GET` and `MAP` with String keys), charge a turn-only cost for their work, which never touches `--max-steps`, and the task yields right after one of them if its turn is spent (§10.2.1, "Builtins" and "One counter for both budgets"); step counts and the `--max-steps` sweep stay equal to the evaluator. Acceptance test (latency): a fixture with one task that loops on CPU, one that calls a long builtin again and again (for example `List.sort` of 100,000 Ints built without `push`, such as `(0...100000).to_a.map do |i| (i * 7919) % 100003 end`, since faster lists (8d) land after tasks), one that runs a `CONCAT`-heavy loop (for example `t = small + big` with a 1 MB `big` in a loop, or `==` on two equal 1 MB strings; the result is thrown away each time, so memory does not grow), and one that wakes from `Task.sleep(10)` in a loop and records how late each wake is with `Time.monotonic_ms`; a second case has that task read lines from a stdin pipe, and the Racket test writes a line once the program says it is ready and measures the time until the program echoes it back. The test asserts that the worst delay stays under a generous limit (for example 250 ms, against a design bound of a few turn budgets, tens of ms) and prints the measured value, so it is not flaky in CI. A second test proves that the check can fail: it runs the same fixture with `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only environment variable that makes the VM skip turn costs, `docs/vm.md` §10.2.1; every build honors it, since it changes only when tasks switch; it may be removed after 7i) and expects the worst delay to be over the limit. Without turn costs, one turn of the long-builtin or `CONCAT` task runs hundreds of its calls, seconds of work, so this test is not flaky either. Both tests live in their own file, `tests/vm-latency-test.rkt`, outside `make test`'s parallel batch, so they do not share the CPU with the heavy shards: a `make vm-latency` target runs it alone, and the CI `test` job runs it right after `make test`, with the normal `make vm` binary only. It is not run in the ASan or GC-stress configurations (it skips with a message when `AGENTICA_VM` names another binary), whose timings mean nothing. Add the target to the Commands section of `AGENTS.md`. It runs N=1 (one scheduler) but on the structures split for N schedulers (`docs/vm.md` section 10.2.3): shared read-only runtime, per-scheduler loop, run queue, registry and turn counter, per-task stack, registers and frame, the step budget as an atomic counter taken in batches, and no mutable global state in `vm/`. Document in the programming skill's tasks reference the per-task `Random` split (`docs/vm.md` §7.4) and that `--seed` alone does not make a multi-task run repeatable at N>1.
+- [ ] Multicore schedulers (`docs/vm.md` section 10.2.3), its own PR after the tasks PR. Gated: the design stays complete in §10.2.3, but the work starts only after the server measurement (7j, order step 9) and the evaluation round (6c, step 10), and only if the server measurement shows CPU-bound work that needs more than one core (for example throughput or p99 latency limited by one busy scheduler while other cores sit idle); order step 11 decides. The item: N>1 with `--schedulers N` (default: the number of cores), work stealing of ready tasks, Boehm built for threads (`GC_THREADS`, `PARALLEL_MARK`, `THREAD_LOCAL_ALLOC`), the I/O hand-off to the loop that owns a handle, `agentica --vm --schedulers N` passing the flag through, and a stress test that runs the task fixtures with `--schedulers 4`, under TSan when available (an `AGC_NO_GC`-style build with `-fsanitize=thread`, since TSan does not get along with Boehm's stop-the-world; it never calls `agc_set_alloc_limit`, so the block tracking stays off) as a `make vm-tsan` target, added to the `vm-sanitizers` job and its path list in `.github/workflows/ci.yml` and to the Commands section of `AGENTS.md`. ASan and TSan (both without GC) cover memory errors and data races in the scheduler code; the GC-threaded build is covered only by a GC-stress run with `--schedulers 4`. Update `docs/grammar.md` and the programming skill's tasks reference (CPU parallelism on the VM, `--schedulers`). It does not block 7i (the evaluator cannot run in parallel anyway); with N=1 the parity rule stays, and the differential, golden and seeded tests and the `--max-steps` sweep run with `--schedulers 1`. After the evaluator is removed, site examples, example smoke tests and BDD runs that use tasks run with `--schedulers 1`, or must not depend on cross-task order.
+- [ ] Processes, behind the VM's own `--allow-run` flag (order step 7, after the tasks PR; then TCP and TLS, then HTTP); before this, decide in `grammar.md` whether the current directory is searched.
 - [ ] TCP and TLS (OpenSSL 3, rules in `docs/vm.md` section 10.3).
 - [ ] HTTP/1.1 clients and servers.
 - [ ] BDD: handlers move to the VM (the evaluator goes away in 7i).
@@ -1182,25 +1223,41 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 **Done when:** every example and every CI smoke test runs on the VM with the same results.
 
+### 7j: Server measurement
+
+Order step 9, after 7h HTTP and faster lists (8d). Measure a small real server on the VM, so the multicore and front-end decisions (order step 11) rest on numbers from a real program, not on micro-benchmarks. It is a measuring task: no language change, not part of `make test` or CI, and no timing thresholds.
+
+- [ ] The server: the HTTP service of the real-applications step if it is ready, otherwise a small one written for this under `benchmarks/` (typed JSON in and out, modules, one route with some CPU work per request). It runs on localhost on a dynamically assigned port.
+- [ ] A load driver under `benchmarks/` (Python standard library only) that sends a fixed mix of requests at fixed concurrency levels and reports requests/s and p50/p99 latency, with a warm-up and several runs.
+- [ ] Latency while a CPU-bound task runs: the same load with one background task in the server that loops on CPU (and one that calls a long builtin), to show the fairness rule of `docs/vm.md` §10.2.1 on a real program.
+- [ ] Peak memory (max RSS) of the server under load, measured as in 12c.
+- [ ] Source → result start-up (the 7g runner): the time from `agentica --vm server.agc` and `dist/agentica --vm server.agc` to the first answered request, next to `dist/agentica-vm -- server.agcb`.
+- [ ] Python as the outside reference where it makes sense: the same service in the standard library (`http.server` with threads, or `asyncio`), measured by the same driver.
+- [ ] Record the machine, OS, tool versions and numbers in `docs/vm-benchmarks.md` (a server section next to the 7g numbers).
+
+**Done when:** `docs/vm-benchmarks.md` has the server numbers, and the report says whether one scheduler limits the server (CPU-bound requests queue while other cores sit idle) and how much of the real start-up is the Racket front end. These are the inputs to order step 11.
+
 ### 7i: Switch the default backend
+
+Order step 11: after the evaluation round (6c), and in parallel with the multicore decision, which it does not depend on.
 
 - [x] `agentica --vm file.agc`: temporary bytecode file with the rules in `docs/vm.md` section 9 (Linux; Windows and macOS later).
 - [ ] Make the VM the default for `agentica run`; keep the evaluator behind a flag for one release.
 - [ ] Package the VM in `dist/` and the release workflow.
 - [ ] Single-file Linux release: `raco exe --orig-exe` with the VM embedded, older glibc baseline ([`future.md` section 18](future.md#18-front-end-implementation-language)).
 - [ ] Update `README.md`, the development skill and `CHANGELOG.md`.
-- [ ] Remove the Racket evaluator once these are done: `docs/vm.md` §12.2 items 6b and 7 (JSON), every open 7e item, 7h including BDD on the VM (but not the multicore schedulers item), every Phase 8 item already in the evaluator also running on the VM, and one release with the evaluator behind a flag (item above). The front end (lexer, parser, checker, lowering) stays. The VM differential tests become golden-output tests: the expected stdout, stderr, exit code and diagnostic code and span are generated from the evaluator before it goes, except for every case `docs/vm.md` marks as a documented difference (for example §2.5, §3.5, §6.1, §6.3, §7.3), whose goldens come from the VM; the `--max-steps` sweep, seeded runs and the extreme-Int and deep-value corpora are kept. After removal, new fixtures get hand-checked expected output, and regenerating goldens from the VM needs a reviewed diff; items that say "evaluator and VM" land on the VM only. The same PR updates `docs/vm.md`, this roadmap's phase 7 rules, the `ci.yml` path list, AGENTS.md (layout and test notes, `make vm-gc-stress`), the development skill, `README.md`, `docs/grammar.md`, the programming skill, and `benchmarks/` with `docs/vm-benchmarks.md`; every test or tool that loads `src/evaluator.rkt` (site examples, examples, BDD, file, process, task and network tests) moves to the VM, so no file still requires it. Until then the evaluator runs what the VM cannot and stays the reference.
+- [ ] Remove the Racket evaluator once these are done: `docs/vm.md` §12.2 items 6b and 7 (JSON), every open 7e item, 7h including BDD on the VM (but not the multicore schedulers item, which is gated on its own), every Phase 8 item already in the evaluator also running on the VM, and one release with the evaluator behind a flag (item above). The front end (lexer, parser, checker, lowering) stays. The VM differential tests become golden-output tests: the expected stdout, stderr, exit code and diagnostic code and span are generated from the evaluator before it goes, except for every case `docs/vm.md` marks as a documented difference (for example §2.5, §3.5, §6.1, §6.3, §7.3), whose goldens come from the VM; the `--max-steps` sweep, seeded runs and the extreme-Int and deep-value corpora are kept. After removal, new fixtures get hand-checked expected output, and regenerating goldens from the VM needs a reviewed diff; items that say "evaluator and VM" land on the VM only. The same PR updates `docs/vm.md`, this roadmap's phase 7 rules, the `ci.yml` path list, AGENTS.md (layout and test notes, `make vm-gc-stress`), the development skill, `README.md`, `docs/grammar.md`, the programming skill, and `benchmarks/` with `docs/vm-benchmarks.md`; every test or tool that loads `src/evaluator.rkt` (site examples, examples, BDD, file, process, task and network tests) moves to the VM, so no file still requires it. Until then the evaluator runs what the VM cannot and stays the reference.
 
 **Done when:** a release ships with the VM as the default backend.
 
 ## Phase 8: Core data structures
 
-Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges and queues can start as soon as the VM covers closures (7e PR 5e, for the block forms); sets need the VM maps (PR 5d).
+Specified in [`future.md` section 12](future.md#12-data-structures). Each item lands in the evaluator and the VM in the same PR, with `grammar.md`, the programming skill, the site docs and tests. Ranges (done) and queues needed the VM closures (7e PR 5e, done); sets need the VM maps (PR 5d, done). Sets and queues can proceed in parallel with order steps 6 to 11; faster lists (8d) have their own place in the order (step 8).
 
 - [x] 8a Ranges (reserving `Range` breaks a user type of that name; say so in the changelog, as for `Set` in 8b): `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
 - [ ] 8b `Set[T]`.
 - [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue` (breaking change for `as Queue`).
-- [ ] 8d Faster lists: a persistent vector behind `List` in both backends, no language change (`future.md` §12.4).
+- [ ] 8d Faster lists: a persistent vector behind `List` in both backends, no language change (`future.md` §12.4). Reason: `List.append` (`push`) copies the whole array in `vm/builtins.c` and in the evaluator, so building a list with n pushes is O(n²) (the `lists` and `maze-bfs` benchmarks show it, `docs/vm-benchmarks.md`). Order step 8: after 7h processes and network, and before any instruction-dispatch micro-optimization (7g).
 - [ ] Later (`future.md` §12.5), each after a real program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map or set, a deque.
 
 **Done when:** ranges, sets, queues and the faster lists run on both backends, and an evaluation round shows agents use ranges without `while` workarounds.
@@ -1240,15 +1297,15 @@ Needs: `Bytes`, not repeated here. It is the Phase 8 "Later" item (`future.md` �
 
 ## Phase 12: Cross-language benchmarks
 
-Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It is a measuring task: no language change, no new builtin. It has two rounds. Round 1 (12a to 12d) uses single-threaded programs and starts after the 7g benchmark script, the real applications (order step 7), faster lists (8d) and the VM `IO` library (`docs/vm.md` §12.2 item 6a, done; for the stdin program in 12a), so the numbers show the VM with its planned list representation on realistic programs. Round 2 (12e to 12g) adds concurrent programs once tasks run on the VM (7h, scheduler in `docs/vm.md` §10.2), and covers multicore once the 7h multicore schedulers item lands (`docs/vm.md` §10.2.3). The goal is to find VM hot spots and to give honest numbers for the "Ruby with types" pitch, not to win a contest.
+Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It is a measuring task: no language change, no new builtin. It has two rounds. Round 1 (12a to 12d) uses single-threaded programs and needs the 7g benchmark script (done), the real applications, faster lists (8d) and the VM `IO` library (`docs/vm.md` §12.2 item 6a, done) (real applications are order step 13; the `IO` library is for the stdin program in 12a), so the numbers show the VM with its planned list representation on realistic programs. Round 2 (12e to 12g) adds concurrent programs once tasks run on the VM (7h, scheduler in `docs/vm.md` §10.2), and covers multicore only if the 7h multicore schedulers item lands (`docs/vm.md` §10.2.3; it is gated, order step 11). The server measurement (7j) is separate and comes earlier: it uses one Agentica server and Python, not the cross-language suite. The goal is to find VM hot spots and to give honest numbers for the "Ruby with types" pitch, not to win a contest.
 
 - [ ] 12a Suite: reuse the 7g programs (`knight-tour`, `maze-bfs`, `traveling-salesman` and the small loops) and add one CLI-style program from the real applications step, for example file processing over a fixed input piped on stdin by the runner (the input is kept in `benchmarks/`). It reads stdin, not a file, because the VM has no `File` library before 7h; stdin comes with the VM `IO` library (`docs/vm.md` §12.2 item 6a, done). Round 2 may add a variant that reads a real file or a TCP socket. Keep the suite small and fixed; every program reads the same input and prints the same output in every language.
 - [ ] 12b Other languages: write each program idiomatically (no tricks a normal user would not use) in Ruby (CRuby, run with YJIT on and off), Crystal (`--release` build; compile time reported apart from run time) and, optionally, Python (CPython). For Python, write an idiomatic CPython version of each program (the same one 7g uses as its outside reference); there is one Python version per program. Put them next to the Agentica versions under `benchmarks/`.
 - [ ] 12c Runner: a script under `benchmarks/` that first checks that every language gives the same output for each program, then times them. Wall time is the median of N=5 runs, measured with `hyperfine` when it is installed and a plain loop otherwise. Peak memory is the max RSS of each run, measured in its own wrapper process: `/usr/bin/time -v` per run is the default. `getrusage(RUSAGE_CHILDREN)` is used only from a fresh wrapper per child, since `ru_maxrss` keeps the maximum of all waited children. Crystal's compile time and Agentica's `compile` to `.agcb` are timed apart from the run time. It runs Agentica on the VM and, for reference, on the evaluator; the evaluator's time includes Racket start-up, and the report says so. When a language's tool (`ruby`, `crystal`, `python3`) is missing, it skips that language and says so in its report.
 - [ ] 12d Report: record the machine, OS, tool versions, wall time and peak memory (max RSS), both measured as in 12c, in `docs/vm-benchmarks.md` (a cross-language section next to the 7g numbers). Note where the VM is slow and link the hot spots to VM issues.
 - [ ] 12e Round 2 suite (needs 7h): add concurrent programs, for example many tasks doing I/O-like work over pipes or localhost TCP (port 0, cleaned up as in the network tests), and a CPU-bound fan-out over tasks. Same rules as 12a: fixed inputs, same output in every language.
-- [ ] 12f Round 2 other languages: idiomatic versions in Ruby (Threads, Fibers, and Ractors for the CPU-bound fan-out), Crystal (fibers; `-Dpreview_mt` reported as its own column if used) and, optionally, Python (asyncio, and threads). The 12c runner times them the same way. Report the VM with `--schedulers 1` and with the default (all cores, `docs/vm.md` §10.2.3) once multicore lands; report each parallel runtime (the multicore VM, Ruby Ractors, Crystal `-Dpreview_mt`, Python multiprocessing if used) in its own column, apart from the single-thread ones.
-- [ ] 12g Round 2 report: add the concurrent results to `docs/vm-benchmarks.md` and re-run round 1 on the same machine to catch regressions from 7h. When the multicore schedulers item lands (`docs/vm.md` §10.2.3), run round 2 and round 1 again and add a new set of numbers, including the cost of stop-the-world collections.
+- [ ] 12f Round 2 other languages: idiomatic versions in Ruby (Threads, Fibers, and Ractors for the CPU-bound fan-out), Crystal (fibers; `-Dpreview_mt` reported as its own column if used) and, optionally, Python (asyncio, and threads). The 12c runner times them the same way. Report the VM with `--schedulers 1` and with the default (all cores, `docs/vm.md` §10.2.3) if multicore lands; report each parallel runtime (the multicore VM, Ruby Ractors, Crystal `-Dpreview_mt`, Python multiprocessing if used) in its own column, apart from the single-thread ones.
+- [ ] 12g Round 2 report: add the concurrent results to `docs/vm-benchmarks.md` and re-run round 1 on the same machine to catch regressions from 7h. If the multicore schedulers item lands (`docs/vm.md` §10.2.3), run round 2 and round 1 again and add a new set of numbers, including the cost of stop-the-world collections.
 - [ ] Not part of `make test` or CI, and no timing thresholds: the numbers are observations.
 
 **Done when:** round 1: `docs/vm-benchmarks.md` has a table for every program and language, made by the runner on one machine, and the largest VM hot spots it shows are listed as follow-up work. Round 2: the same holds for the concurrent programs after 7h, with the round 1 numbers re-run next to them.
@@ -1264,6 +1321,9 @@ Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
   | 10,000 | 869.56 / 12.59 | 2,200.83 / 29.21 |
   | 50,000 | 23,240.65 / 61.62 | 54,904.19 / 146.60 |
 
+- [ ] SIMD in the VM ([`future.md` section 19](future.md#19-simd-in-the-vm)), on demand: starts only if profiling (7j or phase 12) shows time in string, JSON or copy routines. Using libc `memcpy`/`memcmp`/`memchr` in place of hand loops needs no profiling and can land at any time.
+- [ ] `Crypto` module ([`future.md` section 20](future.md#20-crypto-module)), on demand: after TLS on the VM (7h) and `Bytes`; VM only if it lands after 7i.
+
 ### Enums and pattern matching: implemented
 
 - [x] Specify generic enums, enum-qualified variants, and qualified imported names (`Domain.Option.Some`).
@@ -1276,6 +1336,6 @@ Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
 ### Open decisions
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
-- [ ] Front-end implementation language: Racket for now; revisit (self-hosting, or Rust) only once the grammar is stable and startup time or binary size call for it ([`future.md` section 18](future.md#18-front-end-implementation-language)).
+- [ ] Front-end implementation language: Racket for now; revisit (self-hosting, or Rust) only once the grammar is stable and startup time or binary size call for it ([`future.md` section 18](future.md#18-front-end-implementation-language)). Order step 11 decides it, with the source → result start-up of the server measurement (7j) and the evaluation round (6c); a rewrite starts only if those numbers show that the Racket front end hurts.
 
-The open items in this section are outside the current implementation order.
+The open items in this section are outside the current implementation order, except the front-end language, which order step 11 decides.
