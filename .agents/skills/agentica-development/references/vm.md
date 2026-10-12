@@ -441,7 +441,16 @@ instructions. A file that loads may still compute wrong values or end with
   levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
 - Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
   index and size sums use `uint64_t`.
-- No code comments, except a legal header if one is ever needed.
+- Comments in `vm/*.c`, `vm/*.h` and `vm/tests/*.c`: the default is no
+  comment. Add one only where the code's complexity justifies it, and make
+  it say why, not what: an invariant, a subtle ownership or lifetime rule, a
+  protocol, OpenSSL or libuv quirk, an order that is not obvious, or the
+  spec section or RFC the code follows. Use short `/* */` block comments.
+  Never narrate obvious code and never leave commented-out code. A file may
+  also start with a short header comment that says what the file is and
+  where its design lives, as `vm/main.c` does, or with a legal header. Tool
+  markers (`// NOLINT(...)`, `/* fall through */`) are not comments in this
+  sense.
 - Only `value.c` reads the value union. Immediates write the full word.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
