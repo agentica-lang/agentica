@@ -133,6 +133,9 @@ the programming reference contain the current signatures.
   that must be called as a method on a builtin type (`xs.find do ... end`),
   cannot be a `std/` module; it goes in the compiler prelude
   (`stdlib/prelude/*.agc`, `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica.
+  The prelude has the one guarded exception to "no internal helper
+  builtins": `__fail_arg`, which the loader accepts only in prelude
+  functions.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 
