@@ -1,0 +1,9 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-UNWRAP-ERROR",
+  "stdout": [
+    "error(\"a\\u0000b\\aé 日本\\e[1m\\r\\n\\u007F\\t\")",
+    ""
+  ],
+  "stderr": []
+}

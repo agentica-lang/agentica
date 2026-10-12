@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "ok()",
+    "false",
+    "ok()",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

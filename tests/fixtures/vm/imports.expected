@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "Point(x: 1, y: 2)",
+    "Point(x: 3)",
+    "Point(x: 0, y: 0)",
+    "Shape.Tagged(\"home\", Point(x: 1, y: 2))",
+    "[Shape.Dot(Point(x: 1, y: 2)), Shape.Tagged(\"home\", Point(x: 1, y: 2)), Shape.Nothing, Shape.Nothing]",
+    "dot 1",
+    "home at Point(x: 1, y: 2)",
+    "nothing",
+    "nothing",
+    "2 3",
+    "at Point(x: 1, y: 2)",
+    "Point(x: 1, y: 2)",
+    "[Shape.Dot(Point(x: 1, y: 2)), Shape.Tagged(\"home\", Point(x: 1, y: 2)), Shape.Nothing, Shape.Nothing]",
+    "Shape.Tagged(\"home\", Point(x: 1, y: 2))",
+    "Shape.Dot(Point(x: 1, y: 2)) Point(x: 3)",
+    ""
+  ],
+  "stderr": []
+}

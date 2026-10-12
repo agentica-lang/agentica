@@ -1,0 +1,32 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "a b;$x|--allow-run|ñ|",
+    "ok()",
+    "ok(\"ñ\")",
+    "ok()",
+    "ok([])",
+    "ok([0, 255, 10])",
+    "ok()",
+    "ok(\"one\")",
+    "ok()",
+    "ok()",
+    "error(\"process: stdin is closed\")",
+    "ok(\"two\")",
+    "error(\"process: end of input\")",
+    "ok([])",
+    "ok(7)",
+    "ok(7)",
+    "error(\"process: process is closed\")",
+    "error(\"process: process is closed\")",
+    "error(\"process: process is closed\")",
+    "error(\"process: process is closed\")",
+    ""
+  ],
+  "stderr": [
+    "err-line",
+    "after wait",
+    ""
+  ]
+}

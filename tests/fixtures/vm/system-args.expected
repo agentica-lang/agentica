@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "0 \"one\"",
+    "1 \"\"",
+    "2 \"λ 日本 𝔸\"",
+    "3 \"--json\"",
+    "4 \"two words\"",
+    "5 \"tab\\tend\"",
+    "[\"one\", \"\", \"λ 日本 𝔸\", \"--json\", \"two words\", \"tab\\tend\"]",
+    ""
+  ],
+  "stderr": []
+}

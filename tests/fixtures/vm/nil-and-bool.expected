@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "nil",
+    "nil true",
+    "false",
+    "true",
+    "false",
+    "true",
+    "12.5true",
+    "nil",
+    ""
+  ],
+  "stderr": []
+}

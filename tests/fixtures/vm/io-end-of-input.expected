@@ -1,0 +1,14 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-END-OF-INPUT",
+  "stdout": [
+    "prompt> error(\"IO.gets reached the end of input\")",
+    "ok([])",
+    "true",
+    ""
+  ],
+  "stderr": [
+    "before",
+    ""
+  ]
+}

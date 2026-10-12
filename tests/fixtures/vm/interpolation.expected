@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "-7",
+    "-0.0 1e+21 0.30000000000000004 0.3333333333333333",
+    "[false] [nil] [text] [true]",
+    "-7-0.0falseniltext",
+    "start -6 middle n-7 end",
+    "nested inner text deep -7 done",
+    "",
+    "\"text\" -7 -0.0 false nil",
+    "text -7 -0.0 false nil",
+    "\"-7\"",
+    "falsenil",
+    "text",
+    "\"\\\"-7\\\"\"",
+    "text!text!",
+    "true",
+    "nil",
+    "3.5",
+    ""
+  ],
+  "stderr": []
+}

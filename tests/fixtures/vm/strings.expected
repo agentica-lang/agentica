@@ -1,0 +1,29 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "ababab!",
+    "!",
+    "",
+    "é😀",
+    "\"\" == \"\": true, != false",
+    "\"a\" == \"\": false, != true",
+    "\"abc\" == \"abd\": false, != true",
+    "\"abc\" == \"ab\": false, != true",
+    "\"é\" == \"é\": false, != true",
+    "\"é\" == \"é\": true, != false",
+    "\"😀\" == \"😀\": true, != false",
+    "\"ab\" == \"ab\": true, != false",
+    "no newline then end",
+    "io puts",
+    "io print",
+    "-9223372036854775808",
+    "0.30000000000000004",
+    ""
+  ],
+  "stderr": [
+    "to stderr",
+    "42",
+    ""
+  ]
+}

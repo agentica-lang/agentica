@@ -1,0 +1,9 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-STACK-OVERFLOW",
+  "stdout": [
+    "start",
+    ""
+  ],
+  "stderr": []
+}

@@ -1,0 +1,11 @@
+{
+  "exit": 3,
+  "code": null,
+  "stdout": [
+    "buffered"
+  ],
+  "stderr": [
+    "to stderr",
+    ""
+  ]
+}

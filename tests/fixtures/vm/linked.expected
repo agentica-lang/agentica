@@ -1,0 +1,12 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INDEX-OUT-OF-RANGE",
+  "stdout": [
+    "   pen: Level.Low(4)",
+    "   ink: Level.Plenty",
+    "Item(name: \"pen\", count: 4)",
+    "7",
+    ""
+  ],
+  "stderr": []
+}

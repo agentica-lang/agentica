@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "\"head\"",
+    "\"body ��\\nline\\r\\n😀 tail\\r\"",
+    "\"\"",
+    "ok([])",
+    "true",
+    "error(\"IO.gets reached the end of input\")",
+    ""
+  ],
+  "stderr": []
+}

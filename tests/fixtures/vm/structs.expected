@@ -1,0 +1,28 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "Point(x: 1, y: 2)",
+    "11",
+    "1",
+    "Label(text: \"tab\\there\", at: Point(x: 11, y: 2), tags: [\"a\\\"b\", \"λ\"], weight: -0.0, hidden: false, note: nil)",
+    "Label(text: \"tab\\there\", at: Point(x: 11, y: 2), tags: [\"a\\\"b\", \"λ\"], weight: -0.0, hidden: false, note: nil)",
+    "label Label(text: \"tab\\there\", at: Point(x: 11, y: 2), tags: [\"a\\\"b\", \"λ\"], weight: -0.0, hidden: false, note: nil), x 11",
+    "Label(text: \"tab\\there\", at: Point(x: 11, y: 2), tags: [\"a\\\"b\", \"λ\"], weight: -0.0, hidden: false, note: nil)",
+    "Label(text: \"tab\\there\", at: Point(x: 11, y: 2), tags: [\"a\\\"b\", \"λ\"], weight: -0.0, hidden: false, note: nil)",
+    "tab\there",
+    "\"tab\\there\"",
+    "a\"b",
+    "[Point(x: 1, y: 2), Point(x: 11, y: 2), Point(x: -3, y: 9223372036854775807)]",
+    "16",
+    "9223372036854775807",
+    "Empty()",
+    "[Empty(), Empty()]",
+    "Point(x: 3, y: 0)",
+    ""
+  ],
+  "stderr": [
+    "Point(x: 11, y: 2)",
+    ""
+  ]
+}

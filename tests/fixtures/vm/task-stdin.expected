@@ -1,0 +1,11 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "5000",
+    "[\"first line\", \"second\", \"third\"]",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

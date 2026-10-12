@@ -1,0 +1,11 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-UNWRAP-ERROR",
+  "stdout": [
+    "error(\"process: spawning requires --allow-run\")",
+    "error(\"process: spawning requires --allow-run\")",
+    "false",
+    ""
+  ],
+  "stderr": []
+}

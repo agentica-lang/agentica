@@ -1,0 +1,33 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "ok(<Json>)",
+    "error(\"missing JSON key \\\"nope\\\"\")",
+    "error(\"missing JSON key \\\"q\\\\\\\"uote\\\\n\\\"\")",
+    "error(\"expected a JSON object\")",
+    "ok(<Json>)",
+    "\"x\"",
+    "error(\"JSON array index is out of range\")",
+    "error(\"JSON array index is out of range\")",
+    "error(\"expected a JSON array\")",
+    "ok(\"text\")",
+    "error(\"expected a JSON string\")",
+    "ok(7)",
+    "error(\"expected a signed 64-bit JSON integer\")",
+    "error(\"expected a signed 64-bit JSON integer\")",
+    "ok(7.0)",
+    "ok(2.5)",
+    "ok(1e+20)",
+    "error(\"expected a JSON number representable as a finite Float\")",
+    "ok(true)",
+    "error(\"expected a JSON boolean\")",
+    "ok([<Json>, <Json>])",
+    "error(\"expected a JSON array\")",
+    "true",
+    "ok(-1)",
+    "ok(\"text\")",
+    ""
+  ],
+  "stderr": []
+}

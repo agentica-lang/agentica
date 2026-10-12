@@ -1,0 +1,9 @@
+{
+  "exit": 255,
+  "code": null,
+  "stdout": [
+    "bye",
+    ""
+  ],
+  "stderr": []
+}

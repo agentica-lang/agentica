@@ -1,0 +1,11 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "500500",
+    "{\"$defs\":{\"Node\":{\"properties\":{\"depth\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"next\":{\"items\":{\"$ref\":\"#/$defs/Node\"},\"type\":\"array\"}},\"required\":[\"depth\",\"next\"],\"type\":\"object\"}},\"properties\":{\"depth\":{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"},\"next\":{\"items\":{\"$ref\":\"#/$defs/Node\"},\"type\":\"array\"}},\"required\":[\"depth\",\"next\"],\"type\":\"object\"}",
+    "8033",
+    ""
+  ],
+  "stderr": []
+}

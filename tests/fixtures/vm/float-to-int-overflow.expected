@@ -1,0 +1,6 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INTEGER-OVERFLOW",
+  "stdout": [],
+  "stderr": []
+}

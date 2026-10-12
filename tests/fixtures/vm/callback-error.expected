@@ -1,0 +1,11 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-DIVISION-BY-ZERO",
+  "stdout": [
+    "at 4",
+    "at 2",
+    "at 0",
+    ""
+  ],
+  "stderr": []
+}

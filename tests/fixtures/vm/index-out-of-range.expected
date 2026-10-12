@@ -1,0 +1,12 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INDEX-OUT-OF-RANGE",
+  "stdout": [
+    "Cy",
+    ""
+  ],
+  "stderr": [
+    "before [\"Ana\", \"Bo\", \"Cy\"]",
+    ""
+  ]
+}

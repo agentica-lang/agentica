@@ -1,0 +1,9 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-JSON-ENCODE",
+  "stdout": [
+    "{\"values\":[1.0]}",
+    ""
+  ],
+  "stderr": []
+}

@@ -1,0 +1,10 @@
+{
+  "exit": 7,
+  "code": null,
+  "stdout": [
+    "item 1",
+    "item 2",
+    ""
+  ],
+  "stderr": []
+}

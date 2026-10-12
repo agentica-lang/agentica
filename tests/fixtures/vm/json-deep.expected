@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "stdout": [
+    "2049",
+    "true",
+    "true",
+    "ok(<Json>)",
+    ""
+  ],
+  "stderr": []
+}
