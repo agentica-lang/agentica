@@ -189,7 +189,7 @@ Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S 
 
 - `src/version.rkt` is the single source of the version: `make version` prints it and `agentica --version` reports it. Keep it in sync with `CHANGELOG.md` and the Git tag.
 - `CHANGELOG.md` follows Keep a Changelog and Semantic Versioning. Add user-visible entries under `## [Unreleased]` as work lands, and move them into a dated version section when tagging.
-- Tag releases with the bare version (`0.1.0`, no `v` prefix). `.github/workflows/release.yml` validates the tag against `src/version.rkt`, builds `dist/agentica`, packages a `raco distribute` bundle, and publishes a GitHub Release with generated notes.
+- Tag releases with the bare version (`0.1.0`, no `v` prefix). `.github/workflows/release.yml` validates the tag against `src/version.rkt`, builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`, `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share directory) and Chez Scheme's `NOTICE` (checked in at `licenses/racket/ChezScheme-NOTICE`, from Racket v9.3's source; update it when the Racket version changes), checks that the archive has them, and publishes a GitHub Release with generated notes.
 
 ## When to read a reference
 

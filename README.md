@@ -175,3 +175,35 @@ IO.gets (and top-level gets) returns Result[String]; IO.gets! (and gets!) is the
 
 The maze accepts rectangular grids with 1–32 rows and columns. `.` is open and `#` is blocked; only horizontal and vertical steps are allowed. Start and goal use `row * width + column` and must be open, in-range cells. The example above returns `{"found":true,"distance":4,"path":[0,3,4,5,2]}`. An unreachable goal returns `{"found":false,"distance":-1,"path":[]}`; invalid input returns `{"error":"invalid input"}`. Start equal to goal returns distance zero and a one-cell path. The queue uses numeric keys and deletes consumed entries; `Map.delete` maintains insertion order in O(n), so this example demonstrates the API rather than a queue with constant-time operations.
 
+## License
+
+Agentica is licensed under the Apache License 2.0 with the LLVM exception
+(SPDX: `Apache-2.0 WITH LLVM-exception`). See [`LICENSE`](LICENSE) and
+[`NOTICE`](NOTICE).
+
+- If you redistribute Agentica, as source or binaries, changed or not, keep
+  `LICENSE` and `NOTICE` with it and mark files you changed (Apache-2.0
+  section 4 has the full conditions).
+- Programs you write in Agentica are yours; this license does not cover
+  them. When compiling your program puts parts of Agentica into the compiled
+  output (for example an imported `std/` module linked into your `.agcb`),
+  the LLVM exception lets you ship that output without Agentica's `LICENSE`
+  and `NOTICE`. Shipping Agentica itself with your program (`agentica`,
+  `agentica-vm`) is redistribution: keep `LICENSE` and `NOTICE` with it. If
+  you combine Agentica with GPLv2 software and a court finds a part of this
+  license in conflict with GPLv2, the exception also lets you set that part
+  aside for the combined software.
+- Third-party components keep their own licenses, and the LLVM exception
+  does not cover them; their notices apply wherever they are shipped:
+  - the Boehm GC (`vm/third_party/bdwgc`): the Boehm-GC license, with its
+    notice in `README.QUICK`;
+  - libuv (`vm/third_party/libuv`): MIT, with BSD-2-Clause and ISC parts in
+    its `LICENSE-extra`;
+  - yyjson (`vm/third_party/yyjson`): MIT;
+  - the Unicode character data in `vm/unicode_data.c` (generated from the
+    Unicode Character Database): Unicode License v3;
+  - picohttpparser: MIT (planned);
+  - OpenSSL 3: Apache-2.0 (planned);
+  - Racket CS (MIT or Apache-2.0) and the Chez Scheme it embeds
+    (Apache-2.0), bundled in the release archives, which ship their
+    license files and Chez Scheme's `NOTICE` in `licenses/racket/`.

@@ -43,9 +43,18 @@ jobs:
           "./dist/$name/bin/agentica" examples/hello.agc
           "./dist/$name/bin/agentica" --version
           "./dist/$name/bin/agentica" examples/queue.agc
+          cp LICENSE NOTICE "dist/$name/"
+          share=$(racket -e '(require setup/dirs) (display (find-share-dir))')
+          mkdir -p "dist/$name/licenses/racket"
+          cp "$share/LICENSE.txt" "$share/LICENSE-MIT.txt" "$share/LICENSE-APACHE.txt" \
+            licenses/racket/ChezScheme-NOTICE "dist/$name/licenses/racket/"
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
-          tar -tzf "dist/$name.tar.gz" >/dev/null
+          listing=$(tar -tzf "dist/$name.tar.gz")
+          for f in LICENSE NOTICE licenses/racket/LICENSE.txt licenses/racket/LICENSE-MIT.txt \
+            licenses/racket/LICENSE-APACHE.txt licenses/racket/ChezScheme-NOTICE; do
+            grep -qxF "$name/$f" <<< "$listing" || { echo "$name.tar.gz lacks $name/$f" >&2; exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: agentica-linux-x86_64
