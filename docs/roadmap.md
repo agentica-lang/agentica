@@ -21,10 +21,12 @@ a list with `push` is O(n²); one scheduler with a fair turn rule is the next
 big step, and multicore is not yet shown to be needed; and it is not yet shown
 that agents do better in Agentica than in typed Python. So the next work is:
 tasks on the VM with one scheduler (N=1) and a fairness rule that also covers
-long builtins (7h, `docs/vm.md` §10.2.1); then processes, TCP/TLS and HTTP on
-the VM (7h); then faster lists (8d), before any instruction-dispatch
-micro-optimization (7g); then a measurement of a small real server on the VM,
-with a source → result start-up runner (7j); then an evaluation round against
+long builtins (7h, `docs/vm.md` §10.2.1); then processes and TCP/TLS on the
+VM (7h); then binary data (phase 13: `Int` and `Float` bit builtins and the
+`std/binary` module); then HTTP on the VM (7h); then faster lists (8d),
+before any instruction-dispatch micro-optimization (7g); then a measurement
+of a small real server on the VM, with a source → result start-up runner
+(7j); then an evaluation round against
 typed Python on harder tasks (6c). Those results decide three things: the
 multicore schedulers (fully designed in `docs/vm.md` §10.2.3, and gated on
 that measurement), a front-end rewrite (`future.md` §18, gated the same way),
@@ -59,7 +61,7 @@ order.
 | 4 | **Complete:** Ruby-style ergonomics: operators, methods on builtins, interpolation, blocks and closures, `break`/`next`, printing any value with `to_s`, and the forms agents use (measured in evaluation rounds 5–8) | Accept the Ruby habits agents already have, with static types |
 | 5 | **Mostly complete:** Bytecode VM core in C with the Boehm GC (`docs/vm.md` §12.2 items 1 to 8), the 7g benchmark script, 7h part 1 (event loop and files) and ranges (8a); small items stay open in 7c, 7e (loader validation for opcodes as they land) and 7f | Checked programs run on the VM with the same exit code, stdout, program stderr and diagnostic codes (black-box parity) |
 | 6 | **Next:** 7h tasks with one scheduler (N=1) on the structures split for N (`docs/vm.md` §10.2.3), with the fairness rule of §10.2.1 (long builtins charge the turn, never `--max-steps`) and the latency test of the 7h tasks item | Concurrent programs on the VM; timers and I/O stay responsive while other tasks compute |
-| 7 | 7h processes, then TCP and TLS, then HTTP; BDD on the VM; the differential tests and the independent process and network fixtures extended to the VM | Every example and CI smoke test runs on the VM |
+| 7 | 7h processes, then TCP and TLS, then binary data (phase 13, `future.md` §23; before UDP once UDP is planned), then HTTP; BDD on the VM; the differential tests and the independent process and network fixtures extended to the VM | Every example and CI smoke test runs on the VM; programs read and write binary numbers with `std/binary` |
 | 8 | Faster lists (8d): a persistent vector behind `List`, before any instruction-dispatch micro-optimization (7g); then the review of what the VM inherited from Racket (7k), next to the 7g hot spots | `push` stops copying the whole list; list-heavy programs stop being O(n²); the VM keeps Racket's rules only where they are good on their own |
 | 8.1 | VM layers (7l, `future.md` §21); after the tasks PR, next to 7k | The prerequisites of the JIT |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g) | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
@@ -87,6 +89,36 @@ foundations below.
 Historical phase sections retain their original completion signatures. The
 current language uses Void for completion and Nil for data; grammar.md and
 the programming reference contain the current signatures.
+
+### New library features: `std/` first
+
+- New library features that are pure computation over types that already
+  exist start as `std/` modules written in Agentica (`stdlib/*.agc`,
+  registered in `src/stdlib.rkt`), not as builtins. Examples: numbers to
+  bytes, bit tricks built on the `Int` builtins, text formatting, algorithms.
+  They run on both backends with no evaluator or VM work, and the vm-diff
+  fixtures test them.
+- A function moves to a C builtin later only when a measurement shows it is
+  hot (`make bench`, the server measurement 7j, or phase 12). Its `std/` API
+  does not change, results and error strings included, so user code does not
+  change; only step counts may (black-box parity). Before 7i the builtin also
+  needs its Racket twin.
+- Exceptions, which are builtins from day one (in C, and in Racket while the
+  evaluator has them):
+  1. Anything that touches the OS: files, stdin and stdout, processes,
+     sockets, TLS, time, signals, random bytes from the OS. A program cannot
+     make system calls.
+  2. Crypto. It always uses OpenSSL (`future.md` §20) and is never written in
+     Agentica: a constant-time compare is impossible in an interpreter, and
+     home-made crypto is a classic source of bugs.
+  3. Parsers of untrusted input that have mature libraries: JSON on yyjson
+     and HTTP on picohttpparser stay as decided.
+  4. Anything that needs its own memory layout in the runtime: `Bytes`, and
+     the insides of `Map` and `List`.
+  5. Basic operations on the core types, at the level of operators, which
+     would be loops or fragile code in Agentica: for example the `Int` bit
+     operations and `Float` bit conversions of `future.md` §23.
+- Not retroactive: existing builtins, JSON included, stay as they are.
 
 ## Phase 1: Source handling and lexer
 
@@ -1277,7 +1309,7 @@ Specified in [`future.md` section 12](future.md#12-data-structures). Each item l
 
 - [x] 8a Ranges (reserving `Range` breaks a user type of that name; say so in the changelog, as for `Set` in 8b): `a..b`, `a...b`, `for` over a range, `Range` methods, `Int#times`, `upto` and `downto`.
 - [ ] 8b `Set[T]`.
-- [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue` (breaking change for `as Queue`).
+- [ ] 8c `Queue[T]`; `std/queue` stays deprecated under the alias `StringQueue` (breaking change for `as Queue`). It is removed later, in its own PR, only when another `std/` module covers the `std/` path (`future.md` §12.3); 8c and phase 13 do not remove it.
 - [ ] 8d Faster lists: a persistent vector behind `List` in both backends, no language change (`future.md` §12.4). Reason: `List.append` (`push`) copies the whole array in `vm/builtins.c` and in the evaluator, so building a list with n pushes is O(n²) (the `lists` and `maze-bfs` benchmarks show it, `docs/vm-benchmarks.md`). Order step 8: after 7h processes and network, and before any instruction-dispatch micro-optimization (7g).
 - [ ] Later (`future.md` §12.5), each after a real program needs it: tuples (then `Queue.pop`), `Bytes`, `Heap[T]`, a sorted map or set, a deque.
 
@@ -1330,6 +1362,16 @@ Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
 - [ ] Not part of `make test` or CI, and no timing thresholds: the numbers are observations.
 
 **Done when:** round 1: `docs/vm-benchmarks.md` has a table for every program and language, made by the runner on one machine, and the largest VM hot spots it shows are listed as follow-up work. Round 2: the same holds for the concurrent programs after 7h, with the round 1 numbers re-run next to them.
+
+## Phase 13: Binary data
+
+Specified in [`future.md` section 23](future.md#23-binary-data). Order step 7: after TCP and TLS on the VM, before HTTP. UDP has no item yet (the phase 7 rules name it only as an example); when it is planned, it goes after this phase, since UDP programs pack their headers with `std/binary`. This phase has no technical need for TCP or TLS: `std/` imports already run on the VM, so it can move earlier if a real program needs it. It follows the library rule (after the order table): the packing is a `std/` module in Agentica, and the bit operations are builtins under its exception 5.
+
+- [ ] 13a Builtins on both backends, in one PR (`future.md` §23.2 to §23.4): `Int.bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left` (wraps), `shift_right` (arithmetic), `shift_right_unsigned` (logical), with `RUNTIME-INVALID-COUNT` for a negative count; `Float.to_bits`, `from_bits`, `to_bits32`, `from_bits32`, with the canonical NaNs and `RUNTIME-INVALID-NUMBER` for `from_bits32` outside `0 .. 4294967295`. With `grammar.md`, the programming skill, `site/content/library/numbers.md`, and the tests of §23.7 (vm-diff fixtures, evaluator tests, Python vectors).
+- [ ] 13b `std/binary` (`stdlib/binary.agc`, registered in `src/stdlib.rkt`), its own PR after 13a (`future.md` §23.5): readers and writers for `u8` to `i64`, `f32` and `f64` in both byte orders, `concat`, and the 4-byte length framing, written in Agentica on the 13a builtins. Docs: a "Binary data" part in `grammar.md` next to "String queue"; a `references/binary.md` file in the programming skill and its row in the "When to read a reference" table; a `site/content/library/binary.md` page (front matter `title` and `weight`, runnable examples that `tests/site-examples-test.rkt` checks). Tests (§23.7): the Python `struct` vectors checked in with their generator, round trips, error cases, both backends through the vm-diff fixtures, and the fixed-output check in `tests/std-binary-test.rkt`.
+- Not in this phase: `Bytes` (`future.md` §12.5), which this work does not replace; when `Bytes` lands, the `std/binary` API moves to it together with the `*_bytes` builtins. No mutable buffers or references.
+
+**Done when:** the Python vectors of 13a and 13b pass on both backends, what each reader returns writes back to the same bytes (a NaN pattern other than the canonical one aside), and the site page's examples run.
 
 ## Later extensions
 
