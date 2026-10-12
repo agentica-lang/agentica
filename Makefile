@@ -206,7 +206,7 @@ $(OSSL_STAMP): $(OSSL_DIR)/VERSION.dat FORCE
 	@$(OSSL_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
-	@command -v perl >/dev/null || { echo "building OpenSSL needs perl" >&2; exit 1; }
+	@perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { echo "building OpenSSL needs perl 5 with its core modules (Debian: perl)" >&2; exit 1; }
 	rm -rf $(OSSL_BUILD)
 	mkdir -p $(OSSL_BUILD)
 	cd $(OSSL_BUILD) && env -u CFLAGS -u CPPFLAGS -u CXXFLAGS -u LDFLAGS -u LDLIBS CC='$(VM_CC)' \

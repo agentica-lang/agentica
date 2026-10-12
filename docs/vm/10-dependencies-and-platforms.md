@@ -49,8 +49,9 @@ an OpenSSL development package.
   release) and `CFLAGS`, `CPPFLAGS` and `LDFLAGS` cleared, then `make
   build_libs` there with `-j $(JOBS)`. Its output goes to `configure.log`
   and `build.log` in that directory; a failure prints their tail. It
-  needs Perl 5 for `Configure`; the rule stops with a clear message when
-  `perl` is missing.
+  needs Perl 5 with its core modules for `Configure` (on Debian the
+  `perl` package; `perl-base` alone lacks `IPC::Cmd`). The rule stops with
+  a clear message when they are missing; CI then installs `perl`.
 - Options (`OSSL_OPTS` in the Makefile): `no-shared no-tests no-docs
   no-apps`, no loadable code (`no-module no-dso no-engine`), no legacy
   provider, no automatic `openssl.cnf` loading (`no-autoload-config`),

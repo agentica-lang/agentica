@@ -60,6 +60,7 @@ jobs:
             rm "$archive"
           fi
           echo "CC=$dir/zig cc -target x86_64-linux-gnu.$VM_GLIBC" >> "$GITHUB_ENV"
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - name: Build the VM against glibc ${{ env.VM_GLIBC }}
         run: |
           set -o pipefail

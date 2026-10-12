@@ -138,6 +138,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-release
       - uses: actions/cache@v4
         with:
@@ -212,6 +213,7 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: make build && raco make -j 4 tests/*.rkt
       - run: python3 --version
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-release
       - uses: actions/cache@v4
         with:
@@ -295,6 +297,7 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: clang --version
       - run: python3 --version
+      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
       - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-sanitize
       - uses: actions/cache@v4
         with:
