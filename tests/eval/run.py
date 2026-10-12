@@ -34,6 +34,7 @@ def build() -> None:
     runtime = ROOT / "dist" / "runtime"
     shutil.rmtree(runtime, ignore_errors=True)
     subprocess.run(["raco", "distribute", str(runtime), str(ROOT / "dist" / "agentica")], check=True)
+    shutil.copy2(ROOT / "dist" / "agentica-vm", runtime / "bin" / "agentica-vm")
 
 
 def clone_rootfs(template: Path, destination: Path) -> Path:
@@ -472,7 +473,7 @@ def main() -> None:
         validate_sandbox(args.chroot_root, args.agent)
     if not args.no_build:
         build()
-    if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
+    if not all((ROOT / "dist" / "runtime" / "bin" / name).is_file() for name in ("agentica", "agentica-vm")):
         raise SystemExit("dist/runtime is missing; rerun without --no-build")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"

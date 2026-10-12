@@ -14,9 +14,11 @@
 (define-runtime-path main-program "main.rkt")
 
 (define (default-bdd-command)
-  (if (path? (variable-reference->module-source (#%variable-reference)))
-      (list (or (find-executable-path "racket") (error 'BDD "Racket is not installed")) main-program)
-      (list (path->complete-path (find-system-path 'exec-file)))))
+  (append
+   (if (path? (variable-reference->module-source (#%variable-reference)))
+       (list (or (find-executable-path "racket") (error 'BDD "Racket is not installed")) main-program)
+       (list (path->complete-path (find-system-path 'exec-file))))
+   '("--legacy-eval")))
 
 (define (make-bdd-context base [command (default-bdd-command)])
   (bdd-context base command (make-hash) #f (make-custodian) 0 #f #f

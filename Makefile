@@ -14,10 +14,10 @@ build:
 # All tests, in parallel:      make test
 # A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"
 # More or fewer workers:       make test JOBS=8
-test: build
+test: build vm
 	$(RACO) test -j $(JOBS) $(TESTS)
 
-exe: build
+exe: build vm
 	mkdir -p dist
 	$(RACO) exe -o dist/agentica src/main.rkt
 

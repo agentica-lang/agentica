@@ -158,7 +158,8 @@
                                  (path->string custom) (path->string handlers)) driver)
         (define builtin (cli (path->string driver)))
         (check-equal? (car builtin) 0)
-        (check-equal? (caddr builtin) "")
+        (check-equal? (caddr builtin)
+                      "agentica: the VM does not support the builtin BDD.run yet; running on the legacy evaluator\n")
         (check-equal? (hash-ref (string->jsexpr (cadr builtin)) 'passed) 4)
         (for ([style '("--ai" "plain")])
           (define text (apply cli (append (if (equal? style "plain") '() (list style))
@@ -173,5 +174,5 @@
         (display-to-file "Feature: failure\nScenario: fail\nThen an assertion fails\n" failure-file)
         (display-to-file (format "def main() -> Void\n  result = BDD.run(~s, [~s])\n  IO.inspect(Result.ok?(result))\n  report = Result.unwrap!(result)\n  IO.inspect(Result.unwrap!(JSON.bool(Result.unwrap!(JSON.get(report, \"ok\")))))\nend\n\n"
                                  (path->string failure-file) (path->string handlers)) driver #:exists 'truncate)
-        (check-equal? (cli (path->string driver)) '(0 "true\nfalse\n" "")))
+        (check-equal? (cli "--legacy-eval" (path->string driver)) '(0 "true\nfalse\n" "")))
       (lambda () (delete-directory/files directory)))))

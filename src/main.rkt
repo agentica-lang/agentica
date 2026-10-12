@@ -113,21 +113,35 @@
            (when to-vm (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
            (parameterize-break #f (stop-vm process))))))
 
+(define (split-legacy-flag arguments)
+  (let loop ([rest arguments] [kept '()] [legacy? #f])
+    (match rest
+      [(cons "--legacy-eval" more) (loop more kept #t)]
+      [(list* (and flag (or "--max-steps" "--seed" "--steps")) value more)
+       (loop more (list* value flag kept) legacy?)]
+      [(cons (and flag (regexp #rx"^-")) more) #:when (not (equal? flag "--"))
+       (loop more (cons flag kept) legacy?)]
+      [_ (values (append (reverse kept) rest) legacy?)])))
+
 (module+ main
+  (define-values (argv legacy?) (split-legacy-flag (vector->list (current-command-line-arguments))))
   (define dump? #f)
   (define dump-ir? #f)
   (define style 'plain)
   (define max-steps #f)
   (define allow-run? #f)
   (define seed #f)
-  (define vm? #f)
   (define step-files '())
   (define raw-arguments
     (command-line
      #:program "agentica"
+     #:argv (list->vector argv)
+     #:usage-help
+     "Programs run on the bytecode VM. A program that uses TCP, TLS, HTTP or BDD"
+     "runs on the legacy evaluator, with a notice on stderr, and so does agentica test."
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]
-     [("--vm") "run the program with the bytecode VM" (set! vm? #t)]
+     [("--vm") "accepted for compatibility: programs run on the VM by default" (void)]
      [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]
      [("--max-steps") count "limit execution to N expression/statement entries"
       (define parsed (string->number count))
@@ -149,16 +163,6 @@
      [("--steps") path "load Agentica BDD step definitions" (set! step-files (append step-files (list path)))]
      #:args arguments
      arguments))
-  (when vm?
-    (define unsupported
-      (or (and dump? "--dump")
-          (and dump-ir? "--dump-ir")
-          (and (pair? step-files) "--steps")
-          (and (pair? raw-arguments) (member (car raw-arguments) '("test" "help" "check" "compile"))
-               (car raw-arguments))))
-    (when unsupported
-      (eprintf "agentica: --vm does not support ~a\n" unsupported)
-      (exit 2)))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "test"))
     (for ([argument (in-list (cdr raw-arguments))])
       (when (member argument '("--ai" "--json"))
@@ -217,15 +221,10 @@
   (unless (if compile?
               (and (= (length arguments) 3) (equal? (cadr arguments) "-o") (not dump?) (not dump-ir?))
               (>= (length arguments) 1))
-    (eprintf "usage: agentica [--version] [--vm] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
-  (define vm (and vm? (find-vm)))
-  (when (and vm (not (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm)))))
-    (eprintf "agentica: cannot find the VM at ~a; run make vm or set AGENTICA_VM\n" vm)
-    (exit 2))
-
   (define (fail! problem)
     (displayln (case style
                  [(ai) (format-diagnostic-ai problem)]
@@ -248,19 +247,57 @@
   (when (diagnostic? tree) (fail! tree))
   (define linked (link-program tree source-file))
   (when (diagnostic? linked) (fail! linked))
-  (define types (and (or compile? dump-ir? vm?) (make-hasheq)))
+  (define types (make-hasheq))
   (define checked (check linked #:types types))
   (when (diagnostic? checked) (fail! checked))
   (define (lowered)
     (define ir (lower checked types))
     (when (diagnostic? ir) (fail! ir))
     ir)
-  (define (bytecode-data)
-    (define code (ir->bytecode (lowered)))
+  (define (run-evaluator)
+    (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
+                             #:seed seed #:builtin-handler (make-bdd-service)))
+    (cond
+      [(diagnostic? result) (fail! result)]
+      [(exit-code? result) (exit (exit-code-code result))]))
+  (define (bytecode-data [ir (lowered)])
+    (define code (ir->bytecode ir))
     (when (diagnostic? code) (fail! code))
     (define data (write-bytecode code))
     (when (diagnostic? data) (fail! data))
     data)
+  (define (run-on-vm ir)
+    (define data (bytecode-data ir))
+    (define vm (find-vm))
+    (unless (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm)))
+      (eprintf "agentica: cannot find the VM at ~a; run make vm or set AGENTICA_VM\n" vm)
+      (exit 2))
+    (define bytecode-file (temporary-bytecode-path))
+    (define created? #f)
+    (define options
+      (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
+              (if seed (list "--seed" (number->string seed)) '())
+              (if allow-run? '("--allow-run") '())
+              (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
+    (define status
+      (dynamic-wind
+        void
+        (lambda ()
+          (if (with-handlers ([exn:fail:filesystem? (lambda (_) #f)])
+                (write-temporary-bytecode bytecode-file data (lambda () (set! created? #t)))
+                #t)
+              (run-vm-process vm bytecode-file options program-args)
+              'no-temporary))
+        (lambda () (when created? (delete-temporary bytecode-file)))))
+    (when (eq? status 'read-failed)
+      (fail! (diagnostic 'RUNTIME-INTERNAL "cannot read standard input" (program-span checked))))
+    (when (eq? status 'no-temporary)
+      (eprintf "agentica: cannot write a temporary file in ~a\n" (find-system-path 'temp-dir))
+      (exit 2))
+    (unless (exact-integer? status)
+      (eprintf "agentica: cannot run the VM at ~a\n" vm)
+      (exit 2))
+    (exit status))
   (cond
     [check-only? (displayln (if (eq? style 'json) "{\"ok\":true}" "check ok"))]
     [dump? (pretty-print checked)]
@@ -274,37 +311,12 @@
                         (exit 2))])
        (call-with-output-file output-file #:exists 'truncate/replace
          (lambda (out) (void (write-bytes data out)))))]
-    [vm?
-     (define data (bytecode-data))
-     (define bytecode-file (temporary-bytecode-path))
-     (define created? #f)
-     (define options
-       (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
-               (if seed (list "--seed" (number->string seed)) '())
-               (if allow-run? '("--allow-run") '())
-               (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
-     (define status
-       (dynamic-wind
-         void
-         (lambda ()
-           (if (with-handlers ([exn:fail:filesystem? (lambda (_) #f)])
-                 (write-temporary-bytecode bytecode-file data (lambda () (set! created? #t)))
-                 #t)
-               (run-vm-process vm bytecode-file options program-args)
-               'no-temporary))
-         (lambda () (when created? (delete-temporary bytecode-file)))))
-     (when (eq? status 'read-failed)
-       (fail! (diagnostic 'RUNTIME-INTERNAL "cannot read standard input" (program-span checked))))
-     (when (eq? status 'no-temporary)
-       (eprintf "agentica: cannot write a temporary file in ~a\n" (find-system-path 'temp-dir))
-       (exit 2))
-     (unless (exact-integer? status)
-       (eprintf "agentica: cannot run the VM at ~a\n" vm)
-       (exit 2))
-     (exit status)]
+    [legacy? (run-evaluator)]
     [else
-     (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
-                              #:seed seed #:builtin-handler (make-bdd-service)))
+     (define ir (lower checked types))
      (cond
-       [(diagnostic? result) (fail! result)]
-       [(exit-code? result) (exit (exit-code-code result))])]))
+       [(and (diagnostic? ir) (eq? (diagnostic-code ir) 'LOWER-UNSUPPORTED))
+        (eprintf "agentica: ~a; running on the legacy evaluator\n" (diagnostic-message ir))
+        (run-evaluator)]
+       [(diagnostic? ir) (fail! ir)]
+       [else (run-on-vm ir)])]))
