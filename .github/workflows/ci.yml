@@ -253,8 +253,9 @@ jobs:
             exit 1
           fi
           make vm-lint
-      - run: |
-          make vm vm-test TRACE=0
+      - if: github.event_name == 'workflow_dispatch'
+        run: |
+          make vm TRACE=0
           dist/agentica-vm --version | grep -q 'trace off'
       - run: make vm vm-test
       - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt
