@@ -1,7 +1,7 @@
 #lang racket
 
 (require "ast.rkt" "bdd.rkt" "checker.rkt" "diagnostic.rkt" "evaluator.rkt"
-         "gherkin.rkt" "json.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "process.rkt" "modules.rkt")
+         "gherkin.rkt" "json.rkt" "lexer.rkt" "lower.rkt" "parser.rkt" "source.rkt" "process.rkt" "modules.rkt")
 
 (provide run-bdd make-bdd-service format-bdd-report bdd-error-report)
 
@@ -20,7 +20,10 @@
 (define (read-program path)
   (with-handlers ([exn:fail? (lambda (failure) (diagnostic 'RUNTIME-BDD-INFRA (exn-message failure) (file-span path)))])
     (define linked (load-program path))
-    (if (diagnostic? linked) linked (check linked))))
+    (define checked (if (diagnostic? linked) linked (check linked)))
+    (or (and (not (diagnostic? checked))
+             (check-vm-only checked "agentica test runs step files on the legacy evaluator"))
+        checked)))
 
 (define (guard context span thunk)
   (with-handlers ([exn:fail:bdd? exn:fail:bdd-problem]
