@@ -387,9 +387,11 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `OPENSSL_PREFIX` required (CI and releases: `/usr`, Debian's static
   archives), `PKG_CONFIG_PATH` unset, `PKG_CONFIG_LIBDIR` limited to the
   prefix (`lib`, `lib64`, multiarch) and `libdir` checked inside it,
-  `libssl.a`, `libcrypto.a`, `libz.a` and `libzstd.a` linked by full path
-  (only glibc's own flags stay), and `readelf -d` checked against a
-  `NEEDED` allowlist (libc, libm, `ld-linux`). The OpenSSL settings and
+  `libssl.a`, `libcrypto.a` and each non-glibc library of libcrypto's
+  `Libs.private` (on trixie `libz.a`, `libzstd.a`) linked by full path,
+  a missing one a build error (only glibc's own flags stay), and `readelf
+  -d` checked against the `NEEDED` allowlist of 10.0 (libc, libm,
+  `ld-linux`). The OpenSSL settings and
   resolved cflags and link flags are written to `build/vm/flags` by its
   stamp recipe and read back by the link recipe; no parse-time
   `pkg-config`. Only `OPENSSL_3.0.0` symbols are called:
@@ -402,9 +404,11 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 - **HTTP (7h)**: parity is black-box. Well-formed messages: same status,
   headers, body and `Result` ok or error. Malformed input: both reject
   (server error status and close, client error `Result`); the code may
-  differ except 413, 431 (also trailers), 505 and 501 (`CONNECT`, and any
+  differ except 413, 431 (also trailers), 505 (requests; a bad response
+  version is a client error `Result`) and 501 (`CONNECT`, and any
   `Transfer-Encoding` but one `chunked`). Equal duplicate `Content-Length`
-  is accepted; conflicting values give 400. No copying of evaluator quirks or
+  is accepted; conflicting values give 400; `Content-Length` with any
+  `Transfer-Encoding` is 400 first. No copying of evaluator quirks or
   its order of failing lines; picohttpparser's leniencies are documented
   differences; framing stays strict. picohttpparser (submodule
   `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the baseline
@@ -417,7 +421,10 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   8192-byte start line plus 64 KiB of headers); a -1 is 400 or a client
   error `Result`. A pre-scan checks size limits (431), bare LF and the
   header count (431 past 100, before pico runs), skipping one leading CRLF
-  before a request. Before pico, the adapter checks a complete start line
+  before a request. The pre-scan stops at the end of the start line; the
+  start-line check (431 for its length, then 505 or 400) runs before the
+  pre-scan looks at any header line. Before pico, the adapter checks a
+  complete start line
   with the evaluator's shape: `HTTP/[0-9.]+` other than exactly `1.1`
   gives 505 (`GET / HTTP/1` too), other bad shapes 400, so it fails at
   once. On pico's output: target (origin form or `*` with
