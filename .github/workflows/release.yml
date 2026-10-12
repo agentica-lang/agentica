@@ -72,18 +72,23 @@ jobs:
             exit 1
           }
           export LC_ALL=C
-          readelf -h dist/agentica-vm | grep -q 'Type:[[:space:]]*DYN' || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
-          readelf -d dist/agentica-vm | grep -q 'FLAGS_1).*PIE' || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
-          readelf -d dist/agentica-vm | grep -q '(FLAGS).*BIND_NOW' || { echo "dist/agentica-vm lacks BIND_NOW" >&2; exit 1; }
-          readelf -lW dist/agentica-vm | grep -q 'GNU_RELRO' || { echo "dist/agentica-vm lacks RELRO" >&2; exit 1; }
-          objdump -T dist/agentica-vm | grep -q '__stack_chk_fail' || { echo "dist/agentica-vm lacks the stack protector" >&2; exit 1; }
+          header=$(readelf -h dist/agentica-vm)
+          dynamic=$(readelf -d dist/agentica-vm)
+          segments=$(readelf -lW dist/agentica-vm)
+          symbols=$(objdump -T dist/agentica-vm)
+          grep -q 'Type:[[:space:]]*DYN' <<< "$header" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
+          grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
+          grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || { echo "dist/agentica-vm lacks BIND_NOW" >&2; exit 1; }
+          grep -q 'GNU_RELRO' <<< "$segments" || { echo "dist/agentica-vm lacks RELRO" >&2; exit 1; }
+          grep -q '__stack_chk_fail' <<< "$symbols" || { echo "dist/agentica-vm lacks the stack protector" >&2; exit 1; }
+          grep -qE '__(memcpy|read|vsnprintf)_chk' <<< "$symbols" || { echo "dist/agentica-vm lacks _FORTIFY_SOURCE" >&2; exit 1; }
       - name: Golden tests on the release VM
         env:
           AGENTICA_VM_BINARY: dist/agentica-vm
           AGENTICA_REQUIRE_VM: '1'
         run: |
           make build
-          raco test -j 4 tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
+          raco test -j 2 tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
       - name: Build and smoke-test
         run: |
           make exe
