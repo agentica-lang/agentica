@@ -4,12 +4,33 @@ This document closes roadmap step 7b. It fixes the decisions that 7c
 (lowering), 7d (bytecode emitter) and 7e (VM core) build on, and the library
 choices and safety rules that 7h and 7i need. The language does not change.
 `grammar.md` stays the contract, and the Racket evaluator
-(`src/evaluator.rkt`) stays the reference until 7i. Where this document and
-the evaluator disagree, the evaluator wins and this document is fixed.
-Roadmap step 7b lists each decision in one line; this document gives the
-details and reasons.
+(`src/evaluator.rkt`) stays the reference until 7i. Roadmap step 7b lists
+each decision in one line; this document gives the details and reasons.
 
 ## 1. Overview
+
+**Parity is black-box.** The VM must give the evaluator's exit code, the
+stdout of a program that finishes, and on failure the same diagnostic code
+(`RUNTIME-INDEX-OUT-OF-RANGE`, say); a runaway program must stop with
+`RUNTIME-STEP-LIMIT` under `--max-steps`. Everything else may differ:
+diagnostic message text and span, stderr wording, OS error text, the error
+strings of library `Result`s (HTTP, files, processes), exact step counts
+and the step-limit span, `Random` sequences, and cross-task order. VM
+messages must still be clear and useful for agents; evaluation rounds judge
+that, not identity with Racket. Where this document and the evaluator
+disagree on what must match, the evaluator wins and this document is
+fixed. Much of this document records Racket's exact behavior because the
+first PRs copied it; that is a description of today's VM, not a rule, and
+designs kept only to copy Racket's text or counts may be simplified. For
+example, the HTTP adapter does not need to map parser failures onto
+`http-wire.rkt`'s exact messages, only onto the same diagnostic or `Result`
+error kind. The turn cost (10.2.1) stays: it is there for fairness, not
+for parity. With black-box parity the compiler may also optimize freely as
+long as exit code, stdout and diagnostic codes stay the same: inlining,
+constant folding, common subexpression elimination, loop-invariant code
+motion, and merging or moving `STEP`s (a runaway loop must still hit
+`RUNTIME-STEP-LIMIT`; step counts may change). New APIs the evaluator never
+had (UDP, say) may be VM-only, tested with fixed expected output.
 
 ```text
 .agc files
@@ -105,7 +126,9 @@ of memory). A heap cap is an open question (13).
 ## 2. Reference behavior the VM must copy
 
 These rules come from the Racket sources, not only from the grammar. The
-differential tests (section 12) check them.
+differential tests (section 12) check only what black-box parity needs
+(exit code, stdout, diagnostic code); messages, spans and step counts below
+describe the VM today and may change (1).
 
 ### 2.1 Steps (`task-step!` in `src/task.rkt`, `step!` in `src/evaluator.rkt`)
 
@@ -133,7 +156,9 @@ differential tests (section 12) check them.
   function still meets the step limit.
 - Without `--max-steps`, nothing is counted. With limit N, the first N entries
   run and entry N+1 fails with `RUNTIME-STEP-LIMIT` at its own span. All tasks
-  share one counter. Racket accepts any positive integer; the VM clamps values
+  share one counter. Only the outcome must match the evaluator: a runaway
+  program stops with `RUNTIME-STEP-LIMIT`; the exact count and span may
+  differ (1). Racket accepts any positive integer; the VM clamps values
   above `INT64_MAX`, which can never be exhausted anyway.
 
 ### 2.2 Numbers
@@ -381,8 +406,9 @@ fails when the committed file differs from what the generator prints.
 
 ### 2.5 Diagnostics, streams and exit codes
 
-- Runtime diagnostics carry only code, message and span. Messages are copied
-  verbatim from the Racket sources.
+- Runtime diagnostics carry only code, message and span. Messages started as
+  copies of the Racket text; only the code must match (1), and a VM message
+  may be reworded when that makes it clearer.
   `RUNTIME-UNWRAP-ERROR` uses the error's own String as its message, so the
   VM's outcome carries the message with its byte length (`agc_fail_text`)
   and prints it as raw bytes, like any other String.
@@ -393,7 +419,7 @@ fails when the committed file differs from what the generator prints.
   NBSP stay). `--json` prints one line; `jsexpr->string` escapes `"`, `\`,
   `\b \f \n \r \t` in short form and the other bytes below 0x20 and DEL as
   lowercase `\u00XX`, and leaves everything else raw, so the VM's JSON is
-  byte-for-byte the evaluator's even for odd file names.
+  valid even for odd file names.
 - The formats are `format-diagnostic`, `format-diagnostic-ai` (which also
   starts with `check failed: 1 error` at runtime) and `diagnostic->jsexpr` in
   `src/diagnostic.rkt`. Columns count characters; source lines split on LF
@@ -491,9 +517,10 @@ fails when the committed file differs from what the generator prints.
 
 ### 2.8 Files and paths (`src/filesystem.rkt`)
 
-Every failure is an error value whose message is the evaluator's text, so
-the VM copies Racket's own messages where the evaluator lets them through.
-The checks run in this order:
+Every failure is an error value. Its text started as the evaluator's (Racket's
+own messages included, where the evaluator lets them through); error strings
+need not match (1), so they may be replaced with clearer ones. The checks
+run in this order:
 
 - `File.write`, `write_text`, `append_text`: text above 1 MiB (`filesystem:
   text exceeds 1048576 bytes`); `File.write_bytes`: `network: bytes must be
@@ -563,9 +590,7 @@ After a timeout on an active handle operation both backends close the
 handle: later operations give `filesystem: file handle is closed` and
 `File.close` gives `ok()`.
 
-Documented differences: read and write errors after a successful open
-(`EIO`, `ENOSPC`) say `error reading from stream port` or `error writing to
-stream port` with the OS error, not Racket's port text. FIFOs and devices
+Documented difference: FIFOs and devices
 count as files on both backends, but they are not compared beyond a timed
 out read: the evaluator waits on them with Racket's nonblocking ports, while
 the VM does a blocking read or write on a thread-pool thread. So a FIFO with
@@ -875,7 +900,8 @@ result register of the `CALL` that made the frame, just as the replaced
 function's `RETURN` would have. `CALL` and `RETURN` charge
 no steps, and the lowering puts the same `step`s before a `tail-call` as
 before a `call`, so a tail call charges exactly what `call` + `return`
-charged: step counts and `--max-steps` failures do not change.
+charged: step counts and `--max-steps` failures do not change (exact counts
+are not part of parity, 1, but keeping them made the change easy to test).
 
 `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` are
 **resumable builtins**. `CALL_BUILTIN` pushes a native frame whose state (the
@@ -923,9 +949,12 @@ The IR has one `step` per charged node. The 7d emitter merges only adjacent
 `step`s with no label between them into one `STEP n`, splitting runs above
 65535 because the count is 16 bits. Struct and variant ids are 16-bit
 operands too, so the emitter rejects a program with more than 65535 structs
-or variants. The charge points do
-not move, so counts and failing spans stay exact. Wider merging across pure
-instructions is left to 7g if profiling asks for it.
+or variants. Today the charge points do not move, so counts and failing
+spans match the evaluator. Black-box parity (1) allows more: merging `STEP`s
+across pure instructions or moving them out of straight-line code is fine as
+long as every loop and recursion still charges at least one step per round,
+so a runaway program still stops with `RUNTIME-STEP-LIMIT`. Roadmap 7k
+lists it with the other lowering optimizations.
 
 ### 4.5 Builtin imports
 
@@ -962,8 +991,7 @@ points into: the entry file first (span 0), then the others in the order
 the lowerer meets them. Each entry keeps the name the front end gave the
 file (the entry file as given on the command line, other files by their
 full path, `std/` modules by their `std/...` key), so a diagnostic raised in
-imported code names that file, line and column exactly as the evaluator
-does. The loader checks every span's line and column against its own
+imported code names that file, line and column. The loader checks every span's line and column against its own
 source.
 
 Format version 2 (the structs, enums and `case` PR) fills the Structs and
@@ -1084,7 +1112,7 @@ typedef struct {
   functions that tail-call each other) fails there with
   `RUNTIME-STACK-OVERFLOW` and runs on the VM. The VM's depth is never above
   the evaluator's, so a program that stays within the limit on the evaluator
-  stays within it on the VM, with the same output, steps and spans; a
+  stays within it on the VM, with the same output; a
   runtime diagnostic carries one span and no stack trace, so the replaced
   frames are not visible. Non-tail recursion keeps the limit and its span.
   The evaluator is not changed: it goes away in 7i.
@@ -1122,7 +1150,7 @@ handlers allocate nothing, kill child processes, `write(2, ...)` the fixed
 line `agentica-vm: out of memory` (the abort handler: `agentica-vm: internal
 GC error`) and call `_Exit(70)` (no atexit handlers, no stdio flush, so
 buffered stdout is lost). Racket has no matching diagnostic, so this is a
-documented difference. It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
+documented difference (the exit code differs). It also sets `GC_set_warn_proc(GC_ignore_warn_proc)`,
 so libgc warnings (such as `Repeated allocation of very large block`) never
 reach the program's stderr.
 
@@ -1371,7 +1399,7 @@ and cost one predictable branch each.
 - `agentica-vm [--max-steps N] [--seed N] [--ai|--json] -- file.agcb
   [args...]` (7e; `--allow-run` joins in 7h). The option parser is hand
   written: it stops at the first non-option and honors `--`. Option values are
-  checked with the same messages and exit code 2 as `src/main.rkt`. Callers
+  checked with exit code 2, as in `src/main.rkt`. Callers
   always pass `--` before the file. A test checks that `--allow-run` after the
   file is a program argument. On Windows, arguments come from `wmain`
   (`-municode`) and are converted to UTF-8; the input file is opened with `_wopen` on the original UTF-16 argument, so
@@ -1564,8 +1592,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
   one per 64 bytes of text it copies or scans. The units are tuned with the
   turn budget in 7h; a builtin with constant work charges nothing. The turn
   cost is taken from the turn only, never from `--max-steps`
-  (`steps_left`), so step counts, the `RUNTIME-STEP-LIMIT` span and the
-  `--max-steps` sweep stay equal to the evaluator. When the builtin has
+  (`steps_left`), so it never changes when `--max-steps` stops a program. When the builtin has
   returned and its result is stored, the task yields at the next
   instruction if its turn is spent (see "One counter for both budgets").
   This does not cut a long builtin in half: it bounds what runs after it.
@@ -1943,10 +1970,10 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   GC-threaded build is covered only by a GC-stress run with
   `--schedulers 4`); then round 2 of the benchmarks covers multicore
   (roadmap phase 12) if it landed. Multicore does not block 7i: the
-  evaluator cannot run in parallel anyway. The parity rule stays:
-  with N=1, output, counts and spans match the evaluator. The differential,
-  bytecode and golden tests, the `--max-steps` sweep and the seeded runs
-  all run the VM with `--schedulers 1`.
+  evaluator cannot run in parallel anyway. The parity rule stays
+  black-box (1): with N=1, exit code, stdout and diagnostic codes match the
+  evaluator. The differential, bytecode and golden tests, the `--max-steps`
+  sweep and the seeded runs all run the VM with `--schedulers 1`.
 
 ### 10.3 TLS
 
@@ -2139,19 +2166,26 @@ the platform's OpenSSL package) to each job.
 - `tests/vm-diff-*-test.rkt` (from the first VM PR, completed in 7f; four
   shards of `tests/vm-diff-common.rkt`) run each
   program on the evaluator in-process (as `tests/examples-test.rkt` does,
-  formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm`, and
-  compare stdout, stderr, exit code, and diagnostic code and span in all
-  three formats. Inputs: `examples/`, `tests/eval/tasks/*` reference
+  formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm` with
+  `--json`, and compare exit code, stdout and diagnostic code (black-box
+  parity, 1). The code is read from stderr in any of the three formats:
+  `error[CODE]`, an `[CODE]` line, or `"code":"CODE"`. Inputs: `examples/`, `tests/eval/tasks/*` reference
   solutions and hidden cases, and `tests/fixtures/vm/` with one program per
   runtime code and error span.
-- Every program also runs with `--max-steps` 1 to 200 and some larger values;
-  the failing span must match. In the slice the test finds each program's
-  total step count with the evaluator and sweeps every limit from 1 to it
-  when the total is at most 2000; above that (the call-depth program, about
-  60,000 steps) it sweeps 1 to 300, 50 evenly spaced limits, and the total
-  and the total minus one. The run without a limit compares all three
-  formats; the sweep compares the plain format; stderr includes `IO.warn`
-  output before the diagnostic. The inputs are `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
+- Every program also runs on the VM under a sweep of `--max-steps`
+  limits. The test finds each program's total step count T with the
+  evaluator and sweeps every limit from 1 to T when T is at most 2000;
+  above that (the call-depth program, about 60,000 steps) it sweeps 1 to
+  300, 50 evenly spaced limits, T - 1 and T; then it adds 2T + 100. For
+  each limit the VM must either give the full run's exit code, stdout and
+  diagnostic code, or stop with exit 1 and `RUNTIME-STEP-LIMIT` with a
+  stdout that is a prefix of the evaluator's full-run stdout. Once the VM
+  finishes at one limit it must finish at every larger one, and it must
+  finish at 2T + 100. The evaluator runs once per program, not once per
+  limit. This allows other step counts and spans but catches a VM that
+  ignores the limit, stops with another code, prints what the program
+  would not print, or charges far more than the evaluator. The inputs are
+  `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. `Random` fixtures print only what both backends share, since
   seeded sequences differ by design (7.4).
 - Corpora: Float text has a fixed table in `vm/tests/float_text_test.c`
@@ -2186,7 +2220,7 @@ the platform's OpenSSL package) to each job.
   gets a new empty directory under the shard's work directory for every
   run, evaluator and VM alike (directory names have the same length, so
   cut forms match), the argument is replaced by its path, the path is
-  replaced back by `@tmp` in stdout and stderr before the comparison, and
+  replaced back by `@tmp` in stdout before the comparison, and
   the directory is deleted afterwards. The fixtures use long timeouts, so
   a loaded machine does not turn a slow write into a timeout.
 - Tasks, processes and network programs join in 7h, with the independent

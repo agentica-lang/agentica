@@ -100,8 +100,13 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
 - The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
   file lock in `build/`, since they run in parallel), print `SKIP` locally
   when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
-  They compare each fixture in the plain, `--ai` and `--json` formats, and
-  sweep `--max-steps` in the plain format. Fixtures are compiled in-process
+  They run each fixture once on the evaluator and on the VM with `--json`
+  and compare exit code, stdout and diagnostic code (`outcome`; the code is
+  read from stderr in any format by `diagnostic-code`). The `--max-steps`
+  sweep runs only the VM: each limit must give the full run's outcome, or
+  exit 1 with `RUNTIME-STEP-LIMIT` and a stdout that is a prefix of the
+  full stdout; once a limit finishes, larger ones must too, and 2T + 100
+  (T the evaluator's step count) must finish (`check-sweep`). Fixtures are compiled in-process
   (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
   The VM runs of one fixture go through one `/bin/sh` script that writes each
   run's stdout, stderr and exit status to files (stdin from a file, arguments
@@ -226,7 +231,7 @@ call in the module's file.
    `.gitattributes` marks them binary so CRLF survives) as its stdin and
    `name.args` (a Racket list of strings, read with `file->value`) as its
    program arguments when they exist; the diff test feeds both to the
-   evaluator and the VM, in every format and in the `--max-steps` sweep.
+   evaluator and the VM, and to the VM in the `--max-steps` sweep.
    An `.args` entry `@tmp` becomes a fresh empty directory per run (both
    backends, same name length), and that path is turned back into `@tmp`
    in the output before the comparison; file fixtures (`files-*`) use it
@@ -246,8 +251,9 @@ Rules for the C code:
   loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.
-- Fail at the span the evaluator uses (call span, or `span + 1 + i` for
-  argument `i`) with the evaluator's message text, copied verbatim.
+- Fail with the evaluator's diagnostic code, at the call span or `span + 1 + i`
+  for argument `i`, with a clear message (it need not be the evaluator's
+  text).
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
 - Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d
@@ -266,12 +272,18 @@ Rules for the C code:
 
 ## Rules every change keeps
 
-**Parity.** Same stdout, stderr, exit code, diagnostic code and span as the
-evaluator. Diagnostic messages are copied verbatim; `RUNTIME-INTERNAL` text is
-not compared. Each deliberate difference goes into `docs/vm.md` as a
-documented difference; `docs/vm.md` lists them (for example a failed stdout
-write exits 1, out of memory exits
-70, and the 2^24 register cap gives `RUNTIME-STACK-OVERFLOW`).
+**Parity is black-box** (`docs/vm.md` §1). Same exit code, stdout of a
+program that finishes, and diagnostic code as the evaluator; a runaway
+program stops with `RUNTIME-STEP-LIMIT` under `--max-steps`. Message text,
+spans, stderr wording, OS error text, library `Result` error strings, exact
+step counts and the step-limit span, `Random` sequences and cross-task order
+may differ, but VM messages must stay clear for agents. Lowering may
+optimize (inline, fold constants, move or merge `STEP`s) as long as that
+holds. A deliberate difference in exit code, stdout or code goes into
+`docs/vm.md` as a documented difference (for example a failed stdout write
+exits 1, out of memory exits 70, and the 2^24 register cap gives
+`RUNTIME-STACK-OVERFLOW`). New APIs the evaluator never had may be VM-only,
+tested with fixed expected output.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, runs children only with its own
@@ -360,7 +372,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   counter; per-task stack, registers and frame). Once tasks land, a
   builtin or opcode whose work grows with its input sets a turn cost
   (`docs/vm.md` §10.2.1, Builtins); it is taken from the turn only, never
-  from `steps_left`, so step counts stay equal to the evaluator. Only the
+  from `steps_left`, so it never changes how `--max-steps` stops a program. Only the
   scheduler that owns a loop calls `uv_run` on it. New code adds no
   mutable `static` or global variable in `vm/` (the exceptions are listed
   in `docs/vm.md` §10.2.3); state goes in the runtime, scheduler or task
