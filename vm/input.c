@@ -18,7 +18,6 @@
 #define INPUT_SHRINK ((size_t)1024 * 1024)
 #define INPUT_READ_MAX ((size_t)1024 * 1024)
 #define INPUT_ROOM ((size_t)4096)
-#define GOT_NONE 2
 #define FILL_WAIT 3
 
 #ifdef __linux__
@@ -36,7 +35,7 @@ void agc_input_open(agc_vm *vm, int fd, bool flush_out) {
   in->flush_out = flush_out;
   in->pending_eof = false;
   in->reading = false;
-  in->got = GOT_NONE;
+  in->got = 0;
 }
 
 static _Noreturn void read_failed(agc_vm *vm) {
@@ -118,8 +117,7 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
     in->end += (size_t)q->got;
   } else {
     in->got = q->got == 0 ? 0 : -1;
-    in->eof_readers = 1;
-    for (const agc_task *t = in->waiters; t; t = t->next) in->eof_readers++;
+    in->eof_seq++;
   }
   free(q);
   agc_task_wake_all(vm, &in->waiters, &in->waiters_tail);
@@ -172,13 +170,9 @@ static int fill(agc_vm *vm) {
     return 0;
   }
   if (in->fd < 0) return 0;
-  if (in->got != GOT_NONE) {
-    int got = in->got;
-    if (got == 0 && in->eof_readers > 1)
-      in->eof_readers--;
-    else
-      in->got = GOT_NONE;
-    return got;
+  if (vm->task->input_seen != in->eof_seq) {
+    vm->task->input_seen = in->eof_seq;
+    return in->got;
   }
   return start_read(vm, in);
 }

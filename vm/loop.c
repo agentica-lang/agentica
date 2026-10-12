@@ -54,6 +54,7 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   r->context = agc_void();
   r->task = NULL;
   r->holder = NULL;
+  r->next_owner = NULL;
   r->waiters = r->waiters_tail = NULL;
   r->slot = reg->count;
   reg->items[reg->count++] = r;
@@ -71,13 +72,6 @@ void agc_unregister(agc_vm *vm, agc_resource *r) {
 #endif
   reg->items[reg->count] = NULL;
   r->slot = SIZE_MAX;
-}
-
-bool agc_handle_wait(agc_vm *vm, agc_resource *handle) {
-  if (!handle->holder) return false;
-  agc_task_enqueue(&handle->waiters, &handle->waiters_tail, vm->task);
-  agc_task_park(vm, true);
-  return true;
 }
 
 #ifdef __linux__
@@ -220,6 +214,41 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   return true;
 }
 
+static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return agc_void();
+}
+
+static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL};
+
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t timeout_ms) {
+  agc_task *t = vm->task;
+  if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
+    if (t->lock_deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+    t->lock_deadline = 0;
+    if (handle->next_owner == t) {
+      handle->next_owner = NULL;
+      agc_task_wake_all(vm, &handle->waiters, &handle->waiters_tail);
+    }
+    return AGC_LOCK_TAKEN;
+  }
+  agc_loop *loop = loop_of(vm);
+  uv_update_time(&loop->uv);
+  uint64_t now = uv_now(&loop->uv);
+  if (!t->lock_deadline) t->lock_deadline = now + (uint64_t)timeout_ms;
+  agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+  if (now >= t->lock_deadline) {
+    t->lock_deadline = 0;
+    return AGC_LOCK_TIMEOUT;
+  }
+  agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
+  agc_io_start(vm, &lock_io, NULL, agc_void(), (int64_t)(t->lock_deadline - now));
+  agc_task_park(vm, true);
+  return AGC_LOCK_WAIT;
+}
+
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   agc_resource *r = t->parked;
   t->parked = NULL;
@@ -233,7 +262,12 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
     agc_resource *handle = agc_as_handle(vm, context);
     if (handle->holder == r) {
       handle->holder = NULL;
-      agc_task_wake_all(vm, &handle->waiters, &handle->waiters_tail);
+      agc_task *next = handle->waiters;
+      if (next) {
+        agc_task_remove(&handle->waiters, &handle->waiters_tail, next);
+        handle->next_owner = next;
+        agc_task_wake(vm, next);
+      }
     }
   }
   agc_value result;
@@ -299,6 +333,13 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   (void)vm;
   (void)wait;
   return false;
+}
+
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t timeout_ms) {
+  (void)vm;
+  (void)handle;
+  (void)timeout_ms;
+  return AGC_LOCK_TAKEN;
 }
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {

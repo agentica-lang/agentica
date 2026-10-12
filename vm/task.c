@@ -24,9 +24,9 @@ void agc_task_wake(agc_vm *vm, agc_task *t) {
 }
 
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t) {
-  t->next = NULL;
+  t->wait_next = NULL;
   if (*tail)
-    (*tail)->next = t;
+    (*tail)->wait_next = t;
   else
     *head = t;
   *tail = t;
@@ -36,10 +36,24 @@ void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail) {
   agc_task *t = *head;
   *head = *tail = NULL;
   while (t) {
-    agc_task *next = t->next;
-    t->next = NULL;
+    agc_task *next = t->wait_next;
+    t->wait_next = NULL;
     agc_task_wake(vm, t);
     t = next;
+  }
+}
+
+void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t) {
+  agc_task *previous = NULL;
+  for (agc_task *k = *head; k; previous = k, k = k->wait_next) {
+    if (k != t) continue;
+    if (previous)
+      previous->wait_next = k->wait_next;
+    else
+      *head = k->wait_next;
+    if (*tail == k) *tail = previous;
+    k->wait_next = NULL;
+    return;
   }
 }
 
@@ -99,6 +113,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_task *child = agc_new_task();
   agc_random_seed(&child->random, agc_random_next(&vm->task->random));
+  child->input_seen = vm->rt->in.eof_seq;
   agc_task_call(vm, child, args[0], args[1], span);
   enqueue(vm, child);
   return agc_task_value(child);

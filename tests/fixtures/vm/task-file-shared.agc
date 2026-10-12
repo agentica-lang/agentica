@@ -19,7 +19,10 @@ def main() -> Void
   input = Result.unwrap!(File.open(path, "read", 60000))
   a = Task.spawn(&read_all, input)
   b = Task.spawn(&read_all, input)
-  both = Task.await(a).concat(Task.await(b)).sort
+  ra = Task.await(a)
+  rb = Task.await(b)
+  IO.inspect(ra.size > 0 and rb.size > 0)
+  both = ra.concat(rb).sort
   IO.inspect(both.size)
   IO.inspect(both.at(0))
   IO.inspect(both.at(59))

@@ -154,6 +154,7 @@ struct agc_resource {
   agc_value context;
   agc_task *task;
   agc_resource *holder;
+  agc_task *next_owner;
   agc_task *waiters, *waiters_tail;
 };
 
@@ -265,7 +266,8 @@ typedef struct {
   bool flush_out, pending_eof, reading;
   int got;
   uint8_t *buf;
-  size_t start, end, cap, scanned, eof_readers;
+  size_t start, end, cap, scanned;
+  uint64_t eof_seq;
   agc_task *waiters, *waiters_tail;
 } agc_input;
 
@@ -288,6 +290,8 @@ typedef enum { AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKED, AGC_TASK_DONE 
 
 typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
 
+typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status;
+
 struct agc_task {
   agc_value *regs;
   size_t reg_capacity;
@@ -300,9 +304,10 @@ struct agc_task {
   uint32_t park_reg;
   bool parking, retry;
   int64_t turn_cost;
+  uint64_t lock_deadline, input_seen;
   agc_task_state state;
   agc_value result;
-  agc_task *next;
+  agc_task *next, *wait_next;
   agc_task *waiters, *waiters_tail;
 };
 
@@ -451,7 +456,7 @@ extern const size_t agc_task_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
-bool agc_handle_wait(agc_vm *vm, agc_resource *handle);
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t timeout_ms);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
 void agc_io_init(void);
@@ -472,6 +477,7 @@ void agc_task_wake(agc_vm *vm, agc_task *t);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail);
+void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
 void agc_turn_begin(agc_vm *vm);
 bool agc_turn_charge(agc_vm *vm);
 void agc_turn_finish(agc_vm *vm);

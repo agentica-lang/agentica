@@ -5,9 +5,11 @@
 
 (define-runtime-path root "..")
 (define-runtime-path fixture "fixtures/latency/latency.agc")
+(define-runtime-path close-fixture "fixtures/latency/close-reader.agc")
 (define-runtime-path main-file "../src/main.rkt")
 
 (define limit-ms 250)
+(define wait-seconds 60)
 (define vm-file (build-path root "dist" "agentica-vm"))
 
 (define (environment no-turn-cost?)
@@ -21,6 +23,11 @@
       (subprocess #f #f (current-error-port) vm-file "--" (path->string bytecode) mode))
     (values process out in)))
 
+(define (next-line out)
+  (define line (sync/timeout wait-seconds (read-line-evt out 'linefeed)))
+  (unless line (error 'latency "no output from the VM within ~a s" wait-seconds))
+  line)
+
 (define (stop process out in)
   (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
   (subprocess-wait process)
@@ -33,7 +40,7 @@
     void
     (lambda ()
       (close-output-port in)
-      (define line (read-line out))
+      (define line (next-line out))
       (match (and (string? line) (regexp-match #rx"^worst ([0-9]+)$" line))
         [(list _ worst) (string->number worst)]
         [_ (error 'latency "unexpected output: ~s" line)]))
@@ -48,11 +55,11 @@
         (cond
           [(or (= round 20) (> worst limit-ms)) worst]
           [else
-           (unless (equal? (read-line out) "ready") (error 'latency "the program did not say ready"))
+           (unless (equal? (next-line out) "ready") (error 'latency "the program did not say ready"))
            (define sent (current-inexact-monotonic-milliseconds))
            (fprintf in "line ~a\n" round)
            (flush-output in)
-           (define reply (read-line out))
+           (define reply (next-line out))
            (define delay (- (current-inexact-monotonic-milliseconds) sent))
            (unless (equal? reply (format "echo line ~a" round)) (error 'latency "unexpected echo: ~s" reply))
            (loop (add1 round) (max worst delay))])))
@@ -81,6 +88,20 @@
                    sleep (round echo) limit-ms)
            (check-true (< sleep limit-ms) (format "sleep wake ~a ms" sleep))
            (check-true (< echo limit-ms) (format "stdin echo ~a ms" echo)))
+         (test-case "a task reading in a loop lets main close the handle, and the run ends"
+           (define close-bytecode (build-path work "close-reader.agcb"))
+           (check-true (system* (find-system-path 'exec-file) (path->string main-file)
+                                "compile" (path->string close-fixture) "-o" (path->string close-bytecode)))
+           (define-values (process out in err)
+             (subprocess #f #f (current-error-port) vm-file "--" (path->string close-bytecode) (path->string work)))
+           (dynamic-wind
+             void
+             (lambda ()
+               (close-output-port in)
+               (check-not-false (sync/timeout wait-seconds process) "the VM did not end")
+               (check-equal? (subprocess-status process) 0)
+               (check-equal? (port->string out) "ok()\n2\n"))
+             (lambda () (stop process out in))))
          (test-case "without turn costs the same check fails"
            (define sleep (sleep-worst bytecode #t))
            (define echo (echo-worst bytecode #t))

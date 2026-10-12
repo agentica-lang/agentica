@@ -267,6 +267,7 @@ agc_value agc_task_value(agc_task *t) {
 }
 
 uint64_t agc_value_units(agc_value v) {
+  while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
     case AGC_T_STRING: return ((const agc_string *)v.as.p)->bytes / AGC_COST_BYTES;
     case AGC_T_LIST: return ((const agc_list *)v.as.p)->len;
