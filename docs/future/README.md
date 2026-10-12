@@ -4,7 +4,7 @@ Status: proposals only. This document is not normative; implemented language beh
 
 Working rule: when a phase of the [roadmap](../roadmap/README.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT) are implementation proposals with no language change. Section 23 (binary data) adds `Int` and `Float` builtins and the `std/binary` module, with no grammar change. Section 24 (logging and debugging) adds the `std/log` module, stack traces on runtime errors and tracing inside the VM, with no grammar change. Section 25 (Ruby typed idioms) plans more Ruby forms for after 7i, lists others to evaluate later, and records the ones decided against.
+Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT) are implementation proposals with no language change. Section 23 (binary data) adds `Int` and `Float` builtins and the `std/binary` module, with no grammar change. Section 24 (logging and debugging) adds the `std/log` module, stack traces on runtime errors and tracing inside the VM, with no grammar change. Section 25 (Ruby typed idioms) plans more Ruby forms for after 7i, lists others to evaluate later, and records the ones decided against. Section 26 (strict diagnostics) records that Agentica has no warnings and plans four new errors: unused imports, unused variables, unreachable code and ignored `Result` values.
 
 
 ## Files
@@ -37,6 +37,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Planned (roadmap phase 13) |
 | 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14) |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
+| 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
 
 New features are VM-only: they come after the evaluator is deleted (roadmap 7i) and get no Racket twin ([roadmap rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).
 
