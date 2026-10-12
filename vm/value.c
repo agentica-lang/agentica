@@ -65,6 +65,19 @@ unsigned agc_gc_version(void) {
 #endif
 }
 
+bool agc_gc_stats(agc_gc_info *info) {
+#ifdef AGC_NO_GC
+  (void)info;
+  return false;
+#else
+  info->collections = (uint64_t)GC_get_gc_no();
+  info->heap = (uint64_t)GC_get_heap_size();
+  info->free = (uint64_t)GC_get_free_bytes();
+  info->since = (uint64_t)GC_get_bytes_since_gc();
+  return true;
+#endif
+}
+
 #ifdef AGC_NO_GC
 static void *own(size_t size) {
   if (!on_limit) return calloc(1, size);

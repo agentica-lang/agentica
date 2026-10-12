@@ -21,6 +21,8 @@
 #include <windows.h>
 
 #define file_stat _fstat64
+#define TRACE_OPEN (_O_WRONLY | _O_APPEND | _O_CREAT | _O_NOINHERIT | _O_BINARY)
+#define TRACE_MODE (_S_IREAD | _S_IWRITE)
 
 typedef struct _stat64 file_info;
 
@@ -29,6 +31,8 @@ static wchar_t **wide_args; // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 #include <unistd.h>
 
 #define file_stat fstat
+#define TRACE_OPEN (O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW)
+#define TRACE_MODE 0600
 
 typedef struct stat file_info;
 #endif
@@ -144,6 +148,50 @@ static bool bind_to_driver(int64_t driver) {
 }
 #endif
 
+#ifdef _WIN32
+static int private_trace_fd(int fd) { return fd; }
+#else
+static int private_trace_fd(int fd) {
+  struct stat info;
+  if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != geteuid()) {
+    close(fd);
+    return -1;
+  }
+  if (fd > 2) return fd;
+  int moved = fcntl(fd, F_DUPFD_CLOEXEC, 3);
+  close(fd);
+  return moved;
+}
+#endif
+
+#ifdef __linux__
+static void fill_standard_fds(void) {
+  for (int fd = 0; fd <= 2; fd++) {
+    if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) continue;
+    int opened = open("/dev/null", fd == 0 ? O_WRONLY : O_RDONLY);
+    if (opened < 0 || opened == fd) continue;
+    dup2(opened, fd);
+    close(opened);
+  }
+}
+#endif
+
+static void start_trace(agc_trace *trace) {
+  const char *names = getenv("AGENTICA_VM_TRACE");
+  const char *path = getenv("AGENTICA_VM_TRACE_FILE");
+  int fd = 2;
+  if (AGC_TRACE_BUILD && names && *names && path && *path) {
+    fd = open(path, TRACE_OPEN, TRACE_MODE);
+    if (fd >= 0) fd = private_trace_fd(fd);
+    if (fd < 0) {
+      agc_trace_message(2, "cannot open", path, strlen(path), false);
+      names = NULL;
+      fd = 2;
+    }
+  }
+  agc_trace_parse(trace, names, fd);
+}
+
 static agc_value program_args(int argc, char **argv, int first) {
   size_t n = first < argc ? (size_t)(argc - first) : 0;
   agc_list *list = agc_new_list(n);
@@ -242,12 +290,13 @@ static int run(int argc, char **argv) {
     if (strcmp(arg, "--version") == 0) {
       unsigned gc = agc_gc_version();
       const char *uv = agc_uv_version();
+      const char *trace = AGC_TRACE_BUILD ? "" : ", trace off";
       if (gc)
-        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
-               agc_json_version(), uv ? ", libuv " : "", uv ? uv : "");
+        printf("agentica-vm %s (libgc %u.%u.%u, yyjson %s%s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF,
+               gc & 0xFF, agc_json_version(), uv ? ", libuv " : "", uv ? uv : "", trace);
       else
-        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s)\n", AGC_VERSION, agc_json_version(),
-               uv ? ", libuv " : "", uv ? uv : "");
+        printf("agentica-vm %s (sanitizer build, no libgc, yyjson %s%s%s%s)\n", AGC_VERSION, agc_json_version(),
+               uv ? ", libuv " : "", uv ? uv : "", trace);
       return fflush(stdout) == 0 ? 0 : 1;
     }
     if (strcmp(arg, "--ai") == 0 || strcmp(arg, "--json") == 0) {
@@ -302,6 +351,8 @@ static int run(int argc, char **argv) {
     fputs("agentica-vm: --driver-pid does not match the parent process\n", stderr);
     return 2;
   }
+  agc_trace trace;
+  start_trace(&trace);
   size_t len = 0;
   uint8_t *data = read_file(i, path, seen_driver, &len);
   if (!data) {
@@ -310,7 +361,7 @@ static int run(int argc, char **argv) {
   }
   agc_program *program = NULL;
   char error[160];
-  if (!agc_load(data, len, &program, error, sizeof error)) {
+  if (!agc_load_traced(data, len, &program, error, sizeof error, &trace)) {
     fprintf(stderr, "agentica-vm: invalid bytecode: %s\n", error);
     return 2;
   }
@@ -318,6 +369,7 @@ static int run(int argc, char **argv) {
   bool own_uring_env = agc_io_init();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
+  vm->rt->trace = trace;
   vm->rt->allow_run = allow_run;
   vm->rt->drop_uring_env = own_uring_env;
   seed_map_hash(vm);
@@ -346,6 +398,7 @@ static int run(int argc, char **argv) {
   }
 #ifdef __linux__
   if (!settled) {
+    AGC_TRACE(&trace, AGC_TRACE_IO, "hard_exit code=%d", code);
     fflush(stdout);
     fflush(stderr);
     _exit(code);
@@ -375,5 +428,10 @@ int wmain(int argc, wchar_t **wide_argv) {
   return run(argc, argv);
 }
 #else
-int main(int argc, char **argv) { return run(argc, argv); }
+int main(int argc, char **argv) {
+#ifdef __linux__
+  fill_standard_fds();
+#endif
+  return run(argc, argv);
+}
 #endif

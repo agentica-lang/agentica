@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,16 +13,30 @@ typedef struct {
   const uint8_t *data;
   size_t len, pos;
   uint64_t budget;
+  uint32_t format;
+  const agc_trace *trace;
+  uint64_t start;
   char *error;
   size_t error_size;
   jmp_buf fail;
 } reader;
+
+static uint64_t elapsed_us(uint64_t start) {
+  uint64_t now = agc_trace_now();
+  return now > start ? (now - start) / 1000u : 0;
+}
+
+static void trace_reject(const reader *r) {
+  AGC_TRACE(r->trace, AGC_TRACE_LOADER, "reject reason=%.*s pos=%zu us=%" PRIu64,
+            agc_trace_len(strnlen(r->error, r->error_size)), r->error, r->pos, elapsed_us(r->start));
+}
 
 static _Noreturn void reject(reader *r, const char *format, ...) {
   va_list args;
   va_start(args, format);
   vsnprintf(r->error, r->error_size, format, args);
   va_end(args);
+  trace_reject(r);
   longjmp(r->fail, 1);
 }
 
@@ -382,7 +397,8 @@ static void load_tables(reader *r, agc_program *p) {
 
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), "AGCB", 4) != 0) reject(r, "bad magic");
-  if (read_u32(r) != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
+  r->format = read_u32(r);
+  if (r->format != AGC_FORMAT_VERSION) reject(r, "unsupported format version");
   if (!same_text(read_string(r), AGC_VERSION)) reject(r, "built for another Agentica version");
 
   p->source_count = read_count(r, 8, "source");
@@ -480,21 +496,49 @@ static void load(reader *r, agc_program *p) {
   for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
 }
 
-bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size) {
+static void trace_tables(const agc_trace *tr, const agc_program *p) {
+  AGC_TRACE(tr, AGC_TRACE_LOADER,
+            "tables sources=%" PRIu32 " spans=%" PRIu32 " constants=%" PRIu32 " builtins=%" PRIu32
+            " functions=%" PRIu32 " structs=%" PRIu32 " types=%" PRIu32 " enums=%" PRIu32 " variants=%" PRIu32,
+            p->source_count, p->span_count, p->constant_count, p->builtin_count, p->function_count, p->struct_count,
+            p->type_count, p->enum_count, p->variant_count);
+}
+
+static bool load_guarded(reader *r, agc_program *p) {
+  if (setjmp(r->fail)) return false;
+  load(r, p);
+  return true;
+}
+
+bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
+                     const agc_trace *trace) {
+  static const agc_trace off = {0, 2, 0};
+  const agc_trace *tr = trace ? trace : &off;
   reader r;
   r.data = data;
   r.len = len;
   r.pos = 0;
+  r.format = 0;
+  r.trace = tr;
+  r.start = AGC_TRACE_ON(tr, AGC_TRACE_LOADER) ? agc_trace_now() : 0;
   r.error = error;
   r.error_size = error_size;
   r.budget = (uint64_t)len * 4 + ((uint64_t)1 << 20);
   agc_program *p = agc_alloc(sizeof(agc_program));
+  AGC_TRACE(tr, AGC_TRACE_LOADER, "file bytes=%zu", len);
   if (len > AGC_MAX_FILE_BYTES) {
     snprintf(error, error_size, "file is larger than 256 MiB");
+    trace_reject(&r);
     return false;
   }
-  if (setjmp(r.fail)) return false;
-  load(&r, p);
+  if (!load_guarded(&r, p)) return false;
+  AGC_TRACE(tr, AGC_TRACE_LOADER, "format version=%" PRIu32, r.format);
+  trace_tables(tr, p);
+  AGC_TRACE(tr, AGC_TRACE_LOADER, "done us=%" PRIu64, elapsed_us(r.start));
   *program = p;
   return true;
+}
+
+bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size) {
+  return agc_load_traced(data, len, program, error, error_size, NULL);
 }

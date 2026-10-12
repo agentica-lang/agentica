@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `agentica-vm` traces its internals for VM developers:
+  `AGENTICA_VM_TRACE=sched,io,proc,loader,gc` (or `all`) writes one
+  `agc-trace` line per event (task spawns, turns and wakes, I/O jobs and
+  `uv_run` waits, process spawns, exits, kills and signal watchers, loader
+  table sizes and rejects, GC collections) to stderr, or to the file named
+  by `AGENTICA_VM_TRACE_FILE`. Tracing never changes the exit code, stdout,
+  or (with a file) stderr. `make vm TRACE=0` compiles the trace points out.
+
 - The bytecode VM runs processes on Linux: every `Process` function, behind
   the VM's own `--allow-run` flag, which `agentica --vm` now passes through.
   Each call parks only its own task; reads and writes have their own locks;
@@ -340,6 +348,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   import aliases with those names no longer check.
 
 ### Fixed
+
+- `agentica-vm` started with stdin, stdout or stderr closed (`2>&-`) no
+  longer aborts on a libuv assertion: on Linux it first fills the closed
+  descriptor with `/dev/null` opened the other way round, so reads and
+  writes on it still fail as before (a program that prints with stdout
+  closed still ends with `RUNTIME-INTERNAL`).
 
 - A file handle closed by a timeout no longer holds its lock in the
   evaluator: later operations give `filesystem: file handle is closed` at

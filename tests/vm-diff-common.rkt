@@ -16,7 +16,9 @@
          "../src/source.rkt")
 
 (provide shard-count
-         run-shard)
+         run-shard
+         vm-file
+         vm-built?)
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
@@ -38,6 +40,10 @@
 (define runaway-limit 500)
 (define vm-turn-steps 2000)
 (define shard-count 4)
+
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define heavy-fixtures
   '(("tail-calls.agc" . 1) ("files-large.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
     ("callback-overflow.agc" . 3) ("results.agc" . 3) ("list-chunks.agc" . 3)))
@@ -51,7 +57,7 @@
 (define tmp-root (make-parameter #f))
 (define tmp-count 0)
 
-(define (vm-built?)
+(define (vm-built? [tests "VM golden tests"])
   (define make (find-executable-path "make"))
   (define (make-vm)
     (define lock (build-path root "build" "vm-diff-make.lock"))
@@ -75,7 +81,7 @@
   (cond
     [built? #t]
     [(getenv "AGENTICA_REQUIRE_VM") (error 'vm-diff "the VM must build when AGENTICA_REQUIRE_VM is set")]
-    [else (displayln "SKIP VM golden tests: make vm failed") #f]))
+    [else (printf "SKIP ~a: make vm failed\n" tests) #f]))
 
 (define (front-end path #:types [types #f])
   (define name (path->string path))

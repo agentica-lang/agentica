@@ -14,6 +14,9 @@
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path vm-header "../vm/agc.h")
 
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+  (environment-variables-set! (current-environment-variables) name #f))
+
 (define (lower-text text)
   (define types (make-hasheq))
   (define checked (check (parse (lex (source "test.agc" text))) #:types types))
