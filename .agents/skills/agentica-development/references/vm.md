@@ -370,9 +370,10 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
 - **OpenSSL 3 (7h)**: `OPENSSL_init_ssl(OPENSSL_INIT_NO_LOAD_CONFIG)`.
-  Linux trust: `SSL_CERT_FILE`/`SSL_CERT_DIR` alone when set (never widened
-  with a distro bundle); else the dynamic build uses the default verify
-  paths and the static build loads the first existing distro CA bundle.
+  Linux trust as in Racket, file and directory each replaced on its own:
+  the dynamic build always calls `SSL_CTX_set_default_verify_paths`; the
+  static build uses `SSL_CERT_FILE` or else the first existing distro CA
+  bundle, and `SSL_CERT_DIR` or else no directory.
   Windows: the ROOT store; macOS: the Keychain anchors (never
   `set_default_verify_paths` there). A non-empty `ca_file` replaces system
   trust. `SSL_set1_host` and SNI per connection; no `SSL_VERIFY_NONE` path.
@@ -380,8 +381,11 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   libcrypto`, `-lssl -lcrypto`); the build fails for a missing or pre-3.0
   OpenSSL. `OPENSSL=static OPENSSL_PREFIX=/path` for release artifacts:
   `PKG_CONFIG_LIBDIR` limited to the prefix, the archives linked by full
-  path, and `readelf -d` shows no libssl/libcrypto `NEEDED`. Only 3.0
-  symbols are called directly; newer features are found at run time.
+  path plus `pkg-config --static --libs-only-l --libs-only-other` without
+  `-lssl -lcrypto`, and `readelf -d` shows no libssl/libcrypto `NEEDED`.
+  Only 3.0 symbols are called directly (`-DOPENSSL_API_COMPAT=30000`; CI
+  checks `objdump -T` for no `OPENSSL_3.[1-9]`); newer features are found
+  at run time.
   `--version` prints the OpenSSL version in use (`docs/vm.md` 10.0, 10.3).
 - **HTTP (7h)**: ports `src/http-wire.rkt`. picohttpparser (submodule
   `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the baseline
