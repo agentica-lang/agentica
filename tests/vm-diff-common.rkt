@@ -24,9 +24,9 @@
 (define-runtime-path tests-directory ".")
 (define make-lock-wait 900)
 (define run-timeout 60)
-(define timeout-program (and linux? (find-executable-path "timeout")))
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
 (define linux? (eq? (system-type 'os*) 'linux))
+(define timeout-program (and linux? (find-executable-path "timeout")))
 (define vm-file
   (if vm-binary
       (path->complete-path vm-binary root)
