@@ -640,8 +640,19 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   full sweep and are sampled. Put the other cases in `tests/vm-http-test.rkt`,
   which starts one Python peer (`tests/fixtures/http-peer.py`: a
   `ThreadingHTTPServer`, the same over `ssl`, and a raw socket server with
-  canned hostile responses) and runs three programs once. The client gets
-  its connection from tcp.c through `agc_conn`, never its own socket code.
+  canned hostile responses) and runs three programs once. Python 3
+  (standard library only) is required in CI, as Node is for TCP: with `CI`
+  set the test fails without it, locally it prints a skip. picohttpparser
+  is the submodule `vm/third_party/picohttpparser` (v1.4); bumping it: check
+  out the new tag inside it, `git add` it, and rerun
+  `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/vm-http-test.rkt`.
+  The client gets its connection from tcp.c through `agc_conn`, never its own
+  socket code. Idle pooled connections and the idle timer are unreferenced
+  (`agc_conn_hold`), so they never keep a stalled run alive; a connection
+  freed while calls wait is parked first and handed over by a 1 ms
+  referenced timer, so bytes that arrive late close it instead of reaching
+  the next call. A close-delimited body over TLS needs `close_notify`
+  (`agc_conn_clean_eof`); a bare FIN gives "truncated HTTP body".
 - **Limits**: the 1 MiB per-call reads, HTTP framing limits and the other
   caps in the `docs/vm/10-io-tls-processes-http.md` limits table stay exactly as in the Racket
   sources.

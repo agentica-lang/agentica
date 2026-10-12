@@ -720,11 +720,27 @@ HttpWire.close_client(client: HttpClient) -> Void
   complete exchange with no `Connection: close` on either side and a framed
   body. Header names are lowercased, values are decoded as Latin-1, and the
   body must be valid UTF-8.
+- After `HEAD`, 204 or 304 the connection is not kept when the response
+  still announced a body (a nonzero `Content-Length`, or chunked). A
+  connection freed while calls wait is parked as idle first and handed to
+  the first waiter by the client's timer 1 ms later, so bytes the server
+  sends late close it instead of reaching the next exchange. Idle
+  connections and the idle timer are unreferenced in libuv
+  (`agc_conn_hold`), so a pool never hides a stalled run.
+- Over TLS, a close-delimited body must end with `close_notify`: tcp.c
+  records whether the TLS layer closed before the TCP FIN
+  (`agc_conn_clean_eof`), and a bare FIN gives "http: truncated HTTP body".
+  OpenSSL cannot tell this itself here, since `SSL_OP_IGNORE_UNEXPECTED_EOF`
+  makes a bare FIN look like `close_notify` (both set
+  `SSL_RECEIVED_SHUTDOWN`).
 - One `timeout_ms` covers the call, from the wait for a slot to the last
   body byte; on timeout the connection is closed and the call returns
   "network: operation timed out". `close_client` closes idle connections
   and fails every call in flight with "http: client is closed".
 - Errors are `http: ` plus the text of 10.6, or the network error text of
   tcp.c for DNS, connect, TLS, read and write failures.
+- `HttpResponse`, `Header`, `HttpClientOptions` and `FileInfo` carry their
+  field types from `builtin-records`, so `JSON.encode`, `JSON.decode` and
+  `JSON.schema` work on them on the VM (the `http-json` golden).
 - Turn cost (`AGC_COST_SIZE`): charged when the call ends, for the
   request's headers and body and the response's body and header fields.

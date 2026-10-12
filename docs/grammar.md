@@ -273,8 +273,11 @@ rejected and IPv6 hosts go in brackets. The client adds `Host` and, when
 there is a body or the method is `POST`, `PUT` or `PATCH`, `Content-Length`;
 a request that sets `Host`, `Content-Length`, `Transfer-Encoding` or
 `Connection` itself is an error. Response header names are lowercase. 4xx
-and 5xx are normal responses. Errors are Results whose text starts with
-`http: ` (or `network: ` for connection errors). `std/http` calls the
+and 5xx are normal responses. Errors are Results. Protocol and limit
+errors start with `http: `; connection errors keep the TCP and TLS texts
+(`tcp-connect: ...`, `ssl-connect: ...`, `error reading from stream port`,
+`error writing to stream port`), and a timeout is `network: operation timed
+out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`). `std/http` calls the
 internal module `HttpWire`, which no other module can name
 (`CHECK-UNKNOWN-NAME`). A program that reaches `HttpWire` cannot fall back
 to the legacy evaluator: when the program also needs the evaluator (it uses
@@ -406,7 +409,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Task[R]` | Opaque lightweight task with exactly one result type |
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
 | Network handles | Opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
-| Builtin records | `Header`, `Request`, `Response`, `HttpClientOptions`, `HttpServerOptions` |
+| Builtin records | `Header`, `Request`, `Response`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions` |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -909,6 +912,7 @@ Builtin records are immutable and use the existing named-field constructors:
 | Header | name: String, value: String |
 | Request | method: String, target: String, path: String, headers: List[Header], body: HttpBody |
 | Response | status: Int, headers: List[Header], body: HttpBody |
+| HttpResponse | status: Int, headers: List[Header], body: String (`std/http`, VM only) |
 | HttpClientOptions | timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String |
 | HttpServerOptions | header_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int |
 

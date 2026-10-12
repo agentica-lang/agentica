@@ -343,7 +343,8 @@ and docs:
   shown by the accepts, `Connection: close`, chunked and close-delimited
   bodies, a call after `close_client`) and `http-errors` (option checks,
   bad URLs and headers, bodies over the limit both ways, a non-UTF-8
-  body); their step counts are about 2,800 and 4,100 because the URL
+  body), plus `http-json` (JSON on `Header`, `HttpResponse` and
+  `HttpClientOptions`); the first two take about 2,800 and 4,300 steps because the URL
   parser is Agentica, so the sweep samples them (each takes about 2 s).
   `tests/vm-http-test.rkt` starts one peer, `tests/fixtures/http-peer.py`
   (a `ThreadingHTTPServer`, the same over `ssl` with
