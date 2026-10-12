@@ -314,9 +314,9 @@ static void bind_all(net *n) {
     n->error = rc;
     drop_links(n);
     n->port = wanted;
-    if (!bound)
+    if (!bound && (rc == UV_EADDRNOTAVAIL || rc == UV_EAFNOSUPPORT))
       a = a->ai_next;
-    else if (wanted || rc != UV_EADDRINUSE || ++tries >= BIND_TRIES)
+    else if (!bound || wanted || rc != UV_EADDRINUSE || ++tries >= BIND_TRIES)
       break;
   }
   ready(n->opener);
@@ -454,6 +454,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   net *n = q->n;
   unlink_request(q);
+  if (q->kind == REQ_SEND) agc_charge(vm, q->count);
   agc_value result;
   if (q->kind == REQ_CONNECT || q->kind == REQ_LISTEN) {
     result = opened(vm, q, context);
@@ -465,7 +466,6 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else if (n->closed) {
     result = agc_error_value(socket_closed);
   } else {
-    agc_charge(vm, q->count);
     result = n->write_status < 0 ? agc_system_error(vm, write_failed, -n->write_status) : ok_value(agc_void());
   }
   drop_request(q);

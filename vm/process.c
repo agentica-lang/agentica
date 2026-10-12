@@ -284,6 +284,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   proc *p = q->p;
   unlink_request(q);
+  if (q->kind == REQ_SEND) agc_charge(vm, q->count);
   agc_value result;
   if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
     result = take(vm, p, q->kind, q->count);
@@ -293,7 +294,6 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else if (q->kind == REQ_WAIT) {
     result = agc_result_value(true, agc_int(p->status));
   } else {
-    agc_charge(vm, q->count);
     result = p->write_status < 0 ? agc_system_error(vm, write_failed, -p->write_status) : ok_void();
   }
   drop_request(q);

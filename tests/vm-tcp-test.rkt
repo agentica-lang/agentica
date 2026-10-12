@@ -162,6 +162,19 @@ end
 AGC
   )
 
+(define taken-program
+  #<<AGC
+def main() -> Void
+  listener = TCP.listen("localhost", ~a)
+  if Result.ok?(listener)
+    puts("listening")
+  else
+    puts(Result.message(listener))
+  end
+end
+AGC
+  )
+
 (define (writers-program ports)
   (format
    #<<AGC
@@ -304,6 +317,20 @@ AGC
               (check-true (finished? process) "the VM listener finishes")
               (check-equal? (subprocess-status process) 0 (port->string err)))
             (lambda () (stop process out err))))
+
+        (test-case "a listen on localhost fails when another program holds the port on ::1"
+          (if (localhost-has-ipv6?)
+              (let* ([holder (tcp-listen 0 4 #f "::1")]
+                     [port (let-values ([(_host port _peer _peer-port) (tcp-addresses holder #t)]) port)])
+                (dynamic-wind
+                  void
+                  (lambda ()
+                    (define result (run-vm-text work "taken" (format taken-program port)))
+                    (check-equal? (first result) 0 (third result))
+                    (check-true (string-prefix? (second result) "tcp-listen: listen failed\n  hostname: localhost\n")
+                                (second result)))
+                  (lambda () (tcp-close holder))))
+              (displayln "SKIP held ::1 listen test: no IPv6 localhost")))
 
         (test-case "two tasks writing to one socket take the writer lock in FIFO order"
           (with-peer

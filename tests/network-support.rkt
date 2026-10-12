@@ -41,11 +41,13 @@
 (define (run-cli-program text)
   (compile-program text)
   (define file (make-temporary-file "agentica-network-~a.agc"))
+  (define child #f)
   (dynamic-wind
     void
     (lambda ()
       (call-with-output-file file #:exists 'truncate (lambda (port) (display text port)))
       (define-values (process output input errors) (apply subprocess #f #f #f (cli-command file)))
+      (set! child process)
       (close-output-port input)
       (define error-text #f)
       (define reader (thread (lambda () (set! error-text (port->string errors)))))
@@ -56,7 +58,12 @@
       (close-input-port errors)
       (check-equal? (subprocess-status process) 0 error-text)
       text-output)
-    (lambda () (delete-file file))))
+    (lambda ()
+      (when (and child (eq? (subprocess-status child) 'running))
+        (subprocess-kill child #f)
+        (unless (sync/timeout 5 child) (subprocess-kill child #t))
+        (subprocess-wait child))
+      (delete-file file))))
 
 (define (with-peers thunk)
   (define cust (make-custodian))
