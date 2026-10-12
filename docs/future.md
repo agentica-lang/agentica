@@ -1089,7 +1089,7 @@ Crypto.open(key: Bytes, sealed: Bytes) -> Result[Bytes]
 
 - Compiled code keeps the `STEP` and turn-cost checks at the same safe points as the interpreter (backward jumps and calls), so `--max-steps`, fairness (`docs/vm.md` §10.2.1) and cancellation still work.
 - Frames stay interpreter-compatible, so a function can be interpreted or compiled, and a call can go either way.
-- Black-box parity (`docs/vm.md` §1) holds: exit code, stdout and diagnostic codes do not depend on the tier.
+- Black-box parity (`docs/vm.md` §1) holds: exit code, stdout, program stderr and diagnostic codes do not depend on the tier.
 
 **Code generation** (decided in the JIT PR): copy-and-patch (stencils generated at build time with clang, as CPython 3.13 does) or a small hand-written x86-64 assembler. No LLVM or libgccjit at run time (size, and libgccjit is GPL). x86-64 Linux first, ARM64 next.
 

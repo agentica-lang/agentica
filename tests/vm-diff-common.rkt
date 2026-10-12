@@ -23,6 +23,8 @@
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path tests-directory ".")
 (define make-lock-wait 900)
+(define run-timeout 60)
+(define timeout-program (find-executable-path "timeout"))
 (define vm-binary (getenv "AGENTICA_VM_BINARY"))
 (define linux? (eq? (system-type 'os*) 'linux))
 (define vm-file
@@ -123,24 +125,28 @@
         (get-output-string out)
         (string-append (get-output-string err) (if (diagnostic? result) (string-append text "\n") ""))))
 
-(define (run-process program #:input [input #""] . arguments)
+(define (run-process program #:input [input #""] #:timeout [timeout #f] . arguments)
   (define-values (process out in err) (apply subprocess #f #f #f program arguments))
   (define writer
     (thread (lambda ()
               (with-handlers ([exn:fail? void]) (write-bytes input in))
               (with-handlers ([exn:fail? void]) (close-output-port in)))))
   (define stderr #f)
-  (define reader (thread (lambda () (set! stderr (port->string err)))))
-  (define stdout (port->string out))
-  (thread-wait reader)
+  (define stdout #f)
+  (define readers
+    (list (thread (lambda () (set! stderr (port->string err))))
+          (thread (lambda () (set! stdout (port->string out))))))
+  (define finished (sync/timeout timeout process))
+  (unless finished (subprocess-kill process #t))
+  (for-each thread-wait readers)
   (thread-wait writer)
   (close-input-port out)
   (close-input-port err)
   (subprocess-wait process)
-  (list (subprocess-status process) stdout stderr))
+  (list (if finished (subprocess-status process) 'timeout) stdout stderr))
 
-(define (run-vm bytecode limit #:style [style 'json] . extra)
-  (apply run-process vm-file #:input (fixture-input)
+(define (run-vm bytecode limit #:style [style 'json] #:timeout [timeout #f] . extra)
+  (apply run-process vm-file #:input (fixture-input) #:timeout timeout
          (append (limit-options limit)
                  (style-options style)
                  (list "--" (path->string bytecode))
@@ -207,7 +213,10 @@
           (for ([options (in-list option-lists)] [tmp (in-list tmps)] [index (in-naturals)])
             (define base (path->string (build-path directory (number->string index))))
             (write-string
-             (format "~a ~a ~a < ~a > ~a 2> ~a\necho $? > ~a\n"
+             (format "~a~a ~a ~a < ~a > ~a 2> ~a\necho $? > ~a\n"
+                     (if timeout-program
+                         (format "~a -k 5 ~a " (shell-quote (path->string timeout-program)) run-timeout)
+                         "")
                      (shell-quote (path->string vm-file)) (string-join (map shell-quote options)) (tail tmp)
                      (shell-quote (path->string input)) (shell-quote (string-append base ".out"))
                      (shell-quote (string-append base ".err")) (shell-quote (string-append base ".status")))
@@ -299,7 +308,7 @@
 
 (define (check-limited on-vm full name limit)
   (define seen (outcome on-vm))
-  (define message (format "~a --max-steps ~a: ~s" name limit seen))
+  (define message (format "~a --max-steps ~a (exit 124 or timeout: the run timed out): ~s" name limit seen))
   (unless (equal? seen full)
     (check-equal? (first seen) 1 message)
     (check-equal? (fourth seen) "RUNTIME-STEP-LIMIT" message)
@@ -349,15 +358,29 @@
     (if (file-exists? file) (read-it file) default))
   (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
                  [fixture-args (sidecar #".args" file->value '())])
-    (test-case (format "~a matches the evaluator's exit code, stdout and diagnostic code under every --max-steps" name)
+    (test-case (format "~a matches the evaluator's exit code, stdout, stderr and diagnostic code under every --max-steps" name)
       (define limits (sweep-limits (total-steps checked)))
+      (define text-styles '(plain ai))
       (define-values (vm-results full)
         (vm-batch name bytecode runs
-                  (for/list ([limit (in-list (cons #f limits))])
-                    (append (limit-options limit) (style-options 'json)))
+                  (append (list (style-options 'json))
+                          (map style-options text-styles)
+                          (for/list ([limit (in-list limits)])
+                            (append (limit-options limit) (style-options 'json))))
                   (lambda () (outcome (run-racket checked #f)))))
       (check-equal? (outcome (first vm-results)) full name)
-      (check-sweep (rest vm-results) limits full name))))
+      (for ([style (in-list text-styles)] [on-vm (in-list (rest vm-results))])
+        (check-text-format on-vm full (format "~a ~a" name style)))
+      (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name))))
+
+(define (check-text-format on-vm full message)
+  (check-equal? (take on-vm 2) (take full 2) message)
+  (define stderr (third on-vm))
+  (check-true (string-prefix? stderr (third full)) message)
+  (define diagnostic (substring stderr (min (string-length stderr) (string-length (third full)))))
+  (if (fourth full)
+      (check-equal? (text-code diagnostic) (fourth full) message)
+      (check-equal? diagnostic "" message)))
 
 (define (run-shard shard)
   (when (vm-built?)
@@ -417,14 +440,14 @@
       (for ([limit (in-list '(1 2 3 4 5 50 500))])
         (define message (format "~a --max-steps ~a" name limit))
         (define expected (run-racket checked limit))
-        (define on-vm (run-vm bytecode limit))
+        (define on-vm (run-vm bytecode limit #:timeout run-timeout))
+        (define (compatible a b) (or (string-prefix? a b) (string-prefix? b a)))
         (for ([result (in-list (list expected on-vm))])
           (check-equal? (first result) 1 message)
           (check-true (step-limited? result) message)
           (check-false (string-contains? (second result) "done") message))
-        (check-true (or (string-prefix? (second expected) (second on-vm))
-                        (string-prefix? (second on-vm) (second expected)))
-                    message))))
+        (check-true (compatible (second expected) (second on-vm)) message)
+        (check-true (compatible (third (outcome expected)) (third (outcome on-vm))) message))))
   (test-case "the VM CLI checks options and stops parsing at the file"
     (define bytecode (build-path work "calls.agcb"))
     (check-equal? (first (run-vm bytecode #f "--max-steps" "1")) 0)
@@ -661,7 +684,7 @@
       (define full (outcome (run-racket checked #f)))
       (check-equal? (outcome (run-vm bytecode #f)) full "large input")
       (for ([limit (in-list '(1 50 100000 400000))])
-        (check-limited (run-vm bytecode limit) full "large input" limit))))
+        (check-limited (run-vm bytecode limit #:timeout run-timeout) full "large input" limit))))
 
   (test-case "a CRLF program under a non-ASCII path matches the evaluator"
     (define folder (build-path work "dír-λ-𝔸"))
@@ -680,4 +703,4 @@
     (define full (outcome (run-racket checked #f)))
     (define total (total-steps checked))
     (define limits (list 1 (sub1 total) total (+ (* 2 total) 100)))
-    (check-sweep (for/list ([limit (in-list limits)]) (run-vm bytecode limit)) limits full "CRLF program")))
+    (check-sweep (for/list ([limit (in-list limits)]) (run-vm bytecode limit #:timeout run-timeout)) limits full "CRLF program")))

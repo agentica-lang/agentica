@@ -10,12 +10,12 @@ each decision in one line; this document gives the details and reasons.
 ## 1. Overview
 
 **Parity is black-box.** The VM must give the evaluator's exit code, the
-stdout of a program that finishes, what the program itself writes to stderr
-(`IO.warn`; the diagnostic line after it is not part of this), and on
-failure the same diagnostic code (`RUNTIME-INDEX-OUT-OF-RANGE`, say); a
-runaway program must stop with `RUNTIME-STEP-LIMIT` under `--max-steps`,
-and the VM may not charge more than about 2T + 100 steps for a program the
-evaluator runs in T. Everything else may differ: diagnostic message text
+stdout and program stderr (what the program itself writes, as with
+`IO.warn`; the diagnostic after it is not part of this) of every run except
+one stopped by `--max-steps`, and on failure the same diagnostic code
+(`RUNTIME-INDEX-OUT-OF-RANGE`, say); a runaway program must stop with
+`RUNTIME-STEP-LIMIT` under `--max-steps`, and a program the evaluator runs
+in T steps must finish on the VM under a limit of 2T + 100. Everything else may differ: diagnostic message text
 and span, the VM's own stderr wording, OS error text, the error strings of
 library `Result`s (HTTP, files, processes), exact step counts and the
 step-limit span, `Random` sequences, and cross-task order. An error string
@@ -33,7 +33,8 @@ example, the HTTP adapter does not need to map parser failures onto
 `http-wire.rkt`'s exact messages, only onto the same diagnostic or `Result`
 error kind (10.6). The turn cost (10.2.1) stays: it is there for fairness, not
 for parity. With black-box parity the compiler may also optimize freely as
-long as exit code, stdout and diagnostic codes stay the same: inlining,
+long as exit code, stdout, program stderr and diagnostic codes stay the
+same: inlining,
 constant folding, common subexpression elimination, loop-invariant code
 motion, and merging or moving `STEP`s (a runaway loop must still hit
 `RUNTIME-STEP-LIMIT`; step counts may change). New APIs the evaluator never
@@ -134,7 +135,7 @@ of memory). A heap cap is an open question (13).
 
 These rules come from the Racket sources, not only from the grammar. The
 differential tests (section 12) check only what black-box parity needs
-(exit code, stdout, diagnostic code); messages, spans and step counts below
+(exit code, stdout, program stderr, diagnostic code); messages, spans and step counts below
 describe the VM today and may change (1).
 
 ### 2.1 Steps (`task-step!` in `src/task.rkt`, `step!` in `src/evaluator.rkt`)
@@ -2072,8 +2073,8 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   `--schedulers 4`); then round 2 of the benchmarks covers multicore
   (roadmap phase 12) if it landed. Multicore does not block 7i: the
   evaluator cannot run in parallel anyway. The parity rule stays
-  black-box (1): with N=1, exit code, stdout and diagnostic codes match the
-  evaluator. The differential, bytecode and golden tests, the `--max-steps`
+  black-box (1): with N=1, exit code, stdout, program stderr and diagnostic
+  codes match the evaluator. The differential, bytecode and golden tests, the `--max-steps`
   sweep and the seeded runs all run the VM with `--schedulers 1`.
 
 ### 10.3 TLS
@@ -2447,9 +2448,11 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   `--json`, and compare exit code, stdout, the program's own stderr and
   the diagnostic code (black-box parity, 1). With `--json` the diagnostic
   is the last stderr line: it is parsed as JSON for the code and removed
-  before stderr is compared. The CRLF and CLI tests also run the plain and
-  `--ai` formats and read the code with a pattern (`error[CODE]` or an
-  `[CODE]` line). Inputs: `examples/`, `tests/eval/tasks/*` reference
+  before stderr is compared. Each fixture also runs once on the VM in the
+  plain and `--ai` formats: exit code and stdout must equal the full run's,
+  stderr must start with the full run's program stderr, and the rest must
+  name the same code (`error[CODE]` or an `[CODE]` line) or be empty when
+  there is no diagnostic. Inputs: `examples/`, `tests/eval/tasks/*` reference
   solutions and hidden cases, and `tests/fixtures/vm/` with one program per
   runtime code and error span.
 - Every program also runs on the VM under a sweep of `--max-steps`
@@ -2466,11 +2469,15 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   over-charging (not finishing by 2T + 100). It cannot catch an ignored
   limit, since these programs finish anyway: the runaway programs in
   `tests/fixtures/vm/step-limited/` do (`while true`, non-tail recursion,
-  mutual tail calls, a `while` inside a `List.each` block, a loop inside a
+  a self tail call, mutual tail calls, a `while true` whose body is only dead
+  code, a `while` inside a `List.each` block, a loop inside a
   closure called through a function value, and the counting builtins).
   Each must stop with exit 1 and `RUNTIME-STEP-LIMIT` on both backends at
-  every tested limit, their stdouts must be prefixes of one another, and
-  neither may print what follows the loop. The inputs are
+  every tested limit, their stdouts and program stderrs must be prefixes
+  of one another, and neither may print what follows the loop. Every VM
+  run in the sweep and the runaway test has a 60-second timeout, so a VM
+  that ignores the limit fails with the fixture and limit named instead
+  of hanging. The inputs are
   `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. `Random` fixtures print only what both backends share, since
   seeded sequences differ by design (7.4).
@@ -2506,7 +2513,7 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   gets a new empty directory under the shard's work directory for every
   run, evaluator and VM alike (directory names have the same length, so
   cut forms match), the argument is replaced by its path, the path is
-  replaced back by `@tmp` in stdout before the comparison, and
+  replaced back by `@tmp` in stdout and stderr before the comparison, and
   the directory is deleted afterwards. The fixtures use long timeouts, so
   a loaded machine does not turn a slow write into a timeout.
 - Tasks, processes and network programs join in 7h, with the independent
