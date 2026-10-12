@@ -7,7 +7,11 @@ def wait_accept(listener: Listener) -> Bool
 end
 
 def flood(socket: Socket) -> Result[Void]
-  return TCP.send(socket, String.join(List.repeat("abcdefgh", 1048576), ""), 60000)
+  chunk = String.join(List.repeat("abcdefgh", 1048576), "")
+  chunk = chunk + chunk
+  chunk = chunk + chunk
+  chunk = chunk + chunk
+  return TCP.send(socket, chunk, 60000)
 end
 
 def main() -> Void

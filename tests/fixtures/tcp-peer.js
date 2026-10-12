@@ -35,6 +35,9 @@ const handlers = {
   reset(socket) {
     socket.resetAndDestroy();
   },
+  partial(socket) {
+    socket.write('partial', () => setTimeout(() => socket.resetAndDestroy(), 50));
+  },
   long(socket) {
     socket.write(Buffer.alloc(1048577, 'a'));
     socket.resume();
@@ -45,6 +48,22 @@ const handlers = {
   watch(socket) {
     socket.resume();
     socket.on('close', () => say('closed watch'));
+  },
+  collect(socket) {
+    const chunks = [];
+    socket.pause();
+    setTimeout(() => socket.resume(), 300);
+    socket.on('data', chunk => chunks.push(chunk));
+    socket.on('end', () => {
+      const runs = [];
+      for (const byte of Buffer.concat(chunks)) {
+        const last = runs[runs.length - 1];
+        if (last && last[0] === byte) last[1] += 1;
+        else runs.push([byte, 1]);
+      }
+      say(`collect ${runs.map(([byte, count]) => `${String.fromCharCode(byte)}=${count}`).join(' ')}`);
+      socket.end();
+    });
   },
 };
 

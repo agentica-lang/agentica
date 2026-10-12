@@ -23,7 +23,11 @@ TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result
 TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
 ```
 
-Listen on port zero for an assigned port. TLS listeners and sockets use the
+Listen on port zero for an assigned port. Listen binds every address the
+host resolves to, all on one port (`localhost` takes both `127.0.0.1` and
+`::1` clients); addresses the system cannot use, such as IPv6 on a host
+without it, are skipped. Ports are 1..65535 for connect and 0..65535 for
+listen. A host containing NUL is an error. TLS listeners and sockets use the
 same TCP operations. TLS verifies certificates and hostnames with TLS 1.2 or
 later; an empty CA path uses system trust, a nonempty path selects a PEM CA.
 The server takes a PEM certificate chain and private key.
@@ -31,19 +35,25 @@ The server takes a PEM certificate chain and private key.
 Timeouts are positive milliseconds and cover the whole operation, including
 lock waits. Read and write directions have independent locks; coordinate
 which task reads a stream and the order of writes. Timing out an active I/O
-operation closes that socket. Waiting for a lock alone does not close it.
+operation closes that socket, and later calls on it fail at once with
+`network: socket is closed`. Waiting for a lock alone does not close it.
 Failures return Results; explicit close is idempotent.
 
 Send encodes UTF-8 and flushes. Byte values must be 0..255, at most 1 MiB per
 send_bytes call. recv_bytes accepts 1..1048576, returns available data up to
 that count, and returns ok([]) at EOF. TCP supplies a stream, not messages.
 read_line handles fragmented UTF-8, strips LF or CRLF, accepts a final line
-without a terminator, and errors on empty EOF or a line over 1 MiB.
+without a terminator at EOF, and errors on empty EOF, on a read error (a
+connection reset in the middle of a line is an error, not a line) and on a
+line over 1 MiB, which also closes the socket.
 
-`TCP` programs run on the VM. There a line over 1 MiB also closes the socket,
-and so does a timed-out read or write; the next call on it returns
-`network: socket is closed` at once. A program that uses `TLS` or `HTTP` runs
-on the legacy evaluator.
+Temporary exception until TLS moves to the VM: TLS sockets run on the
+legacy evaluator, where a line over 1 MiB leaves the socket open in the
+middle of that line, and a call after a timed-out read or write waits out
+its own timeout instead of failing at once.
+
+`TCP` programs run on the VM (Linux). A program that uses `TLS` or `HTTP`
+runs on the legacy evaluator.
 
 Builtin records are immutable and use the existing named-field constructors:
 

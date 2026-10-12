@@ -39,13 +39,41 @@
   (compile-file source bytecode)
   bytecode)
 
+(define (vm-environment [env '()])
+  (define environment (environment-variables-copy (current-environment-variables)))
+  (for ([pair (in-list (list* (cons #"LC_ALL" #"C.UTF-8") (cons #"LANG" #"C.UTF-8") (cons #"LC_MESSAGES" #f) env))])
+    (environment-variables-set! environment (car pair) (cdr pair)))
+  environment)
+
 (define (run-vm-text work name text #:env [env '()])
   (define bytecode (compile-text work name text))
-  (define environment (environment-variables-copy (current-environment-variables)))
-  (for ([pair (in-list env)])
-    (environment-variables-set! environment (car pair) (cdr pair)))
-  (parameterize ([current-environment-variables environment])
+  (parameterize ([current-environment-variables (vm-environment env)])
     (run-process vm-file #:timeout run-timeout "--" (path->string bytecode))))
+
+(define (start-vm bytecode)
+  (parameterize ([current-environment-variables (vm-environment)])
+    (subprocess #f #f #f vm-file "--" (path->string bytecode))))
+
+(define (stop process . ports)
+  (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
+  (subprocess-wait process)
+  (for-each close-input-port ports))
+
+(define (finished? process)
+  (and (sync/timeout wait-seconds process) #t))
+
+(define (localhost-has-ipv6?)
+  (with-handlers ([exn:fail? (lambda (_) #f)])
+    (define listener (tcp-listen 0 4 #t "localhost"))
+    (define-values (_host port _peer _peer-port) (tcp-addresses listener #t))
+    (dynamic-wind
+      void
+      (lambda ()
+        (define-values (in out) (tcp-connect "::1" port))
+        (close-input-port in)
+        (close-output-port out)
+        #t)
+      (lambda () (tcp-close listener)))))
 
 (define (client-program ports)
   (define (port name) (hash-ref ports name))
@@ -72,11 +100,23 @@ def main() -> Void
   silent = Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000))
   IO.inspect(TCP.read_line(silent, 100))
   IO.inspect(TCP.send(silent, "x", 1000))
+  stuck = Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000))
+  big = "abcdefgh"
+  round = 0
+  while round < 22
+    big = big + big
+    round = round + 1
+  end
+  IO.inspect(TCP.send(stuck, big, 200))
+  IO.inspect(TCP.send(stuck, "x", 1000))
+  partial = Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000))
+  IO.inspect(TCP.read_line(partial, 5000))
   refused = TCP.connect("127.0.0.1", ~a, 5000)
   puts(Result.message(refused))
 end
 AGC
-   (port 'echo) (port 'fragments) (port 'reset) (port 'long) (port 'silent) (port 'refused)))
+   (port 'echo) (port 'fragments) (port 'reset) (port 'long) (port 'silent) (port 'silent) (port 'partial)
+   (port 'refused)))
 
 (define server-program
   #<<AGC
@@ -102,6 +142,60 @@ def main() -> Void
 end
 AGC
   )
+
+(define localhost-program
+  #<<AGC
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("localhost", 0))
+  puts(TCP.local_port(listener))
+  IO.flush()
+  line = ""
+  while line != "end"
+    socket = Result.unwrap!(TCP.accept(listener, 10000))
+    line = Result.unwrap!(TCP.read_line(socket, 10000))
+    puts(line)
+    IO.flush()
+    TCP.close(socket)
+  end
+  TCP.close_listener(listener)
+end
+AGC
+  )
+
+(define (writers-program ports)
+  (format
+   #<<AGC
+struct Job
+  socket: Socket
+  text: String
+end
+
+def write(job: Job) -> Result[Void]
+  return TCP.send(job.socket, job.text, 30000)
+end
+
+def fill(letter: String) -> String
+  text = "#{letter}#{letter}#{letter}#{letter}#{letter}#{letter}#{letter}#{letter}"
+  round = 0
+  while round < 21
+    text = text + text
+    round = round + 1
+  end
+  return text
+end
+
+def main() -> Void
+  socket = Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000))
+  a = Task.spawn(&write, Job(socket: socket, text: fill("a")))
+  b = Task.spawn(&write, Job(socket: socket, text: fill("b")))
+  c = Task.spawn(&write, Job(socket: socket, text: fill("c")))
+  IO.inspect(Task.await(a))
+  IO.inspect(Task.await(b))
+  IO.inspect(Task.await(c))
+  TCP.close(socket)
+end
+AGC
+   (hash-ref ports 'collect)))
 
 (define (exit-program ports)
   (format
@@ -156,34 +250,74 @@ AGC
                "error(\"network: socket is closed\")\n"
                "error(\"network: operation timed out\")\n"
                "error(\"network: socket is closed\")\n"
+               "error(\"network: operation timed out\")\n"
+               "error(\"network: socket is closed\")\n"
+               "error(\"error reading from stream port\\n  system error: Connection reset by peer; errno=104\")\n"
                (format "tcp-connect: connection failed\n  hostname: 127.0.0.1\n  port number: ~a\n  system error: Connection refused; errno=111\n"
                        (hash-ref ports 'refused)))))))
 
         (test-case "a VM server serves two Node clients at once, one task per connection"
           (define bytecode (compile-text work "server" server-program))
-          (define-values (process out in err) (subprocess #f #f #f vm-file "--" (path->string bytecode)))
+          (define-values (process out in err) (start-vm bytecode))
+          (define peer #f)
+          (define peer-ports '())
           (dynamic-wind
             void
             (lambda ()
               (close-output-port in)
               (define port (next-line out))
-              (define-values (peer peer-out peer-in peer-err) (subprocess #f #f #f node peer-file "clients" port))
+              (define-values (started peer-out peer-in peer-err) (subprocess #f #f #f node peer-file "clients" port))
+              (set! peer started)
+              (set! peer-ports (list peer-out peer-err))
               (close-output-port peer-in)
-              (define peer-text (port->string peer-out))
-              (define peer-errors (port->string peer-err))
-              (subprocess-wait peer)
-              (close-input-port peer-out)
-              (close-input-port peer-err)
-              (check-equal? (subprocess-status peer) 0 peer-errors)
-              (check-equal? peer-text "clients ok\n")
+              (check-true (finished? peer) "the Node clients finish")
+              (check-equal? (subprocess-status peer) 0 (port->string peer-err))
+              (check-equal? (port->string peer-out) "clients ok\n")
               (check-equal? (next-line out) "served")
-              (check-not-false (sync/timeout wait-seconds process))
+              (check-true (finished? process) "the VM server finishes")
               (check-equal? (subprocess-status process) 0 (port->string err)))
             (lambda ()
-              (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
-              (subprocess-wait process)
-              (close-input-port out)
-              (close-input-port err))))
+              (when peer (apply stop peer peer-ports))
+              (stop process out err))))
+
+        (test-case "a VM listener on localhost takes IPv4 and IPv6 clients"
+          (define ipv6? (localhost-has-ipv6?))
+          (define bytecode (compile-text work "localhost" localhost-program))
+          (define-values (process out in err) (start-vm bytecode))
+          (dynamic-wind
+            void
+            (lambda ()
+              (close-output-port in)
+              (define port (string->number (next-line out)))
+              (define (send-line host text)
+                (define-values (from to) (tcp-connect host port))
+                (write-string (string-append text "\n") to)
+                (close-output-port to)
+                (close-input-port from))
+              (send-line "127.0.0.1" "v4")
+              (check-equal? (next-line out) "v4")
+              (when ipv6?
+                (send-line "::1" "v6")
+                (check-equal? (next-line out) "v6"))
+              (send-line "127.0.0.1" "end")
+              (check-equal? (next-line out) "end")
+              (check-true (finished? process) "the VM listener finishes")
+              (check-equal? (subprocess-status process) 0 (port->string err)))
+            (lambda () (stop process out err))))
+
+        (test-case "two tasks writing to one socket take the writer lock in FIFO order"
+          (with-peer
+           (lambda (ports events)
+             (define trace (build-path work "writers.trace"))
+             (define result
+               (run-vm-text work "writers" (writers-program ports)
+                            #:env (list (cons #"AGENTICA_VM_TRACE" #"io")
+                                        (cons #"AGENTICA_VM_TRACE_FILE" (path->bytes trace)))))
+             (check-equal? (take result 2) (list 0 "ok()\nok()\nok()\n") (third result))
+             (define size (* 8 (expt 2 21)))
+             (check-equal? (next-line events) (format "collect a=~a b=~a c=~a" size size size))
+             (check-true (for/or ([line (in-list (file->lines trace))]) (regexp-match? #rx" io lock_wait " line))
+                         "a writer waited for the lock"))))
 
         (test-case "main returns while tasks wait on sockets: the run ends and every socket closes"
           (with-peer

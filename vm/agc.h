@@ -178,7 +178,7 @@ typedef struct {
 
 typedef struct {
   uint8_t *data;
-  size_t start, end, cap;
+  size_t start, end, cap, scanned;
   bool eof;
   int error;
 } agc_inbuf;
@@ -535,7 +535,7 @@ agc_resource *agc_new_lock(agc_vm *vm);
 bool agc_stream_lock(agc_vm *vm, agc_resource *lock, int64_t *timeout, agc_value *result);
 size_t agc_inbuf_pending(const agc_inbuf *b);
 void agc_inbuf_free(agc_inbuf *b);
-bool agc_inbuf_ready(const agc_inbuf *b, bool line, size_t count);
+bool agc_inbuf_ready(agc_inbuf *b, bool line, size_t count);
 size_t agc_inbuf_want(const agc_inbuf *b, bool line, size_t count);
 uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);

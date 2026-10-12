@@ -266,7 +266,7 @@ static void drop_request(void *data) {
   settle(p);
 }
 
-static bool read_ready(const proc *p, req_kind kind, size_t count) {
+static bool read_ready(proc *p, req_kind kind, size_t count) {
   return p->closed || agc_inbuf_ready(&p->out_buf, kind == REQ_LINE, count);
 }
 
@@ -287,11 +287,13 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   agc_value result;
   if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
     result = take(vm, p, q->kind, q->count);
+    agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
     result = agc_error_value(closed_text);
   } else if (q->kind == REQ_WAIT) {
     result = agc_result_value(true, agc_int(p->status));
   } else {
+    agc_charge(vm, q->count);
     result = p->write_status < 0 ? agc_system_error(vm, write_failed, -p->write_status) : ok_void();
   }
   drop_request(q);
@@ -641,20 +643,28 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   return read_op(vm, args[0], REQ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
-static agc_value write_op(agc_vm *vm, agc_value handle, uint8_t *data, size_t len, int64_t timeout) {
+static proc *take_writer(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *result) {
   agc_process *pr = agc_as_process(vm, handle);
-  agc_value result;
-  if (!agc_stream_lock(vm, pr->writer, &timeout, &result)) return result;
+  if (!agc_stream_lock(vm, pr->writer, timeout, result)) return NULL;
   proc *p = live(pr);
-  if (!p) return agc_error_value(closed_text);
+  if (!p) *result = agc_error_value(closed_text);
+  return p;
+}
+
+static agc_value write_op(agc_vm *vm, const agc_value *args, uint8_t *data, size_t len) {
+  int64_t timeout = agc_as_int(vm, args[2]);
+  agc_value result;
+  proc *p = take_writer(vm, args[0], &timeout, &result);
+  if (!p) return result;
   if (p->in_closed) return agc_error_value("process: stdin is closed");
   p->write_status = 0;
   int rc = agc_stream_write((uv_stream_t *)&p->in, &p->write_req, &p->write_data, data, len, wrote);
   if (rc < 0) return agc_system_error(vm, write_failed, -rc);
   if (rc == 0) return ok_void();
   request *q = new_request(p, REQ_SEND);
+  q->count = (size_t)agc_value_units(args[1]);
   p->writer = q;
-  q->job = agc_io_start(vm, &process_io, q, agc_handle_value(pr->writer), timeout);
+  q->job = agc_io_start(vm, &process_io, q, agc_handle_value(agc_as_process(vm, args[0])->writer), timeout);
   return agc_void();
 }
 
@@ -662,7 +672,7 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_string *text = agc_as_string(vm, args[1]);
   if (text->bytes > LIMIT) return agc_error_value("process: send exceeds 1048576 bytes");
-  return write_op(vm, args[0], (uint8_t *)text->data, text->bytes, agc_as_int(vm, args[2]));
+  return write_op(vm, args, (uint8_t *)text->data, text->bytes);
 }
 
 static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -670,17 +680,15 @@ static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   const agc_list *values = agc_as_list(vm, args[1]);
   uint8_t *data = agc_byte_list(vm, values, LIMIT);
   if (!data) return agc_error_value("process: bytes must be 0..255 and at most 1048576 per call");
-  return write_op(vm, args[0], data, values->len, agc_as_int(vm, args[2]));
+  return write_op(vm, args, data, values->len);
 }
 
 static agc_value builtin_close_stdin(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_process *pr = agc_as_process(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value result;
-  if (!agc_stream_lock(vm, pr->writer, &timeout, &result)) return result;
-  proc *p = live(pr);
-  if (!p) return agc_error_value(closed_text);
+  proc *p = take_writer(vm, args[0], &timeout, &result);
+  if (!p) return result;
   if (!p->in_closed) AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stdin", (int)p->process.pid);
   p->in_closed = true;
   close_handle((uv_handle_t *)&p->in, closed_in);
@@ -717,10 +725,10 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
 
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
-  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},

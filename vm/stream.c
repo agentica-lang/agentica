@@ -48,20 +48,23 @@ size_t agc_inbuf_pending(const agc_inbuf *b) { return b->end - b->start; }
 void agc_inbuf_free(agc_inbuf *b) {
   free(b->data);
   b->data = NULL;
-  b->start = b->end = b->cap = 0;
+  b->start = b->end = b->cap = b->scanned = 0;
 }
 
-static size_t line_window(const agc_inbuf *b) {
+static const uint8_t *find_lf(agc_inbuf *b) {
   size_t have = agc_inbuf_pending(b);
-  return have < LIMIT + 1 ? have : LIMIT + 1;
+  size_t window = have < LIMIT + 1 ? have : LIMIT + 1;
+  if (b->scanned >= window) return NULL;
+  const uint8_t *data = b->data + b->start;
+  const uint8_t *lf = memchr(data + b->scanned, '\n', window - b->scanned);
+  b->scanned = lf ? (size_t)(lf - data) : window;
+  return lf;
 }
 
-bool agc_inbuf_ready(const agc_inbuf *b, bool line, size_t count) {
-  size_t have = agc_inbuf_pending(b);
+bool agc_inbuf_ready(agc_inbuf *b, bool line, size_t count) {
   if (b->eof || b->error) return true;
-  if (!line) return have >= count;
-  size_t window = line_window(b);
-  return have > LIMIT || (window && memchr(b->data + b->start, '\n', window));
+  if (!line) return agc_inbuf_pending(b) >= count;
+  return agc_inbuf_pending(b) > LIMIT || find_lf(b);
 }
 
 size_t agc_inbuf_want(const agc_inbuf *b, bool line, size_t count) {
@@ -100,9 +103,8 @@ void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof) {
 
 agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over) {
   size_t have = agc_inbuf_pending(b);
-  size_t window = line_window(b);
   const uint8_t *data = have ? b->data + b->start : NULL;
-  const uint8_t *lf = window ? memchr(data, '\n', window) : NULL;
+  const uint8_t *lf = find_lf(b);
   size_t len = have, consume = have;
   *over = false;
   if (lf) {
@@ -112,11 +114,13 @@ agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const c
   } else if (have > LIMIT) {
     *over = true;
     return agc_error_value(too_long);
+  } else if (b->error) {
+    return agc_system_error(vm, "error reading from stream port", b->error);
   } else if (have == 0) {
-    if (b->error) return agc_system_error(vm, "error reading from stream port", b->error);
     return agc_error_value(at_end);
   }
   b->start += consume;
+  b->scanned = 0;
   size_t chars;
   if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(data, len);
   return agc_result_value(true, agc_string_value(agc_make_string((const char *)data, len, chars)));
@@ -129,6 +133,7 @@ agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   agc_list *l = agc_new_list(n);
   for (size_t k = 0; k < n; k++) l->items[k] = agc_int(b->data[b->start + k]);
   b->start += n;
+  b->scanned = b->scanned > n ? b->scanned - n : 0;
   return agc_result_value(true, agc_list_value(l));
 }
 

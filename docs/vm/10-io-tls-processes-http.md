@@ -55,9 +55,10 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   `TCP.local_port` still answers after `close_listener`, as in the
   evaluator.
 - **State.** One `malloc`'d `net` serves sockets and listeners: the
-  `uv_getaddrinfo_t`, the `uv_write_t`, the current `link` (a `malloc`'d
+  `uv_getaddrinfo_t`, the `uv_write_t`, its links (a `malloc`'d
   `uv_tcp_t` with its `uv_connect_t`; callbacks find the `net` through
-  it), the address list, the input buffer and the pending requests (the
+  it; a socket has one, a listener one per bound address), the address
+  list, the input buffer and the pending requests (the
   opener, one reader, one writer, and a FIFO of accepts). It is freed when
   its users (the resource and each request) and its callbacks (a DNS
   lookup in flight, one close callback per link) reach zero, so no
@@ -75,18 +76,32 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   "network: operation timed out". `TCP_NODELAY` is set on every connected
   and accepted socket.
 - **Listen.** Checks the port (0..65535) and the host, resolves with
-  `AI_PASSIVE`, then binds and listens (backlog 128; libuv sets
-  `SO_REUSEADDR`, as Racket's `tcp-listen` with `reuse? #t`) on the first
-  address that works. It has no timeout, as in `grammar.md`. The bound
-  port comes from `uv_tcp_getsockname`.
+  `AI_PASSIVE`, then listens on every address, as `grammar.md` and
+  Racket's `tcp-listen` do (backlog 128; libuv sets `SO_REUSEADDR`, as
+  `reuse? #t`). The first address that binds fixes the port (read with
+  `uv_tcp_getsockname` when the program asked for port 0); every other
+  address binds to that same port. Duplicate addresses are skipped, and
+  so are addresses that fail with `EADDRNOTAVAIL` or `EAFNOSUPPORT` (an
+  IPv6 address on a host without IPv6). Any other failure closes every
+  handle and fails the listen; when the program asked for port 0 and a
+  later address finds the chosen port in use, the VM starts again with a
+  new port, up to 8 times. With more than one address, IPv6 handles are
+  `IPV6_V6ONLY`, so `::` and `0.0.0.0` can share a port. It has no
+  timeout, as in `grammar.md`. The `io` trace event `tcp_listen` names
+  the port and the number of bound addresses.
 - **Accept.** "listener is closed" is checked first, then the timeout, as
-  in the evaluator. Waiting accepts form a FIFO. libuv accepts one
-  connection from the kernel into its own slot and calls the connection
-  callback; the head waiter is marked served and woken, and its `done`
+  in the evaluator. Waiting accepts form one FIFO for all of the
+  listener's handles. On each handle libuv accepts one connection from
+  the kernel into its own slot and calls the connection callback; the
+  head waiter is marked served for that handle and woken, and its `done`
   half calls `uv_accept` on the interpreter thread, so a connection never
-  waits without an owner. While no task waits, libuv keeps that one
-  connection and stops watching the listener. A timed-out accept leaves
-  the listener open.
+  waits without an owner, then serves the next waiter if another handle
+  holds a connection. While no task waits, libuv keeps that one
+  connection per handle and stops watching it. When `uv_accept` fails,
+  libuv no longer watches that handle, so the VM closes the listener:
+  that accept returns the error and every other waiting accept returns
+  "network: listener is closed". A timed-out accept leaves the listener
+  open.
 - **Reads.** `recv_bytes` checks 1..1048576 first; then, as for
   `read_line`: the timeout, the reader lock, and that the socket is open.
   The socket is read only while a reader waits (`uv_read_start`, then
@@ -95,13 +110,17 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   about 4 KiB past what the program asked for, like the evaluator's port
   buffer. `recv_bytes` returns what is buffered, up to its count, as soon
   as there is one byte, and `ok([])` at EOF. `read_line` looks for LF in
-  the first 1 MiB + 1 bytes, strips LF or CRLF, returns a final line
+  the first 1 MiB + 1 bytes (it remembers how far it has looked, so each
+  new chunk is searched once), strips LF or CRLF, returns a final line
   without a terminator at EOF (a lone CR stays) and "network: end of
-  input" on an empty EOF. A line over 1 MiB returns "network: line
-  exceeds 1048576 bytes" and closes the socket. Invalid UTF-8 returns the
+  input" on an empty EOF. A read error ends a line too: bytes without LF
+  followed by a reset return the read error, not a line. A line over 1
+  MiB returns "network: line exceeds 1048576 bytes" and closes the
+  socket. Invalid UTF-8 returns the
   `bytes->string/utf-8` error and the line is consumed. A read error
   (`ECONNRESET`) returns "error reading from stream port" with the OS
-  text, and later reads return it too.
+  text, and later reads return it too. `recv_bytes` still returns bytes
+  that arrived before the error.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size
   limit, as `grammar.md` says; `send_bytes` checks byte values and the 1
   MiB limit first. Then the timeout, the writer lock and the open check,
@@ -110,8 +129,13 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
   its callback. `ok()` means every byte reached the kernel's send buffer:
   that is the flush. A failed write (`EPIPE`, `ECONNRESET`) returns
   "error writing to stream port" with the OS text and leaves the socket
-  open. `TCP.send` charges a turn cost by the size of its String
-  (`AGC_COST_SIZE`, 10.2.1), `send_bytes` by its list.
+  open.
+- **Turn costs.** `send`, `send_bytes`, `recv_bytes` and `read_line`
+  charge a turn cost by size (`AGC_COST_SIZE`, 10.2.1): the String or
+  list they write, and the String or list they return. When the call
+  parks, the `done` half charges it, so a call that waits costs the same
+  as one that does not. `Process.send`, `send_bytes`, `read_line` and
+  `read_bytes` follow the same rule.
 - **Timeouts.** A timed-out read or write closes the socket, as
   `grammar.md` says; waiting for the lock alone does not. A timed-out
   connect closes the half-open socket. A timed-out accept leaves the
@@ -145,23 +169,23 @@ VM: a program that calls a `TLS` builtin falls back as a whole.
 - **Black-box differences** (no parity is required; these are the places
   where `grammar.md` is silent and the VM does not copy the evaluator):
   - After a timed-out read or write closes a socket, the next call
-    returns "network: socket is closed" at once. The evaluator's
-    timed-out thread keeps that direction's lock, so its next call waits
-    its whole timeout (the legacy bug of 10.4).
-  - A `read_line` over 1 MiB closes the socket on the VM. The evaluator
-    drops the 1 MiB + 1 bytes it read and leaves the stream in the middle
-    of the line, so its next `read_line` returns the tail of the long line
-    as if it were a whole line.
-  - A host with a NUL byte is an error on the VM; Racket cut the host at
-    the NUL.
+    returns "network: socket is closed" at once, as `grammar.md` now
+    says. The evaluator's timed-out thread keeps that direction's lock,
+    so its next call waits its whole timeout (the legacy bug of 10.4);
+    `grammar.md` keeps that as a temporary exception for TLS sockets.
+  - A `read_line` over 1 MiB closes the socket, as `grammar.md` now
+    says. The evaluator drops the 1 MiB + 1 bytes it read and leaves the
+    stream in the middle of the line, so its next `read_line` returns the
+    tail of the long line as if it were a whole line; `grammar.md` keeps
+    that as a temporary exception for TLS sockets until TLS moves to the
+    VM.
+  - A host with a NUL byte is an error (`grammar.md`); Racket cut the
+    host at the NUL.
   - A port out of range returns the VM's own message, not Racket's
     contract text.
   - `TCP_NODELAY` is on for every socket; Racket leaves Nagle's algorithm
     on. Each `send` already flushes, so batching is the program's choice,
     and a write, write, read exchange never waits for a delayed ACK.
-  - `TCP.listen` listens on the first address the host resolves to that
-    works; Racket listens on all of them. For `127.0.0.1` or `::1` this is
-    the same; `localhost` may listen on one family only.
   - libuv accepts one connection ahead into its own slot while no task is
     in `accept`; the kernel had completed that connection anyway.
 
@@ -219,7 +243,9 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   `drop_uring_env` says the VM set it. A failed `uv_spawn` (`EACCES`,
   `ENOEXEC`) is an error `Result` with the OS text (`agc_system_error`).
   `Process.spawn` charges a turn cost by the size of its arguments
-  (`AGC_COST_SIZE`, 10.2.1).
+  (`AGC_COST_SIZE`, 10.2.1); `send`, `send_bytes`, `read_line` and
+  `read_bytes` charge by the size they write or return, also when they
+  park (10.3.1).
 - **State.** The `malloc`'d `proc` holds the `uv_process_t`, the three
   `uv_pipe_t`, one `uv_write_t`, the stdout buffer, and the pending
   requests (one reader, one writer, a list of waits). Callbacks find it with
@@ -234,7 +260,9 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   a `read_bytes` still needs when that is more, so the VM reads at most
   about 4 KiB past what the program asked for, like the evaluator's 4 KiB
   port buffer, and a child that writes much more than the program reads
-  blocks on its pipe as it does there. A write first tries
+  blocks on its pipe as it does there. The stdout buffer is the one TCP
+  uses (`vm/stream.c`, 10.3.1), so a read error after a partial line
+  returns the error, not the partial line. A write first tries
   `uv_try_write`; the rest is copied and sent with `uv_write`, and the
   task parks until its callback. `wait` returns at once when the child has
   exited and its stderr reached EOF; otherwise it parks on a job that

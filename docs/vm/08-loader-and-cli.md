@@ -264,9 +264,10 @@ and cost one predictable branch each.
   registry, `settled`), hard_exit, and the TCP events of 10.3.1:
   tcp_connect (`socket`, `host`, `port`), tcp_connected, tcp_connect_error
   (`error`, one per failed address), tcp_listen (`listener`, `host`, the
-  bound `port`), tcp_accept (`listener`, the new `socket`),
-  tcp_accept_error, tcp_eof (`error=0` at EOF), tcp_close (`socket` or
-  `listener`, `why=close|timeout|line|failed|exit`); `proc` spawn,
+  bound `port`, the number of bound `addresses`), tcp_accept (`listener`,
+  the new `socket`), tcp_accept_error, tcp_eof (`error=0` at EOF),
+  tcp_close (`socket` or `listener`,
+  `why=close|timeout|line|accept|failed|exit`); `proc` spawn,
   spawn_failed (`rc`, or `reason=unresolved` when the executable is not
   found), exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
   stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
