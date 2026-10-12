@@ -98,7 +98,7 @@
         (string-replace (second result) directory tmp-token)
         (string-replace (third result) directory tmp-token)))
 
-(define (run-racket checked limit [style 'plain])
+(define (run-racket checked limit [style 'json])
   (cond
     [(uses-tmp?)
      (define directory (fresh-tmp "ev"))
@@ -139,7 +139,7 @@
   (subprocess-wait process)
   (list (subprocess-status process) stdout stderr))
 
-(define (run-vm bytecode limit #:style [style 'plain] . extra)
+(define (run-vm bytecode limit #:style [style 'json] . extra)
   (apply run-process vm-file #:input (fixture-input)
          (append (limit-options limit)
                  (style-options style)
@@ -264,26 +264,47 @@
           file)
         path<?))
 
-(define code-pattern
-  #px"(?m:error\\[([A-Z]+-[A-Z0-9-]+)\\]|^\\[([A-Z]+-[A-Z0-9-]+)\\]$|\"code\"\\s*:\\s*\"([A-Z]+-[A-Z0-9-]+)\")")
-
-(define (diagnostic-code stderr)
-  (define found (regexp-match* code-pattern stderr #:match-select cdr))
-  (and (pair? found) (ormap values (last found))))
+(define (last-line-start text)
+  (let search ([index (string-length text)])
+    (cond
+      [(zero? index) 0]
+      [(char=? (string-ref text (sub1 index)) #\newline) index]
+      [else (search (sub1 index))])))
 
 (define (outcome result)
-  (list (first result) (second result) (diagnostic-code (third result))))
+  (define stderr (third result))
+  (define body (if (string-suffix? stderr "\n") (substring stderr 0 (sub1 (string-length stderr))) stderr))
+  (define start (last-line-start body))
+  (define parsed
+    (and (equal? (first result) 1)
+         (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr (substring body start)))))
+  (define code (and (hash? parsed) (string? (hash-ref parsed 'code #f)) (hash-ref parsed 'code)))
+  (list (first result) (second result) (if code (substring stderr 0 start) stderr) code))
+
+(define (text-code stderr)
+  (define found
+    (regexp-match* #px"(?m:error\\[([A-Z]+-[A-Z0-9-]+)\\]|^\\[([A-Z]+-[A-Z0-9-]+)\\]$)" stderr #:match-select cdr))
+  (and (pair? found) (ormap values (last found))))
+
+(define (styled-outcome result style)
+  (if (eq? style 'json)
+      (outcome result)
+      (list (first result) (second result) (text-code (third result)))))
+
+(define (diagnostic-code result)
+  (fourth (outcome result)))
 
 (define (step-limited? result)
-  (equal? (diagnostic-code (third result)) "RUNTIME-STEP-LIMIT"))
+  (equal? (diagnostic-code result) "RUNTIME-STEP-LIMIT"))
 
 (define (check-limited on-vm full name limit)
   (define seen (outcome on-vm))
   (define message (format "~a --max-steps ~a: ~s" name limit seen))
   (unless (equal? seen full)
     (check-equal? (first seen) 1 message)
-    (check-equal? (third seen) "RUNTIME-STEP-LIMIT" message)
-    (check-true (string-prefix? (second full) (second seen)) message))
+    (check-equal? (fourth seen) "RUNTIME-STEP-LIMIT" message)
+    (check-true (string-prefix? (second full) (second seen)) message)
+    (check-true (string-prefix? (third full) (third seen)) message))
   (equal? seen full))
 
 (define (check-sweep results limits full name)
@@ -334,7 +355,7 @@
         (vm-batch name bytecode runs
                   (for/list ([limit (in-list (cons #f limits))])
                     (append (limit-options limit) (style-options 'json)))
-                  (lambda () (outcome (run-racket checked #f 'json)))))
+                  (lambda () (outcome (run-racket checked #f)))))
       (check-equal? (outcome (first vm-results)) full name)
       (check-sweep (rest vm-results) limits full name))))
 
@@ -394,12 +415,16 @@
       (compile-file program bytecode)
       (define checked (front-end program))
       (for ([limit (in-list '(1 2 3 4 5 50 500))])
+        (define message (format "~a --max-steps ~a" name limit))
         (define expected (run-racket checked limit))
-        (check-equal? (first expected) 1 (format "~a --max-steps ~a" name limit))
-        (check-true (step-limited? expected) name)
         (define on-vm (run-vm bytecode limit))
-        (check-equal? (first on-vm) 1 (format "~a --max-steps ~a" name limit))
-        (check-true (step-limited? on-vm) (format "~a --max-steps ~a" name limit)))))
+        (for ([result (in-list (list expected on-vm))])
+          (check-equal? (first result) 1 message)
+          (check-true (step-limited? result) message)
+          (check-false (string-contains? (second result) "done") message))
+        (check-true (or (string-prefix? (second expected) (second on-vm))
+                        (string-prefix? (second on-vm) (second expected)))
+                    message))))
   (test-case "the VM CLI checks options and stops parsing at the file"
     (define bytecode (build-path work "calls.agcb"))
     (check-equal? (first (run-vm bytecode #f "--max-steps" "1")) 0)
@@ -437,26 +462,33 @@
   (when linux?
     (test-case "agentica --vm gives the evaluator's exit code, stdout and diagnostic code"
       (define temp (make-temporary-directory "agentica-cli~a"))
-      (define (same . arguments)
+      (define (same #:style [style 'plain] . arguments)
         (define on-vm (apply run-cli temp "--vm" arguments))
-        (check-equal? (outcome on-vm) (outcome (apply run-cli temp arguments)) (format "~a" arguments))
+        (check-equal? (styled-outcome on-vm style) (styled-outcome (apply run-cli temp arguments) style)
+                      (format "~a" arguments))
         (check-equal? (bytecode-files temp) '() (format "~a leaves no bytecode" arguments))
         on-vm)
       (dynamic-wind
         void
         (lambda ()
           (for* ([name (in-list '("calls.agc" "division-by-zero.agc" "linked.agc"))]
-                 [style (in-list '(() ("--ai") ("--json")))])
-            (define result (apply same (append style (list (path->string (build-path fixtures name))))))
+                 [style (in-list '(plain ai json))])
+            (define result (apply same #:style style
+                                  (append (style-options style) (list (path->string (build-path fixtures name))))))
             (when (equal? name "linked.agc") (check-equal? (first result) 1)))
           (define calls (path->string (build-path fixtures "calls.agc")))
-          (check-equal? (first (same "--max-steps" "1" calls)) 1)
-          (check-equal? (first (same calls "first" "--allow-run" "--json")) 0)
+          (define (limited . arguments)
+            (define result (apply run-cli temp "--json" "--max-steps" "3" arguments))
+            (list (first result) (fourth (outcome result))))
+          (check-equal? (limited "--vm" calls) (list 1 "RUNTIME-STEP-LIMIT"))
+          (check-equal? (limited calls) (list 1 "RUNTIME-STEP-LIMIT"))
+          (check-equal? (bytecode-files temp) '())
+          (check-equal? (first (same #:style 'json calls "first" "--allow-run" "--json")) 0)
           (define unsupported (build-path temp "args.agc"))
           (display-to-file "def main() -> Void\n  Task.sleep(10)\nend\n\n" unsupported)
           (define lowered (run-cli temp "--vm" "--json" (path->string unsupported)))
           (check-equal? (first lowered) 1)
-          (check-equal? (hash-ref (string->jsexpr (third lowered)) 'code) "LOWER-UNSUPPORTED")
+          (check-equal? (fourth (outcome lowered)) "LOWER-UNSUPPORTED")
           (delete-file unsupported)
           (check-equal? (first (run-cli temp "--vm" "--allow-run" calls)) 2)
           (define random (path->string (build-path fixtures "random.agc")))
@@ -484,7 +516,7 @@
           (check-equal? (hash-ref (string->jsexpr (last (string-split (third failed) "\n"))) 'code)
                         "RUNTIME-INTERNAL")
           (check-equal? (first (same (path->string (build-path fixtures "system-exit.agc")))) 3)
-          (same (path->string (build-path fixtures "system-args.agc")) "a" "" "λ 𝔸" "--json")
+          (same #:style 'json (path->string (build-path fixtures "system-args.agc")) "a" "" "λ 𝔸" "--json")
           (check-equal? (directory-list temp) '()))
         (lambda () (delete-directory/files temp))))
 
@@ -589,7 +621,7 @@
     (check-equal? (run-vm bytecode #f) (list 0 "1000000\nfalse\n" ""))
     (define racket (run-racket (front-end program) #f))
     (check-equal? (first racket) 1)
-    (check-equal? (diagnostic-code (third racket)) "RUNTIME-STACK-OVERFLOW"))
+    (check-equal? (diagnostic-code racket) "RUNTIME-STACK-OVERFLOW"))
 
   (test-case "String.at and slice over a long non-ASCII string on the VM"
     (define program (build-path work "string-cursor.agc"))
@@ -642,9 +674,9 @@
     (compile-file program bytecode)
     (define checked (front-end program))
     (for ([style (in-list '(plain ai json))])
-      (define expected (outcome (run-racket checked #f style)))
-      (check-equal? (third expected) "RUNTIME-DIVISION-BY-ZERO" (format "~a" style))
-      (check-equal? (outcome (run-vm bytecode #f #:style style)) expected (format "~a" style)))
+      (define expected (styled-outcome (run-racket checked #f style) style))
+      (check-equal? (last expected) "RUNTIME-DIVISION-BY-ZERO" (format "~a" style))
+      (check-equal? (styled-outcome (run-vm bytecode #f #:style style) style) expected (format "~a" style)))
     (define full (outcome (run-racket checked #f)))
     (define total (total-steps checked))
     (define limits (list 1 (sub1 total) total (+ (* 2 total) 100)))

@@ -1114,7 +1114,7 @@ Why a VM and not a transpiler or LLVM IR: agents write, run and repair in a loop
 Rules for every subphase:
 
 - The language does not change. `grammar.md` stays the contract; the Racket evaluator stays the reference until 7i.
-- Black-box parity: the VM gives the evaluator's exit code, the stdout of a program that finishes, and on failure the same diagnostic code; a runaway program stops with `RUNTIME-STEP-LIMIT` under `--max-steps`. Message text and spans, stderr wording, OS error text, library `Result` error strings (HTTP, files, processes), exact step counts and the step-limit span, `Random` sequences and cross-task order may differ; VM messages must still be clear for agents, which evaluation rounds judge. Differential tests prove it (`docs/vm.md` §1). New APIs the evaluator never had (UDP, say) may be VM-only, tested with fixed expected output.
+- Black-box parity: the VM gives the evaluator's exit code, the stdout of a program that finishes, the program's own stderr, and on failure the same diagnostic code; a runaway program stops with `RUNTIME-STEP-LIMIT` under `--max-steps`. Message text and spans, stderr wording, OS error text, library `Result` error strings (HTTP, files, processes), exact step counts and the step-limit span, `Random` sequences and cross-task order may differ; VM messages must still be clear for agents, which evaluation rounds judge. Differential tests prove it (`docs/vm.md` §1). New APIs the evaluator never had (UDP, say) may be VM-only, tested with fixed expected output.
 - With black-box parity the compiler may optimize freely as long as exit code, stdout and diagnostic codes stay the same: inlining, constant folding, common subexpression elimination, loop-invariant code motion, and merging or moving `STEP`s (a runaway loop must still hit `RUNTIME-STEP-LIMIT`; step counts may change).
 - Diagnostic codes stay stable. The VM reports `RUNTIME-` diagnostics with the original source span.
 - No placeholder files, directories or opcodes for later subphases.
@@ -1195,7 +1195,7 @@ The work lands as a vertical slice first (lower, emit and run Int, Bool, `if`, `
 
 ### 7f: Differential tests
 
-- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares exit code, stdout and diagnostic code (black-box parity), plus a `--max-steps` sweep on the VM (each limit either gives the full run's outcome or stops with `RUNTIME-STEP-LIMIT` and a prefix of the full stdout; `docs/vm.md` §12.1), `Random` fixtures that print only what both backends share (seeded values differ by design), an extreme-Int corpus and a deep-value corpus.
+- [ ] A harness that runs each program on the evaluator and on `dist/agentica-vm` and compares exit code, stdout, the program's own stderr and diagnostic code (black-box parity), plus a `--max-steps` sweep on the VM (each limit either gives the full run's outcome or stops with `RUNTIME-STEP-LIMIT` and a prefix of the full output) and runaway fixtures that must stop at the limit (`docs/vm.md` §12.1), `Random` fixtures that print only what both backends share (seeded values differ by design), an extreme-Int corpus and a deep-value corpus.
 - [ ] Inputs: `examples/`, `tests/eval/tasks/*` (reference solutions and hidden cases), and a set of rejected-at-runtime programs.
 - [x] Run it in `make test` and CI; a missing VM build fails CI and visibly skips locally (`tests/vm-diff-*-test.rkt`, `AGENTICA_REQUIRE_VM=1`).
 
@@ -1259,7 +1259,7 @@ Order step 8, after faster lists (8d) and next to the 7g hot spots. The first VM
 
 - [ ] Lowering optimizations in `src/lower.rkt`, now allowed: inlining, constant folding, common subexpression elimination, loop-invariant code motion, merging or moving `STEP`s (a runaway loop must still hit `RUNTIME-STEP-LIMIT`). Each lands with a benchmark number before and after (`make bench`, `docs/vm-benchmarks.md`).
 - [ ] `Map.delete` is O(n): `agc_map_delete_hash` in `vm/map.c` copies the reversed key list up to the deleted key. Keep insertion order but use a structure with O(log n) delete, for example the persistent ordered map planned for `Table`, or an index-tagged HAMT plus tombstones compacted later.
-- [ ] Own clear error messages instead of Racket text leaking through: for example `File.read_text`'s `bytes->string/utf-8: ... byte string: #"..."` (Racket byte-string syntax, `vm/files.c`) and `File.write_bytes`'s `network: bytes must be ...` prefix. Review `docs/vm.md` §2.8 and the JSON messages. Diagnostic codes stay.
+- [ ] Own clear error messages instead of Racket text leaking through: for example `File.read_text`'s `bytes->string/utf-8: ... byte string: #"..."` (Racket byte-string syntax, `vm/files.c`) and `File.write_bytes`'s `network: bytes must be ...` prefix. Review `docs/vm.md` §2.8 and the JSON messages. Diagnostic codes stay. An error string a program prints is program data (`docs/vm.md` §1): the PR that changes a message switches the fixtures that print it to printing only ok or error (or a stable kind).
 - [ ] Unicode tables generated from the official Unicode Character Database (UCD) files, pinned to a Unicode version, instead of Racket 9.3's output (`make vm-unicode`).
 - [ ] The 4096-byte per-handle file buffer with Racket's flush rule (`docs/vm.md` §2.8) and other I/O ordering copied from Racket: keep each only where it is a good rule on its own.
 

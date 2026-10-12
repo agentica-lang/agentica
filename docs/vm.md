@@ -10,12 +10,19 @@ each decision in one line; this document gives the details and reasons.
 ## 1. Overview
 
 **Parity is black-box.** The VM must give the evaluator's exit code, the
-stdout of a program that finishes, and on failure the same diagnostic code
-(`RUNTIME-INDEX-OUT-OF-RANGE`, say); a runaway program must stop with
-`RUNTIME-STEP-LIMIT` under `--max-steps`. Everything else may differ:
-diagnostic message text and span, stderr wording, OS error text, the error
-strings of library `Result`s (HTTP, files, processes), exact step counts
-and the step-limit span, `Random` sequences, and cross-task order. VM
+stdout of a program that finishes, what the program itself writes to stderr
+(`IO.warn`; the diagnostic line after it is not part of this), and on
+failure the same diagnostic code (`RUNTIME-INDEX-OUT-OF-RANGE`, say); a
+runaway program must stop with `RUNTIME-STEP-LIMIT` under `--max-steps`,
+and the VM may not charge more than about 2T + 100 steps for a program the
+evaluator runs in T. Everything else may differ: diagnostic message text
+and span, the VM's own stderr wording, OS error text, the error strings of
+library `Result`s (HTTP, files, processes), exact step counts and the
+step-limit span, `Random` sequences, and cross-task order. An error string
+that a program prints is program data, though: today's fixtures that print
+one must still match. When a library message changes (roadmap 7k), the
+fixtures that print it switch, in the same PR, to printing only ok or error
+(or a stable kind). VM
 messages must still be clear and useful for agents; evaluation rounds judge
 that, not identity with Racket. Where this document and the evaluator
 disagree on what must match, the evaluator wins and this document is
@@ -123,7 +130,7 @@ number of bindings, and a file can run `LIST r0 r0 2` in a loop; printing
 such a list ends in the same out-of-memory exit (the evaluator also runs out
 of memory). A heap cap is an open question (13).
 
-## 2. Reference behavior the VM must copy
+## 2. Reference behavior (today's VM)
 
 These rules come from the Racket sources, not only from the grammar. The
 differential tests (section 12) check only what black-box parity needs
@@ -901,7 +908,8 @@ function's `RETURN` would have. `CALL` and `RETURN` charge
 no steps, and the lowering puts the same `step`s before a `tail-call` as
 before a `call`, so a tail call charges exactly what `call` + `return`
 charged: step counts and `--max-steps` failures do not change (exact counts
-are not part of parity, 1, but keeping them made the change easy to test).
+are not part of parity, 1, but keeping them made the change easy to test at
+the time).
 
 `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` are
 **resumable builtins**. `CALL_BUILTIN` pushes a native frame whose state (the
@@ -1771,8 +1779,9 @@ raw epoll or io_uring stays local if measurements ever ask for it.
 - **Quotas.**
   - `--max-steps` stays one global budget shared by all tasks (`steps_left`,
     6.1), as today. Preemption never changes what is charged, and turn
-    costs (see "Builtins") are never charged to it. With one task,
-    counts and failing spans match the evaluator (2.1). With several tasks,
+    costs (see "Builtins") are never charged to it. With one task, a
+    runaway program stops with `RUNTIME-STEP-LIMIT` as on the evaluator
+    (black-box parity, 1; today counts and spans also match, 2.1). With several tasks,
     which task fails at the limit depends on the interleaving, so, like
     cross-task output order, it is not compared.
   - With N schedulers, `steps_left` is one atomic counter. A scheduler takes
@@ -1784,7 +1793,7 @@ raw epoll or io_uring stays local if measurements ever ask for it.
     end of its batch first takes more from the shared counter, and fails
     with `RUNTIME-STEP-LIMIT` only when that is not enough. With N=1 this is
     the same as one plain counter, so counts and the span `s + steps_left`
-    still match the evaluator exactly. With N>1, other schedulers may hold
+    are those of one task's counter. With N>1, other schedulers may hold
     unspent batches, so the run may stop up to (N-1) times the turn budget
     below the limit, and which task hits the limit is not compared, as
     cross-task output order is not compared.
@@ -2435,9 +2444,12 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   shards of `tests/vm-diff-common.rkt`) run each
   program on the evaluator in-process (as `tests/examples-test.rkt` does,
   formatting with `src/diagnostic.rkt`) and on `dist/agentica-vm` with
-  `--json`, and compare exit code, stdout and diagnostic code (black-box
-  parity, 1). The code is read from stderr in any of the three formats:
-  `error[CODE]`, an `[CODE]` line, or `"code":"CODE"`. Inputs: `examples/`, `tests/eval/tasks/*` reference
+  `--json`, and compare exit code, stdout, the program's own stderr and
+  the diagnostic code (black-box parity, 1). With `--json` the diagnostic
+  is the last stderr line: it is parsed as JSON for the code and removed
+  before stderr is compared. The CRLF and CLI tests also run the plain and
+  `--ai` formats and read the code with a pattern (`error[CODE]` or an
+  `[CODE]` line). Inputs: `examples/`, `tests/eval/tasks/*` reference
   solutions and hidden cases, and `tests/fixtures/vm/` with one program per
   runtime code and error span.
 - Every program also runs on the VM under a sweep of `--max-steps`
@@ -2445,14 +2457,20 @@ Homebrew's keg-only `openssl@3` needs `PKG_CONFIG_PATH` set to its
   evaluator and sweeps every limit from 1 to T when T is at most 2000;
   above that (the call-depth program, about 60,000 steps) it sweeps 1 to
   300, 50 evenly spaced limits, T - 1 and T; then it adds 2T + 100. For
-  each limit the VM must either give the full run's exit code, stdout and
-  diagnostic code, or stop with exit 1 and `RUNTIME-STEP-LIMIT` with a
-  stdout that is a prefix of the evaluator's full-run stdout. Once the VM
-  finishes at one limit it must finish at every larger one, and it must
-  finish at 2T + 100. The evaluator runs once per program, not once per
-  limit. This allows other step counts and spans but catches a VM that
-  ignores the limit, stops with another code, prints what the program
-  would not print, or charges far more than the evaluator. The inputs are
+  each limit the VM must either give the full run's outcome, or stop with
+  exit 1 and `RUNTIME-STEP-LIMIT` with a stdout and stderr that are
+  prefixes of the evaluator's full run. Once the VM finishes at one limit
+  it must finish at every larger one, and it must finish at 2T + 100. The
+  evaluator runs once per program, not once per limit. This allows other
+  step counts and spans but catches a wrong code, extra output, and
+  over-charging (not finishing by 2T + 100). It cannot catch an ignored
+  limit, since these programs finish anyway: the runaway programs in
+  `tests/fixtures/vm/step-limited/` do (`while true`, non-tail recursion,
+  mutual tail calls, a `while` inside a `List.each` block, a loop inside a
+  closure called through a function value, and the counting builtins).
+  Each must stop with exit 1 and `RUNTIME-STEP-LIMIT` on both backends at
+  every tested limit, their stdouts must be prefixes of one another, and
+  neither may print what follows the loop. The inputs are
   `tests/fixtures/vm/` only. This covers 2.1 and 4.4, so the IR needs no
   step test. `Random` fixtures print only what both backends share, since
   seeded sequences differ by design (7.4).

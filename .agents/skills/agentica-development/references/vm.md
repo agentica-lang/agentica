@@ -101,12 +101,15 @@ racket src/main.rkt --vm prog.agc    # front end + VM in one step; AGENTICA_VM=p
   file lock in `build/`, since they run in parallel), print `SKIP` locally
   when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
   They run each fixture once on the evaluator and on the VM with `--json`
-  and compare exit code, stdout and diagnostic code (`outcome`; the code is
-  read from stderr in any format by `diagnostic-code`). The `--max-steps`
-  sweep runs only the VM: each limit must give the full run's outcome, or
-  exit 1 with `RUNTIME-STEP-LIMIT` and a stdout that is a prefix of the
-  full stdout; once a limit finishes, larger ones must too, and 2T + 100
-  (T the evaluator's step count) must finish (`check-sweep`). Fixtures are compiled in-process
+  and compare exit code, stdout, stderr without the final JSON diagnostic
+  line, and the diagnostic code parsed from that line (`outcome`). The
+  `--max-steps` sweep runs only the VM: each limit must give the full run's
+  outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr that
+  are prefixes of the full run's; once a limit finishes, larger ones must
+  too, and 2T + 100 (T the evaluator's step count) must finish
+  (`check-sweep`). The sweep cannot see an ignored limit: add a runaway
+  program to `tests/fixtures/vm/step-limited/` for each new loop or call
+  construct (it prints nothing after the loop). Fixtures are compiled in-process
   (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
   The VM runs of one fixture go through one `/bin/sh` script that writes each
   run's stdout, stderr and exit status to files (stdin from a file, arguments
@@ -273,8 +276,11 @@ Rules for the C code:
 ## Rules every change keeps
 
 **Parity is black-box** (`docs/vm.md` §1). Same exit code, stdout of a
-program that finishes, and diagnostic code as the evaluator; a runaway
-program stops with `RUNTIME-STEP-LIMIT` under `--max-steps`. Message text,
+program that finishes, program stderr (`IO.warn`) and diagnostic code as
+the evaluator; a runaway program stops with `RUNTIME-STEP-LIMIT` under
+`--max-steps`. Error strings a program prints are program data: when a
+library message changes, switch the fixtures that print it to printing
+only ok or error in the same PR. Message text,
 spans, stderr wording, OS error text, library `Result` error strings, exact
 step counts and the step-limit span, `Random` sequences and cross-task order
 may differ, but VM messages must stay clear for agents. Lowering may
