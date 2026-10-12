@@ -4,7 +4,7 @@ Status: proposals only. This document is not normative; implemented language beh
 
 Working rule: when a phase of the [roadmap](../roadmap/README.md) finishes, its syntax moves from this document to sections 4–6 of `grammar.md` and is deleted from here.
 
-Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT) are implementation proposals with no language change. Section 23 (binary data) adds `Int` and `Float` builtins and the `std/binary` module, with no grammar change. Section 24 (logging and debugging) adds the `std/log` module, stack traces on runtime errors and tracing inside the VM, with no grammar change.
+Section 14 records ideas that were decided or rejected, so they are not proposed again. Section 18 records an implementation decision that is deferred. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT) are implementation proposals with no language change. Section 23 (binary data) adds `Int` and `Float` builtins and the `std/binary` module, with no grammar change. Section 24 (logging and debugging) adds the `std/log` module, stack traces on runtime errors and tracing inside the VM, with no grammar change. Section 25 (Ruby typed idioms) plans more Ruby forms for after 7i, lists others to evaluate later, and records the ones decided against.
 
 
 ## Files
@@ -18,7 +18,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 4 | Standard library and function values | [`04-stdlib-and-function-values.md`](04-stdlib-and-function-values.md) | Mostly landed; the rest is planned |
 | 5 | Remaining `List` operations | [`05-list-operations.md`](05-list-operations.md) | Mostly landed; other gaps listed |
 | 6 | Native runtime | [`06-native-runtime.md`](06-native-runtime.md) | Replaced by the bytecode VM ([`docs/vm/`](../vm/README.md)) |
-| 7 | Possible metatables: Ruby-style modules | [`07-metatables.md`](07-metatables.md) | Exploratory |
+| 7 | Possible metatables: Ruby-style modules | [`07-metatables.md`](07-metatables.md) | Not planned: see §25 |
 | 8 | Concurrency and parallelism | [`08-concurrency.md`](08-concurrency.md) | Tasks landed; channels and CPU parallelism proposed |
 | 9 | Files and paths | [`done.md`](done.md#9-files-and-paths-implemented) | Implemented |
 | 10 | Void and processes | [`done.md`](done.md#10-void-and-processes-implemented) | Implemented |
@@ -36,5 +36,6 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 22 | JIT | [`22-jit.md`](22-jit.md) | Required (roadmap 7m) |
 | 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Planned (roadmap phase 13) |
 | 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14) |
+| 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 
 The rule "New library features: `std/` first" (a new pure library feature starts as a `std/` module written in Agentica, not as a builtin) lives in the roadmap: [`../roadmap/README.md`](../roadmap/README.md#new-library-features-std-first).

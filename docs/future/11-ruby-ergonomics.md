@@ -9,7 +9,7 @@ Agentica is presented as "Ruby with types". The evaluation logs (`docs/eval-diag
 1. **It is real Ruby**, with the same meaning or a typed version of it. Examples: `!`/`&&`/`||`, `+=`, `"#{x}"`, `do |x| ... end`, `s.length`, `while cond do`, top-level `puts`/`print`/`gets`, `puts(x)` with any value, `x.to_s` and `x.inspect` on every data value, `break`/`next`. When the typed version differs from Ruby (`to_i` and `gets` return a `Result`), document the difference.
 2. **It makes Agentica consistent with itself.** The same spelling works wherever the language already uses it. Examples: `Result.Ok(x)` as a value because it is already a pattern, `ok(v)` as a pattern because it is already a value, `Command.Show` without parentheses because the pattern has none, and a one-line case arm because one-line blocks exist.
 
-Any other form gets a `help` that names the Agentica form, but is not accepted. This covers forms from Python, JavaScript, Rust and Elixir (`let`, `var`, `match`, `fn`, `elif`, `len`). It also covers Ruby forms that do not fit (`when`, `then`, statement modifiers such as `x if c`, `loop do`, `Hash.new`). Before relying on a newly accepted form, check it with a second model in an evaluation round.
+Any other form gets a `help` that names the Agentica form, but is not accepted. This covers forms from Python, JavaScript, Rust and Elixir (`let`, `var`, `match`, `fn`, `elif`, `len`). It also covers Ruby forms that do not fit (`when`, `then`, statement modifiers such as `x if c`, `loop do`, `Hash.new`). Before relying on a newly accepted form, check it with a second model in an evaluation round. Statement modifiers are now planned in [section 25.8](25-ruby-typed-idioms.md#258-statement-modifiers), gated on that evaluation round; `loop do` stays out ([25.12.3](25-ruby-typed-idioms.md#25123-loop-do--end)).
 
 ### 11.1 Operators (implemented)
 
@@ -27,7 +27,7 @@ Interpolation and the `\#` escape are in `grammar.md`.
 
 Blocks, closures, `List.each`, `List.any?` and `List.all?` are in `grammar.md`.
 
-Still open: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), methods on user types and `{ |x| }` blocks.
+Still open: standalone lambdas (`inc = lambda do |x: Int| x + 1 end`), now planned in [section 25.5](25-ruby-typed-idioms.md#255-standalone-lambdas), and `{ |x| }` blocks. Methods on user types are decided against ([section 25.13](25-ruby-typed-idioms.md#2513-decided-against-part-c)).
 
 ### 11.5 Hints for foreign habits
 

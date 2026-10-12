@@ -69,6 +69,7 @@ order.
 | 10 | Evaluation round: Agentica against typed Python on harder tasks (6c) | Evidence on whether agents do better in Agentica than in typed Python |
 | 11 | Decide with the results of steps 9 and 10: multicore schedulers (7h item, gated), a front-end rewrite (`docs/future/18-front-end-language.md` §18, gated), and 7i (VM default, evaluator removed; after step 10, in parallel with the multicore decision) | Build multicore or a new front end only if the numbers ask for it; one backend |
 | 11.1 | Logging and debugging after 7i (phase 14, `docs/future/24-logging.md` §24): stack traces on runtime errors (14b), then `std/log` with the `--log-*` flags (14c) | Agents see the call stack of a runtime error; programs log with levels, fields and JSON lines |
+| 11.2 | Ruby typed idioms after 7i (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A): defaults, re-exports, `with`, value equality, lambdas, Enumerable methods, `unless`, statement modifiers (gated on an evaluation round), `File.open` with a block, heredocs, `format`; one small PR each, on the VM only | Agents write the Ruby forms they know, still checked and immutable |
 | 12 | Core data structures (phase 8): `Set[T]` and `Queue[T]` (may proceed in parallel with steps 6 to 11) | Write loops and algorithms the Ruby way, without workarounds |
 | 13 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 14 | Cross-language benchmarks (phase 12): the same small programs in Agentica (VM and evaluator), Ruby, Crystal and optionally Python. Round 1 (single-threaded; needs the 7g benchmark script (done), the real applications, faster lists (8d) and the VM `IO` library (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a, done)) goes before MCP; round 2 (concurrent programs) needs tasks on the VM (7h) and covers multicore only if the multicore schedulers land (step 11) | Honest speed numbers against Ruby and Crystal, and the VM hot spots to fix next |
@@ -143,6 +144,7 @@ This file holds what matters now: the order above and the general rules. Each op
 | [`12-benchmarks.md`](12-benchmarks.md) | Phase 12: cross-language benchmarks |
 | [`13-binary-data.md`](13-binary-data.md) | Phase 13: binary data |
 | [`14-logging.md`](14-logging.md) | Phase 14: logging and debugging |
+| [`15-ruby-typed-idioms.md`](15-ruby-typed-idioms.md) | Phase 15: Ruby typed idioms |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
 | [`later-extensions.md`](later-extensions.md) | Later extensions and open decisions |
