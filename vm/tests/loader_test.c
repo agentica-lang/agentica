@@ -478,7 +478,7 @@ int main(void) {
   free(spin_file.data);
   agc_vm_init(&vm, p, stdout, stdout, 100000);
   agc_outcome spun = agc_vm_run(&vm);
-  assert(spun.kind == AGC_FAILED && strcmp(spun.code, "RUNTIME-STEP-LIMIT") == 0 && spun.span == 1 && vm.depth == 1);
+  assert(spun.kind == AGC_FAILED && strcmp(spun.code, "RUNTIME-STEP-LIMIT") == 0 && spun.span == 1 && vm.task->depth == 1);
   static const agc_instr builtin_window[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static const uint32_t builtin_spans[] = {1, 1, 0, 0};

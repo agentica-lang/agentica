@@ -10,7 +10,7 @@
 
 static agc_value builtin_random_int(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t value;
-  if (!agc_random_int(&vm->random, agc_as_int(vm, args[0]), agc_as_int(vm, args[1]), &value))
+  if (!agc_random_int(&vm->task->random, agc_as_int(vm, args[0]), agc_as_int(vm, args[1]), &value))
     agc_fail(vm, "RUNTIME-INVALID-RANGE", "Random.int needs min <= max", span);
   return agc_int(value);
 }
@@ -18,7 +18,7 @@ static agc_value builtin_random_int(agc_vm *vm, agc_value *args, uint32_t span) 
 static agc_value builtin_random_float(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  return agc_float(agc_random_float(&vm->random));
+  return agc_float(agc_random_float(&vm->task->random));
 }
 
 static agc_value builtin_float_from_int(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -77,13 +77,13 @@ static agc_value builtin_monotonic_ms(agc_vm *vm, agc_value *args, uint32_t span
 }
 
 const agc_builtin agc_number_builtins[] = {
-  {"Float.from_int", 1, builtin_float_from_int, AGC_NATIVE_NONE},
-  {"Float.to_int", 1, builtin_float_to_int, AGC_NATIVE_NONE},
-  {"Float.to_int!", 1, builtin_float_to_int_bang, AGC_NATIVE_NONE},
-  {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE},
-  {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE},
-  {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE},
-  {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE},
+  {"Float.from_int", 1, builtin_float_from_int, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Float.to_int", 1, builtin_float_to_int, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Float.to_int!", 1, builtin_float_to_int_bang, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_number_builtin_count = sizeof agc_number_builtins / sizeof agc_number_builtins[0];

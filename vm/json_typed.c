@@ -92,14 +92,14 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
     f->n = node->count;
     f->map = agc_new_map();
   } else {
-    f->def = &vm->program->structs[arg];
+    f->def = &vm->rt->program->structs[arg];
     f->n = f->def->count;
     f->record = agc_new_struct(arg, f->def->count);
   }
 }
 
 agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
-  const agc_program *p = vm->program;
+  const agc_program *p = vm->rt->program;
   size_t depth = 0, capacity = 16;
   decode_frame *stack = agc_alloc(agc_size_mul(capacity, sizeof(decode_frame)));
   agc_value item = root;
@@ -108,6 +108,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
     const agc_json *j = agc_as_json(vm, item);
     agc_value v;
     double x;
+    agc_charge(vm, 1);
     if (kind == AGC_TYPE_INT) {
       if (j->kind != AGC_JSON_INT) return decode_error(stack, depth, "signed 64-bit Int");
       v = j->scalar;
@@ -243,7 +244,7 @@ static void mark_type(const agc_program *p, uint32_t t, bool *needed, bool *seen
 }
 
 agc_value agc_json_schema(agc_vm *vm, uint32_t type) {
-  const agc_program *p = vm->program;
+  const agc_program *p = vm->rt->program;
   bool *needed = agc_alloc_atomic(p->type_count);
   memset(needed, 0, p->type_count);
   bool *seen = agc_alloc_atomic(p->struct_count);

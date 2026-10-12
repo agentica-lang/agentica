@@ -127,8 +127,8 @@ static void seed_map_hash(agc_vm *vm) {
     k0 |= (uint64_t)key[k] << (8 * k);
     k1 |= (uint64_t)key[8 + k] << (8 * k);
   }
-  vm->hash_key[0] = k0;
-  vm->hash_key[1] = k1;
+  vm->rt->hash_key[0] = k0;
+  vm->rt->hash_key[1] = k1;
 }
 
 #ifdef __linux__
@@ -308,15 +308,19 @@ static int run(int argc, char **argv) {
     return 2;
   }
 
+  agc_io_init();
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
   seed_map_hash(vm);
   agc_files_init(vm);
-  agc_random_seed(&vm->random, seen_seed ? seed : entropy_seed());
-  vm->args = program_args(argc, argv, i + 1);
+  const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");
+  vm->rt->no_turn_cost = no_turn_cost && strcmp(no_turn_cost, "1") == 0;
+  agc_random_seed(&vm->main->random, seen_seed ? seed : entropy_seed());
+  vm->rt->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);
   bool settled = agc_io_close(vm);
+  agc_files_close(vm);
   if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";

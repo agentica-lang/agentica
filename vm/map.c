@@ -67,17 +67,20 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
     uint64_t x = (uint64_t)agc_as_int(vm, key);
     uint8_t bytes[8];
     for (unsigned k = 0; k < 8; k++) bytes[k] = (uint8_t)(x >> (8 * k));
-    return siphash13(vm->hash_key, (uint64_t)key.tag, bytes, sizeof bytes);
+    return siphash13(vm->rt->hash_key, (uint64_t)key.tag, bytes, sizeof bytes);
   }
   const agc_string *s = agc_as_string(vm, key);
-  return siphash13(vm->hash_key, (uint64_t)key.tag, (const uint8_t *)s->data, s->bytes);
+  agc_charge_bytes(vm, s->bytes);
+  return siphash13(vm->rt->hash_key, (uint64_t)key.tag, (const uint8_t *)s->data, s->bytes);
 }
 
 static bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
   if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
   const agc_string *x = agc_as_string(vm, a), *y = agc_as_string(vm, b);
-  return x->bytes == y->bytes && (x->bytes == 0 || memcmp(x->data, y->data, x->bytes) == 0);
+  if (x->bytes != y->bytes) return false;
+  agc_charge_bytes(vm, x->bytes);
+  return x->bytes == 0 || memcmp(x->data, y->data, x->bytes) == 0;
 }
 
 static agc_hamt *new_node(uint32_t bitmap, uint32_t n) {

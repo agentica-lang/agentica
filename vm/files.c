@@ -84,11 +84,8 @@ static agc_value error_of(const char *message) {
 }
 
 static const char *os_message(agc_vm *vm, int err) {
-  if (!vm->messages_tried) {
-    vm->messages_tried = true;
-    vm->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
-  }
-  return vm->messages_locale ? strerror_l(err, vm->messages_locale) : strerror(err);
+  locale_t messages = vm->rt->messages_locale;
+  return messages ? strerror_l(err, messages) : strerror(err);
 }
 
 static void put_system_error(agc_vm *vm, text *t, int err) {
@@ -205,12 +202,18 @@ void agc_files_init(agc_vm *vm) {
   text t = {0};
   put(&t, buf, len);
   if (len == 0 || buf[len - 1] != '/') puts_text(&t, "/");
-  vm->cwd = agc_make_string(t.data, t.len, 0);
+  vm->rt->cwd = agc_make_string(t.data, t.len, 0);
+  if (!vm->rt->messages_locale) vm->rt->messages_locale = newlocale(LC_MESSAGES_MASK | LC_CTYPE_MASK, "", (locale_t)0);
+}
+
+void agc_files_close(agc_vm *vm) {
+  if (vm->rt->messages_locale) freelocale(vm->rt->messages_locale);
+  vm->rt->messages_locale = (locale_t)0;
 }
 
 static const agc_string *cwd_of(agc_vm *vm) {
-  if (!vm->cwd) agc_files_init(vm);
-  return vm->cwd;
+  if (!vm->rt->cwd) agc_files_init(vm);
+  return vm->rt->cwd;
 }
 
 static char *host_path(agc_vm *vm, const agc_string *s) {
@@ -646,7 +649,7 @@ static agc_value text_result(const op *o) {
 
 static uint32_t file_info_struct(agc_vm *vm) {
   static const char *const fields[] = {"kind", "size_bytes", "modified_seconds"};
-  const agc_program *p = vm->program;
+  const agc_program *p = vm->rt->program;
   for (uint32_t k = 0; k < p->struct_count; k++) {
     const agc_struct_def *d = &p->structs[k];
     if (d->name->bytes != 8 || memcmp(d->name->data, "FileInfo", 8) != 0 || d->count != 3) continue;
@@ -730,7 +733,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
 static const agc_io_kind file_io = {work, done, expired, drop};
 
 static void files_on(agc_vm *vm, uint32_t span) {
-  if (vm->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 
 static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
@@ -818,11 +821,23 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, agc_void(), timeout);
 }
 
-static file_state *usable(agc_vm *vm, agc_value handle, int64_t timeout, bool reading, agc_value *failure) {
+static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *result) {
+  if (*timeout <= 0) {
+    *result = error_of(bad_timeout);
+    return true;
+  }
+  switch (agc_handle_wait(vm, agc_as_handle(vm, handle), timeout)) {
+    case AGC_LOCK_TAKEN: return false;
+    case AGC_LOCK_WAIT: *result = agc_void(); return true;
+    case AGC_LOCK_TIMEOUT: break;
+  }
+  *result = error_of(timed_out);
+  return true;
+}
+
+static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value *failure) {
   file_state *st = agc_as_handle(vm, handle)->native;
-  if (timeout <= 0) {
-    *failure = error_of(bad_timeout);
-  } else if (!st) {
+  if (!st) {
     *failure = error_of("filesystem: file handle is closed");
   } else if (reading && !st->readable) {
     *failure = error_of("filesystem: file handle is not open for reading");
@@ -834,29 +849,27 @@ static file_state *usable(agc_vm *vm, agc_value handle, int64_t timeout, bool re
   return NULL;
 }
 
+static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t count, int64_t timeout) {
+  agc_value failure;
+  if (blocked(vm, handle, &timeout, &failure)) return failure;
+  file_state *st = usable(vm, handle, true, &failure);
+  if (!st) return failure;
+  op *o = new_op(kind);
+  o->st = st;
+  o->count = count;
+  return start(vm, o, handle, timeout);
+}
+
 static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 1 || (uint64_t)count > LIMIT) return error_of("filesystem: max_bytes must be between 1 and 1048576");
-  int64_t timeout = agc_as_int(vm, args[2]);
-  agc_value failure;
-  file_state *st = usable(vm, args[0], timeout, true, &failure);
-  if (!st) return failure;
-  op *o = new_op(OP_READ_BYTES);
-  o->st = st;
-  o->count = (size_t)count;
-  return start(vm, o, args[0], timeout);
+  return read_op(vm, args[0], OP_READ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
-  int64_t timeout = agc_as_int(vm, args[1]);
-  agc_value failure;
-  file_state *st = usable(vm, args[0], timeout, true, &failure);
-  if (!st) return failure;
-  op *o = new_op(OP_READ_LINE);
-  o->st = st;
-  return start(vm, o, args[0], timeout);
+  return read_op(vm, args[0], OP_READ_LINE, 0, agc_as_int(vm, args[1]));
 }
 
 static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const uint8_t *data, size_t len,
@@ -874,7 +887,8 @@ static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const u
 
 static agc_value write_bytes(agc_vm *vm, agc_value handle, const uint8_t *data, size_t len, int64_t timeout) {
   agc_value failure;
-  file_state *st = usable(vm, handle, timeout, false, &failure);
+  if (blocked(vm, handle, &timeout, &failure)) return failure;
+  file_state *st = usable(vm, handle, false, &failure);
   if (!st) return failure;
   if (st->end + len > WRITE_BUFFER) return write_out(vm, handle, st, data, len, timeout);
   if (!st->buf) {
@@ -912,7 +926,8 @@ static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   agc_value failure;
   int64_t timeout = agc_as_int(vm, args[1]);
-  file_state *st = usable(vm, args[0], timeout, false, &failure);
+  if (blocked(vm, args[0], &timeout, &failure)) return failure;
+  file_state *st = usable(vm, args[0], false, &failure);
   if (!st) return failure;
   if (!st->end) return ok_void();
   return write_out(vm, args[0], st, NULL, 0, timeout);
@@ -922,7 +937,8 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   agc_resource *r = agc_as_handle(vm, args[0]);
   int64_t timeout = agc_as_int(vm, args[1]);
-  if (timeout <= 0) return error_of(bad_timeout);
+  agc_value failure;
+  if (blocked(vm, args[0], &timeout, &failure)) return failure;
   if (!r->native) return ok_void();
   op *o = new_op(OP_CLOSE);
   o->st = r->native;
@@ -1024,29 +1040,31 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_file_builtins[] = {
-  {"File.open", 3, builtin_open, AGC_NATIVE_NONE},
-  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE},
-  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE},
-  {"File.write", 3, builtin_write, AGC_NATIVE_NONE},
-  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE},
-  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE},
-  {"File.close", 2, builtin_close, AGC_NATIVE_NONE},
-  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE},
-  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE},
-  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE},
-  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE},
-  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE},
-  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE},
-  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE},
-  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE},
-  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE},
+  {"File.open", 3, builtin_open, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.read_bytes", 3, builtin_read_bytes, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.write", 3, builtin_write, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.stat", 2, builtin_stat, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Dir.list", 2, builtin_dir_list, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Dir.mkdir", 2, builtin_dir_mkdir, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
 #else
 void agc_files_init(agc_vm *vm) { (void)vm; }
 
-const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE}};
+void agc_files_close(agc_vm *vm) { (void)vm; }
+
+const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
 
 const size_t agc_file_builtin_count = 0;
 #endif

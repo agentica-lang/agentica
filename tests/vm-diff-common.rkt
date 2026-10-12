@@ -32,6 +32,7 @@
       (path->complete-path vm-binary root)
       (build-path root "dist" (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))))
 (define full-sweep-limit 2000)
+(define vm-turn-steps 2000)
 (define shard-count 4)
 (define heavy-fixtures
   '(("tail-calls.agc" . 1) ("files-large.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
@@ -350,7 +351,7 @@
         (append (range 1 301)
                 (range 300 total (quotient total 50))
                 (list (sub1 total) total))))
-   (list (+ (* 2 total) 100))))
+   (list (max (+ (* 2 total) 100) (+ total (* 2 vm-turn-steps))))))
 
 (define (run-fixture work program)
   (define name (path->string (file-name-from-path program)))
@@ -513,7 +514,7 @@
           (check-equal? (bytecode-files temp) '())
           (check-equal? (first (same #:style 'json calls "first" "--allow-run" "--json")) 0)
           (define unsupported (build-path temp "args.agc"))
-          (display-to-file "def main() -> Void\n  Task.sleep(10)\nend\n\n" unsupported)
+          (display-to-file "def main() -> Void\n  c = HTTP.client_options()\nend\n\n" unsupported)
           (define lowered (run-cli temp "--vm" "--json" (path->string unsupported)))
           (check-equal? (first lowered) 1)
           (check-equal? (fourth (outcome lowered)) "LOWER-UNSUPPORTED")

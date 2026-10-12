@@ -80,7 +80,7 @@ int main(void) {
   agc_string *mixed = text("a\xc3\xa9\xf0\x9f\x98\x80z");
   assert(mixed->chars == 4);
   agc_vm vm;
-  memset(&vm, 0, sizeof vm);
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   assert(agc_utf8_offset(&vm, mixed, 0) == 0 && agc_utf8_offset(&vm, mixed, 1) == 1);
   assert(agc_utf8_offset(&vm, mixed, 2) == 3 && agc_utf8_offset(&vm, mixed, 3) == 7);
   assert(agc_utf8_offset(&vm, mixed, 4) == 8 && agc_utf8_offset(&vm, mixed, 1) == 1);
@@ -115,21 +115,21 @@ int main(void) {
   accents[2 * n] = '\0';
   agc_string *e = text(accents);
   free(accents);
-  memset(&vm, 0, sizeof vm);
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   for (size_t k = 0; k < n; k++) {
     assert(agc_utf8_offset(&vm, e, k) == 2 * k);
-    assert(vm.cursor == e && vm.cursor_index == k && vm.cursor_offset == 2 * k);
+    assert(vm.task->cursor == e && vm.task->cursor_index == k && vm.task->cursor_offset == 2 * k);
   }
-  vm.cursor_index = 1000;
-  vm.cursor_offset = (size_t)2 * 999;
+  vm.task->cursor_index = 1000;
+  vm.task->cursor_offset = (size_t)2 * 999;
   assert(agc_utf8_offset(&vm, e, 1001) == (size_t)2 * 1000);
-  vm.cursor_index = 1000;
-  vm.cursor_offset = (size_t)2 * 999;
+  vm.task->cursor_index = 1000;
+  vm.task->cursor_offset = (size_t)2 * 999;
   assert(agc_utf8_offset(&vm, e, 999) == (size_t)2 * 998);
-  vm.cursor_index = 3000;
-  vm.cursor_offset = (size_t)2 * 2999;
+  vm.task->cursor_index = 3000;
+  vm.task->cursor_offset = (size_t)2 * 2999;
   assert(agc_utf8_offset(&vm, e, 2990) == (size_t)2 * 2989);
-  vm.cursor = NULL;
+  vm.task->cursor = NULL;
   assert(agc_utf8_offset(&vm, e, 4000) == (size_t)2 * 4000);
   assert(agc_utf8_offset(&vm, e, 10) == (size_t)2 * 10);
 

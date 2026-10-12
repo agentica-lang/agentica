@@ -8,7 +8,7 @@ static void debug_is(const char *text, const char *expected) {
   assert(agc_utf8_chars((const uint8_t *)text, strlen(text), &chars));
   agc_string *s = agc_make_string(text, strlen(text), chars);
   agc_vm vm;
-  memset(&vm, 0, sizeof vm);
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   agc_string *d = agc_debug(&vm, agc_string_value(s));
   size_t expected_chars;
   assert(agc_utf8_chars((const uint8_t *)expected, strlen(expected), &expected_chars));
@@ -27,7 +27,7 @@ int main(void) {
     assert(!agc_write_raw(lo - 1) && !agc_write_raw(hi + 1));
   }
   agc_vm vm;
-  memset(&vm, 0, sizeof vm);
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   agc_string *previous = agc_make_string("", 0, 0);
   for (uint32_t cp = 0; cp <= 0x10FFFF; cp++) {
     if (cp >= 0xD800 && cp <= 0xDFFF) continue;
@@ -97,7 +97,7 @@ int main(void) {
   program.structs = structs;
   program.enums = enums;
   program.variants = variants;
-  vm.program = &program;
+  vm.rt->program = &program;
   agc_value lambda = agc_string_value(agc_make_string("\xce\xbb", 2, 1));
   agc_value chain = agc_enum_value(end);
   for (size_t k = 0; k < depth; k++) {

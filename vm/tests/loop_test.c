@@ -51,11 +51,17 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   task_data *t = calloc(1, sizeof(task_data));
   assert(t);
   t->sleep_ms = sleep_ms;
+  agc_task *task = vm->task;
   agc_io_start(vm, &kind, t, agc_int(100), timeout_ms);
-  assert(vm->parked);
-  agc_io_park(vm, 0);
-  assert(!vm->parked);
-  return agc_as_int(vm, vm->regs[0]);
+  assert(task->parked && task->parking);
+  task->parking = false;
+  task->state = AGC_TASK_PARKED;
+  while (task->state == AGC_TASK_PARKED) assert(agc_io_poll(vm, true));
+  vm->ready = vm->ready_tail = NULL;
+  agc_value result = agc_io_finish(vm, task);
+  assert(!task->parked);
+  task->state = AGC_TASK_RUNNING;
+  return agc_as_int(vm, result);
 }
 
 static void release_count(void *native) { (*(int *)native)++; }
@@ -63,9 +69,8 @@ static void release_count(void *native) { (*(int *)native)++; }
 int main(void) {
   agc_init();
   agc_vm vm;
+  agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-  vm.regs = agc_alloc(4 * sizeof(agc_value));
-  vm.reg_capacity = 4;
 
   agc_resource *items[1000];
   for (int k = 0; k < 1000; k++) items[k] = agc_register(&vm, &released, release_count);

@@ -103,6 +103,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_FN)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Fn>");
   if (agc_is(v, AGC_T_JSON)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Json>");
   if (agc_is(v, AGC_T_HANDLE)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<FileHandle>");
+  if (agc_is(v, AGC_T_TASK)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Task>");
   if (agc_is(v, AGC_T_RANGE)) {
     const agc_range *r = agc_as_range(vm, v);
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
@@ -156,14 +157,14 @@ static bool compound(agc_value v) {
 }
 
 const agc_struct_def *agc_struct_def_of(agc_vm *vm, const agc_struct *st) {
-  const agc_program *p = vm->program;
+  const agc_program *p = vm->rt->program;
   if (!p || st->type >= p->struct_count || p->structs[st->type].count != st->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown struct type", 0);
   return &p->structs[st->type];
 }
 
 static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
-  const agc_program *p = vm->program;
+  const agc_program *p = vm->rt->program;
   if (!p || e->variant >= p->variant_count || p->variants[e->variant].arity != e->n)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: unknown enum variant", 0);
   return &p->variants[e->variant];
@@ -210,7 +211,7 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   }
   const agc_enum *e = agc_as_enum(vm, v);
   const agc_variant_def *variant = variant_def(vm, e);
-  append_string(b, vm->program->enums[variant->owner].name);
+  append_string(b, vm->rt->program->enums[variant->owner].name);
   append(b, ".", 1);
   append_string(b, variant->name);
   if (e->n == 0) return false;
@@ -274,13 +275,18 @@ agc_string *agc_text(agc_vm *vm, agc_value v) {
 }
 
 agc_string *agc_debug(agc_vm *vm, agc_value v) {
-  if (compound(v)) return compound_debug(vm, v);
+  if (compound(v)) {
+    agc_string *text = compound_debug(vm, v);
+    agc_charge_bytes(vm, text->bytes);
+    return text;
+  }
   if (!agc_is(v, AGC_T_STRING)) {
     char text[AGC_SCALAR_TEXT];
     size_t n = agc_scalar_text(vm, v, text);
     return agc_make_string(text, n, n);
   }
   const agc_string *s = agc_as_string(vm, v);
+  agc_charge_bytes(vm, s->bytes);
   size_t chars;
   size_t bytes = agc_write_form(s, NULL, &chars);
   agc_string *result = agc_new_string(bytes, chars);

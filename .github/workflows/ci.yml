@@ -175,6 +175,7 @@ jobs:
       - if: steps.unicode.outputs.cache-hit != 'true'
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
       - run: make test
+      - run: make vm-latency
       - run: make test-bdd
       - run: AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/tcp-test.rkt tests/http-test.rkt tests/process-test.rkt tests/modules-test.rkt
       - run: racket src/main.rkt --allow-run examples/process-tool.agc
@@ -197,6 +198,8 @@ jobs:
       - run: diff <(dist/agentica examples/tasks.agc) <(dist/agentica --vm examples/tasks.agc)
         shell: bash
       - run: diff <(dist/agentica examples/file-summary.agc examples/hello.agc) <(dist/agentica --vm examples/file-summary.agc examples/hello.agc)
+        shell: bash
+      - run: diff <(dist/agentica examples/concurrency.agc) <(dist/agentica --vm examples/concurrency.agc)
         shell: bash
       - run: dist/agentica examples/queue.agc
 

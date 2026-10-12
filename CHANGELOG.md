@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The bytecode VM runs tasks: `Task.spawn`, `Task.await` and `Task.sleep`
+  on one scheduler with a FIFO run queue on the libuv loop. Tasks take
+  turns of 2000 steps; long builtins and opcodes (`List.sort`,
+  `String.join`, `JSON.encode`, string `+` and `==`, printing big values,
+  String map keys) charge a turn-only cost, so a sleeping task or a stdin
+  reader wakes within tens of milliseconds next to busy tasks, while step
+  counts and `--max-steps` stay shared and unchanged. Stdin reads, file
+  calls and sleeps park only their own task. Tasks that share a
+  `FileHandle` take turns on it in order (a FIFO lock with a hand-off, and
+  each waiter keeps its own timeout). Returning from `main` cancels
+  pending tasks, and a failure or `System.exit` in any task ends the run.
+  On the VM each task has its own `Random` generator, split from its
+  parent at spawn. `make vm-latency` checks the wake latency (CI runs it
+  after `make test`). `examples/concurrency.agc` now runs on the VM.
+
 - License: Agentica is `Apache-2.0 WITH LLVM-exception` (`LICENSE`, `NOTICE`).
   Release archives include `LICENSE` and `NOTICE`, and Racket's licenses
   with Chez Scheme's `NOTICE` in `licenses/racket/`.

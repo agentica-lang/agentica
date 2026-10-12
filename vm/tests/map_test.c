@@ -30,7 +30,7 @@ static void debug_is(agc_value v, const char *expected) {
 
 int main(void) {
   agc_init();
-  memset(&vm, 0, sizeof vm);
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
 
   const int64_t n = 20000;
   agc_map *m = agc_new_map();

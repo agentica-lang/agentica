@@ -5,6 +5,7 @@
 #include <locale.h>
 #endif
 #include <setjmp.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -21,9 +22,11 @@
 _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
+#define AGC_TURN_STEPS 2000
+#define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK
 } agc_tag;
 
 typedef struct {
@@ -135,18 +138,25 @@ typedef struct {
 } agc_source;
 
 typedef struct agc_vm agc_vm;
+typedef struct agc_task agc_task;
 
 typedef void (*agc_release_fn)(void *native);
 
 typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
 
-typedef struct {
+typedef struct agc_resource agc_resource;
+
+struct agc_resource {
   size_t slot;
   agc_resource_kind kind;
   void *native;
   agc_release_fn release;
   agc_value context;
-} agc_resource;
+  agc_task *task;
+  agc_resource *holder;
+  agc_task *next_owner;
+  agc_task *waiters, *waiters_tail;
+};
 
 typedef struct agc_registry agc_registry;
 typedef struct agc_loop agc_loop;
@@ -166,11 +176,14 @@ typedef enum {
   AGC_NATIVE_RANGE_EACH, AGC_NATIVE_TIMES, AGC_NATIVE_UPTO, AGC_NATIVE_DOWNTO
 } agc_native_kind;
 
+typedef enum { AGC_COST_NONE, AGC_COST_SIZE } agc_cost_rule;
+
 typedef struct {
   const char *name;
   uint32_t arity;
   agc_builtin_fn fn;
   agc_native_kind native;
+  agc_cost_rule cost;
 } agc_builtin;
 
 typedef struct {
@@ -246,37 +259,66 @@ typedef struct {
   uint64_t s[4];
 } agc_random;
 
+typedef enum { AGC_INPUT_OK, AGC_INPUT_EOF, AGC_INPUT_WAIT, AGC_INPUT_FAILED } agc_input_status;
+
 typedef struct {
   int fd;
-  bool flush_out, pending_eof;
+  bool flush_out, pending_eof, reading;
+  int got;
   uint8_t *buf;
-  size_t start, end, cap;
+  size_t start, end, cap, scanned;
+  uint64_t eof_seq;
+  agc_task *waiters, *waiters_tail;
 } agc_input;
 
-struct agc_vm {
+typedef struct {
   const agc_program *program;
   FILE *out, *err;
-  int64_t steps_left;
+  agc_value args;
+  agc_string *cwd;
+  bool no_files, no_turn_cost;
+#ifdef __linux__
+  locale_t messages_locale;
+#endif
+  uint64_t hash_key[2];
+  _Atomic int64_t steps_left;
+  agc_outcome outcome;
+  agc_input in;
+} agc_runtime;
+
+typedef enum { AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKED, AGC_TASK_DONE } agc_task_state;
+
+typedef enum { AGC_TURN_YIELD, AGC_TURN_PARKED, AGC_TURN_DONE } agc_turn_result;
+
+typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status;
+
+struct agc_task {
   agc_value *regs;
   size_t reg_capacity;
   agc_frame *frames;
   uint32_t frame_capacity, frame_count, depth;
-  agc_input in;
   agc_random random;
-  agc_value args;
   const agc_string *cursor;
   size_t cursor_index, cursor_offset;
+  agc_resource *parked;
+  uint32_t park_reg;
+  bool parking, retry;
+  int64_t turn_cost;
+  uint64_t lock_deadline, input_seen;
+  agc_task_state state;
+  agc_value result;
+  agc_task *next, *wait_next;
+  agc_task *waiters, *waiters_tail;
+};
+
+struct agc_vm {
+  agc_runtime *rt;
+  agc_task *task, *main;
+  agc_task *ready, *ready_tail;
   agc_registry *registry;
   agc_loop *loop;
-  agc_resource *parked;
-  agc_string *cwd;
-  bool no_files;
-#ifdef __linux__
-  locale_t messages_locale;
-  bool messages_tried;
-#endif
-  uint64_t hash_key[2];
-  agc_outcome outcome;
+  int64_t next_stop, stop_set, turn_left, batch;
+  bool yield;
   jmp_buf fail;
 };
 
@@ -305,6 +347,7 @@ agc_value agc_fn_value(agc_fn *f);
 agc_value agc_range_value(int64_t start, int64_t end, bool exclusive);
 agc_value agc_json_value(agc_json *j);
 agc_value agc_handle_value(agc_resource *r);
+agc_value agc_task_value(agc_task *t);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -318,6 +361,7 @@ agc_fn *agc_as_fn(agc_vm *vm, agc_value v);
 agc_range *agc_as_range(agc_vm *vm, agc_value v);
 agc_json *agc_as_json(agc_vm *vm, agc_value v);
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
+agc_task *agc_as_task(agc_vm *vm, agc_value v);
 char *agc_cstr(const agc_string *s);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 bool agc_is(agc_value v, agc_tag tag);
@@ -407,20 +451,41 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
+extern const agc_builtin agc_task_builtins[];
+extern const size_t agc_task_builtin_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
+agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
+void agc_io_init(void);
 void agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
-void agc_io_park(agc_vm *vm, size_t reg);
+bool agc_io_poll(agc_vm *vm, bool wait);
+agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
+void agc_files_close(agc_vm *vm);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
+agc_task *agc_new_task(void);
+void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, agc_value arg, uint32_t span);
+void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
+void agc_task_wake(agc_vm *vm, agc_task *t);
+void agc_task_park(agc_vm *vm, bool retry);
+void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
+void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail);
+void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
+void agc_turn_begin(agc_vm *vm);
+bool agc_turn_charge(agc_vm *vm);
+void agc_turn_finish(agc_vm *vm);
+agc_turn_result agc_run_turn(agc_vm *vm);
 agc_outcome agc_vm_run(agc_vm *vm);
+void agc_charge(agc_vm *vm, uint64_t units);
+void agc_charge_bytes(agc_vm *vm, size_t bytes);
+uint64_t agc_value_units(agc_value v);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
@@ -433,10 +498,10 @@ double agc_random_float(agc_random *r);
 bool agc_random_int(agc_random *r, int64_t low, int64_t high, int64_t *out);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
-int agc_input_peek(agc_vm *vm);
-agc_string *agc_input_line(agc_vm *vm);
-agc_string *agc_input_all(agc_vm *vm);
-bool agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
+agc_input_status agc_input_peek(agc_vm *vm, int *byte);
+agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
+agc_input_status agc_input_all(agc_vm *vm, agc_string **text);
+agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
 
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style);
 
