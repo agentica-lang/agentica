@@ -118,6 +118,15 @@ class Raw(socketserver.BaseRequestHandler):
             while self.request.recv(65536):
                 pass
             return
+        if path == "/stale":
+            self.request.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nstale")
+            self.request.recv(65536)
+            return
+        if path == "/headlength":
+            self.request.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n")
+            if self.request.recv(65536):
+                self.request.sendall(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 6\r\n\r\nreused")
+            return
         if path == "/nocontent":
             self.request.sendall(b"HTTP/1.1 204 No Content\r\nContent-Length: 5\r\n\r\n")
             if self.request.recv(65536):

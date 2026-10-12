@@ -175,6 +175,13 @@ def main() -> Void
   large = Result.unwrap!(Web.client(options(5000, 1, 8388608, "")))
   show(Web.post(large, raw + "/early", [], upload))
   hostile = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
+  stale = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
+  show(Web.get(stale, raw + "/stale"))
+  show(Web.post(stale, raw + "/after", [], "x"))
+  show(Web.get(stale, raw + "/stale"))
+  show(Web.get(stale, raw + "/after"))
+  show(Web.request(stale, "HEAD", raw + "/headlength", [], ""))
+  show(Web.get(stale, raw + "/after"))
   for path in ["/http10", "/status99", "/status600", "/upgrade", "/interim15", "/interim16", "/badchunk", "/atlimit", "/big", "/bigchunks", "/barelf", "/fold", "/twolengths", "/smuggle", "/gzip", "/badtrailer", "/truncated", "/headerless", "/nocontent", "/after"]
     show(Web.get(hostile, raw + path))
   end
@@ -220,6 +227,12 @@ AGC
            (test-case "the VM client against hostile raw responses, and a 413 that comes before the upload ends"
              (check-lines (run-program work "raw" raw-program ports)
                           (list "413 big! 4"
+                                "200 stale 5"
+                                "http: connection closed before the response was complete"
+                                "200 stale 5"
+                                "200 ok 2"
+                                "200  0"
+                                "200 reused 6"
                                 "http: HTTP version is unsupported"
                                 "http: invalid HTTP head"
                                 "http: invalid response status"

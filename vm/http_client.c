@@ -43,7 +43,7 @@ struct origin {
   char *host;
   int64_t port;
   bool secure;
-  size_t open;
+  size_t open, users;
   idle *idle;
   exchange *waiters, *waiters_tail;
   origin *next;
@@ -63,7 +63,7 @@ struct exchange {
   uint8_t *request;
   size_t request_len, seen, fields;
   int interim, status;
-  bool head_only, keep, sent, write_failed, queued, in_body, detached;
+  bool head_only, keep, sent, write_failed, queued, in_body, detached, written, reused, retried, idempotent;
   agc_http_body body;
   uint8_t *field_data;
   field_size *field_sizes;
@@ -119,6 +119,19 @@ static void settle_client(client *c) {
   free(c);
 }
 
+static void prune(client *c) {
+  for (origin **at = &c->origins; *at;) {
+    origin *o = *at;
+    if (o->users || o->open || o->idle || o->waiters) {
+      at = &o->next;
+      continue;
+    }
+    *at = o->next;
+    free(o->host);
+    free(o);
+  }
+}
+
 static void schedule(exchange *x) {
   if (x->queued || x->at == X_DONE || x->detached) return;
   client *c = x->c;
@@ -166,6 +179,7 @@ static void close_conn(agc_conn *conn, const char *why) {
 
 static void lease(exchange *x, agc_conn *conn) {
   agc_conn_hold(conn, true);
+  x->reused = true;
   x->conn = conn;
   x->at = X_EXCHANGE;
   agc_conn_observe(conn, x->c->on_exchange, x);
@@ -231,10 +245,11 @@ static void arm_timer(client *c) {
 static void grant(origin *o) {
   while (!o->c->closed && o->waiters && (o->idle || o->open < o->c->max_connections)) {
     exchange *x = o->waiters;
+    if (x->retried && o->open >= o->c->max_connections) drop_idle(o->idle, "retry");
     o->waiters = x->next;
     if (!o->waiters) o->waiters_tail = NULL;
     x->next = NULL;
-    if (o->idle) {
+    if (o->idle && !x->retried) {
       idle *node = o->idle;
       o->idle = node->next;
       agc_conn *conn = node->conn;
@@ -265,8 +280,29 @@ static void free_slot(origin *o) {
   grant(o);
 }
 
+static bool retry(exchange *x, failure why) {
+  agc_conn *conn = x->conn;
+  if (!conn || !x->reused || x->retried || !x->idempotent || x->c->closed) return false;
+  if (why != F_EOF && why != F_READ && why != F_WRITE) return false;
+  if (x->in_body || x->seen || x->interim || agc_inbuf_pending(agc_conn_input(conn))) return false;
+  origin *o = x->o;
+  close_conn(conn, "retry");
+  o->open--;
+  x->conn = NULL;
+  x->retried = true;
+  x->reused = x->sent = x->write_failed = x->written = false;
+  x->sys = 0;
+  x->at = X_WAIT;
+  x->next = o->waiters;
+  o->waiters = x;
+  if (!o->waiters_tail) o->waiters_tail = x;
+  grant(o);
+  return true;
+}
+
 static void complete(exchange *x, failure why) {
   if (x->at == X_DONE) return;
+  if (retry(x, why)) return;
   if (x->at == X_WAIT) unlink_from(&x->o->waiters, &x->o->waiters_tail, x);
   if (x->at == X_CONFIG) unlink_from(&x->c->config_waiters, NULL, x);
   x->failed = why;
@@ -362,7 +398,8 @@ static bool head_step(exchange *x, agc_inbuf *in) {
   keep_fields(x, &head);
   if (closes(&head)) x->keep = false;
   if (x->head_only || head.status == 204 || head.status == 304) {
-    if (head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0)) x->keep = false;
+    bool announced = head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0);
+    if (announced && !x->head_only) x->keep = false;
     head.frame = AGC_HTTP_FRAME_LENGTH;
     head.length = 0;
   }
@@ -434,8 +471,7 @@ static void send_request(exchange *x) {
     x->write_failed = true;
     x->sys = -agc_conn_write_status(x->conn);
   }
-  free(x->request);
-  x->request = NULL;
+  x->written = true;
 }
 
 static void step(exchange *x) {
@@ -449,6 +485,7 @@ static void step(exchange *x) {
       }
       unlink_from(&c->config_waiters, NULL, x);
       x->at = X_WAIT;
+      uv_update_time(c->loop);
       expire(x->o, uv_now(c->loop));
       enqueue(x->o, x);
       grant(x->o);
@@ -464,7 +501,7 @@ static void step(exchange *x) {
       pump(x);
       return;
     case X_EXCHANGE:
-      if (x->request) send_request(x);
+      if (!x->written) send_request(x);
       pump(x);
       return;
     default:
@@ -501,6 +538,7 @@ static void watch_idle(void *watcher) {
   drop_idle(node, "idle");
   grant(o);
   drain(c);
+  prune(c);
 }
 
 static void timer_fired(uv_timer_t *timer) {
@@ -511,6 +549,7 @@ static void timer_fired(uv_timer_t *timer) {
     grant(o);
   }
   drain(c);
+  prune(c);
   arm_timer(c);
 }
 
@@ -608,6 +647,8 @@ static void detach(exchange *x) {
 static void free_exchange(exchange *x) {
   client *c = x->c;
   detach(x);
+  x->o->users--;
+  prune(c);
   agc_http_body_free(&x->body);
   free(x->request);
   free(x->field_data);
@@ -678,8 +719,9 @@ static agc_value exchange_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   exchange *x = data;
   agc_value result = x->failed == F_NONE ? response_value(vm, x) : failure_value(vm, x);
-  agc_charge(vm, x->units + x->body.len / AGC_COST_BYTES + x->fields);
+  uint64_t cost = x->units + x->body.len / AGC_COST_BYTES + x->fields;
   free_exchange(x);
+  agc_charge(vm, cost);
   return result;
 }
 
@@ -827,12 +869,16 @@ static agc_value builtin_exchange(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!x) agc_out_of_memory();
   x->c = c;
   x->id = agc_resource_id(vm);
-  x->units = agc_value_units(args[6]) + agc_value_units(args[7]);
+  x->units = agc_value_units(args[6]) + request.len / AGC_COST_BYTES;
   x->request = request.data;
   x->request_len = request.len;
-  x->head_only = text_is(agc_as_string(vm, args[4]), "HEAD");
+  const agc_string *method = agc_as_string(vm, args[4]);
+  x->head_only = text_is(method, "HEAD");
+  x->idempotent = x->head_only || text_is(method, "GET") || text_is(method, "OPTIONS") || text_is(method, "PUT") ||
+                  text_is(method, "DELETE");
   x->keep = true;
   x->o = origin_of(c, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), secure);
+  x->o->users++;
   x->active_next = c->active;
   c->active = x;
   c->users++;
