@@ -4,7 +4,7 @@ TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -76,6 +76,8 @@ site-serve: site-sass
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
 # make vm-openssl-key     print what the OpenSSL build of this mode depends on (the CI cache key)
+# make vm-third-party     build libgc, yyjson, picohttpparser and libuv for this mode
+# make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
@@ -84,7 +86,6 @@ UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
 VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_typed.c vm/loop.c vm/files.c vm/stream.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_client.c vm/interp.c vm/task.c vm/diag.c vm/trace.c
-GC_SRC := $(wildcard $(GC_DIR)/*.c $(GC_DIR)/include/*.h $(GC_DIR)/include/private/*.h $(GC_DIR)/extra/*.c)
 VM_DEPS := $(VM_SRC) vm/agc.h vm/trace.h vm/tls.h vm/net.h vm/http_parse.h src/version.rkt
 EXE :=
 VM_PIC := -fPIE
@@ -115,7 +116,6 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
 VM_LIBS += -ldl -lrt
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
-UV_HDRS := $(wildcard $(UV_DIR)/include/*.h $(UV_DIR)/include/uv/*.h $(UV_DIR)/src/*.h $(UV_DIR)/src/unix/*.h)
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
 ifeq ($(SANITIZE),1)
 VM_CC := clang
@@ -149,6 +149,15 @@ VM_CFLAGS += -DAGC_TRACE_BUILD=0
 endif
 VM_STAMP := build/vm/flags
 VM_TP_STAMP := $(VM_BUILD)/third-party-flags
+GC_STAMP := build/vm/gc-flags
+GC_COMPILE = $(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -I $(GC_DIR)/include
+YY_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS) $(YY_DEFS)
+PICO_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS)
+UV_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src
+SUBMODULE_KEY = git ls-tree HEAD $(1) 2>/dev/null || true; git -C $(1) rev-parse HEAD 2>/dev/null || true; git -C $(1) diff HEAD 2>/dev/null | cksum
+GC_KEY = { echo '$(GC_COMPILE)'; $(CC) --version 2>/dev/null | head -n 1; $(call SUBMODULE_KEY,$(GC_DIR)); }
+TP_KEY = { echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES)'; $(VM_CC) --version 2>/dev/null | head -n 1; \
+  $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); }
 VM_YY := $(VM_BUILD)/yyjson.o
 VM_PICO := $(VM_BUILD)/picohttpparser.o
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
@@ -172,37 +181,47 @@ $(VM_STAMP): FORCE
 
 $(VM_TP_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
-	@echo '$(VM_CC) $(YY_CFLAGS) $(YY_DEFS) $(UV_DEFS)' | cmp -s - $@ || echo '$(VM_CC) $(YY_CFLAGS) $(YY_DEFS) $(UV_DEFS)' > $@
+	@$(TP_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+
+$(GC_STAMP): FORCE
+	@mkdir -p build/vm
+	@$(GC_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+
+vm-third-party-key:
+	@$(TP_KEY)
+	@$(if $(VM_GC),$(GC_KEY))
+
+vm-third-party: $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
 
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
 
-build/vm/gc.o: $(GC_DIR)/extra/gc.c $(GC_SRC) Makefile
+build/vm/gc.o: $(GC_STAMP) | $(GC_DIR)/extra/gc.c
 	@mkdir -p build/vm
-	$(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION -I $(GC_DIR)/include -c $< -o $@
+	$(GC_COMPILE) -c $(GC_DIR)/extra/gc.c -o $@
 
 $(YY_DIR)/src/yyjson.c:
 	@echo "missing $(YY_DIR): run git submodule update --init" >&2; exit 1
 
-$(VM_YY): $(YY_DIR)/src/yyjson.c $(YY_DIR)/src/yyjson.h Makefile $(VM_TP_STAMP)
+$(VM_YY): $(VM_TP_STAMP) | $(YY_DIR)/src/yyjson.c
 	@mkdir -p $(VM_BUILD)
-	$(VM_CC) -std=c11 $(YY_CFLAGS) $(YY_DEFS) -c $< -o $@
+	$(YY_COMPILE) -c $(YY_DIR)/src/yyjson.c -o $@
 
 $(PICO_DIR)/picohttpparser.c:
 	@echo "missing $(PICO_DIR): run git submodule update --init" >&2; exit 1
 
-$(VM_PICO): $(PICO_DIR)/picohttpparser.c $(PICO_DIR)/picohttpparser.h Makefile $(VM_TP_STAMP)
+$(VM_PICO): $(VM_TP_STAMP) | $(PICO_DIR)/picohttpparser.c
 	@mkdir -p $(VM_BUILD)
-	$(VM_CC) -std=c11 $(YY_CFLAGS) -c $< -o $@
+	$(PICO_COMPILE) -c $(PICO_DIR)/picohttpparser.c -o $@
 
 $(UV_DIR)/src/uv-common.c:
 	@echo "missing $(UV_DIR): run git submodule update --init" >&2; exit 1
 
-$(VM_BUILD)/uv/%.o: $(UV_DIR)/src/%.c $(UV_HDRS) Makefile $(VM_TP_STAMP)
+$(VM_BUILD)/uv/%.o: $(VM_TP_STAMP) | $(UV_DIR)/src/uv-common.c
 	@mkdir -p $(dir $@)
-	$(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src -c $< -o $@
+	$(UV_COMPILE) -c $(UV_DIR)/src/$*.c -o $@
 
-$(VM_BUILD)/libuv.a: $(UV_DIR)/src/uv-common.c $(UV_OBJS)
+$(VM_BUILD)/libuv.a: $(UV_OBJS) | $(UV_DIR)/src/uv-common.c
 	rm -f $@
 	$(AR) rcs $@ $(UV_OBJS)
 
