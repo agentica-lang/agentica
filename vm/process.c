@@ -286,9 +286,9 @@ static void close_children(guard *g) {
     g->reaping = true;
     bool grace = false;
     for (proc *p = g->first; p; p = p->run_next) {
-      if (p->captured && p->stop == STOP_NONE)
+      if (p->running && p->captured && p->stop == STOP_NONE)
         signal_child(p, SIGTERM);
-      else if (!p->captured && !p->closed)
+      else if (p->running && !p->captured && !p->closed)
         signal_child(p, SIGKILL);
       grace = grace || in_grace(p);
     }
@@ -557,21 +557,39 @@ static void start_reading(proc *p) {
     p->reading = true;
 }
 
+/* Near the limit a chunk goes to the scratch buffer and only what fits is
+   copied, so a kept buffer never grows past 1 MiB of capacity. */
 static void alloc_kept(proc *p, agc_inbuf *b, bool cut, uv_buf_t *buf) {
-  uint8_t *room = cut ? p->err_buf : agc_inbuf_room(b, sizeof p->err_buf);
-  *buf = room ? uv_buf_init((char *)room, (unsigned)sizeof p->err_buf) : uv_buf_init(NULL, 0);
+  size_t size = sizeof p->err_buf;
+  bool near = agc_inbuf_pending(b) > LIMIT - size;
+  uint8_t *room = cut || near ? p->err_buf : agc_inbuf_room(b, size);
+  *buf = room ? uv_buf_init((char *)room, (unsigned)size) : uv_buf_init(NULL, 0);
 }
 
-/* Bytes past the limit land in err_buf and are dropped; a cut wakes the
-   reader, since every stdout read now fails (§31.9). */
+static void keep_scratch(proc *p, agc_inbuf *b, bool *cut, size_t n, const char *pipe) {
+  size_t left = LIMIT - agc_inbuf_pending(b);
+  size_t kept = n < left ? n : left;
+  uint8_t *to = kept ? agc_inbuf_room(b, kept) : NULL;
+  if (to) {
+    memcpy(to, p->err_buf, kept);
+    agc_inbuf_got(b, (int64_t)kept, false);
+  } else if (kept) {
+    agc_inbuf_got(b, UV_ENOBUFS, false);
+  }
+  if (n <= left) return;
+  *cut = true;
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "truncated pid=%d pipe=%s", (int)p->process.pid, pipe);
+  if (p->reader) agc_io_ready(p->reader->job);
+}
+
+/* Once cut, a stream's bytes are dropped; a cut wakes the reader, since
+   every stdout read now fails (§31.9). */
 static bool keep(proc *p, agc_inbuf *b, bool *cut, ssize_t n, const uv_buf_t *buf, const char *pipe) {
-  if (n > 0 && buf->base != (char *)p->err_buf) {
-    agc_inbuf_got(b, n, false);
-    if (agc_inbuf_clip(b, LIMIT)) {
-      *cut = true;
-      AGC_TRACE(&p->trace, AGC_TRACE_PROC, "truncated pid=%d pipe=%s", (int)p->process.pid, pipe);
-      if (p->reader) agc_io_ready(p->reader->job);
-    }
+  if (n > 0 && !*cut) {
+    if (buf->base == (char *)p->err_buf)
+      keep_scratch(p, b, cut, (size_t)n, pipe);
+    else
+      agc_inbuf_got(b, n, false);
   }
   if (n >= 0) return false;
   agc_inbuf_got(b, n, n == UV_EOF);

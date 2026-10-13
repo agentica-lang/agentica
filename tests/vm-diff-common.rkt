@@ -860,6 +860,21 @@
             (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
               (unix-kill (string->number pid) sigkill))))))
 
+    (test-case "an output timeout keeps the captured child, and output decodes invalid UTF-8 as U+FFFD"
+      (define program (build-path work "captured-output.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n"
+        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", \"printf '\\\\377' >&2; sleep 1; echo hi\"], \".\", 60000))\n"
+        "  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
+        "  puts(\"#{out.stdout.inspect} #{out.stderr.length} #{String.code(out.stderr)} #{out.truncated}\")\n"
+        "  Process.close(p)\nend\n")
+       program)
+      (define bytecode (build-path work "captured-output.agcb"))
+      (compile-file program bytecode)
+      (check-equal? (parameterize ([fixture-allow-run #t]) (run-vm bytecode #f #:timeout run-timeout))
+                    (list 0 "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n" "")))
+
     (test-case "a signal caught while the VM is blocked is not lost when the last child exits first"
       (define program (build-path work "signal-pending.agc"))
       (display-to-file

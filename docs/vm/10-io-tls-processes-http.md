@@ -475,10 +475,13 @@ and `Process.output` (`docs/future/31-bdd-in-agentica.md` §31.9) live in
   `uv_process_options_t.cwd`; `"."` passes no `cwd` at all.
 - **Reading.** Both pipes are read from the spawn on, never stopped, into
   two `agc_inbuf`s: `out_buf` (the one `read_line` and `read_bytes` use)
-  and `err_kept`. After each chunk `agc_inbuf_clip` cuts a buffer back to
-  1 MiB of pending bytes and reports the cut; the stream is then marked
-  (`out_cut`, `err_cut`) and its later chunks are read into the 4 KiB
-  scratch buffer and dropped, so the child never blocks. For stdout the
+  and `err_kept`. A chunk is read straight into the buffer while 4 KiB
+  more still fits under 1 MiB of pending bytes; nearer the limit it is
+  read into the 4 KiB scratch buffer and only what fits is copied
+  (`keep_scratch`), so a buffer's capacity never passes 1 MiB. A byte
+  that does not fit marks the stream (`out_cut`, `err_cut`), and its later
+  chunks are read into the scratch buffer and dropped, so the child never
+  blocks. For stdout the
   limit counts unread bytes, so reading makes room again until the first
   cut; stderr is never consumed. A cut readies the waiting reader, and
   `read_ready` and `take` check the two marks before the buffer, so a

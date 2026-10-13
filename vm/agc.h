@@ -547,7 +547,6 @@ void agc_inbuf_free(agc_inbuf *b);
 bool agc_inbuf_ready(agc_inbuf *b, bool line, size_t count);
 size_t agc_inbuf_want(const agc_inbuf *b, bool line, size_t count);
 uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
-bool agc_inbuf_clip(agc_inbuf *b, size_t limit);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
 agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
