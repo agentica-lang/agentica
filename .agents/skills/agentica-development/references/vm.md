@@ -116,8 +116,8 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   suffix, never the whole text. The hidden `--legacy-eval` flag (stripped by
   `split-legacy-flag` from the options before the file) forces the
   evaluator. `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
-  the step program and `std/bdd/runner` and starts the runner VM (see
-  `references/stages.md`).
+  the step program and `std/bdd/runner` and starts the runner VM with
+  `--driver-pid` (see `references/stages.md`).
   Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`
   flag. The VM then deletes its input right after reading it; on Linux it

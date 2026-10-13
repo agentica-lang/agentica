@@ -507,10 +507,10 @@ and `Process.output` (`docs/future/31-bdd-in-agentica.md` §31.9) live in
   second, and only a child stuck in the kernel can make it two. A failed
   `SIGTERM` in `Process.close` is `RUNTIME-PROCESS-CLOSE`, as a failed
   kill is.
-- **Refusal.** Both names are in `vm-only-builtins`, so the fallback,
-  `--legacy-eval` and `agentica test` step files stop with
-  `LOWER-UNSUPPORTED` (`docs/vm/08-loader-and-cli.md` §9) before the
-  evaluator could see them.
+- **Refusal.** Both names are in `vm-only-builtins`, so the fallback and
+  `--legacy-eval` stop with `LOWER-UNSUPPORTED`
+  (`docs/vm/08-loader-and-cli.md` §9) before the evaluator could see them.
+  `agentica test` runs on the VM and never reaches the evaluator.
 
 ### 10.5 Limits the C runtime keeps
 

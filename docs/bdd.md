@@ -18,7 +18,7 @@ make test-bdd
 agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--ai|--json] [--allow-run]
 ```
 
-With no paths, `agentica test` searches `specs/`. Directories are searched recursively for `.feature` files; paths are made absolute and lexical, duplicates are removed and the files are sorted. Explicit files are also accepted. `--steps FILE` names the one step program; it can precede `test` or follow it. Without it, only the predefined steps are available. `--seed N` reaches every step program and every program under test. `--allow-run` lets the programs under test start programs; step handlers can always start them.
+With no paths, `agentica test` searches `specs/`. Directories are searched recursively for `.feature` files; paths are made absolute and lexical, duplicates are removed and the files are sorted. Links to folders are not followed; a `.feature` link to a file is. A folder that cannot be read, a broken `.feature` link or a name that is not UTF-8 is a `RUNTIME-BDD-INFRA` file error, and the search goes on. Explicit files are also accepted. A feature file is at most 1 MiB; a larger one is a `RUNTIME-BDD-IO` file error. `--steps FILE` names the one step program; it can precede `test` or follow it. Without it, only the predefined steps are available. `--seed N` reaches every step program and every program under test. `--allow-run` lets the programs under test start programs; step handlers can always start them.
 
 Exit codes are 0 when every scenario passes and there is at least one, 1 for verification failures or an empty suite, and 2 for usage errors and when any error is `RUNTIME-BDD-INFRA` (a missing path, a step program that cannot be read, a missing VM). Plain, `--ai`, and `--json` give the same verdict. The JSON report has `ok`, `passed`, `failed`, `not_executed` (always 0), `file_errors`, `exit_code`, and `files`; each file has `path`, `feature`, `status`, `scenarios` and `error`, and each scenario its steps, locations, optional Examples row, duration, and diagnostic. Errors of the step program itself are a file entry with its path and an empty `feature`. Reports contain no handler or program output other than diagnostic expected/actual values.
 
@@ -133,11 +133,11 @@ Patterns support literal text, `{string}` for single or double quoted strings, a
 
 Each scenario child runs with `--allow-run`, so step handlers can always call `Process.spawn`. BDD gives no isolation from the host: programs run with the host user's permissions and inherited environment. Programs under test are started with the same `agentica` command as the run (Racket and `src/main.rkt` from source, or the packaged executable), with `--allow-run` only when `agentica test` has it, and `--max-steps 1000000`.
 
-Each scenario has a 30-second wall-clock deadline from the start of its child. Program-driving calls without an explicit timeout get 5 seconds, and starting a program 30. A scenario child has 1,000,000 steps per step plus 1,000,000; the budget also pays for `std/bdd`'s own work in the child (decoding steps, the predefined steps, the JSON comparison), but builtins cost steps per call, not per byte. A program's stdout is kept up to 1 MiB unread and its stderr up to 1 MiB, checked after every step without waiting; handler output is bounded to 1 MiB per step. Output over a limit is `RUNTIME-BDD-OUTPUT-LIMIT`. When a scenario ends, its child is closed, and the child's VM stops the program under test; an interrupted `agentica test` stops the runner, which stops its children, and removes its temporary directory. These checks enforce the behaviors specified; they cannot prove coverage of requirements nobody expressed.
+Each scenario has a 30-second wall-clock deadline from the start of its child. Program-driving calls without an explicit timeout get 5 seconds, and starting a program 30. A scenario child has 1,000,000 steps per step plus 1,000,000; the budget also pays for `std/bdd`'s own work in the child (decoding steps, the predefined steps, the JSON comparison), but builtins cost steps per call, not per byte. A program's stdout is kept up to 1 MiB unread and its stderr up to 1 MiB, checked after every step without waiting; handler output is bounded to 1 MiB per step. Output over a limit is `RUNTIME-BDD-OUTPUT-LIMIT`. When a scenario ends, its child is closed, and the child's VM stops the program under test; an interrupted `agentica test` stops the runner, which stops its children, and removes its temporary directory. On Linux the runner also ends when the driver is killed outright (`SIGKILL`), and stops its children the same way; the next `agentica test` removes the temporary directory such a driver left. These checks enforce the behaviors specified; they cannot prove coverage of requirements nobody expressed.
 
 ## Changes from the Racket BDD
 
-`agentica test` ran on the legacy evaluator until roadmap 21f. These changes break step files written for it (feature files do not change):
+`agentica test` ran on the legacy evaluator until roadmap 21f. These changes break step files written for it. Feature files keep their syntax, but the rows on programs under test, file size and discovery can change their results:
 
 | Before | Now |
 |---|---|
@@ -152,13 +152,17 @@ Each scenario has a 30-second wall-clock deadline from the start of its child. P
 | handlers read an empty stdin | stdin is the protocol pipe; handlers must not read it |
 | `stdout is:` compares all of stdout | it compares the stdout no line step has read yet |
 | program output: 1 MiB per stream in total | 1 MiB of unread stdout and 1 MiB of stderr; a program that writes more stdout while the test reads lines passes |
-| handler output over 1 MiB: `RUNTIME-BDD-IO` | `RUNTIME-BDD-OUTPUT-LIMIT` |
+| handler output over 1 MiB: `RUNTIME-INTERNAL` | `RUNTIME-BDD-OUTPUT-LIMIT` |
 | `I close stdin` twice: `RUNTIME-BDD-CONTEXT` | allowed |
 | BDD failures located at the `BDD.*` call | located at the feature step; crashes keep their span in the step program |
 | `RUNTIME-BDD-PATTERN` and `RUNTIME-BDD-DUPLICATE` at the `BDD.step` call | at the step program's first line, with the pattern in the message |
 | a bad step file leaves the other files' steps usable | one step program: a bad one is a file error and no scenario runs |
 | BDD calls outside a scenario: `RUNTIME-BDD-CONTEXT` | impossible to write; a step program that never calls `BDD.run` is `RUNTIME-BDD-CONTEXT` |
-| feature files of any size | at most 1 MiB |
+| feature files of any size | at most 1 MiB; a larger one is a `RUNTIME-BDD-IO` file error, exit 1 |
+| programs under test ran on the legacy evaluator | they run like `agentica FILE`: on the VM, so seeded `Random` values follow the VM's generator, and a program that uses the `HTTP` builtins prints the fallback notice on stderr until HTTP 20d |
+| handlers could call the `HTTP` builtins | the step program is compiled for the VM: an `HTTP` builtin call is a `LOWER-UNSUPPORTED` file error; use `std/http` |
+| a missing or unreadable `--steps` file: `CHECK-IMPORT-IO`, exit 1, scenarios run as undefined | `RUNTIME-BDD-INFRA`, exit 2, no scenario runs |
+| discovery followed links to folders | links to folders are skipped; an unreadable folder, a broken `.feature` link or a name that is not UTF-8 is a `RUNTIME-BDD-INFRA` file error |
 
 ## Diagnostics
 
@@ -172,6 +176,6 @@ Each scenario has a 30-second wall-clock deadline from the start of its child. P
 | `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT` | an operation or the scenario passed its deadline, or got a bad timeout; a step called `System.exit` or its child ended without a diagnostic |
 | `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON` | a missing Doc String or table, a stream call before a program started, a second program, a step program that never calls `BDD.run`; a missing `.agc` program; a JSON expectation that is not valid JSON |
 | `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS` | a step pattern used twice, an invalid pattern, tasks left running by a handler or by `main` before `BDD.run` |
-| `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`, `RUNTIME-BDD-USAGE` | program or handler output over 1 MiB; a stream I/O failure; a missing executable, VM or feature path, a step program that cannot be read, or a runner failure; bad command-line usage, such as two `--steps` |
+| `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`, `RUNTIME-BDD-USAGE` | program or handler output over 1 MiB; a stream I/O failure, a feature file or a step line over 1 MiB; a missing executable, VM or feature path, an unreadable folder or broken `.feature` link, a step program that cannot be read or that breaks the record protocol, or a runner failure; bad command-line usage, such as two `--steps` |
 
 A step program that does not compile reports its own front-end or `LOWER-` diagnostic as a file error, and a crash in a step reports the VM's diagnostic (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-STEP-LIMIT`, ...) with its span in the step program.

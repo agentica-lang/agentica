@@ -66,7 +66,7 @@ These steps work without any code. `{string}` is text in double quotes and
 | `I receive a JSON line within {int} milliseconds:` | compares the next line as JSON, in any key order |
 | `stdin remains open` | checks that the program still runs |
 | `the program exits with code {int} within {int} milliseconds` | waits for the exit code |
-| `stdout is:` / `stderr is:` | compares all the output after the program ends |
+| `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
 
 `Given`, `When`, `Then`, `And` and `But` all match the same steps.
 `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and
