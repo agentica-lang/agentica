@@ -4,7 +4,33 @@ Read this before changing `.github/workflows/`, the Makefile, or before
 adding VM source files, test peers or fixtures. Everything runs on Racket
 CS 9.3.
 
+## Every CI check is a make target
+
+CI steps call `make` targets, so every check runs locally with the same
+command. Only setup stays in the YAML: checkout, toolchain and `apt`
+installs, caches and their keys, and the `changes` step. A new check gets a
+target first (in `.PHONY` and with a one-line comment), then a step that
+calls it. Targets that are not obvious:
+
+- `build-tests` compiles every test module; `test-ci` runs `make test
+  JOBS=6` with `test-exe` (the process and module tests on `dist/agentica`)
+  beside it (`tests/test-ci.sh`); `smoke` is the example smoke runs
+  (`tests/smoke.sh`). `test-exe`, `test-ci` and `smoke` build `dist/agentica`
+  only when it is missing; `make exe` refreshes it.
+- `vm-unicode-check` regenerates `vm/unicode_data.c` and fails if it changed.
+- `vendored-check` links the VM against the vendored OpenSSL and checks it
+  (static, the submodule's version); `vendored-test` adds the TLS and HTTP
+  tests on that binary.
+- `vm-lint` includes the clang-tidy 19 version check; `vm-trace-off` builds
+  with `TRACE=0` and checks `--version`.
+- `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
+  Racket tests that run against the VM in the sanitizer job.
+- `vm-diff-build` and `vm-diff-test` are the golden tests; `sweep-full` runs
+  them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`). `test-distribution`
+  is the release's distributed-executable test.
+
 ## Pull requests (`.github/workflows/ci.yml`)
+
 
 CI runs its checks on pull requests, on the self-hosted Linux runner
 (`docker-runner` label).
@@ -76,8 +102,8 @@ runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
 that path list in `ci.yml` in step with new VM files.
 
 Only a manual run, or a pull request that changes `vm/trace.*` or
-`vm/tests/trace_test.c`, also runs `make vm vm-test TRACE=0` and checks
-that `--version` says `trace off`.
+`vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm vm-test
+TRACE=0`, then it checks that `--version` says `trace off`).
 
 Pull requests and `master` pushes that change only docs, the site or
 Markdown skip the whole CI workflow. A newer push cancels an older run.
@@ -99,8 +125,8 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   runners share (`CCACHE_MAXSIZE=5G`), so hits carry across jobs and
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
-- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"` and `raco test`
-  with `-j "$(nproc)"`. `make vm-test` and `make vm-lint` run their C tests
+- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
+  `make vm-sanitize-test` runs `raco test -j 4`. `make vm-test` and `make vm-lint` run their C tests
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
@@ -125,7 +151,7 @@ Actions → Run workflow:
   seed.
 
 `sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff` shards on
-the release VM with `AGENTICA_SWEEP=full`. Nothing else in CI runs on a schedule.
+the release VM with `AGENTICA_SWEEP=full` (`make sweep-full`). Nothing else in CI runs on a schedule.
 
 macOS and Windows are paused until further notice: `platforms.yml` is not
 run and only Linux is required. Their platform code is kept but untested;
