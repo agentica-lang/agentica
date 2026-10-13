@@ -10,7 +10,7 @@ Agentica is Ruby with static types: Ruby-like syntax, checked before running, wi
 ## Write and verify
 
 1. Save the requested program as a `.agc` file. It needs one `main() -> Void`.
-2. Check and run it with `agentica program.agc`; it runs on the bytecode VM, and a program that uses `HTTP` or `BDD` runs on the older evaluator after one notice line on stderr. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm` and `--dump-ir` prints the lowered IR; both report `LOWER-UNSUPPORTED` for `HTTP` and `BDD`.
+2. Check and run it with `agentica program.agc`; it runs on the bytecode VM, and a program that uses `HTTP` runs on the older evaluator after one notice line on stderr. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm` and `--dump-ir` prints the lowered IR; both report `LOWER-UNSUPPORTED` for `HTTP`.
 3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) and often a `help` line with the fix.
 4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
@@ -30,7 +30,7 @@ Read only the files the task needs:
 | [references/processes.md](references/processes.md) | starts other programs (`Process`) |
 | [references/tasks.md](references/tasks.md) | runs work concurrently (`Task`) |
 | [references/network.md](references/network.md) | uses TCP, TLS, or HTTP (client or server) |
-| [references/bdd.md](references/bdd.md) | writes `.feature` specifications or BDD step handlers (its report is `Json`: also read `json.md`) |
+| [references/bdd.md](references/bdd.md) | writes `.feature` specifications or a BDD step program (`import "std/bdd" as BDD`, run by `agentica test`) |
 | [references/diagnostics.md](references/diagnostics.md) | hits a diagnostic code whose meaning or fix is unclear |
 
 For fixed JSON records, prefer structs with typed fields. Use `Json`/`JSON.object` for genuinely dynamic data; maps and lists are homogeneous. For stdio protocols, write one message per line, flush stdout with `IO.flush()`, and send logs to stderr with `IO.warn()`.
@@ -117,7 +117,7 @@ Leave a blank line after the `end` of every `def`, `struct` and `enum` before th
 
 - Every parameter and the return type need an annotation.
 - Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no user methods, nested functions, default arguments, or overloading; closures are written as blocks (see "Blocks and closures").
-- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); tail calls (`return f(...)`) do not count toward the depth limit, except in a program that uses `HTTP` or `BDD`, which runs on the evaluator.
+- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); tail calls (`return f(...)`) do not count toward the depth limit, except in a program that uses `HTTP`, which runs on the evaluator.
 - A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
 - `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
 
@@ -282,7 +282,7 @@ result = run(5) do |n| n + 1 end
 - The last expression is the block's value. `return value` leaves only the block. A non-`Void` block must give a value on every path. `try` in a block needs the block to return `Result[...]` known from the call (not in `map`/`sort_by`); end it with `ok(...)`.
 - `case`, `while`, and `for` headers may end with an optional `do` (`while !done do`, `for x in xs do`); that `do` is never a block. Wrap a call with a block in parentheses there: `case (xs.map do |x| x end) do`.
 - Blocks capture values when created; later changes outside do not affect them. A block cannot assign to an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): build the value with `map`/`reduce`, or use a `for` loop. Block parameters cannot reuse visible names.
-- A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn` through a function parameter, or register a BDD step with `BDD.step("pattern") do |args| ... end`.
+- A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn` through a function parameter, or make a BDD step with `BDD.step("pattern") do |ctx, args| ... end` (see `references/bdd.md`).
 - `List.each` runs a block for each element; `List.any?` / `List.all?` stop at the first deciding element.
 
 ## Result and try

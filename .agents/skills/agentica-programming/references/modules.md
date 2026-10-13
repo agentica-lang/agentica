@@ -26,7 +26,7 @@ but importers cannot name or construct those private types.
 Only the root file supplies the executable `main() -> Void`. Imported main
 functions do not run automatically. Linking preserves source spans and distinct
 module identities; imported calls/tasks share the program's execution budget
-and resource ownership. CLI check/run/dump and BDD handlers use the same loader.
+and resource ownership. CLI check/run/dump and `agentica test` use the same loader.
 There are no wildcard imports, package registry, module state, nested module
 blocks, or receiver attachment. `as` is contextual in imports, not reserved.
 
@@ -96,5 +96,7 @@ alias: `import "std/http" as Web`. It has `Web.client_options()`,
 `Web.client(options)`, `Web.get`, `Web.post`, `Web.request`,
 `Web.header_values` and `Web.close_client`; calls return
 `Result[HttpResponse]` with the whole body as a `String`. Importing it makes
-the program VM-only: do not mix it with `HTTP` or `BDD` builtins in one
+the program VM-only: do not mix it with `HTTP` builtins in one
 program (`LOWER-UNSUPPORTED`). Details are in `network.md`.
+
+`import "std/bdd" as BDD` is the step API of `agentica test`; see `bdd.md`.

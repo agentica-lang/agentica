@@ -10,6 +10,10 @@ A program can start other programs only when it runs with `--allow-run`:
 agentica --allow-run tool.agc
 ```
 
+[BDD](/library/bdd/) steps can always start programs: `agentica test` runs
+each scenario with `--allow-run`, and `agentica test --allow-run` only lets the
+programs under test start programs too.
+
 Arguments go to the program as they are, with no shell. Every function that
 waits takes a timeout in milliseconds. Programs that are still running are
 stopped when your program ends. The examples here start real programs, so they
@@ -172,6 +176,8 @@ timeout)` gives that error at once, so you can check for it without waiting.
 Closing a captured program asks it to stop first (`SIGTERM`) and kills it one
 second later if it still runs, so a program that is itself an Agentica program
 can stop its own children. These two functions run only on the VM.
+`agentica test` runs each [BDD](/library/bdd/) scenario, and each program
+under test, as a captured program.
 
 ```agentica {mode="check"}
 def main() -> Void

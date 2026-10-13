@@ -1,6 +1,6 @@
 # Agentica
 
-Interpreter for the Agentica language: a Racket front end and a C bytecode VM, the default backend. The Racket evaluator is frozen; it runs only the programs the VM cannot run yet (`HTTP`, `BDD`, and `agentica test`) until roadmap 7i deletes it. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
+Interpreter for the Agentica language: a Racket front end and a C bytecode VM, the default backend. The Racket evaluator is frozen; it runs only the programs the VM cannot run yet (`HTTP`) until roadmap 7i deletes it. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
 
 ## Commands
 
@@ -13,7 +13,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM, t
 
 ## Layout
 
-- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `modules.rkt` (import linking) → `checker.rkt` → `lower.rkt` → `bytecode.rkt`, run by the C VM in `vm/` (the default backend); the frozen `evaluator.rkt` runs the fallback. Builtins are described once in `builtins.rkt`; runtime libraries (tasks, files, processes, network, HTTP, JSON, BDD) have their own modules.
+- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `modules.rkt` (import linking) → `checker.rkt` → `lower.rkt` → `bytecode.rkt`, run by the C VM in `vm/` (the default backend); the frozen `evaluator.rkt` runs the fallback. Builtins are described once in `builtins.rkt`; runtime libraries (tasks, files, processes, network, HTTP, JSON) have their own modules. `agentica test` is `bdd-driver.rkt` plus `std/bdd` in `stdlib/`.
 - `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
 - `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
 - `tests/<stage>-test.rkt` holds the focused tests for each stage.

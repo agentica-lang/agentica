@@ -1,6 +1,6 @@
 # Builtin functions
 
-`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `Range`, `IO`, `System`, `Json`, `JSON`, `Fn`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `Range`, `IO`, `System`, `Json`, `JSON`, `Fn`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool

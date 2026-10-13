@@ -19,7 +19,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `BDD`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and `HTTP` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and `HTTP` |
 
 Generic enums and exhaustive `case` matching are part of the current language. Other proposals remain in [`future/`](future/README.md).
 
@@ -175,7 +175,7 @@ but importers cannot name or construct those private types.
 Only the root file supplies the executable `main() -> Void`. Imported main
 functions do not run automatically. Linking preserves source spans and distinct
 module identities; imported calls/tasks share the program's execution budget
-and resource ownership. CLI check/run/dump and BDD handlers use the same loader.
+and resource ownership. CLI check/run/dump and `agentica test` use the same loader.
 There are no wildcard imports, package registry, module state, nested module
 blocks, or receiver attachment. `as` is contextual in imports, not reserved.
 
@@ -286,10 +286,43 @@ out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`).
 name (`CHECK-UNKNOWN-NAME`). Importing `std/http` makes the whole program
 VM-only, even when it calls only a pure helper such as `header_values`:
 when the program also needs the legacy evaluator (it uses something the VM
-does not run yet, such as `HTTP` or `BDD`, it runs under `--legacy-eval`,
-or it is a step file of `agentica test`) it stops with `LOWER-UNSUPPORTED`
+does not run yet, such as `HTTP`, or it runs under `--legacy-eval`) it
+stops with `LOWER-UNSUPPORTED`
 at the first `HttpWire` call in `std/http.agc`, with a help that says so,
 exit 1, before anything runs.
+
+#### BDD steps (`std/bdd`)
+
+`std/bdd` is the step API of `agentica test`, written in Agentica. With the
+alias `BDD`:
+
+```text
+BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step
+BDD.run(steps: List[BDD.Step]) -> Void
+BDD.doc_string(ctx: BDD.Context) -> String
+BDD.table(ctx: BDD.Context) -> List[List[String]]
+BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
+BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
+BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
+BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
+BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
+BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
+BDD.when_eof(ctx: BDD.Context) -> BDD.Context
+BDD.then_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
+BDD.then_json_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
+BDD.then_stdin_open(ctx: BDD.Context) -> BDD.Context
+BDD.then_exit(ctx: BDD.Context, code: Int, timeout_ms: Int) -> BDD.Context
+BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
+```
+
+`BDD.Context` can be named but not built: a context exists only inside a
+step. Every call returns the context; use the one it returns. `BDD.run`
+never returns; run directly, a step program prints how to run it on stderr
+and exits 2. `std/bdd` calls VM-only builtins, so a program that imports it
+runs only on the VM. The modules under `std/bdd/` (`gherkin`, `match`,
+`report`, `runner`) are internal to `agentica test` and unsupported. See
+[Function values and BDD](#function-values-and-bdd) and [`bdd.md`](bdd.md).
 
 ### Statements and blocks
 
@@ -713,7 +746,7 @@ Random.int(min: Int, max: Int) -> Int
 Random.float() -> Float
 ```
 
-`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. Seeded sequences come from the VM's generator; a program that falls back to the legacy evaluator (it uses `HTTP` or `BDD`) repeats too, with other values. `agentica --seed N test` passes the seed to step handlers and to the programs under test. Each task has its own generator (on the legacy evaluator, tasks share one): the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
+`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. Seeded sequences come from the VM's generator; a program that falls back to the legacy evaluator (it uses `HTTP`) repeats too, with other values. `agentica --seed N test` passes the seed to every scenario's step program and to the programs under test. Each task has its own generator (on the legacy evaluator, tasks share one): the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
 
 - `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both use Racket's buffered input port.
 - `IO.read_bytes(count)` waits for exactly `count` bytes or EOF and returns a list of integers in `0 .. 255`, with no UTF-8 decoding. A short final read succeeds; EOF before any bytes is `ok([])`. Zero returns `ok([])` without consuming input, even before EOF. Counts must be `0 .. 1048576` (1 MiB per call), bounding eager allocation; invalid counts return an error without consuming input. Input-port failures also return an error. Larger streams can be processed in multiple reads.
@@ -807,9 +840,9 @@ as Int. Maps decoded from JSON use sorted key order.
 
 ### Function values and BDD
 
-`Fn` and `BDD` are reserved builtin names. `f: Fn[Int, Int] = &double` refers to a declared function with exactly those parameter and return types; `f.call(21)` invokes it. References can travel through lists, maps, parameters, returns, and fields. A bare function name remains invalid as a value. Functions have no equality, field access, indexing, or JSON encoding; `IO.inspect` prints `<Fn>`.
+`Fn` is a reserved builtin name. `f: Fn[Int, Int] = &double` refers to a declared function with exactly those parameter and return types; `f.call(21)` invokes it. References can travel through lists, maps, parameters, returns, and fields. A bare function name remains invalid as a value. Functions have no equality, field access, indexing, or JSON encoding; `IO.inspect` prints `<Fn>`.
 
-`BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]` executes `.feature` specifications using local processes. Verification failures return a report with `ok: false`; infrastructure failures return an error Result. `agentica test [PATH...] [--steps FILE]` enforces the verdict as its exit code. Every scenario runs independently; failure stops its remaining steps and execution continues with the next scenario. Step handlers register with `BDD.step(pattern: String, handler: Fn[List[String], Void]) -> Void`. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, step catalog, contextual builtins, reports, and process lifetime.
+`agentica test [PATH...] [--steps FILE]` runs `.feature` specifications and gives the verdict as its exit code. BDD is the standard module `std/bdd`, written in Agentica (`import "std/bdd" as BDD`; `BDD` is not reserved, and a `BDD.` call without the import is `CHECK-UNKNOWN-NAME` with that import as its help). The one `--steps` program is a normal program whose `main` builds its steps with `BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step` and passes the list to `BDD.run(steps: List[BDD.Step]) -> Void`. Every scenario runs in its own child VM, so a step that crashes, exits or loops fails only its scenario; failure stops its remaining steps and execution continues with the next scenario. Every BDD call takes the scenario's context first and returns it. See [`bdd.md`](bdd.md) for the supported Gherkin syntax, the step catalog, the context API, reports, and process lifetime.
 
 ### Blocks and closures
 
@@ -833,7 +866,7 @@ end
 - **Result.** `return value` leaves the block, not the enclosing function. Without `return`, the value of the last expression statement is the block's value. The result type comes from the expected `Fn` (user functions, `each`, `any?`, `all?`, `filter`, and `reduce`, whose result is the accumulator type); for `map` and `sort_by` it comes from the body, where every `return` and the last expression must agree (`CHECK-TYPE-MISMATCH`). A non-`Void` block must give a value on every path (`CHECK-MISSING-RETURN`). When the result is `Void`, the last statement gives no value.
 - **`try`** inside a block returns the error from the block, so the block's result must be `Result[...]` (`CHECK-TRY-CONTEXT` otherwise); write the success as `ok(...)`. The result must be known from the call (a user function's `Fn[..., Result[T]]`), so `try` is not available in `map` and `sort_by` blocks, whose result is inferred.
 - **Capture by value.** A block sees every variable visible where it is written and keeps their values from the moment it is created; later assignments outside do not change it. Assigning to an outer variable inside a block is `CHECK-CAPTURED-ASSIGNMENT`: use `reduce` or a `for` loop. Block parameters and new variables cannot reuse a visible name (`CHECK-SHADOWED-NAME`).
-- **Values.** A block has type `Fn[A, ..., R]` and works wherever a function value does: stored, returned, passed to `Task.spawn` or HTTP callbacks through a variable, or registered with `BDD.step(pattern) do |args| ... end`. It shares the caller's step budget and call-depth limit. Blocks have no equality or JSON form; `IO.inspect` prints `<Fn>`.
+- **Values.** A block has type `Fn[A, ..., R]` and works wherever a function value does: stored, returned, passed to `Task.spawn` or HTTP callbacks through a variable, or made into a BDD step with `BDD.step(pattern) do |ctx, args| ... end`. It shares the caller's step budget and call-depth limit. Blocks have no equality or JSON form; `IO.inspect` prints `<Fn>`.
 
 `List.each` calls `f` on each element in order. `List.any?` and `List.all?` stop at the first element that decides the answer.
 
@@ -856,7 +889,7 @@ Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with 
 
 Pending count (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned is not counted, even when nothing awaited it. A program that calls it runs only on the VM: where it would have to run on the legacy evaluator it stops with `LOWER-UNSUPPORTED` at that call.
 
-BDD registration and step handlers support tasks but must finish them before returning, normally through Task.await. Pending work fails that handler with RUNTIME-BDD-PENDING-TASKS. Child failures stop the current handler while later scenarios continue. BDD registration, state and assertions are synchronized; stdin and stdout have independent locks whose wait counts against the operation timeout.
+BDD step handlers may use tasks but must finish them before returning, normally through Task.await: `std/bdd` checks `Task.pending_count()` after each handler, and pending work fails that step with RUNTIME-BDD-PENDING-TASKS; so does a step program whose `main` leaves tasks running when it calls `BDD.run`. Assertions made by tasks count for the step. A context changed in a task is lost unless the handler takes it back from `Task.await`. A task that fails ends the scenario's child VM, which fails only that scenario.
 
 ### TCP, TLS and HTTP/1.1
 
@@ -1094,7 +1127,7 @@ Process.spawn_captured(command: String, args: List[String], dir: String, timeout
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
 ~~~
 
-- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks, HTTP callbacks, BDD handlers, and programs started by BDD. The existing BDD runner can still launch its programs without granting them Process.spawn.
+- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks and HTTP callbacks. BDD step handlers can always launch programs, because `agentica test` runs every scenario's child VM with `--allow-run`; `agentica test --allow-run` only passes the flag on to the programs under test.
 - A command with no `/` is a bare name: it is looked up in each `PATH` entry in order. The working directory is never added: empty `PATH` entries are skipped, so a program in the current directory runs as `./name`, while an explicit relative entry such as `.` or `bin` resolves against the working directory, as in the shell. A command that contains `/` is a path, relative to the inherited working directory unless it is absolute. A name that is not found, or that names a directory, is "executable is unavailable". On Windows the evaluator also searches the current directory before `PATH`. Children inherit the environment. Arguments are passed directly without shell interpolation. Empty commands, NUL-containing arguments, and unavailable executables fail. On Windows only `.exe` and `.com` programs run; other files, such as batch files, fail. A file that is found but cannot be executed (no execute permission, a bad format) is an error Result from `spawn` on the VM; on the evaluator, spawn succeeds and the child writes the failure to stderr and exits with a nonzero code.
 - Timeouts are positive milliseconds, including lock wait. Read and write locks are independent. A timeout after starting stream I/O kills and closes the child; timing out while waiting for its lock preserves it. Waiting for exit times out without terminating the child.
 - Sends accept at most 1048576 UTF-8 bytes or integers 0..255 and flush before succeeding. Invalid data consumes nothing. read_bytes accepts 0..1048576 and waits for that count or EOF: short/empty EOF succeeds, and zero consumes nothing.
@@ -1131,7 +1164,7 @@ unknown function "totl"
   = help: did you mean "total"?
 ```
 
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `HTTP` or `BDD`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `HTTP`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
 
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running); the VM compiler stages use `LOWER-` and `BYTECODE-`. `LOWER-UNSUPPORTED` also means "needs the VM": a program that calls a VM-only builtin (such as `std/http` or `Process.spawn_captured`) but must run on the legacy evaluator stops with it at that call. Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 

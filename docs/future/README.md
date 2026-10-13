@@ -42,7 +42,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 28 | VM metrics | [`28-vm-metrics.md`](28-vm-metrics.md) | Planned (roadmap phase 18) |
 | 29 | TLS contexts | [`29-tls-context.md`](29-tls-context.md) | Planned (roadmap phase 19, order step 7.4) |
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Planned (roadmap phase 20: 20a to 20d in the catch-up, order step 7.1; streaming 20e to 20g at order step 7.4) |
-| 31 | BDD in Agentica | [`31-bdd-in-agentica.md`](31-bdd-in-agentica.md) | Planned (roadmap phase 21, catch-up item 7h, after HTTP 20a and before 20b) |
+| 31 | BDD in Agentica | [`31-bdd-in-agentica.md`](31-bdd-in-agentica.md) | Done (roadmap phase 21, catch-up item 7h) |
 | 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | Planned (roadmap phase 22, after 7i, order step 7.2a) |
 | 33 | Digit separators | [`33-digit-separators.md`](33-digit-separators.md) | Planned (roadmap phase 23, after phase 22, order step 7.2a) |
 | 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Candidate (roadmap 7g); needs a measurement |
