@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <signal.h>
+#include <unistd.h>
 #include <uv.h>
 #endif
 
@@ -34,11 +35,20 @@ struct agc_io_job {
   uv_timer_t timer;
   const agc_io_kind *kind;
   void *data;
+  bool (*more)(void *data, agc_io_job *job);
   agc_loop *loop;
   job *ready_next;
   size_t slot;
   uint64_t started_ns, ended_ns;
-  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush;
+  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush, on_loop;
+};
+
+struct agc_poller {
+  uv_poll_t handle;
+  int fd;
+  bool close_fd;
+  void (*ready)(void *data, int status);
+  void *data;
 };
 #endif
 
@@ -154,9 +164,15 @@ static void mark_ready(job *j) {
   loop->ready_tail = j;
 }
 
+/* A job's `more` step (agc_io_then) may keep it waiting on the loop after
+   its pool work (a descriptor that can wait forever); agc_io_ready ends it. */
 static void work_finished(uv_work_t *req, int status) {
   (void)status;
   job *j = (job *)(void *)req;
+  if (!j->consumed && !j->detached && j->more && j->more(j->data, j)) {
+    j->on_loop = true;
+    return;
+  }
   j->work_done = true;
   mark_ready(j);
 }
@@ -390,6 +406,44 @@ bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
   return true;
 }
 
+static void poll_ready(uv_poll_t *handle, int status, int events) {
+  (void)events;
+  agc_poller *p = (agc_poller *)(void *)handle;
+  p->ready(p->data, status);
+}
+
+static void poller_closed(uv_handle_t *handle) {
+  agc_poller *p = (agc_poller *)(void *)handle;
+  if (p->close_fd) close(p->fd);
+  free(p);
+}
+
+agc_poller *agc_poller_open(agc_vm *vm, int fd) {
+  agc_poller *p = calloc(1, sizeof(agc_poller));
+  if (!p) agc_out_of_memory();
+  if (uv_poll_init(&loop_of(vm)->uv, &p->handle, fd) != 0) {
+    free(p);
+    return NULL;
+  }
+  p->fd = fd;
+  return p;
+}
+
+void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
+  p->ready = ready;
+  p->data = data;
+  if (uv_poll_start(&p->handle, writing ? UV_WRITABLE : UV_READABLE, poll_ready) != 0) ready(data, UV_EBADF);
+}
+
+void agc_poller_pause(agc_poller *p) { uv_poll_stop(&p->handle); }
+
+void agc_io_then(agc_io_job *j, bool (*more)(void *data, agc_io_job *job)) { j->more = more; }
+
+void agc_poller_close(agc_poller *p, bool close_fd) {
+  p->close_fd = close_fd;
+  uv_close((uv_handle_t *)&p->handle, poller_closed);
+}
+
 bool agc_io_init(void) {
   if (getenv("UV_USE_IO_URING")) return false;
   setenv("UV_USE_IO_URING", "0", 1);
@@ -402,7 +456,6 @@ struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
                                int64_t timeout_ms, const agc_task *task) {
-  if (kind->work && kind->cancel) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
@@ -446,10 +499,11 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   return r->native;
 }
 
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
   agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL);
   job *j = r->native;
   j->detached = j->flush = true;
+  return j;
 }
 
 void agc_io_ready(agc_io_job *j) {
@@ -542,7 +596,7 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
     result = j->kind->expired(vm, j->data, context);
   }
   trace_finish(vm, r, j, done, result);
-  if (j->kind->external) j->work_done = true;
+  if (j->kind->external || j->on_loop) j->work_done = true;
   close_pending(vm, context);
   sweep(vm);
   return result;
@@ -626,7 +680,7 @@ static bool close_all(agc_vm *vm) {
     job *j = job_at(vm, k);
     if (!j) continue;
     j->consumed = true;
-    if (j->kind->external) j->work_done = true;
+    if (j->kind->external || j->on_loop) j->work_done = true;
     close_timer(j);
   }
   release_handles(vm);
@@ -663,7 +717,7 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 
 void agc_io_ready(agc_io_job *j) { (void)j; }
 
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
   (void)kind;
   (void)data;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);

@@ -7,6 +7,7 @@
 #include <linux/magic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
 #include <unistd.h>
@@ -28,7 +29,8 @@ typedef enum {
 
 typedef struct {
   int fd;
-  bool readable, writable;
+  bool readable, writable, polled;
+  agc_poller *poller;
   uint8_t *buf;
   size_t start, end, cap;
 } file_state;
@@ -42,8 +44,12 @@ typedef struct {
   uint8_t *out;
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
-  int err;
-  bool dir, owns_st;
+  int err, fd;
+  bool dir, owns_st, polled;
+  agc_vm *vm;
+  agc_poller *poller;
+  agc_io_job *job;
+  size_t sent;
   int64_t size, mtime;
 } op;
 
@@ -243,6 +249,7 @@ static op *new_op(op_kind kind) {
   op *o = calloc(1, sizeof(op));
   if (!o) agc_out_of_memory();
   o->kind = kind;
+  o->fd = -1;
   return o;
 }
 
@@ -257,7 +264,10 @@ static file_state *new_state(bool readable, bool writable) {
 
 static void free_state(file_state *st) {
   if (!st) return;
-  if (st->fd >= 0) close(st->fd);
+  if (st->poller)
+    agc_poller_close(st->poller, true);
+  else if (st->fd >= 0)
+    close(st->fd);
   free(st->buf);
   free(st);
 }
@@ -267,6 +277,20 @@ static void free_op(op *o) {
   free(o->in);
   free(o->out);
   free(o);
+}
+
+/* A descriptor that can wait forever (a pipe, a FIFO, a terminal, a
+   socket) waits on the loop, never in the pool; epoll refuses only the
+   ones that never wait (regular files, /dev/null, /dev/zero). */
+static bool pollable(int fd) {
+  struct stat info;
+  if (fstat(fd, &info) != 0 || S_ISREG(info.st_mode) || S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode)) return false;
+  int ep = epoll_create1(EPOLL_CLOEXEC);
+  if (ep < 0) return false;
+  struct epoll_event event = {.events = EPOLLIN};
+  bool ok = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &event) == 0;
+  close(ep);
+  return ok;
 }
 
 static void blocking(int fd) {
@@ -386,9 +410,16 @@ static int open_for(op *o, bool reading, bool append) {
   return checked(o, fd);
 }
 
+static bool on_loop(op *o, int fd) {
+  if (!pollable(fd)) return false;
+  o->fd = fd;
+  o->polled = true;
+  return true;
+}
+
 static void work_read_text(op *o) {
   int fd = open_for(o, true, false);
-  if (fd < 0) return;
+  if (fd < 0 || on_loop(o, fd)) return;
   blocking(fd);
   o->out = malloc(o->count);
   if (!o->out) {
@@ -401,7 +432,7 @@ static void work_read_text(op *o) {
 
 static void work_write_text(op *o) {
   int fd = open_for(o, false, o->kind == OP_APPEND_TEXT);
-  if (fd < 0) return;
+  if (fd < 0 || on_loop(o, fd)) return;
   blocking(fd);
   if (!write_all(fd, o->in, o->in_len, &o->err)) o->status = FS_WRITE;
   close(fd);
@@ -511,7 +542,8 @@ static void work_mkdir(op *o) {
 static void work_open(op *o) {
   int fd = open_for(o, o->kind == OP_OPEN_READ, o->kind == OP_OPEN_APPEND);
   if (fd < 0) return;
-  blocking(fd);
+  o->st->polled = pollable(fd);
+  if (!o->st->polled) blocking(fd);
   o->st->fd = fd;
 }
 
@@ -641,7 +673,118 @@ static void work(void *data) {
 static void drop(void *data) {
   op *o = data;
   if (o->owns_st && o->st) release_state(o->st);
+  if (o->poller)
+    agc_poller_close(o->poller, true);
+  else if (o->fd >= 0)
+    close(o->fd);
   free_op(o);
+}
+
+static bool writes(const op *o) { return o->kind != OP_READ_TEXT && o->kind != OP_READ_LINE && o->kind != OP_READ_BYTES; }
+
+static agc_poller *poller_of(const op *o) { return o->st && o->st->poller ? o->st->poller : o->poller; }
+
+static void send_rest(op *o, int fd, const uint8_t *data, size_t len) {
+  while (o->sent < len) {
+    ssize_t n = write(fd, data + o->sent, len - o->sent);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) {
+      fail_op(o, FS_WRITE, n < 0 ? errno : EIO);
+      return;
+    }
+    o->sent += (size_t)n;
+  }
+}
+
+static void step_read_text(op *o) {
+  for (;;) {
+    if (o->out_len == o->out_cap && !grow_out(o, CHUNK)) {
+      fail_op(o, FS_READ, ENOMEM);
+      return;
+    }
+    ssize_t n = read(o->fd, o->out + o->out_len, o->out_cap - o->out_len);
+    if (n < 0 && errno == EINTR) continue;
+    if (n < 0) {
+      fail_op(o, FS_READ, errno);
+      return;
+    }
+    o->out_len += (size_t)n;
+    if (n == 0 || o->out_len > LIMIT) return;
+  }
+}
+
+static void step_read_bytes(op *o) {
+  file_state *st = o->st;
+  bool eof = false;
+  while (pending(st) < o->count && !eof)
+    if (!fill(st, &o->err, &eof)) {
+      o->status = FS_READ;
+      return;
+    }
+  size_t n = pending(st) < o->count ? pending(st) : o->count;
+  o->out = malloc(n ? n : 1);
+  if (!o->out) {
+    fail_op(o, FS_READ, ENOMEM);
+    return;
+  }
+  if (n) memcpy(o->out, st->buf + st->start, n);
+  st->start += n;
+  o->out_len = n;
+}
+
+/* One non-blocking pass of a call on a polled descriptor, on the loop
+   thread; false while it must wait for the descriptor. */
+static bool step(op *o) {
+  switch (o->kind) {
+    case OP_READ_TEXT: step_read_text(o); break;
+    case OP_READ_LINE: work_read_line(o); break;
+    case OP_READ_BYTES: step_read_bytes(o); break;
+    case OP_CLOSE: send_rest(o, o->st->fd, o->st->buf, o->st->end); break;
+    default: send_rest(o, o->st ? o->st->fd : o->fd, o->in, o->in_len); break;
+  }
+  if (o->status != FS_OK && (o->err == EAGAIN || o->err == EWOULDBLOCK)) {
+    o->status = FS_OK;
+    o->err = 0;
+    return false;
+  }
+  if (o->kind == OP_CLOSE) o->st->end = 0;
+  return true;
+}
+
+static void ready(void *data, int status) {
+  op *o = data;
+  if (status < 0)
+    fail_op(o, writes(o) ? FS_WRITE : FS_READ, EIO);
+  else if (!step(o))
+    return;
+  agc_poller_pause(poller_of(o));
+  agc_io_ready(o->job);
+}
+
+/* The rest of a whole-file call whose path is a pipe, a FIFO or a device:
+   its pool work only opened it, and the job now waits on the loop. */
+static bool more(void *data, agc_io_job *job) {
+  op *o = data;
+  if (!o->polled || o->status != FS_OK) return false;
+  o->poller = agc_poller_open(o->vm, o->fd);
+  if (!o->poller) {
+    fail_op(o, writes(o) ? FS_WRITE : FS_READ, EBADF);
+    return false;
+  }
+  o->job = job;
+  if (step(o)) return false;
+  agc_poller_wait(o->poller, writes(o), ready, o);
+  return true;
+}
+
+static bool stop(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
+  (void)deadline;
+  agc_poller *p = poller_of(data);
+  if (!p) return false;
+  agc_poller_pause(p);
+  return true;
 }
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
@@ -728,6 +871,8 @@ static agc_value closed(agc_vm *vm, void *data, agc_value context) {
 
 static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL};
 
+static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop};
+
 /* The close of a crashed task's file, or of a file still open when the run
    ends: pending while a job holds it. */
 static void close_file(agc_vm *vm, agc_resource *r) {
@@ -740,7 +885,14 @@ static void close_file(agc_vm *vm, agc_resource *r) {
   o->owns_st = true;
   r->native = NULL;
   agc_unregister(vm, r);
-  agc_io_detached(vm, &close_io, o);
+  if (!o->st->poller) {
+    agc_io_detached(vm, &close_io, o);
+  } else if (step(o)) {
+    drop(o);
+  } else {
+    o->job = agc_io_detached(vm, &poll_close_io, o);
+    agc_poller_wait(o->st->poller, true, ready, o);
+  }
 }
 
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
@@ -763,6 +915,8 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_READ:
       case OP_OPEN_WRITE:
       case OP_OPEN_APPEND: {
+        if (o->st->polled) o->st->poller = agc_poller_open(vm, o->st->fd);
+        if (o->st->polled && !o->st->poller) blocking(o->st->fd);
         agc_resource *r = agc_register(vm, o->st, release_state);
         agc_own(vm, r, close_file);
         r->pool_close = true;
@@ -779,6 +933,8 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
 
 static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   op *o = data;
+  agc_poller *p = poller_of(o);
+  if (p) agc_poller_pause(p);
   if (agc_is(context, AGC_T_HANDLE)) {
     o->owns_st = true;
     agc_resource *r = agc_as_handle(vm, context);
@@ -788,14 +944,23 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return error_of(timed_out);
 }
 
-static const agc_io_kind file_io = {work, done, expired, drop, false, "file", NULL};
+static const agc_io_kind file_io = {work, done, expired, drop, false, "file", stop};
+
+static const agc_io_kind poll_io = {NULL, done, expired, drop, true, "file", stop};
 
 static void files_on(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 
 static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
-  agc_io_start(vm, &file_io, o, context, timeout);
+  o->vm = vm;
+  if (!o->st || !o->st->poller) {
+    agc_io_then(agc_io_start(vm, &file_io, o, context, timeout), more);
+    return agc_void();
+  }
+  if (step(o)) return done(vm, o, context);
+  o->job = agc_io_start(vm, &poll_io, o, context, timeout);
+  agc_poller_wait(o->st->poller, writes(o), ready, o);
   return agc_void();
 }
 

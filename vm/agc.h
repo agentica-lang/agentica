@@ -208,6 +208,7 @@ typedef struct {
 typedef struct agc_registry agc_registry;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
+typedef struct agc_poller agc_poller;
 
 typedef struct {
   void (*work)(void *data);
@@ -313,8 +314,9 @@ typedef struct {
 typedef enum { AGC_INPUT_OK, AGC_INPUT_EOF, AGC_INPUT_WAIT, AGC_INPUT_FAILED } agc_input_status;
 
 typedef struct {
-  int fd;
-  bool flush_out, pending_eof, reading, reserved;
+  int fd, poll_fd;
+  bool flush_out, pending_eof, reading, reserved, poll_tried, poll_socket;
+  agc_poller *poller;
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;
@@ -572,10 +574,15 @@ void agc_io_ready(agc_io_job *j);
 extern const int agc_stop_signals[AGC_STOP_SIGNALS];
 void agc_io_block_stop(sigset_t *saved);
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
+void agc_io_then(agc_io_job *j, bool (*more)(void *data, agc_io_job *job));
+agc_poller *agc_poller_open(agc_vm *vm, int fd);
+void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
+void agc_poller_pause(agc_poller *p);
+void agc_poller_close(agc_poller *p, bool close_fd);
 #endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
 void agc_io_watch_stop(agc_vm *vm);

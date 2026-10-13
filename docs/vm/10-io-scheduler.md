@@ -408,13 +408,35 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   `uv_queue_work` creates the pool, so it must be in the environment when
   the VM starts; changing it later has no effect. The default is 4 and
   libuv caps it at 1024. There is one pool per process, shared by every
-  loop (10.2.3). It runs file I/O (stdin reads too), DNS (`getaddrinfo`)
-  and the TLS setup jobs that load CA, certificate and key files, so long
-  or many concurrent file reads, or slow DNS, queue behind each other.
-  Raise it when a program keeps more of these calls in flight at once
-  than the pool has threads, or uses FIFOs or devices that may block.
-- **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
-  check, then blocking for reads and writes in the pool).
+  loop (10.2.3). It runs regular-file I/O (stdin too when it is a regular
+  file), opens and path calls, DNS (`getaddrinfo`) and the TLS setup jobs
+  that load CA, certificate and key files, so long or many concurrent
+  file reads, or slow DNS, queue behind each other. Raise it when a
+  program keeps more of these calls in flight at once than the pool has
+  threads. Nothing that can wait forever runs there (next item).
+- **We only wait where the loop can cancel.** Files open with `O_CLOEXEC`
+  and `O_NONBLOCK` (so `open` of a FIFO never waits for a peer), and the
+  pool work then picks the path with `fstat` and an `epoll_ctl` probe
+  (`pollable` in `vm/files.c`), never by the name: a regular file, a block
+  device, or a device epoll refuses (`/dev/null`, `/dev/zero`, which never
+  wait) is set blocking and served by pool jobs, whose system calls end in
+  bounded time; a pipe, a FIFO, a terminal or another character device
+  that can wait stays non-blocking and is served on the loop through an
+  `agc_poller` (a `uv_poll_t`, `vm/loop.c`). A handle call on such a file
+  first tries its non-blocking read or write on the loop thread (`step`);
+  when it would wait, it parks on an `external` job and the poller's
+  callback repeats the step until the call is done (`agc_io_ready`). Its
+  timer is the job's own, so a timeout really ends the wait (the `expired`
+  half stops the poller and, as for any active handle call, closes the
+  handle), and a cancelled task's call stops through the `cancel` half.
+  A whole-file call (`read_text`, `write_text`, `append_text`) opens in a
+  pool job; when the path turns out to be pollable, the job's `more` step
+  (`agc_io_then`, run on the loop thread after the work) opens a poller
+  and keeps the same job, timer and parked task waiting on the loop. A
+  pool kind's `cancel` half may drop its data only in that loop phase,
+  never while its work runs. `read_text` of a pipe reads to EOF (at most
+  1 MiB). The end-of-run flush of such a file is a detached loop job,
+  waited for like the pool flush jobs.
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error of `main`, the step limit or a stop
   signal), `end_run` in `vm/main.c` takes the same fixed steps and nothing
@@ -536,21 +558,20 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   `agc_release_all`, on the normal path and after the allocation limit, so
   a loop or a resource would never outlive the mutant.
 
-**Stdin (deviation from 10.2).** Stdin is read by thread-pool jobs, not
-by `uv_pipe_t`/`uv_tty_t` handles chosen with `uv_guess_handle`: a job
-does one blocking `read(0)` (with `poll` on `EAGAIN`) into a `malloc`'d
-buffer of up to 1 MiB, and its `done` half appends the bytes to the
-shared `agc_input` buffer (owned by the runtime, served by scheduler 0)
-and wakes the tasks waiting for that read. It works for every kind of
-descriptor (TTY, pipe, file, socket) with one code path, and it never
-changes the descriptor's flags: `uv_pipe_open` and `uv_tty_init` make the
-inherited descriptor non-blocking, which leaks into the parent's open file
-description (a shell's terminal) when the VM is killed. One read is in
-flight at a time; a second reader parks in the input's FIFO. A read stuck
-at the end of the run is handled like a stuck file job (`_exit`). A stdin
-read shares the pool with file jobs, so stuck file calls that fill the
-pool (four by default) delay it.
-Non-Linux builds keep the blocking read.
+**Stdin.** Stdin follows the same rule as files. On the first read,
+`watch_stdin` in `vm/input.c` checks the descriptor: a pipe, a FIFO or a
+terminal is reopened through `/proc/self/fd/N` with `O_NONBLOCK` (a new
+open file description, so the inherited one, which a shell's terminal
+shares, keeps its flags; `uv_pipe_open` and `uv_tty_init` would change
+it) and read on the loop through an `agc_poller`; a socket keeps its
+flags (restored after `uv_poll_init`) and is read with `MSG_DONTWAIT`; a
+regular file or a device epoll refuses stays a pool job with one
+`read`. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
+and its `done` half appends the bytes to the shared `agc_input` buffer
+(owned by the runtime, served by scheduler 0) and wakes the tasks waiting
+for that read. One read is in flight at a time; a second reader parks in
+the input's FIFO. A read with no data at the end of the run is not waited
+for (one exit path). Non-Linux builds keep the blocking read.
 
 How tasks extended it (10.2.1): `agc_io_park` became the place where a task
 leaves its turn. It records the task and the result register, and the
