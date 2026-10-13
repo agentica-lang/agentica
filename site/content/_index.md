@@ -66,3 +66,4 @@ error("negative price: -2")
 - [Language tour](/tour/): the language in short pages, one idea at a time.
 - [Library](/library/): every builtin module, with one example per function.
 - [Language specification](/reference/): the formal grammar and rules.
+- [The Aurora VM](/vm/): how your program runs, and the libraries underneath.
