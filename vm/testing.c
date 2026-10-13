@@ -6,6 +6,8 @@
 typedef enum { MODE_NONE, MODE_LIST, MODE_RUN } run_mode;
 
 struct agc_test_run {
+  run_mode mode;
+  agc_string *token;
   agc_task *current;
   const agc_test_case *test;
 };
@@ -114,14 +116,16 @@ static agc_value position(uint32_t line, uint32_t column) {
 }
 
 static void write_record(agc_vm *vm, agc_json_member *m, size_t n) {
+  m[n++] = member("token", json_text(vm->task->test_run->token));
   const agc_string *text = agc_json_encode(vm, agc_json_object(m, n), 0);
+  if (vm->rt->out_mid_line) agc_write(vm, vm->rt->out, "\n", 1);
   agc_write(vm, vm->rt->out, marker, sizeof marker - 1);
   agc_write(vm, vm->rt->out, text->data, text->bytes);
   agc_write(vm, vm->rt->out, "\n", 1);
 }
 
 static void write_event(agc_vm *vm, const char *event) {
-  agc_json_member *m = members(1);
+  agc_json_member *m = members(2);
   m[0] = member("event", json_text(lit(event)));
   write_record(vm, m, 1);
   agc_flush(vm);
@@ -132,7 +136,7 @@ static void write_list(agc_vm *vm, const agc_list *tests) {
   for (size_t k = 0; k < tests->len; k++) {
     const agc_test_case *c = case_at(vm, tests, k);
     const agc_span *at = &p->spans[c->span];
-    agc_json_member *m = members(4);
+    agc_json_member *m = members(5);
     m[0] = member("column", json_int(at->start_column));
     m[1] = member("event", json_text(lit("test")));
     m[2] = member("line", json_int(at->start_line));
@@ -148,7 +152,7 @@ static void write_fail(agc_vm *vm, const char *code, agc_string *message, uint32
   agc_json_member *range = members(2);
   range[0] = member("end", position(at->end_line, at->end_column));
   range[1] = member("start", position(at->start_line, at->start_column));
-  agc_json_member *m = members(7);
+  agc_json_member *m = members(8);
   size_t count = 0;
   m[count++] = member("code", json_text(lit(code)));
   m[count++] = member("event", json_text(lit("fail")));
@@ -252,8 +256,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *tests = agc_as_list(vm, args[0]);
   agc_test_run *r = vm->task->test_run;
   if (!r) {
-    if (vm->task->test || vm->test_active)
-      agc_fail(vm, "RUNTIME-TEST-RUN", "Test.run cannot run inside a test or next to another Test.run", span);
+    if (vm->task != vm->main) agc_fail(vm, "RUNTIME-TEST-RUN", "call Test.run from main, outside every test", span);
     check_names(vm, tests);
     run_mode mode = mode_of(vm);
     if (mode == MODE_NONE) {
@@ -261,13 +264,19 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
       agc_write(vm, vm->rt->err, usage, sizeof usage - 1);
       agc_exit(vm, 2);
     }
-    if (mode == MODE_LIST) {
-      write_list(vm, tests);
-      finish_run(vm);
-    }
     r = agc_alloc(sizeof(agc_test_run));
+    r->mode = mode;
     vm->task->test_run = r;
-    vm->test_active = true;
+  }
+  if (!r->token) {
+    agc_string *line = NULL;
+    agc_input_status status = agc_protocol_line(vm, &line);
+    if (status == AGC_INPUT_WAIT) return agc_void();
+    r->token = status == AGC_INPUT_OK ? line : lit("");
+  }
+  if (r->mode == MODE_LIST) {
+    write_list(vm, tests);
+    finish_run(vm);
   }
   for (;;) {
     if (r->current) {
@@ -276,13 +285,15 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
       r->current = NULL;
     }
     agc_string *line = NULL;
-    agc_input_status status = agc_input_line(vm, &line);
+    agc_input_status status = agc_protocol_line(vm, &line);
     if (status == AGC_INPUT_WAIT) return agc_void();
     if (status != AGC_INPUT_OK) finish_run(vm);
     r->test = next_test(vm, tests, line, span);
     r->current = start_test(vm, r->test);
   }
 }
+
+bool agc_test_protocol(agc_vm *vm) { return mode_of(vm) != MODE_NONE; }
 
 const agc_builtin agc_test_builtins[] = {
   {"Test.test", 2, builtin_test, AGC_NATIVE_NONE, AGC_COST_NONE},

@@ -3,10 +3,10 @@
   "code": null,
   "steps": 56,
   "stdout": [
-    "\u001eagentica-bdd {\"code\":\"RUNTIME-TASK-CRASHED\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-crash-observed.agc\",\"message\":\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/test-crash-observed.agc:2:13: division by zero\",\"range\":{\"end\":{\"column\":8,\"line\":17},\"start\":{\"column\":5,\"line\":12}}}",
-    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-PENDING-TASKS\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-crash-observed.agc\",\"message\":\"the test returned while its tasks were still running\",\"range\":{\"end\":{\"column\":8,\"line\":21},\"start\":{\"column\":5,\"line\":18}}}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TASK-CRASHED\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-crash-observed.agc\",\"message\":\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/test-crash-observed.agc:2:13: division by zero\",\"range\":{\"end\":{\"column\":8,\"line\":17},\"start\":{\"column\":5,\"line\":12}},\"token\":\"k3y\"}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-PENDING-TASKS\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-crash-observed.agc\",\"message\":\"the test returned while its tasks were still running\",\"range\":{\"end\":{\"column\":8,\"line\":21},\"start\":{\"column\":5,\"line\":18}},\"token\":\"k3y\"}",
     "ok(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/test-crash-observed.agc:6:12: division by zero\")",
-    "\u001eagentica-bdd {\"event\":\"pass\"}",
+    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
     ""
   ],
   "stderr": [

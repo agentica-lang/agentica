@@ -47,7 +47,7 @@ Builds a test from a name and a block. A `TestCase` has no fields; it keeps the 
 Test.run(tests: List[TestCase]) -> Void
 ```
 
-Serves the test runner and never returns. Call it once, from `main`: inside a test it fails with `RUNTIME-TEST-RUN`. Each test runs in its own task, so a test that crashes fails alone and the next test still runs. Running the file as a normal program prints `run this file with agentica test` on stderr and exits 2; running test files with `agentica test` comes in a later release.
+Serves the test runner and never returns. Call it once, from `main` itself: in any other task, a test or a task you spawned, it fails with `RUNTIME-TEST-RUN`. Standard input belongs to the runner: under `agentica test`, a test file sees it empty from the start of `main` (`IO.gets` returns the end-of-input error, and `/dev/stdin` reads nothing). Every record the runner reads carries a secret token and starts a line, and the runner checks both, so nothing a test prints can pass for one of its records. Line starts are tracked for `puts`, `print` and `IO.write`; if a test writes to `/dev/stdout` with `File`, end the text with a newline. Each test runs in its own task, so a test that crashes fails alone and the next test still runs. Running the file as a normal program prints `run this file with agentica test` on stderr and exits 2; running test files with `agentica test` comes in a later release.
 
 A test fails, in this order, with:
 
@@ -67,7 +67,7 @@ Each test gets its own random generator, seeded from the run's seed and the test
 Test.eq(actual: T, expected: T) -> Result[Void]
 ```
 
-Compares two values of the same type. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys. When the values differ, the test reports `values are not equal` and the error shows both in the `inspect` form, with any `Json` as its JSON text.
+Compares two values of the same type. The type comes from the first argument, the actual value, so put it first: `Test.eq(r, error("x"))` works, while `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` alone does not say what its `ok` type is. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys. When the values differ, the test reports `values are not equal` and the error shows both in the `inspect` form, with any `Json` as its JSON text.
 
 ```agentica
 struct Point

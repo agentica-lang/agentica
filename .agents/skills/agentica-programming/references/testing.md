@@ -44,7 +44,8 @@ end
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag: `expected ok; actual error("...")`, `expected an error; actual ok(0)`.
 - `Test.assert(cond, message)` fails with `message`.
 - A failed assertion also counts against its test even when its Result is dropped (`Test.eq(a, b)` as a statement), including one made in a task the test spawned. Outside a test, an assertion only returns its Result.
-- Names must be non-empty and different in a file (`RUNTIME-TEST-NAME` at the `Test.test` call). Call `Test.run` once, from `main`: inside a test it is `RUNTIME-TEST-RUN`.
+- Names must be non-empty and different in a file (`RUNTIME-TEST-NAME` at the `Test.test` call). Call `Test.run` once, from `main` itself: in any other task (a test, or a task you spawned) it is `RUNTIME-TEST-RUN`.
+- Under `agentica test`, stdin belongs to the runner: a test file reads it as empty (`IO.gets` is an end-of-input error, `/dev/stdin` reads nothing), from the start of `main`. Records carry a secret token and start a line, and the runner checks both, so output a test prints cannot pass for a record. Write output with `puts`/`print`/`IO.write`; text written to `/dev/stdout` with `File` should end with a newline.
 - A task crash outside every test (say, in a task `main` started) that nothing awaited fails the whole file (exit 1 with the crash summary).
 - Each test runs in its own task. A test fails with, in this order: a crash (its own code and span), its first failed assertion (`RUNTIME-TEST-ASSERTION` at the assertion), an `error(m)` returned by the block (`RUNTIME-TEST-ERROR`), tasks it left running (`RUNTIME-TEST-PENDING-TASKS`; they are stopped), or a task it spawned that crashed unawaited (`RUNTIME-TASK-CRASHED`). Await every task you spawn in a test. The next test still runs after a crash.
 - Each test's `Random` generator is seeded from the run's seed and the test's name, so values do not depend on the other tests.

@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 70,
+  "stdout": [
+    "main reads: IO.gets reached the end of input",
+    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
+    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
+    "partial",
+    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
+    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"guess\"}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":20},\"start\":{\"column\":7,\"line\":20}},\"token\":\"k3y\"}",
+    ""
+  ],
+  "stderr": []
+}
