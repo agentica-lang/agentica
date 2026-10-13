@@ -1,0 +1,26 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 10832,
+  "stdout": [
+    "PARSE-GHERKIN-HEADER sample.feature:1:1-1",
+    "PARSE-GHERKIN-EMPTY sample.feature:1:1-15",
+    "PARSE-GHERKIN-EMPTY sample.feature:2:1-16",
+    "PARSE-GHERKIN-STEP sample.feature:3:1-12",
+    "PARSE-GHERKIN-UNSUPPORTED sample.feature:2:1-11",
+    "PARSE-GHERKIN-UNSUPPORTED sample.feature:1:1-15",
+    "PARSE-GHERKIN-UNSUPPORTED sample.feature:3:1-11",
+    "PARSE-GHERKIN-HEADER sample.feature:1:1-12",
+    "PARSE-GHERKIN-HEADER sample.feature:2:1-11",
+    "PARSE-GHERKIN-HEADER sample.feature:2:1-10",
+    "PARSE-GHERKIN-HEADER sample.feature:4:1-12",
+    "PARSE-GHERKIN-EMPTY sample.feature:1:1-11",
+    "PARSE-GHERKIN-STEP sample.feature:2:1-8",
+    "PARSE-GHERKIN-STEP sample.feature:4:1-10",
+    "PARSE-GHERKIN-TAGS sample.feature:1:1-8",
+    "PARSE-GHERKIN-TAGS sample.feature:4:1-8",
+    "PARSE-GHERKIN-TAGS sample.feature:1:1-11",
+    ""
+  ],
+  "stderr": []
+}
