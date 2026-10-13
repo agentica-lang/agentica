@@ -1,7 +1,6 @@
 #lang racket
 
-(require (only-in ffi/unsafe -> _fun _int get-ffi-obj)
-         file/sha1 json racket/os racket/random racket/runtime-path
+(require file/sha1 json racket/os racket/random racket/runtime-path
          "bytecode.rkt" "checker.rkt" "diagnostic.rkt" "lexer.rkt" "lower.rkt"
          "modules.rkt" "parser.rkt" "source.rkt" "vm-launch.rkt")
 
@@ -121,20 +120,26 @@
     (define path (build-path temporary name))
     (define held (and (regexp-match? stale-name (path->bytes name)) (not (equal? path own)) (abandoned? path owner)))
     (when held
-      (with-handlers ([exn:fail? void])
-        (delete-directory/files path #:must-exist? #f))
+      (remove-run-directory path)
       (close-output-port held))))
 
-(define unix-geteuid (get-ffi-obj "geteuid" #f (_fun -> _int) (lambda () #f)))
+(define (remove-run-directory directory)
+  (with-handlers ([exn:fail? void])
+    (for ([name (in-list (directory-list directory))]
+          #:unless (equal? (path->bytes name) #"lock"))
+      (delete-directory/files (build-path directory name) #:must-exist? #f))
+    (delete-directory/files directory #:must-exist? #f)))
 
-(define (shared-and-not-sticky? temporary)
+(define (shared-and-not-sticky? temporary own)
   (define stat (file-or-directory-stat temporary))
+  (define mine (file-or-directory-stat own #t))
   (define mode (hash-ref stat 'mode))
-  (define (writable? bits) (not (zero? (bitwise-and mode bits))))
-  (and (zero? (bitwise-and mode #o1000))
-       (or (writable? #o002)
-           (and (writable? #o020)
-                (not (and unix-geteuid (equal? (hash-ref stat 'user-id) (unix-geteuid))))))))
+  (define (set? bits) (not (zero? (bitwise-and mode bits))))
+  (define (same? key) (equal? (hash-ref stat key) (hash-ref mine key)))
+  (and (not (set? #o1000))
+       (or (set? #o002)
+           (and (set? #o020)
+                (not (and (same? 'user-id) (same? 'group-id) (not (set? #o2000))))))))
 
 (define (message-line text pick)
   (define lines (string-split text "\n"))
@@ -192,35 +197,36 @@
                             (path->string vm) style)]
     [else
      (define temporary (find-system-path 'temp-dir))
-     (define hex (bytes->hex-string (crypto-random-bytes 16)))
-     (define directory (build-path temporary (format "agentica-bdd-~a" hex)))
-     (define current (build-path temporary (format "agentica-bdd-new-~a" hex)))
+     (define (random-name prefix) (build-path temporary (string-append prefix (bytes->hex-string (crypto-random-bytes 16)))))
+     (define directory (random-name "agentica-bdd-"))
+     (define current (random-name "agentica-bdd-new-"))
      (define created? #f)
      (define lock #f)
      (with-handlers ([exn:break? raise])
        (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (message-line (exn-message failure) car) (path->string temporary) style))])
-         (if (shared-and-not-sticky? temporary)
-             (infrastructure-report
-              (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
-              (path->string temporary) style)
-             (dynamic-wind
-               (lambda ()
-                 (parameterize-break #f
-                   (make-directory current #o700)
-                   (set! created? #t)))
-               (lambda ()
-                 (parameterize-break #f
-                   (set! lock (take-lock current))
-                   (rename-file-or-directory current directory)
-                   (set! current directory))
-                 (sweep-stale temporary directory)
-                 (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
-               (lambda ()
-                 (parameterize-break #f
-                   (with-handlers ([exn:fail? void])
-                     (when created? (delete-directory/files current #:must-exist? #f)))
-                   (with-handlers ([exn:fail? void])
-                     (when lock (close-output-port lock)))))))))]))
+         (dynamic-wind
+           (lambda ()
+             (parameterize-break #f
+               (make-directory current #o700)
+               (set! created? #t)))
+           (lambda ()
+             (cond
+               [(shared-and-not-sticky? temporary current)
+                (infrastructure-report
+                 (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
+                 (path->string temporary) style)]
+               [else
+                (parameterize-break #f
+                  (set! lock (take-lock current))
+                  (rename-file-or-directory current directory)
+                  (set! current directory))
+                (sweep-stale temporary directory)
+                (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm)]))
+           (lambda ()
+             (parameterize-break #f
+               (when created? (remove-run-directory current))
+               (with-handlers ([exn:fail? void])
+                 (when lock (close-output-port lock))))))))]))
 
 (define (run-in directory paths step-file style allow-run? seed vm)
   (define runner-file (build-path directory "runner.agcb"))

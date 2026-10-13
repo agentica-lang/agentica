@@ -246,4 +246,6 @@
        (file-or-directory-permissions temporary #o1777)
        (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
        (file-or-directory-permissions temporary #o775)
-       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))))))
+       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
+       (file-or-directory-permissions temporary #o2775)
+       (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))))))
