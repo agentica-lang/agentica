@@ -23,6 +23,8 @@ def struct enum case do import export end if elsif else while for in return try
 true false nil and or not
 ```
 
+`break` and `next` are not reserved words: they can name variables, and as statements they are loop control.
+
 Reserved builtin names cannot be declared as functions, types, variables, import aliases or module names: `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `List`, `Map`, `Result`, `Range`, `Fn`, `Json`, `JSON`, `Task`, `Process`, `ProcessOutput`, `IO`, `System`, `Time`, `Random`, `Test`, `TestCase`, `File`, `Dir`, `Path`, `FileHandle`, `FileInfo`, `TCP`, `TLS`, `HttpWire`, `Socket`, `Listener`, `HttpClient`, `HttpServer`, `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions` and `HttpServerOptions`. `HTTP` is not reserved: it is the usual alias of `std/http`. `ok` and `error` are names, but cannot be declared as functions, variables, parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds for `puts`, `print`, `gets` and `gets!` as variables, parameters, loop variables and pattern bindings.
 
 A trailing `?` or `!` belongs to a lowercase name, whatever follows it: `contains? (s, part)` is valid. `!` is not a suffix before `=`, so `a!=b` is `a != b`. By convention `?` marks a predicate that returns `Bool`, and `!` marks the form that halts the run with an error instead of returning a `Result`. Variables, fields and parameters cannot have the suffix.

@@ -27,11 +27,10 @@ variant_decl     = TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL ;
 qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
+
 A function, struct or enum declaration, exported or not, needs a blank line before the next declaration; a line with only a comment counts. Otherwise `PARSE-MISSING-BLANK-LINE` is reported at the next declaration. Imports may follow each other directly, but an import after a declaration also needs the blank line. Other text after a declaration's `end` is `PARSE-TOP-LEVEL-STATEMENT`.
 
 Struct, enum and function declarations appear only at the top level. There are no user methods, classes, inheritance or nested functions; closures are blocks (§6). The parser accepts type applications such as `List[Int]`. The checker allows them only for supported builtins and declared enums, and only enums take type parameters: generic functions and generic structs are not supported.
-
-### Statements and blocks
 
 ### Statements and blocks
 
@@ -65,11 +64,10 @@ qualified_variant = TYPE_NAME, ".", TYPE_NAME, [ ".", TYPE_NAME ] ;
 pattern_bindings = pattern_binding, { ",", pattern_binding } ;
 pattern_binding  = NAME | "_" ;
 ```
+
 Assignments, `if`, `while` and `for` are statements, not expressions. `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`, with the same checks as the long form.
 
 `break` leaves the innermost `while` or `for`; `next` skips to its next iteration. Both are statements, not reserved words, and they are `CHECK-LOOP-CONTROL` outside a loop of the same function or block: a block cannot break or skip its caller's loop. Inside a block, `return` leaves the block. There are no statement modifiers (`break if x`), no `continue`, and no assignment to fields or indexes.
-
-### Expressions and precedence
 
 ### Expressions and precedence
 
@@ -114,8 +112,9 @@ map_literal      = "{", [ map_entry, { ",", map_entry }, [ "," ] ], "}" ;
 map_entry        = expression, ":", expression ;
 literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 ```
+
 Calls are to named functions, or to function values through `.call(...)`; there are no user methods. Parentheses are required for every call. They may be dropped only for builtin methods, and for module functions without arguments, builtin or reached through an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So `f = Util.helper` calls `helper`; write `&Util.helper` for the function value. `&name` references a declared top-level function without captures. A bare `Enum.Variant` of an enum in the same file is that nullary variant, and `M.Enum.Variant` through an import alias is one too.
 
-`a..b` and `a...b` have the lowest precedence and do not chain: `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator, and `0...n + 1` is `0...(n + 1)`. A method on a range needs parentheses: `(1..5).to_a`. `1..5` lexes as two integers.
+`a..b` and `a...b` have the lowest precedence and do not chain: `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator, and `0...n + 1` is `0...(n + 1)`. A method on a range needs parentheses: `(1..5).to_a`. `1..5` lexes as two integers. A line that ends in `..` or `...` does not continue on the next line.
 
 `and` and `or` short-circuit. Operators group from left to right, except that comparisons and equality do not chain: `a < b < c` is invalid. From high to low, the precedence is: named call, field, index and grouping; unary `-`, `not`, `!` and `try`; `*`, `/`, `%`; `+`, `-`; comparisons; equality; `and`; `or`; ranges. `not` binds tighter than comparisons, so to negate one, write `not (age >= 18)`.
