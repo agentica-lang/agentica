@@ -28,7 +28,8 @@ A first `changes` job diffs the pull request merge commit against its base
 (`git diff HEAD^1 HEAD`). It runs `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
-- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`;
+- `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
+  `src/stdlib.rkt` (the registry that embeds the `std/` modules);
 - `tests/vm-diff-*`, `tests/vm-trace-test.rkt`, `tests/vm-tcp-test.rkt`,
   `tests/fixtures/tcp-peer.js`, `tests/vm-tls-test.rkt`,
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,

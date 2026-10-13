@@ -178,15 +178,11 @@ def quoted_end(chars: List[String], at: Int) -> Int
   return at
 end
 
+# Splitting on escaped backslashes first leaves each other backslash just before the character it escapes.
 def unquote(chars: List[String], at: Int, stop: Int) -> String
-  out = ""
-  i = at + 1
-  while i < stop - 1
-    if chars[i] == "\\"
-      i += 1
-    end
-    out += chars[i]
-    i += 1
+  content = chars.take(stop - 1).drop(at + 1).join("")
+  if not content.include?("\\")
+    return content
   end
-  return out
+  return content.split("\\\\").map do |part| part.replace("\\", "") end.join("\\")
 end

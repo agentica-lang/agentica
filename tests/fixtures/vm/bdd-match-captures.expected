@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 18643,
+  "steps": 17849,
   "stdout": [
     "I close stdin | I close stdin -> []",
     "I close stdin | I close stdin now -> no match",

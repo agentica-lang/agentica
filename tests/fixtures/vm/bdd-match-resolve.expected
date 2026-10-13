@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 42852,
+  "steps": 42334,
   "stdout": [
     "Scenario: Remember 7",
     "scenario state is empty -> scenario state is empty []",
