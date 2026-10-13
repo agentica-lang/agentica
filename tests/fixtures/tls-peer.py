@@ -2,6 +2,7 @@ import os
 import socket
 import ssl
 import sys
+import threading
 
 CERTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tls")
 
@@ -25,6 +26,47 @@ def serve() -> None:
             tls.unwrap()
 
 
+def answer(context: ssl.SSLContext, conn: socket.socket, hang: threading.Event, done: list[str]) -> None:
+    conn.settimeout(20)
+    with context.wrap_socket(conn, server_side=True, suppress_ragged_eofs=False) as tls:
+        path = ""
+        data = b""
+        while True:
+            chunk = tls.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+            while b"\r\n\r\n" in data:
+                head, data = data.split(b"\r\n\r\n", 1)
+                path = head.split(b" ")[1].decode()
+                if path == "/hang":
+                    hang.set()
+                    continue
+                if path == "/ping":
+                    hang.wait(20)
+                tls.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok")
+        done.append("close_notify " + path)
+
+
+def serve_http() -> None:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(os.path.join(CERTS, "server.pem"), os.path.join(CERTS, "server-key.pem"))
+    hang = threading.Event()
+    done: list[str] = []
+    threads = []
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        print(listener.getsockname()[1], flush=True)
+        for _ in range(2):
+            conn, _ = listener.accept()
+            thread = threading.Thread(target=answer, args=(context, conn, hang, done))
+            thread.start()
+            threads.append(thread)
+    for thread in threads:
+        thread.join()
+    for line in sorted(done):
+        print(line, flush=True)
+
+
 def connect(port: int) -> None:
     context = ssl.create_default_context(cafile=os.path.join(CERTS, "ca.pem"))
     with socket.create_connection(("127.0.0.1", port)) as raw:
@@ -43,5 +85,7 @@ def connect(port: int) -> None:
 if __name__ == "__main__":
     if sys.argv[1] == "server":
         serve()
+    elif sys.argv[1] == "http":
+        serve_http()
     else:
         connect(int(sys.argv[2]))

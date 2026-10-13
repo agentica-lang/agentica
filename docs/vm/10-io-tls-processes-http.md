@@ -99,8 +99,8 @@ the behaviour is the same with both.
   close as TCP does. The end of the run does not close sockets one by one
   (10.2.2): `agc_io_goodbye` calls the `goodbye` hook `tcp.c` sets on each
   socket resource, which sends that same one write, and `_exit` closes the
-  descriptor. HTTP client connections have no hook yet, so the end of the
-  run gives them no `close_notify` (20c can add one).
+  descriptor. An `HttpClient` has the same hook for its idle and active
+  connections (10.7.1).
 - **Messages** keep Racket's shapes: "ssl-connect: connect failed
   (detail)", "port->ssl-ports: accept failed (detail)",
   "ssl-load-certificate-chain!: load failed from: \"path\" (detail)",
@@ -791,6 +791,10 @@ HttpWire.close_client(client: HttpClient) -> Void
   body byte; on timeout the connection is closed and the call returns
   "network: operation timed out". `close_client` closes idle connections
   and fails every call in flight with "http: client is closed".
+- At the end of the run the exit path's `goodbye` hook (`client_goodbye`,
+  added in 20c) sends one non-blocking TLS `close_notify` on each HTTPS
+  connection of an `HttpClient`, idle or in use (`agc_conn_goodbye`), as
+  tcp.c does for its sockets.
 - Errors are `http: ` plus the text of 10.6, or the network error text of
   tcp.c for DNS, connect, TLS, read and write failures.
 - `HttpResponse`, `Header`, `HttpClientOptions` and `FileInfo` carry their
@@ -899,10 +903,8 @@ HttpWire.local_port(server: HttpServer) -> Int
   `IO.warn` line (`http: handler error: ...` or `http: invalid response:
   ...`). The loop ends when `write_response` returns anything but
   `ok(true)`.
-- At the end of the run the exit path's `goodbye` hook sends one
-  non-blocking TLS `close_notify` on each HTTPS connection of an
-  `HttpClient`, idle or in use (`agc_conn_goodbye`), as tcp.c does for its
-  sockets; the server's connections are tcp.c sockets and get it there.
+- The server's connections are tcp.c sockets, so the end of the run gives
+  them `close_notify` there (10.3).
 - Turn cost (`AGC_COST_SIZE`): `read_request` charges the body, the header
   count and their bytes when it ends; `write_response` charges the
   response's bytes.

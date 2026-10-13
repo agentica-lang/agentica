@@ -417,7 +417,7 @@ static void free_writer(writer *w) {
   free(w);
 }
 
-static bool delivered(const agc_conn *c) {
+static bool fully_sent(const agc_conn *c) {
   return !agc_conn_closed(c) && agc_conn_write_status(c) >= 0 && agc_conn_sent(c);
 }
 
@@ -425,7 +425,7 @@ static void write_watch(void *watcher) {
   writer *w = watcher;
   agc_conn *c = w->conn;
   if (w->done) return;
-  if (!w->delivered) w->delivered = delivered(c);
+  if (!w->delivered) w->delivered = fully_sent(c);
   if (w->close ? !linger(c) : !(w->delivered || agc_conn_closed(c) || agc_conn_write_status(c) < 0)) return;
   w->done = true;
   agc_conn_unobserve(c, w);
@@ -495,7 +495,7 @@ static agc_value builtin_write_response(agc_vm *vm, agc_value *args, uint32_t sp
   free(out.data);
   if (!c) return agc_error_value(socket_closed);
   if (rc < 0) return agc_system_error(vm, "error writing to stream port", -rc);
-  if (!close && delivered(c)) return agc_result_value(true, agc_bool(true));
+  if (!close && fully_sent(c)) return agc_result_value(true, agc_bool(true));
   writer *w = calloc(1, sizeof(writer));
   if (!w) agc_out_of_memory();
   w->conn = c;
