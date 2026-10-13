@@ -1,6 +1,6 @@
 ## Phase 6: Validate the language design
 
-Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result` + `try` and JSON) are described under Phase 5d3 and use the same task set, so the results compare.
+Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result` + `try` and JSON) are described under Phase 5d3 and 6a in [`01-foundations.md`](01-foundations.md) and use the same task set, so the results compare.
 
 - [x] Ask agents to write and repair small programs using only the grammar and examples (evaluation rounds 1–8, `tests/eval/`).
 - [x] Record correct programs, repair attempts, and whether diagnostics helped identify the fix (`eval-results.md`, `eval-diagnostics.md`).

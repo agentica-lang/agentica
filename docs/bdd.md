@@ -56,6 +56,24 @@ A step accepts one `"""` Doc String, optionally with a media type, or one rectan
 
 Paths to programs under test are relative to the feature file. CLI paths and the step program are relative to the working directory. Programs run with the feature's directory as their working directory.
 
+### Gherkin rules
+
+`std/bdd/gherkin` parses the subset above and returns a `Feature` or the first error, with the same codes, first error and locations as the Racket parser it replaced:
+
+- **Lines.** Empty lines and `#` comment lines are skipped. `# language: en` is accepted; any other `# language:` line is `PARSE-GHERKIN-UNSUPPORTED` ("only English Gherkin is supported").
+- **Tags.** A line that starts with `@` is tags separated by spaces or tabs, each `@` followed by at least one non-space character (`PARSE-GHERKIN-TAGS`, "invalid tags"). They wait for the next `Feature`, `Scenario`, `Example`, `Scenario Outline` or `Examples`. Tags before a step are `PARSE-GHERKIN-TAGS` ("tags must precede a section"), and tags left at the end of the file too ("tags without a section", at line 1). They are copied into the report and never skip anything.
+- **Headings.** `Feature:`, `Background:`, `Scenario Outline:`, `Scenario:`, `Example:` and `Examples:` at the start of the trimmed line, then spaces or tabs, then the name. A name is required except for `Background` and `Examples` (`PARSE-GHERKIN-HEADER`, "a section needs a name"). One `Feature` per file, first (`PARSE-GHERKIN-HEADER`); a missing one is "missing Feature" at line 1.
+- **Background.** At most once, before any scenario, without tags (`PARSE-GHERKIN-HEADER`). Its steps run before each scenario's own steps. A Background without steps is `PARSE-GHERKIN-EMPTY`.
+- **Scenarios.** `Scenario` and `Example` are the same. A scenario without steps is `PARSE-GHERKIN-EMPTY`; a Feature without scenarios too.
+- **Outlines.** `Scenario Outline` needs at least one `Examples`, and `Examples` outside an outline is an error (`PARSE-GHERKIN-EXAMPLES`). After `Examples:`, blank and comment lines are skipped and a table follows, with a header row and at least one row; header cells are not empty and are unique (`PARSE-GHERKIN-EXAMPLES`). Several `Examples` blocks add rows; tags before an `Examples` apply to its rows. Each row becomes a scenario: `<name>` is replaced in the scenario name, the step text, the Doc String and the table cells; a name that is not a column is `PARSE-GHERKIN-PARAMETER` at the row. A scenario's tags are the Feature's, then the scenario's, then the Examples block's.
+- **Steps.** `Given`, `When`, `Then`, `And`, `But`, then spaces or tabs, then the text. A step outside a Background or scenario, or after `Examples`, is `PARSE-GHERKIN-STEP`. `And` and `But` take the kind of the step before them in the same section; with none before, `PARSE-GHERKIN-STEP`. The keyword does not matter for matching; the kind matters only for the `Then` assertion rule.
+- **Doc Strings.** A line that is `"""`, optionally followed by a media type of letters, digits and `_ . / + -` (ignored); anything else after the quotes is `PARSE-GHERKIN-ARGUMENT`. Content lines run to the next line whose trimmed text is `"""`; without one, `PARSE-GHERKIN-ARGUMENT` at the opening line. Each content line loses as many leading spaces or tabs as the opening line's indentation, at most; lines are joined with LF, so a final empty line keeps a final newline.
+- **Data Tables.** Rows are lines that start with `|`, read while they do. A row ends with an unescaped `|`; cells are trimmed; `\|`, `\\` and `\n` are decoded, any other escape or a final lone `\` is an error; every row has the same width; a row has at least one cell. All of these are `PARSE-GHERKIN-TABLE`.
+- **One argument per step.** A Doc String or table must follow a step in a Background or scenario, with no tags waiting, and a step takes at most one (`PARSE-GHERKIN-ARGUMENT`).
+- **Not supported**, each `PARSE-GHERKIN-UNSUPPORTED`: `Rule:`, `Scenario Template:`, `Scenarios:`, `* ` steps, backtick Doc Strings, and a step keyword followed by a colon (`Then: ...`).
+- **Descriptions.** Free text is allowed after a heading as long as the section has no steps yet, no tags are waiting, and it is not after `Examples`; otherwise `PARSE-GHERKIN-STEP` ("unexpected text after steps").
+- **Locations.** Every scenario, step and Examples row keeps its line; a location's column is 1, and a diagnostic's range runs from column 1 to the end of the raw line. File names in locations are the feature file's absolute path.
+
 ## Predefined steps
 
 Step keywords do not affect matching. These exact patterns are available without a step program:
@@ -76,6 +94,21 @@ Step keywords do not affect matching. These exact patterns are available without
 | `stderr is:` | Doc String; compare all of stderr after exit |
 
 Object key order does not affect JSON equality: both lines are compared by their canonical text, `JSON.encode(JSON.parse(line))`. Arrays retain order; value kinds remain distinct. Timeouts must be positive integers.
+
+**How the predefined steps work.** They are handlers in `std/bdd` over the context API:
+
+| Call | How |
+|---|---|
+| `given_program(path)` | The path resolves against the feature's directory; it must exist and end in `.agc`, else `RUNTIME-BDD-PROGRAM`. Starts `agentica [--allow-run] [--seed N] --max-steps 1000000 PATH` with `Process.spawn_captured` in the feature's directory, with a 30-second start timeout; a missing `agentica` is `RUNTIME-BDD-INFRA`. |
+| `when_line(text)`, `when_input(text)` | `Process.send` with or without LF, 5 seconds. `process: stdin is closed` is `RUNTIME-BDD-CONTEXT` ("stdin is already closed"); a timeout is `RUNTIME-BDD-TIMEOUT`; other errors `RUNTIME-BDD-IO`. |
+| `when_eof()` | `Process.close_stdin`, 5 seconds; idempotent. |
+| `then_line(expected, ms)` | `ms` must be positive (`RUNTIME-BDD-TIMEOUT`). `Process.read_line(p, ms)`: equal is an assertion record, different is `RUNTIME-BDD-ASSERTION` with expected and actual; `network: operation timed out` is `RUNTIME-BDD-TIMEOUT`; `process: end of input` is `RUNTIME-BDD-ASSERTION` ("stdout ended before the expected line"); the output limit is `RUNTIME-BDD-OUTPUT-LIMIT`. |
+| `then_json_line(expected, ms)` | As `then_line`, then both lines through `JSON.parse` (either invalid: `RUNTIME-BDD-JSON`), compared by their canonical texts. |
+| `then_stdin_open()` | `Process.send(p, "", 5000)` succeeds (stdin open) and `Process.wait(p, 1)` times out (still running); otherwise `RUNTIME-BDD-ASSERTION`. |
+| `then_exit(code, ms)` | `Process.wait(p, ms)`; a timeout is `RUNTIME-BDD-TIMEOUT`; then `Process.output` must not be truncated (`RUNTIME-BDD-OUTPUT-LIMIT`); then the code is compared. |
+| `then_stdout(expected)`, `then_stderr(expected)` | The program must have exited (`Process.wait(p, 1)`), else `RUNTIME-BDD-CONTEXT` ("complete output requires program exit"). `Process.output(p, 5000)`: stdout is what no line step has read yet; stderr is all of it. |
+
+The VM stores a parsed object's members sorted by key bytes, with a duplicate key keeping its last value, and encodes them in that order (`vm/json.c`), so `JSON.encode(JSON.parse(x))` is canonical and the JSON comparison is one line in `std/bdd`; no JSON parser or sort is written in Agentica. The Gherkin and pattern scanners run in the runner, which has no step limit; what runs in the scenario child (the predefined steps, the JSON comparison) spends the child's step budget, and builtins such as `JSON.parse` and `JSON.encode` cost steps per call, not per byte, so a long JSON line stays cheap.
 
 ## Step programs
 
@@ -121,6 +154,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 
 Patterns support literal text, `{string}` for single or double quoted strings, and `{int}` for decimal digits with an optional minus sign. Captures arrive as strings in order; quoted captures remove delimiters and unescape backslash-prefixed characters. This is a small pattern language, not the full Cucumber Expressions syntax. A pattern used twice (predefined ones included) is `RUNTIME-BDD-DUPLICATE`, and any other `{...}` or a stray brace is `RUNTIME-BDD-PATTERN`; both are errors of the step program at its first line, with the pattern in the message.
 
+**Matching.** `std/bdd/match` compiles and matches patterns by hand, with no regular expressions. A pattern is literal text and placeholders; `{string}` and `{int}` are the only placeholders. Any other `{...}` is `RUNTIME-BDD-PATTERN` ("only {string} and {int} are supported") and a leftover `{` or `}` is `RUNTIME-BDD-PATTERN` ("unmatched pattern braces"). A match is whole-text, tried piece by piece with backtracking: a literal must appear exactly at the current position; `{int}` is an optional `-` and one or more ASCII digits, tried from the longest to the shortest; `{string}` is a double- or single-quoted string in which a backslash escapes the next character, and it ends at the first unescaped closing quote; the match succeeds only at the end of the text. An int capture is the digits as written (`"-3"`). Every step of a scenario is matched against every definition, predefined steps first, before the scenario starts. No match is `CHECK-BDD-UNDEFINED` and two or more is `CHECK-BDD-AMBIGUOUS`, both with the step text (in quotes) as `actual`. The first unresolved step is reported as failed and every other step of that scenario as `not_executed`, and no child starts.
+
 **The context.** A handler gets the scenario's context and returns the context it ends with; the next step gets it, with its own Doc String and table. Every BDD call takes the context first and returns it: use the one it returns. Only `BDD.set` and `BDD.given_program` change it. `BDD.Context` can be named but not built, so a context exists only inside a step. The program under test lives in the context: a handler that drops the context `BDD.given_program` returned loses the program.
 
 **Rules.** `BDD.doc_string` and `BDD.table` without an argument on the step fail with `RUNTIME-BDD-CONTEXT`; `BDD.get` of a missing name is `error("missing scenario state")`. Stream calls before `BDD.given_program` and a second program in a scenario are `RUNTIME-BDD-CONTEXT`. Every `Then` step, including its following `And`/`But`, must perform at least one BDD assertion; every scenario must perform one. A BDD failure ends the step at once; the value after it is never used.
@@ -138,6 +173,64 @@ Patterns support literal text, `{string}` for single or double quoted strings, a
 Each scenario child runs with `--allow-run`, so step handlers can always call `Process.spawn`. BDD gives no isolation from the host: programs run with the host user's permissions and inherited environment. Programs under test are started with the same `agentica` command as the run (Racket and `src/main.rkt` from source, or the packaged executable), with `--allow-run` only when `agentica test` has it, and `--max-steps 1000000`.
 
 Each scenario has a 30-second wall-clock deadline from the start of its child. Program-driving calls without an explicit timeout get 5 seconds, and starting a program 30. A scenario child has 1,000,000 steps per step plus 1,000,000; the budget also pays for `std/bdd`'s own work in the child (decoding steps, the predefined steps, the JSON comparison), but builtins cost steps per call, not per byte. A program's stdout is kept up to 1 MiB unread and its stderr up to 1 MiB, checked after every step without waiting; handler output is bounded to 1 MiB per step. Output over a limit is `RUNTIME-BDD-OUTPUT-LIMIT`. When a scenario ends, its child is closed, and the child's VM stops the program under test; an interrupted `agentica test` stops the runner, which stops its children, and removes its temporary directory. On Linux the runner also ends when the driver is killed outright (`SIGKILL`), and stops its children the same way. Each run holds an exclusive lock on a `lock` file in its temporary directory; the next `agentica test` removes a directory of the same user whose lock it can take, so a killed run's directory goes and a live run's stays, even across PID namespaces or hosts. On a file system without `flock`, `agentica test` fails with `RUNTIME-BDD-INFRA` (exit 2). `agentica test` refuses a temporary directory without the sticky bit that other users can write to, or that its group can write to unless it belongs to your own user and group and has no setgid bit (`RUNTIME-BDD-INFRA`, exit 2): set `TMPDIR` to a private folder. These checks enforce the behaviors specified; they cannot prove coverage of requirements nobody expressed.
+
+## How a run works
+
+```text
+agentica test [PATH...] [--steps FILE]          (Racket driver, src/bdd-driver.rkt)
+  compiles std/test/runner (embedded root) and the step program to two .agcb
+  in a private temporary directory, then runs:
+  agentica-vm --allow-run [--seed N] -- runner.agcb config.jsonl
+    runner (Agentica, our code only):
+      1. list child:     agentica-vm --allow-run --json --max-steps 1000000 [--seed N]
+                           -- steps.agcb --agentica-bdd list
+                         -> the patterns, in order
+      2. per .feature:   parse, expand, match
+      3. per scenario:   agentica-vm --allow-run --json --max-steps M [--seed N]
+                           -- steps.agcb --agentica-bdd scenario
+                         <- one init line, then one line per step (stdin)
+                         -> records: assert, end, fail (stdout)
+                         -> on a crash: the --json diagnostic (last stderr line)
+           a step may start the program under test:
+             agentica [--allow-run] [--seed N] --max-steps 1000000 FILE.agc
+             (cwd = the feature's directory)
+      4. the report: plain, --ai or --json on stdout; System.exit(0, 1 or 2)
+```
+
+- **The runner is a separate, fixed program**, not the user's step program. User code never runs in the process that writes the report: the user's `main` runs only in children, always under a step limit, a deadline and captured output. So a step program that prints, loops or crashes in `main` still gives a clean report with a file error.
+- **The step program is both the list child and the scenario child**: one `.agcb`, two modes chosen by `System.args`. Patterns, predefined steps and user steps come from the same `BDD.run(steps)` call in both modes, so the step numbers the runner sends match the ones the child runs.
+- Scenarios run one at a time. A VM starts in about a millisecond, so a child per scenario is cheap next to what most scenarios already pay: each `the Agentica program "..."` step starts the `agentica` CLI.
+- **Starting a scenario child.** `M` is 1,000,000 times (the number of steps + 1). `--json` makes the child's last stderr line its diagnostic. `--allow-run` is always given, because the child starts the program under test. The child's working directory is the runner's. The list child is the same command with `list`, `--max-steps 1000000` and a 30-second limit; how it ends is read as for a step, and any failure is a file error of the step program, and then no scenario runs.
+- **Protocol.** One record per line of JSON. A record that the child writes starts with the marker U+001E followed by `agentica-bdd ` and the JSON; the runner looks for the marker anywhere in a line, and treats everything else on the child's stdout as handler output. The child reads its stdin with `IO.gets` and writes records with `IO.print` and `IO.flush`. The runner sends a step only after the previous one ended.
+
+| Direction | Line | Meaning |
+|---|---|---|
+| runner to child, first | `{"base":"/abs/dir/of/feature","agentica":["/usr/bin/racket","/abs/src/main.rkt"],"allow_run":false,"seeded":true,"seed":9}` | Scenario settings: where program paths resolve and programs run, how to start `agentica`, and what to pass to programs under test |
+| runner to child | `{"index":2,"definition":14,"pattern":"I remember {int}","captures":["7"],"has_doc":true,"doc":"{\"value\":7}","has_table":false,"table":[]}` | Run step 2 with definition 14 (in `BDD.run`'s order, predefined steps first). The child checks that `pattern` is the pattern of its definition 14; a mismatch (a step program that builds its list differently from run to run) is a `fail` record with `RUNTIME-BDD-INFRA`. `has_*` stand in for optional fields |
+| runner to child | end of stdin | No more steps: `BDD.run` ends the child with `System.exit(0)` (it never returns) |
+| child to runner | `{"event":"assert"}` | One passing assertion, from any task |
+| child to runner | `{"event":"end","index":2}` | The handler returned, with no task left running |
+| child to runner | `{"event":"fail","code":"RUNTIME-BDD-ASSERTION","message":"...","expected":"...","actual":"..."}` | A BDD failure (`expected` and `actual` only when known); the child then exits 1 |
+| list child to runner | `{"event":"step","pattern":"..."}`, then `{"event":"ready"}` | The definitions in order, then done |
+
+**How the runner reads a step's outcome.** After sending step `i` it reads the child's stdout with `Process.read_line`, up to the scenario deadline:
+
+| What happens | Step `i` | Scenario error |
+|---|---|---|
+| `end` and step `i` is a `Then` (or its `And`/`But`) with no `assert` since it was sent | failed | `RUNTIME-BDD-NO-ASSERTION` ("Then must perform a BDD assertion"); the runner closes the child |
+| `end` otherwise | passed | none; the next step is sent |
+| `fail` record | failed | that record's code, message, expected and actual, located at the step |
+| end of stdout, and the last stderr line is a JSON diagnostic | failed | that diagnostic as it is (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-STEP-LIMIT`, `RUNTIME-UNWRAP-ERROR`, ...), with its own span in the step program |
+| end of stdout otherwise (a `System.exit`, even 0, or an exit without a diagnostic) | failed | `RUNTIME-BDD-PREMATURE-EXIT` ("step exited prematurely", with the exit code in the message) |
+| the deadline passes | failed | `RUNTIME-BDD-TIMEOUT`; the read times out, which closes the child |
+| handler output over 1 MiB (non-record stdout, or stderr) | failed | `RUNTIME-BDD-OUTPUT-LIMIT`. Stdout is counted by the runner as it reads. Stderr needs no wait: once either captured stream is truncated, every stdout read of that child fails with the truncation error, a read already waiting wakes with it, and a zero-byte `Process.read_bytes` returns it at once. So a child that floods stderr fails the step it is in, and the runner also probes after every `end` |
+
+Every step after a failed one is `not_executed`. After the last step passes, the runner closes the child's stdin, waits for exit 0, and fails the scenario with `RUNTIME-BDD-NO-ASSERTION` ("scenario performed no BDD assertions") when no step asserted. The runner closes the child (`Process.close`) on every path.
+
+- **Pending tasks.** On entry, `BDD.run` checks `Task.pending_count() == 0`: a `main` that leaves tasks running gets a `fail` record with `RUNTIME-BDD-PENDING-TASKS`, which the runner reports as a file error of the step program. After a handler returns, the child calls `Task.pending_count()`; above zero is a `fail` record with `RUNTIME-BDD-PENDING-TASKS`. Without this check, a task left running would be cancelled silently when the child exits, and an assertion it would have failed would never be reported. Assertions made by tasks that ended before the handler returned count for that step. Then, if a program under test is running, the child probes it with a zero-byte `Process.read_bytes`; a truncated stream is a `fail` record with `RUNTIME-BDD-OUTPUT-LIMIT`, so output over the limit fails the step in which it happened.
+- **Cleanup.** When the child ends, the VM kills and reaps the program under test (`docs/vm/10-io-processes.md` §10.4). The runner closes each child with `Process.close` (or a read timeout closes it), which for a captured child sends `SIGTERM` first and `SIGKILL` after one second, so the child VM's own signal handling kills the program under test before it dies; the `agentica` CLI it started then takes its VM with it (`PR_SET_PDEATHSIG`, `vm/main.c`). If `agentica test` is interrupted, `SIGINT` reaches the whole foreground process group, and on a break the driver kills the runner VM with `SIGTERM`; each VM's signal handling then kills its own children.
+- **Seeds.** With `--seed N`, every scenario child and every program under test gets `--seed N`, so handlers and programs repeat.
+- **Driver.** `src/bdd-driver.rkt` parses the options (usage errors print a report with `RUNTIME-BDD-USAGE` and exit 2; two `--steps` is one), compiles the step program (a front-end or `LOWER-` diagnostic is a file error of the step program, exit 1; a file that cannot be read is `RUNTIME-BDD-INFRA`, exit 2) and the runner from its embedded root, and writes both `.agcb` files and the configuration into a private temporary directory. The configuration is `config.jsonl`: its first line is the settings as JSON, decoded with `JSON.decode` into a struct, then one line per discovered file or discovery error, so a long list never meets the argument limit or the 1 MiB line limit. The VM path is found as for a normal run (`AGENTICA_VM`, then next to the executable or the checkout). The driver removes `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` from the runner VM's environment, so every child inherits the cleaned environment. If the runner exits 0, 1 or 2 with an empty stderr, the driver prints its stdout and exits with its code; otherwise (a bug in the runner, a missing VM) it prints a report with one `RUNTIME-BDD-INFRA` file error that names the runner's diagnostic, and exits 2. The report is built by `std/test/report`; the plain and `--ai` texts print `PASS` or `FAIL`, the feature and the scenario, the diagnostic on the next line (plain) or after ` | ` (`--ai`), with `; expected ...; actual ...` in the inspect form, and the last line `N passed, N failed, N not executed, N file errors`.
 
 ## Changes from the Racket BDD
 
@@ -183,3 +276,13 @@ Each scenario has a 30-second wall-clock deadline from the start of its child. P
 | `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`, `RUNTIME-BDD-USAGE` | program or handler output over 1 MiB; a stream I/O failure, a feature file or a step line over 1 MiB; a missing executable, VM or feature path, an unreadable folder or broken `.feature` link, a step program that cannot be read or that breaks the record protocol, or a runner failure; bad command-line usage, such as two `--steps` |
 
 A step program that does not compile reports its own front-end or `LOWER-` diagnostic as a file error, and a crash in a step reports the VM's diagnostic (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-STEP-LIMIT`, ...) with its span in the step program.
+
+## Decided against
+
+- **Port BDD to C.** It would be the biggest C module after HTTP, all of it pure computation over strings (std-first says no), and handlers would still need a way to fail one scenario without ending the run.
+- **One process for the whole suite.** A crash, a `System.exit` or a step limit in a handler would end every scenario. Agentica has no exceptions, and adding them for BDD is not worth a second error model.
+- **One process per step.** State and the program under test would have to cross processes, and there would be many more processes.
+- **The user's step program as the runner.** Its `main` would run with `--allow-run` and no limit in the process that writes the report; a `puts` in `main` would break the JSON report.
+- **The runner starts the programs under test and proxies their streams**, so handlers would not need `--allow-run`. Without channels a child cannot match replies to its tasks, so a receive task next to a send would break. And a limit list such as `--allow-run-only PATH` is no boundary: a handler could start `agentica --allow-run` with any program. The owner decided on 2026-10-12 that handlers may always spawn.
+- **An implicit context with module state.** Agentica has no mutable globals, by design.
+- **A result file instead of records on stdout.** It needs a temporary directory per scenario and gives no progress while the child runs; the marker on stdout costs nothing.
