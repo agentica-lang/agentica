@@ -204,7 +204,8 @@ and cost one predictable branch each.
   §31).
 - The refusal (20a, §30.8 of `docs/future/`). Some builtins run only on the
   VM (`vm-only-builtins` in `src/builtins.rkt`: every `HttpWire` builtin,
-  which `std/http` calls). Before the evaluator gets a program, each place
+  which `std/http` calls, and, from 21a, `Process.spawn_captured` and
+  `Process.output`). Before the evaluator gets a program, each place
   that hands it one calls `check-vm-only` (`src/lower.rkt`), which walks
   the checked program and returns a `LOWER-UNSUPPORTED` diagnostic at the
   first VM-only call, or `#f`. Its message says why the evaluator would
@@ -287,9 +288,12 @@ and cost one predictable branch each.
   bound `port`, the number of bound `addresses`), tcp_accept (`listener`,
   the new `socket`), tcp_accept_error, tcp_eof (`error=0` at EOF),
   tcp_close (`socket` or `listener`,
-  `why=close|timeout|line|accept|failed|exit`); `proc` spawn,
-  spawn_failed (`rc`, or `reason=unresolved` when the executable is not
-  found), exit, close, kill, reap, eof (`pipe=stdin|stdout|stderr`),
+  `why=close|timeout|line|accept|failed|exit`); `proc` spawn
+  (`captured=0|1`), spawn_failed (`rc`, `reason=unresolved` when
+  the executable is not found, or `reason=dir` when a captured child's
+  directory is not one), exit, close, term (the `SIGTERM` of a captured
+  child), kill, reap, eof (`pipe=stdin|stdout|stderr`), truncated
+  (`pipe=stdout|stderr`, a captured stream past 1 MiB),
   stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
   `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
   collect (`at=turn|end`); `tls` (10.3) tls_handshake (`socket`, or

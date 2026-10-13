@@ -780,6 +780,101 @@
           (close-input-port out)
           (close-input-port err))))
 
+    (test-case "closing a captured VM child sends SIGTERM first, so the child stops its own children"
+      (define inner (build-path work "captured-inner.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n"
+        "  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $PPID $$; exec sleep 30\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(5000)\nend\n")
+       inner)
+      (define outer (build-path work "captured-outer.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  args = System.args()\n"
+        "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"--allow-run\", \"--\", args[1]], \".\", 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(child, 60000)))\n"
+        "  if args[2] == \"close\"\n    Process.close(child)\n  else\n    IO.inspect(Process.read_line(child, 200))\n  end\nend\n")
+       outer)
+      (define inner-code (build-path work "captured-inner.agcb"))
+      (define outer-code (build-path work "captured-outer.agcb"))
+      (compile-file inner inner-code)
+      (compile-file outer outer-code)
+      (for ([mode (in-list '("close" "timeout"))])
+        (define pids '())
+        (dynamic-wind
+          void
+          (lambda ()
+            (define result
+              (parameterize ([fixture-allow-run #t])
+                (run-vm outer-code #f #:timeout run-timeout (path->string vm-file) (path->string inner-code) mode)))
+            (define lines (string-split (second result) "\n"))
+            (set! pids (if (pair? lines) (filter (lambda (word) (string->number word)) (string-split (first lines))) '()))
+            (check-equal? (first result) 0 mode)
+            (check-equal? (rest lines) (if (equal? mode "close") '() '("error(\"network: operation timed out\")")) mode)
+            (check-equal? (length pids) 2 mode)
+            (for ([pid (in-list pids)])
+              (check-false (directory-exists? (build-path "/proc" pid)) (format "~a: ~a" mode pid))))
+          (lambda ()
+            (for ([pid (in-list pids)] #:when (directory-exists? (build-path "/proc" pid)))
+              (unix-kill (string->number pid) sigkill))))))
+
+    (test-case "close never waits for a captured child; one that ignores SIGTERM gets SIGKILL a second later"
+      (define program (build-path work "captured-grace.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  mode = System.args()[0]\n"
+        "  script = \"trap '' TERM; echo $$; exec sleep 30\"\n"
+        "  if mode == \"quick\"\n    script = \"echo $$; exec sleep 30\"\n  end\n"
+        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", script], \".\", 60000))\n"
+        "  pid = Result.unwrap!(Process.read_line(p, 60000))\n  puts(pid)\n  IO.flush()\n"
+        "  start = Time.monotonic_ms()\n  Process.close(p)\n  puts(Time.monotonic_ms() - start)\n"
+        "  if mode == \"wait\"\n    Task.sleep(1500)\n"
+        "    puts(Result.ok?(File.stat(\"/proc/#{pid}\", 60000)))\n  end\nend\n")
+       program)
+      (define bytecode (build-path work "captured-grace.agcb"))
+      (compile-file program bytecode)
+      (define traced? (not (regexp-match? #rx"trace off" (second (run-process vm-file "--version")))))
+      (define env (environment-variables-copy (current-environment-variables)))
+      (environment-variables-set! env #"AGENTICA_VM_TRACE" #"io")
+      (for ([mode (in-list '("wait" "exit" "quick"))])
+        (define pid #f)
+        (dynamic-wind
+          void
+          (lambda ()
+            (define result
+              (parameterize ([fixture-allow-run #t] [current-environment-variables env])
+                (run-vm bytecode #f #:timeout run-timeout mode)))
+            (define lines (string-split (second result) "\n"))
+            (set! pid (and (pair? lines) (string->number (first lines)) (first lines)))
+            (check-equal? (first result) 0 mode)
+            (check-pred string? pid mode)
+            (check-true (and (>= (length lines) 2) (< (string->number (second lines)) 500)) (format "~a: ~a" mode lines))
+            (check-equal? (list-tail lines (min 2 (length lines))) (if (equal? mode "wait") '("false") '()) mode)
+            (when (string? pid)
+              (check-false (directory-exists? (build-path "/proc" pid)) mode))
+            (check-false (regexp-match? #rx"hard_exit" (third result)) mode)
+            (when traced?
+              (check-true (regexp-match? #rx"close resources=0 settled=1" (third result)) mode)))
+          (lambda ()
+            (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
+              (unix-kill (string->number pid) sigkill))))))
+
+    (test-case "an output timeout keeps the captured child, and output decodes invalid UTF-8 as U+FFFD"
+      (define program (build-path work "captured-output.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n"
+        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", \"printf '\\\\377' >&2; sleep 1; echo hi\"], \".\", 60000))\n"
+        "  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
+        "  puts(\"#{out.stdout.inspect} #{out.stderr.length} #{String.code(out.stderr)} #{out.truncated}\")\n"
+        "  Process.close(p)\nend\n")
+       program)
+      (define bytecode (build-path work "captured-output.agcb"))
+      (compile-file program bytecode)
+      (check-equal? (parameterize ([fixture-allow-run #t]) (run-vm bytecode #f #:timeout run-timeout))
+                    (list 0 "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n" "")))
+
     (test-case "a signal caught while the VM is blocked is not lost when the last child exits first"
       (define program (build-path work "signal-pending.agc"))
       (display-to-file

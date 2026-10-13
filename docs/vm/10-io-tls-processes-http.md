@@ -461,6 +461,57 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
     under it. Only timing can differ.
   - Error texts of failed system calls follow `agc_system_error`.
 
+**As built (21a, captured processes, Linux).** `Process.spawn_captured`
+and `Process.output` (`docs/future/31-bdd-in-agentica.md` §31.9) live in
+`vm/process.c` beside the eight builtins above and share their code; a
+`proc` has a `captured` flag.
+
+- **Spawn.** `spawn_child` serves both spawns. The checks keep the order
+  above, with `dir` (nonempty, no NUL) after the arguments and before the
+  timeout. The command resolves first, against the VM's working directory;
+  then `dir` becomes a host path like a file path (raw `getcwd` bytes for a
+  relative one) and must be a directory (`stat`), else "directory is
+  unavailable" (trace `spawn_failed reason=dir`). It goes to
+  `uv_process_options_t.cwd`; `"."` passes no `cwd` at all.
+- **Reading.** Both pipes are read from the spawn on, never stopped, into
+  two `agc_inbuf`s: `out_buf` (the one `read_line` and `read_bytes` use)
+  and `err_kept`. A chunk is read straight into the buffer while 4 KiB
+  more still fits under 1 MiB of pending bytes; nearer the limit it is
+  read into the 4 KiB scratch buffer and only what fits is copied
+  (`keep_scratch`), so a buffer's capacity never passes 1 MiB. A byte
+  that does not fit marks the stream (`out_cut`, `err_cut`), and its later
+  chunks are read into the scratch buffer and dropped, so the child never
+  blocks. For stdout the
+  limit counts unread bytes, so reading makes room again until the first
+  cut; stderr is never consumed. A cut readies the waiting reader, and
+  `read_ready` and `take` check the two marks before the buffer, so a
+  zero-byte `read_bytes` returns the error without parking.
+- **Output.** `Process.output` is a wait like `Process.wait` (same list,
+  no lock, the same `await_child` path); its condition is stdout at EOF or
+  a read error and stderr at EOF. The record is built from the pending
+  bytes with U+FFFD for invalid UTF-8 (`agc_utf8_decode`), nothing is
+  consumed, and the call charges a turn cost by the bytes it copies. The
+  lowerer appends `ProcessOutput` to the struct table as it does
+  `FileInfo`; the C side finds it with `agc_builtin_struct`.
+- **Close.** `shut` sends `SIGTERM` to a running captured child and starts
+  a 1-second `uv_timer_t` (`grace`); the pipes close and the program sees
+  "process is closed" at once. The timer sends `SIGKILL`; libuv's exit
+  callback reaps the child and closes the process handle and the timer
+  (`retire`), so `Process.close` and a stream timeout never block. The
+  end of the run (and a stop signal) first sends `SIGKILL` to plain
+  children and `SIGTERM` to captured ones that have not had it, polls the
+  captured ones under one 1-second deadline (`outlast`), then sends
+  `SIGKILL` to those left and reaps everything under a second 1-second
+  deadline. A captured child that handles `SIGTERM` quickly ends the
+  cleanup in milliseconds; one that ignores it holds the run about one
+  second, and only a child stuck in the kernel can make it two. A failed
+  `SIGTERM` in `Process.close` is `RUNTIME-PROCESS-CLOSE`, as a failed
+  kill is.
+- **Refusal.** Both names are in `vm-only-builtins`, so the fallback,
+  `--legacy-eval` and `agentica test` step files stop with
+  `LOWER-UNSUPPORTED` (`docs/vm/08-loader-and-cli.md` §9) before the
+  evaluator could see them.
+
 ### 10.5 Limits the C runtime keeps
 
 | Limit | Value | Racket source |

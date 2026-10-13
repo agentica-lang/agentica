@@ -26,7 +26,7 @@
 (define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient))
 
 (define builtin-structs
-  (for/list ([name (in-list '("FileInfo" "Header" "HttpResponse" "HttpClientOptions"))])
+  (for/list ([name (in-list '("FileInfo" "Header" "HttpResponse" "HttpClientOptions" "ProcessOutput"))])
     (define fields (hash-ref builtin-records name))
     (ir-struct name (map car fields) (map cdr fields))))
 
@@ -182,7 +182,8 @@
                       "TCP.connect" "TCP.listen" "TCP.accept" "TCP.local_port" "TCP.close_listener"
                       "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"
                       "TLS.connect" "TLS.listen"
-                      "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"))
+                      "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
+                      "Process.spawn_captured" "Process.output"))
 
 (define (walk-ast node visit)
   (define seen (make-hasheq))
@@ -218,9 +219,10 @@
                                              (source-name (source-span-source span)) (call-name node) reason)
                                      span
                                      #:help (string-append
-                                             "a program that imports \"std/http\" runs only on the VM, even when it uses "
-                                             "only a pure helper such as header_values; keep HTTP and BDD builtins, "
-                                             "--legacy-eval and agentica test step files out of it"))))
+                                             "a program that imports \"std/http\" or calls Process.spawn_captured or "
+                                             "Process.output runs only on the VM, even when it uses only a pure helper "
+                                             "such as header_values; keep HTTP and BDD builtins, --legacy-eval and "
+                                             "agentica test step files out of it"))))
                 #f))
     #f))
 
