@@ -2,7 +2,7 @@
 
 The VM core is the scheduler, the loop and the runtime under them (`vm/task.c`, `vm/loop.c`, `vm/input.c`, `vm/files.c`, `vm/process.c`, `vm/tcp.c` and the HTTP and TLS code on top). It must stay small enough that one person can hold it in their head. A blocked `read()` on a thread-pool thread once made the VM hang at exit: the exit path joined the pool, and the pool waited for a FIFO that never wrote. This section is the answer: **one way for each job**. A reviewer checks every core PR against these rules. A PR that breaks one either changes the rule here first, with the reason, or does not merge.
 
-Each rule says what is **as built** today and what is **being built** or is a **target**. The details stay in §10.2.1 and §10.2.2 ([`10-io-scheduler.md`](10-io-scheduler.md)), §10.4 ([`10-io-tls-processes-http.md`](10-io-tls-processes-http.md)), §30.6 and §37.
+Each rule says what is **as built** today and what is **being built** or is a **target**. The details stay in §10.2.1 and §10.2.2 ([`10-io-scheduler.md`](10-io-scheduler.md)), §10.4 ([`10-io-processes.md`](10-io-processes.md)), §30.6 and §37.
 
 ### 14.1 Waiting
 

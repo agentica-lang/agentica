@@ -155,7 +155,9 @@ The design is split by topic. Section numbers stay as they were, so a reference 
 | 10, 10.0, 10.1 | Dependencies and platforms, linking OpenSSL, libuv | [`10-dependencies-and-platforms.md`](10-dependencies-and-platforms.md) |
 | 10.2, 10.2.1, 10.2.2 | Rules for 7h, the scheduler, the loop | [`10-io-scheduler.md`](10-io-scheduler.md) |
 | 10.2.3 | Multicore: M:N schedulers | [`10-io-multicore.md`](10-io-multicore.md) |
-| 10.3 to 10.6 | TLS, TCP (10.3.1), processes, limits the C runtime keeps, HTTP parsing | [`10-io-tls-processes-http.md`](10-io-tls-processes-http.md) |
+| 10.3, 10.3.1 | TLS, TCP | [`10-io-tls.md`](10-io-tls.md) |
+| 10.4, 10.5 | Processes, limits the C runtime keeps | [`10-io-processes.md`](10-io-processes.md) |
+| 10.6, 10.7 | HTTP parsing; HTTP on the VM (the hybrid split, decisions, client, server, answers, tests) | [`10-io-http.md`](10-io-http.md) |
 | 11 | Build, CI and supply chain | [`11-build-ci-supply-chain.md`](11-build-ci-supply-chain.md) |
 | 12, 13 | Testing and first PRs (12.2 is the PR plan); open questions | [`12-testing-and-pr-plan.md`](12-testing-and-pr-plan.md) |
 | 14 | VM core invariants: one way to wait, time out, cancel, end and own a handle; the entry rule for the core | [`14-core-invariants.md`](14-core-invariants.md) |
