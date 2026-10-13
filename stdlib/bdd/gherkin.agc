@@ -480,38 +480,48 @@ def table_row(row: String) -> Result[List[String]]
   if not row.end_with?("|")
     return error("a table row must end with |")
   end
-  cells: List[String] = []
-  cell = ""
-  escaped = false
-  for c in row.split("").drop(1)
-    if escaped
-      if c == "n"
-        cell += "\n"
-      elsif c == "|" or c == "\\"
-        cell += c
-      else
-        return error("invalid table escape")
-      end
-      escaped = false
-    elsif c == "\\"
-      escaped = true
-    elsif c == "|"
-      cells = cells.push(cell.strip)
-      cell = ""
-    else
-      cell += c
-    end
+  body = rest_of(row, 1)
+  chars = body.split("")
+  ends = (0...chars.size).to_a.filter do |i| chars[i] == "|" and even_run?(chars, i) end
+  starts = [0].concat(ends.map do |i| i + 1 end)
+  raws = (0...ends.size).to_a.map do |k| body.slice(starts[k], ends[k] - starts[k]) end
+  rest = rest_of(body, starts[ends.size])
+  cells = collect(raws.concat([rest]).map(&unescape_cell))
+  if not cells.ok?
+    return cells
   end
-  if escaped
-    return error("unfinished table escape")
-  end
-  if cell != ""
+  if rest != ""
     return error("a table row must end with an unescaped |")
   end
-  if cells.size == 0
+  if ends.size == 0
     return error("a table row needs at least one cell")
   end
-  return ok(cells)
+  return ok(cells.unwrap!.take(ends.size).map do |cell| cell.strip end)
+end
+
+def even_run?(chars: List[String], at: Int) -> Bool
+  i = at
+  while i > 0 and chars[i - 1] == "\\"
+    i -= 1
+  end
+  return (at - i) % 2 == 0
+end
+
+def unescape_cell(raw: String) -> Result[String]
+  parts = raw.split("\\\\").map do |part| part.replace("\\|", "|").replace("\\n", "\n") end
+  if parts.any? do |part| part.include?("\\") end
+    return error("invalid table escape")
+  end
+  return ok(parts.join("\\"))
+end
+
+def collect(results: List[Result[String]]) -> Result[List[String]]
+  for result in results
+    if not result.ok?
+      return error(result.message)
+    end
+  end
+  return ok(results.map do |result| result.unwrap! end)
 end
 
 def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: ExampleRow) -> Result[Scenario]
@@ -531,11 +541,7 @@ def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Re
     Argument.DataTable(rows) ->
       replaced: List[List[String]] = []
       for cells in rows
-        out: List[String] = []
-        for cell in cells
-          out = out.push(try substitute(cell, bindings))
-        end
-        replaced = replaced.push(out)
+        replaced = replaced.push(try collect(cells.map do |cell| substitute(cell, bindings) end))
       end
       return ok(Argument.DataTable(replaced))
     Argument.NoArgument -> return ok(argument)
@@ -547,29 +553,22 @@ def substitute(text: String, bindings: Map[String, String]) -> Result[String]
   if not text.include?("<")
     return ok(text)
   end
-  chars = text.split("")
-  out = ""
-  i = 0
-  while i < chars.size
-    j = i + 1
-    if chars[i] == "<"
-      while j < chars.size and chars[j] != "<" and chars[j] != ">"
-        j += 1
-      end
-      if j < chars.size and chars[j] == ">" and j > i + 1
-        name = text.slice(i + 1, j - i - 1)
-        if not bindings.has_key?(name)
-          return error(name)
-        end
-        out += bindings[name]
-        j += 1
-      else
-        out += text.slice(i, j - i)
-      end
-    else
-      out += chars[i]
-    end
-    i = j
+  parts = text.split("<")
+  pieces = collect(parts.drop(1).map do |part| substitute_part(part, bindings) end)
+  if not pieces.ok?
+    return error(pieces.message)
   end
-  return ok(out)
+  return ok(parts[0] + pieces.unwrap!.join(""))
+end
+
+def substitute_part(part: String, bindings: Map[String, String]) -> Result[String]
+  close = part.index_of(">").unwrap_or(0)
+  if close == 0
+    return ok("<" + part)
+  end
+  name = part.slice(0, close)
+  if not bindings.has_key?(name)
+    return error(name)
+  end
+  return ok(bindings[name] + rest_of(part, close + 1))
 end
