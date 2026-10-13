@@ -1,14 +1,27 @@
 @use "tokens" as *;
 
+.content .page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+
+  h1 {
+    min-width: 0;
+    margin: 0;
+  }
+}
+
 .page-actions {
   display: none;
   position: relative;
-  float: right;
-  margin: 0.35rem 0 0.75rem 1rem;
+  flex: none;
+  margin-top: 0.35rem;
   font-size: 0.875rem;
   line-height: 1.25;
 
-  .js & {
+  &.ready {
     display: block;
   }
 
@@ -67,10 +80,6 @@
 }
 
 .page-actions.no-copy {
-  [data-copy] {
-    display: none;
-  }
-
   .page-actions-label {
     display: inline;
   }

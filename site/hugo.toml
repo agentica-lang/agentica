@@ -35,6 +35,7 @@ disableKinds = ["taxonomy", "term", "rss"]
 
 [[cascade]]
   title = "Language specification"
+  description = "The formal grammar and rules of the Agentica language."
   weight = 4
   [cascade.target]
     path = "/reference"

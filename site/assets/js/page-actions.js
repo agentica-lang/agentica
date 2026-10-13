@@ -28,6 +28,7 @@ if (root) {
   const clipboard = window.isSecureContext ? navigator.clipboard : undefined;
   if (!clipboard || !clipboard.writeText) {
     root.classList.add("no-copy");
+    for (const element of root.querySelectorAll("[data-copy]")) (element.closest("li") ?? element).remove();
     toggle.setAttribute("aria-label", "Page actions");
   } else {
     let timer;
@@ -60,4 +61,5 @@ if (root) {
       });
     }
   }
+  root.classList.add("ready");
 }

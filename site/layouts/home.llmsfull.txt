@@ -1,12 +1,8 @@
-{{- $pages := slice . -}}
-{{- range .Pages.ByWeight -}}
-  {{- $pages = $pages | append . -}}
-  {{- if .IsSection }}{{ $pages = $pages | append .Pages.ByWeight }}{{ end -}}
-{{- end -}}
 # {{ site.Title }} documentation
 
 > {{ site.Params.description }}
-{{- range $pages }}
+{{- range partial "llms-groups.html" . }}
+{{- range .pages }}
 {{- $md := partial "page-markdown.html" . }}
 
 # {{ $md.title }}
@@ -14,4 +10,5 @@
 Source: {{ (.OutputFormats.Get "markdown").Permalink }}
 
 {{ $md.body }}
+{{- end }}
 {{- end }}
