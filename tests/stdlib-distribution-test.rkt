@@ -43,7 +43,7 @@
                        [current-output-port out] [current-error-port err])
           (define bin (build-path relocated "bin"
                                   (if (eq? (system-type 'os) 'windows) "agentica.exe" "agentica")))
-          (check-true (system* bin program)))
+          (check-true (system* bin program) (get-output-string err)))
         (check-equal? (get-output-string err) "")
         (check-equal? (get-output-string out) "embedded\n"))
       (lambda () (delete-directory/files directory)))))

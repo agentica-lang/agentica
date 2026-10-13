@@ -440,6 +440,7 @@ static const builtin_table tables[] = {
   {agc_process_builtins, &agc_process_builtin_count},
   {agc_tcp_builtins, &agc_tcp_builtin_count},
   {agc_http_builtins, &agc_http_builtin_count},
+  {agc_test_builtins, &agc_test_builtin_count},
 };
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {

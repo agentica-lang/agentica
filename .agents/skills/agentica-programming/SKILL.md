@@ -31,6 +31,7 @@ Read only the files the task needs:
 | [references/tasks.md](references/tasks.md) | runs work concurrently (`Task`) |
 | [references/network.md](references/network.md) | uses TCP, TLS, or the HTTP client (`import "std/http" as HTTP`) |
 | [references/bdd.md](references/bdd.md) | writes `.feature` specifications or a BDD step program (`import "std/bdd" as BDD`, run by `agentica test`) |
+| [references/testing.md](references/testing.md) | writes unit tests (`Test.test`, `Test.eq`, `Test.run`) |
 | [references/diagnostics.md](references/diagnostics.md) | hits a diagnostic code whose meaning or fix is unclear |
 
 For fixed JSON records, prefer structs with typed fields. Use `Json`/`JSON.object` for genuinely dynamic data; maps and lists are homogeneous. For stdio protocols, write one message per line, flush stdout with `IO.flush()`, and send logs to stderr with `IO.warn()`.

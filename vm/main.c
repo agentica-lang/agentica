@@ -402,7 +402,8 @@ static int run(int argc, char **argv) {
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");
   vm->rt->no_turn_cost = no_turn_cost && strcmp(no_turn_cost, "1") == 0;
-  agc_random_seed(&vm->main->random, seen_seed ? seed : entropy_seed());
+  vm->rt->seed = seen_seed ? seed : entropy_seed();
+  agc_random_seed(&vm->main->random, vm->rt->seed);
   vm->rt->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
   agc_outcome outcome = agc_vm_run(vm);

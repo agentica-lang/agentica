@@ -77,10 +77,7 @@ uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
 static bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
   if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
-  const agc_string *x = agc_as_string(vm, a), *y = agc_as_string(vm, b);
-  if (x->bytes != y->bytes) return false;
-  agc_charge_bytes(vm, x->bytes);
-  return x->bytes == 0 || memcmp(x->data, y->data, x->bytes) == 0;
+  return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
 }
 
 static agc_hamt *new_node(uint32_t bitmap, uint32_t n) {
