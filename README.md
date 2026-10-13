@@ -3,7 +3,7 @@
 Interpreter for the Agentica language: a Racket front end and a bytecode VM
 in C. Agentica is Ruby
 with static types: Ruby-like syntax, checked before running, with immutable
-values. The language is defined in [`docs/grammar/`](docs/grammar.md); the
+values. The language is defined in [`docs/grammar.md`](docs/grammar.md); the
 self-contained reference for agents writing Agentica is the
 [`agentica-programming` skill](.agents/skills/agentica-programming/SKILL.md).
 Planned syntax is in

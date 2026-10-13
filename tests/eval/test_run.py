@@ -86,6 +86,24 @@ class CandidateBoundaryTests(unittest.TestCase):
             self.assertEqual((outside_home / "agent" / "credentials").read_text(), "old credentials")
 
 
+class PrepareTests(unittest.TestCase):
+    def test_grammar_arm_writes_the_whole_specification(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "dist" / "runtime").mkdir(parents=True)
+            (root / "examples").mkdir()
+            shutil.copytree(run.ROOT / "docs" / "grammar", root / "docs" / "grammar")
+            task = root / "tasks" / "sample"
+            task.mkdir(parents=True)
+            (task / "task.md").write_text("Sample task.\n", encoding="utf-8")
+            work = root / "work"
+            with patch.object(run, "ROOT", root), patch.object(run, "TASKS", root / "tasks"):
+                run.prepare(work, "sample", "grammar")
+
+            grammar = (work / "docs" / "grammar.md").read_text(encoding="utf-8")
+            self.assertTrue(grammar.startswith("# Agentica"))
+
+
 class DockerBoundaryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
