@@ -106,6 +106,11 @@ class PrepareTests(unittest.TestCase):
             positions = [grammar.find(marker) for marker in markers]
             self.assertTrue(all(position >= 0 for position in positions), positions)
             self.assertEqual(positions, sorted(positions))
+            self.assertNotIn("](../", grammar)
+            self.assertNotIn("site/content", grammar)
+
+    def test_grammar_arm_prompt_names_agentica_help(self) -> None:
+        self.assertIn("agentica help NAME", run.prompt(Path("/tmp/work"), "grammar"))
 
 
 class DockerBoundaryTests(unittest.TestCase):
