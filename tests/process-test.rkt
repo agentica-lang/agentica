@@ -76,6 +76,21 @@
                            "dir\\x.bAt" "x.exe." "x.com " "x" "x.ps1" "x.bat::$DATA"
                            "x.exe::$DATA" "x.bat:y.exe" "dir.exe\\x"))])
       (check-false (windows-runnable-name? name) name)))
+  (test-case "failed and explicitly closed processes leave the active registry"
+    (define executable (path->string (find-executable-path "racket")))
+    (define counts '())
+    (define probe
+      (make-output-port 'probe always-evt
+                        (lambda (data start end non-block? breakable?)
+                          (set! counts (cons (hash-count (current-process-registry)) counts))
+                          (- end start))
+                        void))
+    (define text
+      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    puts(Result.ok?(failed))\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    puts(\"closed\")\n  end\nend\n\n" executable))
+    (define result (evaluate (compile-program text) #:allow-run #t #:out probe #:err (open-output-nowhere)))
+    (check-pred void? result)
+    (check-true (>= (length counts) 6))
+    (check-true (andmap zero? counts) (~s counts)))
   (cond
     [(not node)
      (if (getenv "CI") (error 'process-test "Node.js is required in CI")
