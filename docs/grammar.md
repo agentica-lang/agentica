@@ -845,6 +845,7 @@ end
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.await(task: Task[R]) -> R
 Task.sleep(milliseconds: Int) -> Void
+Task.pending_count() -> Int
 ```
 
 Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Handles belong to one execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
@@ -852,6 +853,8 @@ Spawn starts a named function immediately with one argument; use a struct for mu
 Any task diagnostic terminates the whole evaluation with its original code and span, even when unawaited. System.exit in any task terminates the evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending tasks: explicitly await work that must finish. External interruption also cancels tasks and closes resources created under the execution custodian, preserving caller-supplied ports.
 
 Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, arguments and contextual builtin services. Shared streams have no cross-task ordering guarantee; coordinate who reads input. All tasks, including nested tasks, share the execution's synchronized --max-steps counter.
+
+Pending count (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned is not counted, even when nothing awaited it. A program that calls it runs only on the VM: where it would have to run on the legacy evaluator it stops with `LOWER-UNSUPPORTED` at that call.
 
 BDD registration and step handlers support tasks but must finish them before returning, normally through Task.await. Pending work fails that handler with RUNTIME-BDD-PENDING-TASKS. Child failures stop the current handler while later scenarios continue. BDD registration, state and assertions are synchronized; stdin and stdout have independent locks whose wait counts against the operation timeout.
 

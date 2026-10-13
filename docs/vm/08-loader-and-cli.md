@@ -205,7 +205,7 @@ and cost one predictable branch each.
 - The refusal (20a, §30.8 of `docs/future/`). Some builtins run only on the
   VM (`vm-only-builtins` in `src/builtins.rkt`: every `HttpWire` builtin,
   which `std/http` calls, and, from 21a, `Process.spawn_captured` and
-  `Process.output`). Before the evaluator gets a program, each place
+  `Process.output`, and, from 21b, `Task.pending_count`). Before the evaluator gets a program, each place
   that hands it one calls `check-vm-only` (`src/lower.rkt`), which walks
   the checked program and returns a `LOWER-UNSUPPORTED` diagnostic at the
   first VM-only call, or `#f`. Its message says why the evaluator would
