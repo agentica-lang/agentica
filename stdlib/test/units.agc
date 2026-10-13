@@ -163,8 +163,11 @@ def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span)
     line = Process.read_line(p, Child.left(deadline))
     if not line.ok?
       found = failure(settings, p, line.message, deadline, span)
-      return TestEnd(verdict: Report.Verdict.Fail(found.problem), output: Child.tail(joined(tail_text(lines, count), found.output), 65536),
-                     stopped: true, blame: found.blame)
+      shown = found.output
+      if found.blame
+        shown = Child.tail(joined(tail_text(lines, count), found.output), 65536)
+      end
+      return TestEnd(verdict: Report.Verdict.Fail(found.problem), output: shown, stopped: true, blame: found.blame)
     end
     text = line.unwrap!
     record = Child.record_for(text, settings.token)
@@ -222,7 +225,7 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
                    blame: true)
   end
   if message == "process: output exceeds 1048576 bytes"
-    return Failure(problem: stderr_limit(Report.Span(file: span.file, line: 1, column: 1, end_column: 1)), output: "", blame: false)
+    return overflow(settings, p, deadline, span)
   end
   if message != "process: end of input" and message != "process: stdin is closed"
     return Failure(problem: Report.error_at("RUNTIME-BDD-IO", message, span), output: "", blame: true)
@@ -241,14 +244,27 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
   return Failure(problem: problem, output: Child.stderr_text(stderr), blame: true)
 end
 
+def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> Failure
+  Process.close_stdin(p, Child.left(deadline))
+  output = Process.output(p, Child.left(deadline))
+  if not output.ok?
+    return timed_out(settings, span)
+  end
+  stderr = output.unwrap!.stderr
+  if stderr.length < 262144
+    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span), output: "", blame: true)
+  end
+  where = Report.Span(file: span.file, line: 1, column: 1, end_column: 1)
+  return Failure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
+end
+
 def timed_out(settings: Settings, span: Report.Span) -> Failure
   problem = Report.error_at("RUNTIME-TEST-TIMEOUT", "the test did not finish within #{settings.timeout_ms} ms", span)
   return Failure(problem: problem, output: "", blame: true)
 end
 
 def stderr_limit(where: Report.Span) -> Report.Error
-  return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's unread stdout, or its stderr over all its tests, exceeds 1 MiB",
-                         where)
+  return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's stderr over all its tests exceeds 1 MiB", where)
 end
 
 def record_error(record: Json) -> Report.Error

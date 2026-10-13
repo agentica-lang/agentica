@@ -191,7 +191,7 @@
   (define out (open-output-bytes))
   (values out (thread (lambda () (copy-port port out) (close-input-port port)))))
 
-(define (run-runner vm runner config seed)
+(define (run-runner vm runner config seed token)
   (define environment (environment-variables-copy (current-environment-variables)))
   (for ([name '(#"AGENTICA_VM_METRICS" #"AGENTICA_VM_METRICS_FILE")])
     (environment-variables-set! environment name #f))
@@ -200,6 +200,8 @@
       (apply subprocess #f #f #f vm
              (append '("--allow-run") (if seed (list "--seed" (number->string seed)) '())
                      (list "--driver-pid" (number->string (getpid)) "--" (path->string runner) (path->string config))))))
+  (with-handlers ([exn:fail? void])
+    (write-string (string-append token "\n") stdin))
   (close-output-port stdin)
   (dynamic-wind
     void
@@ -290,14 +292,13 @@
                 'seeded (and seed #t)
                 'seed (or seed 0)
                 'only only
-                'token (bytes->hex-string (crypto-random-bytes 16))
                 'test_timeout_ms test-timeout-ms)))
      (write-private config-file
                     (string->bytes/utf-8
                      (string-append* config "\n" (for/list ([entry (in-list entries)]) (string-append (jsexpr->string entry) "\n")))))
      (define-values (status out err)
        (with-handlers ([exn:fail? (lambda (failure) (values #f "" (exn-message failure)))])
-         (run-runner vm runner-file config-file seed)))
+         (run-runner vm runner-file config-file seed (bytes->hex-string (crypto-random-bytes 16)))))
      (if (and (memv status '(0 1 2)) (equal? err ""))
          (values status out)
          (infrastructure-report

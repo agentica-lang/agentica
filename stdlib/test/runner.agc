@@ -19,7 +19,6 @@ struct Config
   seeded: Bool
   seed: Int
   only: String
-  token: String
   test_timeout_ms: Int
 end
 
@@ -64,6 +63,11 @@ export def main() -> Void
     System.exit(2)
   end
   config = decoded.unwrap!
+  token = IO.gets().unwrap_or("")
+  if token == ""
+    IO.warn("the BDD runner needs the run token on its standard input")
+    System.exit(2)
+  end
   # The driver writes one feature file or discovery error per line after the settings.
   read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
   closed = File.close(handle, 5000)
@@ -75,7 +79,7 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
-  files = matched(config, run_all(seeded(config, seed), read.map do |entry| entry.unwrap! end))
+  files = matched(config, run_all(seeded(config, seed), token, read.map do |entry| entry.unwrap! end))
   if config.style == "json"
     puts(Report.json(files, seed))
   else
@@ -87,7 +91,7 @@ export def main() -> Void
   end
 end
 
-def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
+def run_all(config: Config, token: String, entries: List[Entry]) -> List[Report.FileResult]
   if entries.size == 0
     problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
@@ -100,9 +104,9 @@ def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
   end
   case listing
     Listing.Broken(problem) ->
-      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, [], entry) end
+      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, token, [], entry) end
       return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, patterns, entry) end
+    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, token, patterns, entry) end
   end
 end
 
@@ -131,12 +135,12 @@ def steps_listing(config: Config) -> Listing
   return list_steps(config, where)
 end
 
-def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
+def run_entry(config: Config, token: String, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
   if entry.problem != ""
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
   if entry.kind == "tests"
-    settings = Units.Settings(vm: config.vm, seed: config.seed, token: config.token, only: config.only,
+    settings = Units.Settings(vm: config.vm, seed: config.seed, token: token, only: config.only,
                               timeout_ms: config.test_timeout_ms)
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
@@ -147,7 +151,7 @@ def seeded(config: Config, seed: Int) -> Config
   return Config(vm: config.vm, steps_bytecode: config.steps_bytecode, steps_source: config.steps_source,
                 steps_error: config.steps_error, steps_given: config.steps_given, agentica: config.agentica, count: config.count,
                 empty_path: config.empty_path, empty_message: config.empty_message, style: config.style,
-                allow_run: config.allow_run, seeded: true, seed: seed, only: config.only, token: config.token,
+                allow_run: config.allow_run, seeded: true, seed: seed, only: config.only,
                 test_timeout_ms: config.test_timeout_ms)
 end
 

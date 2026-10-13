@@ -31,13 +31,13 @@
   (for/list ([file (in-list (hash-ref report 'files))])
     (list (hash-ref file 'kind) (let ([problem (hash-ref file 'error)]) (and (hash? problem) (hash-ref problem 'code))))))
 
-(define (test-children seed)
+(define (processes-mentioning directory)
+  (define text (path->bytes directory))
   (for/list ([name (in-list (directory-list "/proc"))]
              #:when (regexp-match? #rx"^[0-9]+$" (path->string name))
              #:when (let ([line (with-handlers ([exn:fail? (lambda (_) #"")])
                                   (call-with-input-file (build-path "/proc" name "cmdline") port->bytes))])
-                      (and (regexp-match? #rx#"\0--agentica-test\0" line)
-                           (regexp-match? (byte-regexp (bytes-append #"\0--seed\0" (string->bytes/utf-8 seed) #"\0")) line))))
+                      (regexp-match? (regexp-quote text) line)))
     name))
 
 (module+ test
@@ -75,15 +75,23 @@
     (check-equal? (field (second stops) 'code) "RUNTIME-BDD-PREMATURE-EXIT")
     (check-equal? (hash-ref (second stops) 'output) "going away")
     (check-equal? (hash-ref report 'not_executed) 1)
+    (define temporary (make-temporary-directory "agentica-hangs~a"))
+    (define saved (getenv "TMPDIR"))
     (define-values (code text)
-      (run-agentica-test (list (fixture "hangs_test.agc")) '() #:style 'json #:allow-run #f #:seed 1234567 #:vm (find-vm)
-                         #:test-timeout-ms 1000))
+      (dynamic-wind
+        (lambda () (putenv "TMPDIR" (path->string temporary)))
+        (lambda ()
+          (run-agentica-test (list (fixture "hangs_test.agc")) '() #:style 'json #:allow-run #f #:seed #f #:vm (find-vm)
+                             #:test-timeout-ms 1000))
+        (lambda ()
+          (if saved (putenv "TMPDIR" saved) (environment-variables-set! (current-environment-variables) #"TMPDIR" #f)))))
     (check-equal? code 1)
     (define hung (cases (string->jsexpr text)))
     (check-equal? (map (lambda (item) (hash-ref item 'status)) hung) '("failed" "not_executed"))
     (check-equal? (field (first hung) 'code) "RUNTIME-TEST-TIMEOUT")
     (check-equal? (hash-ref (first hung) 'output) "before the hang")
-    (check-equal? (test-children "1234567") '()))
+    (check-equal? (processes-mentioning temporary) '())
+    (delete-directory/files temporary))
 
   (test-case "--only keeps matching tests, and a test draws the same values alone or with others"
     (define (draws seed . arguments)
@@ -117,6 +125,13 @@
     (match-define (list _ plain _) (agentica-test (fixture "lists/config_test.agc")))
     (check-true (string-contains? plain "exited with code 3\n  bad config\n")))
 
+  (test-case "a test cannot take the run token from the run's folder"
+    (match-define (list status report) (json-test (fixture "leak_test.agc")))
+    (check-equal? status 1)
+    (define item (car (cases report)))
+    (check-equal? (field item 'code) "RUNTIME-TEST-ASSERTION")
+    (check-true (string-prefix? (hash-ref item 'output) "read the config\n")))
+
   (test-case "a record the test prints never passes it, even with the seed's values"
     (match-define (list status _ _) (run-main-in-process "--seed" "7" "test" (fixture "forged_test.agc")))
     (check-equal? status 1)
@@ -132,10 +147,15 @@
     (define output (hash-ref (first items) 'output))
     (check-true (<= 1 (string-length output) 65536))
     (check-true (string-prefix? output "17 "))
+    (match-define (list _ chatty) (json-test (fixture "chatty_test.agc")))
+    (check-equal? (map (lambda (item) (list (hash-ref item 'status) (field item 'code))) (cases chatty))
+                  '(("failed" "RUNTIME-BDD-OUTPUT-LIMIT") ("not_executed" #f)))
+    (check-equal? (file-codes chatty) '(("tests" #f)))
     (match-define (list status flood) (json-test (fixture "flood_test.agc")))
     (check-equal? status 1)
     (check-equal? (hash-ref flood 'failed) 0)
-    (check-equal? (file-codes flood) '(("tests" "RUNTIME-BDD-OUTPUT-LIMIT"))))
+    (check-equal? (file-codes flood) '(("tests" "RUNTIME-BDD-OUTPUT-LIMIT")))
+    (check-true (string-prefix? (hash-ref (car (hash-ref flood 'files)) 'output) "xxx")))
 
   (test-case "test files and features share one report, and test/ is a default path"
     (match-define (list status report)
