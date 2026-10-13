@@ -40,6 +40,13 @@ python3 tests/eval/diagnostics.py
 
 `--tasks` picks tasks (the default is all eight). `--sandbox firejail --chroot-root PATH` is the other sandbox; you prepare its rootfs yourself. The results go to `tests/eval/results/`, which is not versioned. The runner has its own tests: `python3 -m unittest discover -s tests/eval -p test_run.py`.
 
+The Docker sandbox works like this:
+
+- Grading runs each hidden case in a fresh container with `--network=none`, no provider credentials, and the solution mounted read-only.
+- Agent containers mount only the task workspace, and they can reach the provider. They run with `--read-only`, `--cap-drop=ALL` and `no-new-privileges`. Credentials come only from `--pass-env`.
+- `--no-build` reuses `dist/runtime`, the bundle that a normal run makes with `make exe`, `raco distribute` and a copy of `agentica-vm` into its `bin/`. The runner exits when it is missing.
+- `--agent claude` needs `--image` with the Claude CLI and Python. The default image has Pi only.
+
 In round 4 some `binary` runs tried to download the docs from GitHub. The repository was private, so the downloads failed. Close the network for the `binary` arm before the repository goes public.
 
 ## Results
@@ -106,7 +113,7 @@ The `binary` arm on the head of PR #33.
 | t6 to t8 (9 runs) | 8/9 | 79,286 | 189 | 22.8 |
 
 - GLM used fewer tokens than DeepSeek on t1 to t5, and it hit more errors.
-- Both models wrote the same Ruby and Python forms, so the fixes do not fit one model only. GLM also wrote `puts` with a non-String value and `to_s` on `Bool`, which Ruby allows and Agentica rejects.
+- Both models wrote the same Ruby and Python forms, so the habits are not one model's quirk. GLM also wrote `puts` with a non-String value and `to_s` on `Bool`. Ruby allows both, and the checker rejected both in those rounds.
 - One t6 run failed a hidden case with a logic error.
 
 ### JSON tasks: smoke run (2026-10-03)
@@ -130,7 +137,7 @@ The `t8-enum-ledger` reference solutions passed all 8 hidden cases in Docker on 
 
 ## Diagnostics
 
-Hits of the top codes in the `binary` arm, from `tests/eval/diagnostics.py`. A dash means the code was not in that round's top list.
+Hits of the top codes in the `binary` arm, from `tests/eval/diagnostics.py`, in the 2026-10 rounds. A dash means the code was not in that round's top list.
 
 | Code | Round 5 | Round 6 | Round 8 (GLM) |
 |---|---|---|---|
@@ -140,9 +147,8 @@ Hits of the top codes in the `binary` arm, from `tests/eval/diagnostics.py`. A d
 | `CHECK-MISSING-RETURN` | 11 | 9 | 11 |
 | `CHECK-UNKNOWN-METHOD` | – | – | 42 |
 
-- Most hits are Python and Ruby habits, not logic errors: `len(s)`, `s.length`, `x.to_i`, `!a`, `a && b`, `x += 1`, `print(x)`. Their Agentica forms are `String.length(s)`, `String.to_int(x)`, `not a`, `a and b`, `x = x + 1` and `puts(x)`.
-- `puts` takes a String only, so `puts(n)` is a type mismatch.
-- Failing runs were fixed after the agent read the code and the span, so the diagnostics worked as a repair signal.
+- In those rounds most hits were Python and Ruby habits, not logic errors: `len(s)`, `s.length`, `x.to_i`, `print(x)`, `!a`, `x += 1`. The checker rejected them then, so check the grammar for what the language accepts now.
+- In round 1, failing runs were fixed after the agent read the code and the span, so the diagnostics worked as a repair signal.
 
 ## What the results do not show
 
