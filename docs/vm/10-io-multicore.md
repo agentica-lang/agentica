@@ -50,7 +50,9 @@ CPU-bound work that one scheduler cannot serve.
   wait condition and its cancel flag; if either is satisfied, it unregisters
   and goes back to RUNNING with one CAS that accepts PARKING or WOKEN. A job
   already linked on the inbox cannot be unlinked, so for a job "unregisters"
-  means the task detaches it and the job runs to its end (§16.11).
+  means the task detaches it, when the cancel flag ended the wait, and the
+  job runs to its end (§16.11). If the outcome (§16.5) is already set, the
+  task consumes the job instead.
   Otherwise it CASes PARKING to PARKED. Registering on another task's result
   is done under that task's lock and fails if the result is already
   published. A waker acts only on PARKING (CAS to WOKEN, no queue: the
@@ -60,8 +62,8 @@ CPU-bound work that one scheduler cannot serve.
   increment. A wake that finds RUNNING or WOKEN is stale and dropped. The
   scheduler sets WOKEN to RUNNING when the task's turn starts. A resumed
   task re-checks its wait condition, so a wake is only a hint. No wake is
-  lost, and a task is queued at most once. Which waker wins, and which
-  thread pushes after a completion, a timeout or a cancel, is in §16.5.
+  lost, and a task is queued at most once. Which waker wins, and what it
+  does, is in §16.5.
 - **State split.** As built (`vm/agc.h`): `agc_runtime` (shared), `struct
   agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
   current `task`, the run queue, `loop`, `registry`, the turn counters and
