@@ -4,7 +4,7 @@ TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
 
-.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key vm-openssl-check site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -75,7 +75,10 @@ site-serve: site-sass
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
-# make vm-openssl-key     print what the OpenSSL build of this mode depends on (the CI cache key)
+# make vm OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does);
+#                         the default OPENSSL=system links the system OpenSSL 3 found by pkg-config (Debian: libssl-dev pkg-config)
+# make vm-openssl         OPENSSL=vendored: build only the static libraries; OPENSSL=system: check the system OpenSSL
+# make vm-openssl-key     OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
@@ -162,13 +165,31 @@ OSSL_CONFIGURE = $(OSSL_ENV) CC='$(VM_CC)' perl $(CURDIR)/$(OSSL_DIR)/Configure 
 OSSL_SUBMAKE = $(OSSL_ENV) make -C $(OSSL_BUILD) CC='$(VM_CC)' build_libs
 OSSL_RECIPE = $(subst ','\'',$(subst $(CURDIR)/,,$(OSSL_CONFIGURE) | $(OSSL_SUBMAKE)))
 OSSL_KEY = { echo '$(OSSL_RECIPE)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; git -C $(OSSL_DIR) rev-parse HEAD 2>/dev/null || true; }
-VM_OSSL := $(if $(UV_NAMES),$(OSSL_BUILD)/libssl.a $(OSSL_BUILD)/libcrypto.a)
-OSSL_INC := $(if $(UV_NAMES),-I $(OSSL_BUILD)/include -I $(OSSL_DIR)/include)
+OPENSSL ?= system
+PKG_CONFIG ?= pkg-config
+OSSL_MIN := 3.0.0
+VM_OSSL :=
+OSSL_LINK :=
+OSSL_INC :=
+OSSL_CHECK :=
+ifneq ($(UV_NAMES),)
+ifeq ($(OPENSSL),vendored)
+VM_OSSL := $(OSSL_BUILD)/libssl.a $(OSSL_BUILD)/libcrypto.a
+OSSL_LINK := $(VM_OSSL)
+OSSL_INC := -I $(OSSL_BUILD)/include -I $(OSSL_DIR)/include
+else ifeq ($(OPENSSL),system)
+OSSL_LINK := $(shell $(PKG_CONFIG) --libs openssl 2>/dev/null)
+OSSL_INC := $(shell $(PKG_CONFIG) --cflags openssl 2>/dev/null)
+OSSL_CHECK := vm-openssl-check
+else
+$(error OPENSSL must be system or vendored, not '$(OPENSSL)')
+endif
+endif
 VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
-	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS)' > $@
+	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(OPENSSL) $(OSSL_LINK)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(OPENSSL) $(OSSL_LINK)' > $@
 
 $(VM_TP_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
@@ -210,9 +231,15 @@ $(OSSL_DIR)/VERSION.dat:
 	@echo "missing $(OSSL_DIR): run git submodule update --init" >&2; exit 1
 
 vm-openssl-key: $(OSSL_DIR)/VERSION.dat
+	@test '$(OPENSSL)' = vendored || { echo "vm-openssl-key describes the OPENSSL=vendored build; run make -s vm-openssl-key OPENSSL=vendored" >&2; exit 1; }
 	@$(OSSL_KEY)
 
-vm-openssl: $(VM_OSSL)
+vm-openssl: $(VM_OSSL) | $(OSSL_CHECK)
+
+vm-openssl-check:
+	@command -v $(PKG_CONFIG) >/dev/null || { echo "OPENSSL=system needs pkg-config and the OpenSSL 3 development files (Debian: apt install pkg-config libssl-dev), or build with OPENSSL=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --exists openssl || { echo "pkg-config cannot find openssl: install the OpenSSL 3 development files (Debian: libssl-dev), or build with OPENSSL=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --atleast-version=$(OSSL_MIN) openssl || { echo "the VM needs OpenSSL $(OSSL_MIN) or newer, pkg-config found $$($(PKG_CONFIG) --modversion openssl); install a newer libssl-dev or build with OPENSSL=vendored" >&2; exit 1; }
 
 $(OSSL_STAMP): $(OSSL_DIR)/VERSION.dat FORCE
 	@mkdir -p $(VM_BUILD)
@@ -229,30 +256,30 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 	@test -f $@ || { echo "$@ is missing: remove $(OSSL_BUILD) and rebuild" >&2; exit 1; }
 
-dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
+dist/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP) | $(OSSL_CHECK)
 	@mkdir -p dist
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS) $(VM_ENTRY)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(OSSL_LINK) $(VM_LDFLAGS) $(VM_ENTRY)
 
 vm: dist/agentica-vm$(EXE)
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 
-$(VM_BUILD)/%-test$(EXE): vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS)
+$(VM_BUILD)/%-test$(EXE): vm/tests/%_test.c $(VM_DEPS) vm/fuzz.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP) | $(OSSL_CHECK)
+	$(VM_CC) $(VM_CFLAGS) -U NDEBUG -o $@ $(VM_SRC) vm/fuzz.c $< $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(OSSL_LINK) $(VM_LDFLAGS)
 
 vm-test: $(VM_TESTS)
 	for t in $(VM_TESTS); do $$t || exit 1; done
 
-$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS)
+$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(VM_DEPS) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP) | $(OSSL_CHECK)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/fuzz.c vm/fuzz_main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(OSSL_LINK) $(VM_LDFLAGS)
 
 vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	@mkdir -p $(VM_BUILD)/corpus
 	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
-$(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP)
-	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_LDFLAGS) $(VM_ENTRY)
+$(VM_BUILD)/agentica-vm$(EXE): $(VM_DEPS) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_OSSL) $(VM_STAMP) | $(OSSL_CHECK)
+	$(VM_CC) $(VM_CFLAGS) -o $@ $(VM_SRC) vm/main.c $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(OSSL_LINK) $(VM_LDFLAGS) $(VM_ENTRY)
 
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
@@ -266,7 +293,7 @@ VM_LINT_SKIP := vm/unicode_data.c
 VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 
 .PHONY: vm-lint
-vm-lint: $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c $(VM_OSSL)
+vm-lint: $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c $(VM_OSSL) | $(OSSL_CHECK)
 	@$(CLANG_TIDY) --list-checks -checks=misc-use-internal-linkage | grep -q misc-use-internal-linkage || { echo "clang-tidy 19+ required" >&2; exit 1; }
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -I $(GC_DIR)/include
 	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -DAGC_NO_GC -fsanitize=address,undefined

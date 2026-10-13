@@ -26,7 +26,7 @@ You can also do the two steps yourself. `agentica compile file.agc -o file.agcb`
 
 ## What it is built on
 
-The libraries below are vendored as pinned git submodules in `vm/third_party/` and built into the `agentica-vm` binary by `make vm`. No system libraries are needed beyond the C library; building them needs a C11 compiler, make and Perl 5 (for OpenSSL). Each keeps its own license, and the release archives ship their notices in `licenses/`.
+The libraries below are vendored as pinned git submodules in `vm/third_party/`. The release builds all of them into the `agentica-vm` binary, so it needs no system libraries beyond the C library. A default `make vm` builds the same way except for OpenSSL: it links the system OpenSSL 3 (found with `pkg-config`, Debian package `libssl-dev`) dynamically. `make vm OPENSSL=vendored` builds the OpenSSL submodule too, like the release, and needs Perl 5. Each library keeps its own license, and the release archives ship their notices in `licenses/`.
 
 | Library | Purpose | License |
 |---|---|---|
