@@ -91,7 +91,7 @@ stdlib/                 # std/ modules written in Agentica, embedded by src/stdl
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/stages.md
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-protocol helpers, shared by unit tests and BDD
-examples/               # small programs per feature; README.md lists them
+examples/               # small programs per feature; examples/README.md lists them
 docs/
   grammar.md   # index of the language grammar
   grammar/     # the language definition, one file per section; the source of truth
