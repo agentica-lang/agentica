@@ -171,7 +171,8 @@ TP_KEY = { echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) |
   $(AR) --version 2>/dev/null | head -n 1; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); }
 ifeq ($(origin CCACHE),undefined)
-CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) && d=$$($$c -k cache_dir 2>/dev/null) && mkdir -p "$$d" 2>/dev/null && [ -w "$$d" ] && echo $$c)
+CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) || exit 0; d=$$($$c -k cache_dir 2>/dev/null) || d=$${CCACHE_DIR:-$$HOME/.ccache}; \
+  while [ ! -d "$$d" ]; do d=$$(dirname "$$d"); done; [ -w "$$d" ] && echo $$c)
 endif
 export CCACHE_BASEDIR ?= $(CURDIR)
 VM_OBJ := $(VM_BUILD)/obj
@@ -217,7 +218,8 @@ VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
-	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' > $@.$(notdir $(VM_BUILD)); \
+	if cmp -s $@.$(notdir $(VM_BUILD)) $@; then rm -f $@.$(notdir $(VM_BUILD)); else mv $@.$(notdir $(VM_BUILD)) $@; fi
 
 $(VM_OBJ_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
@@ -305,7 +307,7 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 	@perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { echo "building OpenSSL needs perl 5 with its core modules (Debian: perl)" >&2; exit 1; }
 	rm -rf $(OSSL_BUILD)
 	mkdir -p $(OSSL_BUILD)
-	cd $(OSSL_BUILD) && $(OSSL_CONFIGURE) > configure.log 2>&1 || { cat configure.log; exit 1; }
+	cd $(OSSL_BUILD) && $(OSSL_CONFIGURE) $(DEBUG_MAP) > configure.log 2>&1 || { cat configure.log; exit 1; }
 	$(OSSL_SUBMAKE) -j $(JOBS) > $(OSSL_BUILD)/build.log 2>&1 || { tail -n 40 $(OSSL_BUILD)/build.log; exit 1; }
 	touch $@
 
@@ -333,7 +335,7 @@ vm-test: $(VM_TESTS)
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
-FUZZ_CORPUS = racket -e '(require (file "$(CURDIR)/tests/vm-diff-common.rkt") racket/path)' \
+FUZZ_CORPUS = racket -e '(require (file "tests/vm-diff-common.rkt") racket/path)' \
   -e '(for ([f (current-command-line-arguments)]) (compile-file (string->path f) (build-path "$(VM_BUILD)/corpus" (path-replace-extension (file-name-from-path f) \#".agcb"))))'
 
 vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)

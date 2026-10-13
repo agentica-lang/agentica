@@ -143,15 +143,18 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   `$(VM_BUILD)/obj/` with `-MMD -MP` (dependency files beside the objects),
   and every binary links from them (`VM_LINK`); a new `vm/*.c` file goes
   in `VM_SRC` only. `$(VM_BUILD)/obj-flags` recompiles the mode when the
-  compile line changes; `tls_openssl.o` also follows the OpenSSL stamp.
-  Compiles run through `$(CCACHE)`, the vendored OpenSSL too, but not its
-  key. It is found on `PATH` and used only when `ccache -k cache_dir` is
-  writable; `CCACHE=` turns it off (use it when a ccache setup fails).
-  `CCACHE_BASEDIR` is the checkout, and the `-g` modes add
-  `-fdebug-prefix-map=$(CURDIR)=.` (to the compile only, not to the
-  stamps), so worktrees share hits and debug info names `.`.
-- `vm/tests/*_test.o` are `.SECONDARY`, so make keeps them and a second
-  `make vm vm-test` does nothing.
+  compile line or the compiler's `--version` changes; `tls_openssl.o` also
+  follows the OpenSSL stamp. Compiles run through `$(CCACHE)`, the vendored
+  OpenSSL too, but not its key. It is found on `PATH` and used only when
+  its cache dir (`ccache -k cache_dir`, or `$CCACHE_DIR`/`~/.ccache` for a
+  ccache without `-k`) or its nearest existing parent is writable; the
+  check creates nothing. `CCACHE=` turns it off (use it when a ccache
+  setup fails). `CCACHE_BASEDIR` is the checkout, and the `-g` modes add
+  `-fdebug-prefix-map=$(CURDIR)=.` (`DEBUG_MAP`) to the VM, third-party and
+  vendored OpenSSL compiles but not to the stamps or the OpenSSL key, so
+  worktrees share hits and debug info names `.`.
+- `build/vm/<mode>/obj/tests/*_test.o` are `.SECONDARY`, so make keeps them
+  and a second `make vm vm-test` does nothing.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
