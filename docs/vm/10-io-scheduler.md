@@ -237,8 +237,8 @@
     only a hint, as 10.2.3 asks). A task whose bottom frame returns, or
     leaves through `try`, is done; its registers and frames are dropped.
   - Cancellation: when `main` returns, the run ends; ready and parked
-    tasks never run again, and `agc_io_close` closes their timers and
-    jobs as before. `System.exit` in any task, and a failure in `main`,
+    tasks never run again, and the one exit path (End of run, below)
+    neither waits for their jobs nor closes them one by one. `System.exit` in any task, and a failure in `main`,
     `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL` in any task, end the run at
     once through `agc_fail`/`agc_exit`.
   - Crashes (phase 24, `docs/future/37-task-crash-isolation.md` §37).
@@ -285,9 +285,10 @@
     run. When a task ends normally, the handles it still owns go to its
     parent (`agc_give_owned`), so a handle moved to a helper task and
     returned with it is still closed if the parent crashes later. At the
-    end of the run, `vm/main.c` first flushes stdout, so a stuck file
-    does not hold back the program's last output. Then `agc_io_close`
-    starts the same `OP_CLOSE` job for every file still open
+    end of the run, `vm/main.c` first kills the children and flushes
+    stdout, so a stuck file does not hold back the program's last output.
+    Then `agc_io_flush_files` starts the same `OP_CLOSE` job for every file
+    still open
     (`close_files`), then waits for all file close jobs, the crashed
     tasks' ones too (`finish_flushes`): with no limit
     by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
@@ -400,8 +401,10 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   epoll. Boehm is built without thread support (until 10.2.3) and never
   sees these threads. `agc_io_start` blocks `SIGINT`, `SIGTERM` and
   `SIGHUP` around `uv_queue_work`, so the pool threads (made on the first
-  call) start with them blocked and only the loop thread runs libuv's
-  handler for them (10.4).
+  call) start with them blocked; so do the threads `tcp.c` and
+  `http_client.c` start (`agc_io_block_stop`). Boehm's own marker threads
+  do not block them, so the stop handler (below) may run on any thread:
+  it only touches lock-free atomics and async-signal-safe calls.
 - **Pool size.** The VM never sets it; libuv's own `UV_THREADPOOL_SIZE`
   does (no `AGENTICA_*` variable). libuv reads it once, when the first
   `uv_queue_work` creates the pool, so it must be in the environment when
@@ -414,26 +417,76 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   than the pool has threads, or uses FIFOs or devices that may block.
 - **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
   check, then blocking for reads and writes in the pool).
-- **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
-  it ended: open handles are closed (the evaluator's cleanup), timers are
-  closed, the loop runs once without waiting, and the loop is freed when no
-  job is left. Closing a file writes its pending output in an `OP_CLOSE`
-  pool job (§10.2.1, Owners), and the run waits for those jobs: without a
-  limit by default, so a write to a FIFO whose reader stopped reading
-  keeps the run open, as Racket's flush in `filesystem-close-all!` does;
-  `--flush-timeout MS` bounds that wait and then prints that file data may
-  not be written. `agc_io_close` returns false when a job is still stuck
-  in the OS (a read on a silent FIFO, or a flush past `--flush-timeout`);
-  `vm/main.c` then flushes stdout and stderr and ends with `_exit`,
-  because a normal exit would run libuv's destructor, which joins the
-  pool threads and would wait for that job. A file whose operation is
-  still running in the pool (`main` returned while a child task's read
-  was in flight) gets no close job and is not waited for: the job still
-  uses its state. It is released (`release_state`, a direct write on the
-  loop thread) after the loop's last run once that job's work is done;
-  otherwise it
-  stays registered, `agc_io_close` returns false, and the process ends
-  with `_exit` as above.
+- **End of run: one exit path.** However the run ends (`main` returns,
+  `System.exit`, a runtime error of `main`, the step limit or a stop
+  signal), `end_run` in `vm/main.c` takes the same fixed steps and nothing
+  else: (1) `agc_processes_stop` kills the children (§10.4, Close; at most
+  about 2 seconds); (2) `agc_io_goodbye` gives each TCP socket with a
+  finished TLS handshake one non-blocking `close_notify` write
+  (`uv_try_write`; HTTP client connections get none, a target for 20c);
+  (3) stdout and stderr are flushed (retried on `EINTR`), and
+  `agc_io_flush_files` closes every open file, whose pending output an
+  `OP_CLOSE` pool job writes (§10.2.1, Owners), and waits for those jobs:
+  without a limit by default, so a write to a FIFO whose reader stopped
+  reading keeps the run open, as Racket's flush in `filesystem-close-all!`
+  does; `--flush-timeout MS` bounds that wait and then prints that file
+  data may not be written; (4) the diagnostic or summary is printed and
+  the VM ends with `_exit`. No task is awaited, no other pool job is waited
+  for, no socket is read to its end and the loop is not freed: the OS
+  frees descriptors and memory, and `_exit` skips libuv's destructor,
+  which would join the pool threads. A file whose operation is still
+  running in the pool (`main` returned while a child task's read was in
+  flight) gets no close job and is not waited for: the job still uses its
+  state. Killing the children first means a child that reads one of the
+  program's FIFOs is gone before the flush, so data buffered for it is
+  lost (the flush to a FIFO with no reader fails with `EPIPE`). A file
+  close that fails with `agc_fail` at this point (it runs after the
+  scheduler's frame returned) lands on a fresh `setjmp` in `end_run`,
+  skips the rest of the flush and prints one stderr line, as
+  `--flush-timeout` does (`agentica: file data may not be written: the
+  flush failed (CODE: message)`, or `{"flush_failed":"CODE","warning":...}`
+  with `--json`); the exit code does not change. `agc_io_close`, which closes every
+  resource and frees the loop, is only for in-process harnesses (the
+  fuzzer and the C tests): it flushes the files, then releases every
+  resource (the process guard's release kills the children).
+- **Stop signals.** `agc_io_watch_stop` (called by `vm/main.c` before the
+  run) installs a `sigaction` handler for `SIGINT`, `SIGTERM` and `SIGHUP`,
+  except a signal the VM started with ignored (`nohup`). A handler gets no
+  context, so the stop state is the VM's one process-wide variable
+  (`stop` in `vm/loop.c`): the first signal, a second one, a `held` flag,
+  the driver's pid and the `uv_async_t` that wakes the loop (unreferenced,
+  so it never keeps the loop alive). The integers are lock-free atomics,
+  since the handler may run on any thread. The first signal is stored and
+  wakes the loop; the scheduler checks it after every turn, before it
+  waits and before it reports a stall (`check_stop` in `vm/task.c`), and
+  ends the run as an exit with code 128 + signal (`agc_stop` in
+  `vm/interp.c`); `end_run` takes the steps above and then raises the
+  signal again with its default action, so the VM ends by it. After the
+  `end` trace line and the last flush of stdout and stderr (both can
+  block, so they run with the signals open), stop signals are blocked for
+  the last read of the flag, so one that comes after it is not lost
+  between that read and `_exit`. A second stop signal
+  ends the VM at once (default action, then `kill(getpid(), sig)`), so the
+  flush with no limit can always be cut short, but never before the
+  children are stopped: until `agc_processes_stop` returns, `held` is set
+  and a second signal is only recorded; `agc_io_children_stopped` then
+  acts on it, with no flush. An `alarm` of 3 seconds backs this up: the
+  handler arms it, and installs its `SIGALRM` handler, only when it
+  records that second signal (a third one does not push it back); if the
+  main thread does not get there in time, the `SIGALRM` handler ends the
+  VM by the recorded signal. Until then `SIGALRM` keeps its default
+  action, so an outside `SIGALRM` (`timeout -s ALRM`) still ends the VM. A driven VM (`--driver-pid`) whose driver is
+  gone (`getppid()` differs; its `PR_SET_PDEATHSIG` is a `SIGTERM`) treats
+  even the first signal as a second one: it stops the children and exits
+  without the flush, since no one waits for its output. The handler has
+  no `SA_RESTART`: a write to stdout that nobody reads returns `EINTR`;
+  `agc_write` and `agc_flush` (`vm/interp.c`) then clear the stream error
+  and end the run as the stop (128 + signal, no diagnostic) when a stop
+  signal is set. They never retry: only the VM's own handlers interrupt a
+  write, and they set the stop first, so `EINTR` with no stop is a write
+  error like any other (glibc drops the buffer of a failed write, so a
+  retry would lose bytes). A CPU-bound task delays the stop by at most one
+  turn.
 - **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a
   `holder` (the job resource of the operation in flight on it), a
   `next_owner` task and a FIFO of waiting tasks, all on the GC
@@ -511,8 +564,8 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   `agc_io_ready`, which marks the work done and puts the job on the ready
   list like a pool job; a second call, or one after the job was taken, does
   nothing. The timer, the `done` and `expired` halves, the lock hand-off
-  and `drop` are the same as for pool jobs, and `agc_io_close` marks an
-  external job done when it takes it at the end of the run.
+  and `drop` are the same as for pool jobs, and `agc_io_close` (only in
+  the in-process harnesses) marks an external job done when it takes it.
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`, so mutated programs
   never touch the file system; a file builtin (`Path.cwd` and
   `Path.resolve` too, since they read the current directory) then ends the

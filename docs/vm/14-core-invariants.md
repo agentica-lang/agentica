@@ -14,14 +14,14 @@ Each rule says what is **as built** today and what is **being built** or is a **
 
 Known exceptions, as built:
 
-- **stdout and stderr writes block.** `puts`, `print`, `IO.inspect` and `IO.warn` write through `agc_write` to a blocking `FILE *` (`vm/interp.c`), so a full stdout pipe stalls every task. Decided: kept for now, as the simplest form.
+- **stdout and stderr writes block.** `puts`, `print`, `IO.inspect` and `IO.warn` write through `agc_write` to a blocking `FILE *` (`vm/interp.c`), so a full stdout pipe stalls every task. Decided: kept for now, as the simplest form. A stop signal interrupts such a write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4).
 - **Reaping a process blocks the loop thread.** `Process.close` and an owned process's close (`close_proc` → `shut` → `reap` in `vm/process.c`), and `outlast` at the end of the run, poll with `nanosleep` for at most `REAP_SECONDS` (1 s). It is bounded, but it is neither a park nor a job timer (§14.2).
 
 ### 14.2 Timeouts
 
 **Rule.** One way: a timer on the job. A builtin that takes `timeout_ms` passes it to `agc_io_start`, whose job owns one `uv_timer_t` (`start_job` in `vm/loop.c`). When it fires, the job ends with the timeout error and the task wakes. No builtin starts its own timer for a timeout.
 
-`Task.sleep` is the same thing: a job with no work and a timer. As built, a few timers are not job timeouts and stay: a captured child's grace period (§31.9), the `HttpClient` pool's timer, and the end-of-run flush deadline (§14.4). The reap's `nanosleep` deadline (§14.1) is a bounded wait of the same kind, not a loop timer. A new one needs a reason here.
+`Task.sleep` is the same thing: a job with no work and a timer. As built, a few timers are not job timeouts and stay: a captured child's grace period (§31.9), the `HttpClient` pool's timer, the end-of-run flush deadline (§14.4), and the 3-second process `alarm` of the stop signals (`STOP_GRACE_SECONDS` in `vm/loop.c`): it bounds how long a second stop signal is held while the children are stopped, and it is armed only after a second signal (§10.2.2, Stop signals). The reap's `nanosleep` deadline (§14.1) is a bounded wait of the same kind, not a loop timer. A new one needs a reason here.
 
 ### 14.3 Cancelling
 
@@ -37,13 +37,14 @@ A job that is cancelled is detached (`agc_io_detach`): a loop job is stopped by 
 2. flush stdout, stderr and open files (the file flush with no limit by default, or within `--flush-timeout`);
 3. exit.
 
-Nothing else is joined or drained: no task is awaited, no pool job other than the file flush is waited for, no socket is read to its end. `System.exit` and a crash of `main` take the same path. So does the first stop signal (SIGTERM, SIGINT, SIGHUP), flush included; a second stop signal exits at once without flushing, so a flush that cannot end (a FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM, `vm/main.c`) never makes the VM unkillable. The two signal steps are a target.
+Nothing else is joined or drained: no task is awaited, no pool job other than the file flush is waited for, no socket is read to its end. `System.exit` and a crash of `main` take the same path. So does the first stop signal (SIGTERM, SIGINT, SIGHUP), flush included; a second stop signal exits at once without flushing, so a flush that cannot end (a FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM, `vm/main.c`) never makes the VM unkillable. A second signal that comes before the children are stopped waits for step 1, so children are never left behind.
 
-As built (`agc_vm_run` in `vm/task.c`, then `vm/main.c` and `agc_io_close` in `vm/loop.c`): `main`'s return breaks the scheduler loop; `vm/main.c` flushes stdout (a blocking `fflush`, with no limit even under `--flush-timeout`); `close_files` starts a close job for each open file and `finish_flushes` waits for them; then `release_handles` frees the rest, and the process guard kills the children (`close_children` in `vm/process.c`); if a job is still stuck, `vm/main.c` flushes stdout and stderr and ends with `_exit`, so libuv's destructor does not join the pool. Where this differs from the rule (targets):
+As built (`end_run` in `vm/main.c`, §10.2.2 "End of run" and "Stop signals"): `main`'s return, `System.exit`, a diagnostic, the step limit and the first stop signal (`check_stop` in `vm/task.c`, or `EINTR` on a stdout write) all reach `end_run`, which kills the children (`agc_processes_stop` → `close_children` in `vm/process.c`, about 2 seconds at most), sends one non-blocking TLS `close_notify` per finished TCP session (`agc_io_goodbye`), flushes stdout and stderr, closes the files and waits for their flush jobs (`agc_io_flush_files`), prints the diagnostic or summary and ends with `_exit`, or by the stop signal raised again, so libuv's destructor never joins the pool. A second stop signal before `agc_processes_stop` returns is recorded and acted on right after it (an `alarm` bounds that at 3 seconds); later, it ends the VM at once. A driven VM whose driver is gone takes that immediate path on its first signal. `agc_io_close` (close every resource, free the loop) is only for the in-process harnesses. Where this differs from the rule (targets):
 
-- Children are killed after the files flush, not before.
 - The `fflush` of stdout and stderr is not bounded by `--flush-timeout`.
-- A stop signal goes through the process guard only while a child runs: it kills the children and raises the signal again, with no flush. With no child, the signal's default action ends the VM. Target: the first signal takes the three steps, a second one exits at once.
+- HTTP client TLS connections get no `close_notify` at the end of the run (only `TCP` sockets do); 20c can give its connections the same `goodbye` hook.
+
+Known exceptions, outside the exit path: the out-of-memory and GC abort handlers end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none either; both leave children running.
 
 ### 14.5 Handles
 

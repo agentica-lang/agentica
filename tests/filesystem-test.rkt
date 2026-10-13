@@ -6,7 +6,8 @@
          racket/list
          racket/system
          json
-         "cli-in-process.rkt")
+         "cli-in-process.rkt"
+         (only-in "vm-diff-common.rkt" vm-file vm-built?))
 
 (define-runtime-path examples-dir "../examples")
 
@@ -29,6 +30,38 @@
     (lambda () (delete-directory/files directory))))
 
 (define (literal text) (format "~s" text))
+
+(define vm-wait-seconds 10)
+(define python (find-executable-path "python3"))
+(define-runtime-path stop-peer "fixtures/stop-peer.py")
+
+(define (python-ready? what)
+  (cond
+    [(not (vm-built? what)) #f]
+    [python #t]
+    [(getenv "CI") (error 'filesystem "Python 3 is required in CI")]
+    [else (displayln (format "SKIP ~a: python3 is unavailable" what)) #f]))
+
+(define (run-vm-bounded root text #:peer [peer #f] #:input [input #f] . arguments)
+  (define source (build-path root "program.agc"))
+  (define bytecode (path->string (build-path root "program.agcb")))
+  (display-to-file text source #:exists 'truncate)
+  (check-equal? (first (run-main-in-process "compile" (path->string source) "-o" bytecode)) 0)
+  (define-values (process out in err)
+    (apply subprocess #f #f #f (if peer python vm-file)
+           (append (if peer (list (path->string stop-peer) peer (path->string vm-file)) '())
+                   (list "--allow-run" "--" bytecode) arguments)))
+  (when input (write-string input in))
+  (close-output-port in)
+  (define output #f)
+  (define reader (thread (lambda () (set! output (port->string out)))))
+  (define finished (sync/timeout vm-wait-seconds process))
+  (unless finished (subprocess-kill process #t))
+  (sync/timeout vm-wait-seconds reader)
+  (close-input-port out)
+  (close-input-port err)
+  (check-true (and finished #t) (format "the VM ends within ~a s" vm-wait-seconds))
+  (list (subprocess-status process) output))
 
 (module+ test
   (test-case "the run waits for the close of a crashed task's file, so its buffered write reaches the disk"
@@ -87,6 +120,36 @@
            (check-true (< (- (current-inexact-milliseconds) start) 10000))
            (check-equal? (take result 2) '(0 "main done\n"))
            (check-equal? (hash-ref (string->jsexpr (third result)) 'flush_timeout_ms) 200)))))
+
+  (test-case "file calls cannot reopen the VM's own pipes, so a later spawn does not deadlock"
+    (when (python-ready? "the private pipe test")
+      (with-temp-dir
+       (lambda (root)
+         (define result
+           (run-vm-bounded
+            root
+            (string-append
+             "def main() -> Void\n  for name in Dir.list(\"/proc/self/fd\", 1000).unwrap!\n"
+             "    if name != \"0\" and name != \"1\" and name != \"2\"\n"
+             "      path = \"/proc/self/fd/\" + name\n"
+             "      IO.inspect([File.read_text(path, 100).ok?, File.open(path, \"append\", 100).ok?])\n"
+             "    end\n  end\n"
+             "  p = Process.spawn(\"true\", [], 1000).unwrap!\n  IO.inspect(Process.wait(p, 1000))\nend\n")
+            #:peer "clean"))
+         (define lines (string-split (second result) "\n"))
+         (check-equal? (first result) 0)
+         (check-equal? (last lines) "ok(0)")
+         (check-equal? (remove-duplicates (drop-right lines 1)) '("[false, false]"))))))
+
+  (test-case "pipes the VM got at start stay readable: an inherited descriptor and a piped stdin"
+    (when (python-ready? "the inherited pipe test")
+      (with-temp-dir
+       (lambda (root)
+         (define program
+           (string-append "def main() -> Void\n  f = File.open(System.args()[0], \"read\", 1000).unwrap!\n"
+                          "  IO.inspect(File.read_line(f, 1000))\nend\n"))
+         (check-equal? (run-vm-bounded root program #:peer "inherit") '(0 "ok(\"inherited\")\n"))
+         (check-equal? (run-vm-bounded root program #:input "piped\n" "/dev/stdin") '(0 "ok(\"piped\")\n"))))))
 
   (test-case "file-summary example reads a command-line path"
     (define input-path (build-path examples-dir "hello.agc"))

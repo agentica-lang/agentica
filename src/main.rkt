@@ -64,28 +64,32 @@
       (set! read-failed? #t)
       (stop-vm process))
     (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
+  (define broke? #f)
   (and process
        (dynamic-wind
          void
          (lambda ()
-           (parameterize-break #f (when to-vm (set! feeder (thread feed))))
-           (define (pump from to)
-             (thread (lambda ()
-                       (with-handlers ([exn:fail? (lambda (_) (copy-port from (open-output-nowhere)))])
-                         (copy-port from to))
-                       (close-input-port from))))
-           (define readers
-             (filter values (list (and from-vm (pump from-vm stdout))
-                                  (and from-vm-err (pump from-vm-err stderr)))))
-           (subprocess-wait process)
-           (for-each thread-wait readers)
-           (flush-output stdout)
-           (flush-output stderr)
-           (if read-failed? 'read-failed (subprocess-status process)))
+           (call-noting-break
+            (lambda () (set! broke? #t))
+            (lambda ()
+             (parameterize-break #f (when to-vm (set! feeder (thread feed))))
+             (define (pump from to)
+               (thread (lambda ()
+                         (with-handlers ([exn:fail? (lambda (_) (copy-port from (open-output-nowhere)))])
+                           (copy-port from to))
+                         (close-input-port from))))
+             (define readers
+               (filter values (list (and from-vm (pump from-vm stdout))
+                                    (and from-vm-err (pump from-vm-err stderr)))))
+             (subprocess-wait process)
+             (for-each thread-wait readers)
+             (flush-output stdout)
+             (flush-output stderr)
+             (if read-failed? 'read-failed (subprocess-status process)))))
          (lambda ()
            (when feeder (kill-thread feeder))
            (when to-vm (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
-           (parameterize-break #f (stop-vm process))))))
+           (parameterize-break #f (stop-vm process #:interrupted? broke?))))))
 
 (module+ main
   (define dump? #f)

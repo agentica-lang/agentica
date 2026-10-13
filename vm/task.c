@@ -295,6 +295,13 @@ void agc_task_observe(agc_vm *vm, agc_task *t) {
   vm->observed_count++;
 }
 
+/* A stop signal ends the run between turns as an exit with 128 + signal;
+   vm/main.c then raises it again after the exit path. */
+static void check_stop(agc_vm *vm) {
+  int sig = agc_io_stop_signal();
+  if (sig) agc_stop(vm, sig);
+}
+
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_task_enter(vm, vm->main, vm->rt->program->entry);
@@ -303,7 +310,9 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     for (;;) {
       agc_task *t = dequeue(vm);
       if (!t) {
+        check_stop(vm);
         if (!agc_io_poll(vm, true)) {
+          check_stop(vm);
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
         }
@@ -333,6 +342,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
         enqueue(vm, t);
       }
       agc_io_poll(vm, false);
+      check_stop(vm);
     }
     vm->rt->outcome.kind = AGC_DONE;
     if (agc_report_unobserved(vm)) {

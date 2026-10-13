@@ -169,7 +169,9 @@ measurement shows CPU-bound work that one scheduler cannot serve.
     `vm/fuzz_main.c`; `wide_args` in `vm/main.c` (Windows), set once before
     any scheduler starts; the block-scope `extern char **environ` in
     `vm/process.c`, read (never written) when `Process.spawn` builds a
-    child's environment.
+    child's environment; the stop state `stop` in `vm/loop.c` (lock-free
+    atomics, a pid and the wake handle), since a signal handler gets no
+    context (10.2.2, Stop signals).
   - `agc_init` (`vm/value.c`) asks Boehm (`GC_is_init_called`) instead of
     keeping a `ready` flag.
   - The GC-stress counter in `vm/value.c` (`AGC_GC_STRESS`, a test build

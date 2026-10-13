@@ -4,9 +4,11 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/magic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 #define LIMIT ((size_t)1048576)
@@ -33,6 +35,7 @@ typedef struct {
 
 typedef struct {
   op_kind kind;
+  const agc_runtime *rt;
   char *path;
   file_state *st;
   uint8_t *in;
@@ -44,6 +47,12 @@ typedef struct {
   bool dir, owns_st;
   int64_t size, mtime;
 } op;
+
+typedef struct {
+  struct stat pipe;
+  int fd;
+  bool found;
+} pipe_search;
 
 typedef struct {
   char *data;
@@ -231,10 +240,11 @@ char *agc_host_path(agc_vm *vm, const agc_string *s) {
   return path;
 }
 
-static op *new_op(op_kind kind) {
+static op *new_op(agc_vm *vm, op_kind kind) {
   op *o = calloc(1, sizeof(op));
   if (!o) agc_out_of_memory();
   o->kind = kind;
+  o->rt = vm->rt;
   return o;
 }
 
@@ -315,6 +325,87 @@ static bool write_target(const char *path) {
   return errno != ELOOP;
 }
 
+bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
+  DIR *dir = opendir("/proc/self/fd");
+  if (!dir) return false;
+  int own = dirfd(dir);
+  for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
+    char *end = NULL;
+    long fd = strtol(e->d_name, &end, 10);
+    if (end == e->d_name || *end || fd < 0 || fd == own || fd > INT32_MAX) continue;
+    if (visit((int)fd, data)) break;
+  }
+  closedir(dir);
+  return true;
+}
+
+static bool same_file(int fd, const struct stat *file) {
+  struct stat info;
+  return fstat(fd, &info) == 0 && info.st_dev == file->st_dev && info.st_ino == file->st_ino;
+}
+
+static bool pipe_info(int fd, struct stat *info) {
+  struct statfs fs;
+  return fstat(fd, info) == 0 && S_ISFIFO(info->st_mode) && fstatfs(fd, &fs) == 0 && fs.f_type == PIPEFS_MAGIC;
+}
+
+static bool same_pipe(int fd, void *data) {
+  pipe_search *s = data;
+  s->found = fd > 2 && fd != s->fd && same_file(fd, &s->pipe);
+  return s->found;
+}
+
+static bool note_pipe(int fd, void *data) {
+  agc_file_ids *ids = data;
+  struct stat info;
+  if (!pipe_info(fd, &info)) return false;
+  if (ids->count == ids->cap) {
+    size_t cap = ids->cap ? agc_size_mul(ids->cap, 2) : 8;
+    agc_file_id *grown = agc_alloc_atomic(agc_size_mul(cap, sizeof *grown));
+    if (ids->count) memcpy(grown, ids->ids, ids->count * sizeof *grown);
+    ids->ids = grown;
+    ids->cap = cap;
+  }
+  ids->ids[ids->count++] = (agc_file_id){(uint64_t)info.st_dev, (uint64_t)info.st_ino};
+  return false;
+}
+
+agc_file_ids agc_files_inherited(void) {
+  agc_file_ids ids = {0};
+  agc_each_fd(note_pipe, &ids);
+  return ids;
+}
+
+void agc_files_forget(agc_file_ids *ids, int fd) {
+  struct stat info;
+  if (!pipe_info(fd, &info)) return;
+  for (size_t k = ids->count; k-- > 0;)
+    if (ids->ids[k].dev == (uint64_t)info.st_dev && ids->ids[k].ino == (uint64_t)info.st_ino)
+      ids->ids[k] = ids->ids[--ids->count];
+}
+
+static bool inherited(const agc_file_ids *ids, const struct stat *info) {
+  for (size_t k = 0; k < ids->count; k++)
+    if (ids->ids[k].dev == (uint64_t)info->st_dev && ids->ids[k].ino == (uint64_t)info->st_ino) return true;
+  return false;
+}
+
+/* A path like /proc/self/fd/N can reopen a pipe the VM itself made (libuv's
+   signal pipes, a child's stdio); using it would corrupt the runtime. Pipes
+   the VM got at start stay reachable. */
+static bool private_pipe(const agc_runtime *rt, int fd) {
+  pipe_search s = {.fd = fd};
+  if (!pipe_info(fd, &s.pipe) || inherited(&rt->inherited, &s.pipe)) return false;
+  return !agc_each_fd(same_pipe, &s) || s.found;
+}
+
+static int checked(op *o, int fd) {
+  if (fd < 0 || !private_pipe(o->rt, fd)) return fd;
+  close(fd);
+  fail_op(o, FS_NOT_REGULAR, 0);
+  return -1;
+}
+
 static int open_for(op *o, bool reading, bool append) {
   if (reading) {
     struct stat info;
@@ -331,7 +422,7 @@ static int open_for(op *o, bool reading, bool append) {
     }
     int fd = open(o->path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) fail_op(o, FS_OPEN, errno);
-    return fd;
+    return checked(o, fd);
   }
   if (!write_target(o->path)) {
     fail_op(o, FS_NOT_REGULAR, 0);
@@ -344,7 +435,7 @@ static int open_for(op *o, bool reading, bool append) {
   }
   int fd = open(o->path, O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC | (append ? O_APPEND : O_TRUNC), 0666);
   if (fd < 0) fail_op(o, errno == EISDIR ? FS_IS_DIR : FS_OPEN, errno);
-  return fd;
+  return checked(o, fd);
 }
 
 static void work_read_text(op *o) {
@@ -696,7 +787,7 @@ static void close_file(agc_vm *vm, agc_resource *r) {
   r->next_owner = NULL;
   agc_task_wake_all(vm, &r->waiters, &r->waiters_tail, "close");
   if (!r->native || r->holder) return;
-  op *o = new_op(OP_CLOSE);
+  op *o = new_op(vm, OP_CLOSE);
   o->st = r->native;
   o->owns_st = true;
   r->native = NULL;
@@ -764,7 +855,7 @@ static agc_value path_op(agc_vm *vm, op_kind kind, const agc_string *path, int64
                          const char *expected) {
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return contract_error(who, expected, path);
-  op *o = new_op(kind);
+  op *o = new_op(vm, kind);
   o->path = agc_host_path(vm, path);
   return start(vm, o, agc_void(), timeout);
 }
@@ -783,7 +874,7 @@ static agc_value write_text(agc_vm *vm, agc_value *args, uint32_t span, op_kind 
   if (content->bytes > LIMIT) return error_of("filesystem: text exceeds 1048576 bytes");
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
-  op *o = new_op(kind);
+  op *o = new_op(vm, kind);
   o->in = malloc(content->bytes ? content->bytes : 1);
   if (!o->in) agc_out_of_memory();
   if (content->bytes) memcpy(o->in, content->data, content->bytes);
@@ -833,7 +924,7 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
     return error_of("filesystem: mode must be read, write, or append");
   }
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
-  op *o = new_op(kind);
+  op *o = new_op(vm, kind);
   o->path = agc_host_path(vm, path);
   o->st = new_state(kind == OP_OPEN_READ, kind != OP_OPEN_READ);
   o->owns_st = true;
@@ -874,7 +965,7 @@ static agc_value read_op(agc_vm *vm, agc_value handle, op_kind kind, size_t coun
   if (blocked(vm, handle, &timeout, &failure)) return failure;
   file_state *st = usable(vm, handle, true, &failure);
   if (!st) return failure;
-  op *o = new_op(kind);
+  op *o = new_op(vm, kind);
   o->st = st;
   o->count = count;
   return start(vm, o, handle, timeout);
@@ -894,7 +985,7 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const uint8_t *data, size_t len,
                            int64_t timeout) {
-  op *o = new_op(OP_WRITE);
+  op *o = new_op(vm, OP_WRITE);
   o->st = st;
   o->in_len = st->end + len;
   o->in = malloc(o->in_len ? o->in_len : 1);
@@ -954,7 +1045,7 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_value failure;
   if (blocked(vm, args[0], &timeout, &failure)) return failure;
   if (!r->native || r->closing) return ok_void();
-  op *o = new_op(OP_CLOSE);
+  op *o = new_op(vm, OP_CLOSE);
   o->st = r->native;
   o->owns_st = true;
   r->native = NULL;
@@ -1075,6 +1166,13 @@ const agc_builtin agc_file_builtins[] = {
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
 #else
 void agc_files_init(agc_vm *vm) { (void)vm; }
+
+agc_file_ids agc_files_inherited(void) { return (agc_file_ids){0}; }
+
+void agc_files_forget(agc_file_ids *ids, int fd) {
+  (void)ids;
+  (void)fd;
+}
 
 void agc_files_close(agc_vm *vm) { (void)vm; }
 

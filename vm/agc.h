@@ -27,7 +27,6 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
 #define AGC_TURN_STEPS 2000
 #define AGC_COST_BYTES 64
-#define AGC_STOP_SIGNALS 3
 
 typedef enum {
   AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST
@@ -157,7 +156,7 @@ struct agc_resource {
   uint64_t id;
   agc_resource_kind kind;
   void *native;
-  agc_release_fn release;
+  agc_release_fn release, goodbye;
   agc_value context;
   agc_task *task;
   agc_resource *holder;
@@ -327,6 +326,15 @@ typedef struct {
 } agc_gc_info;
 
 typedef struct {
+  uint64_t dev, ino;
+} agc_file_id;
+
+typedef struct {
+  agc_file_id *ids;
+  size_t count, cap;
+} agc_file_ids;
+
+typedef struct {
   const agc_program *program;
   FILE *out, *err;
   agc_value args;
@@ -343,6 +351,7 @@ typedef struct {
   agc_trace trace;
   agc_outcome outcome;
   agc_input in;
+  agc_file_ids inherited;
 } agc_runtime;
 
 typedef enum { AGC_TASK_READY, AGC_TASK_RUNNING, AGC_TASK_PARKED, AGC_TASK_DONE } agc_task_state;
@@ -569,15 +578,23 @@ struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
 #ifdef __linux__
-extern const int agc_stop_signals[AGC_STOP_SIGNALS];
 void agc_io_block_stop(sigset_t *saved);
+bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 #endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
+void agc_io_watch_stop(agc_vm *vm, int64_t driver);
+int agc_io_stop_signal(void);
+void agc_io_children_stopped(void);
+void agc_io_goodbye(agc_vm *vm);
+void agc_io_flush_files(agc_vm *vm);
+void agc_processes_stop(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
+agc_file_ids agc_files_inherited(void);
+void agc_files_forget(agc_file_ids *ids, int fd);
 void agc_files_close(agc_vm *vm);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
@@ -631,6 +648,7 @@ _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *mes
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
 void agc_flush(agc_vm *vm);
+_Noreturn void agc_stop(agc_vm *vm, int sig);
 
 void agc_random_seed(agc_random *r, uint64_t seed);
 uint64_t agc_random_next(agc_random *r);
@@ -649,6 +667,7 @@ void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outco
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
 void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style);
+void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, agc_style style);
 
 int agc_fuzz_one(const uint8_t *data, size_t len);
 

@@ -147,7 +147,7 @@ and cost one predictable branch each.
   limit. When it runs out, `vm/main.c` prints `agentica: file data may
   not be written: the flush took longer than MS ms`, or
   `{"flush_timeout_ms":MS,"warning":"file data may not be written"}` with
-  `--json`, after `agc_io_close` and before a diagnostic, and keeps the
+  `--json`, after the file flush and before a diagnostic, and keeps the
   exit code. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
@@ -181,10 +181,15 @@ and cost one predictable branch each.
   checks it deletes the input, but only if the path still names the file it
   opened (same device and inode). The driver deletes the file too, when the
   VM never ran or failed before loading, and on a break. On a break
-  (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver) the driver stops a
-  running VM with `SIGTERM`, waits up to 2 seconds for it to end, and only
-  then sends `SIGKILL`; the VM's watchers kill its children in that
-  time (10.4). When a driver
+  (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver) the driver first waits up
+  to 2 seconds, since a Ctrl-C on a terminal reaches the VM too and a
+  `SIGTERM` at once would be its second stop signal, which skips the file
+  flush (10.2.2, Stop signals); then it sends `SIGTERM`, waits up to 2 more
+  seconds, and only then sends `SIGKILL`. On any other way out (a failed
+  stdin read) it sends `SIGTERM` at once. The VM kills its children on its
+  exit path (10.4). A driven VM whose driver died (`getppid()` is no longer
+  `PID`) ends on its first stop signal without the file flush, after it
+  kills its children. When a driver
   output port is not a file stream (rackunit, captured output) it copies
   that stream through a pipe, and a non-file stdin is copied into the VM's
   stdin by a thread that stops when the VM exits. The thread reads ahead
@@ -267,13 +272,16 @@ and cost one predictable branch each.
   libuv callbacks have no runtime pointer. Task ids come from the runtime's
   `next_task_id` (main is 1); job and handle ids are resource ids from the
   scheduler's registry. Event names: `sched` spawn, turn (`steps`, `cost`,
-  `why`), wake (`by=job|await|lock|stdin`), cancel, stall, fail, exit; `io`
+  `why`), wake (`by=job|await|lock|stdin`), cancel, stall, fail, stop
+  (`signal`, a stop signal ends the run), exit; `io`
   start, done, timeout (`us` from the job start to its `done` callback,
   `result=ok|error|value`; lock jobs have none, `lock_handoff` and
   `lock_timeout` cover them), lock_wait, lock_handoff, lock_timeout, stdin,
   poll (`mode=once|nowait`, `us` blocked; a `nowait` poll that found no
-  finished job writes nothing), close (`resources` left in the
-  registry, `settled`), hard_exit, and the TCP events of 10.3.1:
+  finished job writes nothing), end (`code`, `signal`: the one exit
+  path is done and `_exit` or the signal follows; the harnesses'
+  `agc_io_close` writes close with `resources` and `settled` instead),
+  and the TCP events of 10.3.1:
   tcp_connect (`socket`, `host`, `port`), tcp_connected, tcp_connect_error
   (`error`, one per failed address), tcp_listen (`listener`, `host`, the
   bound `port`, the number of bound `addresses`), tcp_accept (`listener`,
@@ -285,7 +293,7 @@ and cost one predictable branch each.
   directory is not one), exit, close, term (the `SIGTERM` of a captured
   child), kill, reap, eof (`pipe=stdin|stdout|stderr`), truncated
   (`pipe=stdout|stderr`, a captured stream past 1 MiB),
-  stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
+  stderr, guard_cleanup;
   `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
   collect (`at=turn|end`); `tls` (10.3) tls_handshake (`socket`, or
   `socket=0` and the `listener` on the server side, `role=client|server`,
