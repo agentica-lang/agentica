@@ -8,7 +8,7 @@ description: Install Agentica, run your first program, check it and read its err
 
 Agentica programs run on a bytecode VM written in C. The `agentica` command checks a program and compiles it to bytecode with a front end written in [Racket](https://racket-lang.org/), then runs it on the VM.
 
-To build from source you need Racket CS 9.3 or newer, a C11 compiler (gcc or clang) and `make`. Get the source with the VM's third-party libraries, and build the `agentica` command:
+To build from source you need Racket CS 9.3 or newer, a C11 compiler (gcc or clang) and `make`. On Linux the VM also needs OpenSSL 3 and `pkg-config` (Debian and Ubuntu: `libssl-dev pkg-config`); `make vm AGENTICA_OPENSSL=vendored` builds OpenSSL from its submodule instead, which needs Perl 5 and takes a few minutes; pass it to every make command, or `export AGENTICA_OPENSSL=vendored`. Get the source with the VM's third-party libraries, and build the `agentica` command:
 
 ```sh
 git clone https://github.com/sonic182/agentica.git
@@ -17,7 +17,7 @@ git submodule update --init
 make exe
 ```
 
-This writes `dist/agentica` and the VM next to it, `dist/agentica-vm`. Put that directory on your `PATH`, or call the command by its full path. You can also skip `make exe`: after `make vm`, `racket src/main.rkt file.agc` does the same as `agentica file.agc`, with the VM from `dist/`.
+This writes `dist/agentica` and the VM next to it, `dist/agentica-vm`. A source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its VM has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path. You can also skip `make exe`: after `make vm`, `racket src/main.rkt file.agc` does the same as `agentica file.agc`, with the VM from `dist/`.
 
 The release archive for Linux x86-64 needs none of these tools: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or newer.
 

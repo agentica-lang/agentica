@@ -38,6 +38,7 @@ jobs:
           dest: ${{ steps.racket.outputs.dir }}
       - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"
       - run: echo "commit $GITHUB_SHA, FUZZ_SEED=$FUZZ_SEED, FUZZ_RUNS=$RUNS"
+      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
       - run: make vm-fuzz FUZZ_RUNS="$RUNS"
       - if: failure()
         uses: actions/upload-artifact@v4
