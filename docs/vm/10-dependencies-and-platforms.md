@@ -39,7 +39,9 @@ The `AGENTICA_OPENSSL` make variable picks the OpenSSL build (user decision of
 - `system` (the default) links the system OpenSSL dynamically with the
   flags from `pkg-config --cflags --libs openssl`. The stamp
   `$(VM_BUILD)/openssl-system`, the first prerequisite of every VM binary
-  and of `vm-lint`, checks first and stops with a clear message when
+  and of `vm-lint` and an order-only prerequisite of every VM object, so
+  it runs before any `vm/*.c` compile (under `-j` the third-party
+  libraries may start beside it); it stops with a clear message when
   `pkg-config` or the package is missing, or when its version is older
   than `OSSL_MIN` (3.0.0: the adapter uses 3.0 APIs such as
   `SSL_CTX_load_verify_file`, `ERR_SYSTEM_ERROR` and
@@ -53,8 +55,8 @@ The `AGENTICA_OPENSSL` make variable picks the OpenSSL build (user decision of
   glibc's own libraries (libc, libm, libpthread, libdl; `readelf -d` shows
   no `libssl` or `libcrypto`) and runs on any glibc 2.28 system. Every
   CI job, the sanitizer one included, uses `system`; the `test` job links
-  one vendored release-mode binary from a cached OpenSSL and runs the TLS
-  tests on it, so this path stays tested (11).
+  one vendored release-mode binary from a cached OpenSSL and, on a cache
+  hit, runs the TLS tests on it, so this path stays tested (11).
 
 The mode is not remembered: pass `AGENTICA_OPENSSL=vendored` to every make
 command, or export it, since `make test` and the Racket tests run `make

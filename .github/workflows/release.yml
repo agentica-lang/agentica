@@ -17,6 +17,7 @@ jobs:
       ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
       VM_GLIBC: '2.28'
       AGENTICA_OPENSSL: vendored
+      CCACHE: ''
     steps:
       - uses: actions/checkout@v4
         with:

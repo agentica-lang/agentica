@@ -149,7 +149,6 @@ jobs:
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - run: make vm-openssl AGENTICA_OPENSSL=vendored
-      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
       - run: |
           make -j"$(nproc)" build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
           if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
@@ -273,6 +272,8 @@ jobs:
             build/vm/release/openssl/libcrypto.a
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
+      - if: steps.vendored.outputs.cache-hit != 'true'
+        run: echo "::notice::Vendored OpenSSL check skipped - no cached release-mode OpenSSL for this key; warm-third-party checks it on master"
       - if: steps.vendored.outputs.cache-hit == 'true'
         run: |
           make -j"$(nproc)" build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
