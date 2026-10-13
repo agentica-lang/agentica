@@ -33,7 +33,7 @@ struct agc_io_job {
   job *ready_next;
   size_t slot;
   uint64_t started_ns, ended_ns;
-  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued;
+  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping;
 };
 #endif
 
@@ -66,6 +66,25 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   r->slot = reg->count;
   reg->items[reg->count++] = r;
   return r;
+}
+
+static void hand_on(agc_vm *vm, agc_resource *handle) {
+  agc_task *next = handle->waiters;
+  if (!next) return;
+  agc_task_remove(&handle->waiters, &handle->waiters_tail, next);
+  handle->next_owner = next;
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_handoff handle=%" PRIu64 " task=%" PRIu64, handle->id, next->id);
+  agc_task_wake(vm, next, "lock");
+}
+
+void agc_handle_leave(agc_vm *vm, agc_task *t) {
+  agc_resource *handle = t->lock_wait;
+  t->lock_wait = NULL;
+  t->lock_deadline = 0;
+  agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+  if (handle->next_owner != t) return;
+  handle->next_owner = NULL;
+  hand_on(vm, handle);
 }
 
 void agc_unregister(agc_vm *vm, agc_resource *r) {
@@ -134,7 +153,7 @@ static job *job_at(const agc_vm *vm, size_t k) {
 static void sweep(agc_vm *vm) {
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
-    if (!j || !j->consumed || !j->work_done) continue;
+    if (!j || !j->consumed || !j->work_done || j->queued) continue;
     if (j->data) {
       j->kind->drop(j->data);
       j->data = NULL;
@@ -160,6 +179,63 @@ static agc_loop *loop_of(agc_vm *vm) {
   return loop;
 }
 
+static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return agc_void();
+}
+
+static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL, false, "lock", NULL};
+
+static void trace_finish(agc_vm *vm, const agc_resource *r, const job *j, bool done, agc_value result) {
+  const agc_trace *tr = &vm->rt->trace;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns || j->kind == &lock_io) return;
+  uint64_t end = j->ended_ns ? j->ended_ns : agc_trace_now();
+  uint64_t us = end > j->started_ns ? (end - j->started_ns) / 1000u : 0;
+  const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
+  AGC_TRACE(tr, AGC_TRACE_IO, "%s job=%" PRIu64 " kind=%s us=%" PRIu64 " result=%s", done ? "done" : "timeout", r->id,
+            j->kind->name, us, outcome);
+}
+
+static agc_value take_context(agc_vm *vm, agc_resource *r) {
+  agc_value context = r->context;
+  r->context = agc_void();
+  if (agc_is(context, AGC_T_HANDLE)) {
+    agc_resource *handle = agc_as_handle(vm, context);
+    if (handle->holder == r) {
+      handle->holder = NULL;
+      hand_on(vm, handle);
+    }
+  }
+  return context;
+}
+
+/* A detached job (its task was cancelled) ends here, between turns: its
+   result is dropped, its `expired` half never runs, so it never closes a
+   handle, and the turn cost of `done` is not charged to the current task. */
+static void end_detached(agc_vm *vm, agc_resource *r) {
+  job *j = r->native;
+  if (!j->dropping && !j->work_done) {
+    if (!j->timer_fired || !j->kind->cancel || !j->kind->cancel(j->data, true)) return;
+    j->dropping = true;
+  }
+  close_timer(j);
+  j->consumed = true;
+  agc_value context = take_context(vm, r);
+  void *data = j->data;
+  j->data = NULL;
+  if (j->dropping) {
+    j->work_done = true;
+    if (data) j->kind->drop(data);
+  } else {
+    int64_t cost = vm->task->turn_cost;
+    trace_finish(vm, r, j, true, j->kind->done(vm, data, context));
+    vm->task->turn_cost = cost;
+  }
+  sweep(vm);
+}
+
 static void drain(agc_vm *vm) {
   agc_loop *loop = vm->loop;
   job *j = loop->ready;
@@ -169,11 +245,14 @@ static void drain(agc_vm *vm) {
     job *next = j->ready_next;
     j->ready_next = NULL;
     j->queued = false;
-    if (reg && j->slot < reg->count && reg->items[j->slot]->native == j) {
+    if (!j->consumed && reg && j->slot < reg->count && reg->items[j->slot]->native == j) {
       agc_resource *r = reg->items[j->slot];
       agc_task *t = r->task;
       r->task = NULL;
-      if (t) agc_task_wake(vm, t, "job");
+      if (t)
+        agc_task_wake(vm, t, "job");
+      else if (j->detached)
+        end_detached(vm, r);
     }
     j = next;
   }
@@ -252,25 +331,20 @@ void agc_io_ready(agc_io_job *j) {
 }
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
-  if (!vm->loop || !uv_loop_alive(&vm->loop->uv)) return false;
-  const agc_trace *tr = &vm->rt->trace;
-  uint64_t before = AGC_TRACE_ON(tr, AGC_TRACE_IO) ? agc_trace_now() : 0;
-  uv_run(&vm->loop->uv, wait ? UV_RUN_ONCE : UV_RUN_NOWAIT);
-  if (wait || vm->loop->ready)
-    AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, wait ? "once" : "nowait",
-              (agc_trace_now() - before) / 1000u);
+  if (!vm->loop) return false;
+  if (uv_loop_alive(&vm->loop->uv)) {
+    const agc_trace *tr = &vm->rt->trace;
+    uint64_t before = AGC_TRACE_ON(tr, AGC_TRACE_IO) ? agc_trace_now() : 0;
+    uv_run(&vm->loop->uv, wait ? UV_RUN_ONCE : UV_RUN_NOWAIT);
+    if (wait || vm->loop->ready)
+      AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, wait ? "once" : "nowait",
+                (agc_trace_now() - before) / 1000u);
+  } else if (!vm->loop->ready) {
+    return false;
+  }
   drain(vm);
   return true;
 }
-
-static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  return agc_void();
-}
-
-static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL, false, "lock"};
 
 static uint64_t loop_now(agc_vm *vm) {
   agc_loop *loop = loop_of(vm);
@@ -282,6 +356,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   agc_task *t = vm->task;
   uint64_t deadline = t->lock_deadline;
   uint64_t now = deadline ? loop_now(vm) : 0;
+  t->lock_wait = NULL;
   if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
     if (deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
     t->lock_deadline = 0;
@@ -307,19 +382,10 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_wait handle=%" PRIu64 " task=%" PRIu64 " wait_ms=%" PRIu64, handle->id,
             t->id, deadline - now);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
+  t->lock_wait = handle;
   agc_io_start(vm, &lock_io, NULL, agc_void(), (int64_t)(deadline - now));
   agc_task_park(vm, true);
   return AGC_LOCK_WAIT;
-}
-
-static void trace_finish(agc_vm *vm, const agc_resource *r, const job *j, bool done, agc_value result) {
-  const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns || j->kind == &lock_io) return;
-  uint64_t end = j->ended_ns ? j->ended_ns : agc_trace_now();
-  uint64_t us = end > j->started_ns ? (end - j->started_ns) / 1000u : 0;
-  const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
-  AGC_TRACE(tr, AGC_TRACE_IO, "%s job=%" PRIu64 " kind=%s us=%" PRIu64 " result=%s", done ? "done" : "timeout", r->id,
-            j->kind->name, us, outcome);
 }
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
@@ -328,22 +394,8 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   r->task = NULL;
   job *j = r->native;
   close_timer(j);
-  agc_value context = r->context;
-  r->context = agc_void();
   j->consumed = true;
-  if (agc_is(context, AGC_T_HANDLE)) {
-    agc_resource *handle = agc_as_handle(vm, context);
-    if (handle->holder == r) {
-      handle->holder = NULL;
-      agc_task *next = handle->waiters;
-      if (next) {
-        agc_task_remove(&handle->waiters, &handle->waiters_tail, next);
-        handle->next_owner = next;
-        AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "lock_handoff handle=%" PRIu64 " task=%" PRIu64, handle->id, next->id);
-        agc_task_wake(vm, next, "lock");
-      }
-    }
-  }
+  agc_value context = take_context(vm, r);
   agc_value result;
   bool done = (j->kind->work || j->kind->external) ? j->work_done : j->timer_fired;
   if (done) {
@@ -357,6 +409,17 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   if (j->kind->external) j->work_done = true;
   sweep(vm);
   return result;
+}
+
+void agc_io_detach(agc_vm *vm, agc_task *t) {
+  agc_resource *r = t->parked;
+  t->parked = NULL;
+  r->task = NULL;
+  job *j = r->native;
+  j->detached = true;
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "detach job=%" PRIu64 " kind=%s task=%" PRIu64, r->id, j->kind->name, t->id);
+  if (j->kind->cancel && j->kind->cancel(j->data, false)) j->dropping = true;
+  if (j->dropping || j->work_done) mark_ready(j);
 }
 
 static bool held(const agc_resource *r) {
@@ -385,6 +448,7 @@ static bool close_all(agc_vm *vm) {
   release_handles(vm);
   if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
+  for (job *j = vm->loop->ready; j; j = j->ready_next) j->queued = false;
   vm->loop->ready = vm->loop->ready_tail = NULL;
   sweep(vm);
   release_handles(vm);
@@ -431,6 +495,11 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+}
+
+void agc_io_detach(agc_vm *vm, agc_task *t) {
+  (void)vm;
+  t->parked = NULL;
 }
 
 bool agc_io_close(agc_vm *vm) {

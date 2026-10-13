@@ -241,6 +241,40 @@
     jobs as before. A failure or `System.exit` in any task ends the run at
     once through `agc_fail`/`agc_exit`, as the evaluator's first
     published outcome does.
+  - Task cancellation (20b, the core that `close_server` (20c),
+    `Task.map` (17a) and task crash isolation (phase 24) build on; no
+    program can cancel a task yet). Each task records its `parent` (the
+    task that spawned it; `main` has none) and a list of its running
+    children (`children`, linked through `prev_sibling` and
+    `next_sibling`). When a task ends, normally or cancelled, it leaves
+    its parent's list and its running children move to its parent, so a
+    grandchild whose parent ended is still a descendant of the item
+    above it. `agc_task_cancel(vm, t)` cancels `t` and its running
+    descendants, children before parents, and does nothing for `main`
+    or a task that has ended. Each task gets its `cancelled` flag, then:
+    - a ready task leaves the run queue;
+    - a task parked on an I/O job detaches from it (10.2.2, "Detached
+      jobs"); a `Task.sleep` job is a timer only, so its timer is closed
+      at the next drain;
+    - a task waiting for a handle's lock (`lock_wait`) leaves the FIFO;
+      if it was the `next_owner`, ownership passes to the head waiter,
+      which is woken, as at a release;
+    - a task in `Task.await` (`awaiting`) leaves the target's waiters;
+      a stdin reader waiting for the read in flight leaves the input's
+      FIFO;
+    - the task then ends like a task that returns (registers and frames
+      dropped, `pending_count` lowered), and its waiters are woken. On
+      retry, a `Task.await` on a cancelled task halts with
+      `RUNTIME-TASK-CANCELLED` ("task was cancelled") at that call's
+      span; so does any later `Task.await` on it.
+    A running task (the one that calls the cancel, with N=1) only gets
+    its flag and `vm->yield`: the builtin that cancels finishes its work,
+    `CALL_BUILTIN` stores its result and returns, and the scheduler ends
+    the task as above instead of queueing it, so no instruction of it
+    runs after that builtin. With N schedulers the flag is the cancel
+    flag of 10.2.3. The cancel spends no step; it charges one turn unit
+    per cancelled task to the task that calls it (the turn only, never
+    `--max-steps`).
   - Stall check (N=1): the queue is empty and `uv_loop_alive` is false
     (or there is no loop) while `main` is not done: `RUNTIME-INTERNAL`
     ("every task is waiting and nothing can wake them"). No Agentica
@@ -363,7 +397,10 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   next to `File.close` ends, as with Racket's fair semaphore). When the
   `next_owner` takes the lock it wakes the rest, which re-run and queue
   again in order behind it; that also covers an owner whose call ends
-  without a job (a buffered write, a closed handle). So `close` waits
+  without a job (a buffered write, a closed handle). A cancelled waiter
+  leaves the FIFO, and a cancelled `next_owner` passes ownership to the
+  next head waiter the same way (20b, `agc_handle_leave`), so a lock
+  never stays with a task that will not run. So `close` waits
   for the operation in flight, two readers take turns and never share
   the read buffer, and buffered writes keep their order. On an operation
   timeout, `expired` hands the state to the stuck operation and closes the
@@ -371,6 +408,30 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   closed" and never touches the state the stuck work still uses. Wait
   lists link tasks through `wait_next`, apart from the run queue's
   `next`, since a waiter woken by its timer is in both until it runs.
+- **Detached jobs (20b).** When its task is cancelled, a job is
+  detached (`agc_io_detach`): `r->task` and `task->parked` are cleared
+  and the job is marked detached. It is never abandoned with a close: it
+  runs to its own end or deadline as if its task were still there, keeps
+  the handle's lock until then, and ends between turns, when the drain
+  meets it: its `done` half runs and the result is dropped (its turn cost
+  is not charged to the current task), the lock passes to the head
+  waiter as at a release, and the job is swept. Its `expired` half never
+  runs, so a detached job never closes a handle. A kind may set a
+  `cancel` half, called once at the detach and again when the job's
+  timer fires before its work ends; when it returns true the job ends
+  then without a result, through `drop`. `HttpWire.exchange` uses it:
+  an exchange that waits for its TLS setup or for a pool slot leaves the
+  queue, and one that holds a slot but has not sent its request (still
+  connecting) closes that connection, so the slot passes to the next
+  waiter (or becomes free); an exchange that has sent its request runs
+  to its end, and its connection is then closed, never pooled. The TCP
+  and process kinds use it at the deadline for everything but a send: a
+  read, accept, connect or wait leaves its handle (`drop` unlinks the
+  request) without the `expired` half that would close it; a send waits
+  for its write callback, since the write request lives in the handle's
+  state. A pool job (files, stdin) cannot be stopped, so it ends when its
+  work ends. A job on the ready list is never swept until the drain
+  takes it.
 - **External jobs (processes PR).** A kind with `external` set has no
   `work` half: nothing runs in the pool. A libuv callback on the loop
   thread (a pipe or socket read, a finished write, a child's exit, a

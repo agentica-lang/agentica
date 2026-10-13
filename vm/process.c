@@ -414,7 +414,12 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   return agc_stream_timed_out();
 }
 
-static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process"};
+static bool request_cancel(void *data, bool deadline) {
+  const request *q = data;
+  return deadline && q->kind != REQ_SEND;
+}
+
+static const agc_io_kind process_io = {NULL, request_done, request_expired, drop_request, true, "process", request_cancel};
 
 static void wrote(uv_write_t *w, int status) {
   proc *p = OWNER(w, write_req);

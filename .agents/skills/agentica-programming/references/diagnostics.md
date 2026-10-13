@@ -61,6 +61,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
 | `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration (see `tasks.md`) |
+| `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled, at the await (see `tasks.md`); no program can cancel a task yet |
 | `LOWER-UNSUPPORTED` | the VM cannot run this form; exit 1 before anything runs. Every checked program runs on the VM today, so seeing it is an interpreter bug to report |
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and `RUNTIME-BDD-*` codes; see `bdd.md`.

@@ -13,7 +13,7 @@ Any task diagnostic terminates the evaluation with its original code and span, e
 
 Random: each task has its own generator, split from its parent at spawn (one parent draw per spawn), so with `--seed N` each task repeats its own values. `--seed` alone does not make a multi-task run repeatable: only per-task values repeat, and the interleaving can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler. Do not depend on cross-task order.
 
-Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
+Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`; the VM cancels a task only for a library feature (none yet), and a `Task.await` on a cancelled task halts with RUNTIME-TASK-CANCELLED at the await. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
 `pending_count` (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await or I/O. A returned task is not counted, even when nothing awaited it.
 

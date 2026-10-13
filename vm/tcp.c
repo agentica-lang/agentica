@@ -844,7 +844,12 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   return agc_stream_timed_out();
 }
 
-static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp"};
+static bool request_cancel(void *data, bool deadline) {
+  const request *q = data;
+  return deadline && q->kind != REQ_SEND;
+}
+
+static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp", request_cancel};
 
 static request *park(agc_vm *vm, net *n, req_kind kind, agc_value context, int64_t timeout) {
   request *q = new_request(n, kind);

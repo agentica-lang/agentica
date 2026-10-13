@@ -617,7 +617,7 @@ static void release_client(void *native) {
   settle_client(c);
 }
 
-static void detach(exchange *x) {
+static void detach(exchange *x, const char *why) {
   if (x->detached) return;
   client *c = x->c;
   unqueue(x);
@@ -633,7 +633,7 @@ static void detach(exchange *x) {
     break;
   }
   if (x->conn) {
-    close_conn(x->conn, "timeout");
+    close_conn(x->conn, why);
     x->conn = NULL;
     free_slot(x->o);
   }
@@ -646,7 +646,7 @@ static void detach(exchange *x) {
 
 static void free_exchange(exchange *x) {
   client *c = x->c;
-  detach(x);
+  detach(x, "timeout");
   x->o->users--;
   prune(c);
   agc_http_body_free(&x->body);
@@ -728,13 +728,23 @@ static agc_value exchange_done(agc_vm *vm, void *data, agc_value context) {
 static agc_value exchange_expired(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
   (void)context;
-  detach(data);
+  detach(data, "timeout");
   return agc_stream_timed_out();
 }
 
 static void exchange_drop(void *data) { free_exchange(data); }
 
-static const agc_io_kind http_io = {NULL, exchange_done, exchange_expired, exchange_drop, true, "http"};
+static bool exchange_cancel(void *data, bool deadline) {
+  exchange *x = data;
+  if (deadline || x->at != X_EXCHANGE) {
+    detach(x, "cancel");
+    return true;
+  }
+  x->keep = false;
+  return false;
+}
+
+static const agc_io_kind http_io = {NULL, exchange_done, exchange_expired, exchange_drop, true, "http", exchange_cancel};
 
 static bool host_text(const agc_string *host) {
   if (host->bytes == 0 || host->bytes > MAX_HOST) return false;
