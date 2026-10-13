@@ -65,7 +65,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
   third_party/picohttpparser # picohttpparser submodule pinned to v1.4 (HTTP heads)
-  third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9; VM_OPENSSL=vendored builds it static per mode into build/vm/<mode>/openssl (needs Perl); the default links the system OpenSSL 3
+  third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9; AGENTICA_OPENSSL=vendored builds it static per mode into build/vm/<mode>/openssl (needs Perl); the default links the system OpenSSL 3
 tests/
   <stage>-test.rkt      # lexer, parser, checker, modules, bdd; filesystem and process run programs on the VM
   diagnostic-test.rkt   # excerpt and caret format

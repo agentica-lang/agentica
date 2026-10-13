@@ -77,11 +77,11 @@ site-serve: site-sass
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
-# make vm VM_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
-#                         every make command or export it. The default VM_OPENSSL=system links the system OpenSSL 3 found by pkg-config
+# make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
+#                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before building anything else.
-# make vm-openssl         VM_OPENSSL=vendored: build only the static libraries; VM_OPENSSL=system: check the system OpenSSL
-# make vm-openssl-key     VM_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
+# make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
+# make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
 # make vm-third-party     build libgc, yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
@@ -189,7 +189,7 @@ OSSL_CONFIGURE = $(OSSL_ENV) CC='$(strip $(OSSL_LAUNCH) $(VM_CC))' perl $(CURDIR
 OSSL_SUBMAKE = $(OSSL_ENV) make -C $(OSSL_BUILD) CC='$(strip $(OSSL_LAUNCH) $(VM_CC))' build_libs
 OSSL_RECIPE = $(subst ','\'',$(subst $(CURDIR)/,,$(OSSL_CONFIGURE) | $(OSSL_SUBMAKE)))
 OSSL_KEY = { echo '$(OSSL_RECIPE)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; git -C $(OSSL_DIR) rev-parse HEAD 2>/dev/null || true; }
-VM_OPENSSL ?= system
+AGENTICA_OPENSSL ?= system
 PKG_CONFIG ?= pkg-config
 OSSL_MIN := 3.0.0
 VM_OSSL :=
@@ -197,24 +197,24 @@ OSSL_LINK :=
 OSSL_INC :=
 OSSL_DEP :=
 ifneq ($(UV_NAMES),)
-ifeq ($(VM_OPENSSL),vendored)
+ifeq ($(AGENTICA_OPENSSL),vendored)
 VM_OSSL := $(OSSL_BUILD)/libssl.a $(OSSL_BUILD)/libcrypto.a
 OSSL_LINK := $(VM_OSSL)
 OSSL_DEP := $(VM_OSSL)
 OSSL_INC := -I $(OSSL_BUILD)/include -I $(OSSL_DIR)/include
-else ifeq ($(VM_OPENSSL),system)
+else ifeq ($(AGENTICA_OPENSSL),system)
 OSSL_LINK := $(shell $(PKG_CONFIG) --libs openssl 2>/dev/null)
 OSSL_INC := $(shell $(PKG_CONFIG) --cflags openssl 2>/dev/null)
 OSSL_DEP := $(VM_BUILD)/openssl-system
 else
-$(error VM_OPENSSL must be system or vendored, not '$(VM_OPENSSL)')
+$(error AGENTICA_OPENSSL must be system or vendored, not '$(AGENTICA_OPENSSL)')
 endif
 endif
 VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
-	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(VM_OPENSSL) $(OSSL_LINK)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(VM_OPENSSL) $(OSSL_LINK)' > $@
+	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' > $@
 
 $(VM_OBJ_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
@@ -282,15 +282,15 @@ $(OSSL_DIR)/VERSION.dat:
 vm-openssl-key $(OSSL_STAMP): OSSL_LAUNCH :=
 
 vm-openssl-key: $(OSSL_DIR)/VERSION.dat
-	@test '$(VM_OPENSSL)' = vendored || { echo "vm-openssl-key describes the VM_OPENSSL=vendored build; run make -s vm-openssl-key VM_OPENSSL=vendored" >&2; exit 1; }
+	@test '$(AGENTICA_OPENSSL)' = vendored || { echo "vm-openssl-key describes the AGENTICA_OPENSSL=vendored build; run make -s vm-openssl-key AGENTICA_OPENSSL=vendored" >&2; exit 1; }
 	@$(OSSL_KEY)
 
 vm-openssl: $(OSSL_DEP)
 
 $(VM_BUILD)/openssl-system: FORCE
-	@command -v $(PKG_CONFIG) >/dev/null || { echo "VM_OPENSSL=system needs pkg-config and the OpenSSL 3 development files (Debian: apt install pkg-config libssl-dev), or build with VM_OPENSSL=vendored" >&2; exit 1; }
-	@$(PKG_CONFIG) --exists openssl || { echo "pkg-config cannot find openssl: install the OpenSSL 3 development files (Debian: libssl-dev), or build with VM_OPENSSL=vendored" >&2; exit 1; }
-	@$(PKG_CONFIG) --atleast-version=$(OSSL_MIN) openssl || { echo "the VM needs OpenSSL $(OSSL_MIN) or newer, pkg-config found $$($(PKG_CONFIG) --modversion openssl); install a newer libssl-dev or build with VM_OPENSSL=vendored" >&2; exit 1; }
+	@command -v $(PKG_CONFIG) >/dev/null || { echo "AGENTICA_OPENSSL=system needs pkg-config and the OpenSSL 3 development files (Debian: apt install pkg-config libssl-dev), or build with AGENTICA_OPENSSL=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --exists openssl || { echo "pkg-config cannot find openssl: install the OpenSSL 3 development files (Debian: libssl-dev), or build with AGENTICA_OPENSSL=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --atleast-version=$(OSSL_MIN) openssl || { echo "the VM needs OpenSSL $(OSSL_MIN) or newer, pkg-config found $$($(PKG_CONFIG) --modversion openssl); install a newer libssl-dev or build with AGENTICA_OPENSSL=vendored" >&2; exit 1; }
 	@mkdir -p $(VM_BUILD)
 	@{ $(PKG_CONFIG) --modversion openssl; echo '$(OSSL_INC) $(OSSL_LINK)'; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
