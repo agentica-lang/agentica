@@ -1,13 +1,13 @@
 ### TCP, TLS and HTTP
 
-Networking uses the existing expression syntax and lightweight tasks.
-`TCP`, `TLS`, `HttpWire`, `Socket`, `Listener`, `HttpClient`, `HttpServer`,
-`Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions` and
-`HttpServerOptions` are reserved; `HTTP` is not, since it is the import
-alias of `std/http` (below, "HTTP client and server (`std/http`)"). Handles are opaque: no constructor, equality, fields or JSON
-encoding; inspect prints their type in angle brackets. Handles belong to
-their run and close when it ends.
-Network access needs no CLI permission flag.
+Networking uses the existing expression syntax and lightweight tasks. `TCP`,
+`TLS`, `HttpWire`, `Socket`, `Listener`, `HttpClient`, `HttpServer`, `Header`,
+`HttpRequest`, `HttpResponse`, `HttpClientOptions` and `HttpServerOptions` are
+reserved; `HTTP` is not, since it is the import alias of `std/http` (below,
+"HTTP client and server (`std/http`)"). Handles are opaque: no constructor,
+equality, fields or JSON encoding; inspect prints their type in angle
+brackets. Handles belong to their run and close when it ends. Network access
+needs no CLI permission flag.
 
 ```text
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
@@ -75,15 +75,7 @@ HTTP is the `std/http` library, imported with `import "std/http" as HTTP`
 (`HTTP` is the documented alias; any other alias works too). It has a
 client and a server.
 
-```text
-HTTP.client_options() -> HttpClientOptions
-HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
-HTTP.close_client(client: HttpClient) -> Void
-HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
-HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
-HTTP.header_values(headers: List[Header], name: String) -> List[String]
-```
+The `HTTP` client functions (`std/http`) are in [`network.md`](../../site/content/library/network.md).
 
 Every call is whole: it returns after the whole body was read, and
 the body must be valid UTF-8. `client_options()` gives a 30 s timeout, a 30 s
@@ -100,32 +92,24 @@ already closed is retried once on a new connection, within the same
 timeout, when no byte of a response arrived; `POST`, `PATCH` and other
 methods are never retried and return the error.
 
-URLs are `http://` or `https://` with a host, an optional port (1..65535)
-and an optional path and query; the fragment is dropped, user info is
-rejected and IPv6 hosts go in brackets. The client adds `Host` and, when
-there is a body or the method is `POST`, `PUT` or `PATCH`, `Content-Length`;
-a request that sets `Host`, `Content-Length`, `Transfer-Encoding` or
-`Connection` itself is an error. Response header names are lowercase. 4xx
-and 5xx are normal responses. A response must be `HTTP/1.1` with a status
-of 100 to 599; at most 15 interim responses are skipped and a 101 is an
-error. A chunked or close-delimited response body is decoded whole, its
-trailers are checked and dropped, and `Content-Encoding` stays raw (no
-gzip). A bad options record is an error Result. Errors are Results. Protocol and limit
-errors start with `http: `; connection errors keep the TCP and TLS texts
-(`tcp-connect: ...`, `ssl-connect: ...`, `error reading from stream port`,
-`error writing to stream port`), and a timeout is `network: operation timed
-out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`).
-`std/http` calls the internal module `HttpWire`, which no other module can
-name (`CHECK-UNKNOWN-NAME`).
+URLs are `http://` or `https://` with a host, an optional port (1..65535) and
+an optional path and query; the fragment is dropped, user info is rejected and
+IPv6 hosts go in brackets. The client adds `Host` and, when there is a body or
+the method is `POST`, `PUT` or `PATCH`, `Content-Length`; a request that sets
+`Host`, `Content-Length`, `Transfer-Encoding` or `Connection` itself is an
+error. Response header names are lowercase. 4xx and 5xx are normal responses.
+A response must be `HTTP/1.1` with a status of 100 to 599; at most 15 interim
+responses are skipped and a 101 is an error. A chunked or close-delimited
+response body is decoded whole, its trailers are checked and dropped, and
+`Content-Encoding` stays raw (no gzip). A bad options record is an error
+Result. Protocol and limit errors start with `http: `; connection errors keep
+the TCP and TLS texts (`tcp-connect: ...`, `ssl-connect: ...`, `error reading
+from stream port`, `error writing to stream port`), and a timeout is `network:
+operation timed out`. A bracketed host must be an IPv6 literal (hex digits,
+`:` and `.`). `std/http` calls the internal module `HttpWire`, which no other
+module can name (`CHECK-UNKNOWN-NAME`).
 
-```text
-HTTP.server_options() -> HttpServerOptions
-HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Void]
-HTTP.close_server(server: HttpServer) -> Void
-```
+The `HTTP` server functions are in the same page.
 
 A complete program is in [`examples/http_server.agc`](../../examples/http_server.agc).
 
@@ -164,9 +148,7 @@ the handler runs get an empty answer and a close; the status for each case
 every connection, and cancels the handlers and every task they spawned; it is
 idempotent. When `main` returns, the run ends whatever the server is doing. If
 the client leaves while the response is written, the connection closes
-quietly. Memory for bodies can reach `max_body_bytes` times `max_connections`
-times 4 (a body is held once in C and once as a `String`, on each side), so a
-program that raises `max_body_bytes` should lower `max_connections` to match.
+quietly.
 
 ### Files and paths
 

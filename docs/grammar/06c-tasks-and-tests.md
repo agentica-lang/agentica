@@ -28,14 +28,7 @@ BDD step handlers may use tasks but must finish them before returning, normally 
 
 `Test` and `TestCase` are reserved. `Test` is a builtin module for unit tests in the style of ExUnit; it needs no import. A test file is a program whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks.
 
-```text
-Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
-Test.run(tests: List[TestCase]) -> Void
-Test.eq(actual: T, expected: T) -> Result[Void]
-Test.ok?(result: Result[T]) -> Result[Void]
-Test.error?(result: Result[T]) -> Result[Void]
-Test.assert(condition: Bool, message: String) -> Result[Void]
-```
+The signatures of the `Test` functions are in `agentica help NAME --json` and in [`test.md`](../../site/content/library/test.md).
 
 `Test.test` builds a `TestCase`, an opaque value that keeps the name, the block and the span of the `Test.test` call; it has no constructor, fields, equality or JSON encoding, and inspect shows `<TestCase>`. The block returns `Result[Void]`, so `try` works inside it and the last assertion can be its result.
 
@@ -43,7 +36,9 @@ Assertions return `ok()` when they hold and `error(text)` when they do not. `Tes
 
 A failed assertion is also recorded on the test it runs in: the test's own task, or a task spawned inside the test. So `Test.eq(a, b)` as a statement, whose Result is dropped, still fails the test, and the first recorded failure is the one reported. Outside a test, an assertion only returns its Result.
 
-`Test.run` never returns: it ends the run with an exit code. It runs only in `main`'s own task: called in any other task (a test, or a task `main` or a test spawned), it fails with RUNTIME-TEST-RUN at the call. It then checks the names: an empty name, or a name used by an earlier test of the list, fails the run with RUNTIME-TEST-NAME at that `Test.test` call. Run directly, as `agentica file.agc`, it then prints `run this file with agentica test` on stderr and exits 2. Under `agentica test`, stdin belongs to the runner; the runner protocol and the failure order of a test are in [`bdd.md`](../bdd.md#unit-test-files-testrun).
+`Test.run` never returns: it ends the run with an exit code. It runs only in `main`'s own task: called in any other task (a test, or a task `main` or a test spawned), it fails with RUNTIME-TEST-RUN at the call. It then checks the names: an empty name, or a name used by an earlier test of the list, fails the run with RUNTIME-TEST-NAME at that `Test.test` call. Run directly, as `agentica file.agc`, it then prints `run this file with agentica test` on stderr and exits 2. Under `agentica test`, stdin belongs to the runner; the runner protocol is in [`bdd.md`](../bdd.md#unit-test-files-testrun).
+
+A test fails, in this order, with: the crash of its task (its own code, message and span; reporting it observes the crash); else its first recorded assertion (RUNTIME-TEST-ASSERTION at the assertion, its message, and `expected` and `actual` for `Test.eq`, only `actual` for `Test.ok?` and `Test.error?`, neither for `Test.assert`); else the `error(m)` the block returned (RUNTIME-TEST-ERROR with `m`, at the test); else tasks spawned in the test that were still running when its task ended (RUNTIME-TEST-PENDING-TASKS, at the test); else the first crash of such a task that no await observed (RUNTIME-TASK-CRASHED at the test, with the crash text as its message). After the record, every crash of the test's tasks counts as observed, and its tasks still running are cancelled before the next test, whatever the outcome. A crash prints its diagnostic on stderr as any task crash does. A runtime error in `main`, RUNTIME-STEP-LIMIT and `System.exit` in a test still end the whole run.
 
 Each test's task gets its own `Random` generator, seeded from the run's seed (`--seed`, or the one drawn from the operating system) and the test's name, so a test sees the same values whether it runs alone or after other tests.
 

@@ -22,7 +22,7 @@ The grammar determines what can be written. The following rules determine which 
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
 | Declared struct | Nominal type, typed and immutable fields |
 
-Network handles (`Socket`, `Listener`, `HttpClient`, `HttpServer`) and the builtin records (`Header`, `HttpRequest`, ...) are described in [TCP, TLS and HTTP](06d-io-and-network.md).
+Network handles (`Socket`, `Listener`, `HttpClient`, `HttpServer`) and the builtin records (`Header`, `HttpRequest`, ...) are described in [TCP, TLS and HTTP](06d-io-and-network.md#tcp-tls-and-http).
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
 
@@ -152,7 +152,7 @@ more = Map.put(stock, "kiwi", 7)
 - If a literal repeats a key, the last value wins; the key keeps its first-insertion position. Replacing a key with `Map.put` also preserves its position.
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
 - There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
-- Lookup, `Map.has_key?` and `Map.put` take O(log32 n) steps in the map size, excluding key hashing and comparison, so they are effectively constant-time. `Map.size` is O(1); `Map.keys` is O(n). An update shares unchanged storage with the old map instead of copying it.
+- Lookup, `Map.has_key?` and `Map.put` take O(log32 n) operations in the map size, excluding key hashing and comparison, so they are effectively constant-time. `Map.size` is O(1); `Map.keys` is O(n). An update shares unchanged storage with the old map instead of copying it.
 
 ### Result and propagation
 

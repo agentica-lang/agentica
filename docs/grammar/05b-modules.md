@@ -86,11 +86,6 @@ The implementation uses Lists: push, pop, peek, size and empty? are O(n)
 with the current host list operations; new is O(1). No constant-time FIFO
 performance is promised.
 
-#### HTTP client and server (`std/http`)
-
-The `std/http` library is documented with the TCP, TLS and HTTP records in
-[`06d-io-and-network.md`](06d-io-and-network.md#http-client-and-server-stdhttp).
-
 #### BDD steps (`std/bdd`)
 
 `std/bdd` is the step API of `agentica test`, written in Agentica. With the
@@ -101,10 +96,10 @@ BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -
 BDD.run(steps: List[BDD.Step]) -> Void
 ```
 
-The other `BDD.*` functions take the context first and return it; their full list is in [`bdd.md`](../bdd.md).
+Most `BDD.*` functions take the context first and return it; `BDD.doc_string`, `BDD.table` and `BDD.get` take it and return their value. The full list is in [`bdd.md`](../bdd.md).
 
 `BDD.Context` can be named but not built: a context exists only inside a
-step. Every call returns the context; use the one it returns. `BDD.run`
+step. Use the context that a call returns. `BDD.run`
 never returns; run directly, a step program prints how to run it on stderr
 and exits 2. The modules `std/bdd/gherkin`, `std/bdd/match`, `std/test/report`
 and `std/test/runner` are internal to `agentica test` and unsupported. See

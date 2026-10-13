@@ -88,24 +88,13 @@ Expected types flow into these operations for contextual empty collections and R
 
 The `String` module works on text. `String.length` and `String.slice` count Unicode characters, not bytes; a `slice` out of range is a runtime error. With a non-empty `sep`, `String.split(s, sep)` keeps every part, even empty ones at the ends or between two separators, so `String.join(String.split(s, sep), sep)` gives back `s`; `String.split("", sep)` is `[""]`. `String.split(s, "")` returns a list with one Unicode character per element. The conversions `String.to_int!` and `String.to_float!` accept decimal numbers with an optional sign; `to_int!` fails with `RUNTIME-INVALID-NUMBER` if the text is not a decimal integer and with `RUNTIME-INTEGER-OVERFLOW` if it is outside the range of `Int`, while `to_float!` rejects text that is not a real decimal with `RUNTIME-INVALID-NUMBER`.
 
-```text
-Float.from_int(n: Int) -> Float
-Float.to_int(x: Float) -> Result[Int]
-Float.to_int!(x: Float) -> Int
-```
-
-The signatures of the `String` functions are in `agentica help NAME --json` and in [`string.md`](../../site/content/library/string.md); those of `Float` are in [`numbers.md`](../../site/content/library/numbers.md).
+The signatures of the `String` and `Float` functions are in `agentica help NAME --json` and in [`string.md`](../../site/content/library/string.md) and [`numbers.md`](../../site/content/library/numbers.md).
 
 `String.index_of` returns the character index of the first match, `ok(0)` for an empty part, and an error when the part is absent. `String.at` reads one character at a zero-based index and halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument outside the string. `String.reverse` reverses Unicode characters. `String.code` returns the code point of a one-character string; `String.from_code` builds one from a Unicode scalar value (0..0x10FFFF, without surrogates). Both halt with `RUNTIME-INVALID-CHARACTER` at their argument on other input. `Float.from_int` converts to the nearest Float. `Float.to_int` truncates toward zero; NaN and infinity are errors, and results outside `Int` are errors. `Float.to_int!` halts instead, with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
 
 The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns `ok(line)` without its terminator (LF, CR, or CRLF), or an error value at EOF. A blank line is `ok("")`, not EOF. `IO.gets!` returns the line directly and halts with `RUNTIME-END-OF-INPUT` at EOF; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 
-```text
-System.args() -> List[String]
-System.exit(code: Int) -> Void
-```
-
-The signatures of the `IO`, `Time` and `Random` functions are in `agentica help NAME --json` and in [`io.md`](../../site/content/library/io.md) and [`system.md`](../../site/content/library/system.md).
+The signatures of the `IO`, `System`, `Time` and `Random` functions are in `agentica help NAME --json` and in [`io.md`](../../site/content/library/io.md) and [`system.md`](../../site/content/library/system.md).
 
 `Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. `agentica --seed N test` passes the seed to every scenario's step program and to the programs under test. Each task has its own generator: the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
 

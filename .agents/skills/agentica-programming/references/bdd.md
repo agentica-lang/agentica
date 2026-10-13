@@ -68,7 +68,7 @@ BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
 BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
-- **The context rule.** Every BDD call takes the scenario's `ctx` first and returns it: use the one it returns (`started = BDD.given_program(ctx, "../app.agc")`, then `BDD.when_line(started, "hi")`). A handler returns the context it ends with; the next step gets it. Only `set` and `given_program` change it, but any BDD call can end a handler or block. `BDD.Context` can be named but not built.
+- **The context rule.** Most BDD calls take the scenario's `ctx` first and return it: use the one they return; `BDD.doc_string`, `BDD.table` and `BDD.get` take it and return their value (`started = BDD.given_program(ctx, "../app.agc")`, then `BDD.when_line(started, "hi")`). A handler returns the context it ends with; the next step gets it. Only `set` and `given_program` change it, but any BDD call can end a handler or block. `BDD.Context` can be named but not built.
 - `BDD` is not a builtin: without the import, `BDD.step` is `CHECK-UNKNOWN-NAME` with the import as help. `BDD.run` adds the predefined steps in front and never returns. Run directly, a step program exits 2 with a hint.
 - `main` runs once to list the steps and once in each scenario's child: only build the list there; its output goes nowhere.
 - Patterns are literal text plus `{string}` and `{int}`; unknown captures and duplicate patterns (predefined ones too) are file errors of the step program, and then no scenario runs. Ambiguous or undefined steps fail their scenario. Captures are strings in order; quoted strings lose delimiters and unescape backslash-prefixed characters. Decimal integers may have a minus sign.

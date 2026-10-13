@@ -1,6 +1,6 @@
 # Roadmap: foundations (phases 1 to 5n, complete)
 
-Phases 1 to 5h and the completed foundations for general programming and MCP. They were built on the Racket evaluator, which the VM replaced (phase 7, 7i); the language they define is specified in [`docs/grammar.md`](../grammar.md) and its [`docs/grammar/`](../grammar/) files, and the tests of each stage are in `tests/<stage>-test.rkt`. The full checklists and design notes that used to be in `done.md` are in git history. The current order is in [`README.md`](README.md).
+Phases 1 to 5h and the completed foundations for general programming and MCP. They were built on the Racket evaluator, which the VM replaced (phase 7, 7i); the language they define is specified in [`docs/grammar.md`](../grammar.md) and its files in `docs/grammar/`, and the tests of each stage are in `tests/<stage>-test.rkt`. The full checklists and design notes that used to be in `done.md` are in git history. The current order is in [`README.md`](README.md).
 
 **Still open from this period** (both tracked here until they are done or dropped):
 
