@@ -137,7 +137,7 @@
       (display text)
       (exit code))
     (define (usage-error message)
-      (call-with-values (lambda () (bdd-usage-report message style)) show-report))
+      (call-with-values (lambda () (bdd-usage-report message style seed)) show-report))
     (define paths '())
     (define only #f)
     (let loop ([arguments (cdr raw-arguments)])
@@ -149,6 +149,7 @@
          (cond
            [(equal? (car arguments) "--steps") (set! step-files (append step-files (list (cadr arguments))))]
            [only (usage-error "one --only TEXT")]
+           [(equal? (cadr arguments) "") (usage-error "--only needs a non-empty TEXT")]
            [else (set! only (cadr arguments))])
          (loop (cddr arguments))]
         [(member (car arguments) '("--json" "--ai"))

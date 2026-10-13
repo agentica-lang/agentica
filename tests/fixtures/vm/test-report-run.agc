@@ -102,7 +102,7 @@ def run_file(patterns: List[Match.Pattern], path: String, text: String) -> Repor
     Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, "feature", Report.error_at(problem.code, problem.message, problem.span))
     Gherkin.Outcome.Done(feature) ->
       scenarios = feature.scenarios.map do |item| run_scenario(patterns, item) end
-      return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios, verdict: Report.Verdict.Pass)
+      return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios, verdict: Report.Verdict.Pass, output: "")
   end
 end
 

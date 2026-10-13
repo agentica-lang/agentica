@@ -48,6 +48,8 @@ The exit code is `0` when every scenario passes, `1` when one fails, and `2`
 when the tests could not run. `--ai` and `--json` change the report format.
 `--seed N` makes `Random` repeat in steps and programs. A program under test
 can start other programs only with `agentica test --allow-run`.
+
+`agentica test` also runs `*_test.agc` unit test files ([Test](/library/test/)) in the same report. With no paths it searches `specs/` and `test/`. `--only TEXT` keeps the scenarios and tests whose name contains `TEXT`. Without `--seed`, the runner draws one seed and every step program and program under test shares it; the report shows it when the run fails.
 `agentica test` refuses a shared temporary directory without the sticky bit
 (exit `2`); set `TMPDIR` to a private folder.
 
@@ -245,7 +247,7 @@ end
 `stdout is:` compares the output that no line step has read yet. Output is
 kept up to 1 MiB on each stream.
 
-A failed `then_*` check compares with `Test.eq` and reports `expected` and `actual` as `Test.eq` does, in the inspect form: a line or output in quotes, an exit code as a number, a JSON line as its canonical text (sorted keys). The text report prints them as they are; an undefined or ambiguous step's `actual` is the step text in quotes.
+A failed `then_*` check compares with `Test.eq` and reports `expected` and `actual` as `Test.eq` does, in the inspect form: a line or output in quotes, an exit code as a number, a JSON line as its canonical text (sorted keys). The text report prints them as they are; an undefined or ambiguous step's `actual` is the step text in quotes. A text longer than 64 Ki characters is cut there and ends with `...` and the number of characters left out. A front-end error of the step program keeps its own `expected` and `actual`, the raw type names (`Int`, `String`), so in `--json` their form depends on the code.
 
 ## Running tests from a program
 

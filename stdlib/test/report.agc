@@ -60,6 +60,7 @@ export struct FileResult
   kind: String
   scenarios: List[ScenarioResult]
   verdict: Verdict
+  output: String
 end
 
 struct Totals
@@ -100,7 +101,11 @@ export def with_actual(problem: Error, actual: String) -> Error
 end
 
 export def file_error(path: String, kind: String, problem: Error) -> FileResult
-  return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem))
+  return file_failure(path, kind, problem, "")
+end
+
+export def file_failure(path: String, kind: String, problem: Error, output: String) -> FileResult
+  return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
 # 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error is RUNTIME-BDD-INFRA or
@@ -185,6 +190,7 @@ def file_json(file: FileResult) -> Json
     "status": JSON.from(state),
     "scenarios": JSON.array(file.scenarios.map do |item| scenario_json(item) end),
     "error": verdict_json(file.verdict),
+    "output": JSON.from(file.output),
   }
   return JSON.object(fields)
 end
@@ -268,7 +274,7 @@ end
 def file_text(file: FileResult, ai: Bool) -> String
   head: List[String] = []
   case file.verdict
-    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem)}"]
+    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem)}#{output_text(file.output, ai)}"]
     Verdict.Pass -> head = []
     Verdict.NotExecuted -> head = []
   end
@@ -283,7 +289,7 @@ end
 def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   case item.verdict
     Verdict.Pass -> return "PASS #{label} / #{item.name}"
-    Verdict.NotExecuted -> return "SKIP #{label} / #{item.name}"
+    Verdict.NotExecuted -> return "NOT RUN #{label} / #{item.name}"
     Verdict.Fail(problem) -> return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem)}#{output_text(item.output, ai)}"
   end
 end

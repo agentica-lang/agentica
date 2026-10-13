@@ -20,24 +20,24 @@
 (define (first-line-span file)
   (source-span (source file "") (source-position 0 1 1) (source-position 0 1 1)))
 
-(define (one-error-report problem style)
+(define (one-error-report problem style seed)
   (define error (diagnostic->jsexpr problem))
   (define file (hash-ref error 'file))
   (values 2
           (if (eq? style 'json)
               (string-append
                (jsexpr->string
-                (hasheq 'ok #f 'passed 0 'failed 0 'not_executed 0 'file_errors 1 'exit_code 2 'seed (json-null)
+                (hasheq 'ok #f 'passed 0 'failed 0 'not_executed 0 'file_errors 1 'exit_code 2 'seed (or seed (json-null))
                         'files (list (hasheq 'path file 'feature "" 'kind "" 'status "failed" 'scenarios '() 'error error))))
                "\n")
               (format "FAIL ~a~a~a:1:1 [~a] ~a\n0 passed, 0 failed, 0 not executed, 1 file errors\n"
                       file (if (eq? style 'ai) " | " "\n") file (hash-ref error 'code) (hash-ref error 'message)))))
 
-(define (bdd-usage-report message style)
-  (one-error-report (diagnostic 'RUNTIME-BDD-USAGE message (first-line-span "<arguments>")) style))
+(define (bdd-usage-report message style [seed #f])
+  (one-error-report (diagnostic 'RUNTIME-BDD-USAGE message (first-line-span "<arguments>")) style seed))
 
-(define (infrastructure-report message file style)
-  (one-error-report (diagnostic 'RUNTIME-BDD-INFRA message (first-line-span file)) style))
+(define (infrastructure-report message file style seed)
+  (one-error-report (diagnostic 'RUNTIME-BDD-INFRA message (first-line-span file)) style seed))
 
 (define (compile-text name text)
   (let/ec stop
@@ -220,10 +220,10 @@
                            #:only [only ""] #:test-timeout-ms [test-timeout-ms 30000])
   (cond
     [(> (length step-files) 1)
-     (bdd-usage-report "one --steps program; import the other files from it" style)]
+     (bdd-usage-report "one --steps program; import the other files from it" style seed)]
     [(not (and (file-exists? vm) (memq 'execute (file-or-directory-permissions vm))))
      (infrastructure-report (format "cannot find the VM at ~a; run make vm or set AGENTICA_VM" vm)
-                            (path->string vm) style)]
+                            (path->string vm) style seed)]
     [else
      (define temporary (find-system-path 'temp-dir))
      (define (random-name prefix) (build-path temporary (string-append prefix (bytes->hex-string (crypto-random-bytes 16)))))
@@ -232,7 +232,7 @@
      (define created? #f)
      (define lock #f)
      (with-handlers ([exn:break? raise])
-       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (message-line (exn-message failure) car) (path->string temporary) style))])
+       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (message-line (exn-message failure) car) (path->string temporary) style seed))])
          (dynamic-wind
            (lambda ()
              (parameterize-break #f
@@ -243,7 +243,7 @@
                [(shared-and-not-sticky? temporary current)
                 (infrastructure-report
                  (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
-                 (path->string temporary) style)]
+                 (path->string temporary) style seed)]
                [else
                 (parameterize-break #f
                   (set! lock (take-lock current))
@@ -266,7 +266,7 @@
   (cond
     [(diagnostic? runner)
      (infrastructure-report (format "the BDD runner does not compile: ~a" (diagnostic-message runner))
-                            (path->string vm) style)]
+                            (path->string vm) style seed)]
     [else
      (write-private runner-file runner)
      (unless (diagnostic? steps) (write-private steps-file steps))
@@ -278,14 +278,19 @@
                 'steps_bytecode (path->string steps-file)
                 'steps_source (path->string (if step-file (path->complete-path step-file) (build-path directory "steps.agc")))
                 'steps_error (if (diagnostic? steps) (jsexpr->string (diagnostic->jsexpr steps)) "")
+                'steps_given (and step-file #t)
                 'agentica (agentica-command)
                 'count (length entries)
                 'empty_path (path->string (simplify-path (path->complete-path (if (null? given) (car default-paths) (car given))) #f))
+                'empty_message (if (null? given)
+                                   "no .feature or *_test.agc files found: neither specs/ nor test/ exists"
+                                   "no .feature or *_test.agc files found")
                 'style (symbol->string style)
                 'allow_run allow-run?
                 'seeded (and seed #t)
                 'seed (or seed 0)
                 'only only
+                'token (bytes->hex-string (crypto-random-bytes 16))
                 'test_timeout_ms test-timeout-ms)))
      (write-private config-file
                     (string->bytes/utf-8
@@ -298,4 +303,4 @@
          (infrastructure-report
           (format "the BDD runner failed with exit code ~a: ~a" status
                   (message-line err last))
-          (path->string vm) style))]))
+          (path->string vm) style seed))]))

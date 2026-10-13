@@ -27,6 +27,19 @@
 (define (start-line problem)
   (hash-ref (hash-ref (hash-ref problem 'range) 'start) 'line))
 
+(define (file-codes report)
+  (for/list ([file (in-list (hash-ref report 'files))])
+    (list (hash-ref file 'kind) (let ([problem (hash-ref file 'error)]) (and (hash? problem) (hash-ref problem 'code))))))
+
+(define (test-children seed)
+  (for/list ([name (in-list (directory-list "/proc"))]
+             #:when (regexp-match? #rx"^[0-9]+$" (path->string name))
+             #:when (let ([line (with-handlers ([exn:fail? (lambda (_) #"")])
+                                  (call-with-input-file (build-path "/proc" name "cmdline") port->bytes))])
+                      (and (regexp-match? #rx#"\0--agentica-test\0" line)
+                           (regexp-match? (byte-regexp (bytes-append #"\0--seed\0" (string->bytes/utf-8 seed) #"\0")) line))))
+    name))
+
 (module+ test
   (test-case "a test file reports each outcome, with captured output only for failed tests"
     (match-define (list status report) (json-test (fixture "outcomes_test.agc")))
@@ -63,12 +76,14 @@
     (check-equal? (hash-ref (second stops) 'output) "going away")
     (check-equal? (hash-ref report 'not_executed) 1)
     (define-values (code text)
-      (run-agentica-test (list (fixture "hangs_test.agc")) '() #:style 'json #:allow-run #f #:seed #f #:vm (find-vm)
+      (run-agentica-test (list (fixture "hangs_test.agc")) '() #:style 'json #:allow-run #f #:seed 1234567 #:vm (find-vm)
                          #:test-timeout-ms 1000))
     (check-equal? code 1)
     (define hung (cases (string->jsexpr text)))
     (check-equal? (map (lambda (item) (hash-ref item 'status)) hung) '("failed" "not_executed"))
-    (check-equal? (field (first hung) 'code) "RUNTIME-TEST-TIMEOUT"))
+    (check-equal? (field (first hung) 'code) "RUNTIME-TEST-TIMEOUT")
+    (check-equal? (hash-ref (first hung) 'output) "before the hang")
+    (check-equal? (test-children "1234567") '()))
 
   (test-case "--only keeps matching tests, and a test draws the same values alone or with others"
     (define (draws seed . arguments)
@@ -84,7 +99,43 @@
     (match-define (list _ text _) (run-main-in-process "--seed" "7" "test" (fixture "seed_test.agc")))
     (check-true (string-suffix? text "0 passed, 2 failed, 0 not executed, 0 file errors, seed 7\n"))
     (match-define (list status none) (json-test "--only" "nothing" (fixture "seed_test.agc")))
-    (check-equal? (list status (cases none)) '(1 ())))
+    (check-equal? (list status (cases none) (file-codes none)) '(1 () (("tests" #f) ("" "CHECK-BDD-EMPTY"))))
+    (for ([arguments (list '("--only" "") '("--only" "a" "--only" "b"))])
+      (match-define (list usage-status report) (apply json-test (append arguments (list (fixture "seed_test.agc")))))
+      (check-equal? (list usage-status (file-codes report)) '(2 (("" "RUNTIME-BDD-USAGE")))))
+    (match-define (list _ usage _) (run-main-in-process "--seed" "5" "test" "--json" "--only" ""))
+    (check-equal? (hash-ref (string->jsexpr usage) 'seed) 5))
+
+  (test-case "a file that fails before its tests run is a file error that shows what it printed"
+    (match-define (list status report) (json-test (fixture "lists")))
+    (check-equal? status 1)
+    (check-equal? (file-codes report)
+                  '(("tests" "RUNTIME-BDD-PREMATURE-EXIT") ("tests" "RUNTIME-DIVISION-BY-ZERO") ("tests" "RUNTIME-TEST-NAME")
+                    ("tests" "RUNTIME-TEST-RUN")))
+    (check-equal? (map (lambda (file) (hash-ref file 'output)) (hash-ref report 'files))
+                  '("bad config" "loading" "" "no tests here"))
+    (match-define (list _ plain _) (agentica-test (fixture "lists/config_test.agc")))
+    (check-true (string-contains? plain "exited with code 3\n  bad config\n")))
+
+  (test-case "a record the test prints never passes it, even with the seed's values"
+    (match-define (list status _ _) (run-main-in-process "--seed" "7" "test" (fixture "forged_test.agc")))
+    (check-equal? status 1)
+    (define result (run-main-in-process "--seed" "7" "test" "--json" (fixture "forged_test.agc")))
+    (check-equal? (map (lambda (item) (field item 'code)) (cases (string->jsexpr (cadr result))))
+                  '("RUNTIME-TEST-ASSERTION" "RUNTIME-TEST-ASSERTION")))
+
+  (test-case "output limits: 1 MiB per test with a 64 Ki tail, and a stderr flood is the file's error"
+    (match-define (list _ noisy) (json-test (fixture "noisy_test.agc")))
+    (define items (cases noisy))
+    (check-equal? (map (lambda (item) (hash-ref item 'status)) items) '("failed" "not_executed"))
+    (check-equal? (field (first items) 'code) "RUNTIME-BDD-OUTPUT-LIMIT")
+    (define output (hash-ref (first items) 'output))
+    (check-true (<= 1 (string-length output) 65536))
+    (check-true (string-prefix? output "17 "))
+    (match-define (list status flood) (json-test (fixture "flood_test.agc")))
+    (check-equal? status 1)
+    (check-equal? (hash-ref flood 'failed) 0)
+    (check-equal? (file-codes flood) '(("tests" "RUNTIME-BDD-OUTPUT-LIMIT"))))
 
   (test-case "test files and features share one report, and test/ is a default path"
     (match-define (list status report)
@@ -94,6 +145,17 @@
                     (list (hash-ref file 'kind) (let ([problem (hash-ref file 'error)]) (and (hash? problem) (hash-ref problem 'code)))))
                   '(("tests" "CHECK-TYPE-MISMATCH") ("tests" #f) ("feature" #f)))
     (check-equal? (hash-ref report 'passed) 2)
+    (match-define (list _ only)
+      (json-test (fixture "mixed") "--steps" (path->string handlers) "--only" "state starts"))
+    (check-equal? (map (lambda (item) (hash-ref item 'name)) (cases only)) '("state starts empty"))
+    (match-define (list broken-status broken) (json-test (fixture "mixed") "--steps" (fixture "steps/broken_steps.agc")))
+    (check-equal? broken-status 1)
+    (check-equal? (file-codes broken) '(("steps" "CHECK-TYPE-MISMATCH") ("tests" "CHECK-TYPE-MISMATCH") ("tests" #f)))
+    (check-equal? (hash-ref broken 'passed) 1)
+    (match-define (list alone-status alone) (json-test (fixture "mixed/fine_test.agc") "--steps" (fixture "steps/broken_steps.agc")))
+    (check-equal? (list alone-status (file-codes alone)) '(1 (("steps" "CHECK-TYPE-MISMATCH") ("tests" #f))))
+    (match-define (list unlisted-status _) (json-test (fixture "mixed/fine_test.agc") "--steps" (fixture "steps/crash_steps.agc")))
+    (check-equal? unlisted-status 0)
     (define directory (make-temporary-directory "agentica-unit~a"))
     (dynamic-wind
       void
@@ -101,7 +163,10 @@
         (make-directory (build-path directory "test"))
         (copy-file (build-path fixtures "mixed" "fine_test.agc") (build-path directory "test" "fine_test.agc"))
         (match-define (list status _ _) (parameterize ([current-directory directory]) (agentica-test)))
-        (check-equal? status 0))
+        (check-equal? status 0)
+        (delete-directory/files (build-path directory "test"))
+        (match-define (list _ empty) (parameterize ([current-directory directory]) (json-test)))
+        (check-equal? (file-codes empty) '(("" "CHECK-BDD-EMPTY"))))
       (lambda () (delete-directory/files directory))))
 
   (test-case "the std/ unit tests pass"

@@ -1,6 +1,8 @@
 def main() -> Void
   Test.run([
     Test.test("hangs") do
+      puts("before the hang")
+      IO.flush()
       Task.sleep(60000)
       ok()
     end,

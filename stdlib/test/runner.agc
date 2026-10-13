@@ -9,14 +9,17 @@ struct Config
   steps_bytecode: String
   steps_source: String
   steps_error: String
+  steps_given: Bool
   agentica: List[String]
   count: Int
   empty_path: String
+  empty_message: String
   style: String
   allow_run: Bool
   seeded: Bool
   seed: Int
   only: String
+  token: String
   test_timeout_ms: Int
 end
 
@@ -72,7 +75,7 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
-  files = run_all(seeded(config, seed), read.map do |entry| entry.unwrap! end)
+  files = matched(config, run_all(seeded(config, seed), read.map do |entry| entry.unwrap! end))
   if config.style == "json"
     puts(Report.json(files, seed))
   else
@@ -86,11 +89,13 @@ end
 
 def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
   if entries.size == 0
-    problem = Child.located("CHECK-BDD-EMPTY", "no .feature or *_test.agc files found", config.empty_path)
+    problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
   end
   listing = Listing.Ready([])
   if entries.any? do |entry| entry.kind == "feature" and entry.problem == "" end
+    listing = steps_listing(config)
+  elsif config.steps_given and config.steps_error != ""
     listing = steps_listing(config)
   end
   case listing
@@ -98,6 +103,22 @@ def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
       tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, [], entry) end
       return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
     Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, patterns, entry) end
+  end
+end
+
+def matched(config: Config, files: List[Report.FileResult]) -> List[Report.FileResult]
+  if config.only == "" or files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
+    return files
+  end
+  problem = Child.located("CHECK-BDD-EMPTY", "no test or scenario name contains #{config.only.inspect}", config.empty_path)
+  return files.push(Report.file_error(config.empty_path, "", problem))
+end
+
+def failed?(verdict: Report.Verdict) -> Bool
+  case verdict
+    Report.Verdict.Fail(_) -> return true
+    Report.Verdict.Pass -> return false
+    Report.Verdict.NotExecuted -> return false
   end
 end
 
@@ -115,7 +136,8 @@ def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Re
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
   if entry.kind == "tests"
-    settings = Units.Settings(vm: config.vm, seed: config.seed, only: config.only, timeout_ms: config.test_timeout_ms)
+    settings = Units.Settings(vm: config.vm, seed: config.seed, token: config.token, only: config.only,
+                              timeout_ms: config.test_timeout_ms)
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
   return run_file(config, patterns, entry.path)
@@ -123,8 +145,9 @@ end
 
 def seeded(config: Config, seed: Int) -> Config
   return Config(vm: config.vm, steps_bytecode: config.steps_bytecode, steps_source: config.steps_source,
-                steps_error: config.steps_error, agentica: config.agentica, count: config.count, empty_path: config.empty_path,
-                style: config.style, allow_run: config.allow_run, seeded: true, seed: seed, only: config.only,
+                steps_error: config.steps_error, steps_given: config.steps_given, agentica: config.agentica, count: config.count,
+                empty_path: config.empty_path, empty_message: config.empty_message, style: config.style,
+                allow_run: config.allow_run, seeded: true, seed: seed, only: config.only, token: config.token,
                 test_timeout_ms: config.test_timeout_ms)
 end
 
@@ -178,7 +201,7 @@ def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Rep
       chosen = feature.scenarios.filter do |item| config.only == "" or item.name.include?(config.only) end
       scenarios = chosen.map do |item| run_scenario(config, patterns, base, item) end
       return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios,
-                               verdict: Report.Verdict.Pass)
+                               verdict: Report.Verdict.Pass, output: "")
   end
 end
 

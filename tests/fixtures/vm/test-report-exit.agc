@@ -1,5 +1,4 @@
 import "std/test/report" as Report
-import "std/bdd/gherkin" as Gherkin
 
 def at(line: Int) -> Report.Span
   return Report.Span(file: "/specs/x.feature", line: line, column: 3, end_column: 12)
@@ -23,7 +22,7 @@ def unit(name: String, verdict: Report.Verdict, output: String) -> Report.Scenar
 end
 
 def feature(scenarios: List[Report.ScenarioResult]) -> Report.FileResult
-  return Report.FileResult(path: "/specs/x.feature", feature: "X", kind: "feature", scenarios: scenarios, verdict: Report.Verdict.Pass)
+  return Report.FileResult(path: "/specs/x.feature", feature: "X", kind: "feature", scenarios: scenarios, verdict: Report.Verdict.Pass, output: "")
 end
 
 # As `agentica --json check` writes it, with a help line added.
@@ -68,10 +67,10 @@ def main() -> Void
                         expected: Report.Detail.Known("2"), actual: Report.Detail.Known("3"), original: JSON.null())
   units = [unit("adds", Report.Verdict.Pass, ""), unit("fails", Report.Verdict.Fail(failed), "line one\nline two"),
            unit("later", Report.Verdict.NotExecuted, "")]
-  tests = [Report.FileResult(path: "/test/x_test.agc", feature: "", kind: "tests", scenarios: units, verdict: Report.Verdict.Pass)]
+  tests = [Report.FileResult(path: "/test/x_test.agc", feature: "", kind: "tests", scenarios: units, verdict: Report.Verdict.Pass, output: "")]
   show("tests", tests)
   puts(Report.text(tests, false, 7))
   puts(Report.json(tests, 7))
   show("tests pass", [Report.FileResult(path: "/test/x_test.agc", feature: "", kind: "tests", scenarios: [units[0]],
-                                        verdict: Report.Verdict.Pass)])
+                                        verdict: Report.Verdict.Pass, output: "")])
 end
