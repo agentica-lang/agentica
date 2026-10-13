@@ -1,6 +1,6 @@
 ## 20. Crypto module
 
-**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same vendored OpenSSL 3.5 LTS, linked statically in every build (`docs/vm/10-dependencies-and-platforms.md` 10.0). Every 3.5 feature (Argon2id, `OSSL_set_max_threads`) is always there; when `EVP_KDF_fetch` still returns `NULL` (an algorithm left out of the build), the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
+**Status:** on demand: it starts when a real program needs it (signed webhooks, tokens, password storage). It needs `Bytes` (§12.5) and lands only after TLS on the VM (roadmap 7h), since it uses the same OpenSSL: the vendored 3.5 LTS, linked statically, in the release, and the system OpenSSL 3 (3.0 or newer) in a default source build (`docs/vm/10-dependencies-and-platforms.md` 10.0). So 3.5-only features (Argon2id, `OSSL_set_max_threads`) are not always there: when this work lands, either raise the minimum in the Makefile's `OSSL_MIN` and the `#error` in `vm/tls_openssl.c` to 3.5, or check at run time on system builds and return an error `Result` that names the missing feature. Likewise, when `EVP_KDF_fetch` still returns `NULL` (an algorithm left out of the build), the call returns an error `Result` that names the missing feature. If it lands after 7i, it is VM only.
 
 **Sketch** (names are not final):
 
