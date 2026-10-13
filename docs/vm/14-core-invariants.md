@@ -21,7 +21,7 @@ Known exceptions, as built:
 
 **Rule.** One way: a timer on the job. A builtin that takes `timeout_ms` passes it to `agc_io_start`, whose job owns one `uv_timer_t` (`start_job` in `vm/loop.c`). When it fires, the job ends with the timeout error and the task wakes. No builtin starts its own timer for a timeout.
 
-`Task.sleep` is the same thing: a job with no work and a timer. As built, a few timers are not job timeouts and stay: a captured child's grace period (§31.9), the `HttpClient` pool's timer, and the end-of-run flush deadline (§14.4). The reap's `nanosleep` deadline (§14.1) is a bounded wait of the same kind, not a loop timer. A new one needs a reason here.
+`Task.sleep` is the same thing: a job with no work and a timer. As built, a few timers are not job timeouts and stay: a captured child's grace period (§31.9), the `HttpClient` pool's timer, the end-of-run flush deadline (§14.4), and the 3-second process `alarm` of the stop signals (`STOP_GRACE_SECONDS` in `vm/loop.c`): it bounds how long a second stop signal is held while the children are stopped, and it is armed only after a second signal (§10.2.2, Stop signals). The reap's `nanosleep` deadline (§14.1) is a bounded wait of the same kind, not a loop timer. A new one needs a reason here.
 
 ### 14.3 Cancelling
 

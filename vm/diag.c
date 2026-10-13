@@ -179,6 +179,14 @@ void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, ag
   fflush(err);
 }
 
+void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, agc_style style) {
+  if (style == AGC_STYLE_JSON)
+    fprintf(err, "{\"flush_failed\":\"%s\",\"warning\":\"file data may not be written\"}\n", code);
+  else
+    fprintf(err, "agentica: file data may not be written: the flush failed (%s: %.*s)\n", code, (int)len, message);
+  fflush(err);
+}
+
 void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style) {
   if (style == AGC_STYLE_JSON)
     fprintf(err, "{\"flush_timeout_ms\":%" PRId64 ",\"warning\":\"file data may not be written\"}\n", ms);

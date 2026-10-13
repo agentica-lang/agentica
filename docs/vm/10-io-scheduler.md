@@ -441,8 +441,11 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   program's FIFOs is gone before the flush, so data buffered for it is
   lost (the flush to a FIFO with no reader fails with `EPIPE`). A file
   close that fails with `agc_fail` at this point (it runs after the
-  scheduler's frame returned) lands on a fresh `setjmp` in `end_run` and
-  only skips the rest of the flush. `agc_io_close`, which closes every
+  scheduler's frame returned) lands on a fresh `setjmp` in `end_run`,
+  skips the rest of the flush and prints one stderr line, as
+  `--flush-timeout` does (`agentica: file data may not be written: the
+  flush failed (CODE: message)`, or `{"flush_failed":"CODE","warning":...}`
+  with `--json`); the exit code does not change. `agc_io_close`, which closes every
   resource and frees the loop, is only for in-process harnesses (the
   fuzzer and the C tests): it flushes the files, then releases every
   resource (the process guard's release kills the children).
@@ -458,24 +461,32 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   waits and before it reports a stall (`check_stop` in `vm/task.c`), and
   ends the run as an exit with code 128 + signal (`agc_stop` in
   `vm/interp.c`); `end_run` takes the steps above and then raises the
-  signal again with its default action, so the VM ends by it. Stop
-  signals are blocked for the last read of the flag, so one that comes
-  after it is not lost between that read and `_exit`. A second stop signal
+  signal again with its default action, so the VM ends by it. After the
+  `end` trace line and the last flush of stdout and stderr (both can
+  block, so they run with the signals open), stop signals are blocked for
+  the last read of the flag, so one that comes after it is not lost
+  between that read and `_exit`. A second stop signal
   ends the VM at once (default action, then `kill(getpid(), sig)`), so the
   flush with no limit can always be cut short, but never before the
   children are stopped: until `agc_processes_stop` returns, `held` is set
   and a second signal is only recorded; `agc_io_children_stopped` then
-  acts on it, with no flush. An `alarm` of 3 seconds backs this up: if the
+  acts on it, with no flush. An `alarm` of 3 seconds backs this up: the
+  handler arms it, and installs its `SIGALRM` handler, only when it
+  records that second signal (a third one does not push it back); if the
   main thread does not get there in time, the `SIGALRM` handler ends the
-  VM by the recorded signal. A driven VM (`--driver-pid`) whose driver is
+  VM by the recorded signal. Until then `SIGALRM` keeps its default
+  action, so an outside `SIGALRM` (`timeout -s ALRM`) still ends the VM. A driven VM (`--driver-pid`) whose driver is
   gone (`getppid()` differs; its `PR_SET_PDEATHSIG` is a `SIGTERM`) treats
   even the first signal as a second one: it stops the children and exits
   without the flush, since no one waits for its output. The handler has
   no `SA_RESTART`: a write to stdout that nobody reads returns `EINTR`;
   `agc_write` and `agc_flush` (`vm/interp.c`) then clear the stream error
   and end the run as the stop (128 + signal, no diagnostic) when a stop
-  signal is set, and retry the write otherwise. A CPU-bound task delays the
-  stop by at most one turn.
+  signal is set. They never retry: only the VM's own handlers interrupt a
+  write, and they set the stop first, so `EINTR` with no stop is a write
+  error like any other (glibc drops the buffer of a failed write, so a
+  retry would lose bytes). A CPU-bound task delays the stop by at most one
+  turn.
 - **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a
   `holder` (the job resource of the operation in flight on it), a
   `next_owner` task and a FIFO of waiting tasks, all on the GC

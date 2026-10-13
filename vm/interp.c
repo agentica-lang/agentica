@@ -49,27 +49,22 @@ void agc_stop(agc_vm *vm, int sig) {
   agc_exit(vm, 128 + sig);
 }
 
-static bool interrupted(agc_vm *vm, FILE *stream) {
-  if (errno != EINTR) return false;
-  clearerr(stream);
+static _Noreturn void write_failed(agc_vm *vm, FILE *stream) {
   int sig = agc_io_stop_signal();
-  if (sig) agc_stop(vm, sig);
-  return true;
+  if (errno == EINTR && sig) {
+    clearerr(stream);
+    agc_stop(vm, sig);
+  }
+  agc_fail(vm, "RUNTIME-INTERNAL",
+           stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
 }
 
 void agc_flush(agc_vm *vm) {
-  while (fflush(vm->rt->out) != 0)
-    if (!interrupted(vm, vm->rt->out)) agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to standard output", 0);
+  if (fflush(vm->rt->out) != 0) write_failed(vm, vm->rt->out);
 }
 
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
-  size_t done = 0;
-  while (done < len) {
-    done += fwrite((const uint8_t *)data + done, 1, len - done, stream);
-    if (done < len && !interrupted(vm, stream))
-      agc_fail(vm, "RUNTIME-INTERNAL",
-               stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
-  }
+  if (len && fwrite(data, 1, len, stream) != len) write_failed(vm, stream);
   if (len && stream == vm->rt->out) vm->rt->out_mid_line = ((const uint8_t *)data)[len - 1] != '\n';
 }
 

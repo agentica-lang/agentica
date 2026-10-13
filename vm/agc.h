@@ -667,6 +667,7 @@ void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outco
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
 void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style);
+void agc_print_flush_failed(FILE *err, const char *code, const char *message, size_t len, agc_style style);
 
 int agc_fuzz_one(const uint8_t *data, size_t len);
 

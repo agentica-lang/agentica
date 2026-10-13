@@ -14,6 +14,7 @@
 (define sighup 1)
 (define sigint 2)
 (define sigkill 9)
+(define sigalrm 14)
 (define sigterm 15)
 
 (define (ready? what)
@@ -105,6 +106,17 @@
            (unix-kill (subprocess-pid vm) (second run))
            (check-equal? (finish vm (lambda () (close-input-port out) (close-input-port err))) (+ 128 (second run)) label)
            (check-stopped pid path label))))))
+
+  (test-case "an outside SIGALRM keeps its default action"
+    (when (ready? "the SIGALRM test")
+      (with-temp-dir
+       (lambda (root)
+         (define bytecode (compile-program root "def main() -> Void\n  puts(\"ready\")\n  IO.flush()\n  Task.sleep(30000)\nend\n"))
+         (define-values (vm out in err) (subprocess #f #f #f vm-file "--" bytecode))
+         (close-output-port in)
+         (check-equal? (sync/timeout wait-seconds (read-line-evt out)) "ready")
+         (unix-kill (subprocess-pid vm) sigalrm)
+         (check-equal? (finish vm (lambda () (close-input-port out) (close-input-port err))) (+ 128 sigalrm))))))
 
   (test-case "a second stop signal before the children are stopped waits for them"
     (when (ready? "the early second signal test")
