@@ -78,7 +78,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 - Handlers may spawn tasks and pass `ctx` in a struct; tasks must end before the handler returns (`RUNTIME-BDD-PENDING-TASKS`). Assertions in tasks count. A context changed in a task is lost unless taken back from `Task.await`. A task that crashed and was not awaited fails the step with `RUNTIME-TASK-CRASHED`, the crash text as its message.
 - Handlers can always call `Process.spawn`; `agentica test --allow-run` only lets programs under test start programs. Handlers must not read stdin (it is the runner's protocol pipe).
 - Programs run with host permissions and environment, with the feature directory as their working directory; BDD provides no filesystem or network isolation. Timeouts are positive; each scenario has 30 seconds, program-driving calls without a timeout 5 seconds, each scenario child one million steps per step plus one million (library work included), and output is limited to 1 MiB of unread stdout, 1 MiB of stderr and 1 MiB of handler output per step.
-- To run a suite from a program, start `agentica test --json` with `Process.spawn` (needs `--allow-run`) and parse its report: `ok`, `passed`, `failed`, `not_executed`, `file_errors`, `exit_code`, `files`.
+- `agentica test` also runs `*_test.agc` unit test files in the same report (`references/testing.md`); with no paths it searches `specs/` and `test/`. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`. The run always has a seed (shown on failure); `--seed N` replays it.
+- To run a suite from a program, start `agentica test --json` with `Process.spawn` (needs `--allow-run`) and parse its report: `ok`, `passed`, `failed`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
 
 ## Diagnostics
 

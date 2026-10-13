@@ -98,7 +98,7 @@
        (define report (json-test (in directory "tasks.feature") "--steps" (in directory "steps.agc")))
        (check-equal? (codes report) '(#f "RUNTIME-BDD-PENDING-TASKS" #f)))))
 
-  (test-case "a seed reaches step handlers and programs under test"
+  (test-case "a seed, given or drawn, reaches step handlers and programs under test"
     (define draw "Random.int(1, 1000000).to_s + \" \" + Random.int(1, 1000000).to_s")
     (with-suite
      `(("draw.agc" . ,(format "def main() -> Void\n  puts(~a)\nend\n" draw))
@@ -110,7 +110,9 @@
      (lambda (directory)
        (define arguments (list (in directory "seed.feature") "--steps" (in directory "steps.agc")))
        (check-true (hash-ref (apply json-test #:before '("--seed" "9") arguments) 'ok))
-       (check-false (hash-ref (apply json-test arguments) 'ok)))))
+       (define drawn (apply json-test arguments))
+       (check-true (hash-ref drawn 'ok))
+       (check-true (exact-nonnegative-integer? (hash-ref drawn 'seed))))))
 
   (test-case "programs under test: no flush, wrong output, the output limits, literal input and the working directory"
     (with-suite

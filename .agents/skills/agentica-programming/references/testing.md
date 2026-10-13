@@ -49,4 +49,11 @@ end
 - A task crash outside every test (say, in a task `main` started) that nothing awaited fails the whole file (exit 1 with the crash summary).
 - Each test runs in its own task. A test fails with, in this order: a crash (its own code and span), its first failed assertion (`RUNTIME-TEST-ASSERTION` at the assertion), an `error(m)` returned by the block (`RUNTIME-TEST-ERROR`), tasks it left running (`RUNTIME-TEST-PENDING-TASKS`; they are stopped), or a task it spawned that crashed unawaited (`RUNTIME-TASK-CRASHED`). Await every task you spawn in a test. The next test still runs after a crash.
 - Each test's `Random` generator is seeded from the run's seed and the test's name, so values do not depend on the other tests.
-- `Test.run` never returns. Run directly, it prints `run this file with agentica test` and exits 2; `agentica test` runs test files from roadmap 25b on.
+- `Test.run` never returns. Run directly, it prints `run this file with agentica test` and exits 2.
+
+## Running tests
+
+- Name the file `*_test.agc` and run `agentica test` (searches `test/` and `specs/`), `agentica test test/ports_test.agc`, or `agentica test --only TEXT` (tests and scenarios whose name contains `TEXT`). Test files and `.feature` files share one report and the BDD exit codes (0 all passed, 1 a failure or nothing found, 2 usage or infrastructure).
+- Lines: `PASS file / name`, `FAIL file / name` then `file:line:col [CODE] message; expected E; actual A` and the test's own stdout indented by two spaces, `SKIP file / name` for a test not run. `--json` adds `kind: "tests"`, `output` and `status: "not_executed"`; `--ai` puts the output after ` | output`.
+- Each test file runs in its own child VM, each test in its own task, 30 seconds per test (`RUNTIME-TEST-TIMEOUT`). `System.exit`, a step limit or a timeout in a test ends the file's run: the rest is not executed. A front-end error in a test file is a file error; the other files still run.
+- A passed test's output is dropped. The run always has a seed; `--seed N` replays it (the report shows the seed when the run fails).

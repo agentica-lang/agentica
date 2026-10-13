@@ -27,8 +27,8 @@
           (if (eq? style 'json)
               (string-append
                (jsexpr->string
-                (hasheq 'ok #f 'passed 0 'failed 0 'not_executed 0 'file_errors 1 'exit_code 2
-                        'files (list (hasheq 'path file 'feature "" 'status "failed" 'scenarios '() 'error error))))
+                (hasheq 'ok #f 'passed 0 'failed 0 'not_executed 0 'file_errors 1 'exit_code 2 'seed (json-null)
+                        'files (list (hasheq 'path file 'feature "" 'kind "" 'status "failed" 'scenarios '() 'error error))))
                "\n")
               (format "FAIL ~a~a~a:1:1 [~a] ~a\n0 passed, 0 failed, 0 not executed, 1 file errors\n"
                       file (if (eq? style 'ai) " | " "\n") file (hash-ref error 'code) (hash-ref error 'message)))))
@@ -50,6 +50,18 @@
 (define (feature-name? name)
   (regexp-match? #rx#"[.]feature$" (path->bytes name)))
 
+(define (test-name? name)
+  (regexp-match? #rx#"_test[.]agc$" (path->bytes name)))
+
+(define (target-name? name)
+  (or (feature-name? name) (test-name? name)))
+
+(define (kind-of path)
+  (cond
+    [(test-name? path) "tests"]
+    [(feature-name? path) "feature"]
+    [else ""]))
+
 (define (utf-8-name? name)
   (with-handlers ([exn:fail:contract? (lambda (_) #f)])
     (and (bytes->string/utf-8 (path->bytes name)) #t)))
@@ -58,7 +70,7 @@
   (define errors '())
   (define targets '())
   (define (fail! path message)
-    (set! errors (cons (hasheq 'path (path->string path) 'problem message) errors)))
+    (set! errors (cons (hasheq 'path (path->string path) 'problem message 'kind (kind-of path)) errors)))
   (define (walk directory)
     (define names
       (with-handlers ([exn:fail? (lambda (failure) (fail! directory (format "cannot list the directory: ~a" (exn-message failure))) '())])
@@ -70,10 +82,10 @@
           (file-or-directory-type path #t)))
       (cond
         [(not type) (void)]
-        [(and (not (utf-8-name? name)) (or (eq? type 'directory) (feature-name? name)))
+        [(and (not (utf-8-name? name)) (or (eq? type 'directory) (target-name? name)))
          (fail! path "the file name is not valid UTF-8")]
         [(eq? type 'directory) (walk path)]
-        [(not (feature-name? name)) (void)]
+        [(not (target-name? name)) (void)]
         [(eq? type 'file) (set! targets (cons path targets))]
         [(and (eq? type 'link) (file-exists? path)) (set! targets (cons path targets))]
         [(memq type '(link directory-link)) (fail! path "the symbolic link does not name a file")])))
@@ -82,9 +94,26 @@
     (cond
       [(directory-exists? path) (walk path)]
       [(file-exists? path) (set! targets (cons path targets))]
-      [else (fail! path "feature path does not exist")]))
+      [else (fail! path "test path does not exist")]))
   (define files (sort (remove-duplicates (map path->string targets)) string<?))
-  (append (reverse errors) (for/list ([file (in-list files)]) (hasheq 'path file 'problem ""))))
+  (append (reverse errors) (for/list ([file (in-list files)]) (hasheq 'path file 'problem "" 'kind (kind-of (string->path file))))))
+
+(define (compile-tests entries directory)
+  (for/list ([entry (in-list entries)] [index (in-naturals)])
+    (define path (hash-ref entry 'path))
+    (cond
+      [(not (and (equal? (hash-ref entry 'kind) "tests") (equal? (hash-ref entry 'problem) "")))
+       (hash-set* entry 'bytecode "" 'front_end "")]
+      [else
+       (define text (with-handlers ([exn:fail? (lambda (_) #f)]) (file->string path)))
+       (define compiled
+         (if text
+             (compile-text path text)
+             (diagnostic 'RUNTIME-BDD-INFRA (format "cannot read the test file ~a" path) (first-line-span path))))
+       (define output (build-path directory (format "test-~a.agcb" index)))
+       (unless (diagnostic? compiled) (write-private output compiled))
+       (hash-set* entry 'bytecode (path->string output)
+                  'front_end (if (diagnostic? compiled) (jsexpr->string (diagnostic->jsexpr compiled)) ""))])))
 
 (define stale-name #rx"^agentica-bdd-[0-9a-f]+$")
 
@@ -185,7 +214,10 @@
               (bytes->string/utf-8 (get-output-bytes err) #\uFFFD)))
     (lambda () (parameterize-break #f (stop-vm process)))))
 
-(define (run-agentica-test paths step-files #:style style #:allow-run allow-run? #:seed seed #:vm vm)
+(define default-paths '("specs/" "test/"))
+
+(define (run-agentica-test paths step-files #:style style #:allow-run allow-run? #:seed seed #:vm vm
+                           #:only [only ""] #:test-timeout-ms [test-timeout-ms 30000])
   (cond
     [(> (length step-files) 1)
      (bdd-usage-report "one --steps program; import the other files from it" style)]
@@ -218,14 +250,14 @@
                   (rename-file-or-directory current directory)
                   (set! current directory))
                 (sweep-stale temporary directory)
-                (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm)]))
+                (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm only test-timeout-ms)]))
            (lambda ()
              (parameterize-break #f
                (when created? (remove-run-directory current))
                (with-handlers ([exn:fail? void])
                  (when lock (close-output-port lock))))))))]))
 
-(define (run-in directory paths step-file style allow-run? seed vm)
+(define (run-in directory paths step-file style allow-run? seed vm only test-timeout-ms)
   (define runner-file (build-path directory "runner.agcb"))
   (define steps-file (build-path directory "steps.agcb"))
   (define config-file (build-path directory "config.jsonl"))
@@ -238,7 +270,8 @@
     [else
      (write-private runner-file runner)
      (unless (diagnostic? steps) (write-private steps-file steps))
-     (define entries (discover paths))
+     (define given (if (null? paths) (filter directory-exists? default-paths) paths))
+     (define entries (compile-tests (discover given) directory))
      (define config
        (jsexpr->string
         (hasheq 'vm (path->string vm)
@@ -247,11 +280,13 @@
                 'steps_error (if (diagnostic? steps) (jsexpr->string (diagnostic->jsexpr steps)) "")
                 'agentica (agentica-command)
                 'count (length entries)
-                'empty_path (path->string (simplify-path (path->complete-path (car paths)) #f))
+                'empty_path (path->string (simplify-path (path->complete-path (if (null? given) (car default-paths) (car given))) #f))
                 'style (symbol->string style)
                 'allow_run allow-run?
                 'seeded (and seed #t)
-                'seed (or seed 0))))
+                'seed (or seed 0)
+                'only only
+                'test_timeout_ms test-timeout-ms)))
      (write-private config-file
                     (string->bytes/utf-8
                      (string-append* config "\n" (for/list ([entry (in-list entries)]) (string-append (jsexpr->string entry) "\n")))))

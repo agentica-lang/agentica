@@ -66,8 +66,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-TEST-ASSERTION` | a failed `Test.eq`, `Test.ok?`, `Test.error?` or `Test.assert` in a test, at the assertion (see `testing.md`) |
 | `RUNTIME-TEST-ERROR` | a test block returned `error(message)`, at the `Test.test` call |
 | `RUNTIME-TEST-NAME` | an empty or repeated test name, at that `Test.test` call |
-| `RUNTIME-TEST-RUN` | `Test.run` called in a task other than `main`'s own (a test, or a task you spawned); call it once, from `main` |
+| `RUNTIME-TEST-RUN` | `Test.run` called in a task other than `main`'s own (a test, or a task you spawned); call it once, from `main`. Under `agentica test` it also names a test file whose `main` never calls `Test.run` |
 | `RUNTIME-TEST-PENDING-TASKS` | a test returned while tasks it spawned were still running; await them |
+| `RUNTIME-TEST-TIMEOUT` | under `agentica test`, a test ran longer than 30 seconds; the rest of its file is not executed |
 | `LOWER-UNSUPPORTED` | the VM cannot run this form; exit 1 before anything runs. Every checked program runs on the VM today, so seeing it is an interpreter bug to report |
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and `RUNTIME-BDD-*` codes; see `bdd.md`.

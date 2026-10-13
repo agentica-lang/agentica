@@ -1,0 +1,110 @@
+#lang racket
+
+(require rackunit json racket/runtime-path "cli-in-process.rkt" "../src/bdd-driver.rkt" "../src/vm-launch.rkt")
+
+(define-runtime-path fixtures "fixtures/unit")
+(define-runtime-path std-tests "std")
+(define-runtime-path handlers "bdd/handlers.agc")
+
+(define (fixture name)
+  (path->string (build-path fixtures name)))
+
+(define (agentica-test . arguments)
+  (apply run-main-in-process "test" arguments))
+
+(define (json-test . arguments)
+  (define result (apply agentica-test "--json" arguments))
+  (check-equal? (caddr result) "")
+  (list (car result) (string->jsexpr (cadr result))))
+
+(define (cases report)
+  (append-map (lambda (file) (hash-ref file 'scenarios)) (hash-ref report 'files)))
+
+(define (field item key)
+  (define problem (hash-ref item 'error))
+  (and (hash? problem) (hash-ref problem key #f)))
+
+(define (start-line problem)
+  (hash-ref (hash-ref (hash-ref problem 'range) 'start) 'line))
+
+(module+ test
+  (test-case "a test file reports each outcome, with captured output only for failed tests"
+    (match-define (list status report) (json-test (fixture "outcomes_test.agc")))
+    (check-equal? status 1)
+    (define results (cases report))
+    (check-equal? (map (lambda (item) (hash-ref item 'status)) results)
+                  '("passed" "failed" "failed" "failed" "passed" "failed" "failed" "passed"))
+    (check-equal? (map (lambda (item) (field item 'code)) results)
+                  '(#f "RUNTIME-TEST-ASSERTION" "RUNTIME-TEST-ERROR" "RUNTIME-DIVISION-BY-ZERO" #f
+                    "RUNTIME-TEST-PENDING-TASKS" "RUNTIME-TASK-CRASHED" #f))
+    (define compared (second results))
+    (check-equal? (list (field compared 'expected) (field compared 'actual)) '("\"c\"" "\"a\\\"b\""))
+    (check-equal? (start-line (hash-ref compared 'error)) 19)
+    (check-equal? (start-line (hash-ref (fourth results) 'error)) 2)
+    (check-equal? (hash-ref compared 'output) "first line\n\u001eagentica-bdd {\"event\":\"pass\"}")
+    (check-equal? (map (lambda (item) (hash-ref item 'output)) (list (first results) (third results) (fourth results)))
+                  '("" "" ""))
+    (check-equal? (hash-ref (car (hash-ref report 'files)) 'kind) "tests")
+    (check-equal? (list (hash-ref report 'passed) (hash-ref report 'failed) (hash-ref report 'not_executed)) '(3 5 0))
+    (match-define (list _ plain _) (agentica-test (fixture "outcomes_test.agc")))
+    (check-true (string-contains? plain ":19:7 [RUNTIME-TEST-ASSERTION] values are not equal; expected \"c\"; actual \"a\\\"b\"\n  first line\n"))
+    (check-false (string-contains? plain "quiet when passing"))
+    (match-define (list _ ai _) (agentica-test "--ai" (fixture "outcomes_test.agc")))
+    (check-true (string-contains? ai "actual \"a\\\"b\" | output \"first line\\n\\u001Eagentica-bdd ")))
+
+  (test-case "an exit or a timeout ends the file's run, and bad names are a file error"
+    (match-define (list status report) (json-test (fixture "stops_test.agc") (fixture "names_test.agc")))
+    (check-equal? status 1)
+    (define names (car (hash-ref report 'files)))
+    (check-equal? (list (hash-ref (hash-ref names 'error) 'code) (start-line (hash-ref names 'error))) '("RUNTIME-TEST-NAME" 6))
+    (define stops (cases report))
+    (check-equal? (map (lambda (item) (hash-ref item 'status)) stops) '("passed" "failed" "not_executed"))
+    (check-equal? (field (second stops) 'code) "RUNTIME-BDD-PREMATURE-EXIT")
+    (check-equal? (hash-ref (second stops) 'output) "going away")
+    (check-equal? (hash-ref report 'not_executed) 1)
+    (define-values (code text)
+      (run-agentica-test (list (fixture "hangs_test.agc")) '() #:style 'json #:allow-run #f #:seed #f #:vm (find-vm)
+                         #:test-timeout-ms 1000))
+    (check-equal? code 1)
+    (define hung (cases (string->jsexpr text)))
+    (check-equal? (map (lambda (item) (hash-ref item 'status)) hung) '("failed" "not_executed"))
+    (check-equal? (field (first hung) 'code) "RUNTIME-TEST-TIMEOUT"))
+
+  (test-case "--only keeps matching tests, and a test draws the same values alone or with others"
+    (define (draws seed . arguments)
+      (define result (apply run-main-in-process "--seed" seed "test" "--json" arguments))
+      (define report (string->jsexpr (cadr result)))
+      (for/list ([item (in-list (cases report))]) (list (hash-ref item 'name) (field item 'actual))))
+    (define all (draws "7" (fixture "seed_test.agc")))
+    (define alone (draws "7" "--only" "second" (fixture "seed_test.agc")))
+    (check-equal? alone (list (second all)))
+    (check-not-equal? (draws "8" "--only" "second" (fixture "seed_test.agc")) alone)
+    (match-define (list _ drawn) (json-test (fixture "seed_test.agc")))
+    (check-true (exact-nonnegative-integer? (hash-ref drawn 'seed)))
+    (match-define (list _ text _) (run-main-in-process "--seed" "7" "test" (fixture "seed_test.agc")))
+    (check-true (string-suffix? text "0 passed, 2 failed, 0 not executed, 0 file errors, seed 7\n"))
+    (match-define (list status none) (json-test "--only" "nothing" (fixture "seed_test.agc")))
+    (check-equal? (list status (cases none)) '(1 ())))
+
+  (test-case "test files and features share one report, and test/ is a default path"
+    (match-define (list status report)
+      (json-test (fixture "mixed") "--steps" (path->string handlers)))
+    (check-equal? status 1)
+    (check-equal? (for/list ([file (in-list (hash-ref report 'files))])
+                    (list (hash-ref file 'kind) (let ([problem (hash-ref file 'error)]) (and (hash? problem) (hash-ref problem 'code)))))
+                  '(("tests" "CHECK-TYPE-MISMATCH") ("tests" #f) ("feature" #f)))
+    (check-equal? (hash-ref report 'passed) 2)
+    (define directory (make-temporary-directory "agentica-unit~a"))
+    (dynamic-wind
+      void
+      (lambda ()
+        (make-directory (build-path directory "test"))
+        (copy-file (build-path fixtures "mixed" "fine_test.agc") (build-path directory "test" "fine_test.agc"))
+        (match-define (list status _ _) (parameterize ([current-directory directory]) (agentica-test)))
+        (check-equal? status 0))
+      (lambda () (delete-directory/files directory))))
+
+  (test-case "the std/ unit tests pass"
+    (match-define (list status report) (json-test (path->string std-tests)))
+    (check-equal? status 0)
+    (check-equal? (list (hash-ref report 'passed) (hash-ref report 'failed)) '(7 0))))
