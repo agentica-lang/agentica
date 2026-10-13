@@ -92,9 +92,9 @@ File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 ```
 
-Opens a file for streaming. The mode is `"read"`, `"write"` (create or empty
-the file) or `"append"`. `close` writes pending data; closing twice is fine.
-Open files are closed when the program ends.
+Opens a file for streaming. The mode is `"read"`, `"write"` (create or empty the file) or `"append"`. `close` writes pending data; closing twice is fine. A `close` on a file that is already being closed (its task crashed) returns `ok()` at once; the run still waits for that close to write the data.
+
+Open files are closed when the program ends, and the run waits until their pending data is written. `agentica --flush-timeout MS app.agc` waits at most MS milliseconds: when time runs out, the run ends with the same exit code and prints one line on stderr saying that file data may not be written. Without the flag the wait has no limit, so a write to a FIFO that nobody reads keeps the program from ending.
 
 ```agentica {mode="check"}
 def main() -> Void

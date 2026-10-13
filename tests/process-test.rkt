@@ -203,12 +203,12 @@
      (test-case "every way a run ends kills and reaps its children"
        (for ([ending (in-list '("" "  System.exit(4)" "  x = 1 / 0"
                                 "  while true\n  end"
-                                "  task = Task.spawn(&crash, 0)\n  Task.sleep(60000)"))])
+                                "  task = Task.spawn(&crash, 0)\n  n = Task.await(task)"))])
          (define-values (result out err)
            (run (program "hold" (string-append "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n" ending)
                          "def crash(n: Int) -> Int\n  return 1 / 0\nend\n\n")
                 #:limit (and (string-contains? ending "while") 100)))
          (check-regexp-match #px"^[0-9]+\n$" out)
          (when (string-contains? ending "crash")
-           (check-equal? result 'RUNTIME-DIVISION-BY-ZERO))
+           (check-equal? result 'RUNTIME-TASK-CRASHED))
          (check-false (alive? out))))]))

@@ -98,8 +98,8 @@ Notes on the language rules of each library area: what the checker enforces and 
 ## Lightweight I/O tasks
 
 - Task.spawn takes Fn[A, R] and one argument and returns Task[R]; await returns the cached R, including false/nil/error Results. Sleep takes nonnegative milliseconds, zero yields and negative values halt with RUNTIME-INVALID-DURATION. Reserve Task; use Todo for the demonstration struct. No channels, closures or CPU parallelism.
-- Entrypoint return cancels pending work and closes the run's resources. Any task diagnostic or System.exit ends the run. Tasks inherit ports and arguments; cross-task stream ordering is unspecified.
-- `std/bdd` fails a step with RUNTIME-BDD-PENDING-TASKS when `Task.pending_count()` is above zero after its handler.
+- Entrypoint return cancels pending work and closes the run's resources. A diagnostic in `main`, RUNTIME-STEP-LIMIT, RUNTIME-INTERNAL or System.exit ends the run; any other diagnostic in a task is a crash that ends only that task (phase 24, §37), and an unobserved crash makes the run exit 1 when `main` returns. Tasks inherit ports and arguments; cross-task stream ordering is unspecified.
+- `std/bdd` fails a step with RUNTIME-BDD-PENDING-TASKS when `Task.pending_count()` is above zero after its handler, then with RUNTIME-TASK-CRASHED when `Task.unobserved_crash()` is `ok`. The runner skips stderr lines with `"task": true` when it reads a child's last diagnostic.
 - The `task-*` goldens own task behavior. tests/bdd-integration.rkt verifies concurrent streams of a program under test and cleanup. examples/concurrency.agc is a hermetic CI smoke check.
 
 ## TCP, TLS and HTTP
@@ -110,7 +110,7 @@ Notes on the language rules of each library area: what the checker enforces and 
 
 ## Files and paths
 
-- File builtins are `vm/files.c` (`references/vm.md`). File reads/writes serialize on one per-handle lock and include lock wait in the deadline; a timed-out active operation closes the handle. Symlink targets resolve relative to the link's own directory, and link cycles stop at the first repeated path. The end of a run flushes and closes open handles.
+- File builtins are `vm/files.c` (`references/vm.md`). File reads/writes serialize on one per-handle lock and include lock wait in the deadline; a timed-out active operation closes the handle. Symlink targets resolve relative to the link's own directory, and link cycles stop at the first repeated path. The end of a run closes open files with pool close jobs and waits for them (no limit, or `--flush-timeout MS`, then a warning line and the same exit code); other handles close on the loop thread.
 - File.open accepts read/write/append modes and only regular files or links to regular files. Whole-text calls and individual stream operations cap data at 1 MiB; strict UTF-8 errors become Result errors. Dir.mkdir is recursive and idempotent, Dir.list is sorted, and Path.resolve is lexical without symlink resolution. builtin-types.rkt owns FileHandle and FileInfo registration; grammar.md and the self-contained programming reference document matching semantics.
 - tests/filesystem-test.rkt runs checked Agentica programs on the VM against temporary directories, including stream/whole-file round trips, error Results, metadata, paths and EOF. Keep filesystem tests local and clean temporary trees on every outcome.
 

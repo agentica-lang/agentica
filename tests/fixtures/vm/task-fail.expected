@@ -1,10 +1,13 @@
 {
   "exit": 1,
-  "code": "RUNTIME-DIVISION-BY-ZERO",
+  "code": "RUNTIME-TASK-CRASHED",
   "steps": 15,
   "stdout": [
     "start",
     ""
   ],
-  "stderr": []
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-fail.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":3},\"start\":{\"column\":13,\"line\":3}},\"task\":true}",
+    ""
+  ]
 }

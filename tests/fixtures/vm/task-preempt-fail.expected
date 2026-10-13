@@ -1,7 +1,13 @@
 {
   "exit": 1,
-  "code": "RUNTIME-DIVISION-BY-ZERO",
-  "steps": 2005,
-  "stdout": [],
-  "stderr": []
+  "code": "RUNTIME-TASK-CRASHED",
+  "steps": 3923,
+  "stdout": [
+    "true",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-preempt-fail.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":13,\"line\":2}},\"task\":true}",
+    ""
+  ]
 }

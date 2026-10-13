@@ -768,6 +768,19 @@ static char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   return path;
 }
 
+static int end_child(agc_vm *vm, agc_resource *r) {
+  proc *p = r->native;
+  if (!p) return 0;
+  r->native = NULL;
+  agc_unregister(vm, r);
+  int err = close_proc(p);
+  p->users--;
+  settle(p);
+  return err;
+}
+
+static void close_child(agc_vm *vm, agc_resource *r) { (void)end_child(vm, r); }
+
 /* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
    resolves before the child changes directory (§10.4). */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout) {
@@ -821,6 +834,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   }
   p->users = 1;
   pr->state = agc_register(vm, p, release_proc);
+  agc_own(vm, pr->state, close_child);
   return agc_result_value(true, agc_process_value(pr));
 }
 
@@ -945,15 +959,8 @@ static agc_value builtin_output(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_resource *r = agc_as_process(vm, args[0])->state;
-  proc *p = r->native;
-  if (!p) return agc_void();
-  r->native = NULL;
-  agc_unregister(vm, r);
-  int err = close_proc(p);
-  p->users--;
-  settle(p);
-  if (err) agc_fail(vm, "RUNTIME-PROCESS-CLOSE", "process: the child cannot be stopped", span);
+  if (end_child(vm, agc_as_process(vm, args[0])->state))
+    agc_fail(vm, "RUNTIME-PROCESS-CLOSE", "process: the child cannot be stopped", span);
   return agc_void();
 }
 

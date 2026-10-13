@@ -23,7 +23,7 @@ void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) 
   o->message_len = strlen(message);
   o->text = NULL;
   o->span = span;
-  longjmp(vm->fail, 1);
+  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
 void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span) {
@@ -34,13 +34,13 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
   o->message = message->data;
   o->message_len = message->bytes;
   o->span = span;
-  longjmp(vm->fail, 1);
+  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
 void agc_exit(agc_vm *vm, int64_t code) {
   vm->rt->outcome.kind = AGC_EXITED;
   vm->rt->outcome.exit_code = code;
-  longjmp(vm->fail, 1);
+  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
 void agc_flush(agc_vm *vm) {
@@ -69,6 +69,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->err = err;
   atomic_init(&rt->steps_left, max_steps);
   rt->in.fd = -1;
+  rt->flush_timeout = -1;
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   rt->args = agc_list_value(agc_new_list(0));

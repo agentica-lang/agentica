@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 74,
+  "stdout": [
+    "2 0",
+    "1 0",
+    "false",
+    "0",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-crash-descendants.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":15},\"start\":{\"column\":16,\"line\":15}},\"task\":true}",
+    ""
+  ]
+}

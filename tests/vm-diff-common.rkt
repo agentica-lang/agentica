@@ -116,6 +116,13 @@
   (for/list ([argument (in-list (fixture-args))])
     (if (equal? argument tmp-token) directory argument)))
 
+(define fixture-directory
+  (path->string (path->directory-path (simplify-path (build-path tests-directory "fixtures")))))
+
+(define (unfixture result)
+  (match-define (list status stdout stderr) result)
+  (list status (string-replace stdout fixture-directory fixture-token) (string-replace stderr fixture-directory fixture-token)))
+
 (define (untmp directory result)
   (list (first result)
         (string-replace (second result) directory tmp-token)
@@ -260,7 +267,7 @@
           (list (string->number (string-trim (file->string (part ".status"))))
                 (file->string (part ".out"))
                 (file->string (part ".err"))))
-        (if tmp (untmp tmp result) result)))
+        (unfixture (if tmp (untmp tmp result) result))))
     (lambda ()
       (when process
         (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
@@ -311,12 +318,13 @@
   (define parsed
     (and (equal? (first result) 1)
          (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr (substring body start)))))
-  (define code (and (hash? parsed) (string? (hash-ref parsed 'code #f)) (hash-ref parsed 'code)))
+  (define code (and (hash? parsed) (not (hash-ref parsed 'task #f)) (string? (hash-ref parsed 'code #f))
+                    (hash-ref parsed 'code)))
   (list (first result) (second result) (if code (substring stderr 0 start) stderr) code))
 
 (define (text-code stderr)
   (define found
-    (regexp-match* #px"(?m:error\\[([A-Z]+-[A-Z0-9-]+)\\]|^\\[([A-Z]+-[A-Z0-9-]+)\\]$)" stderr #:match-select cdr))
+    (regexp-match* #px"(?m:error\\[([A-Z]+-[A-Z0-9-]+)\\]$|^\\[([A-Z]+-[A-Z0-9-]+)\\]$)" stderr #:match-select cdr))
   (and (pair? found) (ormap values (last found))))
 
 (define (diagnostic-code result)
@@ -344,6 +352,9 @@
   (check-true finished (format "~a finishes under --max-steps ~a" name (last limits))))
 
 (define (run-fixture-vm bytecode limit)
+  (unfixture (run-fixture-vm-raw bytecode limit)))
+
+(define (run-fixture-vm-raw bytecode limit)
   (cond
     [(uses-tmp?)
      (define directory (fresh-tmp "vm"))
@@ -471,11 +482,45 @@
          (check-text-format on-vm full (format "~a ~a" name style)))
        (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name)))))
 
+(define (json-crash-free text)
+  (for/fold ([kept '()] [codes '()] [summaries '()]
+             #:result (values (string-join (reverse kept) "\n") (reverse codes) (reverse summaries)))
+            ([line (in-list (regexp-split #rx"\n" text))])
+    (define parsed (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr line)))
+    (cond
+      [(and (hash? parsed) (eq? (hash-ref parsed 'task #f) #t))
+       (values kept (cons (hash-ref parsed 'code) codes) summaries)]
+      [(and (hash? parsed) (hash-has-key? parsed 'unobserved_crashes))
+       (values kept codes (cons (list (hash-ref parsed 'unobserved_crashes) (hash-ref parsed 'first)) summaries))]
+      [else (values (cons line kept) codes summaries)])))
+
+(define (text-crash-free text)
+  (define plain-header #px"^.*:[0-9]+:[0-9]+ error\\[([A-Z]+-[A-Z0-9-]+)\\] in a task$")
+  (define ai-header #px"^\\[([A-Z]+-[A-Z0-9-]+)\\] in a task$")
+  (define summary #px"^([0-9]+) task crash(?:es were| was) not observed; first: (.*)$")
+  (define (after-caret lines)
+    (define rest (memf (lambda (line) (regexp-match? #px"^ +\\| [ \t]*\\^+$" line)) lines))
+    (if rest (cdr rest) '()))
+  (let loop ([lines (regexp-split #rx"\n" text)] [kept '()] [codes '()] [summaries '()])
+    (cond
+      [(null? lines) (values (string-join (reverse kept) "\n") (reverse codes) (reverse summaries))]
+      [(and (>= (length lines) 4) (regexp-match ai-header (first lines)))
+       => (lambda (found) (loop (drop lines 4) kept (cons (cadr found) codes) summaries))]
+      [(regexp-match plain-header (car lines))
+       => (lambda (found) (loop (after-caret (cdr lines)) kept (cons (cadr found) codes) summaries))]
+      [(regexp-match summary (car lines))
+       => (lambda (found)
+            (loop (cdr lines) kept codes (cons (list (string->number (cadr found)) (caddr found)) summaries)))]
+      [else (loop (cdr lines) (cons (car lines) kept) codes summaries)])))
+
 (define (check-text-format on-vm full message)
   (check-equal? (take on-vm 2) (take full 2) message)
-  (define stderr (third on-vm))
-  (check-true (string-prefix? stderr (third full)) message)
-  (define diagnostic (substring stderr (min (string-length stderr) (string-length (third full)))))
+  (define-values (stderr text-crashes text-summaries) (text-crash-free (third on-vm)))
+  (define-values (expected json-crashes json-summaries) (json-crash-free (third full)))
+  (check-equal? text-crashes json-crashes message)
+  (check-equal? text-summaries json-summaries message)
+  (check-true (string-prefix? stderr expected) message)
+  (define diagnostic (substring stderr (min (string-length stderr) (string-length expected))))
   (if (fourth full)
       (check-equal? (text-code diagnostic) (fourth full) message)
       (check-equal? diagnostic "" message)))

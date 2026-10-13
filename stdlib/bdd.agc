@@ -219,6 +219,7 @@ def serve(all: List[Step]) -> Void
     if Task.pending_count() > 0
       halt("RUNTIME-BDD-PENDING-TASKS", "await pending tasks before returning from a BDD handler")
     end
+    check_crash()
     probe(ctx)
     fields: Map[String, Json] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
     IO.print(record_text(fields))
@@ -231,6 +232,14 @@ end
 def check_tasks() -> Void
   if Task.pending_count() > 0
     halt("RUNTIME-BDD-PENDING-TASKS", "await pending tasks before calling BDD.run")
+  end
+  check_crash()
+end
+
+def check_crash() -> Void
+  crash = Task.unobserved_crash()
+  if crash.ok?
+    halt("RUNTIME-TASK-CRASHED", crash.unwrap!)
   end
 end
 

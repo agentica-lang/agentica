@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 59,
+  "stdout": [
+    "error(\"network: end of input\")",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/tcp-crash-delegate.agc:8:15: division by zero\")",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/tcp-crash-delegate.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":8},\"start\":{\"column\":15,\"line\":8}},\"task\":true}",
+    ""
+  ]
+}

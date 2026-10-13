@@ -4,6 +4,8 @@
          racket/file
          racket/runtime-path
          racket/list
+         racket/system
+         json
          "cli-in-process.rkt")
 
 (define-runtime-path examples-dir "../examples")
@@ -29,6 +31,53 @@
 (define (literal text) (format "~s" text))
 
 (module+ test
+  (test-case "the run waits for the close of a crashed task's file, so its buffered write reaches the disk"
+    (with-temp-dir
+     (lambda (root)
+       (define path (path->string (build-path root "crash.txt")))
+       (define-values (output result)
+         (run-program
+          (string-append
+           "def writer(path: String) -> Result[Int]\n  f = try File.open(path, \"write\", 1000)\n"
+           "  try File.write(f, \"hello world\\n\", 1000)\n  n = 0\n  return ok(1 / n)\nend\n\n"
+           "def main() -> Void\n  t = Task.spawn(&writer, System.args()[0])\n  puts(Task.await(t).ok?)\nend\n")
+          #:args (list path)))
+       (check-equal? output "false\n")
+       (check-equal? result (void))
+       (check-equal? (file->string path) "hello world\n"))))
+
+  (test-case "--flush-timeout needs a non-negative integer"
+    (define hello (path->string (build-path examples-dir "hello.agc")))
+    (check-equal? (first (run-main-in-process "--flush-timeout" "-1" hello)) 2)
+    (check-equal? (first (run-main-in-process "--flush-timeout" "soon" hello)) 2)
+    (check-equal? (first (run-main-in-process "--flush-timeout" "0" hello)) 0))
+
+  (test-case "--flush-timeout ends the run when a file flush cannot finish"
+    (define mkfifo (find-executable-path "mkfifo"))
+    (if (not mkfifo)
+        (displayln "skip: mkfifo is not available")
+        (with-temp-dir
+         (lambda (root)
+           (define fifo (path->string (build-path root "fifo")))
+           (define source (path->string (build-path root "stuck.agc")))
+           (check-true (system* mkfifo fifo))
+           (display-to-file
+            (string-append
+             "def main() -> Void\n  f = File.open(System.args()[0], \"write\", 1000).unwrap!\n"
+             "  File.write(f, String.join(List.repeat(\"a\", 65536), \"\"), 1000).unwrap!\n"
+             "  File.write(f, \"x\", 1000).unwrap!\n  IO.print(\"main done\\n\")\nend\n")
+            source)
+           (define reader (open-input-file fifo))
+           (define start (current-inexact-milliseconds))
+           (define result
+             (dynamic-wind
+               void
+               (lambda () (run-main-in-process "--json" "--flush-timeout" "200" source fifo))
+               (lambda () (close-input-port reader))))
+           (check-true (< (- (current-inexact-milliseconds) start) 10000))
+           (check-equal? (take result 2) '(0 "main done\n"))
+           (check-equal? (hash-ref (string->jsexpr (third result)) 'flush_timeout_ms) 200)))))
+
   (test-case "file-summary example reads a command-line path"
     (define input-path (build-path examples-dir "hello.agc"))
     (define-values (output result)
