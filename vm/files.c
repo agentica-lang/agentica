@@ -510,7 +510,8 @@ static void work_read_text(op *o) {
   int fd = open_for(o, true, false);
   if (fd < 0 || on_loop(o, fd)) return;
   blocking(fd);
-  if (o->count == 1) {
+  struct stat info;
+  if (o->count == 1 && fstat(fd, &info) == 0 && S_ISREG(info.st_mode)) {
     o->fd = fd;
     step_read_text(o);
     o->fd = -1;
@@ -1039,7 +1040,7 @@ static void files_on(agc_vm *vm, uint32_t span) {
 static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   o->vm = vm;
   if (!o->st || !o->st->poller) {
-    agc_io_then(agc_io_start(vm, &file_io, o, context, timeout), more);
+    agc_io_start_then(vm, &file_io, o, context, timeout, more);
     return agc_void();
   }
   if (step(o)) return done(vm, o, context);

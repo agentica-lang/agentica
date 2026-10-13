@@ -435,10 +435,10 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   handle), and a cancelled task's call stops through the `cancel` half.
   A whole-file call (`read_text`, `write_text`, `append_text`) opens in a
   pool job; when the path turns out to be pollable, the job's `more` step
-  (`agc_io_then`, run on the loop thread after the work) opens a poller
+  (`agc_io_start_then`, run on the loop thread after the work) opens a poller
   and keeps the same job, timer and parked task waiting on the loop. The
   loop calls a `cancel` half only in that loop phase, never while the work
-  runs (`cancellable` in `vm/loop.c`). A poller hang-up or error first
+  runs (`cancellable` in `vm/loop.c`). A pool kind with a `cancel` half must have a `more` step; `start_job` checks this when the job starts. A poller hang-up or error first
   repeats the step, so the call reports the real error (`EPIPE` for a
   reader that left), and `EIO` only when the step would still wait. A
   timed-out close keeps only the bytes it did not send yet. `read_text` of
@@ -604,16 +604,18 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
 
 **Stdin.** Stdin follows the same rule as files. On the first read,
 `watch_stdin` in `vm/input.c` checks the descriptor: a pipe, a FIFO or a
-terminal is reopened through `/proc/self/fd/N` with `O_NONBLOCK` (a new
+terminal is reopened through `/proc/self/fd/N` (N is 0, or in protocol
+mode the reserved descriptor that holds the real stdin) with `O_NONBLOCK` (a new
 open file description, so the inherited one, which a shell's terminal
 shares, keeps its flags; `uv_pipe_open` and `uv_tty_init` would change
 it) and read on the loop through an `agc_poller`; a socket keeps its
 flags (restored after `uv_poll_init`) and is read with `MSG_DONTWAIT`; a
 regular file, a device epoll refuses, a write-only stdin, or a pipe or
 terminal whose reopen fails (no `/proc`, or `EACCES` after `su` or
-`sudo -u`) stays a pool job with one blocking `read`, so that read keeps a
+`sudo -u`), a socket whose `F_DUPFD` fails, or a descriptor whose poller
+cannot be made (`agc_poller_open` fails) stays a pool job with one blocking `read`, so that read keeps a
 pool thread until data comes (§14.1, exceptions). The poller owns its own
-descriptor (a socket is duplicated) and `agc_io_close` closes it. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
+descriptor (a socket is duplicated) and `agc_input_close` closes it. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
 and its `done` half appends the bytes to the shared `agc_input` buffer
 (owned by the runtime, served by scheduler 0) and wakes the tasks waiting
 for that read. One read is in flight at a time; a second reader parks in

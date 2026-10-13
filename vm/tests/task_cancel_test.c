@@ -169,7 +169,7 @@ static agc_value test_pool_job(agc_vm *vm, agc_value *args, uint32_t span) {
   assert(q);
   q->vm = vm;
   q->tag = agc_as_int(vm, args[0]);
-  agc_io_then(agc_io_start(vm, &pool_io, q, agc_void(), 30000), pool_more);
+  agc_io_start_then(vm, &pool_io, q, agc_void(), 30000, pool_more);
   return agc_void();
 }
 

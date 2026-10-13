@@ -41,7 +41,7 @@ struct agc_io_job {
   uv_timer_t timer;
   const agc_io_kind *kind;
   void *data;
-  bool (*more)(void *data, agc_io_job *job);
+  agc_more_fn more;
   agc_loop *loop;
   job *ready_next;
   size_t slot;
@@ -169,7 +169,7 @@ static void mark_ready(job *j) {
   loop->ready_tail = j;
 }
 
-/* A job's `more` step (agc_io_then) may keep it waiting on the loop after
+/* A job's `more` step (agc_io_start_then) may keep it waiting on the loop after
    its pool work (a descriptor that can wait forever); agc_io_ready ends it. */
 static void work_finished(uv_work_t *req, int status) {
   (void)status;
@@ -290,11 +290,7 @@ static void discard(agc_vm *vm, agc_value result) {
 
 /* Only a loop wait can be cancelled: a pool job's work runs to its end
    (docs/vm/14-core-invariants.md, 14.3). */
-static bool cancellable(agc_vm *vm, const job *j) {
-  if (!j->kind->cancel) return false;
-  if (j->kind->work && !j->more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
-  return !j->kind->work || j->on_loop;
-}
+static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->work || j->on_loop); }
 
 /* A detached job (its task was cancelled) ends here, between turns: its
    result is dropped, its `expired` half never runs, so it never closes a
@@ -303,7 +299,7 @@ static bool cancellable(agc_vm *vm, const job *j) {
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
   if (!j->dropping && !j->work_done) {
-    if (!j->timer_fired || !cancellable(vm, j) || !j->kind->cancel(vm, j->data, r->context, true)) return;
+    if (!j->timer_fired || !cancellable(j) || !j->kind->cancel(vm, j->data, r->context, true)) return;
     j->dropping = true;
   }
   close_timer(j);
@@ -477,8 +473,6 @@ void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int 
 
 void agc_poller_pause(agc_poller *p) { uv_poll_stop(&p->handle); }
 
-void agc_io_then(agc_io_job *j, bool (*more)(void *data, agc_io_job *job)) { j->more = more; }
-
 void agc_poller_close(agc_poller *p) { uv_close((uv_handle_t *)&p->handle, poller_closed); }
 
 bool agc_io_init(void) {
@@ -492,12 +486,14 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task) {
+                               int64_t timeout_ms, const agc_task *task, agc_more_fn more) {
+  if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
   j->kind = kind;
   j->data = data;
+  j->more = more;
   j->loop = loop;
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
@@ -528,16 +524,21 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   return r;
 }
 
-agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task);
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                              agc_more_fn more) {
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
   return r->native;
 }
 
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+  return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
+}
+
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL);
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL);
   job *j = r->native;
   j->detached = j->flush = true;
   return j;
@@ -646,7 +647,7 @@ void agc_io_detach(agc_vm *vm, agc_task *t) {
   job *j = r->native;
   j->detached = true;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "detach job=%" PRIu64 " kind=%s task=%" PRIu64, r->id, j->kind->name, t->id);
-  if (cancellable(vm, j) && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
+  if (cancellable(j) && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
   if (j->dropping || j->work_done || j->timer_fired) mark_ready(j);
 }
 

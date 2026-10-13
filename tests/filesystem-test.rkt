@@ -210,21 +210,20 @@
            (run-vm-bounded
             root
             (string-append
-             "def reader(path: String) -> Result[String]\n  return File.read_text(path, 60000)\nend\n\n"
-             "def parent(path: String) -> Int\n  Task.spawn(&reader, path)\n  Task.sleep(50)\n"
+             "def reader(path: String) -> Result[String]\n  text = File.read_text(path, 60000)\n"
+             "  puts(\"the read returned\")\n  return text\nend\n\n"
+             "def parent(path: String) -> Int\n  Task.spawn(&reader, path)\n  Task.sleep(300)\n"
              "  zero = String.length(\"\")\n  return 1 / zero\nend\n\n"
+             "def count() -> Int\n  return Dir.list(\"/proc/self/fd\", 1000).unwrap!.length\nend\n\n"
              "def main() -> Void\n  fifo = System.args()[0]\n"
-             "  holder = File.open(fifo, \"append\", 1000)\n"
-             "  IO.inspect(Dir.list(\"/proc/self/fd\", 1000).unwrap!.length)\n"
-             "  Task.spawn(&parent, fifo)\n  Task.sleep(300)\n"
-             "  IO.inspect(Dir.list(\"/proc/self/fd\", 1000).unwrap!.length)\n"
+             "  keep = File.open(fifo, \"read\", 1000).unwrap!\n"
+             "  holder = File.open(fifo, \"append\", 1000).unwrap!\n"
+             "  before = count()\n  Task.spawn(&parent, fifo)\n  Task.sleep(150)\n"
+             "  IO.inspect(count() - before)\n  Task.sleep(450)\n  IO.inspect(count() - before)\n"
              "  IO.inspect(File.write_text(System.args()[1], \"x\", 1000))\nend\n")
             #:one-pool-thread #t fifo path))
-         (define lines (string-split (second result) "\n"))
          (check-equal? (first result) 1)
-         (check-equal? (length lines) 3)
-         (check-equal? (first lines) (second lines) "the cancelled read's descriptor is closed")
-         (check-equal? (third lines) "ok()")))))
+         (check-equal? (second result) "1\n0\nok()\n" "the read parks with one descriptor, and the cancel closes it")))))
 
   (test-case "stdin waits on the loop, so file calls run while a task waits for input"
     (when (vm-built? "the stdin test")

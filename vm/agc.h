@@ -207,6 +207,7 @@ typedef struct {
 typedef struct agc_registry agc_registry;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
+typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
 
 typedef struct {
@@ -582,7 +583,8 @@ void agc_io_ready(agc_io_job *j);
 #ifdef __linux__
 void agc_io_block_stop(sigset_t *saved);
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
-void agc_io_then(agc_io_job *j, bool (*more)(void *data, agc_io_job *job));
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                              agc_more_fn more);
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err);
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
 void agc_poller_pause(agc_poller *p);

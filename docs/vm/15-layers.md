@@ -38,7 +38,7 @@ The port is what a service needs from the core to do I/O and to wait, as §14 al
 | Job | Functions |
 |---|---|
 | Park and wake a task | `agc_task_park` (`task.c:65`), `agc_task_enqueue` (`task.c:31`), `agc_task_wake` (`task.c:25`), `agc_task_wake_all` (`task.c:40`) |
-| Submit a job (loop or pool), with its timeout | `agc_io_start` (`loop.c:377`) with an `agc_io_kind` (`work`, `done`, `expired`, `drop`, `cancel`), `agc_io_ready` (`loop.c:391`), `agc_io_detached` (`loop.c:385`), `agc_io_then` (a pool job's `more` step, which may keep it waiting on the loop) |
+| Submit a job (loop or pool), with its timeout | `agc_io_start` (`loop.c:377`) with an `agc_io_kind` (`work`, `done`, `expired`, `drop`, `cancel`), `agc_io_ready` (`loop.c:391`), `agc_io_detached` (`loop.c:385`), `agc_io_start_then` (a pool job's `more` step, which may keep it waiting on the loop) |
 | Wait on a descriptor on the loop | `agc_poller_open`, `agc_poller_wait`, `agc_poller_pause`, `agc_poller_close` (a `uv_poll_t` that owns its descriptor; `files.c`, and `input.c` in the core) |
 | Set a timer | no own function: a timer is the job's `timeout_ms` (§14.2); `Task.sleep` is a job with no work. The three other timers of §14.2 use libuv through `agc_io_uv` and stay exceptions |
 | Register, own and close a handle | `agc_register` (`loop.c:49`), `agc_own` (`loop.c:73`) with an `agc_close_fn`, `agc_unregister` (`loop.c:120`), `agc_resource_id` (`loop.c:47`); the handle's lock FIFO: `agc_handle_wait` (`loop.c:420`); the resource's `goodbye` hook (a release-shaped function the exit path calls through `agc_io_goodbye`; `tcp.c` sets it for TLS `close_notify`); the V3 field (new) |
