@@ -43,7 +43,7 @@ work rather than their numeric order.
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g); it also reads the VM metrics of phase 18 (GC, run-queue delay, I/O) while the load runs | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
 | 9.1 | JIT (7m, `docs/future/22-jit.md` §22): required, not gated; after 7l and 7j, independent of 7i and of the multicore decision | Hot functions run as native code with the same results |
 | 10 | Evaluation round: Agentica against typed Python on harder tasks (6c) | Evidence on whether agents do better in Agentica than in typed Python |
-| 11 | Decide with the results of steps 9 and 10: multicore schedulers (7h item, gated) and a front-end rewrite (`docs/future/18-front-end-language.md` §18, gated) | Build multicore or a new front end only if the numbers ask for it |
+| 11 | Decide with the results of steps 9 and 10: multicore schedulers (7h item, gated). The front end is decided: self-hosting, long-term, after this table ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
 | 12 | Core data structures (phase 8): `Set[T]` and `Queue[T]` (may proceed in parallel with steps 6 to 11) | Write loops and algorithms the Ruby way, without workarounds |
 | 13 | Real applications | Validate the APIs with a file-processing CLI, automation script and HTTP service |
 | 14 | Cross-language benchmarks (phase 12): the same small programs in Agentica (VM), Ruby, Crystal and optionally Python. Round 1 (single-threaded; needs the 7g benchmark script (done), the real applications, faster lists (8d) and the VM `IO` library (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a, done)) goes before MCP; round 2 (concurrent programs) needs tasks on the VM (7h) and covers multicore only if the multicore schedulers land (step 11) | Honest speed numbers against Ruby and Crystal, and the VM hot spots to fix next |
@@ -53,7 +53,7 @@ work rather than their numeric order.
 | 18 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
 | 19 | (On demand) SIMD in the VM (`docs/future/19-simd.md` §19): AVX2 first, with run-time dispatch and a scalar fallback; only after profiling (7j or phase 12) shows time in string, JSON or copy routines | Faster string and JSON work without changing the release baseline |
 
-Long-term, after the order above: the self-hosted front end and a single binary ([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13. It replaces the front-end decision of step 11 and gets phase numbers when it is scheduled.
+Long-term, after the order above: the self-hosted front end and a single binary ([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13. It gets phase numbers when it is scheduled.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs.
