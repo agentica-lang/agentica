@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 17849,
+  "steps": 19055,
   "stdout": [
     "I close stdin | I close stdin -> []",
     "I close stdin | I close stdin now -> no match",
@@ -30,6 +30,8 @@
     "the message is {string} | the message is 'say \"hi\"' -> [\"say \\\"hi\\\"\"]",
     "the message is {string} | the message is \"a\\\\b\\n\" -> [\"a\\\\bn\"]",
     "the message is {string} | the message is \"\" -> [\"\"]",
+    "the message is {string} | the message is \"x\\\\\\\"y\" -> [\"x\\\\\\\"y\"]",
+    "the message is {string} | the message is '\\\\\\\\' -> [\"\\\\\\\\\"]",
     "the message is {string} | the message is \"open -> no match",
     "the message is {string} | the message is \"a\" \"b\" -> no match",
     "the message is {string} | the message is plain -> no match",

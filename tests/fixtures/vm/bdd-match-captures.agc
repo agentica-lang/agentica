@@ -43,6 +43,8 @@ def main() -> Void
   show("the message is {string}", "the message is 'say \"hi\"'")
   show("the message is {string}", "the message is \"a\\\\b\\n\"")
   show("the message is {string}", "the message is \"\"")
+  show("the message is {string}", "the message is \"x\\\\\\\"y\"")
+  show("the message is {string}", "the message is '\\\\\\\\'")
   show("the message is {string}", "the message is \"open")
   show("the message is {string}", "the message is \"a\" \"b\"")
   show("the message is {string}", "the message is plain")
