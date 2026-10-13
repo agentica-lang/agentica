@@ -91,6 +91,9 @@ tests/
   vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
+stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
+  queue.agc http.agc    # std/queue, std/http
+  bdd/gherkin.agc       # std/bdd/gherkin: internal piece of the BDD rewrite (phase 21); see references/stages.md
 examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth
