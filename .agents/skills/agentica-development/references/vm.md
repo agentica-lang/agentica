@@ -77,7 +77,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/tests/tls_test.c` | two adapters in memory: handshakes with tiny record slices, a 100,000-byte transfer, `close_notify` and raw EOF, every verify error, EOF and a plain HTTP request during the handshake, the load errors (`ENOENT`, bad certificate, bad key, mismatch, bad CA) |
 | `tests/vm-tls-test.rkt` | the VM against independent peers (`tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`, certificates in `tests/fixtures/tls/` from `make-certs.sh`): a client against Node servers (one-byte records, abrupt EOF, a reset, 100,000-byte lines, the 1 MiB limit, a silent peer, wrong host, expired, self-signed, TLS 1.0/1.1 only, plain text, a stalled handshake), system trust through `SSL_CERT_FILE`, a Python TLS 1.2 server, a Python HTTPS server that sees `close_notify` on an idle and an active `HttpClient` connection when `main` returns (`client_goodbye`), a VM server with two Node clients (TLS 1.3 and 1.2), a Python client and a client that does not trust it; VM programs that are their own peers for handshake errors on both sides, timeouts and a pending handshake, and the end of a run with TLS work pending (`tls` trace); every case runs once (no step sweep), in about 5 s; needs Node and Python 3 in CI |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
-| `vm/third_party/picohttpparser` | picohttpparser submodule (MIT, the notice is at the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only `vm/http_pico.c` includes its header |
+| `vm/third_party/picohttpparser` | picohttpparser submodule (MIT or Perl, dual; the MIT notice is at the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only `vm/http_pico.c` includes its header |
 | `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..8}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into eight shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 1 to 7; shard 8 runs only the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue` |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
@@ -629,7 +629,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `Transfer-Encoding` is 400 first. No copying of evaluator quirks or
   its order of failing lines; picohttpparser's leniencies are documented
   differences; framing stays strict. picohttpparser (submodule
-  `vm/third_party/picohttpparser`, MIT, tag v1.4, built at the baseline
+  `vm/third_party/picohttpparser`, MIT or Perl, tag v1.4, built at the baseline
   without `-msse4.2`) parses and validates start lines and headers, behind
   `vm/http_parse.h` (our head struct with byte slices,
   `agc_http_parse_request_head`/`agc_http_parse_response_head` returning

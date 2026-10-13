@@ -30,7 +30,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The [README](../README.
 
 ## Input from stdin
 
-Six examples read stdin: three JSON examples, and three search examples. The searches can run long, so they get `--max-steps`.
+Six examples read one JSON document from stdin: three JSON examples and three searches. The searches can run long, so they get `--max-steps`.
 
 ```sh
 printf '%s\n' '{"service":{"name":"api","port":8080,"enabled":false}}' | dist/agentica examples/json-config.agc

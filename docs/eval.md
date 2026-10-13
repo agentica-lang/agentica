@@ -148,7 +148,7 @@ Hits of the top codes in the `binary` arm, from `tests/eval/diagnostics.py`, in 
 | `CHECK-UNKNOWN-METHOD` | – | – | 42 |
 
 - In those rounds most hits were Python and Ruby habits, not logic errors: `len(s)`, `s.length`, `x.to_i`, `print(x)`, `!a`, `x += 1`. The checker rejected them then, so check the grammar for what the language accepts now.
-- In round 1, failing runs were fixed after the agent read the code and the span, so the diagnostics worked as a repair signal.
+- In rounds 2 to 4, failing runs were fixed after the agent read the code and the span, so the diagnostics worked as a repair signal.
 
 ## What the results do not show
 

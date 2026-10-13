@@ -59,7 +59,7 @@ python3 benchmarks/http_bench.py                                          # 4000
 python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```
 
-Results are not recorded yet. They need an idle-machine run (roadmap [20c-bench](roadmap/20-hybrid-http.md)), and the script marks any round that ran on a busy machine.
+Results are not recorded yet. They need an idle-machine run (roadmap [20c-bench](roadmap/20-hybrid-http.md)), and the script marks any round that ran on a busy machine. The table below fills in after that run.
 
 | Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
 |---:|---|---:|---|---:|---:|---:|---:|
