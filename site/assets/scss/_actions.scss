@@ -45,6 +45,15 @@
 
 .page-actions-split {
   display: flex;
+
+  &:hover,
+  &:has([aria-expanded="true"]) {
+    .page-actions-copy,
+    .page-actions-toggle {
+      border-color: var(--muted);
+      background: var(--border);
+    }
+  }
 }
 
 .page-actions-copy,
@@ -56,8 +65,9 @@
   border: 1px solid var(--border);
   background: var(--code-bg);
 
-  &:hover {
-    border-color: var(--muted);
+  &:focus-visible {
+    position: relative;
+    z-index: 1;
   }
 }
 
