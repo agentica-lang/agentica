@@ -1,5 +1,6 @@
 {{ define "main" }}
 <article class="content">
+  {{- partial "page-actions.html" . }}
   {{- if not (partial "heading.html" .) }}
   <h1>{{ .Title }}</h1>
   {{- end }}

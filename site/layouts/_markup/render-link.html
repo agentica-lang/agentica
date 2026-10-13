@@ -1,32 +1,8 @@
-{{- $dest := .Destination -}}
-{{- $url := urls.Parse $dest -}}
-{{- $href := $dest -}}
-{{- $fragment := cond (eq $url.Fragment "") "" (printf "#%s" $url.Fragment) -}}
-{{- if or $url.IsAbs (eq $url.Path "") -}}
-{{- else if hasPrefix $url.Path "/" -}}
-  {{- with site.GetPage $url.Path -}}
-    {{- $href = printf "%s%s" .RelPermalink $fragment -}}
-  {{- else -}}
-    {{- warnf "%s: no page for link %q" .PageInner.Path $dest -}}
-  {{- end -}}
-{{- else -}}
-  {{- $source := partial "source-path.html" .PageInner -}}
-  {{- $target := path.Join (path.Dir $source) $url.Path -}}
-  {{- $page := "" -}}
-  {{- range site.Pages -}}
-    {{- if eq (partial "source-path.html" .) $target }}{{ $page = . }}{{ end -}}
-  {{- end -}}
-  {{- with $page -}}
-    {{- $href = printf "%s%s" .RelPermalink $fragment -}}
-  {{- else -}}
-    {{- $href = "" -}}
-    {{- if site.Params.repoPublic -}}
-      {{- $href = printf "%s/blob/master/%s%s" site.Params.repo $target $fragment -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
+{{- $link := partial "link-target.html" (dict "from" .PageInner "dest" .Destination) -}}
+{{- $href := $link.href -}}
+{{- with $link.page }}{{ $href = printf "%s%s" .RelPermalink $link.fragment }}{{ end -}}
 {{- if eq $href "" -}}
 {{ .Text }}
 {{- else -}}
-<a href="{{ $href }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if $url.IsAbs }} rel="noopener"{{ end }}>{{ .Text }}</a>
+<a href="{{ $href }}"{{ with .Title }} title="{{ . }}"{{ end }}{{ if $link.external }} rel="noopener"{{ end }}>{{ .Text }}</a>
 {{- end -}}

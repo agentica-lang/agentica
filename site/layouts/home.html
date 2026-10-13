@@ -1,5 +1,6 @@
 {{ define "main" }}
 <article class="content">
+  {{- partial "page-actions.html" . }}
   <h1>{{ site.Title }}</h1>
   {{ .Content }}
 </article>

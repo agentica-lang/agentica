@@ -11,6 +11,9 @@
   {{- with resources.Get "scss/main.scss" | css.Sass $sass | fingerprint }}
   <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous">
   {{- end }}
+  {{- with .OutputFormats.Get "markdown" }}
+  <link rel="{{ .Rel }}" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">
+  {{- end }}
   <script>document.documentElement.classList.add("js")</script>
 </head>
 <body>
@@ -24,6 +27,11 @@
   {{ partial "footer.html" . }}
   {{- with resources.Get "js/nav.js" | js.Build (dict "minify" true "targetPath" "js/nav.js" "params" (dict "narrow" site.Params.narrow)) | fingerprint }}
   <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
+  {{- end }}
+  {{- if .OutputFormats.Get "markdown" }}
+  {{- with resources.Get "js/page-actions.js" | js.Build (dict "minify" true "targetPath" "js/page-actions.js") | fingerprint }}
+  <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
+  {{- end }}
   {{- end }}
 </body>
 </html>
