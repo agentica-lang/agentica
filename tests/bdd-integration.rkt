@@ -219,7 +219,7 @@
        (check-equal? (map path->string (directory-list temporary)) '("agentica-bdd-0123456789abcdef" "agentica-bdd-fedcba9876543210"))
        (check-equal? (file->string (build-path outside "lock")) "keep"))))
 
-  (test-case "a shared temporary directory without the sticky bit is refused"
+  (test-case "a temporary directory others can write to without the sticky bit is refused"
     (with-suite
      '()
      (lambda (directory)
@@ -242,4 +242,6 @@
        (file-or-directory-permissions temporary #o777)
        (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))
        (file-or-directory-permissions temporary #o1777)
+       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
+       (file-or-directory-permissions temporary #o775)
        (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))))))

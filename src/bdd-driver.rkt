@@ -123,7 +123,7 @@
 
 (define (shared-and-not-sticky? temporary)
   (define mode (hash-ref (file-or-directory-stat temporary) 'mode))
-  (and (not (zero? (bitwise-and mode #o022))) (zero? (bitwise-and mode #o1000))))
+  (and (not (zero? (bitwise-and mode #o002))) (zero? (bitwise-and mode #o1000))))
 
 (define (compile-steps path directory)
   (cond
