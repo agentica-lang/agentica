@@ -141,6 +141,21 @@
   (subprocess-wait process)
   (list (if finished (subprocess-status process) 'timeout) stdout stderr))
 
+(define (process-exited? pid)
+  (define stat (build-path "/proc" pid "stat"))
+  (define state
+    (with-handlers ([exn:fail:filesystem? (lambda (e) #f)])
+      (regexp-match #rx"^.*[)] (.)" (file->string stat))))
+  (or (not state) (equal? (cadr state) "Z")))
+
+(define (process-gone? pid)
+  (define deadline (+ (current-inexact-milliseconds) 5000))
+  (let wait ()
+    (cond
+      [(process-exited? pid) #t]
+      [(> (current-inexact-milliseconds) deadline) #f]
+      [else (sleep 0.02) (wait)])))
+
 (define (run-vm bytecode limit #:style [style 'json] #:timeout [timeout #f] . extra)
   (apply run-process vm-file #:input (fixture-input) #:timeout timeout
          (append (allow-options)
@@ -772,7 +787,7 @@
             (check-true (directory-exists? (build-path "/proc" pid)))
             (unix-kill (subprocess-pid driver) sigterm)
             (check-not-false (sync/timeout run-timeout driver))
-            (check-false (directory-exists? (build-path "/proc" pid)))))
+            (check-true (process-gone? pid) pid)))
         (lambda ()
           (subprocess-kill driver #t)
           (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
@@ -814,7 +829,7 @@
             (check-equal? (rest lines) (if (equal? mode "close") '() '("error(\"network: operation timed out\")")) mode)
             (check-equal? (length pids) 2 mode)
             (for ([pid (in-list pids)])
-              (check-false (directory-exists? (build-path "/proc" pid)) (format "~a: ~a" mode pid))))
+              (check-true (process-gone? pid) (format "~a: ~a" mode pid))))
           (lambda ()
             (for ([pid (in-list pids)] #:when (directory-exists? (build-path "/proc" pid)))
               (unix-kill (string->number pid) sigkill))))))
@@ -852,7 +867,7 @@
             (check-true (and (>= (length lines) 2) (< (string->number (second lines)) 500)) (format "~a: ~a" mode lines))
             (check-equal? (list-tail lines (min 2 (length lines))) (if (equal? mode "wait") '("false") '()) mode)
             (when (string? pid)
-              (check-false (directory-exists? (build-path "/proc" pid)) mode))
+              (check-true (process-gone? pid) mode))
             (check-false (regexp-match? #rx"hard_exit" (third result)) mode)
             (when traced?
               (check-true (regexp-match? #rx"close resources=0 settled=1" (third result)) mode)))
