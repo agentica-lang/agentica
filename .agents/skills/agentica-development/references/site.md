@@ -15,6 +15,18 @@ rule that a site page shows.
   `~/.local/opt/dart-sass`. The pinned version and sha256 are in
   `pages.yml`.
 
+## Search
+
+- `layouts/home.search.json` builds `/search.json` at build time (the
+  `search` output format of the home page in `hugo.toml`). It has one entry
+  per page (title, section, URL, summary) with the plain text split at each
+  `h2`/`h3`, so results link to the heading anchor. It changes with the
+  content; never edit it by hand.
+- `_partials/search.html` (in the header), `assets/js/search.js` and
+  `assets/scss/_search.scss` are the UI: plain JS, no library. The index
+  loads on first focus. `/` or Ctrl/Cmd+K focuses, arrows choose, Enter
+  opens, Escape closes.
+
 ## Content
 
 - The user docs live in `site/content`: Getting started, the Language tour

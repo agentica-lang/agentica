@@ -89,7 +89,7 @@ make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Conf
 make vm-third-party                  # only libgc, yyjson, picohttpparser and libuv for this mode
 make -s vm-third-party-key           # their build key (compile lines, compiler, submodule commits and local diffs); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
-make vm CCACHE=                      # without ccache (it is used when installed)
+make vm CCACHE=                      # without ccache (used when installed and its cache dir is writable)
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
@@ -154,9 +154,13 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   setup fails). `CCACHE_BASEDIR` is the checkout, and the `-g` modes add
   `-fdebug-prefix-map=$(CURDIR)=.` (`DEBUG_MAP`) to the VM, third-party and
   vendored OpenSSL compiles but not to the stamps or the OpenSSL key, so
-  worktrees share hits and debug info names `.`.
+  worktrees share hits and debug info names `.`. From a checkout reached
+  through a symlink, `$(PWD)` (the path gcc and ccache see) is mapped too.
+  Third-party `-g` objects built earlier or restored from the CI cache
+  keep their absolute paths until their key changes. A read-only ccache
+  (`CCACHE_READONLY`, or a cache dir you cannot write) is turned off.
 - `build/vm/<mode>/obj/tests/*_test.o` are `.SECONDARY`, so make keeps them
-  and a second `make vm vm-test` does nothing.
+  and a second `make vm vm-test` recompiles nothing.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
@@ -189,7 +193,15 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   (`"steps"`, the smallest limit that finishes); the VM's own count, found
   by `total-steps`, may be lower but at most `T + max(10, T / 10)`
   (`check-steps`, which catches over-charging), and the last sweep limit,
-  `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. A new
+  `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. With
+  `AGENTICA_SWEEP=sampled` (the ASan job and `make vm-gc-stress`) each
+  fixture runs only 1, 2, T - 1, T, the last limit and 8 limits drawn one
+  from each eighth of 3 to T - 2 (`sampled-limits`); the release build
+  keeps the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
+  first 8 hex digits of `GITHUB_SHA` or `git rev-parse HEAD`, plus the
+  fixture name, so it rotates with the commit and is fixed within a run.
+  Each shard prints the seed, and a failed limit names it: rerun with that
+  `AGENTICA_SWEEP=sampled AGENTICA_SWEEP_SEED=...`. A new
   fixture needs its golden: run `make goldens`, read the new `.expected` by
   hand, and commit it; a changed golden is a reviewed behaviour change.
   `make goldens` refuses a run that timed out, died by a signal (status
@@ -760,7 +772,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 - Each sweep limit is one VM start, and the start costs more than the run:
   the diff test runs every limit only up to 200 steps; above that it runs 1
   to 100, limits spaced steps / 50 apart, the steps minus 1 and the steps
-  (`sweep-limits` in `tests/vm-diff-common.rkt`).
+  (`sweep-limits` in `tests/vm-diff-common.rkt`). Under ASan a start costs
+  about 20 ms, so the sanitizer and GC-stress runs sample the sweep
+  (`AGENTICA_SWEEP=sampled`).
 - Typed JSON: `user-tables` in `src/lower.rkt` gives each `ir-struct` its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and `src/bytecode.rkt` interns them into the

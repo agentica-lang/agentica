@@ -75,7 +75,7 @@ site-serve: site-sass
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make vm TRACE=0         compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
-# make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
+# make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
 # make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
@@ -123,6 +123,7 @@ VM_LIBS += -ldl -lrt
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
+DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))
 ifeq ($(SANITIZE),1)
 VM_CC := clang
 VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
@@ -131,7 +132,7 @@ VM_GC :=
 VM_BUILD := build/vm/sanitize
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
-DEBUG_MAP := -fdebug-prefix-map=$(CURDIR)=.
+DEBUG_MAP := $(DEBUG_MAPS)
 FUZZ_RUNS ?= 30000
 else ifeq ($(GC_STRESS),1)
 VM_CC := $(CC)
@@ -141,7 +142,7 @@ VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/gcstress
 YY_CFLAGS := -O1 -g $(VM_PIC)
 OSSL_CFLAGS := -g
-DEBUG_MAP := -fdebug-prefix-map=$(CURDIR)=.
+DEBUG_MAP := $(DEBUG_MAPS)
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
@@ -349,7 +350,8 @@ $(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK
 
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
-	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
+	  $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c

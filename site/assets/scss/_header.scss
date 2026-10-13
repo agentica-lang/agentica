@@ -14,7 +14,9 @@
 }
 
 .brand {
+  flex-shrink: 0;
   color: var(--fg);
+  white-space: nowrap;
   font-size: 1.15rem;
   font-weight: 700;
   text-decoration: none;
@@ -36,6 +38,7 @@
 
 .nav-toggle {
   display: none;
+  flex-shrink: 0;
   padding: 0.3rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -46,6 +49,10 @@
 }
 
 @media (max-width: $narrow) {
+  .site-header {
+    gap: 0.5rem;
+  }
+
   .js .nav-toggle {
     display: block;
   }

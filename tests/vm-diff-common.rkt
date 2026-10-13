@@ -42,6 +42,11 @@
 (define sigterm 15)
 (define full-sweep-limit 200)
 (define sweep-head 100)
+(define sample-points 8)
+(define sweep-mode (getenv "AGENTICA_SWEEP"))
+(define sampled-sweep? (equal? sweep-mode "sampled"))
+(unless (member sweep-mode '(#f "" "full" "sampled"))
+  (error 'vm-diff "AGENTICA_SWEEP must be full or sampled, not ~s" sweep-mode))
 (define runaway-limit 500)
 (define vm-turn-steps 2000)
 (define shard-count 4)
@@ -333,9 +338,9 @@
 (define (step-limited? result)
   (equal? (diagnostic-code result) "RUNTIME-STEP-LIMIT"))
 
-(define (check-limited on-vm full name limit)
+(define (check-limited on-vm full name limit #:note [note ""])
   (define seen (outcome on-vm))
-  (define message (format "~a --max-steps ~a (exit 124/137 or timeout: the run timed out): ~s" name limit seen))
+  (define message (format "~a --max-steps ~a~a (exit 124/137 or timeout: the run timed out): ~s" name limit note seen))
   (unless (equal? seen full)
     (check-equal? (first seen) 1 message)
     (check-equal? (fourth seen) "RUNTIME-STEP-LIMIT" message)
@@ -343,13 +348,14 @@
     (check-true (string-prefix? (third full) (third seen)) message))
   (equal? seen full))
 
-(define (check-sweep results limits full name)
+(define (check-sweep results limits full name #:note [note ""])
   (define finished
     (for/fold ([finished #f]) ([on-vm (in-list results)] [limit (in-list limits)])
-      (define done (check-limited on-vm full name limit))
-      (when finished (check-true done (format "~a --max-steps ~a stops after a smaller limit finished" name limit)))
+      (define done (check-limited on-vm full name limit #:note note))
+      (when finished
+        (check-true done (format "~a --max-steps ~a~a stops after a smaller limit finished" name limit note)))
       done))
-  (check-true finished (format "~a finishes under --max-steps ~a" name (last limits))))
+  (check-true finished (format "~a finishes under --max-steps ~a~a" name (last limits) note)))
 
 (define (run-fixture-vm bytecode limit)
   (unfixture (run-fixture-vm-raw bytecode limit)))
@@ -396,6 +402,51 @@
                 (range sweep-head total (quotient total 50))
                 (list (sub1 total) total))))
    (list (last-limit expected-steps))))
+
+(define (head-sha)
+  (define git (find-executable-path "git"))
+  (and git
+       (with-handlers ([exn:fail? (lambda (_) #f)])
+         (parameterize ([current-directory root] [current-error-port (open-output-nowhere)])
+           (string-trim (with-output-to-string (lambda () (system* git "rev-parse" "HEAD"))))))))
+
+(define sweep-seed
+  (let ([given (getenv "AGENTICA_SWEEP_SEED")])
+    (cond
+      [given
+       (define n (string->number given))
+       (unless (exact-nonnegative-integer? n)
+         (error 'vm-diff "AGENTICA_SWEEP_SEED must be a natural number, not ~s" given))
+       n]
+      [sampled-sweep?
+       (define sha (or (getenv "GITHUB_SHA") (head-sha)))
+       (if (and sha (regexp-match? #px"^[0-9a-f]{8}" sha)) (string->number (substring sha 0 8) 16) 0)]
+      [else 0])))
+
+(define (sweep-note)
+  (if sampled-sweep? (format " [sampled sweep: AGENTICA_SWEEP=sampled AGENTICA_SWEEP_SEED=~a]" sweep-seed) ""))
+
+(define (name-seed name)
+  (for/fold ([hash 0]) ([byte (in-bytes (string->bytes/utf-8 name))])
+    (modulo (+ (* hash 31) byte) 2147483647)))
+
+(define (sampled-limits total expected-steps name)
+  (define low 3)
+  (define high (- total 2))
+  (define span (add1 (- high low)))
+  (define middle
+    (if (<= span sample-points)
+        (range low (add1 high))
+        (parameterize ([current-pseudo-random-generator (make-pseudo-random-generator)])
+          (random-seed (add1 (modulo (+ sweep-seed (name-seed name)) 2147483646)))
+          (for/list ([bucket (in-range sample-points)])
+            (define from (+ low (quotient (* bucket span) sample-points)))
+            (define to (+ low (quotient (* (add1 bucket) span) sample-points)))
+            (+ from (random (- to from)))))))
+  (append (sort (remove-duplicates (filter (lambda (limit) (<= 1 limit total))
+                                           (append (list 1 2) middle (list (sub1 total) total))))
+                <)
+          (list (last-limit expected-steps))))
 
 (define (expected-file program)
   (path-replace-extension program #".expected"))
@@ -469,7 +520,7 @@
        (define expected-steps (read-expected-steps program))
        (define total (total-steps bytecode))
        (check-steps total expected-steps name)
-       (define limits (sweep-limits total expected-steps))
+       (define limits (if sampled-sweep? (sampled-limits total expected-steps name) (sweep-limits total expected-steps)))
        (define text-styles '(plain ai))
        (define vm-results
          (vm-batch name bytecode runs
@@ -480,7 +531,7 @@
        (check-equal? (outcome (first vm-results)) full name)
        (for ([style (in-list text-styles)] [on-vm (in-list (rest vm-results))])
          (check-text-format on-vm full (format "~a ~a" name style)))
-       (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name)))))
+       (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name #:note (sweep-note))))))
 
 (define (json-crash-free text)
   (for/fold ([kept '()] [codes '()] [summaries '()]
@@ -526,6 +577,8 @@
       (check-equal? diagnostic "" message)))
 
 (define (run-shard shard)
+  (when sampled-sweep?
+    (printf "vm-diff shard ~a: sampled --max-steps sweep, AGENTICA_SWEEP_SEED=~a\n" shard sweep-seed))
   (when (vm-built?)
     (define work (make-temporary-directory "agentica-vm~a"))
     (define assignment (shard-assignment (fixture-programs)))
