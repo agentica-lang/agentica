@@ -585,18 +585,18 @@ On success it prints `check ok`.
 - [x] Add optional `expected`, `actual`, `callee`, `labels`, and `help` to `diagnostic`; the checker fills them in `CHECK-TYPE-MISMATCH` and the plain-call `CHECK-ARITY` and records the enclosing function signature. (Builtin-call arity now fills callee from the 5e catalog; add an argument field only when a call-argument mismatch fills it.)
 - [x] One structured diagnostic, three printers: plain (with labels and help), `--ai`, and `--json`. They print to stderr, like the plain form.
 - [x] Grounded suggestions in `help`: nearest name (variables, functions, fields, types), field list, missing field type, String/Int/Float conversion functions, missing `return`, shadowing, `for` variable assignment. Builtin-name suggestions now use the 5e catalog.
-- [ ] Measure with the `binary` arm (`docs/eval-6a.md`) whether `--ai` and labels cut failing runs and tokens.
+- [ ] Measure with the `binary` arm (`docs/eval.md`) whether `--ai` and labels cut failing runs and tokens.
 - [ ] `symbols`, `show`, `refs` (P1).
 - [ ] One test per command over `examples/`.
 
-Diagnostics from evaluation data (`docs/eval-diagnostics.md`, `tests/eval/diagnostics.py`):
+Diagnostics from evaluation data (`docs/eval.md`, `tests/eval/diagnostics.py`):
 
 - [x] Count the diagnostics agents saw in past runs, with messages, source lines and repeats.
 - [x] Fix the stale Int/Float help: it now names `Float.from_int` and `Float.to_int!`.
 - [x] Map common Python, Ruby and JavaScript habits (`len`, `str`, `print`, `range`, `input`, `Int.to_float`, `!`, `&&`, `||`, `+=`, `None`) to the Agentica form in `help`. (`!`, `&&`, `||`, `+=` and `print` became real syntax in the Ruby-style ergonomics phase.)
 - [x] Suggest the module function for method-call style on builtin types (`s.length`, `x.to_i()`, `xs.append(v)`). Superseded: methods on builtin types are real syntax now, and unknown methods get a suggestion.
 - [x] Fix the misleading `elif` and `None` messages.
-- [x] Re-run the `binary` arm and the script to measure the change (rounds 5–8 in `eval-results.md` and `eval-diagnostics.md`).
+- [x] Re-run the `binary` arm and the script to measure the change (rounds 5–8 in `eval.md`).
 
 ### Phase 6a: First agent evaluation
 
@@ -618,7 +618,7 @@ The skill `.agents/skills/agentica-programming/` is a variable: one arm gets `do
 
 - [x] Write the minimal `agentica-programming` skill.
 - [x] Write the task set and hidden tests under `tests/eval/` (data and a runner script; no new dependency).
-- [x] Run the Agentica and Python arms (round 1, DeepSeek V4.1 flash via `pi`) and record the results in `docs/eval-6a.md`.
+- [x] Run the Agentica and Python arms (round 1, DeepSeek V4.1 flash via `pi`) and record the results in `docs/eval.md`.
 - [x] Add the `binary` arm (no skill, no grammar) and a Firejail sandbox; smoke-tested. A full `binary` round is still to run.
 - [ ] Sonnet 5.5 round: postponed; only `pi` for now.
 - [x] List the problems found and put them in the next phases before building more (list building: 5n).
@@ -751,7 +751,7 @@ Where it applies: 5g (TCP counterpart), 5h (HTTP/HTTPS counterparts, including a
 - [x] Phase 5d: standard input and output.
 - [x] Phase 5d2: consistency fixes (Result-dependent I/O landed with 5e).
 - [ ] Phase 5d3: agent API (`check --json`, `symbols`, `show`, `refs`).
-- [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval-6a.md`).
+- [x] Phase 6a: first agent evaluation (round 1 done; see `docs/eval.md`).
 - [x] Phase 5e: Result[T], try, and the builtins catalog.
 - [x] Faster maps (before JSON).
 - [x] Phase 5f: JSON.
