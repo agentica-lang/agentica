@@ -1,6 +1,6 @@
 {{- $parts := resources.Match "grammar/*.md" -}}
-{{- if lt (len $parts) 9 -}}
-  {{- errorf "the language specification: expected the 9 files of docs/grammar/, found %d" (len $parts) -}}
+{{- if lt (len $parts) 10 -}}
+  {{- errorf "the language specification: expected the 10 files of docs/grammar/, found %d" (len $parts) -}}
 {{- end -}}
 {{- $text := "" -}}
 {{- range sort $parts "Name" -}}

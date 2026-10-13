@@ -15,7 +15,7 @@ This is the index of the language definition. The text is split by section into 
 | 6 | Lightweight tasks, unit tests (`Test`), `agentica test` | [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md) |
 | 6 | TCP, TLS and HTTP (`std/http` client and server), files and paths, processes | [`grammar/06d-io-and-network.md`](grammar/06d-io-and-network.md) |
 | 7 | Diagnostics for agents: format, codes, hints for other languages | [`grammar/07-diagnostics.md`](grammar/07-diagnostics.md) |
-| 8 | Examples to review the design | [`grammar/01-overview.md`](grammar/01-overview.md#8-examples-to-review-the-design) |
-| 9 | Guide for whoever implements the prototype | [`grammar/01-overview.md`](grammar/01-overview.md#9-guide-for-whoever-implements-the-prototype) |
+| 8 | Examples to review the design | [`grammar/08-examples.md`](grammar/08-examples.md#8-examples-to-review-the-design) |
+| 9 | Guide for whoever implements the prototype | [`grammar/08-examples.md`](grammar/08-examples.md#9-guide-for-whoever-implements-the-prototype) |
 
 When the language changes, update the matching file here, the programming skill and the site together (see [`AGENTS.md`](../AGENTS.md)).
