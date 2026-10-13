@@ -53,6 +53,8 @@ work rather than their numeric order.
 | 18 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
 | 19 | (On demand) SIMD in the VM (`docs/future/19-simd.md` §19): AVX2 first, with run-time dispatch and a scalar fallback; only after profiling (7j or phase 12) shows time in string, JSON or copy routines | Faster string and JSON work without changing the release baseline |
 
+Long-term, after the order above: the self-hosted front end and a single binary ([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13. It replaces the front-end decision of step 11 and gets phase numbers when it is scheduled.
+
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs.
 Keep diagnostics, behavior tests, grammar, and the self-contained programming
