@@ -23,6 +23,8 @@ end
 2
 ```
 
+`size` reads a count that the map keeps, so it takes the same time for any map size.
+
 ## get
 
 ```text

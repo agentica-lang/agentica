@@ -72,7 +72,9 @@ def prepare(work: Path, task: str, arm: str) -> None:
     if arm == "grammar":
         (work / "docs").mkdir()
         parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
-        (work / "docs" / "grammar.md").write_text("\n".join(part.read_text(encoding="utf-8") for part in parts), encoding="utf-8")
+        text = "\n".join(part.read_text(encoding="utf-8") for part in parts)
+        text = re.sub(r"\[([^\]]*)\]\(\.\./[^)]*\)", r"\1", text)
+        (work / "docs" / "grammar.md").write_text(text, encoding="utf-8")
         shutil.copytree(ROOT / "examples", work / "examples")
 
 
@@ -90,7 +92,8 @@ def prompt(work: Path, arm: str) -> str:
                          "`agentica file.agc` runs a program and `agentica check file.agc` checks it without running. "
                          "`agentica --help` lists the options.")
         else:
-            lines.append("The language is described in docs/grammar.md, and example programs are in examples/.")
+            lines.append("The language is described in docs/grammar.md, and example programs are in examples/. "
+                         "Use `agentica help NAME` for builtin signatures.")
     else:
         lines.append("Write a complete Python 3 program to solution.py. Run programs with `python3`.")
     lines.append("Work only inside the current directory. Test your program before you finish, then reply with one sentence.")
