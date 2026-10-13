@@ -15,7 +15,7 @@ Random: each task has its own generator, split from its parent at spawn (one par
 
 Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
-`pending_count` (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await or I/O. A returned task is not counted, even when nothing awaited it. Calling it where the program must run on the legacy evaluator stops with `LOWER-UNSUPPORTED` at that call.
+`pending_count` (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await or I/O. A returned task is not counted, even when nothing awaited it.
 
 ```ruby
 def double(n: Int) -> Int

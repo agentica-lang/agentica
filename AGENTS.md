@@ -1,6 +1,6 @@
 # Agentica
 
-Interpreter for the Agentica language: a Racket front end and a C bytecode VM, the default backend. The Racket evaluator is frozen; it runs only the programs the VM cannot run yet (`HTTP`) until roadmap 7i deletes it. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
+Interpreter for the Agentica language: a Racket front end and a C bytecode VM that runs every program. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
 
 ## Commands
 
@@ -13,7 +13,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM, t
 
 ## Layout
 
-- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `modules.rkt` (import linking) → `checker.rkt` → `lower.rkt` → `bytecode.rkt`, run by the C VM in `vm/` (the default backend); the frozen `evaluator.rkt` runs the fallback. Builtins are described once in `builtins.rkt`; runtime libraries (tasks, files, processes, network, HTTP, JSON) have their own modules. `agentica test` is `bdd-driver.rkt` plus `std/bdd` in `stdlib/`.
+- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `modules.rkt` (import linking) → `checker.rkt` → `lower.rkt` → `bytecode.rkt`, run by the C VM in `vm/`, which holds the runtime (tasks, files, processes, network, HTTP, JSON). Builtins are described once in `builtins.rkt`; `std/` modules written in Agentica live in `stdlib/`. `agentica test` is `bdd-driver.rkt` plus `std/bdd` in `stdlib/`.
 - `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
 - `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
 - `tests/<stage>-test.rkt` holds the focused tests for each stage.
@@ -27,7 +27,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM, t
 - Use Racket's built-in test support (`rackunit`) as the test framework. Independent integration counterparts may use Node.js, Python, or curl; use standard libraries and add no third-party libraries or test frameworks.
 - Network and process tests must stay hermetic: localhost, dynamically assigned ports (port 0), no external services, and cleanup of processes and resources. TCP/HTTP interoperability tests must use an independent protocol implementation as the counterpart, rather than relying only on the Agentica client and server testing each other. Put fixtures in `tests/fixtures/`. These tests are required in CI: install their chosen tools and fail if they are missing. Local runs may explicitly report a skip when a required tool is unavailable. Racket-only tests may complement this coverage; they are not required as the base layer.
 - Tests assert the diagnostic code (and the span when it matters), not message text.
-- The evaluator is frozen. New features are VM-only and come after 7i (the exception, HTTP 20a to 20d, is listed in the roadmap rules). Catch-up work (TCP, TLS, HTTP, BDD on the VM) is tested with golden outputs and independent Node/Python peers, not against the evaluator, and removes its fallback.
+- New features are VM-only. They are tested with golden outputs and independent Node/Python peers.
 - When a phase item is finished, tick it in the roadmap and update the development skill.
 - When the language or a builtin changes, update the matching site page too.
 - When the language changes, update `docs/grammar.md` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md`, and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 5,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.

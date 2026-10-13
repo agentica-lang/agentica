@@ -10,11 +10,11 @@ Agentica is Ruby with static types: Ruby-like syntax, checked before running, wi
 ## Write and verify
 
 1. Save the requested program as a `.agc` file. It needs one `main() -> Void`.
-2. Check and run it with `agentica program.agc`; it runs on the bytecode VM, and a program that uses `HTTP` runs on the older evaluator after one notice line on stderr. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm` and `--dump-ir` prints the lowered IR; both report `LOWER-UNSUPPORTED` for `HTTP`.
+2. Check and run it with `agentica program.agc`; it runs on the bytecode VM. Use `agentica check program.agc` for check-only, or `agentica --dump program.agc` to inspect the checked tree. `agentica compile program.agc -o program.agcb` writes bytecode for `agentica-vm` and `--dump-ir` prints the lowered IR.
 3. Fix diagnostics and rerun. Exit `1` means a program diagnostic; exit `2` means bad usage or an unreadable file. Diagnostics go to stderr and report the first error with a stable stage code (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`) and often a `help` line with the fix.
 4. Finish only when the program exits successfully and its output matches the request. Checking alone does not verify runtime behavior.
 
-Use `agentica help NAME --json` to inspect a builtin without a program file (unknown names exit 2). If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`. `--max-steps N` bounds execution to N expression/statement entries across all tasks (`RUNTIME-STEP-LIMIT`; not an I/O timeout), and `--seed N` makes `Random` repeatable. In `--json` mode the last line of stderr is the diagnostic (the program's own stderr comes before it), and the fallback notice is not printed.
+Use `agentica help NAME --json` to inspect a builtin without a program file (unknown names exit 2). If `agentica` is not on `PATH`, use the path supplied by the user. Pass program arguments after the file; `System.args()` reads them. Process spawning requires `--allow-run`. `--max-steps N` bounds execution to N expression/statement entries across all tasks (`RUNTIME-STEP-LIMIT`; not an I/O timeout), and `--seed N` makes `Random` repeatable. In `--json` mode the last line of stderr is the diagnostic (the program's own stderr comes before it).
 
 ## When to read a reference
 
@@ -29,7 +29,7 @@ Read only the files the task needs:
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths |
 | [references/processes.md](references/processes.md) | starts other programs (`Process`) |
 | [references/tasks.md](references/tasks.md) | runs work concurrently (`Task`) |
-| [references/network.md](references/network.md) | uses TCP, TLS, or HTTP (client or server) |
+| [references/network.md](references/network.md) | uses TCP, TLS, or the HTTP client (`import "std/http" as HTTP`) |
 | [references/bdd.md](references/bdd.md) | writes `.feature` specifications or a BDD step program (`import "std/bdd" as BDD`, run by `agentica test`) |
 | [references/diagnostics.md](references/diagnostics.md) | hits a diagnostic code whose meaning or fix is unclear |
 
@@ -81,8 +81,8 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 | `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Fn[A, ..., R]` | function value (a block or `&name`); last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
 | `Task[R]` | opaque lightweight task; exactly one result type |
-| Network handles | opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
-| Builtin records | `Header`, `Request`, `Response`, `HttpClientOptions`, `HttpServerOptions` |
+| Network handles | opaque `Socket`, `Listener`, `HttpClient` |
+| Builtin records | `Header`, `HttpResponse`, `HttpClientOptions` |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.
@@ -117,7 +117,7 @@ Leave a blank line after the `end` of every `def`, `struct` and `enum` before th
 
 - Every parameter and the return type need an annotation.
 - Structs, enums, and function declarations are top level only. Enum type parameters apply only to their payload types; generic functions and structs are not supported. There are no user methods, nested functions, default arguments, or overloading; closures are written as blocks (see "Blocks and closures").
-- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); tail calls (`return f(...)`) do not count toward the depth limit, except in a program that uses `HTTP`, which runs on the evaluator.
+- Functions can be called before they are declared, and can be recursive. Calls nest at most 10000 deep (`RUNTIME-STACK-OVERFLOW`); tail calls (`return f(...)`) do not count toward the depth limit.
 - A function whose result is not `Void` must `return` on every path. A loop does not count as a return. The last expression is not returned implicitly.
 - `return` alone and reaching the end complete a `Void` function. A `Nil` function explicitly returns `nil`.
 

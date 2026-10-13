@@ -1,11 +1,11 @@
 ---
 title: TCP, TLS and HTTP
 weight: 12
-description: TCP and TLS sockets, an HTTP/1.1 client and an HTTP/1.1 server.
+description: TCP and TLS sockets and the HTTP/1.1 client of std/http.
 ---
 
 Network functions return a `Result` and take timeouts in milliseconds. Sockets,
-servers and clients are handles: `IO.inspect` prints only their type (such as
+listeners and clients are handles: `IO.inspect` prints only their type (such as
 `<Socket>` or `<Listener>`), they cannot be compared, and they are closed when
 the program ends. Most examples here open real connections, so they are
 checked but not run.
@@ -154,107 +154,84 @@ end
 
 ## HTTP client
 
+HTTP is the `std/http` library, written in Agentica. Import it with
+`import "std/http" as HTTP`; a call to `HTTP.get` without the import fails
+with `CHECK-UNKNOWN-NAME` and a help that shows the import. It has a client
+only: an HTTP server comes back in a later release.
+
+Every call is whole: it returns after the whole response arrived, and the body
+is a `String`, which must be valid UTF-8. Status codes such as 404 or 500 are
+normal responses; errors (a bad URL, a refused connection, a timeout, a body
+over the limit) are `error` results.
+
 ### HTTP.client and HTTP.client_options
 
 ```text
-HTTP.client() -> Result[HttpClient]
-HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
 HTTP.client_options() -> HttpClientOptions
+HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 ```
 
-A client keeps a pool of connections. `client_options` gives the defaults;
-build an `HttpClientOptions` record to change them.
+A client keeps open connections and reuses them for the same scheme, host and
+port. `client_options()` gives the defaults: a 30 s `timeout_ms` for each
+whole call, a 30 s `idle_timeout_ms` for kept connections, 4
+`max_connections` per host and a 1 MiB `max_body_bytes`, with the system's
+CA certificates (`ca_file: ""`). Build `HttpClientOptions` to change them;
+every number must be positive, `max_connections` at most 65536 and
+`max_body_bytes` at most 64 MiB.
 
-```agentica
+```agentica {mode="check"}
+import "std/http" as HTTP
+
 def main() -> Void
   defaults = HTTP.client_options()
-  puts(defaults.timeout_ms)
-  options = HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 30000, max_connections: 2, max_body_bytes: 1048576, ca_file: "")
+  options = HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: defaults.idle_timeout_ms,
+    max_connections: 2, max_body_bytes: defaults.max_body_bytes, ca_file: "")
   client = HTTP.client(options).unwrap!
   HTTP.close_client(client)
 end
 ```
 
-```output
-30000
-```
-
-### HTTP.get
+### HTTP.get, HTTP.post and HTTP.request
 
 ```text
-HTTP.get(client: HttpClient, url: String) -> Result[Response]
+HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
 ```
 
-Sends a GET request. The `Response` has `status`, `headers` and `body`. Status
-codes like 404 are normal responses, not errors.
+The `HttpResponse` has `status`, `headers` (names in lowercase) and `body`.
+`post` sends a text body; `request` takes any method. URLs start with
+`http://` or `https://`. The client adds `Host` and `Content-Length` itself,
+so a request may not set them, nor `Transfer-Encoding` or `Connection`.
 
 ```agentica {mode="check"}
+import "std/http" as HTTP
+
 def main() -> Void
-  client = HTTP.client().unwrap!
-  response = HTTP.get(client, "http://example.com/").unwrap!
-  puts(response.status)
-  puts(HTTP.text(response.body, 5000).unwrap!.length > 0)
-end
-```
-
-### HTTP.post and HTTP.request
-
-```text
-HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[Response]
-```
-
-`post` sends a text body. `request` takes any method. Headers are
-`Header(name: ..., value: ...)` records.
-
-```agentica {mode="check"}
-def main() -> Void
-  client = HTTP.client().unwrap!
+  client = HTTP.client(HTTP.client_options()).unwrap!
   headers = [Header(name: "Content-Type", value: "application/json")]
-  created = HTTP.post(client, "http://localhost:8080/items", headers, "{\"name\":\"tea\"}").unwrap!
-  puts(created.status)
-  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1", [], "").unwrap!
-  puts(deleted.status)
-end
-```
-
-### HTTP.text, HTTP.read and HTTP.close_body
-
-```text
-HTTP.text(body: HttpBody, timeout_ms: Int) -> Result[String]
-HTTP.read(body: HttpBody, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
-HTTP.close_body(body: HttpBody) -> Void
-```
-
-`text` reads a whole body (up to 1 MiB) as text. `read` reads the next bytes;
-`ok([])` means the body is done. `close_body` drops a body you do not want.
-
-```agentica {mode="check"}
-def main() -> Void
-  client = HTTP.client().unwrap!
-  response = HTTP.get(client, "http://localhost:8080/big").unwrap!
-  total = 0
-  chunk = HTTP.read(response.body, 65536, 5000).unwrap!
-  while chunk.size > 0
-    total += chunk.size
-    chunk = HTTP.read(response.body, 65536, 5000).unwrap!
+  case HTTP.post(client, "http://localhost:8080/items", headers, "{\"name\":\"tea\"}")
+    ok(created) -> puts("#{created.status} #{created.body}")
+    error(message) -> IO.warn(message)
   end
-  puts("#{total} bytes")
+  deleted = HTTP.request(client, "DELETE", "http://localhost:8080/items/1", [], "")
+  puts(deleted.ok?)
+  HTTP.close_client(client)
 end
 ```
 
-### HTTP.header_values and HTTP.trailers
+### HTTP.header_values
 
 ```text
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
-HTTP.trailers(body: HttpBody) -> Result[List[Header]]
 ```
 
-`header_values` finds every value of a header, ignoring case. `trailers` gives
-the trailer headers after the whole body has been read.
+`header_values` finds every value of a header, ignoring case, in order.
 
 ```agentica
+import "std/http" as HTTP
+
 def main() -> Void
   headers = [Header(name: "set-cookie", value: "a=1"), Header(name: "Set-Cookie", value: "b=2")]
   puts(HTTP.header_values(headers, "Set-Cookie"))
@@ -265,122 +242,14 @@ end
 ["a=1", "b=2"]
 ```
 
-### HTTP.request_stream
+### Moving from the builtin HTTP module
 
-```text
-HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Void]], argument: A) -> Result[Response]
-```
+Earlier versions had a builtin `HTTP` module. Add the import, then:
 
-Uploads a body piece by piece. The producer function gets `argument` and a
-writer. A `length` of `-1` sends the body in chunks.
-
-```agentica {mode="check"}
-def send_lines(lines: List[String], writer: HttpWriter) -> Result[Void]
-  for line in lines
-    try HTTP.write(writer, line + "\n", 5000)
-  end
-  return ok()
-end
-
-def main() -> Void
-  client = HTTP.client().unwrap!
-  response = HTTP.request_stream(client, "POST", "http://localhost:8080/upload", [], -1, &send_lines, ["a", "b"]).unwrap!
-  puts(response.status)
-end
-```
-
-## HTTP server
-
-### HTTP.listen, HTTP.local_port, HTTP.wait and HTTP.close_server
-
-```text
-HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Void]
-HTTP.close_server(server: HttpServer) -> Void
-HTTP.server_options() -> HttpServerOptions
-```
-
-`listen` starts a server that calls the handler for each request. A `Request`
-has `method`, `target`, `path`, `headers` and `body`. `wait` blocks until the
-server is closed.
-
-```agentica {mode="check"}
-def handle(request: Request, writer: HttpWriter) -> Void
-  sent = HTTP.respond(writer, 200, [], "you asked for #{request.path}\n", 5000)
-end
-
-def main() -> Void
-  server = HTTP.listen("127.0.0.1", 8080, &handle, HTTP.server_options()).unwrap!
-  puts("listening on #{HTTP.local_port(server)}")
-  IO.flush()
-  done = HTTP.wait(server)
-end
-```
-
-A server and a client in one program:
-
-```agentica
-def handle(request: Request, writer: HttpWriter) -> Void
-  sent = HTTP.respond(writer, 200, [], "hello from #{request.path}", 2000)
-end
-
-def main() -> Void
-  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
-  client = HTTP.client().unwrap!
-  url = "http://127.0.0.1:#{HTTP.local_port(server)}/tea"
-  response = HTTP.get(client, url).unwrap!
-  puts(response.status)
-  puts(HTTP.text(response.body, 2000))
-  HTTP.close_client(client)
-  HTTP.close_server(server)
-end
-```
-
-```output
-200
-ok("hello from /tea")
-```
-
-### HTTP.listen_tls
-
-```text
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
-```
-
-The same as `listen`, over TLS with PEM certificate and key files.
-
-### HTTP.respond
-
-```text
-HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Void]
-```
-
-Sends a whole response in one call.
-
-### HTTP.begin, HTTP.write, HTTP.write_bytes and HTTP.finish
-
-```text
-HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Void]
-HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Void]
-HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Void]
-HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Void]
-```
-
-Stream a response in parts. A `length` of `-1` sends chunks; any other length
-must match the bytes you write.
-
-```agentica {mode="check"}
-def stream(request: Request, writer: HttpWriter) -> Void
-  started = HTTP.begin(writer, 200, [Header(name: "content-type", value: "text/plain")], -1, 5000)
-  for n in [1, 2, 3]
-    part = HTTP.write(writer, "part #{n}\n", 5000)
-  end
-  done = HTTP.finish(writer, [], 5000)
-end
-
-def main() -> Void
-  server = HTTP.listen("127.0.0.1", 8080, &stream, HTTP.server_options()).unwrap!
-  waited = HTTP.wait(server)
-end
-```
+| Before | Now |
+|---|---|
+| `HTTP.client()` | `HTTP.client(HTTP.client_options())` |
+| `HTTP.text(response.body, timeout)` | `response.body` |
+| `HTTP.read`, `HTTP.trailers`, `HTTP.close_body`, `HTTP.request_stream` | a whole `HTTP.request`; streaming is planned |
+| `HTTP.listen`, `HTTP.respond` and the other server calls | no server yet; it comes back in a later release |
+| `Request`, `Response`, `HttpBody`, `HttpWriter`, `HttpServer`, `HttpServerOptions` | `HttpResponse`; the others are gone |

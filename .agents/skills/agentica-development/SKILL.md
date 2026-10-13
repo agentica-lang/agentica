@@ -1,11 +1,11 @@
 ---
 name: agentica-development
-description: "Develops the Agentica interpreter: the Racket pipeline (lexer, parser, checker, evaluator, libraries) and the C11 bytecode VM (lowering, bytecode, vm/ with the Boehm GC, loader safety, golden tests; the VM is the default backend). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, the Racket and C gotchas of this repo, and the VM build, CI, release, documentation site, benchmarks and copy-paste check. Use when working in the agentica repository on src/, vm/, tests/, site/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
+description: "Develops the Agentica interpreter: the Racket front end (lexer, parser, module linker, checker, lowering, bytecode) and the C11 bytecode VM that runs every program (vm/ with the Boehm GC, the runtime libraries, loader safety, golden tests). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, the Racket and C gotchas of this repo, and the VM build, CI, release, documentation site, benchmarks and copy-paste check. Use when working in the agentica repository on src/, vm/, tests/, site/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
 ---
 
 # Agentica development
 
-Agentica is a Racket bootstrap for a small statically typed language. The grammar is `docs/grammar.md`; planned syntax is in `docs/future/`; the phases and the active checklist are `docs/roadmap/`.
+Agentica is a small statically typed language: a Racket front end compiles it to bytecode for a C VM. The grammar is `docs/grammar.md`; planned syntax is in `docs/future/`; the phases and the active checklist are `docs/roadmap/`.
 
 Read the active phase in the roadmap before adding code. Implement only what that phase asks for: the roadmap explicitly forbids placeholder modules and empty nodes for later phases.
 
@@ -24,7 +24,7 @@ make dup-check                            # jscpd copy-paste check over src/*.rk
 make site                                 # build the documentation site (references/site.md)
 ```
 
-Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the network tests against the compiled executable, and every example smoke run; it is the source of truth for that list. It also runs `make dup-check` (`references/ci.md`): a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the process and module tests against the compiled executable, and every example smoke run; it is the source of truth for that list. It also runs `make dup-check` (`references/ci.md`): a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 
 ## Repository map
 
@@ -38,26 +38,15 @@ src/
   parser.rkt      # parse: (listof token) -> program | diagnostic
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
-  evaluator.rkt   # frozen: runs only the fallback (HTTP) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
-  runtime-values.rkt # shared runtime values, results and immutable map updates
-  task.rkt        # coroutine task results, supervision, global budget and cleanup
-  json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
   modules.rkt     # import linking: std/, pkg/ and relative files, aliases, exports, cycles; runs before check
   stdlib.rkt      # std/ Agentica sources embedded at compile time
-  builtin-types.rkt # opaque handle types and builtin record layouts (Request, Header, FileInfo, ...)
-  json-typed.rkt  # JSON.decode into declared structs and JSON.schema
-  filesystem.rkt  # File, Dir and Path builtins
-  process.rkt     # Process builtins (needs --allow-run)
-  network.rkt     # TCP and TLS sockets of the evaluator (HTTP fallback only; the VM has vm/tcp.c)
-  http-wire.rkt   # HTTP/1.1 framing shared by client and server
-  http-client.rkt # HTTP client with connection pool
-  http-server.rkt # HTTP server
+  builtin-types.rkt # opaque handle types and builtin record layouts (Header, HttpResponse, FileInfo, ...)
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
   bdd-driver.rkt  # agentica test: compiles the step program and the embedded std/bdd/runner, runs the runner VM, infrastructure report
   vm-launch.rkt   # find-vm, stop-vm and running-executable, shared by main.rkt and bdd-driver.rkt
-  main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (the evaluator only on LOWER-UNSUPPORTED, with a notice, or with the hidden --legacy-eval; `check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
+  main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
@@ -78,15 +67,15 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   third_party/picohttpparser # picohttpparser submodule pinned to v1.4 (HTTP heads)
   third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9, built static per mode into build/vm/<mode>/openssl (needs Perl)
 tests/
-  <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, bdd, filesystem, process, tcp, http
+  <stage>-test.rkt      # lexer, parser, checker, modules, bdd; filesystem and process run programs on the VM
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-  bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, LOWER-UNSUPPORTED, compile exit codes
+  bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, every builtin in vm-builtins, compile exit codes
   vm-diff-{1..4}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on dist/agentica-vm in three formats against their <name>.expected goldens (make goldens), with a --max-steps sweep
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-test.rkt, bdd-integration.rkt # agentica test over the CLI (in-process main): step programs, isolation, programs under test
-  network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
+  fixtures/             # golden fixtures and independent Node.js and Python peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
   bdd/                  # feature specs and step handlers run by make test-bdd
@@ -110,7 +99,7 @@ docs/
 | keyword, operator, or literal form | `src/lexer.rkt` lookup tables |
 | AST node | `src/ast.rkt` struct plus `provide`; construct it from `src/parser.rkt` |
 | syntax, statement, or expression form | `src/parser.rkt` |
-| builtin | `src/builtins.rkt` metadata; checker generic rule; the VM implementation (`vm-builtins` in `src/lower.rkt`, `vm/`, see `references/vm.md`) with a golden fixture; no evaluator twin (it is frozen); exercise a real checked call |
+| builtin | `src/builtins.rkt` metadata; checker generic rule; the VM implementation (`vm-builtins` in `src/lower.rkt`, `vm/`, see `references/vm.md`) with a golden fixture; exercise a real checked call |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`; the VM toolchain adds `LOWER-` and `BYTECODE-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
 | language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
@@ -122,7 +111,7 @@ docs/
 
 Every stage follows the same shape; keep new stages consistent with it.
 
-- Entry point is one function: `(lex input)`, `(parse tokens)`, later `(check program)`, `(evaluate program)`.
+- Entry point is one function: `(lex input)`, `(parse tokens)`, `(check program)`, `(lower program types)`.
 - Return either the next data or a single `diagnostic`. Stop at the first error; do not collect several.
 - Never print and never raise from a stage. `main.rkt` owns presentation and exit codes.
 - `main.rkt` guards with `diagnostic?` between stages, prints `format-diagnostic` on stderr, and exits 1.
@@ -181,7 +170,7 @@ Every stage follows the same shape; keep new stages consistent with it.
 - `provide (struct-out name)` exports the constructor, predicate, and accessors in one line.
 - `#lang racket` provides `pretty-print`; `src/main.rkt` uses it for `--dump`.
 - `unary` and `binary` carry `op-span` (the operator token) beside `span`. Operator diagnostics use `op-span`; `node-span` in `ast.rkt` returns any node's span.
-- Racket `equal?` treats `+nan.0` as equal to itself and `0.0` unequal to `-0.0`; the evaluator compares numbers with `=` so `==` follows IEEE 754.
+- Racket `equal?` treats `+nan.0` as equal to itself and `0.0` unequal to `-0.0`; compare numbers with `=` so `==` follows IEEE 754.
 - Positions count Racket string characters, line and column are 1-based, and span ends are exclusive. Keep that convention in new spans.
 
 ## Lexer gotcha: stray NL tokens
@@ -199,9 +188,9 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 ## Bytecode VM (phase 7)
 
-The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm/` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep black-box parity with the evaluator (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm/README.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`.
+The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm/` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep the goldens (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm/README.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`.
 
-Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners evaluator,exe,vm,python`) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart. It is outside `make test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make bench`; record new numbers in `docs/vm-benchmarks.md`. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
+Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners exe,vm,python`) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart. It is outside `make test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make bench`; record new numbers in `docs/vm-benchmarks.md`. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
 
 Agent evaluation (not part of `make test`): `python3 tests/eval/run.py --help`. Docker is the default; its image is built automatically when missing. Allow provider credentials with repeatable `--pass-env NAME`. Optional Firejail requires `--sandbox firejail --chroot-root PATH`. `--jobs N` runs in parallel.
 
@@ -216,7 +205,7 @@ Agent evaluation (not part of `make test`): `python3 tests/eval/run.py --help`. 
 | Read | When |
 |---|---|
 | `references/stages.md` | adding or renaming tokens, AST nodes or diagnostic codes; you need the token-kind table, the code list, the AST node list or a module's public API |
-| `references/runtime-notes.md` | changing the evaluator or a library area: Result and `try`, stdio, JSON, collections, modules, methods, interpolation, blocks, hints, enums, function values and BDD, tasks, TCP/TLS/HTTP, files, Void and processes |
+| `references/runtime-notes.md` | changing a language rule or a library area: Result and `try`, stdio, JSON, collections, modules, methods, interpolation, blocks, hints, enums, function values and BDD, tasks, TCP/TLS/HTTP, files, Void and processes |
 | `references/vm.md` | working on the bytecode VM: lowering, bytecode, `vm/` C code, the VM build and its submodules, Boehm GC, the loader, golden tests, the latency test, sanitizers, lint, fuzzing, or libuv/OpenSSL work |
 | `references/ci.md` | changing `.github/workflows/`, the Makefile, or adding VM files, test peers or fixtures: CI jobs, the `changes` path list, caches and warm jobs, manual workflows, macOS and Windows (paused), the release build, jscpd |
 | `references/site.md` | changing `site/` or a language rule or builtin shown on a site page: Hugo and Dart Sass, content layout, the site-examples test and its fence attributes, deploy |

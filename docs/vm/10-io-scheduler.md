@@ -10,8 +10,8 @@
   results and mark tasks ready.
 - Racket threads are preemptive, so the scheduler also switches tasks that do
   not block, by reductions (10.2.1). Cross-task output order is not compared.
-- Builtins that take a function (`Task.spawn`, `HTTP.listen` and
-  `HTTP.listen_tls` handlers, `HTTP.request_stream`'s producer)
+- Builtins that take a function (`Task.spawn`; the HTTP server's
+  handlers come back with roadmap 20c, as `std/http` code)
   run it as a new VM task (`BDD.step` is not among them: BDD is written
   in Agentica, `docs/future/31-bdd-in-agentica.md` §31); the ones that need its result await it.
 - Stdin may be a TTY, pipe or file: `uv_guess_handle` picks the reader, and a
@@ -128,8 +128,8 @@
   start-up into the runtime config, makes the apply path skip the charge.
   It changes only when tasks switch, never output, step counts or
   diagnostics, so every build honors it and the latency test uses the
-  normal `make vm` binary. It is for tests only, not documented for users,
-  and may be removed after 7i.
+  normal `make vm` binary. It is for tests only, not documented for users.
+  It stays after 7i: it is how the latency test shows that it can fail.
   With N schedulers, `steps_left` in this bullet is the scheduler's batch
   (Quotas): the sync takes spent steps out of the batch, not the atomic
   counter, and a turn cost touches neither. The turn-cost path checks the

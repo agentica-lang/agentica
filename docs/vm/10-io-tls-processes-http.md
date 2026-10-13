@@ -507,10 +507,9 @@ and `Process.output` (`docs/future/31-bdd-in-agentica.md` §31.9) live in
   second, and only a child stuck in the kernel can make it two. A failed
   `SIGTERM` in `Process.close` is `RUNTIME-PROCESS-CLOSE`, as a failed
   kill is.
-- **Refusal.** Both names are in `vm-only-builtins`, so the fallback and
-  `--legacy-eval` stop with `LOWER-UNSUPPORTED`
-  (`docs/vm/08-loader-and-cli.md` §9) before the evaluator could see them.
-  `agentica test` runs on the VM and never reaches the evaluator.
+- **VM only.** Until 7i deleted the evaluator, both names were in
+  `vm-only-builtins`, so the fallback and `--legacy-eval` refused them with
+  `LOWER-UNSUPPORTED` (`docs/vm/08-loader-and-cli.md` §9).
 
 ### 10.5 Limits the C runtime keeps
 
@@ -702,6 +701,11 @@ the I/O layer.
 
 ### 10.7 HTTP on the VM: the hybrid split (phase 20; the client is built)
 
+Status after 7i: the builtin `HTTP` module is gone (deleted with the
+evaluator, decided by the owner on 2026-10-13), so `std/http` is the only
+HTTP, imported as `HTTP`, and it has the client only until 20c brings the
+server.
+
 Planned in `docs/future/30-hybrid-http.md` §30 and roadmap phase 20. HTTP is
 split between a small C builtin module, `HttpWire`, and the Agentica module
 `std/http.agc`, which programs import as `HTTP`.
@@ -709,8 +713,7 @@ split between a small C builtin module, `HttpWire`, and the Agentica module
 - **C (`HttpWire`)**, VM-only and std-only: the linker lets only modules
   embedded from `stdlib/` call it, and gives user code
   `CHECK-UNKNOWN-NAME` with a help that shows the `std/http` import
-  (`src/builtins.rkt` lists it in `std-only-modules`, and its builtins in
-  `vm-only-builtins`; §30.5, §30.8). It keeps what is byte-level, security-critical or shared
+  (`src/builtins.rkt` lists it in `std-only-modules`; §30.5, §30.8). It keeps what is byte-level, security-critical or shared
   across tasks: the head parser of 10.6 (`vm/http_parse.h`,
   `vm/http_pico.c`), the body decoder (`vm/http_body.c`) filling one
   `malloc`'d buffer per body, the UTF-8 check, the error answers before

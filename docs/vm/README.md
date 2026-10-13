@@ -3,10 +3,8 @@
 This document closes roadmap step 7b. It fixes the decisions that 7c
 (lowering), 7d (bytecode emitter) and 7e (VM core) build on, and the library
 choices and safety rules that 7h and 7i need. The language does not change.
-`grammar.md` stays the contract. The VM is the default backend; the Racket
-evaluator (`src/evaluator.rkt`) is frozen and runs only the programs the VM
-cannot run yet (`HTTP`, `BDD`, and `agentica test`) until 7i
-deletes it. Roadmap step 7b lists each decision in one line; this document
+`grammar.md` stays the contract. The VM is the only backend: 7i deleted the
+Racket evaluator, which the VM replaced step by step. Roadmap step 7b lists each decision in one line; this document
 gives the details and reasons. The VM's codename is Aurora (Aurora VM). Only
 the docs use it: the binary (`agentica-vm`), the `AGENTICA_VM*` variables, the
 `agc_` prefix, `.agcb` and `vm/` keep their names.
@@ -22,9 +20,9 @@ evaluator, and the VM matched every one. A runaway program must stop with
 `RUNTIME-STEP-LIMIT` under `--max-steps`, and a run stopped by any smaller
 limit gives a prefix of the full stdout and program stderr (12.1). When
 behaviour changes on purpose, `make goldens` rewrites the files from the VM
-and the PR shows their diff for review. Catch-up work (TCP, TLS, HTTP, BDD on
-the VM) is tested with golden outputs and independent Node/Python peers, not
-against the evaluator; new features are VM-only and come after 7i.
+and the PR shows their diff for review. A new fixture gets hand-checked
+expected output. Network and process work is tested with golden outputs and
+independent Node/Python peers.
 Diagnostic message text and span, the VM's own stderr wording, OS error
 text, exact step counts and the step-limit span may change in a PR that
 updates the goldens. An error string that a program prints is program data,
@@ -33,7 +31,7 @@ agents; evaluation rounds judge that, not identity with Racket. Much of this
 document records Racket's exact behavior because the first PRs copied it;
 that is a description of today's VM, not a rule, and designs kept only to
 copy Racket's text or counts may be simplified. For example, the HTTP
-adapter does not need to map parser failures onto `http-wire.rkt`'s exact
+adapter did not need to map parser failures onto the old `http-wire.rkt`'s exact
 messages, only onto the same diagnostic or `Result` error kind (10.6). The
 turn cost (10.2.1) stays: it is there for fairness. The compiler may
 optimize freely as long as the exit code, stdout, program stderr and
@@ -57,7 +55,7 @@ counts may change).
 | `src/checker.rkt` | One addition in 7c: it can fill a caller-supplied `eq?` hash from expression node to its checked type. |
 | `src/lower.rkt` (7c) | Checked program to IR. Resolves names to slots and indexes, makes types explicit, keeps spans, converts closures. |
 | `src/bytecode.rkt` (7d) | IR to bytecode: label resolution, constant pool, builtin imports, struct, enum, JSON type and span tables, step merging, binary writer and reader. |
-| `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), running on the VM by default with the evaluator fallback (7i). Printing and exit codes stay here. |
+| `src/main.rkt` | `--dump-ir` (7c), `compile` (7d), running every program on the VM (7i). Printing and exit codes stay here. |
 | `vm/` (7e) | The C VM: loader, values, interpreter loop, builtins, JSON, diagnostics, CLI driver. Builds `dist/agentica-vm`. |
 
 **Status.** The vertical slice, the Float PR, the Strings PR, the macOS

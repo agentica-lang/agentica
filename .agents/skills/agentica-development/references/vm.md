@@ -8,8 +8,9 @@ their names.
 layout, loader rules, libraries and the PR plan. Its "Status" note says which
 subset runs today. This file is the working guide: where things live, how to
 widen the VM, and the rules every change keeps. When this guide and
-`docs/vm/` disagree, `docs/vm/` wins. The VM is the default backend and the
-reference; the evaluator is frozen (it runs only the fallback until 7i).
+`docs/vm/` disagree, `docs/vm/` wins. The VM is the only backend and the
+reference: roadmap 7i deleted the Racket evaluator. Notes below that compare
+with "the evaluator" record why a rule was copied from it.
 
 ## Pipeline and files
 
@@ -19,7 +20,7 @@ lower         (src/lower.rkt)     checked program -> IR, or LOWER-UNSUPPORTED / 
 ir->bytecode  (src/bytecode.rkt)  IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL
 write-bytecode                    the versioned .agcb file (magic, format version, Agentica version)
 vm/main.c     dist/agentica-vm [--max-steps N] [--seed N] [--allow-run] [--ai|--json] -- file.agcb [args...]
-src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then the VM (evaluator fallback on LOWER-UNSUPPORTED)
+src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then the VM (LOWER-UNSUPPORTED exits 1)
 ```
 
 | Path | Owns |
@@ -96,7 +97,6 @@ AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-tes
 racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
 racket src/main.rkt --dump-ir prog.agc
 racket src/main.rkt prog.agc         # front end + VM in one step (the default); AGENTICA_VM=path picks the binary
-racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 ```
 
 - CI runs `vm-sanitizers` (`make vm-lint`, ASan diff and bytecode tests, `make vm-fuzz`,
@@ -104,18 +104,12 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   in the `changes` job of `.github/workflows/ci.yml`; the list and the other
   jobs are in `references/ci.md`. A new VM source or test file outside those
   paths must be added there.
-- `agentica file.agc` runs on the VM by default (Linux only for now,
-  `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
-  `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
-  only `HTTP` builtins, which are not in
-  `vm-builtins` in `src/lower.rkt`; `tests/bytecode-test.rkt` checks that
-  every other catalog implementation is there) it prints `agentica: <the
-  lowering's message>; running on the legacy evaluator` on stderr (not with
-  `--json`) and runs the evaluator. Tests check the notice with
-  `fallback-notice?` (`tests/cli-in-process.rkt`): prefix, builtin name and
-  suffix, never the whole text. The hidden `--legacy-eval` flag (stripped by
-  `split-legacy-flag` from the options before the file) forces the
-  evaluator. `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
+- `agentica file.agc` runs on the VM (Linux only for now,
+  `docs/vm/08-loader-and-cli.md` §9): `src/main.rkt` lowers the checked
+  program; a `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1.
+  Every catalog implementation is in `vm-builtins` in `src/lower.rkt`
+  (`tests/bytecode-test.rkt` checks it), so no builtin reaches it today.
+  `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
   the step program and `std/bdd/runner` and starts the runner VM with
   `--driver-pid` (see `references/stages.md`).
   Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
@@ -133,11 +127,11 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   distribute` would copy the VM. A missing VM exits 2, never a silent
   fallback. `--max-steps`, `--seed`, `--allow-run`, `--ai` and `--json`
   pass through; add new options to the pass-through list in `src/main.rkt`
-  as the VM gains them. A catch-up PR (TCP, TLS, HTTP, BDD) adds its
-  builtins to `vm-builtins`, which removes the fallback by itself.
+  as the VM gains them. A new builtin goes into `vm-builtins` with its C
+  implementation.
   `tests/vm-diff-4-test.rkt` checks the CLI against the goldens (with
-  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), the fallback
-  notice, `--legacy-eval`, a missing VM, runs it once in-process to cover
+  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), that the
+  removed `--vm` and `--legacy-eval` flags are unknown, a missing VM, runs it once in-process to cover
   the pipe path, and checks `--driver-pid`.
 
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
@@ -277,21 +271,19 @@ imported declarations carry `@N::` prefixes (display names drop them,
 `write-bytecode` uses `display-name`). The span table names its source
 per span: `lower` collects every `source` a span points to (`note-source!`,
 entry file first), and `vm/diag.c` prints `p->sources[span->source]`, so a
-diagnostic in imported code shows that file as the evaluator does (full
+diagnostic in imported code shows that file (full
 path, or `std/queue.agc` for an embedded module). Block function names use
 only the file's base name, so two imported files may give equal
 `block@m.agc:2:17` names (the `same-basename` fixture); nothing looks
-functions up by name. A std module
-that needs a builtin the VM lacks fails with `LOWER-UNSUPPORTED` at that
-call in the module's file.
+functions up by name.
 
 ## Widen the subset (new form or opcode)
 
 1. Read the matching rules in `docs/vm/02-reference-behavior.md` §2 (reference behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
-   (lowering). Probe the evaluator with small programs when a detail is not
-   written down, and write the finding into §2.
-2. `src/lower.rkt`: lower the form. Emit one IR `step` exactly where the
-   evaluator calls `step!`, before the node's children. Anything still out of
+   (lowering). When a detail is not written down, decide it, write it into §2
+   and pin it with a golden.
+2. `src/lower.rkt`: lower the form. Emit one IR `step` per former AST
+   entry, before the node's children (§3.3). Anything still out of
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
    scalars, `(Struct name)` and `(Enum name ...)` declared in the program,
@@ -350,10 +342,9 @@ call in the module's file.
    import rules change. A fixture `name.agc` reads `name.stdin` (raw bytes;
    `.gitattributes` marks them binary so CRLF survives) as its stdin and
    `name.args` (a Racket list of strings, read with `file->value`) as its
-   program arguments when they exist; the diff test feeds both to the
-   evaluator and the VM, and to the VM in the `--max-steps` sweep.
-   An `.args` entry `@tmp` becomes a fresh empty directory per run (both
-   backends, same name length), and that path is turned back into `@tmp`
+   program arguments when they exist; the golden test feeds both to the
+   VM, also in the `--max-steps` sweep.
+   An `.args` entry `@tmp` becomes a fresh empty directory per run, and that path is turned back into `@tmp`
    in the output before the comparison; file fixtures (`files-*`) use it
    and long timeouts, and never touch paths outside it.
 4. A blocking builtin (7h) checks its arguments, fills a `malloc`'d
@@ -381,14 +372,13 @@ Rules for the C code:
   loader resolves each `(key, arity)` against the C table.
 - Check argument tags generically from the table; check list and map
   elements when you touch them.
-- Fail with the evaluator's diagnostic code, at the call span or `span + 1 + i`
-  for argument `i`, with a clear message (it need not be the evaluator's
-  text).
+- Fail with the documented diagnostic code (`docs/grammar.md`), at the call
+  span or `span + 1 + i` for argument `i`, with a clear message.
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
 - Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d
-  copy, NUL terminated, NULL on an embedded NUL so the caller returns the
-  evaluator's message; the caller frees it, usually with its request). Every String constructor validates UTF-8
+  copy, NUL terminated, NULL on an embedded NUL so the caller returns its
+  error message; the caller frees it, usually with its request). Every String constructor validates UTF-8
   or decodes with U+FFFD. Build a String with `agc_make_string` (copies) or
   `agc_new_string` and fill every byte before it is stored anywhere.
 - Debug text of a String (`inspect`, and later map-key, `index_of` and
@@ -405,14 +395,14 @@ Rules for the C code:
 **Goldens, not parity** (`docs/vm/README.md` §1). The VM is the reference:
 each fixture's golden holds its exit code, stdout, program stderr
 (`IO.warn`) and diagnostic code; a runaway program stops with
-`RUNTIME-STEP-LIMIT` under `--max-steps`. Catch-up work (TCP, TLS, HTTP,
-BDD) is tested with goldens and independent Node/Python peers, not against
-the evaluator. Pick the peer by role: where the VM must talk to a real
+`RUNTIME-STEP-LIMIT` under `--max-steps`. Network, process and protocol
+work is tested with goldens and independent Node/Python peers. Pick the peer
+by role: where the VM must talk to a real
 implementation, use one whose library does the protocol work (Node's `http`
 for HTTP streaming, since Python's `http.server` does not decode chunked
 request bodies); for raw or hostile cases, use the language the test file
-already uses, so each test file has one peer. New features are VM-only
-and come after 7i; the evaluator is frozen. Error strings a program prints are program data: when a library
+already uses, so each test file has one peer. A new golden gets
+hand-checked expected output; a regenerated one needs a reviewed diff. Error strings a program prints are program data: when a library
 message changes, switch the fixtures that print it to printing only ok or
 error in the same PR, or update their goldens on purpose. Message text,
 spans, stderr wording, OS error text, exact step counts and the step-limit
@@ -694,7 +684,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 
 ## Gotchas
 
-- JSON parsing must match `read-json` plus the checks in `src/json.rkt`,
+- JSON parsing matches what the old evaluator did (Racket's `read-json` plus the checks of its deleted `src/json.rkt`),
   not RFC 8259 alone: the control-character pass runs first over the whole
   text, a top-level number or literal stops early (`01` is unexpected
   content, `truex` invalid), the finite check comes after the trailing
@@ -756,9 +746,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   (windows overlap). It does not touch the depth, so on the VM deep tail
   recursion runs while the evaluator gives `RUNTIME-STACK-OVERFLOW`
   (documented in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
-  non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); a
-  fixture that tail-recurses past 10000 differs from the evaluator, so the
-  deep case lives in the VM-only test in `tests/vm-diff-common.rkt`. The loader
+  non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
+  deep tail-recursion case lives in `tests/vm-diff-common.rkt`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
 - Tasks: `make vm-latency` runs `tests/vm-latency-test.rkt` alone (kept
   out of `make test`'s parallel batch by `tests/info.rkt`; CI runs it right

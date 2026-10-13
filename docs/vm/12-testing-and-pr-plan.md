@@ -68,8 +68,7 @@
   fixtures print only what does not depend on the generator's numbers,
   since seeded sequences differ by backend (7.4).
 - The fourth shard also runs the extras: the CLI on the VM (styles, the
-  fallback to the evaluator with its notice, `--legacy-eval`, a missing or
-  non-executable VM, `--seed`, stdin, `System.args`), the `--driver-pid`
+  removed `--vm` and `--legacy-eval` flags, a missing or non-executable VM, `--seed`, stdin, `System.args`), the `--driver-pid`
   rules, signals, inherited descriptors, PATH lookup, a stuck FIFO, a
   non-UTF-8 working directory, invalid UTF-8 arguments, deep tail calls,
   long strings, a large generated input checked against a line splitter
@@ -353,10 +352,9 @@ and docs:
   `max_connections` (one connection shared by three tasks, three opened
   at once behind a barrier) and `close_client` in flight; HTTPS with
   `ca_file`, a wrong trust store and a missing file; a 413 answered before
-  a 4 MiB upload ends, and the client-side hostile list. The refusal is
-  tested in `tests/vm-diff-common.rkt` (the fallback and `--legacy-eval`)
-  and `tests/bdd-test.rkt` (a step file); the guard in
-  `tests/modules-test.rkt`.
+  a 4 MiB upload ends, and the client-side hostile list. The guard is
+  tested in `tests/modules-test.rkt`; the refusal tests went with the
+  evaluator in 7i.
 - **20b** the core of task cancellation (`agc_task_cancel`, parent and
   children links, pool waiters), with `vm/tests/task_cancel_test.c`.
 - **20c** the server: `HttpWire.read_request`, `write_response` and the
@@ -364,10 +362,10 @@ and docs:
   golden fixtures of a client and a server in one program,
   `close_server` during a handler, and every hostile request of 10.6
   from a Python raw-socket peer on port 0.
-- **20d** `std/http`, the switch to `import "std/http" as HTTP`, the
-  removal of the `HTTP` fallback and of the evaluator's HTTP code, the
-  migration of every HTTP program and test, and a performance sanity
-  check against the evaluator's HTTP (`benchmarks/http.py`, not a gate).
+- **20d** the switch to `import "std/http" as HTTP` and the removal of
+  the builtin `HTTP` module: done by 7i (owner decision of 2026-10-13),
+  before 20b and 20c. The performance sanity check (`benchmarks/http.py`,
+  not a gate, now against Python's standard library) moved into 20c.
 
 Golden fixtures stay timing-free (a fixture is its own client and server,
 only `main` prints); anything that depends on a timeout goes in
@@ -383,10 +381,9 @@ of tests.
   xoshiro256** generator, so seeded sequences differ from the evaluator
   by design (7.4).
 - **Heap cap**: `--max-steps` does not bound memory (1), so a hostile or
-  runaway file reaches the out-of-memory exit. Before 7i runs untrusted
-  bytecode by default, decide on a cap such as `--max-heap N` through
-  `GC_set_max_heap_size`, and whether the evaluator gets a matching limit for the one release it
-  stays behind a flag. yyjson allocates its parse document with libc
+  runaway file reaches the out-of-memory exit. Decide on a cap such as
+  `--max-heap N` through `GC_set_max_heap_size`; the VM runs untrusted
+  bytecode by default since 7i. yyjson allocates its parse document with libc
   `malloc`, outside the GC heap, so such a cap must bound it too (for
   example with a counting `yyjson_alc` passed to `yyjson_read_opts`).
 - **BDD on the VM**: decided (2026-10-12): not in C. BDD is written in

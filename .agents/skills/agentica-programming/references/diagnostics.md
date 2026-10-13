@@ -61,6 +61,6 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
 | `RUNTIME-INVALID-DURATION`, `RUNTIME-TASK-CONTEXT`, `RUNTIME-TASK-CANCELLED` | negative `Task.sleep` duration, awaiting a task from another execution, awaiting work cancelled by shutdown (see `tasks.md`) |
-| `LOWER-UNSUPPORTED` | from `agentica compile`: the VM cannot run this yet. On a run it also means "needs the VM": the program calls something only the VM runs (`std/http`, `Process.spawn_captured`, `Process.output`, `Task.pending_count`) but must run on the legacy evaluator (it also uses `HTTP`, or it runs under `--legacy-eval`); exit 1 before anything runs. Keep `std/http` and `std/bdd` apart from `HTTP` builtins |
+| `LOWER-UNSUPPORTED` | the VM cannot run this form; exit 1 before anything runs. Every checked program runs on the VM today, so seeing it is an interpreter bug to report |
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and `RUNTIME-BDD-*` codes; see `bdd.md`.

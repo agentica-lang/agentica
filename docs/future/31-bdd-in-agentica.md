@@ -343,6 +343,8 @@ Per AGENTS.md: `rackunit`; golden fixtures in `tests/fixtures/vm/` for what is d
 
 21f deletes `src/bdd.rkt`, `src/bdd-runner.rkt`, `src/gherkin.rkt`, the `BDD.*` entries of `src/builtins.rkt`, the BDD dispatch of the evaluator (`src/evaluator.rkt:491-503`) and `make-bdd-service`, so no program can reach the evaluator through BDD, and `agentica test` never starts it. The driver stops passing `--legacy-eval` (there is no BDD driver left to pass it). After 21f only a builtin `HTTP` call still triggers the fallback, until HTTP 20d removes it (the order above); then nothing does, but its code stays one more step: 7i deletes `src/evaluator.rkt` and its runtime modules (`task.rkt` with `RUNTIME-BDD-PENDING-TASKS` and `#:require-complete-tasks?`, `process.rkt`, `filesystem.rkt`, the network and HTTP modules), the fallback branch of `src/main.rkt`, `--legacy-eval`, `--vm`, and the evaluator's tests, as its item says. After 21f, 7i has no BDD work left.
 
+**Done in 7i.** 7i deleted all of the above, and the builtin `HTTP` module with them (the owner chose on 2026-10-13 to do 7i before HTTP 20b to 20d), so no fallback is left. `RUNTIME-BDD-PENDING-TASKS` stays: `std/bdd` raises it on the VM through `Task.pending_count`.
+
 ### 31.13 Decided against
 
 - **Port BDD to C.** It would be the biggest C module after HTTP, all of it pure computation over strings (std-first says no), and the handlers would still need a way to fail one scenario without ending the run.

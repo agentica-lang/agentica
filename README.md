@@ -31,11 +31,17 @@ source text -> lexer.rkt -> parser.rkt -> checker.rkt -> lower.rkt -> bytecode.r
                tokens       AST           checked AST    VM IR        .agcb bytes     runs main()
 ```
 
-`main.rkt` is the command-line driver: it compiles in-process and runs
-`dist/agentica-vm`. The Racket evaluator (`evaluator.rkt`) is frozen and runs
-only programs the VM cannot run yet: those that use `HTTP`, which fall back
-to it with a one-line notice on stderr. `agentica test` runs on the VM; its
-step API is the `std/bdd` module (see `docs/bdd.md`). There is nothing to install; build the VM (it needs the git
+`main.rkt` is the command-line driver: it compiles in-process to a temporary
+bytecode file and runs `agentica-vm`, which runs every program. It finds the
+VM next to the `agentica` executable (`bin/` of the release archive), or in
+`dist/` of the checkout for `racket src/main.rkt`; `AGENTICA_VM=path` picks
+another VM, and a missing VM exits 2. It passes `--max-steps`, `--seed`,
+`--allow-run`, `--ai`, `--json` and the program arguments. It is tested on
+Linux only; elsewhere the VM has no guard against outliving the driver
+(macOS skips only the parent check, while the `O_NOFOLLOW`, privacy and inode
+checks run on every non-Windows system, and Windows skips both checks).
+`agentica test` runs on the VM too; its step API is the `std/bdd` module (see
+`docs/bdd.md`). There is nothing to install; build the VM (it needs the git
 submodules: `git submodule update --init`) and compile the modules to
 bytecode once:
 
@@ -88,8 +94,7 @@ racket src/main.rkt examples/hello.agc
 | `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
 | `--seed N` | Seed `Random` with N (0..2147483647) so runs repeat; `agentica test` passes it to handlers and programs under test. Without it, each run is seeded from OS randomness. |
 | `--dump-ir` | Print the lowered VM IR instead of running it (VM subset only; see `docs/vm/`). |
-| `--vm` | Accepted and ignored: programs run on the bytecode VM by default (tested on Linux only; elsewhere the VM has no guard against outliving the driver: macOS skips only the parent check, while the `O_NOFOLLOW`, privacy and inode checks run on every non-Windows system, and Windows skips both checks). The driver compiles to a temporary bytecode file and runs `agentica-vm`, found next to the `agentica` executable (`bin/` of the release archive), or in `dist/` of the checkout for `racket src/main.rkt`; `AGENTICA_VM=path` picks another VM, and a missing VM exits 2. It passes `--max-steps`, `--seed` (a seeded run repeats, with other `Random` values than the old evaluator), `--allow-run`, `--ai`, `--json` and program arguments. A program that uses `HTTP` runs on the legacy evaluator after one notice line on stderr (not with `--json`; `agentica: the VM does not support the builtin HTTP.get yet; running on the legacy evaluator`). |
-| `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). Programs that use `HTTP` fail with `LOWER-UNSUPPORTED`. |
+| `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). |
 
 Use `--allow-run` before the command or source file to enable `Process.spawn`; spawning is disabled by default. `main()` now returns `Void`, and side-effect APIs return `Void` or `Result[Void]`. Use `ok()` for successful completion; `nil` remains data and JSON null. `racket src/main.rkt --allow-run examples/process-tool.agc` demonstrates tool execution and exit checks.
 
@@ -152,7 +157,7 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/file-summary.agc`](examples/file-summary.agc): read a file given as an argument.
 - [`examples/concurrency.agc`](examples/concurrency.agc): lightweight tasks with `Task.spawn` and `Task.await`.
 - [`examples/process-tool.agc`](examples/process-tool.agc): run another program (needs `--allow-run`).
-- [`examples/tcp_echo.agc`](examples/tcp_echo.agc), [`examples/http_get.agc`](examples/http_get.agc), [`examples/http_server.agc`](examples/http_server.agc): TCP and HTTP.
+- [`examples/tcp_echo.agc`](examples/tcp_echo.agc), [`examples/http_get.agc`](examples/http_get.agc): TCP, and an HTTP client with `import "std/http" as HTTP` (the HTTP server comes back with roadmap 20c).
 - [`examples/queue.agc`](examples/queue.agc): the embedded `std/queue` library.
 - [`examples/json-modules.agc`](examples/json-modules.agc): a program split across files (`examples/modules/json-tools.agc`).
 - [`examples/mcp/stdio.agc`](examples/mcp/stdio.agc): a minimal MCP stdio server.

@@ -149,8 +149,9 @@ and cost one predictable branch each.
   both.
   Arguments after the file are the program's `System.args`.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
-- `agentica file.agc [args...]` runs on the VM by default (7i, Linux;
-  `--vm` is still accepted and does nothing). `src/main.rkt`
+- `agentica file.agc [args...]` runs on the VM (7i, Linux). The `--vm`
+  flag, which did nothing once the VM was the default, went with the
+  evaluator; it is now an unknown switch. `src/main.rkt`
   runs the front end and `lower`, then writes the bytecode to
   `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
@@ -181,41 +182,23 @@ and cost one predictable branch each.
   of what the program consumes, so on a non-file stdin shared with other
   code the driver may take bytes the program never read. If reading the
   driver's stdin fails, the thread stops the VM the same way and the driver reports
-  `RUNTIME-INTERNAL` (exit 1), as the evaluator does for a failed read;
+  `RUNTIME-INTERNAL` (exit 1);
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as usual
   (exit 1). `--max-steps N`, `--seed N`, `--allow-run`, `--ai` and `--json`
-  are passed to the VM; a seeded run repeats on the VM, with other numbers
-  than the evaluator gave.
-- Fallback to the evaluator. When `lower` rejects the program with
-  `LOWER-UNSUPPORTED` (today only a call to an `HTTP` or `BDD`
-  builtin), the driver prints one line on stderr (in the plain and `--ai` modes;
-  never with `--json`, where the last stderr line stays the diagnostic),
-  `agentica: <the lowering's message>; running on the legacy evaluator` (for example `agentica: the VM
-  does not support the builtin HTTP.client_options yet; running on the
-  legacy evaluator`), and runs the checked program on the evaluator with the
-  same options. Other `LOWER-` and `BYTECODE-` diagnostics fail as usual.
-  The hidden `--legacy-eval` flag (not in the usage text) forces the
-  evaluator; only options before the file are read, so after the file it is
-  a program argument. `compile` and `--dump-ir` never fall back.
+  are passed to the VM; a seeded run repeats.
+- No fallback (7i). A `LOWER-UNSUPPORTED` from `lower` prints like any
+  diagnostic and exits 1; every catalog builtin is in `vm-builtins`, so no
+  builtin reaches it today. Until 7i, such a program ran on the Racket
+  evaluator after a one-line notice, and the hidden `--legacy-eval` flag
+  forced the evaluator; 7i deleted both, with the evaluator, and the
+  refusal of programs that needed VM-only builtins on those paths
+  (`check-vm-only`, §30.8 of `docs/future/`).
   `agentica test` runs on the VM (roadmap 21f,
   `docs/future/31-bdd-in-agentica.md` §31): `src/bdd-driver.rkt` compiles
   the step program and the runner written in Agentica, starts the runner
   with `--driver-pid`, and the runner starts one VM per scenario; the
   programs under test run like `agentica FILE`.
-- The refusal (20a, §30.8 of `docs/future/`). Some builtins run only on the
-  VM (`vm-only-builtins` in `src/builtins.rkt`: every `HttpWire` builtin,
-  which `std/http` calls, and, from 21a, `Process.spawn_captured` and
-  `Process.output`, and, from 21b, `Task.pending_count`). Before the evaluator gets a program, each place
-  that hands it one calls `check-vm-only` (`src/lower.rkt`), which walks
-  the checked program and returns a `LOWER-UNSUPPORTED` diagnostic at the
-  first VM-only call, or `#f`. Its message says why the evaluator would
-  run it: `this program needs the VM: std/http.agc calls HttpWire.client,
-  which only the VM runs, but ` and then `it must run on the legacy
-  evaluator because <the lowering's message>` (the fallback, checked
-  before its notice is printed) or `--legacy-eval runs it on the legacy
-  evaluator`. These two are the only callers since 21f; they print it and
-  exit 1, and nothing has run. Both go with 7i.
 - Finding the VM, never in the current directory: `AGENTICA_VM=path` wins;
   under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout
   (from the module's own source path); in a `raco exe` build it is
@@ -224,8 +207,7 @@ and cost one predictable branch each.
   `agentica`, so the same rule finds it there, also through a symlink on
   `PATH`. A missing or non-executable VM prints `agentica: cannot find
   the VM at PATH; run make vm or set AGENTICA_VM` and exits 2 after the
-  front end and the lowering, so a program diagnostic or the fallback wins;
-  the driver never falls back to the evaluator because the VM is missing.
+  front end and the lowering, so a program diagnostic wins.
   It does not use `define-runtime-path`: `raco distribute` would then copy
   the VM into `lib/` and fail when it is not built.
 - Future work: Windows (a kill-on-close job object instead of
