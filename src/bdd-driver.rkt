@@ -1,6 +1,7 @@
 #lang racket
 
-(require file/sha1 json racket/os racket/random racket/runtime-path
+(require (only-in ffi/unsafe -> _fun _int get-ffi-obj)
+         file/sha1 json racket/os racket/random racket/runtime-path
          "bytecode.rkt" "checker.rkt" "diagnostic.rkt" "lexer.rkt" "lower.rkt"
          "modules.rkt" "parser.rkt" "source.rkt" "vm-launch.rkt")
 
@@ -96,7 +97,10 @@
 
 (define (take-lock directory)
   (define port (open-output-file (lock-file directory) #:exists 'error #:permissions #o600))
-  (unless (port-try-file-lock? port 'exclusive)
+  (define locked?
+    (with-handlers ([(lambda (_) #t) (lambda (failure) (close-output-port port) (raise failure))])
+      (port-try-file-lock? port 'exclusive)))
+  (unless locked?
     (close-output-port port)
     (error 'agentica "cannot lock ~a" directory))
   port)
@@ -121,9 +125,20 @@
         (delete-directory/files path #:must-exist? #f))
       (close-output-port held))))
 
+(define unix-geteuid (get-ffi-obj "geteuid" #f (_fun -> _int) (lambda () #f)))
+
 (define (shared-and-not-sticky? temporary)
-  (define mode (hash-ref (file-or-directory-stat temporary) 'mode))
-  (and (not (zero? (bitwise-and mode #o002))) (zero? (bitwise-and mode #o1000))))
+  (define stat (file-or-directory-stat temporary))
+  (define mode (hash-ref stat 'mode))
+  (define (writable? bits) (not (zero? (bitwise-and mode bits))))
+  (and (zero? (bitwise-and mode #o1000))
+       (or (writable? #o002)
+           (and (writable? #o020)
+                (not (and unix-geteuid (equal? (hash-ref stat 'user-id) (unix-geteuid))))))))
+
+(define (message-line text pick)
+  (define lines (string-split text "\n"))
+  (if (null? lines) "no diagnostic" (pick lines)))
 
 (define (compile-steps path directory)
   (cond
@@ -177,11 +192,13 @@
                             (path->string vm) style)]
     [else
      (define temporary (find-system-path 'temp-dir))
-     (define directory (build-path temporary (format "agentica-bdd-~a" (bytes->hex-string (crypto-random-bytes 16)))))
+     (define hex (bytes->hex-string (crypto-random-bytes 16)))
+     (define directory (build-path temporary (format "agentica-bdd-~a" hex)))
+     (define current (build-path temporary (format "agentica-bdd-new-~a" hex)))
      (define created? #f)
      (define lock #f)
      (with-handlers ([exn:break? raise])
-       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (car (string-split (exn-message failure) "\n")) (path->string temporary) style))])
+       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (message-line (exn-message failure) car) (path->string temporary) style))])
          (if (shared-and-not-sticky? temporary)
              (infrastructure-report
               (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
@@ -189,15 +206,21 @@
              (dynamic-wind
                (lambda ()
                  (parameterize-break #f
-                   (make-directory directory #o700)
-                   (set! created? #t)
-                   (set! lock (take-lock directory))))
+                   (make-directory current #o700)
+                   (set! created? #t)))
                (lambda ()
+                 (parameterize-break #f
+                   (set! lock (take-lock current))
+                   (rename-file-or-directory current directory)
+                   (set! current directory))
                  (sweep-stale temporary directory)
                  (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
                (lambda ()
-                 (when lock (close-output-port lock))
-                 (when created? (delete-directory/files directory #:must-exist? #f)))))))]))
+                 (parameterize-break #f
+                   (with-handlers ([exn:fail? void])
+                     (when created? (delete-directory/files current #:must-exist? #f)))
+                   (with-handlers ([exn:fail? void])
+                     (when lock (close-output-port lock)))))))))]))
 
 (define (run-in directory paths step-file style allow-run? seed vm)
   (define runner-file (build-path directory "runner.agcb"))
@@ -236,5 +259,5 @@
          (values status out)
          (infrastructure-report
           (format "the BDD runner failed with exit code ~a: ~a" status
-                  (let ([lines (string-split err "\n")]) (if (null? lines) "no diagnostic" (last lines))))
+                  (message-line err last))
           (path->string vm) style))]))
