@@ -38,7 +38,12 @@
   that it sweeps 1 to 100, the limits from 100 spaced count / 50 apart
   (at most 50), the count minus 1 and the count; then it adds the
   larger of 2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`), with the
-  golden's T. For each limit the
+  golden's T. The ASan and GC-stress runs set `AGENTICA_SWEEP=sampled`:
+  each fixture runs only 1, 2, the count minus 1, the count, the last
+  limit and one limit drawn from each eighth of the rest, with a seed from
+  `AGENTICA_SWEEP_SEED` or the commit (`GITHUB_SHA`, else `git rev-parse
+  HEAD`), so the sample moves with every commit and a failure names the
+  seed that reproduces it. For each limit the
   VM must either give the golden outcome, or stop with exit 1 and
   `RUNTIME-STEP-LIMIT` with a stdout and stderr that are prefixes of the
   golden's. Once the VM finishes at one limit it must finish at every larger
