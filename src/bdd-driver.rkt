@@ -45,10 +45,7 @@
     (define tree (pass (parse (pass (lex (source name text))))))
     (define types (make-hasheq))
     (define checked (pass (check (pass (link-program tree name)) #:types types)))
-    (define ir (lower checked types))
-    (when (and (diagnostic? ir) (eq? (diagnostic-code ir) 'LOWER-UNSUPPORTED))
-      (stop (diagnostic 'LOWER-UNSUPPORTED (diagnostic-message ir) (diagnostic-span ir) #:help vm-only-help)))
-    (pass (write-bytecode (pass (ir->bytecode (pass ir)))))))
+    (pass (write-bytecode (pass (ir->bytecode (pass (lower checked types))))))))
 
 (define (feature-name? name)
   (regexp-match? #rx#"[.]feature$" (path->bytes name)))

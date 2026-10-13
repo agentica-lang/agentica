@@ -142,6 +142,18 @@
       (check-equal? (check-code (main-with (car entry))) (cadr entry)))
     (check-equal? (check-code (string-append "def f(c: HttpClient) -> Void\n  JSON.encode(c)\nend\n\n" (main-with "")))
                   'CHECK-NOT-ENCODABLE))
+  (test-case "task types reject invalid programs at their boundaries"
+    (define prefix "def identity(n: Int) -> Int\n  return n\nend\n\n")
+    (for ([entry '(("Task.spawn(&identity, \"x\")" CHECK-TYPE-MISMATCH)
+                   ("Task.spawn(7, 0)" CHECK-TYPE-MISMATCH)
+                   ("Task.await(7)" CHECK-TYPE-MISMATCH)
+                   ("t: Task[String] = Task.spawn(&identity, 7)" CHECK-TYPE-MISMATCH)
+                   ("t: Task = Task.spawn(&identity, 7)" CHECK-UNKNOWN-TYPE)
+                   ("Task.spawn(&main, nil)" CHECK-TYPE-MISMATCH)
+                   ("JSON.encode(Task.spawn(&identity, 0))" CHECK-NOT-ENCODABLE)
+                   ("t = Task.spawn(&identity, 0)\n  t == t" CHECK-TYPE-MISMATCH))])
+      (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry)))
+    (check-equal? (check-code "struct Task\n  n: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
   (test-case "function values check references, parameters and returns"
     (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n\n")
     (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))

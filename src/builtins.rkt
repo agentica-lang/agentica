@@ -1,7 +1,7 @@
 #lang racket
 
 (provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean
-         std-only-modules std-only-name? public-builtin-names vm-only-builtins)
+         std-only-modules std-only-name? public-builtin-names)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
@@ -188,9 +188,6 @@
 
 (define (public-builtin-names)
   (filter (lambda (name) (not (std-only-name? name))) (hash-keys builtins)))
-
-(define vm-only-builtins '("HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
-                           "Process.spawn_captured" "Process.output" "Task.pending_count"))
 
 (define (builtin-ref name [arity #f])
   (define entry (hash-ref builtins name #f))

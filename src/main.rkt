@@ -10,7 +10,6 @@
          "bytecode.rkt"
          "checker.rkt"
          "diagnostic.rkt"
-         "evaluator.rkt"
          "lexer.rkt"
          "lower.rkt"
          "parser.rkt"
@@ -88,18 +87,7 @@
            (when to-vm (with-handlers ([exn:fail? void]) (close-output-port to-vm)))
            (parameterize-break #f (stop-vm process))))))
 
-(define (split-legacy-flag arguments)
-  (let loop ([rest arguments] [kept '()] [legacy? #f])
-    (match rest
-      [(cons "--legacy-eval" more) (loop more kept #t)]
-      [(list* (and flag (or "--max-steps" "--seed" "--steps")) value more)
-       (loop more (list* value flag kept) legacy?)]
-      [(cons (and flag (regexp #rx"^-")) more) #:when (not (equal? flag "--"))
-       (loop more (cons flag kept) legacy?)]
-      [_ (values (append (reverse kept) rest) legacy?)])))
-
 (module+ main
-  (define-values (argv legacy?) (split-legacy-flag (vector->list (current-command-line-arguments))))
   (define dump? #f)
   (define dump-ir? #f)
   (define style 'plain)
@@ -110,13 +98,10 @@
   (define raw-arguments
     (command-line
      #:program "agentica"
-     #:argv (list->vector argv)
      #:usage-help
-     "Programs run on the bytecode VM. A program that uses HTTP"
-     "runs on the legacy evaluator, with a notice on stderr."
+     "Programs run on the bytecode VM (dist/agentica-vm, or AGENTICA_VM)."
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]
-     [("--vm") "accepted for compatibility: programs run on the VM by default" (void)]
      [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]
      [("--max-steps") count "limit execution to N expression/statement entries"
       (define parsed (string->number count))
@@ -228,15 +213,6 @@
     (define ir (lower checked types))
     (when (diagnostic? ir) (fail! ir))
     ir)
-  (define (refuse-vm-only reason)
-    (define refusal (check-vm-only checked reason))
-    (when refusal (fail! refusal)))
-  (define (run-evaluator)
-    (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
-                             #:seed seed))
-    (cond
-      [(diagnostic? result) (fail! result)]
-      [(exit-code? result) (exit (exit-code-code result))]))
   (define (bytecode-data [ir (lowered)])
     (define code (ir->bytecode ir))
     (when (diagnostic? code) (fail! code))
@@ -288,16 +264,4 @@
                         (exit 2))])
        (call-with-output-file output-file #:exists 'truncate/replace
          (lambda (out) (void (write-bytes data out)))))]
-    [legacy?
-     (refuse-vm-only "--legacy-eval runs it on the legacy evaluator")
-     (run-evaluator)]
-    [else
-     (define ir (lower checked types))
-     (cond
-       [(and (diagnostic? ir) (eq? (diagnostic-code ir) 'LOWER-UNSUPPORTED))
-        (refuse-vm-only (format "it must run on the legacy evaluator because ~a" (diagnostic-message ir)))
-        (unless (eq? style 'json)
-          (eprintf "agentica: ~a; running on the legacy evaluator\n" (diagnostic-message ir)))
-        (run-evaluator)]
-       [(diagnostic? ir) (fail! ir)]
-       [else (run-on-vm ir)])]))
+    [else (run-on-vm (lowered))]))
