@@ -12,6 +12,7 @@ export struct Error
   end_line: Int
   expected: Detail
   actual: Detail
+  original: Json
 end
 
 export enum Verdict
@@ -57,19 +58,35 @@ end
 
 export def from_diagnostic(problem: Gherkin.Diagnostic) -> Error
   return Error(code: problem.code, message: problem.message, span: problem.span, end_line: problem.span.line,
-               expected: Detail.Unknown, actual: Detail.Unknown)
+               expected: Detail.Unknown, actual: Detail.Unknown, original: JSON.null())
 end
 
+# Reads a diagnostic as `--json` writes it and keeps the whole object, so the report writes every key unchanged
+# (help, function, callee, labels, ...).
+export def from_json(text: String) -> Result[Error]
+  root = try JSON.parse(text)
+  range = try JSON.get(root, "range")
+  start = try JSON.get(range, "start")
+  stop = try JSON.get(range, "end")
+  span = Gherkin.Span(file: try text_at(root, "file"), line: try int_at(start, "line"), column: try int_at(start, "column"),
+                      end_column: try int_at(stop, "column"))
+  return ok(Error(code: try text_at(root, "code"), message: try text_at(root, "message"), span: span,
+                  end_line: try int_at(stop, "line"), expected: detail_at(root, "expected"), actual: detail_at(root, "actual"),
+                  original: root))
+end
+
+# For an error built from fields: a kept `--json` object is written as it is.
 export def with_actual(problem: Error, actual: String) -> Error
   return Error(code: problem.code, message: problem.message, span: problem.span, end_line: problem.end_line,
-               expected: problem.expected, actual: Detail.Known(actual))
+               expected: problem.expected, actual: Detail.Known(actual), original: problem.original)
 end
 
 export def file_error(path: String, problem: Error) -> FileResult
   return FileResult(path: path, feature: "", scenarios: [], verdict: Verdict.Fail(problem))
 end
 
-# 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error is RUNTIME-BDD-INFRA, else 1.
+# 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error is RUNTIME-BDD-INFRA or
+# RUNTIME-BDD-USAGE, else 1.
 export def exit_code(files: List[FileResult]) -> Int
   return totals(files).exit_code
 end
@@ -104,13 +121,13 @@ def totals(files: List[FileResult]) -> Totals
   scenarios = files.reduce(0) do |n, file| n + file.scenarios.size end
   passed = files.reduce(0) do |n, file| n + file.scenarios.filter do |item| not failed?(item.verdict) end.size end
   file_errors = files.filter do |file| failed?(file.verdict) end.size
-  infra = files.any? do |file|
-    infra?(file.verdict) or file.scenarios.any? do |item| infra?(item.verdict) end
+  severe = files.any? do |file|
+    severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end
   end
   code = 1
   if scenarios > 0 and passed == scenarios and file_errors == 0
     code = 0
-  elsif infra
+  elsif severe
     code = 2
   end
   return Totals(passed: passed, failed: scenarios - passed, file_errors: file_errors, exit_code: code)
@@ -123,10 +140,10 @@ def failed?(verdict: Verdict) -> Bool
   end
 end
 
-def infra?(verdict: Verdict) -> Bool
+def severe?(verdict: Verdict) -> Bool
   case verdict
     Verdict.Pass -> return false
-    Verdict.Fail(problem) -> return problem.code == "RUNTIME-BDD-INFRA"
+    Verdict.Fail(problem) -> return problem.code == "RUNTIME-BDD-INFRA" or problem.code == "RUNTIME-BDD-USAGE"
   end
 end
 
@@ -203,6 +220,9 @@ def verdict_json(verdict: Verdict) -> Json
 end
 
 def error_json(problem: Error) -> Json
+  if not JSON.null?(problem.original)
+    return problem.original
+  end
   span = problem.span
   start: Map[String, Json] = {"line": JSON.from(span.line), "column": JSON.from(span.column)}
   stop: Map[String, Json] = {"line": JSON.from(problem.end_line), "column": JSON.from(span.end_column)}
@@ -251,4 +271,23 @@ def detail_text(label: String, detail: Detail) -> String
     Detail.Known(value) -> return "; #{label} #{value.inspect}"
     Detail.Unknown -> return ""
   end
+end
+
+def text_at(root: Json, key: String) -> Result[String]
+  return JSON.string(try JSON.get(root, key))
+end
+
+def int_at(root: Json, key: String) -> Result[Int]
+  return JSON.int(try JSON.get(root, key))
+end
+
+def detail_at(root: Json, key: String) -> Detail
+  found = JSON.get(root, key)
+  if found.ok?
+    value = JSON.string(found.unwrap!)
+    if value.ok?
+      return Detail.Known(value.unwrap!)
+    end
+  end
+  return Detail.Unknown
 end

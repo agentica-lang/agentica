@@ -39,7 +39,8 @@ end
 
 def assertion(step: Gherkin.Step, expected: String, actual: String) -> Report.Error
   return Report.Error(code: "RUNTIME-BDD-ASSERTION", message: "BDD assertion failed", span: step.span,
-                      end_line: step.span.line, expected: Report.Detail.Known(expected), actual: Report.Detail.Known(actual))
+                      end_line: step.span.line, expected: Report.Detail.Known(expected), actual: Report.Detail.Known(actual),
+                      original: JSON.null())
 end
 
 # Every step is resolved first: an undefined or ambiguous step fails alone and the others are not executed.
