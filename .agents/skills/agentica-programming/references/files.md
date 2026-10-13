@@ -47,9 +47,10 @@ one stderr line, `agentica: file data may not be written: ...`, or
 `{"flush_timeout_ms": MS, "warning": "file data may not be written"}` with
 `--json` (not a diagnostic). `SIGINT`, `SIGTERM` and `SIGHUP` take the
 same end: children stop, files are written, then the VM ends by the
-signal; a second signal ends it at once. A path that reopens one of the
-VM's own pipes (`/proc/self/fd/N` or `/dev/fd/N` above 2) is refused as not
-a regular file; standard input, output and error stay readable. FIFOs
+signal; a second signal ends it at once (after the children are
+stopped). A path that reopens a pipe the VM made itself (`/proc/self/fd/N`
+or `/dev/fd/N`) is refused as not a regular file; pipes the VM got at
+start (standard input, output and error, `bash <(...)`) stay readable. FIFOs
 and devices count as files: a FIFO with no writer gives EOF, and opening
 one for writing with no reader is an error. Calls on pipes, FIFOs and
 terminals (stdin too) wait on the VM's event loop, not in the thread pool,

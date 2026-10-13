@@ -299,11 +299,7 @@ void agc_task_observe(agc_vm *vm, agc_task *t) {
    vm/main.c then raises it again after the exit path. */
 static void check_stop(agc_vm *vm) {
   int sig = agc_io_stop_signal();
-  if (!sig) return;
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stop signal=%d", sig);
-  vm->rt->outcome.kind = AGC_EXITED;
-  vm->rt->outcome.exit_code = 128 + sig;
-  longjmp(vm->fail, 1);
+  if (sig) agc_stop(vm, sig);
 }
 
 agc_outcome agc_vm_run(agc_vm *vm) {
@@ -316,6 +312,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       if (!t) {
         check_stop(vm);
         if (!agc_io_poll(vm, true)) {
+          check_stop(vm);
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
         }

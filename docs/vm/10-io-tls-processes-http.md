@@ -94,9 +94,13 @@ the behaviour is the same with both.
   framing above TLS (lines, HTTP lengths) must catch truncation. A
   transport error after the handshake is the TCP read error; a TLS error
   after it is "error reading from stream port" with `EPROTO`.
-- **Close.** `TCP.close`, a timeout and the end of the run send
-  `close_notify` with one `uv_try_write` when the handshake finished and
-  no write is pending, then close as TCP does.
+- **Close.** `TCP.close` and a timeout send `close_notify` with one
+  `uv_try_write` when the handshake finished and no write is pending, then
+  close as TCP does. The end of the run does not close sockets one by one
+  (10.2.2): `agc_io_goodbye` calls the `goodbye` hook `tcp.c` sets on each
+  socket resource, which sends that same one write, and `_exit` closes the
+  descriptor. HTTP client connections have no hook yet, so the end of the
+  run gives them no `close_notify` (20c can add one).
 - **Messages** keep Racket's shapes: "ssl-connect: connect failed
   (detail)", "port->ssl-ports: accept failed (detail)",
   "ssl-load-certificate-chain!: load failed from: \"path\" (detail)",
@@ -410,14 +414,14 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   killed and reaped as above, the files are flushed, and the VM raises the
   signal again, so it ends by that signal as it would without children. The
   process guard has no signal watchers of its own: it only lists the
-  running children for that cleanup. The pool threads keep the three
-  signals blocked (10.2.2). The children are killed before the file flush,
-  so a flush with no limit never delays their cleanup. A VM killed by
-  `SIGKILL`, or ended by the out-of-memory exit (70, 6.3), leaves its
-  children running (they get EOF or `EPIPE` when they next touch a pipe).
-  `agentica` stops the VM with `SIGTERM` and kills it only after 2 seconds
-  (9), so a cleanup that takes longer than that leaves the rest of the
-  children running.
+  running children for that cleanup. The children are killed before the
+  file flush, so a flush with no limit never delays their cleanup, and a
+  second stop signal that comes before they are killed waits for that
+  (10.2.2). A VM killed by `SIGKILL`, or ended by the out-of-memory exit
+  (70, 6.3), leaves its children running (they get EOF or `EPIPE` when
+  they next touch a pipe). On a break `agentica` waits 2 seconds, then
+  sends `SIGTERM`, and kills the VM only 2 seconds after that (8), so a
+  cleanup that takes longer leaves the rest of the children running.
 - **Black-box differences.**
   - A file that exists but cannot be executed (no execute permission, a
     bad format) is an error `Result` from `Process.spawn` on the VM; the

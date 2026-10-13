@@ -181,10 +181,15 @@ and cost one predictable branch each.
   checks it deletes the input, but only if the path still names the file it
   opened (same device and inode). The driver deletes the file too, when the
   VM never ran or failed before loading, and on a break. On a break
-  (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver) the driver stops a
-  running VM with `SIGTERM`, waits up to 2 seconds for it to end, and only
-  then sends `SIGKILL`; the VM's watchers kill its children in that
-  time (10.4). When a driver
+  (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver) the driver first waits up
+  to 2 seconds, since a Ctrl-C on a terminal reaches the VM too and a
+  `SIGTERM` at once would be its second stop signal, which skips the file
+  flush (10.2.2, Stop signals); then it sends `SIGTERM`, waits up to 2 more
+  seconds, and only then sends `SIGKILL`. On any other way out (a failed
+  stdin read) it sends `SIGTERM` at once. The VM kills its children on its
+  exit path (10.4). A driven VM whose driver died (`getppid()` is no longer
+  `PID`) ends on its first stop signal without the file flush, after it
+  kills its children. When a driver
   output port is not a file stream (rackunit, captured output) it copies
   that stream through a pipe, and a non-file stdin is copied into the VM's
   stdin by a thread that stops when the VM exits. The thread reads ahead

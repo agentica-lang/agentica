@@ -45,7 +45,7 @@ src/
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
   bdd-driver.rkt  # agentica test: compiles the step program and the embedded std/test/runner, runs the runner VM, infrastructure report
-  vm-launch.rkt   # find-vm, stop-vm and running-executable, shared by main.rkt and bdd-driver.rkt
+  vm-launch.rkt   # find-vm, stop-vm, call-noting-break and running-executable, shared by main.rkt and bdd-driver.rkt
   main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
@@ -81,6 +81,7 @@ tests/
   fixtures/             # golden fixtures and independent Node.js and Python peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
+  vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full stdout, Ctrl-C through the CLI
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
@@ -192,7 +193,7 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 ## Bytecode VM (phase 7)
 
-The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm/` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep the goldens (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm/README.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`.
+The C VM lives in `vm/` and runs `.agcb` files produced by `src/lower.rkt` and `src/bytecode.rkt`; `docs/vm/` is its contract. Read `references/vm.md` before touching `src/lower.rkt`, `src/bytecode.rkt`, `vm/`, the VM Makefile targets or the VM CI jobs. In short: keep the goldens (exit code, stdout, the program's own stderr and the diagnostic code; messages, spans and step counts may differ, and a runaway program still stops with `RUNTIME-STEP-LIMIT`; `docs/vm/README.md` §1), treat every `.agcb` as untrusted, keep opcodes in the same order in Racket and C, and fail out-of-subset programs with `LOWER-UNSUPPORTED`. A PR that touches the VM core (the scheduler, the loop, files, stdin, processes, sockets, the end of the run) is checked against the core invariants of `docs/vm/14-core-invariants.md` (§14): one way to wait, time out, cancel, end and own a handle, and no new subsystem without a use case.
 
 Speed check (7g): `make bench` (or `python3 benchmarks/run.py --runs N --size S --only NAMES --runners exe,vm,python`) times `benchmarks/programs/*.agc` on each runner against the CPython versions in `benchmarks/python/`, checks that every runner prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and times `hello.agc` start-up apart. It is outside `make test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make bench`; record new numbers in `docs/vm-benchmarks.md`. A new program needs `def scale() -> Int` returning 1 (the script rewrites it for `--size`), a deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
 
