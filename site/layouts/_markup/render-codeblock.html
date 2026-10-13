@@ -2,6 +2,10 @@
 {{- if in (slice "output" "input") $lang -}}
 <div class="sample sample-{{ $lang }}"><span class="sample-label">{{ cond (eq $lang "input") "Input" "Output" }}</span><pre><code>{{ .Inner }}</code></pre></div>
 {{- else -}}
-{{- if in (slice "agentica" "agc") $lang }}{{ $lang = "ruby" }}{{ end -}}
+{{- $expect := "" -}}
+{{- if in (slice "agentica" "agc") $lang }}{{ $lang = "ruby" }}{{ $expect = .Attributes.expect | default "" }}{{ end -}}
 {{- transform.Highlight .Inner $lang .Options -}}
+{{- with $expect }}
+<div class="sample sample-error"><span class="sample-label">{{ cond (hasPrefix . "RUNTIME-") "Runtime error" "Does not compile" }}</span><pre><code>error[{{ . }}]</code></pre></div>
+{{- end -}}
 {{- end -}}

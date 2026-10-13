@@ -71,10 +71,11 @@ site-serve: site-sass
 # make vm-test            C tests in vm/tests/
 # make vm SANITIZE=1      clang with ASan and UBSan, no libgc
 # Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
-# Compiles go through ccache when it is installed (CCACHE= turns it off); CCACHE_BASEDIR is the checkout, so worktrees share hits.
+# Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
+# the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make vm TRACE=0         compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
-# make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests
+# make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
 # make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
@@ -122,6 +123,7 @@ VM_LIBS += -ldl -lrt
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
+DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))
 ifeq ($(SANITIZE),1)
 VM_CC := clang
 VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
@@ -130,6 +132,7 @@ VM_GC :=
 VM_BUILD := build/vm/sanitize
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
+DEBUG_MAP := $(DEBUG_MAPS)
 FUZZ_RUNS ?= 30000
 else ifeq ($(GC_STRESS),1)
 VM_CC := $(CC)
@@ -139,6 +142,7 @@ VM_GC := build/vm/gc.o
 VM_BUILD := build/vm/gcstress
 YY_CFLAGS := -O1 -g $(VM_PIC)
 OSSL_CFLAGS := -g
+DEBUG_MAP := $(DEBUG_MAPS)
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
@@ -168,10 +172,10 @@ TP_KEY = { echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) |
   $(AR) --version 2>/dev/null | head -n 1; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); }
 ifeq ($(origin CCACHE),undefined)
-CCACHE := $(shell command -v ccache 2>/dev/null)
+CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) || exit 0; d=$$($$c -k cache_dir 2>/dev/null) || d=$${CCACHE_DIR:-$$HOME/.ccache}; \
+  while [ ! -d "$$d" ]; do d=$$(dirname "$$d"); done; [ -w "$$d" ] && echo $$c)
 endif
 export CCACHE_BASEDIR ?= $(CURDIR)
-export CCACHE_NOHASHDIR ?= 1
 VM_OBJ := $(VM_BUILD)/obj
 VM_OBJS := $(patsubst vm/%.c,$(VM_OBJ)/%.o,$(VM_SRC))
 VM_OBJ_STAMP := $(VM_BUILD)/obj-flags
@@ -215,11 +219,12 @@ VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
-	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' > $@
+	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' > $@.$(notdir $(VM_BUILD)); \
+	if cmp -s $@.$(notdir $(VM_BUILD)) $@; then rm -f $@.$(notdir $(VM_BUILD)); else mv $@.$(notdir $(VM_BUILD)) $@; fi
 
 $(VM_OBJ_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
-	@echo '$(VM_CC) $(VM_CFLAGS)' | cmp -s - $@ || echo '$(VM_CC) $(VM_CFLAGS)' > $@
+	@{ echo '$(VM_CC) $(VM_CFLAGS)'; $(VM_CC) --version 2>/dev/null | head -n 1; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 $(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
 
@@ -227,7 +232,7 @@ $(VM_OBJ)/tls_openssl.o: $(OSSL_DEP)
 
 $(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP)
 	@mkdir -p $(dir $@)
-	$(CCACHE) $(VM_CC) $(VM_CFLAGS) $(VM_OBJ_FLAGS) -MMD -MP -c $< -o $@
+	$(CCACHE) $(VM_CC) $(VM_CFLAGS) $(DEBUG_MAP) $(VM_OBJ_FLAGS) -MMD -MP -c $< -o $@
 
 -include $(wildcard $(VM_OBJ)/*.d $(VM_OBJ)/tests/*.d)
 
@@ -257,21 +262,21 @@ $(YY_DIR)/src/yyjson.c:
 
 $(VM_YY): $(VM_TP_STAMP) | $(YY_DIR)/src/yyjson.c
 	@mkdir -p $(VM_BUILD)
-	$(CCACHE) $(YY_COMPILE) -c $(YY_DIR)/src/yyjson.c -o $@
+	$(CCACHE) $(YY_COMPILE) $(DEBUG_MAP) -c $(YY_DIR)/src/yyjson.c -o $@
 
 $(PICO_DIR)/picohttpparser.c:
 	@echo "missing $(PICO_DIR): run git submodule update --init" >&2; exit 1
 
 $(VM_PICO): $(VM_TP_STAMP) | $(PICO_DIR)/picohttpparser.c
 	@mkdir -p $(VM_BUILD)
-	$(CCACHE) $(PICO_COMPILE) -c $(PICO_DIR)/picohttpparser.c -o $@
+	$(CCACHE) $(PICO_COMPILE) $(DEBUG_MAP) -c $(PICO_DIR)/picohttpparser.c -o $@
 
 $(UV_DIR)/src/uv-common.c:
 	@echo "missing $(UV_DIR): run git submodule update --init" >&2; exit 1
 
 $(VM_BUILD)/uv/%.o: $(VM_TP_STAMP) | $(UV_DIR)/src/uv-common.c
 	@mkdir -p $(dir $@)
-	$(CCACHE) $(UV_COMPILE) -c $(UV_DIR)/src/$*.c -o $@
+	$(CCACHE) $(UV_COMPILE) $(DEBUG_MAP) -c $(UV_DIR)/src/$*.c -o $@
 
 $(VM_BUILD)/libuv.a: $(UV_OBJS) | $(UV_DIR)/src/uv-common.c
 	rm -f $@
@@ -303,7 +308,7 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 	@perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { echo "building OpenSSL needs perl 5 with its core modules (Debian: perl)" >&2; exit 1; }
 	rm -rf $(OSSL_BUILD)
 	mkdir -p $(OSSL_BUILD)
-	cd $(OSSL_BUILD) && $(OSSL_CONFIGURE) > configure.log 2>&1 || { cat configure.log; exit 1; }
+	cd $(OSSL_BUILD) && $(OSSL_CONFIGURE) $(DEBUG_MAP) > configure.log 2>&1 || { cat configure.log; exit 1; }
 	$(OSSL_SUBMAKE) -j $(JOBS) > $(OSSL_BUILD)/build.log 2>&1 || { tail -n 40 $(OSSL_BUILD)/build.log; exit 1; }
 	touch $@
 
@@ -320,6 +325,7 @@ dist/agentica-vm$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) 
 vm: dist/agentica-vm$(EXE)
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
+.SECONDARY: $(patsubst vm/tests/%.c,$(VM_OBJ)/tests/%.o,$(wildcard vm/tests/*_test.c))
 
 $(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/tests/%_test.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
@@ -330,9 +336,13 @@ vm-test: $(VM_TESTS)
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
+FUZZ_CORPUS = racket -e '(require (file "tests/vm-diff-common.rkt") racket/path)' \
+  -e '(for ([f (current-command-line-arguments)]) (compile-file (string->path f) (build-path "$(VM_BUILD)/corpus" (path-replace-extension (file-name-from-path f) \#".agcb"))))'
+
 vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	@mkdir -p $(VM_BUILD)/corpus
-	for f in tests/fixtures/vm/*.agc; do racket src/main.rkt compile $$f -o $(VM_BUILD)/corpus/$$(basename $$f .agc).agcb || exit 1; done
+	$(RACO) make tests/vm-diff-common.rkt
+	$(FUZZ_CORPUS) tests/fixtures/vm/*.agc
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
 $(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
@@ -340,7 +350,8 @@ $(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK
 
 vm-gc-stress: build
 	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
-	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
+	  $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c
