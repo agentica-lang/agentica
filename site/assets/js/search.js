@@ -8,12 +8,14 @@ const root = document.querySelector(".site-search");
 const input = document.getElementById("search-input");
 const panel = root && root.querySelector(".search-panel");
 const status = document.getElementById("search-status");
+const message = root && root.querySelector(".search-message");
 const list = document.getElementById("search-results");
 
 let entries = null;
 let loading = null;
 let results = [];
 let active = -1;
+let closings = 0;
 
 function loadIndex() {
   if (entries) return Promise.resolve(true);
@@ -61,7 +63,7 @@ function buildEntries(index) {
 }
 
 function terms(query) {
-  return [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))].sort((a, b) => b.length - a.length);
+  return [...new Set(query.toLowerCase().split(/\s+/).filter((word) => word.length >= MIN_QUERY_LENGTH))].sort((a, b) => b.length - a.length);
 }
 
 function wordStart(text, at) {
@@ -157,11 +159,15 @@ function snippet(entry, words) {
 function setOpen(open) {
   panel.hidden = !open;
   input.setAttribute("aria-expanded", String(open && results.length > 0));
-  if (!open) setActive(-1);
+  if (!open) {
+    closings++;
+    setActive(-1);
+  }
 }
 
 function setStatus(text) {
   status.textContent = text;
+  message.textContent = text;
 }
 
 function setActive(index) {
@@ -186,7 +192,7 @@ function render(query) {
         ? `${highlight(entry.page.title, words)} <span class="search-sep">›</span> ${highlight(entry.heading, words)}`
         : highlight(entry.page.title, words);
       const body = entry.text ? `<span class="search-snippet">${snippet(entry, words)}</span>` : "";
-      return `<li id="search-option-${i}" role="option" aria-selected="false"><a href="${escapeHtml(href)}" tabindex="-1"><span class="search-title">${title}</span><span class="search-section">${escapeHtml(entry.page.section || "")}</span>${body}</a></li>`;
+      return `<li id="search-option-${i}" role="option" aria-selected="false"><a href="${escapeHtml(href)}" tabindex="-1"><span class="search-title">${title}</span>${entry.page.section ? `<span class="search-section">${escapeHtml(entry.page.section)}</span>` : ""}${body}</a></li>`;
     })
     .join("");
   active = -1;
@@ -195,18 +201,19 @@ function render(query) {
 
 async function update() {
   const query = input.value.trim();
-  if (query.length < MIN_QUERY_LENGTH) {
+  if (!terms(query).length) {
     results = [];
     list.innerHTML = "";
-    setStatus(query ? `Type at least ${MIN_QUERY_LENGTH} characters.` : "");
+    setStatus(query ? `Type a word of at least ${MIN_QUERY_LENGTH} characters.` : "");
     setOpen(query.length > 0);
     return;
   }
   if (!entries) {
     setStatus("Loading…");
     setOpen(true);
+    const opened = closings;
     const ready = await loadIndex();
-    if (query !== input.value.trim()) return;
+    if (opened !== closings || query !== input.value.trim() || document.activeElement !== input) return;
     if (!ready) {
       results = [];
       list.innerHTML = "";
@@ -229,13 +236,14 @@ function isTyping(target) {
   return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
 }
 
-if (root && input && panel && status && list) {
+if (root && input && panel && status && message && list) {
   input.addEventListener("focus", () => {
     void loadIndex();
     if (input.value.trim()) void update();
   });
   input.addEventListener("input", () => void update());
   input.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       if (panel.hidden) {
         void update();
@@ -249,11 +257,12 @@ if (root && input && panel && status && list) {
       event.preventDefault();
       if (!panel.hidden && results.length) openResult(active >= 0 ? active : 0);
     } else if (event.key === "Escape") {
-      event.stopPropagation();
       if (!panel.hidden) {
+        event.stopPropagation();
         event.preventDefault();
         setOpen(false);
       } else if (input.value) {
+        event.stopPropagation();
         input.value = "";
       } else {
         input.blur();
@@ -272,6 +281,7 @@ if (root && input && panel && status && list) {
     if (!root.contains(event.target)) setOpen(false);
   });
   document.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
     const shortcut = (event.key === "k" || event.key === "K") && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
     const slash = event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !isTyping(event.target);
     if (shortcut || slash) {

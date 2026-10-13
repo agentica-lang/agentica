@@ -49,6 +49,10 @@
 }
 
 @media (max-width: $narrow) {
+  .site-header {
+    gap: 0.5rem;
+  }
+
   .js .nav-toggle {
     display: block;
   }
