@@ -1,4 +1,4 @@
-import "std/http" as Web
+import "std/http" as HTTP
 
 def options(connections: Int, body: Int) -> HttpClientOptions
   return HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, ca_file: "")
@@ -22,23 +22,23 @@ def serve(listener: Listener) -> Void
 end
 
 def main() -> Void
-  IO.inspect(Web.client(options(0, 10)))
-  IO.inspect(Web.client(options(65537, 10)))
-  IO.inspect(Web.client(options(1, 67108865)))
+  IO.inspect(HTTP.client(options(0, 10)))
+  IO.inspect(HTTP.client(options(65537, 10)))
+  IO.inspect(HTTP.client(options(1, 67108865)))
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   port = TCP.local_port(listener)
   server = Task.spawn(&serve, listener)
-  pool = Result.unwrap!(Web.client(options(1, 16)))
+  pool = Result.unwrap!(HTTP.client(options(1, 16)))
   IO.inspect(pool)
   for url in ["ftp://x/", "http://", "http://u@h/", "http://h:/", "http://h:0/", "http://h:123456/", "http://[::1/", "http://[example.com]/", "http://h x/"]
-    IO.inspect(Web.get(pool, url))
+    IO.inspect(HTTP.get(pool, url))
   end
-  IO.inspect(Web.request(pool, "GET", "http://127.0.0.1:#{port}/", [Header(name: "Host", value: "x")], ""))
-  IO.inspect(Web.request(pool, "BAD METHOD", "http://127.0.0.1:#{port}/", [], ""))
-  IO.inspect(Web.post(pool, "http://127.0.0.1:#{port}/", [], "this body is over the limit"))
-  IO.inspect(Web.get(pool, "http://127.0.0.1:#{port}/big"))
-  IO.inspect(Web.get(pool, "http://127.0.0.1:#{port}/bytes"))
+  IO.inspect(HTTP.request(pool, "GET", "http://127.0.0.1:#{port}/", [Header(name: "Host", value: "x")], ""))
+  IO.inspect(HTTP.request(pool, "BAD METHOD", "http://127.0.0.1:#{port}/", [], ""))
+  IO.inspect(HTTP.post(pool, "http://127.0.0.1:#{port}/", [], "this body is over the limit"))
+  IO.inspect(HTTP.get(pool, "http://127.0.0.1:#{port}/big"))
+  IO.inspect(HTTP.get(pool, "http://127.0.0.1:#{port}/bytes"))
   Task.await(server)
-  Web.close_client(pool)
+  HTTP.close_client(pool)
   TCP.close_listener(listener)
 end

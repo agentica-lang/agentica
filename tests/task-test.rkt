@@ -33,41 +33,6 @@
     (check-equal? result (void))
     (check-equal? output "105\n"))
 
-  (test-case "HTTP handlers share global diagnostics and budget and close listeners on termination"
-    (for ([body '("  n = 1 / 0" "  while true\n    Task.sleep(0)\n  end")]
-          [code '(RUNTIME-DIVISION-BY-ZERO RUNTIME-STEP-LIMIT)])
-      (define owner (make-custodian))
-      (dynamic-wind void
-        (lambda ()
-          (parameterize ([current-custodian owner])
-            (define-values (reader output) (make-pipe))
-            (define-values (input writer) (make-pipe))
-            (define-values (caller results)
-              (start (string-append "def handler(request: Request, writer: HttpWriter) -> Void\n" body
-                                    "\nend\n\ndef main() -> Void\n  server = Result.unwrap!(HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options()))\n"
-                                    "  puts(String.from_int(HTTP.local_port(server)))\n  IO.flush()\n  HTTP.wait(server)\nend\n\n")
-                     input output #:max-steps 200))
-            (check-not-false (sync/timeout 5 reader))
-            (define port (string->number (read-line reader)))
-            (define-values (peer-in peer-out) (tcp-connect "127.0.0.1" port))
-            (display "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n" peer-out)
-            (flush-output peer-out)
-            (define result (sync/timeout 5 results))
-            (check-true (diagnostic? result))
-            (check-equal? (diagnostic-code result) code)
-            (define line (source-position-line (source-span-start (diagnostic-span result))))
-            (if (eq? code 'RUNTIME-DIVISION-BY-ZERO)
-                (check-equal? line 2)
-                (check-not-false (memv line '(2 3))))
-            (check-exn exn:fail:network? (lambda () (tcp-connect "127.0.0.1" port)))
-            (check-false (port-closed? output))))
-        (lambda () (custodian-shutdown-all owner)))))
-  (test-case "explicit server close clears supervised work before strict BDD return"
-    (define prefix "def handler(request: Request, writer: HttpWriter) -> Void\nend\n\ndef main() -> Void\n  server = Result.unwrap!(HTTP.listen(\"127.0.0.1\", 0, &handler, HTTP.server_options()))\n")
-    (check-equal? (evaluate (checked (string-append prefix "  HTTP.close_server(server)\nend\n\n"))
-                           #:require-complete-tasks? #t) (void))
-    (define pending (evaluate (checked (string-append prefix "end\n\n")) #:require-complete-tasks? #t))
-    (check-equal? (diagnostic-code pending) 'RUNTIME-BDD-PENDING-TASKS))
   (test-case "tasks infer results, retain values and isolate nested function scopes"
     (define-values (result output)
       (run (string-append

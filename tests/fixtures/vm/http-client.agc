@@ -1,4 +1,4 @@
-import "std/http" as Web
+import "std/http" as HTTP
 
 def head(socket: Socket, port: Int, seen: List[String]) -> List[String]
   line = Result.unwrap!(TCP.read_line(socket, 5000))
@@ -31,17 +31,17 @@ def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   port = TCP.local_port(listener)
   server = Task.spawn(&serve, listener)
-  pool = Result.unwrap!(Web.client(Web.client_options()))
+  pool = Result.unwrap!(HTTP.client(HTTP.client_options()))
   base = "http://127.0.0.1:#{port}"
-  first = Result.unwrap!(Web.get(pool, base + "/a?b=1#frag"))
-  second = Web.request(pool, "DELETE", base, [Header(name: "X-Id", value: "7")], "")
-  third = Web.post(pool, base + "/form", [], "ping\r\n")
-  fourth = Web.get(pool, base + "/again")
-  Web.close_client(pool)
-  closed = Web.get(pool, base)
+  first = Result.unwrap!(HTTP.get(pool, base + "/a?b=1#frag"))
+  second = HTTP.request(pool, "DELETE", base, [Header(name: "X-Id", value: "7")], "")
+  third = HTTP.post(pool, base + "/form", [], "ping\r\n")
+  fourth = HTTP.get(pool, base + "/again")
+  HTTP.close_client(pool)
+  closed = HTTP.get(pool, base)
   IO.inspect(first.status)
   IO.inspect(first.body)
-  IO.inspect(Web.header_values(first.headers, "X-NOTE"))
+  IO.inspect(HTTP.header_values(first.headers, "X-NOTE"))
   IO.inspect(second)
   IO.inspect(third)
   IO.inspect(fourth)

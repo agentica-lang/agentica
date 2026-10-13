@@ -402,12 +402,12 @@
                        (path->string (build-path directory (car entry))))
          (check-regexp-match #rx"import \"std/http\"" (diagnostic-help problem)))))
     (with-files
-     '(("root.agc" . "import \"std/http\" as Web\ndef main() -> Void\n  Web.close_client(Result.unwrap!(Web.client(Web.client_options())))\nend\n\n"))
+     '(("root.agc" . "import \"std/http\" as HTTP\ndef main() -> Void\n  HTTP.close_client(Result.unwrap!(HTTP.client(HTTP.client_options())))\nend\n\n"))
      (lambda (directory)
        (check-false (diagnostic? (checked (build-path directory "root.agc"))))))
-    (for ([body '("  x = HttpWir.client(1)\n" "  x = close_clien(1)\n" "  x = Web.exchang(1)\n")])
+    (for ([body '("  x = HttpWir.client(1)\n" "  x = close_clien(1)\n" "  x = HTTP.exchang(1)\n")])
       (with-files
-       (list (cons "root.agc" (string-append "import \"std/http\" as Web\ndef main() -> Void\n" body "end\n\n")))
+       (list (cons "root.agc" (string-append "import \"std/http\" as HTTP\ndef main() -> Void\n" body "end\n\n")))
        (lambda (directory)
          (define problem (checked (build-path directory "root.agc")))
          (check-true (diagnostic? problem) body)
