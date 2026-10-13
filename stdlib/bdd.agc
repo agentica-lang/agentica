@@ -142,11 +142,12 @@ end
 
 export def then_stdin_open(ctx: Context) -> Context
   p = program(ctx)
+  wanted = "open stdin and active program"
   state = "closed stdin or stopped program"
   if Process.send(p, "", 5000).ok? and not Process.wait(p, 1).ok?
-    state = "open stdin and active program"
+    state = wanted
   end
-  return compare_text(ctx, state, "open stdin and active program")
+  return compare(ctx, Test.eq(state, wanted), wanted, state)
 end
 
 export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
@@ -362,12 +363,19 @@ def compare(ctx: Context, checked: Result[Void], expected: String, actual: Strin
       "event": JSON.from("fail"),
       "code": JSON.from("RUNTIME-BDD-ASSERTION"),
       "message": JSON.from("BDD assertion failed"),
-      "expected": JSON.from(expected),
-      "actual": JSON.from(actual),
+      "expected": JSON.from(clip(expected)),
+      "actual": JSON.from(clip(actual)),
     }
     finish(fields)
   end
   return ctx
+end
+
+def clip(text: String) -> String
+  if text.length <= 65536
+    return text
+  end
+  return "#{text.slice(0, 65536)}... (#{text.length - 65536} more characters)"
 end
 
 def with_state(ctx: Context, state: Map[String, Json]) -> Context

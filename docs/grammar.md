@@ -325,8 +325,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 `BDD.Context` can be named but not built: a context exists only inside a
 step. Every call returns the context; use the one it returns. `BDD.run`
 never returns; run directly, a step program prints how to run it on stderr
-and exits 2. The modules under `std/bdd/` (`gherkin`, `match`, `report`,
-`runner`) are internal to `agentica test` and unsupported. See
+and exits 2. The modules `std/bdd/gherkin`, `std/bdd/match`, `std/test/report`
+and `std/test/runner` are internal to `agentica test` and unsupported. See
 [Function values and BDD](#function-values-and-bdd) and [`bdd.md`](bdd.md).
 
 ### Statements and blocks
