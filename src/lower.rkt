@@ -219,10 +219,10 @@
                                              (source-name (source-span-source span)) (call-name node) reason)
                                      span
                                      #:help (string-append
-                                             "a program that imports \"std/http\" or calls Process.spawn_captured, "
-                                             "Process.output or Task.pending_count runs only on the VM, even when it "
-                                             "uses only a pure helper such as header_values; keep HTTP and BDD "
-                                             "builtins, --legacy-eval and agentica test step files out of it"))))
+                                             "a program that imports \"std/http\" (even for a pure helper such as "
+                                             "header_values) or calls Process.spawn_captured, Process.output or "
+                                             "Task.pending_count runs only on the VM; keep HTTP and BDD builtins, "
+                                             "--legacy-eval and agentica test step files out of it"))))
                 #f))
     #f))
 
