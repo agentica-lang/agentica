@@ -234,11 +234,24 @@ static void mark_subtree(agc_task *root) {
   }
 }
 
+/* The one way a subtree is dropped, for a crash (its root has already
+   ended, so only its children are cancelled) and for close_server. */
+static void drop_tree(agc_vm *vm, agc_task *root, bool with_root) {
+  mark_subtree(root);
+  if (with_root) {
+    agc_task_cancel(vm, root);
+  } else {
+    for (agc_task *child = root->children, *next; child; child = next) {
+      next = child->next_sibling;
+      agc_task_cancel(vm, child);
+    }
+  }
+  agc_close_owned(vm);
+}
+
 void agc_task_drop(agc_vm *vm, agc_task *root) {
   if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
-  mark_subtree(root);
-  agc_task_cancel(vm, root);
-  agc_close_owned(vm);
+  drop_tree(vm, root, true);
 }
 
 /* No await can observe a hidden task (an HTTP connection task), so of its
@@ -274,12 +287,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   agc_print_diagnostic(vm->rt->err, vm->rt->program, o, vm->rt->style, true);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
-  mark_subtree(t);
-  for (agc_task *child = t->children, *next; child; child = next) {
-    next = child->next_sibling;
-    agc_task_cancel(vm, child);
-  }
-  agc_close_owned(vm);
+  drop_tree(vm, t, false);
   finish_task(vm, t);
 }
 

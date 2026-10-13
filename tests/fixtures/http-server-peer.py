@@ -221,6 +221,22 @@ def secure(port, certs):
     s.close()
 
 
+def flood():
+    s = connect()
+    send(s, head(b"GET /big HTTP/1.1"))
+    s.recv(4096)
+    junk = head(b"GET / HTTP/1.1") * 2048
+    s.settimeout(0.5)
+    total = 0
+    try:
+        while total < 256 * 1024 * 1024:
+            total += s.send(junk)
+    except (socket.timeout, BrokenPipeError, ConnectionResetError):
+        pass
+    print("flood", "bounded" if total < 32 * 1024 * 1024 else "unbounded %d" % total)
+    s.close()
+
+
 def main():
     hostile()
     expect_over_limit()
@@ -229,6 +245,7 @@ def main():
     client()
     slots(int(sys.argv[2]))
     secure(int(sys.argv[3]), sys.argv[4])
+    flood()
 
 
 main()

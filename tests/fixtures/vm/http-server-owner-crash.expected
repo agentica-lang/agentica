@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 1298,
+  "stdout": [
+    "handling",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/http-server-owner-crash.agc:20:16: division by zero\")",
+    "error(\"network: end of input\")",
+    "client: http: connection closed before the response was complete",
+    "ok()",
+    "after: refused",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/http-server-owner-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":20},\"start\":{\"column\":16,\"line\":20}},\"task\":true}",
+    ""
+  ]
+}

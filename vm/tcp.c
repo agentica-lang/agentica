@@ -1175,6 +1175,10 @@ agc_inbuf *agc_conn_input(agc_conn *c) { return &c->in; }
 
 void agc_conn_read(agc_conn *c) { start_reading(c); }
 
+void agc_conn_pause(agc_conn *c) { stop_reading(c); }
+
+void agc_conn_goodbye(agc_conn *c) { goodbye(c); }
+
 static void write_side_shut(uv_shutdown_t *req, int status) {
   (void)status;
   net *n = req->data;

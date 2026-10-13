@@ -804,8 +804,8 @@ HttpWire.close_client(client: HttpClient) -> Void
 
 ```text
 HttpWire.read_request(socket: Socket, first_byte_timeout_ms: Int, timeout_ms: Int, max_body_bytes: Int) -> Result[HttpRequest]
-HttpWire.write_response(socket: Socket, response: HttpResponse, head_only: Bool, close: Bool, timeout_ms: Int) -> Result[Void]
-HttpWire.server(listener: Listener, max_connections: Int) -> HttpServer
+HttpWire.write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout_ms: Int) -> Result[Bool]
+HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
 HttpWire.accept(server: HttpServer) -> Result[Socket]
 HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void
 HttpWire.close_server(server: HttpServer) -> Void
@@ -836,17 +836,31 @@ HttpWire.local_port(server: HttpServer) -> Int
   a request is "http: connection closed before the request was complete";
   the deadline closes the socket and returns "network: operation timed
   out" with no answer. Header names are lowercased and values decoded as
-  Latin-1; `path` is the target before `?`.
+  Latin-1; `path` is the target before `?`. When the request is complete
+  the socket stops reading (`agc_conn_pause`) until the next
+  `read_request`, so a client that pipelines bytes while a response is
+  written cannot grow the input buffer.
 - `write_response` builds the whole response before it writes: a status
   of 200 to 599 (the reason phrase is the standard one, or empty), the
   header checks of the client (`Content-Length` and `Transfer-Encoding`
   are refused: "Content-Length and Transfer-Encoding are set by the
   server"), no body with 204 or 304, a `Date` header unless the handler set
-  one, `Content-Length` except on 204 and 304, `Connection: close` when
-  `close` is true and the handler did not send it, and the body unless
-  `head_only`. A bad response is `error("http: invalid response: <reason>")`
-  with nothing written. `timeout_ms` bounds the write from the call.
-- The `HttpServer` handle holds the listener, the number of open
+  one, `Content-Length` except on 204 and 304, and the body unless the
+  request's method is `HEAD`. The connection closes when the request or
+  the response has `Connection: close` (`agc_http_list_closes`, the same
+  token check as the client's `agc_http_closes`): then the handler's
+  `Connection` headers are dropped and one `Connection: close` is sent, so
+  the header cannot contradict itself. A bad response is
+  `error("http: invalid response: <reason>")` with nothing written.
+  Otherwise the call returns `ok(true)` when the connection stays open and
+  `ok(false)` after a closing response, which gets the same lingering close
+  as the error answers before the socket closes. `timeout_ms` bounds the
+  write, and the lingering, from the call; a deadline during the lingering
+  still returns `ok(false)`.
+- `server` makes the `HttpServer` and runs `f(server)`, the accept loop of
+  `std/http`, as a task of the group, so `close_server` cancels it with the
+  connections and a server closed inside `Test.run` leaves no task running.
+  The `HttpServer` handle holds the listener, the number of open
   connections, `max_connections` (1 to 65536) and the jobs of tasks parked
   in `accept` or `wait`, and a group node: a task that never runs
   (`agc_task_group`), the parent of the connection tasks. `accept` returns
@@ -876,14 +890,19 @@ HttpWire.local_port(server: HttpServer) -> Int
   only the first per test (or per run outside `Test.run`) is kept in the
   crash list, and the others are counted on it. With observed crashes
   leaving the list, the list stays bounded however many handlers crash.
-- `std/http` runs the accept loop as a task and, for each socket,
+- `std/http` runs the accept loop in the group and, for each socket,
   `spawn`s the connection loop: `read_request` (the first request waits
   `request_timeout_ms` for its first byte, later ones `idle_timeout_ms`),
   the handler with no time limit, then `write_response` with a fresh
   `request_timeout_ms`. A handler `error` or a response that
   `write_response` refuses gives a 500 with `Connection: close` and one
   `IO.warn` line (`http: handler error: ...` or `http: invalid response:
-  ...`). The connection closes after `Connection: close` on either side.
+  ...`). The loop ends when `write_response` returns anything but
+  `ok(true)`.
+- At the end of the run the exit path's `goodbye` hook sends one
+  non-blocking TLS `close_notify` on each HTTPS connection of an
+  `HttpClient`, idle or in use (`agc_conn_goodbye`), as tcp.c does for its
+  sockets; the server's connections are tcp.c sockets and get it there.
 - Turn cost (`AGC_COST_SIZE`): `read_request` charges the body, the header
   count and their bytes when it ends; `write_response` charges the
   response's bytes.

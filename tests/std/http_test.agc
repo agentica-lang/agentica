@@ -27,6 +27,15 @@ def main() -> Void
       wide = HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 65537, max_body_bytes: 16)
       Test.eq(HTTP.listen_tls("127.0.0.1", 0, "none.pem", "none.pem", &answer, wide).message, "http: max_connections must be at most 65536")
     end,
+    Test.test("a live server answers and closes inside a test") do
+      server = try HTTP.listen("127.0.0.1", 0, &answer, HTTP.server_options())
+      pool = try HTTP.client(HTTP.client_options())
+      response = HTTP.get(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/inside")
+      HTTP.close_client(pool)
+      HTTP.close_server(server)
+      try Test.eq(HTTP.wait(server).ok?, true)
+      Test.eq(response.unwrap!.body, "/inside")
+    end,
     Test.test("header values match names in any case") do
       headers = [Header(name: "Set-Cookie", value: "a=1"), Header(name: "Content-Type", value: "text/plain"),
                  Header(name: "set-cookie", value: "b=2")]

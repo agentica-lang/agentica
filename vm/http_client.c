@@ -555,6 +555,14 @@ static void release_client(void *native) {
   settle_client(c);
 }
 
+static void client_goodbye(void *native) {
+  const client *c = native;
+  for (const origin *o = c->origins; o; o = o->next)
+    for (const idle *k = o->idle; k; k = k->next) agc_conn_goodbye(k->conn);
+  for (const exchange *x = c->active; x; x = x->active_next)
+    if (x->conn) agc_conn_goodbye(x->conn);
+}
+
 static void detach(exchange *x, const char *why) {
   if (x->detached) return;
   client *c = x->c;
@@ -708,7 +716,8 @@ static const char *build_request(agc_vm *vm, agc_http_bytes *b, const agc_value 
   }
   const char *bad = agc_http_put_headers(vm, b, agc_as_list(vm, args[6]), managed_headers,
                                          sizeof managed_headers / sizeof managed_headers[0],
-                                         "Host, Content-Length, Transfer-Encoding and Connection are set by the client", &count);
+                                         "Host, Content-Length, Transfer-Encoding and Connection are set by the client", NULL,
+                                         &count);
   if (bad) return bad;
   agc_http_put_text(b, "\r\n");
   agc_http_put(b, body->data, body->bytes);
@@ -811,6 +820,7 @@ static agc_value builtin_client(agc_vm *vm, agc_value *args, uint32_t span) {
   c->on_timer = timer_fired;
   agc_http_client *hc = agc_alloc(sizeof(agc_http_client));
   hc->state = agc_register(vm, c, release_client);
+  hc->state->goodbye = client_goodbye;
   return agc_result_value(true, agc_http_client_value(hc));
 }
 

@@ -35,7 +35,7 @@ static const char *put_value(agc_http_bytes *b, const agc_string *value) {
 }
 
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
-                                 size_t managed_count, const char *managed_reason, size_t *count) {
+                                 size_t managed_count, const char *managed_reason, const char *skip, size_t *count) {
   size_t block = b->len;
   for (size_t k = 0; k < headers->len; k++) {
     const agc_struct *h = agc_as_struct(vm, headers->items[k]);
@@ -46,6 +46,7 @@ const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *
     agc_http_slice slice = {(const uint8_t *)name->data, name->bytes};
     for (size_t m = 0; m < managed_count; m++)
       if (agc_http_named(slice, managed[m])) return managed_reason;
+    if (skip && agc_http_named(slice, skip)) continue;
     size_t start = b->len;
     agc_http_put(b, name->data, name->bytes);
     agc_http_put_text(b, ": ");
@@ -125,16 +126,32 @@ agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f) {
   return agc_list_value(headers);
 }
 
+static bool value_closes(agc_http_slice v) {
+  size_t start = 0;
+  for (size_t at = 0; at <= v.len; at++) {
+    if (at < v.len && v.data[at] != ',') continue;
+    if (agc_http_named(agc_http_trim((agc_http_slice){v.data + start, at - start}), "close")) return true;
+    start = at + 1;
+  }
+  return false;
+}
+
 bool agc_http_closes(const agc_http_head *head) {
-  for (size_t k = 0; k < head->count; k++) {
-    if (!agc_http_named(head->fields[k].name, "connection")) continue;
-    agc_http_slice v = head->fields[k].value;
-    size_t start = 0;
-    for (size_t at = 0; at <= v.len; at++) {
-      if (at < v.len && v.data[at] != ',') continue;
-      if (agc_http_named(agc_http_trim((agc_http_slice){v.data + start, at - start}), "close")) return true;
-      start = at + 1;
-    }
+  for (size_t k = 0; k < head->count; k++)
+    if (agc_http_named(head->fields[k].name, "connection") && value_closes(head->fields[k].value)) return true;
+  return false;
+}
+
+agc_http_slice agc_http_text(agc_vm *vm, agc_value v) {
+  const agc_string *s = agc_as_string(vm, v);
+  return (agc_http_slice){(const uint8_t *)s->data, s->bytes};
+}
+
+bool agc_http_list_closes(agc_vm *vm, const agc_list *headers) {
+  for (size_t k = 0; k < headers->len; k++) {
+    const agc_struct *h = agc_as_struct(vm, headers->items[k]);
+    if (agc_http_named(agc_http_text(vm, h->fields[0]), "connection") && value_closes(agc_http_text(vm, h->fields[1])))
+      return true;
   }
   return false;
 }

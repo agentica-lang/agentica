@@ -153,11 +153,11 @@ The codes that the hostile-case goldens fix are those §10.6 says must match: 41
 
 ```text
 HttpWire.read_request(socket: Socket, first_byte_timeout_ms: Int, timeout_ms: Int, max_body_bytes: Int) -> Result[HttpRequest]
-HttpWire.write_response(socket: Socket, response: HttpResponse, head_only: Bool, close: Bool, timeout_ms: Int) -> Result[Void]
+HttpWire.write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout_ms: Int) -> Result[Bool]
 HttpWire.client(max_connections: Int, idle_timeout_ms: Int, ca_file: String) -> Result[HttpClient]
 HttpWire.exchange(client: HttpClient, scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpResponse]
 HttpWire.close_client(client: HttpClient) -> Void
-HttpWire.server(listener: Listener, max_connections: Int) -> HttpServer
+HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
 HttpWire.accept(server: HttpServer) -> Result[Socket]
 HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void
 HttpWire.close_server(server: HttpServer) -> Void

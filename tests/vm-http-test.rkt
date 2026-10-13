@@ -228,6 +228,13 @@ AGC
 import "std/http" as HTTP
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
+  if request.path == "/big"
+    big = "x"
+    while String.length(big) < 8388608
+      big = big + big
+    end
+    return ok(HttpResponse(status: 200, headers: [], body: big))
+  end
   return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{request.body}"))
 end
 
@@ -301,7 +308,8 @@ AGC
     "slot-freed 200 GET /waiting  closed"
     "tls-keep-alive 200 GET /one  200 POST /two over tls True"
     "tls-silent closed bounded"
-    "tls-plain closed"))
+    "tls-plain closed"
+    "flood bounded"))
 
 (define server-node-lines
   '("node-chunked 200 true POST /chunked abñcd"

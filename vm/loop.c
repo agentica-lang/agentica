@@ -107,6 +107,9 @@ void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to) {
     if (vm->registry->items[k]->owner == from) vm->registry->items[k]->owner = to;
 }
 
+/* A close can close other handles (a server drops its group) and
+   agc_unregister moves the last entry down into the freed slot, so entries
+   only move down: walking down meets every one still owned. */
 void agc_close_owned(agc_vm *vm) {
   for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;) {
     if (k >= vm->registry->count) continue;

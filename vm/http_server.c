@@ -42,7 +42,7 @@ typedef struct {
 typedef struct {
   agc_conn *conn;
   agc_io_job *job;
-  bool done;
+  bool close, delivered, done;
 } writer;
 
 typedef struct waiter waiter;
@@ -110,27 +110,33 @@ static void finish_read(reader *r, failure why) {
   r->at = R_DONE;
   r->failed = why;
   agc_conn_unobserve(r->conn, r);
-  if (why == F_TLS || why == F_READ || why == F_TRUNCATED || why == F_ANSWERED) agc_conn_shut(r->conn, "http");
+  if (why == F_TLS || why == F_READ || why == F_TRUNCATED || why == F_ANSWERED)
+    agc_conn_shut(r->conn, "http");
+  else
+    agc_conn_pause(r->conn);
   agc_io_ready(r->job);
 }
 
-static void answer_step(reader *r) {
-  agc_conn *c = r->conn;
+/* A lingering close: once the last bytes are sent, the write side closes
+   and input is read and dropped until the peer closes (or the caller's
+   deadline), so unread request bytes cannot turn the close into a reset
+   that loses the answer. True when it is over. */
+static bool linger(agc_conn *c) {
   agc_inbuf *in = agc_conn_input(c);
   consume(in, agc_inbuf_pending(in));
-  if (agc_conn_closed(c) || agc_conn_write_status(c) < 0) {
-    finish_read(r, F_ANSWERED);
-  } else if (agc_conn_sent(c)) {
-    agc_conn_half_close(c);
-    if (in->eof || in->error || agc_conn_failed(c)) finish_read(r, F_ANSWERED);
-  }
+  if (agc_conn_closed(c) || agc_conn_write_status(c) < 0) return true;
+  if (!agc_conn_sent(c)) return false;
+  agc_conn_half_close(c);
+  agc_conn_read(c);
+  return in->eof || in->error || agc_conn_failed(c);
+}
+
+static void answer_step(reader *r) {
+  if (linger(r->conn)) finish_read(r, F_ANSWERED);
 }
 
 /* Error answers are security-critical bytes, so C writes them before the
-   socket closes; the Agentica side only has to stop. After the answer the
-   write side closes and input is read and dropped until the peer closes or
-   the request deadline passes, so unread request bytes cannot turn the
-   close into a reset that loses the answer. */
+   socket closes; the Agentica side only has to stop. */
 static void answer(reader *r, int code, const char *problem) {
   char text[160];
   int len = snprintf(text, sizeof text, "HTTP/1.1 %d %s\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", code,
@@ -321,6 +327,7 @@ static bool read_cancel(agc_vm *vm, void *data, agc_value context, bool deadline
   reader *r = data;
   r->at = R_DONE;
   agc_conn_unobserve(r->conn, r);
+  agc_conn_pause(r->conn);
   return true;
 }
 
@@ -355,23 +362,6 @@ static agc_value builtin_read_request(agc_vm *vm, agc_value *args, uint32_t span
   return agc_void();
 }
 
-static bool user_closes(agc_vm *vm, const agc_list *headers) {
-  for (size_t k = 0; k < headers->len; k++) {
-    const agc_struct *h = agc_as_struct(vm, headers->items[k]);
-    const agc_string *name = agc_as_string(vm, h->fields[0]);
-    if (!agc_http_named((agc_http_slice){(const uint8_t *)name->data, name->bytes}, "connection")) continue;
-    const agc_string *value = agc_as_string(vm, h->fields[1]);
-    const uint8_t *v = (const uint8_t *)value->data;
-    size_t start = 0;
-    for (size_t at = 0; at <= value->bytes; at++) {
-      if (at < value->bytes && v[at] != ',') continue;
-      if (agc_http_named(agc_http_trim((agc_http_slice){v + start, at - start}), "close")) return true;
-      start = at + 1;
-    }
-  }
-  return false;
-}
-
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
   for (size_t k = 0; k < headers->len; k++) {
     const agc_string *name = agc_as_string(vm, agc_as_struct(vm, headers->items[k])->fields[0]);
@@ -390,12 +380,15 @@ static void put_date(agc_http_bytes *b) {
   if (len > 0 && (size_t)len < sizeof text) agc_http_put(b, text, (size_t)len);
 }
 
-static const char *build_response(agc_vm *vm, agc_http_bytes *b, const agc_struct *response, bool head_only,
-                                  bool close) {
-  if (response->n != 3) return "invalid response";
+static const char *build_response(agc_vm *vm, agc_http_bytes *b, const agc_struct *request,
+                                  const agc_struct *response, bool *close) {
+  if (request->n != 5 || response->n != 3) return "invalid response";
   int64_t status = agc_as_int(vm, response->fields[0]);
   const agc_list *headers = agc_as_list(vm, response->fields[1]);
   const agc_string *body = agc_as_string(vm, response->fields[2]);
+  agc_http_slice method = agc_http_text(vm, request->fields[0]);
+  bool head_only = method.len == 4 && memcmp(method.data, "HEAD", 4) == 0;
+  *close = agc_http_list_closes(vm, agc_as_list(vm, request->fields[3])) || agc_http_list_closes(vm, headers);
   if (status < 200 || status > 599) return "the status must be 200..599";
   bool bodyless = status == 204 || status == 304;
   if (bodyless && body->bytes) return "a 204 or 304 response cannot have a body";
@@ -404,14 +397,15 @@ static const char *build_response(agc_vm *vm, agc_http_bytes *b, const agc_struc
   agc_http_put(b, line, (size_t)len);
   size_t count = 0;
   const char *bad = agc_http_put_headers(vm, b, headers, framing_headers, 2,
-                                         "Content-Length and Transfer-Encoding are set by the server", &count);
+                                         "Content-Length and Transfer-Encoding are set by the server",
+                                         *close ? "connection" : NULL, &count);
   if (bad) return bad;
   if (!has_named(vm, headers, "date")) put_date(b);
   if (!bodyless) {
     len = snprintf(line, sizeof line, "Content-Length: %zu\r\n", body->bytes);
     agc_http_put(b, line, (size_t)len);
   }
-  if (close && !user_closes(vm, headers)) agc_http_put_text(b, "Connection: close\r\n");
+  if (*close) agc_http_put_text(b, "Connection: close\r\n");
   agc_http_put_text(b, "\r\n");
   if (!head_only && !bodyless) agc_http_put(b, body->data, body->bytes);
   return NULL;
@@ -423,26 +417,31 @@ static void free_writer(writer *w) {
   free(w);
 }
 
+static bool delivered(const agc_conn *c) {
+  return !agc_conn_closed(c) && agc_conn_write_status(c) >= 0 && agc_conn_sent(c);
+}
+
 static void write_watch(void *watcher) {
   writer *w = watcher;
   agc_conn *c = w->conn;
-  if (w->done || !(agc_conn_closed(c) || agc_conn_sent(c) || agc_conn_write_status(c) < 0)) return;
+  if (w->done) return;
+  if (!w->delivered) w->delivered = delivered(c);
+  if (w->close ? !linger(c) : !(w->delivered || agc_conn_closed(c) || agc_conn_write_status(c) < 0)) return;
   w->done = true;
   agc_conn_unobserve(c, w);
+  if (w->close) agc_conn_shut(c, "http");
   agc_io_ready(w->job);
 }
 
 static agc_value written(agc_vm *vm, const agc_conn *c) {
   if (agc_conn_closed(c)) return agc_error_value(socket_closed);
-  if (agc_conn_write_status(c) < 0)
-    return agc_system_error(vm, "error writing to stream port", -agc_conn_write_status(c));
-  return agc_result_value(true, agc_void());
+  return agc_system_error(vm, "error writing to stream port", -agc_conn_write_status(c));
 }
 
 static agc_value write_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   writer *w = data;
-  agc_value result = written(vm, w->conn);
+  agc_value result = w->delivered ? agc_result_value(true, agc_bool(!w->close)) : written(vm, w->conn);
   free_writer(w);
   return result;
 }
@@ -454,7 +453,7 @@ static agc_value write_expired(agc_vm *vm, void *data, agc_value context) {
   w->done = true;
   agc_conn_unobserve(w->conn, w);
   agc_conn_shut(w->conn, "timeout");
-  return agc_stream_timed_out();
+  return w->delivered ? agc_result_value(true, agc_bool(false)) : agc_stream_timed_out();
 }
 
 static void write_drop(void *data) { free_writer(data); }
@@ -474,12 +473,13 @@ static const agc_io_kind write_io = {NULL, write_done, write_expired, write_drop
 static agc_value builtin_write_response(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_socket *sk = agc_as_socket(vm, args[0]);
-  const agc_struct *response = agc_as_struct(vm, args[1]);
-  bool head_only = agc_as_bool(vm, args[2]), close = agc_as_bool(vm, args[3]);
-  int64_t timeout = agc_as_int(vm, args[4]);
+  const agc_struct *request = agc_as_struct(vm, args[1]);
+  const agc_struct *response = agc_as_struct(vm, args[2]);
+  int64_t timeout = agc_as_int(vm, args[3]);
   if (timeout <= 0) return agc_stream_bad_timeout();
   agc_http_bytes out = {0};
-  const char *bad = build_response(vm, &out, response, head_only, close);
+  bool close = false;
+  const char *bad = build_response(vm, &out, request, response, &close);
   if (bad) {
     free(out.data);
     return agc_http_error_result("http: invalid response: ", bad);
@@ -495,10 +495,11 @@ static agc_value builtin_write_response(agc_vm *vm, agc_value *args, uint32_t sp
   free(out.data);
   if (!c) return agc_error_value(socket_closed);
   if (rc < 0) return agc_system_error(vm, "error writing to stream port", -rc);
-  if (agc_conn_sent(c)) return written(vm, c);
+  if (!close && delivered(c)) return agc_result_value(true, agc_bool(true));
   writer *w = calloc(1, sizeof(writer));
   if (!w) agc_out_of_memory();
   w->conn = c;
+  w->close = close;
   agc_conn_retain(c);
   w->job = agc_io_start(vm, &write_io, w, agc_handle_value(sk->writer), timeout);
   agc_conn_observe(c, write_watch, w);
@@ -591,8 +592,15 @@ static server *open_server(const agc_http_server *hs) {
   return s;
 }
 
+static agc_task *spawn_in_group(agc_vm *vm, const agc_http_server *hs, agc_value fn, const agc_value *arg,
+                                uint32_t span) {
+  uint64_t seed = agc_random_next(&vm->task->random);
+  agc_task *child = agc_task_spawn_in(vm, hs->group, fn, arg, 1, span);
+  agc_random_seed(&child->random, seed);
+  return child;
+}
+
 static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   agc_listener *lv = agc_as_listener(vm, args[0]);
   int64_t max = agc_as_int(vm, args[1]);
   server *s = calloc(1, sizeof(server));
@@ -613,7 +621,9 @@ static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_own(vm, hs->state, close_owned);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "http_server server=%" PRIu64 " listener=%" PRIu64 " max=%zu", hs->state->id,
             lv->state->id, s->max);
-  return agc_http_server_value(hs);
+  agc_value value = agc_http_server_value(hs);
+  (void)spawn_in_group(vm, hs, args[2], &value, span);
+  return value;
 }
 
 static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -652,9 +662,7 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
     if (s && s->open) s->open--;
     return agc_void();
   }
-  uint64_t seed = agc_random_next(&vm->task->random);
-  agc_task *child = agc_task_spawn_in(vm, hs->group, args[2], &args[1], 1, span);
-  agc_random_seed(&child->random, seed);
+  agc_task *child = spawn_in_group(vm, hs, args[2], &args[1], span);
   child->hidden = true;
   if (sk->state->owner == vm->task) sk->state->owner = child;
   conn_link *k = agc_alloc(sizeof(conn_link));
@@ -686,8 +694,8 @@ static agc_value builtin_local_port(agc_vm *vm, agc_value *args, uint32_t span) 
 
 const agc_builtin agc_http_server_builtins[] = {
   {"HttpWire.read_request", 4, builtin_read_request, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.write_response", 5, builtin_write_response, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"HttpWire.server", 2, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"HttpWire.write_response", 4, builtin_write_response, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"HttpWire.server", 3, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"HttpWire.accept", 1, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"HttpWire.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"HttpWire.close_server", 1, builtin_close_server, AGC_NATIVE_NONE, AGC_COST_NONE},
