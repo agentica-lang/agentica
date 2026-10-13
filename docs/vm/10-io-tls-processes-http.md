@@ -1,9 +1,11 @@
 ### 10.3 TLS
 
 **As built (TLS PR, Linux).** `TLS.connect` and `TLS.listen` run on the
-VM; a TLS program no longer falls back to the evaluator. OpenSSL 3.5 LTS is
-vendored and linked statically in every build (10.0), so there is one
-behaviour everywhere.
+VM; a TLS program no longer falls back to the evaluator. The release links
+the vendored OpenSSL 3.5 LTS statically; a default source build links the
+system OpenSSL 3 dynamically (`AGENTICA_OPENSSL`, 10.0). The adapter sets
+its own minimums (TLS 1.2, security level 2) and loads no `openssl.cnf`, so
+the behaviour is the same with both.
 
 - **Adapter.** `vm/tls.h` declares our own types only (`agc_tls_config`,
   `agc_tls`, `agc_tls_status`, `agc_tls_error`, `agc_tls_failure`);

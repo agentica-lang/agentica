@@ -16,6 +16,8 @@ jobs:
       ZIG_VERSION: 0.15.2
       ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
       VM_GLIBC: '2.28'
+      AGENTICA_OPENSSL: vendored
+      CCACHE: ''
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,6 +87,8 @@ jobs:
           symbols=$(objdump -T dist/agentica-vm)
           grep -q 'Type:[[:space:]]*DYN' <<< "$header" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
           if grep -qE 'NEEDED.*lib(ssl|crypto)' <<< "$dynamic"; then echo "dist/agentica-vm links OpenSSL dynamically" >&2; exit 1; fi
+          ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
+          dist/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "dist/agentica-vm does not report the vendored OpenSSL $ossl" >&2; exit 1; }
           grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || { echo "dist/agentica-vm is not PIE" >&2; exit 1; }
           grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || { echo "dist/agentica-vm lacks BIND_NOW" >&2; exit 1; }
           grep -q 'GNU_RELRO' <<< "$segments" || { echo "dist/agentica-vm lacks RELRO" >&2; exit 1; }
@@ -134,6 +138,7 @@ jobs:
           agentica="$unpacked/$name/bin/agentica"
           "$agentica" examples/hello.agc
           "$agentica" --version
+          if LC_ALL=C readelf -d "$unpacked/$name/bin/agentica-vm" | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the archive's agentica-vm links OpenSSL dynamically" >&2; exit 1; fi
           "$agentica" examples/queue.agc
           diff <("$agentica" --seed 7 tests/fixtures/vm/random.agc) <("$agentica" --seed 7 tests/fixtures/vm/random.agc)
           rm -rf "$unpacked"

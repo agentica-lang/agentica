@@ -66,7 +66,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/tests/http_parse_test.c` | the §10.6 hostile list on the request and response head adapter, framing, and the body decoder (each body fed whole and byte by byte) |
 | `vm/tests/loop_test.c` | the registry (slots after removals), a completed job, a timed-out job dropped once its work ends, and `agc_io_close` freeing the loop, or returning false while a job is stuck |
 | `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
-| `vm/third_party/openssl` | OpenSSL submodule (Apache-2.0), shallow, pinned to tag `openssl-3.5.9`; built static on Linux per build mode into `$(VM_BUILD)/openssl/` (`libssl.a`, `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md` §10.0) |
+| `vm/third_party/openssl` | OpenSSL submodule (Apache-2.0), shallow, pinned to tag `openssl-3.5.9`; with `AGENTICA_OPENSSL=vendored` (the release) built static on Linux per build mode into `$(VM_BUILD)/openssl/` (`libssl.a`, `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md` §10.0); the default `AGENTICA_OPENSSL=system` links the system OpenSSL 3 instead |
 | `vm/net.h` | tcp.c's connection object for other C modules (`agc_conn`, `docs/vm/10-io-tls-processes-http.md` §10.7.1): `agc_conn_open` (DNS, connect, TLS with a borrowed `agc_tls_config`) with a watch callback that runs on every state change, `agc_conn_send`/`agc_conn_sent`, `agc_conn_input`/`agc_conn_read` (the `agc_inbuf`), `agc_conn_ready`/`agc_conn_failed`/`agc_conn_error`, `agc_conn_shut` and `agc_conn_release`; also `agc_tls_load_error` |
 | `vm/http_parse.h`, `vm/http_pico.c`, `vm/http_body.c` | the HTTP head adapter and body decoder (§10.6, §10.6.1): limits as constants, `agc_http_error` with its status and text, `agc_http_parse_request_head`/`_response_head` (our pre-scan and start-line checks, then picohttpparser, then token, value, obs-fold, Host and status checks), `agc_http_framing`, and the body decoder (`agc_http_body_init/feed/end/free`: Content-Length, chunked with saturating sizes and checked trailers, close-delimited, one `malloc`'d buffer within the limit). No recursion |
 | `vm/http_client.c` | `HttpWire.client`, `exchange` and `close_client` (`agc_http_builtins`, Linux only, a stub table elsewhere; §10.7.1): a `malloc`'d `client` per handle with its origins (idle connections, open slots, a FIFO of waiting exchanges), one idle timer and a lazily built `agc_tls_config` (a pool job on the first HTTPS call); each `exchange` parks on an `external` job and moves through config, wait, connect and exchange phases on `agc_conn` watches; a `runnable` queue (`schedule`/`drain`) and callbacks stored in the client avoid both static prototypes and call cycles. GC values (the `HttpResponse`) are built only in `done`. Its `cancel` half (20b): an exchange of a cancelled task that has not sent its request leaves the queue or closes its connection, so its slot passes to the next waiter; one that has sent it runs to its end and is not pooled |
@@ -82,12 +82,14 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 
 ```sh
 git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
-make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; OpenSSL built once per mode, needs Perl, a few minutes the first time)
-make vm-openssl                      # only build/vm/<mode>/openssl/libssl.a and libcrypto.a
-make -s vm-openssl-key               # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
+make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; the system OpenSSL 3 from pkg-config, dynamic: Debian libssl-dev pkg-config)
+make vm AGENTICA_OPENSSL=vendored    # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
+make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
+make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-third-party                  # only libgc, yyjson, picohttpparser and libuv for this mode
 make -s vm-third-party-key           # their build key (compile lines, compiler, submodule commits and local diffs); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
+make vm CCACHE=                      # without ccache (it is used when installed)
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
@@ -139,6 +141,14 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   removed `--vm` and `--legacy-eval` flags are unknown, a missing VM, runs it once in-process to cover
   the pipe path, and checks `--driver-pid`.
 
+- Each mode compiles `vm/*.c`, `vm/tests/*.c` and the drivers once into
+  `$(VM_BUILD)/obj/` with `-MMD -MP` (dependency files beside the objects),
+  and every binary links from them (`VM_LINK`); a new `vm/*.c` file goes
+  in `VM_SRC` only. `$(VM_BUILD)/obj-flags` recompiles the mode when the
+  compile line changes; `tls_openssl.o` also follows the OpenSSL stamp.
+  Compiles run through `$(CCACHE)` (found on `PATH`; `CCACHE=` turns it
+  off; `CCACHE_BASEDIR` is the checkout and `CCACHE_NOHASHDIR=1`, so
+  worktrees share hits), the vendored OpenSSL too, but not its key.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
@@ -540,9 +550,19 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `uv_run` NOWAIT so the callbacks still fire at the end of the run.
   Request buffers stay owned by the request until its callback. All
   handles and descriptors are non-inheritable.
-- **OpenSSL 3.5 (7h, in on Linux)**: vendored submodule, built static
-  per build mode by the Makefile (`docs/vm/10-dependencies-and-platforms.md`
-  §10.0): out-of-tree `Configure` in `$(VM_BUILD)/openssl/` with
+- **OpenSSL 3.5 (7h, in on Linux)**: `AGENTICA_OPENSSL` picks it
+  (`docs/vm/10-dependencies-and-platforms.md` §10.0). The default `system`
+  links the system OpenSSL dynamically with `pkg-config --cflags --libs
+  openssl`; the stamp `$(VM_BUILD)/openssl-system` (the first
+  prerequisite of every VM binary and `vm-lint`, order-only for every VM
+  object, so it runs before any `vm/*.c` compile) fails with a clear
+  message when `pkg-config` or the package is missing or older than
+  `OSSL_MIN` (3.0.0: the code uses 3.0 APIs such as
+  `SSL_CTX_load_verify_file` and `OPENSSL_VERSION_STRING`), and
+  `vm/tls_openssl.c` has an `#error` for older versions and LibreSSL. The
+  mode is not remembered: pass `AGENTICA_OPENSSL=vendored` to every make
+  command or export it. `vendored` (only the release) builds the submodule
+  static per build mode: out-of-tree `Configure` in `$(VM_BUILD)/openssl/` with
   `OSSL_OPTS` (`no-shared no-tests no-docs no-apps no-module ... no-deprecated`)
   and the mode's `OSSL_CFLAGS` (release hardening, `-g` for GC stress,
   clang `-g -fno-omit-frame-pointer` without `-fsanitize` for the
@@ -550,8 +570,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   check the buffers we hand it), output in `configure.log` and
   `build.log`; both commands run under `env -u` for the make and compiler
   variables, and the sub-make is a plain `make` (never `$(MAKE)`, so
-  `make -n` skips it). `$(VM_BUILD)/openssl-flags` is the key (`make -s
-  vm-openssl-key`: the two command lines, compiler version, OpenSSL
+  `make -n` skips it). `$(VM_BUILD)/openssl-flags` is the key of the
+  vendored build only (`make -s vm-openssl-key
+  AGENTICA_OPENSSL=vendored`, which refuses the system mode: the two command lines, compiler version, OpenSSL
   version and commit), rewritten only when it changes, and the archives depend
   only on it, so `TRACE` and VM flag changes never rebuild OpenSSL and a
   restored CI cache is up to date; after editing OpenSSL sources by hand,
@@ -563,11 +584,14 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   SNI plus `SSL_set1_host` per connection, `X509_VERIFY_PARAM_set1_ip_asc`
   (no SNI) for IP literals; no `SSL_VERIFY_NONE` path. Never hand OpenSSL a
   GC pointer, and keep file loading off the scheduler thread (the config
-  loads in a libuv pool job). The release (`zig cc`, glibc 2.28) builds it
-  the same way; `readelf -d` must show no `libssl` or `libcrypto`.
-  `--version` prints the version linked in. Bumping: fetch the new 3.5.x
-  tag in the submodule, commit it, rebuild, rerun the TLS, sanitizer and
-  golden tests.
+  loads in a libuv pool job). The release (`zig cc`, glibc 2.28) sets
+  `AGENTICA_OPENSSL=vendored`; `readelf -d` must show no `libssl` or
+  `libcrypto`, and `--version` must name the submodule's version. `--version` prints the
+  OpenSSL that runs (`OpenSSL_version`), so a system build shows the
+  distro's version. `build/vm/flags` records the mode, so switching it
+  relinks. Bumping: fetch the new 3.5.x tag in the submodule, commit it,
+  rebuild with `AGENTICA_OPENSSL=vendored`, rerun the TLS, sanitizer and golden
+  tests.
 - **HTTP (7h)**: parity is black-box. Well-formed messages: same status,
   headers, body and `Result` ok or error. Malformed input: both reject
   (server error status and close, client error `Result`); the code may
