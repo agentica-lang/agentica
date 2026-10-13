@@ -62,14 +62,22 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   (the Configure and make command lines, compiler version, OpenSSL version
   and submodule commit). The `test` job uses the release key;
   `vm-sanitizers` uses the sanitizer and GC-stress keys.
+- `vm-sanitizers` also caches the sanitizer and GC-stress builds of
+  yyjson, picohttpparser and libuv (and `build/vm/gc.o` for GC stress),
+  with their `third-party-flags` (and `gc-flags`) stamps. The key is the
+  hash of `make -s vm-third-party-key`. The `vm/*.c` objects are not
+  cached.
+- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`. The C tests
+  still run one after another.
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
   three jobs that fill caches under the PR jobs' keys:
   - `warm-cache` compiles the Racket files;
   - `warm-unicode` runs the unicode check (a separate job, so a stale table
     fails `master` without losing the compiled-files cache);
-  - `warm-openssl` builds OpenSSL in the release, sanitizer and GC-stress
-    modes.
+  - `warm-third-party` builds OpenSSL in the release, sanitizer and
+    GC-stress modes, and the other third-party libraries in the sanitizer
+    and GC-stress modes.
 
   These exist because a pull request can restore caches saved on its own
   merge ref or on `master`, never another pull request's.

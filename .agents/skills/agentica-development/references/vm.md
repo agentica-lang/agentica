@@ -85,6 +85,8 @@ git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparse
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; OpenSSL built once per mode, needs Perl, a few minutes the first time)
 make vm-openssl                      # only build/vm/<mode>/openssl/libssl.a and libcrypto.a
 make -s vm-openssl-key               # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
+make vm-third-party                  # only libgc, yyjson, picohttpparser and libuv for this mode
+make -s vm-third-party-key           # their build key (compile lines, compiler, submodule commits and local diffs); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
@@ -206,8 +208,8 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   `tests/bytecode-test.rkt` needs no VM binary.
 - `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
   `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
-  -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when the Makefile
-  changes). `yyjson.c` is built per mode into `$(VM_BUILD)/yyjson.o`
+  -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when its stamp
+  `build/vm/gc-flags` changes). `yyjson.c` is built per mode into `$(VM_BUILD)/yyjson.o`
   with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the
   `YY_DEFS` that turn off everything but the reader; `vm/*.c` see the same
   `YY_DEFS` and `-I vm/third_party/yyjson/src`, and only `vm/json.c`
@@ -215,10 +217,13 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   Linux list of its `CMakeLists.txt`) builds per mode into
   `$(VM_BUILD)/uv/*.o` with `-std=gnu11`, its own `UV_DEFS` and the mode's
   `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`. The
-  yyjson and libuv objects follow their own stamp,
-  `$(VM_BUILD)/third-party-flags` (`VM_CC`, `YY_CFLAGS`, `YY_DEFS`,
-  `UV_DEFS`), not `build/vm/flags`, so `TRACE` does not rebuild them; a
-  flag they need goes in that stamp;
+  yyjson, picohttpparser and libuv objects follow only their own stamp,
+  `$(VM_BUILD)/third-party-flags` (the output of `make -s
+  vm-third-party-key`: the `YY_COMPILE`, `PICO_COMPILE` and `UV_COMPILE`
+  lines, `UV_NAMES`, the compiler version, and each submodule's commit and
+  local diff), not `build/vm/flags`, the Makefile or the source mtimes, so
+  `TRACE` does not rebuild them and a CI cache hit stays valid. Compile them
+  only through those variables, so a new flag changes the stamp;
   `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`,
   `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and `vm/http_client.c` include `uv.h`. Bumping libuv: check out the new tag inside
   `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
