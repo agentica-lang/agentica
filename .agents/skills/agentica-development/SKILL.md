@@ -93,7 +93,7 @@ tests/
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
   queue.agc http.agc    # std/queue, std/http
-  bdd/gherkin.agc bdd/match.agc  # std/bdd/gherkin, std/bdd/match: internal pieces of the BDD rewrite (phase 21); see references/stages.md
+  bdd/gherkin.agc bdd/match.agc bdd/report.agc  # std/bdd/gherkin, match, report: internal pieces of the BDD rewrite (phase 21); see references/stages.md
 examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth
