@@ -268,7 +268,11 @@ static void outlast(guard *g) {
     bool left = false;
     for (proc *p = g->first, *next = NULL; p; p = next) {
       next = p->run_next;
-      if (in_grace(p) && !collected(p)) left = true;
+      if (!in_grace(p)) continue;
+      if (collected(p))
+        retire(p);
+      else
+        left = true;
     }
     if (!left || past(&g->deadline)) return;
     nanosleep(&pause, NULL);

@@ -619,7 +619,10 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   is what stops the programs it started. `tests/vm-diff-common.rkt` checks
   that with a VM child that started `sleep`, closed by `Process.close` and
   by a `read_line` timeout: the grandchild's pid must be gone when the run
-  ends. Golden fixtures with children keep their step counts independent of
+  ends. A second case closes a child that ignores `SIGTERM` (close returns
+  at once, the timer's `SIGKILL`, the end-of-run deadline) and one that
+  dies on it right before `main` returns; each run must end with
+  `close resources=0 settled=1` and no `hard_exit` in the `io` trace. Golden fixtures with children keep their step counts independent of
   timing: wait for an event (`wait`, a read, `output`) before a call whose
   result depends on it.
 - **TCP (7h, in on Linux)**: `vm/tcp.c`, `docs/vm/10-io-tls-processes-http.md`
