@@ -11,10 +11,7 @@ There are two ways to work with JSON:
 - For data whose shape changes, use the `Json` type and the `JSON` functions to
   build and read it.
 
-`Json` values print as JSON text with `puts` and `to_s`; `inspect` shows `<Json>`, also inside a list. A parsed JSON object writes its keys sorted
-(see `JSON.parse`); the order of keys in a built JSON object is not fixed;
-structs and maps keep their order. Functions whose first parameter is a `Json`
-are also methods: `JSON.get(j, "a")` is `j.get("a")`.
+`Json` values print as JSON text with `puts` and `to_s`; `inspect` shows `<Json>`, also inside a list. A parsed JSON object writes its keys sorted (see `JSON.parse`); the order of keys in a built JSON object is not fixed; structs and maps keep their order. Functions whose first parameter is a `Json` are also methods: `JSON.get(j, "a")` is `j.get("a")`.
 
 ## JSON.encode
 

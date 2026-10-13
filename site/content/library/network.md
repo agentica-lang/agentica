@@ -168,7 +168,7 @@ is a `String`, which must be valid UTF-8. Status codes such as 404 or 500 are
 normal responses; errors (a bad URL, a refused connection, a timeout, a body
 over the limit) are `error` results.
 
-A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` sent on a reused connection that the server had already closed is retried once on a new connection, within the same timeout, when no response byte arrived; `POST`, `PATCH` and the other methods are never retried. The body is not decompressed: `Content-Encoding` stays as the server sent it. Header names must be HTTP tokens, and header values must be Latin-1 text without control characters. A client request that sets `Host`, `Content-Length`, `Transfer-Encoding` or `Connection` is an error. A handler that sets `Content-Length` or `Transfer-Encoding` gets a 500 with an empty body.
+A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` sent on a reused connection that the server had already closed is retried once on a new connection, within the same timeout, when no response byte arrived; `POST`, `PATCH` and the other methods are never retried. The body is not decompressed: `Content-Encoding` stays as the server sent it. Header names must be HTTP tokens, and header values must be Latin-1 text without control characters. A handler that sets `Content-Length` or `Transfer-Encoding` gets a 500 with an empty body.
 
 ### HTTP.client and HTTP.client_options
 
@@ -211,7 +211,7 @@ The `HttpResponse` has `status`, `headers` (names in lowercase) and `body`.
 `http://` or `https://`. The client adds `Host` and `Content-Length` itself,
 so a request may not set them, nor `Transfer-Encoding` or `Connection`.
 
-A host in brackets, as in `http://[::1]:8080/`, must be an IPv6 address; any other bracketed host is an error result.
+A host in brackets, as in `http://[::1]:8080/`, must look like an IPv6 address (hex digits, `:` and `.`); any other bracketed host is an error result.
 
 ```agentica {mode="check"}
 import "std/http" as HTTP

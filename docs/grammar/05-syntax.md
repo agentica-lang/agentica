@@ -67,7 +67,7 @@ pattern_binding  = NAME | "_" ;
 
 Assignments, `if`, `while` and `for` are statements, not expressions. `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`, with the same checks as the long form.
 
-`break` leaves the innermost `while` or `for`; `next` skips to its next iteration. Both are statements, not reserved words, and they are `CHECK-LOOP-CONTROL` outside a loop of the same function or block: a block cannot break or skip its caller's loop. Inside a block, `return` leaves the block. There are no statement modifiers (`break if x`), no `continue`, and no assignment to fields or indexes.
+`break` leaves the innermost `while` or `for`; `next` skips to its next iteration. Both are `CHECK-LOOP-CONTROL` outside a loop of the same function or block: a block cannot break or skip its caller's loop. Inside a block, `return` leaves the block. There are no statement modifiers (`break if x`), no `continue`, and no assignment to fields or indexes.
 
 ### Expressions and precedence
 
