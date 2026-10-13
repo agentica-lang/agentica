@@ -64,7 +64,6 @@
            (display-to-file
             (string-append
              "def main() -> Void\n  f = File.open(System.args()[0], \"write\", 1000).unwrap!\n"
-             "  File.write(f, String.join(List.repeat(\"a\", 65536), \"\"), 1000).unwrap!\n"
              "  File.write(f, \"x\", 1000).unwrap!\n  IO.print(\"main done\\n\")\nend\n")
             source)
            (define reader (open-input-file fifo))
@@ -72,7 +71,13 @@
            (define result
              (dynamic-wind
                void
-               (lambda () (run-main-in-process "--json" "--flush-timeout" "200" source fifo))
+               (lambda ()
+                 (define filler (open-output-file fifo #:exists 'append))
+                 (let fill ()
+                   (define written (write-bytes-avail* (make-bytes 4096 97) filler))
+                   (when (and written (positive? written)) (fill)))
+                 (close-output-port filler)
+                 (run-main-in-process "--json" "--flush-timeout" "200" source fifo))
                (lambda () (close-input-port reader))))
            (check-true (< (- (current-inexact-milliseconds) start) 10000))
            (check-equal? (take result 2) '(0 "main done\n"))
