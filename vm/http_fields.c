@@ -1,5 +1,5 @@
 /* Header fields and message bytes shared by the HTTP client and server
-   (docs/vm/10-io-tls-processes-http.md §10.7). */
+   (docs/vm/10-io-http.md §10.7). */
 #include "http_fields.h"
 
 #include <stdio.h>

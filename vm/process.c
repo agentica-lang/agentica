@@ -195,8 +195,9 @@ static void grace_over(uv_timer_t *t) {
   retire(p);
 }
 
-/* §31.9: a captured child gets SIGTERM and one second, from a timer, so a
-   child that is a VM can stop its own children; the program never waits. */
+/* docs/vm/10-io-processes.md §10.4: a captured child gets SIGTERM and one
+   second, from a timer, so a child that is a VM can stop its own children;
+   the program never waits. */
 static int shut(proc *p, const struct timespec *deadline) {
   if (p->closed) return 0;
   p->closed = true;
@@ -533,7 +534,7 @@ static void keep_scratch(proc *p, agc_inbuf *b, bool *cut, size_t n, const char 
 }
 
 /* Once cut, a stream's bytes are dropped; a cut wakes the reader, since
-   every stdout read now fails (§31.9). */
+   every stdout read now fails (docs/vm/10-io-processes.md §10.4). */
 static bool keep(proc *p, agc_inbuf *b, bool *cut, ssize_t n, const uv_buf_t *buf, const char *pipe) {
   if (n > 0 && !*cut) {
     if (buf->base == (char *)p->err_buf)
