@@ -19,6 +19,18 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `vm-sanitizers`: `make vm-lint`, the ASan golden, bytecode, trace, TCP and
   TLS tests, the fuzz smoke and the GC stress build. The TCP tests need
   Node; the TLS tests need Node and Python 3.
+- OpenSSL: every CI job builds with the system OpenSSL (the default
+  `AGENTICA_OPENSSL=system`; a guard step installs `libssl-dev pkg-config` when
+  `pkg-config` cannot find OpenSSL 3, a no-op on our runners), the
+  sanitizer and GC-stress builds too, so no job builds an instrumented
+  OpenSSL. Only the release sets `AGENTICA_OPENSSL=vendored`. To keep that path
+  from rotting, the last step of `test` restores the cached vendored
+  release-mode OpenSSL (restore only) and, on a hit, links
+  `build/vm/release/agentica-vm` against it, checks that `readelf -d`
+  shows no `libssl` or `libcrypto` and that `--version` names the
+  submodule's version, and runs the TLS and HTTP tests on that binary. On
+  a miss (a new OpenSSL key, such as a submodule bump) it skips;
+  `warm-third-party` runs the same link check on `master`.
 - The `test` and `vm-sanitizers` jobs need Node and Python 3 for the
   network peers.
 
@@ -57,19 +69,27 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 
 - Compiled Racket files are cached per job. `vm-sanitizers` and
   `site-examples.yml` fall back to the `test` cache.
-- OpenSSL's headers, `libssl.a`, `libcrypto.a` and stamp are cached per
-  mode with `actions/cache`. The key is the hash of `make -s vm-openssl-key`
-  (the Configure and make command lines, compiler version, OpenSSL version
-  and submodule commit). The `test` job uses the release key;
-  `vm-sanitizers` uses the sanitizer and GC-stress keys.
+- The vendored OpenSSL's headers, `libssl.a`, `libcrypto.a` and stamp are
+  cached for the release mode only, with `actions/cache`. The key is the
+  hash of `make -s vm-openssl-key AGENTICA_OPENSSL=vendored` (the Configure and
+  make command lines, compiler version, OpenSSL version and submodule
+  commit). `warm-third-party` saves it; `test` only restores it.
+- `vm-sanitizers` caches the sanitizer and GC-stress builds of
+  yyjson, picohttpparser and libuv (and `build/vm/gc.o` for GC stress),
+  with their `third-party-flags` (and `gc-flags`) stamps. The key is the
+  hash of `make -s vm-third-party-key`. The VM and test binaries are not
+  cached.
+- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`. The C tests
+  still run one after another.
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
   three jobs that fill caches under the PR jobs' keys:
   - `warm-cache` compiles the Racket files;
   - `warm-unicode` runs the unicode check (a separate job, so a stale table
     fails `master` without losing the compiled-files cache);
-  - `warm-openssl` builds OpenSSL in the release, sanitizer and GC-stress
-    modes.
+  - `warm-third-party` builds the vendored release-mode OpenSSL and runs
+    the vendored link check, then builds the other third-party libraries
+    in the sanitizer and GC-stress modes.
 
   These exist because a pull request can restore caches saved on its own
   merge ref or on `master`, never another pull request's.
@@ -94,9 +114,12 @@ Two more workflows: `site-examples.yml` and `pages.yml` (see
 ## Release (`release.yml`)
 
 The release workflow builds `agentica-vm` with a pinned `zig cc` against
-glibc 2.28. It checks that floor with `objdump -T` and checks that OpenSSL
-is linked statically. It ships the VM in the archive's `bin/` next to
-`agentica`, with the VM's third-party licenses in `licenses/`. Tags,
+glibc 2.28, with `AGENTICA_OPENSSL=vendored` set for the whole job. It
+checks that floor with `objdump -T`, checks that OpenSSL is linked
+statically (in the build and in the unpacked archive) and that `--version`
+names the submodule's OpenSSL version. It ships the VM in the archive's
+`bin/` next to `agentica`, with the VM's third-party licenses in
+`licenses/`. Tags,
 versions and the Racket bundle are in SKILL.md, "Releases".
 
 ## Copy-paste check (jscpd)

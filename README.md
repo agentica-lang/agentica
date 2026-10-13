@@ -17,9 +17,16 @@ User documentation (a guide, a language tour and the library) is published at
 ## Requirements
 
 Racket CS 9.3 or newer, and a C11 compiler (gcc or clang) and `make` to build
-the VM from the vendored submodules. The release archive for Linux x86-64
-needs neither: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or
-newer.
+the VM from the vendored submodules. On Linux the VM also needs OpenSSL 3.0 or
+newer with its development files and `pkg-config` (Debian and Ubuntu:
+`libssl-dev pkg-config`); `make vm AGENTICA_OPENSSL=vendored` builds the pinned
+OpenSSL submodule instead and links it statically, which needs Perl 5 and
+takes a few minutes. Pass `AGENTICA_OPENSSL=vendored` to every make command or
+export it, since `make test` and the tests rebuild the VM themselves. A
+source build with the system OpenSSL runs only where that library is
+installed. The release archive for Linux x86-64 needs none of this:
+it bundles Racket and `agentica-vm`, built with the vendored OpenSSL, and runs
+on glibc 2.28 or newer.
 
 ## Build
 
