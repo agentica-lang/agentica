@@ -181,11 +181,11 @@ static int reserve_stdin(void) {
   int flags = fcntl(0, F_GETFL);
   int fd = flags == -1 || (flags & O_ACCMODE) == O_WRONLY ? -1 : fcntl(0, F_DUPFD_CLOEXEC, 3);
   int null = open("/dev/null", O_RDONLY | O_CLOEXEC);
-  if (null < 0 || dup2(null, 0) < 0) {
+  if (null < 0 || (null != 0 && dup2(null, 0) < 0) || (null == 0 && fcntl(0, F_SETFD, 0) < 0)) {
     fputs("agentica-vm: cannot reserve standard input\n", stderr);
     exit(2);
   }
-  close(null);
+  if (null != 0) close(null);
   return fd;
 }
 #endif
