@@ -406,6 +406,7 @@ static int run(int argc, char **argv) {
   agc_random_seed(&vm->main->random, vm->rt->seed);
   vm->rt->args = program_args(argc, argv, i + 1);
   agc_input_open(vm, 0, isatty(1));
+  vm->rt->in.reserved = agc_test_protocol(vm);
   agc_outcome outcome = agc_vm_run(vm);
   bool stdout_ok = fflush(stdout) == 0;
   bool settled = agc_io_close(vm);

@@ -180,8 +180,14 @@ static int fill(agc_vm *vm) {
   return start_read(vm, in);
 }
 
+static bool hidden(const agc_vm *vm) { return vm->rt->in.reserved && !vm->rt->in.protocol; }
+
 agc_input_status agc_input_peek(agc_vm *vm, int *byte) {
   agc_input *in = &vm->rt->in;
+  if (hidden(vm)) {
+    *byte = -1;
+    return AGC_INPUT_EOF;
+  }
   if (in->start == in->end) {
     int r = fill(vm);
     if (r == FILL_WAIT) return AGC_INPUT_WAIT;
@@ -198,6 +204,7 @@ agc_input_status agc_input_peek(agc_vm *vm, int *byte) {
 
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
   agc_input *in = &vm->rt->in;
+  if (hidden(vm)) return AGC_INPUT_EOF;
   for (;;) {
     bool rescan = false;
     for (size_t k = in->start + in->scanned; k < in->end; k++) {
@@ -237,6 +244,10 @@ agc_input_status agc_input_line(agc_vm *vm, agc_string **line) {
 
 agc_input_status agc_input_all(agc_vm *vm, agc_string **text) {
   agc_input *in = &vm->rt->in;
+  if (hidden(vm)) {
+    *text = agc_new_string(0, 0);
+    return AGC_INPUT_OK;
+  }
   for (;;) {
     int r = fill(vm);
     if (r == FILL_WAIT) return AGC_INPUT_WAIT;
@@ -254,6 +265,10 @@ agc_input_status agc_input_all(agc_vm *vm, agc_string **text) {
 
 agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
   agc_input *in = &vm->rt->in;
+  if (hidden(vm)) {
+    *out = agc_new_list(0);
+    return AGC_INPUT_OK;
+  }
   while (in->end - in->start < count) {
     int r = fill(vm);
     if (r == FILL_WAIT) return AGC_INPUT_WAIT;
@@ -266,4 +281,11 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
   consume(in, in->start + n);
   *out = l;
   return AGC_INPUT_OK;
+}
+
+agc_input_status agc_protocol_line(agc_vm *vm, agc_string **line) {
+  vm->rt->in.protocol = true;
+  agc_input_status status = agc_input_line(vm, line);
+  vm->rt->in.protocol = false;
+  return status;
 }

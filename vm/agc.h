@@ -314,7 +314,7 @@ typedef enum { AGC_INPUT_OK, AGC_INPUT_EOF, AGC_INPUT_WAIT, AGC_INPUT_FAILED } a
 
 typedef struct {
   int fd;
-  bool flush_out, pending_eof, reading;
+  bool flush_out, pending_eof, reading, reserved, protocol;
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;
@@ -331,7 +331,7 @@ typedef struct {
   FILE *out, *err;
   agc_value args;
   agc_string *cwd;
-  bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;
+  bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired, out_mid_line;
   agc_style style;
   int64_t flush_timeout;
 #ifdef __linux__
@@ -392,7 +392,7 @@ struct agc_vm {
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
   agc_task *crashes, *crashes_tail;
   uint64_t tasks_done, gc_seen, crash_count, observed_count;
-  bool yield, in_turn, test_active;
+  bool yield, in_turn;
   jmp_buf fail, turn;
 };
 
@@ -548,6 +548,7 @@ extern const agc_builtin agc_tcp_builtins[];
 extern const size_t agc_tcp_builtin_count;
 extern const agc_builtin agc_http_builtins[];
 extern const size_t agc_http_builtin_count;
+bool agc_test_protocol(agc_vm *vm);
 extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
@@ -641,6 +642,7 @@ agc_input_status agc_input_peek(agc_vm *vm, int *byte);
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
 agc_input_status agc_input_all(agc_vm *vm, agc_string **text);
 agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
+agc_input_status agc_protocol_line(agc_vm *vm, agc_string **line);
 
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);

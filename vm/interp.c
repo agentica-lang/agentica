@@ -51,6 +51,7 @@ void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
   if (len && fwrite(data, 1, len, stream) != len)
     agc_fail(vm, "RUNTIME-INTERNAL",
              stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
+  if (len && stream == vm->rt->out) vm->rt->out_mid_line = ((const uint8_t *)data)[len - 1] != '\n';
 }
 
 agc_task *agc_new_task(agc_vm *vm) {

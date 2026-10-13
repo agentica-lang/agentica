@@ -106,7 +106,7 @@ The runner (`std/test/runner`, extended) handles a test file much as it handles 
 
 - A test's stdout is captured: the runner keeps the non-record lines that arrive while the test runs and shows them under a failed test (`output` in `--json`); a passed test's output is dropped, as ExUnit's `capture_io` does. The 1 MiB output limit applies per test, counted from its index (`RUNTIME-BDD-OUTPUT-LIMIT`); the report keeps at most the last 64 KiB.
 - Stderr is captured for the whole child and read when it exits. It is shown only with a file error, or with the test that was running when the child died. The §37 crash lines (`"task": true`) are not shown again, since the crash is already the test's error.
-- Stdin is the protocol pipe: tests must not read it.
+- Stdin is the protocol pipe. As built (25b): the VM gives the program an empty stdin from the start of `main` when its arguments are `--agentica-test list|run`, and only `Test.run` reads the pipe, so a test or `main` cannot take the runner's lines. The runner sends a random token as the first line, `Test.run` writes it in every record, and a record always starts a line, so output a test prints cannot pass for a record.
 
 ### 36.8 Report and exit codes
 
