@@ -114,7 +114,9 @@
         "continue" "write next, on its own line, to skip to the next iteration"
         "next" "next is a statement on its own line inside while or for"
         "Hash.new" "use a map literal with a type: m: Map[String, Int] = {}"
-        "Array.new" "use a list literal with a type: xs: List[Int] = []"))
+        "Array.new" "use a list literal with a type: xs: List[Int] = []"
+        "Request" "a std/http handler takes an HttpRequest: def handle(request: HttpRequest) -> Result[HttpResponse]"
+        "HttpWriter" "a std/http handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"))
 
 (define foreign-methods
   (hash "to_string" '("to_s") "to_str" '("to_s") "len" '("size" "length")
@@ -307,10 +309,11 @@
          (bail 'CHECK-UNKNOWN-TYPE
                (format "unknown type \"~a\"" (display-name name))
                (type-ref-span reference)
-               #:help (did-you-mean name
+               #:help (or (hash-ref foreign-names name #f)
+                          (did-you-mean name
                                     (append (hash-keys structs) (hash-keys enums))
                                     #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task" "Range")
-                                                     (map symbol->string opaque-types))))]))
+                                                     (map symbol->string opaque-types)))))]))
 
     ;; Scopes ---------------------------------------------------------------
 

@@ -391,6 +391,26 @@
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME))))
 
+  (test-case "the removed std/http server calls and types point to handlers that return an HttpResponse"
+    (for ([entry '(("  HTTP.respond(1, 200, [], \"hi\", 1000)\n" CHECK-IMPORT-NAME #rx"return ok\\(HttpResponse")
+                   ("  HTTP.finish(1, [], 1000)\n" CHECK-IMPORT-NAME #rx"return ok\\(HttpResponse")
+                   ("  HTTP.nothing(1)\n" CHECK-IMPORT-NAME #f))])
+      (with-files
+       (list (cons "root.agc" (string-append "import \"std/http\" as HTTP\ndef main() -> Void\n" (car entry) "end\n\n")))
+       (lambda (directory)
+         (define problem (checked (build-path directory "root.agc")))
+         (check-equal? (diagnostic-code problem) (cadr entry) (car entry))
+         (if (caddr entry)
+             (check-regexp-match (caddr entry) (diagnostic-help problem))
+             (check-false (diagnostic-help problem))))))
+    (for ([entry '(("Request" #rx"HttpRequest") ("HttpWriter" #rx"return ok\\(HttpResponse"))])
+      (with-files
+       (list (cons "root.agc" (format "import \"std/http\" as HTTP\ndef handle(x: ~a) -> Void\nend\n\ndef main() -> Void\nend\n\n" (car entry))))
+       (lambda (directory)
+         (define problem (checked (build-path directory "root.agc")))
+         (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-TYPE (car entry))
+         (check-regexp-match (cadr entry) (diagnostic-help problem))))))
+
   (test-case "HttpWire is internal to std/http: user files, relative imports and pkg modules cannot call it"
     (define call "export def go() -> Void\n  HttpWire.client(1, 1, 1, 1, \"\")\nend\n\n")
     (for ([entry `(("root.agc" "import \"pkg/wire\" as Wire\ndef main() -> Void\n  HttpWire.close_client(HttpWire.client(1, 1, 1, 1, \"\"))\nend\n\n")

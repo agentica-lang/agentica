@@ -180,7 +180,10 @@
              [target
               (define declaration (hash-ref (hash-ref exports target) member #f))
               (unless declaration
-                (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span))
+                (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span
+                      #:help (and (equal? target "std/http.agc")
+                                  (memv (string->symbol member) '(respond begin write write_bytes finish))
+                                  "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))")))
               (unless (case kind
                         [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
                         [(enum) (enum-decl? declaration)]
