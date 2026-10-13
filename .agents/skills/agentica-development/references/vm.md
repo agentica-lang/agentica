@@ -142,7 +142,7 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   pass through; add new options to the pass-through list in `src/main.rkt`
   as the VM gains them. A new builtin goes into `vm-builtins` with its C
   implementation.
-  `tests/vm-diff-4-test.rkt` checks the CLI against the goldens (with
+  `tests/vm-diff-8-test.rkt` checks the CLI against the goldens (with
   `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), that the
   removed `--vm` and `--legacy-eval` flags are unknown, a missing VM, runs it once in-process to cover
   the pipe path, and checks `--driver-pid`.
@@ -200,10 +200,10 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   by `total-steps`, may be lower but at most `T + max(10, T / 10)`
   (`check-steps`, which catches over-charging), and the last sweep limit,
   `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. With
-  `AGENTICA_SWEEP=sampled` (the ASan job and `make vm-gc-stress`) each
+  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`) each
   fixture runs only 1, 2, T - 1, T, the last limit and 8 limits drawn one
-  from each eighth of 3 to T - 2 (`sampled-limits`); the release build
-  keeps the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
+  from each eighth of 3 to T - 2 (`sampled-limits`); local `make test`,
+  the release and the weekly `sweep.yml` keep the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
   first 8 hex digits of `GITHUB_SHA` or `git rev-parse HEAD`, plus the
   fixture name, so it rotates with the commit and is fixed within a run.
   Each shard prints the seed, and a failed limit names it: rerun with that

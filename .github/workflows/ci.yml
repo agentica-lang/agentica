@@ -11,6 +11,7 @@ on:
       - '.github/workflows/platforms.yml'
       - '.github/workflows/release.yml'
       - '.github/workflows/site-examples.yml'
+      - '.github/workflows/sweep.yml'
   push:
     branches: [master]
     paths-ignore:
@@ -22,6 +23,7 @@ on:
       - '.github/workflows/platforms.yml'
       - '.github/workflows/release.yml'
       - '.github/workflows/site-examples.yml'
+      - '.github/workflows/sweep.yml'
   workflow_dispatch:
 
 concurrency:
@@ -135,6 +137,7 @@ jobs:
     timeout-minutes: 45
     env:
       AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
     outputs:
       vm: ${{ steps.changes.outputs.vm }}
       trace: ${{ steps.changes.outputs.trace }}
@@ -216,7 +219,7 @@ jobs:
           AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/process-test.rkt tests/modules-test.rkt > "$log" 2>&1 &
           executable_tests=$!
           status=0
-          make test || status=$?
+          make test JOBS=6 || status=$?
           if wait "$executable_tests"; then
             echo "::group::process and module tests on the built executable: passed"
           else
@@ -335,6 +338,8 @@ jobs:
           make -j"$(nproc)" vm vm-test TRACE=0
           dist/agentica-vm --version | grep -q 'trace off'
       - run: make -j"$(nproc)" vm vm-test vm-fuzz
-      - run: make build && raco make -j "$(nproc)" tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
-      - run: raco test -j "$(nproc)" tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
-      - run: make -j"$(nproc)" vm-gc-stress
+      - if: ${{ !cancelled() }}
+        run: make build && raco make -j "$(nproc)" tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
+      - if: ${{ !cancelled() }}
+        run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
+      - run: make -j"$(nproc)" vm-gc-stress JOBS=4

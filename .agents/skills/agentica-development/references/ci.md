@@ -14,8 +14,11 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   them), `make test` with the process and module tests on `dist/agentica`
   (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make vm-latency` alone
   after that, the example smoke runs (in parallel), the vendored OpenSSL
-  check, and last `make dup-check` (it runs even when an earlier step fails,
-  so a clone or an npm outage does not hide the test results). It also
+  check (the last step that builds), and then `make dup-check` (it runs even
+  when an earlier step fails, so a clone or an npm outage does not hide the
+  test results). `make test` runs with `JOBS=6` beside the two executable-test
+  workers, and the vm-latency negative control starts its two VMs together
+  (it can only raise latency, so the control stays valid). It also
   checks that `vm/unicode_data.c` is up to date. That check is skipped when
   the generator, the table and the Makefile's `vm-unicode` rule match an
   earlier passing check. The vendored check stays last: it rebuilds
@@ -25,17 +28,18 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 - `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
   `make vm-lint`, one `make -j vm vm-test vm-fuzz`, the ASan golden,
   bytecode, trace, TCP and TLS tests, and the GC stress build. The TCP tests need
-  Node; the TLS tests need Node and Python 3. The job sets
-  `AGENTICA_SWEEP=sampled`, so its golden and GC-stress runs sample the
-  `--max-steps` sweep with a seed from `GITHUB_SHA` (the `test` job keeps
-  the full sweep on the release VM); a failure prints
-  `AGENTICA_SWEEP_SEED`.
+  Node; the TLS tests need Node and Python 3. Both PR jobs set
+  `AGENTICA_SWEEP=sampled`, so their golden and GC-stress runs sample the
+  `--max-steps` sweep with a seed from `GITHUB_SHA`; a failure prints
+  `AGENTICA_SWEEP_SEED`. The full sweep runs locally (`make test`), in
+  `release.yml` (`AGENTICA_SWEEP=full`), and weekly in `sweep.yml` (Monday
+  03:00 UTC, or by hand) on the release VM.
 - OpenSSL: every CI job builds with the system OpenSSL (the default
   `AGENTICA_OPENSSL=system`; a guard step installs `libssl-dev pkg-config` when
   `pkg-config` cannot find OpenSSL 3, a no-op on our runners), the
   sanitizer and GC-stress builds too, so no job builds an instrumented
   OpenSSL. Only the release sets `AGENTICA_OPENSSL=vendored`. To keep that path
-  from rotting, the last step of `test` restores the cached vendored
+  from rotting, the last building step of `test` restores the cached vendored
   release-mode OpenSSL (restore only) and, on a hit, links
   `build/vm/release/agentica-vm` against it, checks that `readelf -d`
   shows no `libssl` or `libcrypto` and that `--version` names the
@@ -119,6 +123,9 @@ Actions → Run workflow:
   to platform code (`vm/main.c`, the Makefile, file or process handling).
 - `fuzz.yml` fuzzes the sanitizer VM with 5 million mutants and a random
   seed.
+
+`sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff` shards on
+the release VM with `AGENTICA_SWEEP=full`. Nothing else in CI runs on a schedule.
 
 macOS and Windows are paused until further notice: `platforms.yml` is not
 run and only Linux is required. Their platform code is kept but untested;

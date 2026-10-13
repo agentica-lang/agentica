@@ -38,7 +38,7 @@
   that it sweeps 1 to 100, the limits from 100 spaced count / 50 apart
   (at most 50), the count minus 1 and the count; then it adds the
   larger of 2T + 100 and T + 4000 (two turns of `AGC_TURN_STEPS`), with the
-  golden's T. The ASan and GC-stress runs set `AGENTICA_SWEEP=sampled`:
+  golden's T. The CI jobs on pull requests (release VM, ASan, GC stress) set `AGENTICA_SWEEP=sampled`; the release and the weekly `sweep.yml` run the full sweep (also the default for `make test`):
   each fixture runs only 1, 2, the count minus 1, the count, the last
   limit and one limit drawn from each eighth of the rest, with a seed from
   `AGENTICA_SWEEP_SEED` or the commit (`GITHUB_SHA`, else `git rev-parse
