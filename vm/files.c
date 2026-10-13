@@ -723,7 +723,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return error_of(timed_out);
 }
 
-static const agc_io_kind file_io = {work, done, expired, drop, false, "file"};
+static const agc_io_kind file_io = {work, done, expired, drop, false, "file", NULL};
 
 static void files_on(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);

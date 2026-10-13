@@ -57,7 +57,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   net.h           # tcp.c's connection object (agc_conn) for other C modules
   http_parse.h http_pico.c http_body.c  # HTTP head adapter (the only file that includes picohttpparser) and body decoder
   http_client.c   # HttpWire client builtins: the pool, called only by stdlib/http.agc (Linux)
-  task.c          # scheduler (run queue, turns, park and wake) and the Task builtins
+  task.c          # scheduler (run queue, turns, park and wake), task cancellation and the Task builtins
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
   fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests

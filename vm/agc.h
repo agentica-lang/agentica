@@ -198,6 +198,7 @@ typedef struct {
   void (*drop)(void *data);
   bool external;
   const char *name;
+  bool (*cancel)(agc_vm *vm, void *data, agc_value context, bool deadline);
 } agc_io_kind;
 
 typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
@@ -345,9 +346,13 @@ struct agc_task {
   int64_t turn_cost;
   uint64_t lock_deadline, input_seen;
   agc_task_state state;
+  bool cancelled;
   agc_value result;
   agc_task *next, *wait_next;
   agc_task *waiters, *waiters_tail;
+  agc_task *parent, *children, *prev_sibling, *next_sibling;
+  agc_task *awaiting;
+  agc_resource *lock_wait;
 };
 
 struct agc_vm {
@@ -516,6 +521,7 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
+void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 const char *agc_uv_version(void);
 bool agc_io_init(void);
@@ -528,6 +534,7 @@ void agc_io_block_stop(sigset_t *saved);
 #endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
+void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
 void agc_files_close(agc_vm *vm);
@@ -566,6 +573,7 @@ void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
+void agc_task_cancel(agc_vm *vm, agc_task *t);
 void agc_turn_begin(agc_vm *vm);
 bool agc_turn_charge(agc_vm *vm);
 void agc_turn_finish(agc_vm *vm);

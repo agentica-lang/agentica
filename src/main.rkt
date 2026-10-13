@@ -99,7 +99,7 @@
     (command-line
      #:program "agentica"
      #:usage-help
-     "Programs run on the bytecode VM (dist/agentica-vm, or AGENTICA_VM)."
+     "Programs run on the bytecode VM (agentica-vm, or AGENTICA_VM)."
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]
      [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]

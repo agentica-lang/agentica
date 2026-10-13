@@ -357,6 +357,19 @@ and docs:
   evaluator in 7i.
 - **20b** the core of task cancellation (`agc_task_cancel`, parent and
   children links, pool waiters), with `vm/tests/task_cancel_test.c`.
+  Done: no program can cancel a task yet, so the test builds small
+  bytecode programs by hand, adds test builtins to their table (mark,
+  cancel, a check callback, a handle operation on an external job) and
+  runs them on the real scheduler. It covers a ready task and a later
+  `Task.await` on it, a task parked on an I/O job (its `done` half runs
+  when the job ends, the result is dropped, the handle stays open and
+  its lock passes on), a lock waiter, the `next_owner` of a lock, a task
+  in `Task.await`, one already parked in `Task.await` on the cancelled
+  task, a `Task.sleep` (its timer is closed), a task that cancels itself,
+  the move of a finished task's children to its parent, and the
+  `HttpClient` pool against a local TCP socket on port 0 that never
+  answers the TLS handshake (`max_connections` 1): a waiter leaves the
+  FIFO, and a slot granted to a cancelled task passes to the next waiter.
 - **20c** the server: `HttpWire.read_request`, `write_response` and the
   task group, `HttpRequest`, and the server part of `std/http.agc`;
   golden fixtures of a client and a server in one program,

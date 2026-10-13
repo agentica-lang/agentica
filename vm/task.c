@@ -66,6 +66,23 @@ void agc_task_park(agc_vm *vm, bool retry) {
   vm->task->retry = retry;
 }
 
+static void adopt(agc_task *parent, agc_task *child) {
+  child->parent = parent;
+  child->prev_sibling = NULL;
+  child->next_sibling = parent->children;
+  if (parent->children) parent->children->prev_sibling = child;
+  parent->children = child;
+}
+
+static void leave_parent(agc_task *t) {
+  if (t->prev_sibling)
+    t->prev_sibling->next_sibling = t->next_sibling;
+  else if (t->parent)
+    t->parent->children = t->next_sibling;
+  if (t->next_sibling) t->next_sibling->prev_sibling = t->prev_sibling;
+  t->parent = t->prev_sibling = t->next_sibling = NULL;
+}
+
 static void finish_task(agc_vm *vm, agc_task *t) {
   t->state = AGC_TASK_DONE;
   t->regs = NULL;
@@ -73,8 +90,71 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frames = NULL;
   t->frame_capacity = 0;
   t->cursor = NULL;
+  t->turn_cost = 0;
   vm->tasks_done++;
+  while (t->children) {
+    agc_task *child = t->children;
+    leave_parent(child);
+    if (t->parent) adopt(t->parent, child);
+  }
+  leave_parent(t);
   agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+}
+
+static void leave_ready(agc_vm *vm, const agc_task *t) {
+  agc_task *previous = NULL;
+  for (agc_task *k = vm->ready; k; previous = k, k = k->next) {
+    if (k != t) continue;
+    if (previous)
+      previous->next = k->next;
+    else
+      vm->ready = k->next;
+    if (vm->ready_tail == k) vm->ready_tail = previous;
+    k->next = NULL;
+    return;
+  }
+}
+
+static void end_cancelled(agc_vm *vm, agc_task *t) {
+  if (t->state == AGC_TASK_READY) leave_ready(vm, t);
+  if (t->parked) agc_io_detach(vm, t);
+  if (t->lock_wait) agc_handle_leave(vm, t);
+  if (t->awaiting) agc_task_remove(&t->awaiting->waiters, &t->awaiting->waiters_tail, t);
+  t->awaiting = NULL;
+  agc_task_remove(&vm->rt->in.waiters, &vm->rt->in.waiters_tail, t);
+  t->parking = t->retry = false;
+  finish_task(vm, t);
+}
+
+static void cancel_one(agc_vm *vm, agc_task *t) {
+  t->cancelled = true;
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
+  if (t->state == AGC_TASK_RUNNING)
+    vm->yield = true;
+  else
+    end_cancelled(vm, t);
+}
+
+/* Children before parents, so each cancelled task has no live child left
+   to move; a running task only gets its flag and ends after its builtin. */
+void agc_task_cancel(agc_vm *vm, agc_task *root) {
+  if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
+  agc_task *t = root;
+  uint64_t count = 0;
+  for (;;) {
+    agc_task *child = t->children;
+    while (child && child->cancelled) child = child->next_sibling;
+    if (child) {
+      t = child;
+      continue;
+    }
+    agc_task *up = t->parent;
+    cancel_one(vm, t);
+    count++;
+    if (t == root) break;
+    t = up;
+  }
+  if (vm->task && vm->task->state == AGC_TASK_RUNNING) agc_charge(vm, count);
 }
 
 static void resume(agc_vm *vm, agc_task *t) {
@@ -153,7 +233,9 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_turn_finish(vm);
       trace_turn(vm, t, r);
       trace_gc(vm, "turn");
-      if (r == AGC_TURN_DONE) {
+      if (t->cancelled) {
+        end_cancelled(vm, t);
+      } else if (r == AGC_TURN_DONE) {
         if (t == vm->main) {
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
           break;
@@ -175,15 +257,20 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_random_seed(&child->random, agc_random_next(&vm->task->random));
   child->input_seen = vm->rt->in.eof_seq;
   agc_task_call(vm, child, args[0], args[1], span);
+  adopt(vm->task, child);
   trace_spawn(vm, child, vm->task->id);
   enqueue(vm, child);
   return agc_task_value(child);
 }
 
 static agc_value builtin_await(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   agc_task *target = agc_as_task(vm, args[0]);
-  if (target->state == AGC_TASK_DONE) return target->result;
+  vm->task->awaiting = NULL;
+  if (target->state == AGC_TASK_DONE) {
+    if (target->cancelled) agc_fail(vm, "RUNTIME-TASK-CANCELLED", "task was cancelled", span);
+    return target->result;
+  }
+  vm->task->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, vm->task);
   agc_task_park(vm, true);
   return agc_void();
@@ -196,7 +283,7 @@ static agc_value slept(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false, "sleep"};
+static const agc_io_kind sleep_io = {NULL, slept, slept, NULL, false, "sleep", NULL};
 
 static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t ms = agc_as_int(vm, args[0]);
