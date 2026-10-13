@@ -164,6 +164,8 @@ is a `String`, which must be valid UTF-8. Status codes such as 404 or 500 are
 normal responses; errors (a bad URL, a refused connection, a timeout, a body
 over the limit) are `error` results.
 
+A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` sent on a reused connection that the server had already closed is retried once on a new connection, within the same timeout, when no response byte arrived; `POST`, `PATCH` and the other methods are never retried. The body is not decompressed: `Content-Encoding` stays as the server sent it. Header values use the Latin-1 byte range, and names must be HTTP tokens; CR, LF, control characters and framing headers that the program sets itself are rejected.
+
 ### HTTP.client and HTTP.client_options
 
 ```text
@@ -178,7 +180,7 @@ whole call, a 30 s `idle_timeout_ms` for kept connections, 4
 `max_connections` per host and a 1 MiB `max_body_bytes`, with the system's
 CA certificates (`ca_file: ""`). Build `HttpClientOptions` to change them;
 every number must be positive, `max_connections` at most 65536 and
-`max_body_bytes` at most 64 MiB.
+`max_body_bytes` at most 64 MiB. Calls wait in FIFO order for one of the `max_connections` slots. A call still in flight when `close_client` runs fails with `http: client is closed`.
 
 ```agentica {mode="check"}
 import "std/http" as HTTP
