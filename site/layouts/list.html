@@ -1,7 +1,6 @@
 {{ define "main" }}
 <article class="content">
-  {{- partial "page-actions.html" . }}
-  <h1>{{ .Title }}</h1>
+  <div class="page-head"><h1>{{ .Title }}</h1>{{ partial "page-actions.html" . }}</div>
   {{ .Content }}
   <ul class="pages">
     {{- range .Pages.ByWeight }}

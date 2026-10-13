@@ -1,0 +1,5 @@
+{{- $groups := slice (dict "title" "Docs" "pages" ((slice site.Home) | append site.Home.Pages.ByWeight)) -}}
+{{- range where site.Home.Pages.ByWeight "IsSection" true -}}
+  {{- $groups = $groups | append (dict "title" .LinkTitle "pages" .Pages.ByWeight) -}}
+{{- end -}}
+{{- return $groups -}}
