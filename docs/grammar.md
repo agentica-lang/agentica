@@ -884,17 +884,22 @@ Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.await(task: Task[R]) -> R
 Task.sleep(milliseconds: Int) -> Void
 Task.pending_count() -> Int
+Task.unobserved_crash() -> Result[String]
 ```
 
 Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
 
-Any task diagnostic ends the whole run with its original code and span, even when unawaited. System.exit in any task ends the run with its code. The first of these outcomes wins. Returning from the entrypoint ends the run, and pending tasks never run again: explicitly await work that must finish. At the end of a run, however it ends, the VM flushes and closes open files, closes sockets and listeners, and stops and reaps the child processes it started; stdin, stdout and stderr stay open.
+A runtime error in a task other than `main` is a crash: it ends only that task, and the rest of the program goes on. Its diagnostic is printed on stderr when it happens, with ` in a task` after the code (`--json` adds `"task": true`). Its running descendants are cancelled; no program can await one of them, since only the crashed subtree holds them (with `Task.map` and the HTTP server, a later `Task.await` on a cancelled task will give `error("task: cancelled")` when `R` is a `Result`, and RUNTIME-TASK-CANCELLED otherwise). The files, sockets, listeners and processes it owns are closed: a handle belongs to the task that opened it, and one passed directly as the `Task.spawn` argument moves to the new task (a handle inside a struct, list or block does not move). When a task returns normally, the handles it still owns go to its parent task. Other tasks that use a closed handle get its closed error. An `HttpClient` is never closed by a crash. `Task.await` on a crashed task returns `error(text)` when `R` is a `Result`, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`; otherwise the awaiter halts with RUNTIME-TASK-CRASHED at its own await, with that text as the message, so the crash moves up through awaits. Each await of a crashed task gives the same outcome. These still end the whole run: a runtime error in `main`, RUNTIME-STEP-LIMIT, an internal VM error, and System.exit in any task (the run ends with its code). The first of these outcomes wins.
+
+A crash is observed when an await returns its error or halts with RUNTIME-TASK-CRASHED. When `main` returns and a crash was never observed, the run exits 1 and prints one summary line on stderr: `2 task crashes were not observed; first: task crashed: ...` (`--json`: `{"unobserved_crashes":2,"first":"task crashed: ..."}`). `Task.unobserved_crash()` returns `ok(text)` for the first crash no await has observed, or `error("no unobserved crash")`; calling it does not observe the crash.
+
+Returning from the entrypoint ends the run, and pending tasks never run again: explicitly await work that must finish. At the end of a run, however it ends, the VM flushes and closes open files (waiting for the writes; `--flush-timeout` bounds the wait), closes sockets and listeners, and stops and reaps the child processes it started; stdin, stdout and stderr stay open.
 
 Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, arguments and contextual builtin services. Shared streams have no cross-task ordering guarantee; coordinate who reads input. All tasks, including nested tasks, share the execution's synchronized --max-steps counter.
 
-Pending count (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned is not counted, even when nothing awaited it.
+Pending count returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned or crashed is not counted, even when nothing awaited it.
 
-BDD step handlers may use tasks but must finish them before returning, normally through Task.await: `std/bdd` checks `Task.pending_count()` after each handler, and pending work fails that step with RUNTIME-BDD-PENDING-TASKS; so does a step program whose `main` leaves tasks running when it calls `BDD.run`. Assertions made by tasks count for the step. A context changed in a task is lost unless the handler takes it back from `Task.await`. A task that fails ends the scenario's child VM, which fails only that scenario.
+BDD step handlers may use tasks but must finish them before returning, normally through Task.await: `std/bdd` checks `Task.pending_count()` after each handler, and pending work fails that step with RUNTIME-BDD-PENDING-TASKS; so does a step program whose `main` leaves tasks running when it calls `BDD.run`. Assertions made by tasks count for the step. A context changed in a task is lost unless the handler takes it back from `Task.await`. After the pending check, `std/bdd` checks `Task.unobserved_crash()`: a task that crashed in the step and was not awaited fails that step with RUNTIME-TASK-CRASHED and the crash text as its message. A runtime error in the handler itself ends the scenario's child VM, which fails only that scenario.
 
 ### TCP, TLS and HTTP
 
@@ -1018,6 +1023,8 @@ absolute path and does not resolve symlinks.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
 
+At the end of a run the VM writes the buffered output of every file still open and waits until those writes finish. `agentica --flush-timeout MS program.agc` waits at most MS milliseconds (a non-negative integer; bad values exit 2). When time runs out the run still ends, with the same exit code, and stderr gets one line saying that file data may not be written: `agentica: file data may not be written: the flush took longer than MS ms`, or in `--json` mode `{"flush_timeout_ms": MS, "warning": "file data may not be written"}`. Without the flag there is no limit, so a write to a FIFO nobody reads keeps the run open.
+
 Calls nest at most 10000 deep in each task; a deeper call is `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)`, a direct call to a user function) replaces the caller's frame and does not count toward this limit, so deep tail recursion runs.
 
 
@@ -1074,7 +1081,7 @@ unknown function "totl"
   = help: did you mean "total"?
 ```
 
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it.
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode, when a diagnostic ends the run, the last line of stderr is that diagnostic; what the program itself wrote to stderr comes before it. Task crash lines carry `"task": true` and are not the run's diagnostic: a run can exit 0 with only crash lines, and a run that exits 1 because a crash was never observed ends with the `{"unobserved_crashes": N, "first": "..."}` line instead of a diagnostic. The `{"flush_timeout_ms": ...}` warning of `--flush-timeout` is not a diagnostic either; it comes after the unobserved line and before a diagnostic.
 
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running); the VM compiler stages use `LOWER-` and `BYTECODE-`. Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 

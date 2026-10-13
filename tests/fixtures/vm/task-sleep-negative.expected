@@ -1,10 +1,13 @@
 {
   "exit": 1,
-  "code": "RUNTIME-INVALID-DURATION",
+  "code": "RUNTIME-TASK-CRASHED",
   "steps": 12,
   "stdout": [
     "before",
     ""
   ],
-  "stderr": []
+  "stderr": [
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/task-sleep-negative.agc\",\"message\":\"sleep duration must be nonnegative\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":14,\"line\":2}},\"task\":true}",
+    ""
+  ]
 }

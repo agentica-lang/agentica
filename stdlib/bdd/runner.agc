@@ -351,13 +351,19 @@ def send_failure(p: Process, message: String, deadline: Int, span: Gherkin.Span)
   return read_failure(p, message, deadline, span)
 end
 
-# A child that halts writes its --json diagnostic as the last line of stderr.
+# A child that halts writes its --json diagnostic as the last line of stderr;
+# the lines of task crashes carry "task": true and are skipped.
 def stderr_diagnostic(stderr: String) -> Result[Report.Error]
-  lines = stderr.split("\n").filter do |line| line != "" end
+  lines = stderr.split("\n").filter do |line| line != "" and not task_crash?(line) end
   if lines.size == 0
     return error("no diagnostic")
   end
   return Report.from_json(lines[lines.size - 1])
+end
+
+def task_crash?(line: String) -> Bool
+  parsed = JSON.parse(line)
+  return parsed.ok? and JSON.get(parsed.unwrap!, "task").ok?
 end
 
 def record_error(record: Json, span: Gherkin.Span) -> Report.Error

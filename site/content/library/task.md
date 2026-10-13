@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 9
-description: Start, await, pause and count lightweight tasks.
+description: Start, await, pause and count lightweight tasks, and find their crashes.
 ---
 
 Tasks run functions at the same time in one program. The tour page
@@ -13,7 +13,7 @@ Tasks run functions at the same time in one program. The tour page
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and gives a handle to it.
+Starts `function(argument)` in a new task and gives a handle to it. A file, socket, listener or process belongs to the task that opened it. When the argument itself is such a handle, it moves to the new task, so a crash of the new task closes it. A handle inside a struct or a list stays with its owner. When a task returns normally, the handles it still owns go back to the task that started it.
 
 ```agentica
 def greet(name: String) -> String
@@ -37,7 +37,34 @@ Task.await(task: Task[R]) -> R
 ```
 
 Waits for the task and gives its result. Waiting again gives the same value.
-If the task failed, the whole program has already stopped with its error.
+
+A runtime error in a task other than `main` is a crash: it ends only that
+task. The error is printed on stderr, the task's own tasks are cancelled, and
+the files, sockets, listeners and processes it opened are closed. When the
+task returns a `Result`, awaiting it gives
+`error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. Otherwise the
+waiting task stops with `RUNTIME-TASK-CRASHED`. A crash that no await sees
+makes the run exit with code 1 when `main` returns.
+
+```agentica
+def parse(text: String) -> Result[Int]
+  return ok(100 / text.to_i!)
+end
+
+def main() -> Void
+  task = Task.spawn(&parse, "0")
+  case Task.await(task)
+    ok(n) -> puts(n)
+    error(e) -> puts(e.starts_with?("task crashed: RUNTIME-DIVISION-BY-ZERO"))
+  end
+  puts("still running")
+end
+```
+
+```output
+true
+still running
+```
 
 ```agentica
 def add_one(n: Int) -> Int
@@ -109,9 +136,8 @@ Task.pending_count() -> Int
 
 Gives how many tasks of this run have not ended yet, not counting `main`. A
 task that waits to run, sleeps or waits for another task counts; so does the
-task that asks, unless it is `main`. A task that has returned no longer
-counts, even when nothing awaited it. This function runs only on the VM.
-`std/bdd` uses it to fail a [BDD](/library/bdd/) step that leaves tasks
+task that asks, unless it is `main`. A task that has returned or crashed no
+longer counts, even when nothing awaited it. `std/bdd` uses it to fail a [BDD](/library/bdd/) step that leaves tasks
 running.
 
 ```agentica
@@ -139,4 +165,33 @@ end
 2
 20
 0
+```
+
+## Task.unobserved_crash
+
+```text
+Task.unobserved_crash() -> Result[String]
+```
+
+Gives `ok(text)` with the first crash of this run that no `Task.await` has
+seen, or an error when there is none. Asking does not count as seeing it.
+`std/bdd` uses it to fail a [BDD](/library/bdd/) step whose task crashed.
+
+```agentica
+def boom(n: Int) -> Int
+  return 10 / n
+end
+
+def main() -> Void
+  task = Task.spawn(&boom, 0)
+  puts(Task.unobserved_crash().ok?)
+  Task.sleep(0)
+  puts(Task.unobserved_crash().ok?)
+  System.exit(0)
+end
+```
+
+```output
+false
+true
 ```

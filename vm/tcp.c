@@ -187,13 +187,6 @@ static net *new_net(agc_vm *vm, char *host, int64_t port, bool listener) {
   return make_net(&vm->rt->trace, agc_io_uv(vm), host, port, listener);
 }
 
-static agc_resource *own(agc_vm *vm, net *n) {
-  agc_resource *r = agc_register(vm, n, release_net);
-  n->users++;
-  n->id = r->id;
-  return r;
-}
-
 static void disown(agc_vm *vm, agc_resource *r, const char *why) {
   net *n = r->native;
   if (!n) return;
@@ -202,6 +195,16 @@ static void disown(agc_vm *vm, agc_resource *r, const char *why) {
   shut(n, why);
   n->users--;
   settle(n);
+}
+
+static void close_net(agc_vm *vm, agc_resource *r) { disown(vm, r, "crash"); }
+
+static agc_resource *own(agc_vm *vm, net *n) {
+  agc_resource *r = agc_register(vm, n, release_net);
+  agc_own(vm, r, close_net);
+  n->users++;
+  n->id = r->id;
+  return r;
 }
 
 static request *new_request(net *n, req_kind kind) {
@@ -848,7 +851,6 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   const request *q = data;
   if (!deadline || q->kind == REQ_SEND) return false;
   if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "cancel");
-  if (q->kind == REQ_LISTEN) disown(vm, agc_as_listener(vm, context)->state, "cancel");
   return true;
 }
 

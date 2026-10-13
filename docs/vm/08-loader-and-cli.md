@@ -119,8 +119,9 @@ and cost one predictable branch each.
 
 - `agentica compile file.agc -o file.agcb` (7d) runs the front end and writes
   bytecode.
-- `agentica-vm [--max-steps N] [--seed N] [--allow-run] [--ai|--json] --
-  file.agcb [args...]` (7e; `--allow-run` since the 7h processes PR). The option parser is hand
+- `agentica-vm [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run]
+  [--ai|--json] -- file.agcb [args...]` (7e; `--allow-run` since the 7h
+  processes PR; `--flush-timeout` since phase 24). The option parser is hand
   written: it stops at the first non-option and honors `--`. Option values are
   checked with exit code 2, as in `src/main.rkt`. Callers
   always pass `--` before the file. A test checks that `--allow-run` after the
@@ -139,14 +140,22 @@ and cost one predictable branch each.
   statically, so its version is the one built in (`agentica-vm 0.1.0
   (libgc 8.2.12, yyjson 0.13.0, libuv 1.53.0, OpenSSL 3.5.9)`).
 - In the slice the VM accepts `--version`, `--max-steps N`, `--seed N`
-  (7.4), `--ai`, `--json`, `--allow-run` (10.4) and `--`. `--ai` and `--json` may both appear; the last one
+  (7.4), `--flush-timeout MS`, `--ai`, `--json`, `--allow-run` (10.4) and
+  `--`. `--flush-timeout MS` (a non-negative integer, clamped like
+  `--max-steps`) bounds the end-of-run wait for file close jobs
+  (`docs/vm/10-io-scheduler.md` §10.2.1); without it the wait has no
+  limit. When it runs out, `vm/main.c` prints `agentica: file data may
+  not be written: the flush took longer than MS ms`, or
+  `{"flush_timeout_ms":MS,"warning":"file data may not be written"}` with
+  `--json`, after `agc_io_close` and before a diagnostic, and keeps the
+  exit code. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
   exits 1 for every option error it raises itself (a repeated option, an
   unknown switch, a missing value); the VM exits 2 for all of them, since
   the 7i driver parses the user's options itself. Value errors that
-  `src/main.rkt` checks (`--max-steps needs a positive integer`) exit 2 on
-  both.
+  `src/main.rkt` checks (`--max-steps needs a positive integer`,
+  `--flush-timeout needs a non-negative integer`) exit 2 on both.
   Arguments after the file are the program's `System.args`.
 - Tests in 7e and 7f spawn `dist/agentica-vm` directly.
 - `agentica file.agc [args...]` runs on the VM (7i, Linux). The `--vm`
@@ -155,7 +164,7 @@ and cost one predictable branch each.
   runs the front end and `lower`, then writes the bytecode to
   `agentica-<32 hex>.agcb` in the system temp directory (`TMPDIR`), created
   exclusively with mode 0600 (`#:exists 'error #:permissions #o600`). It
-  runs the VM as `agentica-vm [--max-steps N] [--seed N] [--allow-run] [--ai|--json] --driver-pid
+  runs the VM as `agentica-vm [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] --driver-pid
   PID -- file [args...]`. `--driver-pid` is a hidden VM flag (not in the
   usage text). On Linux the VM first sets `SIGTERM` back to its default
   action, calls `prctl(PR_SET_PDEATHSIG, SIGTERM)` (`SIGTERM`, not
@@ -185,8 +194,9 @@ and cost one predictable branch each.
   `RUNTIME-INTERNAL` (exit 1);
   a special (non-byte) value on the port ends the input like EOF. Otherwise it passes the real stdin, stdout
   and stderr, so the VM's output and exit code reach the user unchanged. Front-end and `LOWER-` diagnostics print as usual
-  (exit 1). `--max-steps N`, `--seed N`, `--allow-run`, `--ai` and `--json`
-  are passed to the VM; a seeded run repeats.
+  (exit 1). `--max-steps N`, `--seed N`, `--flush-timeout MS`,
+  `--allow-run`, `--ai` and `--json` are passed to the VM; a seeded run
+  repeats.
 - No fallback (7i). A `LOWER-UNSUPPORTED` from `lower` prints like any
   diagnostic and exits 1; every catalog builtin is in `vm-builtins`, so no
   builtin reaches it today. Until 7i, such a program ran on the Racket

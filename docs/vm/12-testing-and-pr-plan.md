@@ -365,7 +365,9 @@ and docs:
   when the job ends, the result is dropped, the handle stays open and
   its lock passes on), a lock waiter, the `next_owner` of a lock, a task
   in `Task.await`, one already parked in `Task.await` on the cancelled
-  task, a `Task.sleep` (its timer is closed), a task that cancels itself,
+  task, a `Task.sleep` (its timer is closed), a job whose deadline timer
+  fired before the cancel (it ends through `drop` at the next drain), a
+  task that cancels itself,
   the move of a finished task's children to its parent, and the
   `HttpClient` pool against a local TCP socket on port 0 that never
   answers the TLS handshake (`max_connections` 1): a waiter leaves the

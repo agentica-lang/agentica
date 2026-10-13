@@ -601,7 +601,7 @@ static void work(void *data) {
 
 static void drop(void *data) {
   op *o = data;
-  if (o->owns_st) free_state(o->st);
+  if (o->owns_st && o->st) release_state(o->st);
   free_op(o);
 }
 
@@ -680,6 +680,30 @@ static agc_value bytes_result(const op *o) {
   return agc_result_value(true, agc_list_value(l));
 }
 
+static agc_value closed(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  drop(data);
+  return agc_void();
+}
+
+static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL};
+
+/* The close of a crashed task's file, or of a file still open when the run
+   ends: pending while a job holds it. */
+static void close_file(agc_vm *vm, agc_resource *r) {
+  r->closing = true;
+  r->next_owner = NULL;
+  agc_task_wake_all(vm, &r->waiters, &r->waiters_tail, "close");
+  if (!r->native || r->holder) return;
+  op *o = new_op(OP_CLOSE);
+  o->st = r->native;
+  o->owns_st = true;
+  r->native = NULL;
+  agc_unregister(vm, r);
+  agc_io_detached(vm, &close_io, o);
+}
+
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   op *o = data;
@@ -701,6 +725,8 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_WRITE:
       case OP_OPEN_APPEND: {
         agc_resource *r = agc_register(vm, o->st, release_state);
+        agc_own(vm, r, close_file);
+        r->pool_close = true;
         o->st = NULL;
         result = agc_result_value(true, agc_handle_value(r));
         break;
@@ -829,8 +855,9 @@ static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *r
 }
 
 static file_state *usable(agc_vm *vm, agc_value handle, bool reading, agc_value *failure) {
-  file_state *st = agc_as_handle(vm, handle)->native;
-  if (!st) {
+  const agc_resource *r = agc_as_handle(vm, handle);
+  file_state *st = r->native;
+  if (!st || r->closing) {
     *failure = error_of("filesystem: file handle is closed");
   } else if (reading && !st->readable) {
     *failure = error_of("filesystem: file handle is not open for reading");
@@ -926,7 +953,7 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value failure;
   if (blocked(vm, args[0], &timeout, &failure)) return failure;
-  if (!r->native) return ok_void();
+  if (!r->native || r->closing) return ok_void();
   op *o = new_op(OP_CLOSE);
   o->st = r->native;
   o->owns_st = true;

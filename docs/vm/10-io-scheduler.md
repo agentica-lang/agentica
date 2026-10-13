@@ -238,12 +238,64 @@
     leaves through `try`, is done; its registers and frames are dropped.
   - Cancellation: when `main` returns, the run ends; ready and parked
     tasks never run again, and `agc_io_close` closes their timers and
-    jobs as before. A failure or `System.exit` in any task ends the run at
-    once through `agc_fail`/`agc_exit`, as the evaluator's first
-    published outcome does.
+    jobs as before. `System.exit` in any task, and a failure in `main`,
+    `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL` in any task, end the run at
+    once through `agc_fail`/`agc_exit`.
+  - Crashes (phase 24, `docs/future/37-task-crash-isolation.md` §37).
+    `agc_vm_run` runs each turn under its own `setjmp` (`vm->turn`;
+    `agc_fail` jumps there while `vm->in_turn`, and to the run-level
+    `vm->fail` otherwise, so a failure between turns, in the poll or in
+    the crash cleanup ends the run). Any other failure in a task other
+    than `main` crashes that task (`crash` in `vm/task.c`), in this order:
+    the turn ends as any turn (`agc_turn_finish`, `trace_turn` with
+    `why=fail`); the crash text (`task crashed: CODE at FILE:LINE:COLUMN:
+    MESSAGE`, `agc_crash_text`) is stored on the task, which joins the
+    run's list of crashes; the diagnostic is printed on stderr in the
+    run's style with ` in a task` (`"task":true` in `--json`); the task
+    leaves its job, lock, await and stdin FIFOs as a cancelled task does
+    (a `next_owner` turn passes on); its subtree is marked
+    (`drop_handles`) and its running descendants are cancelled with
+    `agc_task_cancel`; `agc_close_owned` closes every handle whose owner
+    is marked; the task ends like a task that returns, and its awaiters
+    are woken. `Task.await` has two entries: `Task.await` halts with
+    `RUNTIME-TASK-CRASHED` (the crash text as its message) or
+    `RUNTIME-TASK-CANCELLED`, and `Task.await_result`, which lowering
+    picks when `R` is a `Result`, returns `error(text)` or
+    `error("task: cancelled")`. Either entry marks a crash observed.
+    When `main` returns with a crash no await observed, the run prints
+    one summary line and ends as `AGC_EXITED` with code 1.
+    `Task.unobserved_crash` reads the first unobserved crash. The cancel
+    of the descendants spends no step, and its turn units are charged to
+    the crashed task, whose turn has ended, so no turn pays them.
+  - Owners (phase 24). `agc_own` records the task that made a
+    user-visible handle and its kind's close (`agc_resource.owner`,
+    `close`): a file (an `OP_CLOSE` job with no task, `agc_io_detached`;
+    while a job holds the file the close is pending, and `close_pending`
+    runs it after that job's `done` or `expired`, for a detached job
+    too), a socket, listener or TLS socket (`disown`, `why=crash`) and a
+    process (`close_proc`, never `release_proc`). The process guard, the
+    job resources, the stream locks and `HttpClient` have no owner. A
+    handle passed directly as the `Task.spawn` argument moves to the new
+    task when the caller owns it (`agc_owned_of`). A closing file is
+    marked `closing`: its lock waiters are woken, and `agc_handle_wait`
+    lets every caller through on a closing handle, so each builtin
+    returns the closed error. A handle made outside a turn (in the
+    `done` half of a detached job) gets no owner; `discard` closes it,
+    except a process, whose `release_proc` would kill every child of the
+    run. When a task ends normally, the handles it still owns go to its
+    parent (`agc_give_owned`), so a handle moved to a helper task and
+    returned with it is still closed if the parent crashes later. At the
+    end of the run, `agc_io_close` starts the same `OP_CLOSE` job for
+    every file still open (`close_files`), then waits for all file close
+    jobs, the crashed tasks' ones too (`finish_flushes`): with no limit
+    by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
+    a deadline `uv_timer_t` stops the wait after MS ms, and `vm/main.c`
+    prints one warning line (`agc_print_flush_timeout`) and keeps the
+    exit code.
   - Task cancellation (20b, the core that `close_server` (20c),
-    `Task.map` (17a) and task crash isolation (phase 24) build on; no
-    program can cancel a task yet). Each task records its `parent` (the
+    `Task.map` (17a) and task crash isolation (phase 24) build on; a
+    program cancels tasks only through a crash, which cancels the
+    crashed task's descendants). Each task records its `parent` (the
     task that spawned it; `main` has none) and a list of its running
     children (`children`, linked through `prev_sibling` and
     `next_sibling`; newest first, and no order is promised). When a task
@@ -267,7 +319,8 @@
       dropped, `pending_count` lowered), and its waiters are woken. On
       retry, a `Task.await` on a cancelled task halts with
       `RUNTIME-TASK-CANCELLED` ("task was cancelled") at that call's
-      span; so does any later `Task.await` on it.
+      span; so does any later `Task.await` on it. The `Result` entry
+      (phase 24) returns `error("task: cancelled")` instead.
     A running task (the one that calls the cancel, with N=1) only gets
     its flag and `vm->yield`: the builtin that cancels finishes its work,
     `CALL_BUILTIN` stores its result and returns, and the scheduler ends
@@ -362,17 +415,21 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
 - **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
   it ended: open handles are closed (the evaluator's cleanup), timers are
   closed, the loop runs once without waiting, and the loop is freed when no
-  job is left. Closing a handle writes its pending output. `agc_io_close`
-  returns false when a job is still stuck in the OS (a read on a silent
-  FIFO, say); `vm/main.c` then flushes stdout and stderr and ends with
-  `_exit`, because a normal exit would run libuv's destructor, which joins
-  the pool threads and would wait for that read. The flush of a handle's
-  write buffer at the end of run is a blocking write, so it can block on a
-  FIFO whose reader stopped reading, as Racket's flush in
-  `filesystem-close-all!` does (parity). A handle whose operation is still
-  running in the pool (`main` returned while a child task's read was in
-  flight) is not released: the job still uses its state. It is released
-  after the loop's last run once that job's work is done; otherwise it
+  job is left. Closing a file writes its pending output in an `OP_CLOSE`
+  pool job (§10.2.1, Owners), and the run waits for those jobs: without a
+  limit by default, so a write to a FIFO whose reader stopped reading
+  keeps the run open, as Racket's flush in `filesystem-close-all!` does;
+  `--flush-timeout MS` bounds that wait and then prints that file data may
+  not be written. `agc_io_close` returns false when a job is still stuck
+  in the OS (a read on a silent FIFO, or a flush past `--flush-timeout`);
+  `vm/main.c` then flushes stdout and stderr and ends with `_exit`,
+  because a normal exit would run libuv's destructor, which joins the
+  pool threads and would wait for that job. A file whose operation is
+  still running in the pool (`main` returned while a child task's read
+  was in flight) gets no close job and is not waited for: the job still
+  uses its state. It is released (`release_state`, a direct write on the
+  loop thread) after the loop's last run once that job's work is done;
+  otherwise it
   stays registered, `agc_io_close` returns false, and the process ends
   with `_exit` as above.
 - **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a
@@ -438,9 +495,10 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   retried. The TCP and process kinds use it at the deadline for
   everything but a send: a read, accept or wait leaves its handle (`drop`
   unlinks the request) without the `expired` half that would close it, a
-  connect or listen closes the socket or listener it was opening; a send waits
-  for its write callback, since the write request lives in the handle's
-  state. A pool job (files, stdin) cannot be stopped, so it ends when its
+  connect closes the socket it was opening; a send waits for its write
+  callback, since the write request lives in the handle's state. A listen
+  has no deadline: a cancelled listen ends when the listen does, and
+  `discard` closes the listener in its dropped result. A pool job (files, stdin) cannot be stopped, so it ends when its
   work ends. A job on the ready list is never swept until the drain
   takes it.
 - **External jobs (processes PR).** A kind with `external` set has no
