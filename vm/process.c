@@ -1,7 +1,6 @@
 #include "agc.h"
 
 #ifdef __linux__
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -28,7 +27,6 @@ typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 typedef struct proc proc;
 typedef struct request request;
 typedef struct guard guard;
-typedef struct watch watch;
 
 struct request {
   req_kind kind;
@@ -38,20 +36,12 @@ struct request {
   size_t count;
 };
 
-struct watch {
-  uv_signal_t handle;
-  guard *owner;
-  bool usable;
-};
-
 struct guard {
   agc_trace trace;
-  watch watches[AGC_STOP_SIGNALS];
   proc *first;
-  size_t running, handles;
+  size_t running;
   struct timespec deadline;
   bool released, reaping;
-  int signal;
 };
 
 struct proc {
@@ -109,27 +99,7 @@ static void close_handle(uv_handle_t *h, uv_close_cb done) {
 }
 
 static void guard_settle(guard *g) {
-  if (g->released && !g->handles && !g->running) free(g);
-}
-
-static void closed_watch(uv_handle_t *h) {
-  guard *g = ((watch *)(void *)h)->owner;
-  g->handles--;
-  guard_settle(g);
-}
-
-static void guard_stop(guard *g, int sig) {
-  sigset_t saved;
-  agc_io_block_stop(&saved);
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
-    uv_signal_t *h = &g->watches[k].handle;
-    if (!g->watches[k].usable || !uv_is_active((uv_handle_t *)h)) continue;
-    if (!sig && h->caught_signals != h->dispatched_signals) sig = agc_stop_signals[k];
-    uv_signal_stop(h);
-  }
-  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "guard_stop raise=%d", sig);
-  if (sig) raise(sig);
-  pthread_sigmask(SIG_SETMASK, &saved, NULL);
+  if (g->released && !g->running) free(g);
 }
 
 static void unlink_child(proc *p) {
@@ -142,7 +112,6 @@ static void unlink_child(proc *p) {
   if (p->run_next) p->run_next->run_prev = p->run_prev;
   p->run_prev = p->run_next = NULL;
   if (--g->running) return;
-  guard_stop(g, g->signal);
   guard_settle(g);
 }
 
@@ -439,14 +408,6 @@ static void exited(uv_process_t *h, int64_t status, int signal) {
   notify_waits(p);
 }
 
-static void interrupted(uv_signal_t *h, int signum) {
-  guard *g = ((watch *)(void *)h)->owner;
-  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "signal sig=%d running=%zu", signum, g->running);
-  g->signal = signum;
-  close_children(g);
-  guard_stop(g, signum);
-}
-
 static void link_child(guard *g, proc *p) {
   p->g = g;
   p->linked = true;
@@ -454,53 +415,35 @@ static void link_child(guard *g, proc *p) {
   p->run_next = g->first;
   if (g->first) g->first->run_prev = p;
   g->first = p;
-  if (g->running++) return;
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++)
-    if (g->watches[k].usable) uv_signal_start(&g->watches[k].handle, interrupted, agc_stop_signals[k]);
-  AGC_TRACE(&g->trace, AGC_TRACE_PROC, "guard_start watchers=%zu", g->handles);
+  g->running++;
 }
 
 static void release_guard(void *native) {
   guard *g = native;
   AGC_TRACE(&g->trace, AGC_TRACE_PROC, "guard_cleanup running=%zu", g->running);
   close_children(g);
-  guard_stop(g, 0);
   g->released = true;
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++)
-    if (g->watches[k].usable) close_handle((uv_handle_t *)&g->watches[k].handle, closed_watch);
   guard_settle(g);
 }
 
-static void keep_descriptors_private(void) {
-  DIR *dir = opendir("/proc/self/fd");
-  if (!dir) return;
-  int own = dirfd(dir);
-  for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
-    char *end = NULL;
-    long fd = strtol(e->d_name, &end, 10);
-    if (end == e->d_name || *end || fd < 3 || fd == own || fd > INT32_MAX) continue;
-    int flags = fcntl((int)fd, F_GETFD);
-    if (flags >= 0 && !(flags & FD_CLOEXEC)) fcntl((int)fd, F_SETFD, flags | FD_CLOEXEC);
-  }
-  closedir(dir);
+void agc_processes_stop(agc_vm *vm) {
+  if (vm->process_guard && vm->process_guard->native) close_children(vm->process_guard->native);
 }
 
-static guard *guard_of(agc_vm *vm, uv_loop_t *loop) {
+static bool keep_private(int fd, void *data) {
+  (void)data;
+  int flags = fd > 2 ? fcntl(fd, F_GETFD) : -1;
+  if (flags >= 0 && !(flags & FD_CLOEXEC)) fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+  return false;
+}
+
+static guard *guard_of(agc_vm *vm) {
   if (vm->process_guard) return vm->process_guard->native;
   agc_resource *r = agc_register(vm, NULL, release_guard);
   guard *g = calloc(1, sizeof(guard));
   if (!g) agc_out_of_memory();
   g->trace = vm->rt->trace;
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
-    watch *w = &g->watches[k];
-    w->owner = g;
-    struct sigaction now;
-    if (sigaction(agc_stop_signals[k], NULL, &now) || now.sa_handler == SIG_IGN || uv_signal_init(loop, &w->handle))
-      continue;
-    w->usable = true;
-    g->handles++;
-  }
-  keep_descriptors_private();
+  agc_each_fd(keep_private, NULL);
   r->native = g;
   vm->process_guard = r;
   return g;
@@ -797,7 +740,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
   uv_loop_t *loop = agc_io_uv(vm);
-  guard *g = guard_of(vm, loop);
+  guard *g = guard_of(vm);
   char *path = resolve(vm, command);
   if (!path) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=unresolved");
@@ -982,4 +925,6 @@ const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof ag
 const agc_builtin agc_process_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE}};
 
 const size_t agc_process_builtin_count = 0;
+
+void agc_processes_stop(agc_vm *vm) { (void)vm; }
 #endif

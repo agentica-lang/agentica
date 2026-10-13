@@ -167,6 +167,8 @@ static void shut(net *n, const char *why) {
   for (const request *q = n->handshakes; q; q = q->next) shut_one(q->child, why);
 }
 
+static void say_goodbye(void *native) { goodbye(native); }
+
 static void release_net(void *native) {
   net *n = native;
   shut(n, "exit");
@@ -203,6 +205,7 @@ static void close_net(agc_vm *vm, agc_resource *r) { disown(vm, r, "crash"); }
 
 static agc_resource *own(agc_vm *vm, net *n) {
   agc_resource *r = agc_register(vm, n, release_net);
+  r->goodbye = say_goodbye;
   agc_own(vm, r, close_net);
   n->users++;
   n->id = r->id;

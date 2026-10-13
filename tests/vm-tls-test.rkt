@@ -437,7 +437,7 @@ AGC
                                "error(\"network: listener is closed\")\n"))
                         (third result)))
 
-        (test-case "main returns while TLS tasks wait: every socket and handshake closes"
+        (test-case "main returns while TLS tasks wait: the run ends without draining them"
           (define trace (build-path work "exit.trace"))
           (define bytecode (compile-text work "exit" exit-program))
           (define result
@@ -448,8 +448,7 @@ AGC
           (check-equal? (take result 2) (list 0 "<Socket>\n<Socket>\n<Socket>\ndone\n") (third result))
           (define lines (file->lines trace))
           (define (count rx) (for/sum ([line (in-list lines)]) (if (regexp-match? rx line) 1 0)))
-          (check-equal? (count #rx" io close resources=0 settled=1$") 1 (string-join lines "\n"))
-          (check-equal? (count #rx" tls tls_close .* why=exit$") 5)
+          (check-equal? (count #rx" io end code=0 signal=0$") 1 (string-join lines "\n"))
           (check-equal? (count #rx" tls tls_handshake_done ") 4)
           (check-equal? (count #rx" tls tls_handshake socket=0 listener=[0-9]+ role=server$") 3)))
       (lambda () (delete-directory/files work)))))

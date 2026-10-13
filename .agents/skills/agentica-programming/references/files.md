@@ -45,14 +45,20 @@ no limit by default; `agentica --flush-timeout MS` (non-negative, bad values
 exit 2) waits at most MS ms, then ends the run with the same exit code and
 one stderr line, `agentica: file data may not be written: ...`, or
 `{"flush_timeout_ms": MS, "warning": "file data may not be written"}` with
-`--json` (not a diagnostic). FIFOs
-and devices count as files, but the VM reads and writes them with blocking
-calls: a FIFO with no peer may give EOF or an error instead of a timeout,
-and a stuck call keeps one of libuv's pool threads. File calls, stdin
-reads, DNS lookups and TLS certificate loading share that one pool per
-process: 4 threads by default. Set `UV_THREADPOOL_SIZE` (up to 1024) in the
-environment before starting the program to raise it, when many file calls
-run at once or may block; changing it later has no effect. Errors are Results. `File.stat` follows symlinks and
+`--json` (not a diagnostic). `SIGINT`, `SIGTERM` and `SIGHUP` take the
+same end: children stop, files are written, then the VM ends by the
+signal; a second signal ends it at once (after the children are
+stopped). A path that reopens a pipe the VM made itself (`/proc/self/fd/N`
+or `/dev/fd/N`) is refused as not a regular file; pipes the VM got at
+start (standard input, output and error, `bash <(...)`) stay readable. FIFOs
+and devices count as files: a FIFO with no writer gives EOF, and opening
+one for writing with no reader is an error. Calls on pipes, FIFOs and
+terminals (stdin too, when `/proc` lets the VM reopen it) wait on the VM's event loop, not in the thread pool,
+so a timeout really ends the wait; `File.read_text` of a pipe reads to EOF.
+Calls on regular files, DNS lookups and TLS certificate loading share one
+thread pool per process: 4 threads by default. Set `UV_THREADPOOL_SIZE`
+(up to 1024) in the environment before starting the program to raise it,
+when many file calls run at once; changing it later has no effect. Errors are Results. `File.stat` follows symlinks and
 returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`;
 directory sizes are zero. `Dir.list` returns immediate entry names sorted by
 name. `Dir.mkdir` creates parents and succeeds when the directory exists.

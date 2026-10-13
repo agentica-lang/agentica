@@ -203,18 +203,22 @@
   (with-handlers ([exn:fail? void])
     (write-string (string-append token "\n") stdin))
   (close-output-port stdin)
+  (define broke? #f)
   (dynamic-wind
     void
     (lambda ()
-      (define-values (out out-reader) (capture stdout))
-      (define-values (err err-reader) (capture stderr))
-      (subprocess-wait process)
-      (thread-wait out-reader)
-      (thread-wait err-reader)
-      (values (subprocess-status process)
-              (bytes->string/utf-8 (get-output-bytes out) #\uFFFD)
-              (bytes->string/utf-8 (get-output-bytes err) #\uFFFD)))
-    (lambda () (parameterize-break #f (stop-vm process)))))
+      (call-noting-break
+       (lambda () (set! broke? #t))
+       (lambda ()
+         (define-values (out out-reader) (capture stdout))
+         (define-values (err err-reader) (capture stderr))
+         (subprocess-wait process)
+         (thread-wait out-reader)
+         (thread-wait err-reader)
+         (values (subprocess-status process)
+                 (bytes->string/utf-8 (get-output-bytes out) #\uFFFD)
+                 (bytes->string/utf-8 (get-output-bytes err) #\uFFFD)))))
+    (lambda () (parameterize-break #f (stop-vm process #:interrupted? broke?)))))
 
 (define default-paths '("specs/" "test/"))
 

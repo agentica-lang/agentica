@@ -2,7 +2,7 @@
 
 (require (only-in ffi/unsafe -> _fun _int get-ffi-obj))
 
-(provide find-vm stop-vm running-executable)
+(provide find-vm stop-vm call-noting-break running-executable)
 
 (define vm-name (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))
 
@@ -24,8 +24,13 @@
 (define sigterm 15)
 (define vm-grace-seconds 2)
 
-(define (stop-vm process)
+(define (stop-vm process #:interrupted? [interrupted? #f])
   (when (eq? (subprocess-status process) 'running)
-    (when unix-kill (unix-kill (subprocess-pid process) sigterm))
-    (unless (and unix-kill (sync/timeout vm-grace-seconds process))
-      (subprocess-kill process #t))))
+    (unless (and interrupted? (sync/timeout vm-grace-seconds process))
+      (when unix-kill (unix-kill (subprocess-pid process) sigterm))
+      (unless (and unix-kill (sync/timeout vm-grace-seconds process))
+        (subprocess-kill process #t)))))
+
+(define (call-noting-break broke! thunk)
+  (with-handlers* ([exn:break? (lambda (e) (broke!) (raise e))])
+    (thunk)))
