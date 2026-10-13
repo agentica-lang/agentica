@@ -66,7 +66,7 @@ jobs:
       - name: Build the VM against glibc ${{ env.VM_GLIBC }}
         run: |
           set -o pipefail
-          make vm vm-test
+          make vm vm-test CCACHE=
           strip dist/agentica-vm
           sections=$(LC_ALL=C readelf -SW dist/agentica-vm)
           if grep -qE '[.](debug_info|symtab)[[:space:]]' <<< "$sections"; then

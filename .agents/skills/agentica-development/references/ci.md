@@ -82,7 +82,8 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 - Every compile goes through ccache: the Makefile finds it on `PATH`, and
   the runner image (ccache 4.12) points `CCACHE_DIR` at a volume that both
   runners share (`CCACHE_MAXSIZE=5G`), so hits carry across jobs and
-  pull requests. The release sets `CCACHE=` and never uses it.
+  pull requests. PR jobs can write to that volume, so the release sets
+  `CCACHE=` (in the job env and on the `make` line) and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`. The C tests
   still run one after another.
 - A `master` push runs no tests. It runs only `dup-check` (which also saves

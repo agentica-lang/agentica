@@ -144,9 +144,14 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   and every binary links from them (`VM_LINK`); a new `vm/*.c` file goes
   in `VM_SRC` only. `$(VM_BUILD)/obj-flags` recompiles the mode when the
   compile line changes; `tls_openssl.o` also follows the OpenSSL stamp.
-  Compiles run through `$(CCACHE)` (found on `PATH`; `CCACHE=` turns it
-  off; `CCACHE_BASEDIR` is the checkout and `CCACHE_NOHASHDIR=1`, so
-  worktrees share hits), the vendored OpenSSL too, but not its key.
+  Compiles run through `$(CCACHE)`, the vendored OpenSSL too, but not its
+  key. It is found on `PATH` and used only when `ccache -k cache_dir` is
+  writable; `CCACHE=` turns it off (use it when a ccache setup fails).
+  `CCACHE_BASEDIR` is the checkout, and the `-g` modes add
+  `-fdebug-prefix-map=$(CURDIR)=.` (to the compile only, not to the
+  stamps), so worktrees share hits and debug info names `.`.
+- `vm/tests/*_test.o` are `.SECONDARY`, so make keeps them and a second
+  `make vm vm-test` does nothing.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
