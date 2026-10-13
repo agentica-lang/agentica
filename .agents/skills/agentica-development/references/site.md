@@ -25,6 +25,8 @@ rule that a site page shows.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 - When the language or a builtin changes, update the matching site page too.
+- Do not hard-wrap prose in `site/content/`: one line per paragraph or list
+  item. Hugo joins the lines anyway. Code blocks keep their own line breaks.
 
 ## Examples are tests
 
