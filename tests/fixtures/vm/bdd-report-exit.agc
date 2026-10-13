@@ -48,6 +48,7 @@ def main() -> Void
     files = [Report.file_error("/specs/steps.agc", checked.unwrap!), feature([passing])]
     show("front end", files)
     puts(Report.json(files))
+    puts(Report.text([Report.file_error("/specs/steps.agc", Report.with_actual(checked.unwrap!, "ignored"))], true))
   end
   puts(Report.from_json("{\"code\":\"X\"}").message)
   odd = "a\"b\\c\nd\t" + String.from_code(233) + String.from_code(1) + String.from_code(127)
