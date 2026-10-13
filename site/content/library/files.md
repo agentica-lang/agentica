@@ -8,12 +8,7 @@ Every file function takes a timeout in milliseconds and returns a `Result`.
 Text is UTF-8. One call reads or writes at most 1 MiB. Programs use the file
 permissions of the user who runs them.
 
-File calls run on a pool of threads, 4 by default, which DNS lookups and
-loading TLS certificates share. When a program keeps many file calls going
-at once in several tasks, or reads FIFOs or devices that may block, later
-calls wait for a free thread. To raise the size, set the `UV_THREADPOOL_SIZE`
-environment variable (at most 1024) when you start the program, for example
-`UV_THREADPOOL_SIZE=16 agentica app.agc`; setting it later has no effect.
+Calls on regular files run on a pool of threads, 4 by default, which DNS lookups and loading TLS certificates share. When a program keeps many file calls going at once in several tasks, later calls wait for a free thread. To raise the size, set the `UV_THREADPOOL_SIZE` environment variable (at most 1024) when you start the program, for example `UV_THREADPOOL_SIZE=16 agentica app.agc`; setting it later has no effect. Calls on pipes, FIFOs and terminals do not use the pool: they wait on the program's event loop, so their timeout always ends the wait, and `File.read_text` of a pipe reads until the writer closes it.
 
 The examples on this page touch the disk, so they are checked but not run
 here.
@@ -94,7 +89,9 @@ File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 
 Opens a file for streaming. The mode is `"read"`, `"write"` (create or empty the file) or `"append"`. `close` writes pending data; closing twice is fine. A `close` on a file that is already being closed (its task crashed) returns `ok()` at once; the run still waits for that close to write the data.
 
-Open files are closed when the program ends, and the run waits until their pending data is written. `agentica --flush-timeout MS app.agc` waits at most MS milliseconds: when time runs out, the run ends with the same exit code and prints one line on stderr saying that file data may not be written. Without the flag the wait has no limit, so a write to a FIFO that nobody reads keeps the program from ending.
+Open files are closed when the program ends, and the run waits until their pending data is written. `agentica --flush-timeout MS app.agc` waits at most MS milliseconds: when time runs out, the run ends with the same exit code and prints one line on stderr saying that file data may not be written. Without the flag the wait has no limit, so a write to a FIFO that nobody reads keeps the program from ending. The same happens when the program is stopped with `SIGINT`, `SIGTERM` or `SIGHUP`: running child programs are stopped first, then the files are written, then the program ends by that signal. A second signal ends it at once, once the child programs are stopped. Under `agentica`, Ctrl-C reaches the program directly; `agentica` waits 2 seconds for it to end before it sends `SIGTERM`, and 2 more before it kills it.
+
+A path that reopens one of the program's own internal pipes, such as `/proc/self/fd/5`, gives `error("filesystem: path does not refer to a regular file")`. Pipes the program got when it started can still be opened by path: standard input, output and error, and a pipe from the shell such as `bash`'s `<(...)`.
 
 ```agentica {mode="check"}
 def main() -> Void

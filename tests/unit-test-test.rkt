@@ -192,4 +192,4 @@
   (test-case "the std/ unit tests pass"
     (match-define (list status report) (json-test (path->string std-tests)))
     (check-equal? status 0)
-    (check-equal? (list (hash-ref report 'passed) (hash-ref report 'failed)) '(9 0))))
+    (check-equal? (list (hash-ref report 'passed) (hash-ref report 'failed)) '(10 0))))

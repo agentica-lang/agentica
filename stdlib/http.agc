@@ -188,9 +188,9 @@ export def close_server(server: HttpServer) -> Void
 end
 
 def start(listener: Listener, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> HttpServer
-  server = HttpWire.server(listener, options.max_connections)
-  Task.spawn(&accept_all, Service(server: server, handler: handler, options: options))
-  return server
+  return HttpWire.server(listener, options.max_connections) do |server|
+    accept_all(Service(server: server, handler: handler, options: options))
+  end
 end
 
 def accept_all(service: Service) -> Void
@@ -218,37 +218,24 @@ def serve(socket: Socket, service: Service) -> Void
 end
 
 def answer(socket: Socket, request: HttpRequest, service: Service) -> Bool
-  head = request.method == "HEAD"
   timeout = service.options.request_timeout_ms
   case service.handler.call(request)
     ok(response) ->
-      close = closes?(request.headers) or closes?(response.headers)
-      case HttpWire.write_response(socket, response, head, close, timeout)
-        ok(_) -> return not close
+      case HttpWire.write_response(socket, request, response, timeout)
+        ok(keep) -> return keep
         error(message) ->
           if String.starts_with?(message, "http: invalid response: ")
             IO.warn(message)
-            failed(socket, head, timeout)
+            failed(socket, request, timeout)
           end
       end
     error(message) ->
       IO.warn("http: handler error: #{message}")
-      failed(socket, head, timeout)
+      failed(socket, request, timeout)
   end
   return false
 end
 
-def failed(socket: Socket, head: Bool, timeout: Int) -> Void
-  HttpWire.write_response(socket, HttpResponse(status: 500, headers: [], body: ""), head, true, timeout)
-end
-
-def closes?(headers: List[Header]) -> Bool
-  for value in header_values(headers, "connection")
-    for token in String.split(value, ",")
-      if String.downcase(String.trim(token)) == "close"
-        return true
-      end
-    end
-  end
-  return false
+def failed(socket: Socket, request: HttpRequest, timeout: Int) -> Void
+  HttpWire.write_response(socket, request, HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: ""), timeout)
 end

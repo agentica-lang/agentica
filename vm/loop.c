@@ -6,7 +6,9 @@
 #include <string.h>
 
 #ifdef __linux__
+#include <errno.h>
 #include <signal.h>
+#include <unistd.h>
 #include <uv.h>
 #endif
 
@@ -19,9 +21,17 @@ struct agc_registry {
 #ifdef __linux__
 typedef struct agc_io_job job;
 
+typedef struct {
+  atomic_int signal, now;
+  atomic_bool held;
+  pid_t driver;
+  uv_async_t *wake;
+} stop_state;
+
 struct agc_loop {
   uv_loop_t uv;
   uv_timer_t deadline;
+  uv_async_t wake;
   job *ready, *ready_tail;
   bool expired;
 };
@@ -31,11 +41,19 @@ struct agc_io_job {
   uv_timer_t timer;
   const agc_io_kind *kind;
   void *data;
+  agc_more_fn more;
   agc_loop *loop;
   job *ready_next;
   size_t slot;
   uint64_t started_ns, ended_ns;
-  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush;
+  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush, on_loop;
+};
+
+struct agc_poller {
+  uv_poll_t handle;
+  int fd;
+  void (*ready)(void *data, int status);
+  void *data;
 };
 #endif
 
@@ -89,6 +107,9 @@ void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to) {
     if (vm->registry->items[k]->owner == from) vm->registry->items[k]->owner = to;
 }
 
+/* A close can close other handles (a server drops its group) and
+   agc_unregister moves the last entry down into the freed slot, so entries
+   only move down: walking down meets every one still owned. */
 void agc_close_owned(agc_vm *vm) {
   for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;) {
     if (k >= vm->registry->count) continue;
@@ -152,9 +173,15 @@ static void mark_ready(job *j) {
   loop->ready_tail = j;
 }
 
+/* A job's `more` step (agc_io_start_then) may keep it waiting on the loop after
+   its pool work (a descriptor that can wait forever); agc_io_ready ends it. */
 static void work_finished(uv_work_t *req, int status) {
   (void)status;
   job *j = (job *)(void *)req;
+  if (!j->consumed && !j->detached && j->more && j->more(j->data, j)) {
+    j->on_loop = true;
+    return;
+  }
   j->work_done = true;
   mark_ready(j);
 }
@@ -197,16 +224,22 @@ static void sweep(agc_vm *vm) {
   }
 }
 
-static agc_loop *loop_of(agc_vm *vm) {
+static agc_loop *new_loop(agc_vm *vm) {
   if (vm->loop) return vm->loop;
   agc_loop *loop = malloc(sizeof(agc_loop));
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
   if (uv_loop_init(&loop->uv) != 0) {
     free(loop);
-    agc_fail(vm, "RUNTIME-INTERNAL", "cannot start the event loop", 0);
+    return NULL;
   }
   vm->loop = loop;
+  return loop;
+}
+
+static agc_loop *loop_of(agc_vm *vm) {
+  agc_loop *loop = new_loop(vm);
+  if (!loop) agc_fail(vm, "RUNTIME-INTERNAL", "cannot start the event loop", 0);
   return loop;
 }
 
@@ -259,6 +292,10 @@ static void discard(agc_vm *vm, agc_value result) {
   agc_unregister(vm, r);
 }
 
+/* Only a loop wait can be cancelled: a pool job's work runs to its end
+   (docs/vm/14-core-invariants.md, 14.3). */
+static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->work || j->on_loop); }
+
 /* A detached job (its task was cancelled) ends here, between turns: its
    result is dropped, its `expired` half never runs, so it never closes a
    task's handle, and the turn cost of `done` is not charged to the current
@@ -266,7 +303,7 @@ static void discard(agc_vm *vm, agc_value result) {
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
   if (!j->dropping && !j->work_done) {
-    if (!j->timer_fired || !j->kind->cancel || !j->kind->cancel(vm, j->data, r->context, true)) return;
+    if (!j->timer_fired || !cancellable(j) || !j->kind->cancel(vm, j->data, r->context, true)) return;
     j->dropping = true;
   }
   close_timer(j);
@@ -310,13 +347,93 @@ static void drain(agc_vm *vm) {
   }
 }
 
-const int agc_stop_signals[AGC_STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
+#define STOP_SIGNALS 3
+#define STOP_GRACE_SECONDS 3
+
+static const int stop_signals[STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
 
 void agc_io_block_stop(sigset_t *saved) {
   sigset_t block;
   sigemptyset(&block);
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) sigaddset(&block, agc_stop_signals[k]);
+  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&block, stop_signals[k]);
   pthread_sigmask(SIG_BLOCK, &block, saved);
+}
+
+/* A signal handler gets no context, so the stop state is the one
+   process-wide variable. `held` is true until the children are stopped:
+   till then a second signal is only recorded in `now`. */
+static stop_state stop; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+_Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the stop state is read in a signal handler");
+
+static void stop_at_once(int sig) {
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}
+
+static void stop_overdue(int sig) {
+  (void)sig;
+  int now = atomic_load(&stop.now);
+  if (now) stop_at_once(now);
+}
+
+static void stop_requested(int sig) {
+  int saved = errno;
+  int none = 0;
+  bool first = atomic_compare_exchange_strong(&stop.signal, &none, sig);
+  bool orphan = stop.driver && getppid() != stop.driver;
+  if (first && !orphan) {
+    if (stop.wake) uv_async_send(stop.wake);
+  } else if (atomic_load(&stop.held)) {
+    none = 0;
+    if (atomic_compare_exchange_strong(&stop.now, &none, sig)) {
+      struct sigaction act = {0};
+      act.sa_handler = stop_overdue;
+      sigemptyset(&act.sa_mask);
+      sigaction(SIGALRM, &act, NULL);
+      alarm(STOP_GRACE_SECONDS);
+    }
+    if (stop.wake) uv_async_send(stop.wake);
+  } else {
+    stop_at_once(sig);
+  }
+  errno = saved;
+}
+
+static void stop_woken(uv_async_t *wake) { (void)wake; }
+
+void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
+  agc_loop *loop = new_loop(vm);
+  if (loop && uv_async_init(&loop->uv, &loop->wake, stop_woken) == 0) {
+    uv_unref((uv_handle_t *)&loop->wake);
+    stop.wake = &loop->wake;
+  }
+  stop.driver = (pid_t)driver;
+  atomic_store(&stop.held, true);
+  struct sigaction act;
+  memset(&act, 0, sizeof act);
+  act.sa_handler = stop_requested;
+  sigemptyset(&act.sa_mask);
+  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
+  for (size_t k = 0; k < STOP_SIGNALS; k++) {
+    struct sigaction now;
+    if (sigaction(stop_signals[k], NULL, &now) == 0 && now.sa_handler != SIG_IGN)
+      sigaction(stop_signals[k], &act, NULL);
+  }
+}
+
+int agc_io_stop_signal(void) { return atomic_load(&stop.signal); }
+
+void agc_io_children_stopped(void) {
+  atomic_store(&stop.held, false);
+  int now = atomic_load(&stop.now);
+  if (!now) return;
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, now);
+  pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+  stop_at_once(now);
+  _exit(128 + now);
 }
 
 static int queue_work(agc_loop *loop, job *j) {
@@ -326,6 +443,41 @@ static int queue_work(agc_loop *loop, job *j) {
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
   return rc;
 }
+
+static void poll_ready(uv_poll_t *handle, int status, int events) {
+  (void)events;
+  agc_poller *p = (agc_poller *)(void *)handle;
+  p->ready(p->data, status);
+}
+
+static void poller_closed(uv_handle_t *handle) {
+  agc_poller *p = (agc_poller *)(void *)handle;
+  close(p->fd);
+  free(p);
+}
+
+agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
+  agc_poller *p = calloc(1, sizeof(agc_poller));
+  if (!p) agc_out_of_memory();
+  int rc = uv_poll_init(&loop_of(vm)->uv, &p->handle, fd);
+  if (rc != 0) {
+    free(p);
+    *err = -rc;
+    return NULL;
+  }
+  p->fd = fd;
+  return p;
+}
+
+void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
+  p->ready = ready;
+  p->data = data;
+  if (uv_poll_start(&p->handle, writing ? UV_WRITABLE : UV_READABLE, poll_ready) != 0) ready(data, UV_EBADF);
+}
+
+void agc_poller_pause(agc_poller *p) { uv_poll_stop(&p->handle); }
+
+void agc_poller_close(agc_poller *p) { uv_close((uv_handle_t *)&p->handle, poller_closed); }
 
 bool agc_io_init(void) {
   if (getenv("UV_USE_IO_URING")) return false;
@@ -338,13 +490,14 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task) {
-  if (kind->work && kind->cancel) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
+                               int64_t timeout_ms, const agc_task *task, agc_more_fn more) {
+  if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
   j->kind = kind;
   j->data = data;
+  j->more = more;
   j->loop = loop;
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
@@ -375,18 +528,24 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   return r;
 }
 
-agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task);
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                              agc_more_fn more) {
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
   return r->native;
 }
 
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL);
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+  return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
+}
+
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL);
   job *j = r->native;
   j->detached = j->flush = true;
+  return j;
 }
 
 void agc_io_ready(agc_io_job *j) {
@@ -484,7 +643,7 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
     result = j->kind->expired(vm, j->data, context);
   }
   trace_finish(vm, r, j, done, result);
-  if (j->kind->external) j->work_done = true;
+  if (j->kind->external || j->on_loop) j->work_done = true;
   close_pending(vm, context);
   sweep(vm);
   return result;
@@ -497,7 +656,7 @@ void agc_io_detach(agc_vm *vm, agc_task *t) {
   job *j = r->native;
   j->detached = true;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "detach job=%" PRIu64 " kind=%s task=%" PRIu64, r->id, j->kind->name, t->id);
-  if (j->kind->cancel && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
+  if (cancellable(j) && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
   if (j->dropping || j->work_done || j->timer_fired) mark_ready(j);
 }
 
@@ -513,6 +672,13 @@ static void release_handles(agc_vm *vm) {
     if (r->native) r->release(r->native);
     r->native = NULL;
     agc_unregister(vm, r);
+  }
+}
+
+void agc_io_goodbye(agc_vm *vm) {
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    agc_resource *r = vm->registry->items[k];
+    if (r->goodbye && r->native) r->goodbye(r->native);
   }
 }
 
@@ -555,18 +721,22 @@ static void finish_flushes(agc_vm *vm) {
   vm->rt->flush_expired = flushing(vm);
 }
 
+void agc_io_flush_files(agc_vm *vm) {
+  if (!vm->loop) return;
+  close_files(vm);
+  finish_flushes(vm);
+}
+
 static bool close_all(agc_vm *vm) {
-  if (vm->loop) {
-    close_files(vm);
-    finish_flushes(vm);
-  }
+  agc_io_flush_files(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
     if (!j) continue;
     j->consumed = true;
-    if (j->kind->external) j->work_done = true;
+    if (j->kind->external || j->on_loop) j->work_done = true;
     close_timer(j);
   }
+  agc_input_close(vm);
   release_handles(vm);
   if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
@@ -606,7 +776,7 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   (void)timeout_ms;
 }
 
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
   (void)kind;
   (void)data;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
@@ -639,4 +809,17 @@ bool agc_io_close(agc_vm *vm) {
   (void)vm;
   return true;
 }
+
+void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
+  (void)vm;
+  (void)driver;
+}
+
+int agc_io_stop_signal(void) { return 0; }
+
+void agc_io_children_stopped(void) {}
+
+void agc_io_goodbye(agc_vm *vm) { (void)vm; }
+
+void agc_io_flush_files(agc_vm *vm) { (void)vm; }
 #endif

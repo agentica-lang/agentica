@@ -18,12 +18,14 @@ typedef struct {
 void agc_http_put(agc_http_bytes *b, const void *data, size_t n);
 void agc_http_put_text(agc_http_bytes *b, const char *text);
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
-                                 size_t managed_count, const char *managed_reason, size_t *count);
+                                 size_t managed_count, const char *managed_reason, const char *skip, size_t *count);
 void agc_http_fields_keep(agc_http_fields *f, const agc_http_head *head);
 void agc_http_fields_free(agc_http_fields *f);
 size_t agc_http_fields_bytes(const agc_http_fields *f);
 agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f);
 bool agc_http_closes(const agc_http_head *head);
+agc_http_slice agc_http_text(agc_vm *vm, agc_value v);
+bool agc_http_list_closes(agc_vm *vm, const agc_list *headers);
 agc_value agc_http_error_result(const char *prefix, const char *reason);
 
 #endif

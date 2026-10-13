@@ -234,11 +234,24 @@ static void mark_subtree(agc_task *root) {
   }
 }
 
+/* The one way a subtree is dropped, for a crash (its root has already
+   ended, so only its children are cancelled) and for close_server. */
+static void drop_tree(agc_vm *vm, agc_task *root, bool with_root) {
+  mark_subtree(root);
+  if (with_root) {
+    agc_task_cancel(vm, root);
+  } else {
+    for (agc_task *child = root->children, *next; child; child = next) {
+      next = child->next_sibling;
+      agc_task_cancel(vm, child);
+    }
+  }
+  agc_close_owned(vm);
+}
+
 void agc_task_drop(agc_vm *vm, agc_task *root) {
   if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
-  mark_subtree(root);
-  agc_task_cancel(vm, root);
-  agc_close_owned(vm);
+  drop_tree(vm, root, true);
 }
 
 /* No await can observe a hidden task (an HTTP connection task), so of its
@@ -274,12 +287,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   agc_print_diagnostic(vm->rt->err, vm->rt->program, o, vm->rt->style, true);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
-  mark_subtree(t);
-  for (agc_task *child = t->children, *next; child; child = next) {
-    next = child->next_sibling;
-    agc_task_cancel(vm, child);
-  }
-  agc_close_owned(vm);
+  drop_tree(vm, t, false);
   finish_task(vm, t);
 }
 
@@ -331,6 +339,13 @@ void agc_task_observe(agc_vm *vm, agc_task *t) {
   t->crash_next = t->crash_prev = NULL;
 }
 
+/* A stop signal ends the run between turns as an exit with 128 + signal;
+   vm/main.c then raises it again after the exit path. */
+static void check_stop(agc_vm *vm) {
+  int sig = agc_io_stop_signal();
+  if (sig) agc_stop(vm, sig);
+}
+
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_task_enter(vm, vm->main, vm->rt->program->entry);
@@ -339,7 +354,9 @@ agc_outcome agc_vm_run(agc_vm *vm) {
     for (;;) {
       agc_task *t = dequeue(vm);
       if (!t) {
+        check_stop(vm);
         if (!agc_io_poll(vm, true)) {
+          check_stop(vm);
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stall pending=%" PRIu64, pending_tasks(vm) + 1);
           agc_fail(vm, "RUNTIME-INTERNAL", "every task is waiting and nothing can wake them", 0);
         }
@@ -369,6 +386,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
         enqueue(vm, t);
       }
       agc_io_poll(vm, false);
+      check_stop(vm);
     }
     vm->rt->outcome.kind = AGC_DONE;
     if (agc_report_unobserved(vm)) {

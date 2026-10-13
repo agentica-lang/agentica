@@ -20,6 +20,8 @@ bool agc_conn_clean_eof(const agc_conn *c);
 void agc_conn_hold(agc_conn *c, bool hold);
 agc_inbuf *agc_conn_input(agc_conn *c);
 void agc_conn_read(agc_conn *c);
+void agc_conn_pause(agc_conn *c);
+void agc_conn_goodbye(agc_conn *c);
 void agc_conn_shut(agc_conn *c, const char *why);
 void agc_conn_half_close(agc_conn *c);
 void agc_conn_release(agc_conn *c);

@@ -94,9 +94,13 @@ the behaviour is the same with both.
   framing above TLS (lines, HTTP lengths) must catch truncation. A
   transport error after the handshake is the TCP read error; a TLS error
   after it is "error reading from stream port" with `EPROTO`.
-- **Close.** `TCP.close`, a timeout and the end of the run send
-  `close_notify` with one `uv_try_write` when the handshake finished and
-  no write is pending, then close as TCP does.
+- **Close.** `TCP.close` and a timeout send `close_notify` with one
+  `uv_try_write` when the handshake finished and no write is pending, then
+  close as TCP does. The end of the run does not close sockets one by one
+  (10.2.2): `agc_io_goodbye` calls the `goodbye` hook `tcp.c` sets on each
+  socket resource, which sends that same one write, and `_exit` closes the
+  descriptor. HTTP client connections have no hook yet, so the end of the
+  run gives them no `close_notify` (20c can add one).
 - **Messages** keep Racket's shapes: "ssl-connect: connect failed
   (detail)", "port->ssl-ports: accept failed (detail)",
   "ssl-load-certificate-chain!: load failed from: \"path\" (detail)",
@@ -254,13 +258,13 @@ TLS sockets are the same `net` with a TLS session on top (10.3).
   request, which returns "network: socket is closed" or "network:
   listener is closed". As with Racket, data the program never read makes
   the kernel answer with RST instead of FIN.
-- **End of run.** Sockets and listeners are registered resources, so
-  `agc_io_close` closes them all, also while reads, writes, accepts and
-  connects are parked (`main` returned, `System.exit`, a runtime error,
-  the step limit); the loop then closes cleanly (`io close resources=0
-  settled=1`). A DNS lookup already running in the pool cannot be
-  cancelled; then the loop stays busy and the VM ends with `_exit`
-  (10.2.2).
+- **End of run.** Sockets and listeners are not closed one by one: the
+  one exit path (10.2.2) drains nothing and ends with `_exit`, so the OS
+  closes them, also while reads, writes, accepts and connects are parked
+  (`main` returned, `System.exit`, a runtime error, the step limit, a stop
+  signal). A peer sees FIN, or RST when data was left unread; a TLS peer
+  gets no `close_notify`. A DNS lookup still running in the pool is not
+  waited for.
 - **Fuzzing.** Under `no_files` (the fuzzer), `TCP.connect` and
   `TCP.listen` end the run with `RUNTIME-INTERNAL`, so a mutant never
   touches the network. The other TCP builtins need a handle from these
@@ -380,9 +384,9 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   order with `IO.warn` output and without waiting for a builtin. If that
   write fails, the rest is read and dropped.
 - **Close.** `Process.close`, a timed-out read or write, and the end of
-  the run (`agc_io_close` releases every resource, also after
-  `System.exit`, a runtime error or the step limit) all go through one
-  close. If the child still runs, it sends `SIGKILL` and polls `waitpid`
+  the run (`agc_processes_stop`, the first step of the one exit path of
+  10.2.2, also after `System.exit`, a runtime error, the step limit or a
+  stop signal) all go through one close. If the child still runs, it sends `SIGKILL` and polls `waitpid`
   with `WNOHANG` every 0.1 ms until a `CLOCK_MONOTONIC` deadline 1 second
   away; a child normally dies within the first polls. `Process.close` and
   a stream timeout give their one child its own deadline. A cleanup of all
@@ -397,46 +401,27 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   handle. A failed kill in `Process.close` ends the run with
   `RUNTIME-PROCESS-CLOSE`, as the evaluator's failed cleanup does; inside
   a timed-out read or write the timeout error stands. If such a child is
-  still there at the end of the run, `uv_loop_close` fails and the VM ends
-  with `_exit` (10.2.2), leaving that child to `init`. Otherwise the pipes
+  still there at the end of the run, the VM ends with `_exit` anyway
+  (10.2.2), leaving that child to `init`. Otherwise the pipes
   are closed at once; libuv's own reap later finds no child and does
   nothing. The waiting reader, writer and waits are readied and see
   "process is closed". A second `close` does nothing, and any other
   operation after it returns "process is closed", as in the evaluator. So
   no child outlives a run that ends normally and no zombie or pipe stays
   behind.
-- **Signals.** The first spawn of a run makes a guard with one
-  `uv_signal_t` each for `SIGINT`, `SIGTERM` and `SIGHUP` (not for a
-  signal the VM started with ignored, as under `nohup`), registered as a
-  resource so the end of the run releases it. The guard keeps a list of
-  the running children and starts its watchers before the first child's
-  `uv_spawn`, so a signal that comes during a spawn is seen once the
-  child is listed; it stops them when the last running child is reaped,
-  so a program with no running child keeps the default actions (and the
-  scheduler's stall check). libuv's own handler only writes to a pipe, so
-  nothing runs in signal context. When a watcher runs on the loop thread,
-  it kills and reaps every running child and raises the signal again
-  after stopping the watchers, so the VM ends by that signal as it would
-  without children. Stopping a watcher could drop a signal that libuv
-  caught but had not dispatched yet (it discards the queued message of a
-  stopped watcher), so every stop blocks the three signals on the loop
-  thread, compares the watcher's `caught_signals` with its
-  `dispatched_signals` (fields of the pinned libuv's `uv_signal_t`), and
-  when one was caught it raises it before unblocking: the VM then ends by
-  it once the children are gone. The pool threads keep the three signals
-  blocked (10.2.2), so no handler runs on another thread while the loop
-  thread stops the watchers. The loop runs between turns, so a CPU-bound
-  task delays the cleanup by at most one turn. A blocking write to stdout
-  delays it until that write ends, which may be never: if nobody reads the
-  VM's stdout any more (for example `agentica prog.agc | less` after
-  the pager stopped reading and the driver died), the VM stays blocked in
-  `write`, never runs its loop, and neither it nor its children react to
-  the `SIGTERM` (the parent-death signal of 9 included); the VM has no
-  alarm fallback for this. A VM killed by `SIGKILL`, or ended by the
-  out-of-memory exit (70, 6.3), leaves its children running (they get EOF
-  or `EPIPE` when they next touch a pipe). `agentica` stops the VM
-  with `SIGTERM` and kills it only after 2 seconds (9), so a cleanup that
-  takes longer than that leaves the rest of the children running.
+- **Signals.** A stop signal (`SIGINT`, `SIGTERM`, `SIGHUP`) takes the
+  one exit path of 10.2.2 ("Stop signals"): the run ends, the children are
+  killed and reaped as above, the files are flushed, and the VM raises the
+  signal again, so it ends by that signal as it would without children. The
+  process guard has no signal watchers of its own: it only lists the
+  running children for that cleanup. The children are killed before the
+  file flush, so a flush with no limit never delays their cleanup, and a
+  second stop signal that comes before they are killed waits for that
+  (10.2.2). A VM killed by `SIGKILL`, or ended by the out-of-memory exit
+  (70, 6.3), leaves its children running (they get EOF or `EPIPE` when
+  they next touch a pipe). On a break `agentica` waits 2 seconds, then
+  sends `SIGTERM`, and kills the VM only 2 seconds after that (8), so a
+  cleanup that takes longer leaves the rest of the children running.
 - **Black-box differences.**
   - A file that exists but cannot be executed (no execute permission, a
     bad format) is an error `Result` from `Process.spawn` on the VM; the
@@ -819,8 +804,8 @@ HttpWire.close_client(client: HttpClient) -> Void
 
 ```text
 HttpWire.read_request(socket: Socket, first_byte_timeout_ms: Int, timeout_ms: Int, max_body_bytes: Int) -> Result[HttpRequest]
-HttpWire.write_response(socket: Socket, response: HttpResponse, head_only: Bool, close: Bool, timeout_ms: Int) -> Result[Void]
-HttpWire.server(listener: Listener, max_connections: Int) -> HttpServer
+HttpWire.write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout_ms: Int) -> Result[Bool]
+HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
 HttpWire.accept(server: HttpServer) -> Result[Socket]
 HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void
 HttpWire.close_server(server: HttpServer) -> Void
@@ -851,17 +836,31 @@ HttpWire.local_port(server: HttpServer) -> Int
   a request is "http: connection closed before the request was complete";
   the deadline closes the socket and returns "network: operation timed
   out" with no answer. Header names are lowercased and values decoded as
-  Latin-1; `path` is the target before `?`.
+  Latin-1; `path` is the target before `?`. When the request is complete
+  the socket stops reading (`agc_conn_pause`) until the next
+  `read_request`, so a client that pipelines bytes while a response is
+  written cannot grow the input buffer.
 - `write_response` builds the whole response before it writes: a status
   of 200 to 599 (the reason phrase is the standard one, or empty), the
   header checks of the client (`Content-Length` and `Transfer-Encoding`
   are refused: "Content-Length and Transfer-Encoding are set by the
   server"), no body with 204 or 304, a `Date` header unless the handler set
-  one, `Content-Length` except on 204 and 304, `Connection: close` when
-  `close` is true and the handler did not send it, and the body unless
-  `head_only`. A bad response is `error("http: invalid response: <reason>")`
-  with nothing written. `timeout_ms` bounds the write from the call.
-- The `HttpServer` handle holds the listener, the number of open
+  one, `Content-Length` except on 204 and 304, and the body unless the
+  request's method is `HEAD`. The connection closes when the request or
+  the response has `Connection: close` (`agc_http_list_closes`, the same
+  token check as the client's `agc_http_closes`): then the handler's
+  `Connection` headers are dropped and one `Connection: close` is sent, so
+  the header cannot contradict itself. A bad response is
+  `error("http: invalid response: <reason>")` with nothing written.
+  Otherwise the call returns `ok(true)` when the connection stays open and
+  `ok(false)` after a closing response, which gets the same lingering close
+  as the error answers before the socket closes. `timeout_ms` bounds the
+  write, and the lingering, from the call; a deadline during the lingering
+  still returns `ok(false)`.
+- `server` makes the `HttpServer` and runs `f(server)`, the accept loop of
+  `std/http`, as a task of the group, so `close_server` cancels it with the
+  connections and a server closed inside `Test.run` leaves no task running.
+  The `HttpServer` handle holds the listener, the number of open
   connections, `max_connections` (1 to 65536) and the jobs of tasks parked
   in `accept` or `wait`, and a group node: a task that never runs
   (`agc_task_group`), the parent of the connection tasks. `accept` returns
@@ -891,14 +890,19 @@ HttpWire.local_port(server: HttpServer) -> Int
   only the first per test (or per run outside `Test.run`) is kept in the
   crash list, and the others are counted on it. With observed crashes
   leaving the list, the list stays bounded however many handlers crash.
-- `std/http` runs the accept loop as a task and, for each socket,
+- `std/http` runs the accept loop in the group and, for each socket,
   `spawn`s the connection loop: `read_request` (the first request waits
   `request_timeout_ms` for its first byte, later ones `idle_timeout_ms`),
   the handler with no time limit, then `write_response` with a fresh
   `request_timeout_ms`. A handler `error` or a response that
   `write_response` refuses gives a 500 with `Connection: close` and one
   `IO.warn` line (`http: handler error: ...` or `http: invalid response:
-  ...`). The connection closes after `Connection: close` on either side.
+  ...`). The loop ends when `write_response` returns anything but
+  `ok(true)`.
+- At the end of the run the exit path's `goodbye` hook sends one
+  non-blocking TLS `close_notify` on each HTTPS connection of an
+  `HttpClient`, idle or in use (`agc_conn_goodbye`), as tcp.c does for its
+  sockets; the server's connections are tcp.c sockets and get it there.
 - Turn cost (`AGC_COST_SIZE`): `read_request` charges the body, the header
   count and their bytes when it ends; `write_response` charges the
   response's bytes.

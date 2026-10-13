@@ -158,6 +158,67 @@ static bool bind_to_driver(int64_t driver) {
 }
 #endif
 
+static bool flush_stream(FILE *stream) {
+  while (fflush(stream) != 0) {
+    if (errno != EINTR) return false;
+    clearerr(stream);
+  }
+  return true;
+}
+
+static void flush_files(agc_vm *vm) {
+  if (setjmp(vm->fail) == 0) {
+    agc_io_flush_files(vm);
+    return;
+  }
+  const agc_outcome *o = &vm->rt->outcome;
+  agc_print_flush_failed(stderr, o->code, o->message, o->message_len, vm->rt->style);
+}
+
+/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
+   then standard output and the files, then the exit. Nothing else is
+   drained: the OS frees descriptors and memory. */
+static int end_run(agc_vm *vm, agc_outcome outcome) {
+  agc_processes_stop(vm);
+  agc_io_children_stopped();
+  agc_io_goodbye(vm);
+  bool stdout_ok = flush_stream(stdout);
+  flush_stream(stderr);
+  flush_files(vm);
+  agc_files_close(vm);
+  if (vm->rt->flush_expired) agc_print_flush_timeout(stderr, vm->rt->flush_timeout, vm->rt->style);
+  if (outcome.kind != AGC_FAILED && !agc_io_stop_signal() && (!stdout_ok || !flush_stream(stdout))) {
+    outcome.kind = AGC_FAILED;
+    outcome.code = "RUNTIME-INTERNAL";
+    outcome.message = "cannot write to standard output";
+    outcome.message_len = strlen(outcome.message);
+    outcome.span = 0;
+  }
+  int code = 0;
+  if (outcome.kind == AGC_FAILED) {
+    agc_print_diagnostic(stderr, vm->rt->program, &outcome, vm->rt->style, false);
+    code = 1;
+  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
+    code = (int)outcome.exit_code;
+  }
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
+  flush_stream(stdout);
+  flush_stream(stderr);
+#ifdef __linux__
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+  int sig = agc_io_stop_signal();
+  if (sig) {
+    signal(sig, SIG_DFL);
+    pthread_sigmask(SIG_SETMASK, &saved, NULL);
+    raise(sig);
+  }
+  _exit(code);
+#else
+  return code;
+#endif
+}
+
 #ifdef _WIN32
 static int private_trace_fd(int fd) { return fd; }
 #else
@@ -304,6 +365,7 @@ static int run(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
 #endif
   agc_init();
+  agc_file_ids inherited = agc_files_inherited();
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
   int64_t driver = 0, flush_timeout = -1;
@@ -414,6 +476,7 @@ static int run(int argc, char **argv) {
   vm->rt->flush_timeout = flush_timeout;
   vm->rt->allow_run = allow_run;
   vm->rt->drop_uring_env = own_uring_env;
+  vm->rt->inherited = inherited;
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");
@@ -422,38 +485,11 @@ static int run(int argc, char **argv) {
   agc_random_seed(&vm->main->random, vm->rt->seed);
   vm->rt->args = program_args(argc, argv, i + 1);
   bool reserved = agc_test_protocol(vm);
+  if (reserved) agc_files_forget(&vm->rt->inherited, 0);
   agc_input_open(vm, reserved ? reserve_stdin() : 0, isatty(1));
   vm->rt->in.reserved = reserved;
-  agc_outcome outcome = agc_vm_run(vm);
-  bool stdout_ok = fflush(stdout) == 0;
-  bool settled = agc_io_close(vm);
-  agc_files_close(vm);
-  if (vm->rt->flush_expired) agc_print_flush_timeout(stderr, flush_timeout, style);
-  if (outcome.kind != AGC_FAILED && (!stdout_ok || fflush(stdout) != 0)) {
-    outcome.kind = AGC_FAILED;
-    outcome.code = "RUNTIME-INTERNAL";
-    outcome.message = "cannot write to standard output";
-    outcome.message_len = strlen(outcome.message);
-    outcome.span = 0;
-  }
-  int code = 0;
-  if (outcome.kind == AGC_FAILED) {
-    agc_print_diagnostic(stderr, program, &outcome, style, false);
-    code = 1;
-  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
-    code = (int)outcome.exit_code;
-  }
-#ifdef __linux__
-  if (!settled) {
-    AGC_TRACE(&trace, AGC_TRACE_IO, "hard_exit code=%d", code);
-    fflush(stdout);
-    fflush(stderr);
-    _exit(code);
-  }
-#else
-  (void)settled;
-#endif
-  return code;
+  agc_io_watch_stop(vm, seen_driver ? driver : 0);
+  return end_run(vm, agc_vm_run(vm));
 }
 
 #ifdef _WIN32

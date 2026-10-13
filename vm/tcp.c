@@ -167,6 +167,8 @@ static void shut(net *n, const char *why) {
   for (const request *q = n->handshakes; q; q = q->next) shut_one(q->child, why);
 }
 
+static void say_goodbye(void *native) { goodbye(native); }
+
 static void release_net(void *native) {
   net *n = native;
   shut(n, "exit");
@@ -203,6 +205,7 @@ static void close_net(agc_vm *vm, agc_resource *r) { disown(vm, r, "crash"); }
 
 static agc_resource *own(agc_vm *vm, net *n) {
   agc_resource *r = agc_register(vm, n, release_net);
+  r->goodbye = say_goodbye;
   agc_own(vm, r, close_net);
   n->users++;
   n->id = r->id;
@@ -1171,6 +1174,10 @@ void agc_conn_hold(agc_conn *c, bool hold) {
 agc_inbuf *agc_conn_input(agc_conn *c) { return &c->in; }
 
 void agc_conn_read(agc_conn *c) { start_reading(c); }
+
+void agc_conn_pause(agc_conn *c) { stop_reading(c); }
+
+void agc_conn_goodbye(agc_conn *c) { goodbye(c); }
 
 static void write_side_shut(uv_shutdown_t *req, int status) {
   (void)status;

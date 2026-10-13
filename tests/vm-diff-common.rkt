@@ -962,9 +962,8 @@
             (check-equal? (list-tail lines (min 2 (length lines))) (if (equal? mode "wait") '("false") '()) mode)
             (when (string? pid)
               (check-true (process-gone? pid) mode))
-            (check-false (regexp-match? #rx"hard_exit" (third result)) mode)
             (when traced?
-              (check-true (regexp-match? #rx"close resources=0 settled=1" (third result)) mode)))
+              (check-true (regexp-match? #rx" io end code=0 signal=0" (third result)) mode)))
           (lambda ()
             (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
               (unix-kill (string->number pid) sigkill))))))
