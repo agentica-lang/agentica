@@ -44,6 +44,17 @@ pre {
   text-transform: uppercase;
 }
 
+.sample-error {
+  .sample-label,
+  pre {
+    color: var(--accent);
+  }
+
+  pre {
+    border-color: var(--accent);
+  }
+}
+
 .chroma {
   .k,
   .kc,

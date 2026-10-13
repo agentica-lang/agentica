@@ -18,7 +18,11 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   outage does not hide the test results.
 - `vm-sanitizers`: `make vm-lint`, the ASan golden, bytecode, trace, TCP and
   TLS tests, the fuzz smoke and the GC stress build. The TCP tests need
-  Node; the TLS tests need Node and Python 3.
+  Node; the TLS tests need Node and Python 3. The job sets
+  `AGENTICA_SWEEP=sampled`, so its golden and GC-stress runs sample the
+  `--max-steps` sweep with a seed from `GITHUB_SHA` (the `test` job keeps
+  the full sweep on the release VM); a failure prints
+  `AGENTICA_SWEEP_SEED`.
 - OpenSSL: every CI job builds with the system OpenSSL (the default
   `AGENTICA_OPENSSL=system`; a guard step installs `libssl-dev pkg-config` when
   `pkg-config` cannot find OpenSSL 3, a no-op on our runners), the
@@ -82,7 +86,8 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 - Every compile goes through ccache: the Makefile finds it on `PATH`, and
   the runner image (ccache 4.12) points `CCACHE_DIR` at a volume that both
   runners share (`CCACHE_MAXSIZE=5G`), so hits carry across jobs and
-  pull requests. The release sets `CCACHE=` and never uses it.
+  pull requests. PR jobs can write to that volume, so the release sets
+  `CCACHE=` (in the job env and on the `make` line) and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`. The C tests
   still run one after another.
 - A `master` push runs no tests. It runs only `dup-check` (which also saves

@@ -289,6 +289,7 @@ jobs:
     timeout-minutes: 75
     env:
       AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
       SANITIZE: '1'
     steps:
       - uses: actions/checkout@v4

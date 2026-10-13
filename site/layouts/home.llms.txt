@@ -1,0 +1,13 @@
+{{- partial "markdown-links-check.html" . -}}
+# {{ site.Title }}
+
+> {{ site.Params.description }}
+
+Every page of this site is also published as Markdown, and the links below point to those versions. [llms-full.txt]({{ (.OutputFormats.Get "llmsfull").Permalink }}) has the full text of all pages in one file.
+{{- range partial "llms-groups.html" . }}
+
+## {{ .title }}
+{{ range .pages }}
+{{ partial "llms-item.html" . }}
+{{- end }}
+{{- end }}

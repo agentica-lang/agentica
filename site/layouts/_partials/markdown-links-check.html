@@ -1,0 +1,8 @@
+{{- $tour := (site.GetPage "/tour").OutputFormats.Get "markdown" -}}
+{{- $self := (site.Home.OutputFormats.Get "markdown").Permalink -}}
+{{- $code := "```agentica\nputs(\"[a](/tour/)\")\n```\n\n`[b](/tour/)` " -}}
+{{- $input := printf "%s[c](/tour/) ![d](d.png) [e](#e) [f](https://example.com/)" $code -}}
+{{- $want := printf "%s[c](%s) ![d](d.png) [e](%s#e) [f](https://example.com/)" $code $tour.Permalink $self -}}
+{{- $got := partial "markdown-links.html" (dict "page" site.Home "body" $input) -}}
+{{- if ne $got $want }}{{ errorf "markdown-links.html: got %q, want %q" $got $want }}{{ end -}}
+{{- return "" -}}
