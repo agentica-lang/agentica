@@ -30,7 +30,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The [README](../README.
 
 ## Input from stdin
 
-Three JSON examples read one document or one line per record from stdin. The algorithm examples can run long, so give them `--max-steps`.
+Six examples read stdin: three JSON examples, and three search examples. The searches can run long, so they get `--max-steps`.
 
 ```sh
 printf '%s\n' '{"service":{"name":"api","port":8080,"enabled":false}}' | dist/agentica examples/json-config.agc
@@ -55,6 +55,6 @@ Searches can be expensive. A step-limit diagnostic does not mean there is no sol
 
 ## Maze
 
-The grid has 1 to 32 rows and columns. `.` is open, `#` is blocked, and only horizontal and vertical steps are allowed. The start and goal use `row * width + column` and must be open cells. It prints `{"found":true,"distance":...,"path":[...]}`, or `{"found":false,"distance":-1,"path":[]}` when the goal cannot be reached. Invalid input gives `{"error":"invalid input"}`.
+The grid is rectangular, with 1 to 32 rows and columns. `.` is open, `#` is blocked, and only horizontal and vertical steps are allowed. The start and goal use `row * width + column` and must be open cells. A start equal to the goal gives distance zero and a one-cell path. It prints `{"found":true,"distance":...,"path":[...]}`, or `{"found":false,"distance":-1,"path":[]}` when the goal cannot be reached. Invalid input gives `{"error":"invalid input"}`.
 
 The queue in `maze-bfs.agc` uses numeric keys and deletes consumed entries. `Map.delete` takes O(n) time, so the example shows the API, not a fast queue.

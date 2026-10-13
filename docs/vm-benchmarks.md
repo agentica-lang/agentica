@@ -17,7 +17,7 @@ python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners v
 
 Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to skip the `hello.agc` start-up check.
 
-Every runner must print the same output, or the row is a mismatch and the script exits 1. The Python twins are idiomatic, not step-by-step copies, so a ratio compares two idiomatic programs.
+Every runner must print the same output, or the row is a mismatch and the script exits 1. A program the VM cannot compile yet shows as `unsupported`, with its `LOWER-UNSUPPORTED` summary. The Python twins are idiomatic, not step-by-step copies, so a ratio compares two idiomatic programs.
 
 ## Results
 
@@ -51,7 +51,7 @@ At size 20 (`--runners vm,python --size 20 --no-startup`), the VM takes 1.06 s o
 
 ## HTTP sanity check
 
-`benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer, and Node for the load client and one server. It compares `examples/http_server.agc serve` on the VM with three single-process servers (Node `http`, a Python asyncio server, and Python's `ThreadingHTTPServer`). Every server gets the same keep-alive load from Node clients in 4 processes. The rounds run interleaved under `taskset`, and a round starts only when the machine is idle.
+`benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer, `taskset`, and Node for the load client and one server. It compares `examples/http_server.agc serve` on the VM with three single-process servers (Node `http`, a Python asyncio server, and Python's `ThreadingHTTPServer`). Every server gets the same keep-alive load from Node clients in 4 processes. The rounds run interleaved under `taskset`, and a round starts only when the machine is idle.
 
 ```sh
 make vm
@@ -60,3 +60,6 @@ python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a qu
 ```
 
 Results are not recorded yet. They need an idle-machine run (roadmap [20c-bench](roadmap/20-hybrid-http.md)), and the script marks any round that ran on a busy machine.
+
+| Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
+|---:|---|---:|---|---:|---:|---:|---:|
