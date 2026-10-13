@@ -37,7 +37,7 @@ Specified in [`docs/future/32-doc-comments.md` section 32](../future/32-doc-comm
     - `help std/http.get` and `help std/http`, in text and JSON;
     - the exit codes and "did you mean".
   - **Docs:**
-    - `docs/grammar.md` §6: the `agentica help` paragraph under "Builtin discovery and execution budget" (around line 1015);
+    - `docs/grammar/06b-builtins.md`: the `agentica help` paragraph under "Builtin discovery and execution budget";
     - the programming skill (how to read a `std/` module's API: `agentica doc std/http`);
     - `site/content/getting-started.md` (the commands);
     - the development skill.

@@ -13,7 +13,7 @@ No grammar change. 14c adds three `System` builtins and a `std/` module; 14b cha
 Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
 
 - Programs have no logging. `IO.warn(x)` writes `x.to_s` and a newline to stderr: no level, no time, no fields, and no way to turn debug lines off. `IO.inspect` writes to stdout, not stderr. `IO.warn("a\nb")` writes two lines, so one message can break into several lines.
-- `IO.warn` on the VM makes two `fwrite` calls on the unbuffered stderr, the text and then `"\n"` (`write_text` in `vm/builtins.c`), so two `write(2)` calls. With one scheduler no other task runs between them, since a builtin is never cut by a task switch; another process that shares the VM's stderr can still write between them (not a `Process.spawn` child, whose stderr the VM forwards through a pipe, `docs/vm/10-io-tls-processes-http.md` §10.4).
+- `IO.warn` on the VM makes two `fwrite` calls on the unbuffered stderr, the text and then `"\n"` (`write_text` in `vm/builtins.c`), so two `write(2)` calls. With one scheduler no other task runs between them, since a builtin is never cut by a task switch; another process that shares the VM's stderr can still write between them (not a `Process.spawn` child, whose stderr the VM forwards through a pipe, `docs/vm/10-io-processes.md` §10.4).
 - There is no `System.env`: `System.env("HOME")` is `CHECK-UNKNOWN-NAME`.
 - A runtime diagnostic has one span and no call stack, in all three formats. A failure inside `pick`, called from `load`, called from `main`, shows only the line in `pick`.
 - A tail call (`return f(...)`) replaces the caller's frame (`docs/vm/05-values-execution-builtins.md` §6.1), so 20,000 nested tail calls run and fail later with the frame of the last call only.

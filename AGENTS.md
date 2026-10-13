@@ -1,6 +1,6 @@
 # Agentica
 
-Interpreter for the Agentica language: a Racket front end and a C bytecode VM that runs every program. The language is defined in `docs/grammar.md`; planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
+Interpreter for the Agentica language: a Racket front end and a C bytecode VM that runs every program. The language is defined in `docs/grammar/` (index: `docs/grammar.md`); planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
 
 ## Commands
 
@@ -33,7 +33,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM th
 - When a phase item is finished, tick it in the roadmap and update the development skill.
 - When the language or a builtin changes, update the matching site page too.
 - Do not hard-wrap prose in `site/content/`: one line per paragraph or list item. Code blocks keep their line breaks.
-- When the language changes, update `docs/grammar.md` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md`, and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 5,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.
+- When the language changes, update `docs/grammar/` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md`, and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 5,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.
 
 ## Working style
 

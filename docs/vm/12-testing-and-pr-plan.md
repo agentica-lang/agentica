@@ -173,7 +173,7 @@ Each PR keeps its own tests and docs and ticks its roadmap items.
      (4.3). No format bump: the function table always had its captures
      field, and the two opcodes are appended. Closures passed to
      `Task.spawn`, HTTP or BDD stay `LOWER-UNSUPPORTED` until 7h (BDD:
-     until phase 21 replaces the `BDD` builtins with `std/bdd`, §31).
+     until phase 21 replaces the `BDD` builtins with `std/bdd`, `docs/bdd.md`).
 6. **Library.** Two PRs:
    - **6a IO and System** (done). Blocking stdio; it moves to libuv
      resumable builtins with the scheduler (7h). `IO.inspect`, `IO.gets`
@@ -330,7 +330,7 @@ those that need files, processes, tasks or the network by name:
 ### 12.3 Plan for HTTP and `TlsContext` (HTTP 20a to 20c built)
 
 The C-only HTTP PR that 7h planned (10.6) is replaced by phase 20
-(`docs/future/30-hybrid-http.md` §30, roadmap `20-hybrid-http.md`). After
+(`10-io-http.md` §10.7, roadmap `20-hybrid-http.md`). After
 the TLS PR (today's API), HTTP lands as four PRs, each with its own tests
 and docs:
 
@@ -434,5 +434,5 @@ of tests.
 - **BDD on the VM**: decided (2026-10-12): not in C. BDD is written in
   Agentica as `std/bdd` and a runner program, with a child VM per
   scenario; the VM gets only `Process.spawn_captured`, `Process.output`
-  and `Task.pending_count` (`docs/future/31-bdd-in-agentica.md` §31,
+  and `Task.pending_count` (`docs/bdd.md`,
   roadmap phase 21). Then the evaluator is removed in 7i (roadmap).

@@ -9,7 +9,7 @@ Generic enums and exhaustive Elixir-style `case` matching are implemented. Their
 ## 9. Files and paths (implemented)
 
 The filesystem phase is implemented; its normative signatures and behavior now
-live in [`grammar.md`](../grammar.md#files-and-paths). It adds `File`, `Dir` and
+live in [`grammar.md`](../grammar/06d-io-and-network.md#files-and-paths). It adds `File`, `Dir` and
 `Path`, an opaque evaluation-owned `FileHandle`, and the `FileInfo` record.
 Host filesystem permissions apply without a separate capability flag. Reads
 and writes are limited to regular files and symlinks to regular files. Whole

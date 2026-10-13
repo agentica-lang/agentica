@@ -10,7 +10,7 @@
 2. The JSON encoder (`vm/json.c`): scanning a string for quotes, backslashes and control characters before escaping.
 3. Comparing and copying: call libc `memcpy`, `memcmp` and `memchr` in place of hand-written byte loops. glibc already picks AVX2 or AVX-512 versions at run time, so this needs no build change and can land at any time.
 4. Sorting `List[Int]` and `List[Float]` with an AVX-512 sort (for example Intel's x86-simd-sort, BSD-3-Clause, which fits the dependency policy), only if faster lists (8d) add unboxed Int or Float storage. Today list items are boxed 16-byte values, so a vector sort does not apply.
-5. HTTP head parsing: picohttpparser (`vm/http_pico.c`, behind `vm/http_parse.h`, `docs/vm/10-io-tls-processes-http.md` 10.6) has an SSE4.2 path that the baseline build leaves off. Enable it with run-time dispatch like the other routines, only if the server measurement shows time in header parsing.
+5. HTTP head parsing: picohttpparser (`vm/http_pico.c`, behind `vm/http_parse.h`, `docs/vm/10-io-http.md` 10.6) has an SSE4.2 path that the baseline build leaves off. Enable it with run-time dispatch like the other routines, only if the server measurement shows time in header parsing.
 
 **Not useful:** instruction dispatch, the builtins that take a callback, the HAMT (it already uses POPCNT), SipHash (kept as it is for its resistance to hash flooding), and the GC.
 

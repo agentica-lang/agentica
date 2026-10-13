@@ -207,10 +207,9 @@ and cost one predictable branch each.
   builtin reaches it today. Until 7i, such a program ran on the Racket
   evaluator after a one-line notice, and the hidden `--legacy-eval` flag
   forced the evaluator; 7i deleted both, with the evaluator, and the
-  refusal of programs that needed VM-only builtins on those paths
-  (`check-vm-only`, §30.8 of `docs/future/`).
+  refusal of programs that needed VM-only builtins on those paths.
   `agentica test` runs on the VM (roadmap 21f,
-  `docs/future/31-bdd-in-agentica.md` §31): `src/bdd-driver.rkt` compiles
+  `docs/bdd.md`): `src/bdd-driver.rkt` compiles
   the step program and the runner written in Agentica, starts the runner
   with `--driver-pid`, and the runner starts one VM per scenario; the
   programs under test run like `agentica FILE`.
@@ -237,8 +236,7 @@ and cost one predictable branch each.
 - The hidden flag deletes its private input after loading, so only a
   driver that hands the VM a private one-shot file may pass it: the normal
   run and the BDD runner of `agentica test` (`src/bdd-driver.rkt`).
-- `check`, `help` and `test` stay Racket commands; since 21f (§31 of
-  `docs/future/`), `test` only discovers the feature files, compiles the
+- `check`, `help` and `test` stay Racket commands; since 21f (`docs/bdd.md`), `test` only discovers the feature files, compiles the
   step program and an embedded runner written in Agentica and runs the
   runner on the VM, which starts a child VM per scenario; its handlers and
   the programs under test run there. `make vm`

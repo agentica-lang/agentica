@@ -2,7 +2,7 @@
 
 **Status:** done (roadmap [phase 25](../roadmap/25-unit-tests.md), 25a and 25b). Order in §36.9. Decided by the owner on 2026-10-13: Agentica gets minimal unit tests in the style of ExUnit, run by `agentica test` next to the BDD features.
 
-A test file is a program named `*_test.agc` whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks. Each block returns `Result[Void]`, and the assertions (`Test.eq`, `Test.ok?`, `Test.error?`, `Test.assert`) return `Result[Void]` too, so they chain with `try`: Agentica has no exceptions. `agentica test` finds test files and `.feature` files in the same pass and writes one report, with the same text, `--ai` and `--json` shapes and the same exit codes as BDD. Each test file runs in its own child VM through the BDD runner (§31.5), and each test runs as its own task, so with §37 a crash fails only that test.
+A test file is a program named `*_test.agc` whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks. Each block returns `Result[Void]`, and the assertions (`Test.eq`, `Test.ok?`, `Test.error?`, `Test.assert`) return `Result[Void]` too, so they chain with `try`: Agentica has no exceptions. `agentica test` finds test files and `.feature` files in the same pass and writes one report, with the same text, `--ai` and `--json` shapes and the same exit codes as BDD. Each test file runs in its own child VM through the BDD runner (`docs/bdd.md`, "How a run works"), and each test runs as its own task, so with §37 a crash fails only that test.
 
 **Why.** Above all for the planned self-hosted front end (§35) and the `std/` modules, which today are tested only through whole-output golden fixtures.
 
@@ -11,7 +11,7 @@ A test file is a program named `*_test.agc` whose `main` calls `Test.run` with a
 Checked at `099daa3`:
 
 - `agentica test [PATH...] [--steps FILE]` runs `.feature` files only (`src/bdd-driver.rkt`, `stdlib/bdd/runner.agc`). The driver finds the files; the runner runs each scenario in its own child VM and builds the report with `std/bdd/report` (`stdlib/bdd/report.agc`: `FileResult`, `ScenarioResult`, `json`, `text`, `exit_code`). (Both moved to `std/test/runner` and `std/test/report` in 25b.)
-- The record protocol (U+001E, `agentica-bdd `, then JSON on stdout), the step limit per child, the 30-second deadline and the 1 MiB output limits are those of §31.5.
+- The record protocol (U+001E, `agentica-bdd `, then JSON on stdout), the step limit per child, the 30-second deadline and the 1 MiB output limits are those of `docs/bdd.md`, "How a run works".
 - `try` already works in a block passed to a function whose parameter is `Fn[..., Result[T]]` (`docs/grammar.md`, "Blocks and closures"), so `Test.test(name) do ... end` with `try` inside needs no checker change.
 - Agentica has no user generics (only enums), and a function cannot learn the span of its caller.
 
@@ -59,7 +59,7 @@ Test.assert(condition: Bool, message: String) -> Result[Void]
 - **`Test.test`** builds a `TestCase`, a builtin record with no public fields, like `FileInfo` (as built in 25a: an opaque builtin type like `FileHandle`, with no fields at all; inspect shows `<TestCase>`). It keeps the name, the block and its own call span (the test's location in the report). The name must not be empty, and names are unique in a file; otherwise `Test.run` fails the file with `RUNTIME-TEST-NAME`.
 - **`Test.run`** serves the runner (§36.6) and never returns: it ends with `System.exit`. Run directly (`agentica ports_test.agc`), it prints "run this file with agentica test" on stderr and exits 2, as `BDD.run` does.
 - **Assertions** return `ok()` when they hold, and `error(text)` when they do not. The text is short and readable: `expected ok(80); actual error("not a number")`. Each also knows its own call span.
-  - `Test.eq` compares by value. `T` must have equality in the sense of §25.4 (scalars, strings, ranges, and lists, maps, Results, structs and enums made of them), or contain `Json`. `Fn`, `Task` and handles are `CHECK-TYPE-MISMATCH`. Phase 25 pulls §25.4's type predicate and its deep compare forward for this builtin; 15d later reuses them for `==`. A `Json` value, at any depth, compares and prints as its canonical text (§31.8). Expected and actual are shown with `inspect`. The order is `actual, expected`, as ExUnit's `assert actual == expected` reads.
+  - `Test.eq` compares by value. `T` must have equality in the sense of §25.4 (scalars, strings, ranges, and lists, maps, Results, structs and enums made of them), or contain `Json`. `Fn`, `Task` and handles are `CHECK-TYPE-MISMATCH`. Phase 25 pulls §25.4's type predicate and its deep compare forward for this builtin; 15d later reuses them for `==`. A `Json` value, at any depth, compares and prints as its canonical text (`docs/bdd.md`). Expected and actual are shown with `inspect`. The order is `actual, expected`, as ExUnit's `assert actual == expected` reads.
   - `Test.ok?` and `Test.error?` check the tag of a `Result`; the failure shows the value with `inspect`.
   - `Test.assert` fails with `message`.
 - **Chaining.** `try Test.eq(...)` stops the test at the first failed assertion; the last assertion can be the block's result. A test that returns `ok()` passes.
@@ -74,19 +74,19 @@ The request named the feature `std/test`. Its functions cannot be written in Age
 - `Test.eq`, `Test.ok?` and `Test.error?` are generic over any type. `std/` modules have no generics, and the compiler prelude, which may be generic (§25.6), starts only at order step 8.2.
 - Every assertion needs the span of its own call. Builtins get it from `CALL_BUILTIN`; Agentica code cannot (stack traces are phase 14b, later).
 - `Test.run` works on runtime state no Agentica code can see: the assertion records, the crash of a test task, its descendants.
-- A builtin module cannot share its name with an import alias (§30.7), so splitting the six functions between a builtin and an `std/test` module would give two names for one API.
+- A builtin module cannot share its name with an import alias (`docs/vm/10-io-http.md` §10.7), so splitting the six functions between a builtin and an `std/test` module would give two names for one API.
 
 The runner and the report stay in Agentica (`std/test/runner`, `std/test/report`, §36.6; 25b moved them from `std/bdd/`, since BDD and unit tests share them, while Gherkin parsing and step matching stay in `std/bdd`). `Test` and `TestCase` become reserved names (`CHECK-REDEFINED-NAME`); no `.agc` file in the repo uses either.
 
 ### 36.5 Discovery, names and filtering
 
-- `agentica test [PATH...]`: `PATH` is a `.feature` file, a `*_test.agc` file, or a directory searched recursively for both, in the same pass and with the same rules (§31.6: sorted, links to folders not followed, the same file errors). The default paths become `specs/` and `test/`; a default folder that does not exist is skipped, and finding nothing is exit 1, as today.
+- `agentica test [PATH...]`: `PATH` is a `.feature` file, a `*_test.agc` file, or a directory searched recursively for both, in the same pass and with the same rules (`docs/bdd.md`: sorted, links to folders not followed, the same file errors). The default paths become `specs/` and `test/`; a default folder that does not exist is skipped, and finding nothing is exit 1, as today.
 - Every test file is its own program: the driver compiles each one, like the step program. A front-end diagnostic is a file error of that file (exit 1); other files still run. `--steps` is only for features.
 - **Filtering**, kept minimal: `--only TEXT` keeps the tests and scenarios whose name contains `TEXT`; the others are left out of the report, not counted as not executed. There are no tags for tests.
 
 ### 36.6 Isolation: a child VM per file, a task per test
 
-The runner (`std/test/runner`, extended) handles a test file much as it handles a scenario, with the same child start (`--allow-run` included, as for step programs, §31.10), record marker and step budget (§31.5):
+The runner (`std/test/runner`, extended) handles a test file much as it handles a scenario, with the same child start (`--allow-run` included, as for step programs, `docs/bdd.md`), record marker and step budget (`docs/bdd.md`, "How a run works"):
 
 1. **List child:** `VM --allow-run --json --max-steps 1000000 --seed N -- FILE.agcb --agentica-test list`. The runner writes the token line first (§36.7). `Test.run` reads it and writes one `{"event":"test","name":...,"line":...,"column":...,"token":...}` record per test, in order, then `ready`. A crash or exit here is a file error (as built in 25a, an unobserved crash outside the tests makes the list child exit 1 with the summary line on stderr, which is such a file error). As built in 25b: the crash's own diagnostic, else `RUNTIME-BDD-PREMATURE-EXIT` for a nonzero exit, else `RUNTIME-TEST-RUN` when the file never called `Test.run`; the file error shows the lines the file printed and its stderr.
 2. **Run child**, one per file: `VM --allow-run --json --max-steps M --seed N -- FILE.agcb --agentica-test run`, with `M` = 1,000,000 × (the number of tests + 1). The runner writes the token line first, then the index of each test to run, one per line, and the child answers `{"event":"pass"}` or `{"event":"fail", ...}` with the fields of the report's error object (as built in 25a: the diagnostic as `--json` writes it, `code`, `file`, `message` and `range`, plus `event`, and `expected` and `actual` when the assertion has them; an index line that is not plain digits naming a test is a `RUNTIME-BDD-INFRA` fail record and exit 1). When stdin ends, the child exits 0, or 1 with the summary line when a crash outside the tests was never observed (25a); the runner reports that exit as a file error, with the stderr summary. The runner sends the next index only after the answer.

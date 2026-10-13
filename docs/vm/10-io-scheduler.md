@@ -17,7 +17,7 @@
 - Builtins that take a function (`Task.spawn`; the HTTP server's
   handlers come back with roadmap 20c, as `std/http` code)
   run it as a new VM task (`BDD.step` is not among them: BDD is written
-  in Agentica, `docs/future/31-bdd-in-agentica.md` §31); the ones that need its result await it.
+  in Agentica, `docs/bdd.md`); the ones that need its result await it.
 - Stdin may be a TTY, pipe or file: `uv_guess_handle` picks the reader, and a
   file (`UV_FILE`) uses a `uv_fs_read` path. Stdout and stderr stay on
   blocking stdio.

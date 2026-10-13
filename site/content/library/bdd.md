@@ -114,9 +114,7 @@ Feature: Memory
     Then the count is 3
 ```
 
-A step gets the context of its scenario, `ctx`, and returns it. Every `BDD`
-call takes the context first and returns it: keep the one it returns. The
-next step of the scenario gets the context the step returned.
+A step gets the context of its scenario, `ctx`, and returns it. Most `BDD` calls take the context first and return it: keep the one they return. `BDD.doc_string`, `BDD.table` and `BDD.get` take it and return their value. The next step of the scenario gets the context the step returned.
 
 Every `Then` step must make at least one check with a `BDD` function.
 

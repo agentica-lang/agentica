@@ -8,8 +8,8 @@ The idea in one paragraph: a run of lines that start with `##` documents the dec
 
 Checked at `650f689`:
 
-- A comment starts with `#` and ends at the end of the line (`docs/grammar.md:59`). The lexer drops it (`src/lexer.rkt:166-168`), so nothing after the lexer sees comments.
-- A line with only a comment counts as blank for the blank-line rule between declarations (`docs/grammar.md:146`, `PARSE-MISSING-BLANK-LINE` at `src/parser.rkt:114`).
+- A comment starts with `#` and ends at the end of the line (`docs/grammar/04-lexical.md`). The lexer drops it (`src/lexer.rkt:166-168`), so nothing after the lexer sees comments.
+- A line with only a comment counts as blank for the blank-line rule between declarations (`docs/grammar/05-syntax.md`, `PARSE-MISSING-BLANK-LINE` at `src/parser.rkt:114`).
 - `agentica help NAME [--json]` shows only builtins, from the catalog in `src/builtins.rkt` (`src/main.rkt:199-212`). It cannot show a function of a `std/` module or of a user file.
 - `stdlib/*.agc` documents itself with plain `#` comments, if at all (`stdlib/queue.agc:1`). The CLI holds a copy of each file in `stdlib-sources` (`src/stdlib.rkt:17`).
 - No `.agc` file in the repo has a line that starts with `##`, so the new rule of §32.2 breaks no existing program here.
