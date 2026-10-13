@@ -127,7 +127,8 @@ Cleanup is one exit path (`end_run` in `vm/main.c`, 10.2.2): kill and reap
 the children, flush stdout, stderr and the files, then `_exit`. It runs when
 the run ends normally, on `System.exit`, on diagnostics, on the step limit
 and on `SIGINT`, `SIGTERM` and `SIGHUP`, after which the VM ends by that
-signal; a second stop signal ends it at once. The out-of-memory and GC
+signal; a second stop signal ends it at once, but only after the
+children are stopped. The out-of-memory and GC
 abort exits (6.3) and `SIGKILL` run no cleanup and leave children running.
 Windows is not built yet: there the plan is console control events and a
 kill-on-close job object for the VM and its children, which would also

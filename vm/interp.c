@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
@@ -43,14 +44,32 @@ void agc_exit(agc_vm *vm, int64_t code) {
   longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
 }
 
+void agc_stop(agc_vm *vm, int sig) {
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "stop signal=%d", sig);
+  agc_exit(vm, 128 + sig);
+}
+
+static bool interrupted(agc_vm *vm, FILE *stream) {
+  if (errno != EINTR) return false;
+  clearerr(stream);
+  int sig = agc_io_stop_signal();
+  if (sig) agc_stop(vm, sig);
+  return true;
+}
+
 void agc_flush(agc_vm *vm) {
-  if (fflush(vm->rt->out) != 0) agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to standard output", 0);
+  while (fflush(vm->rt->out) != 0)
+    if (!interrupted(vm, vm->rt->out)) agc_fail(vm, "RUNTIME-INTERNAL", "cannot write to standard output", 0);
 }
 
 void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
-  if (len && fwrite(data, 1, len, stream) != len)
-    agc_fail(vm, "RUNTIME-INTERNAL",
-             stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
+  size_t done = 0;
+  while (done < len) {
+    done += fwrite((const uint8_t *)data + done, 1, len - done, stream);
+    if (done < len && !interrupted(vm, stream))
+      agc_fail(vm, "RUNTIME-INTERNAL",
+               stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
+  }
   if (len && stream == vm->rt->out) vm->rt->out_mid_line = ((const uint8_t *)data)[len - 1] != '\n';
 }
 

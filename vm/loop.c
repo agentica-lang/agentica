@@ -6,9 +6,9 @@
 #include <string.h>
 
 #ifdef __linux__
-#include <dirent.h>
 #include <errno.h>
 #include <signal.h>
+#include <unistd.h>
 #include <uv.h>
 #endif
 
@@ -20,6 +20,13 @@ struct agc_registry {
 
 #ifdef __linux__
 typedef struct agc_io_job job;
+
+typedef struct {
+  atomic_int signal, now;
+  atomic_bool held;
+  pid_t driver;
+  uv_async_t *wake;
+} stop_state;
 
 struct agc_loop {
   uv_loop_t uv;
@@ -318,55 +325,91 @@ static void drain(agc_vm *vm) {
   }
 }
 
-const int agc_stop_signals[AGC_STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
+#define STOP_SIGNALS 3
+#define STOP_GRACE_SECONDS 3
+
+static const int stop_signals[STOP_SIGNALS] = {SIGINT, SIGTERM, SIGHUP};
 
 void agc_io_block_stop(sigset_t *saved) {
   sigset_t block;
   sigemptyset(&block);
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) sigaddset(&block, agc_stop_signals[k]);
+  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&block, stop_signals[k]);
   pthread_sigmask(SIG_BLOCK, &block, saved);
 }
 
-/* A signal handler gets no context: the stop request and the async handle
-   that wakes the loop for it are the only process-wide state. */
-static volatile sig_atomic_t stop_signal; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-static uv_async_t *stop_wake; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+/* A signal handler gets no context, so the stop state is the one
+   process-wide variable. `held` is true until the children are stopped:
+   till then a second signal is only recorded in `now`. */
+static stop_state stop; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-/* The first stop signal asks the run to end through the one exit path; a
-   second one ends the process at once. */
+_Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the stop state is read in a signal handler");
+
+static void stop_at_once(int sig) {
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}
+
 static void stop_requested(int sig) {
   int saved = errno;
-  if (stop_signal) {
-    signal(sig, SIG_DFL);
-    raise(sig);
+  int none = 0;
+  bool first = atomic_compare_exchange_strong(&stop.signal, &none, sig);
+  bool orphan = stop.driver && getppid() != stop.driver;
+  if (first && !orphan) {
+    if (stop.wake) uv_async_send(stop.wake);
+  } else if (atomic_load(&stop.held)) {
+    none = 0;
+    atomic_compare_exchange_strong(&stop.now, &none, sig);
+    alarm(STOP_GRACE_SECONDS);
+    if (stop.wake) uv_async_send(stop.wake);
   } else {
-    stop_signal = sig;
-    if (stop_wake) uv_async_send(stop_wake);
+    stop_at_once(sig);
   }
   errno = saved;
 }
 
+static void stop_overdue(int sig) {
+  (void)sig;
+  int now = atomic_load(&stop.now);
+  if (now) stop_at_once(now);
+}
+
 static void stop_woken(uv_async_t *wake) { (void)wake; }
 
-void agc_io_watch_stop(agc_vm *vm) {
+void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
   agc_loop *loop = new_loop(vm);
   if (loop && uv_async_init(&loop->uv, &loop->wake, stop_woken) == 0) {
     uv_unref((uv_handle_t *)&loop->wake);
-    stop_wake = &loop->wake;
+    stop.wake = &loop->wake;
   }
+  stop.driver = (pid_t)driver;
+  atomic_store(&stop.held, true);
   struct sigaction act;
   memset(&act, 0, sizeof act);
-  act.sa_handler = stop_requested;
+  act.sa_handler = stop_overdue;
   sigemptyset(&act.sa_mask);
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) sigaddset(&act.sa_mask, agc_stop_signals[k]);
-  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
+  sigaction(SIGALRM, &act, NULL);
+  act.sa_handler = stop_requested;
+  for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
+  for (size_t k = 0; k < STOP_SIGNALS; k++) {
     struct sigaction now;
-    if (sigaction(agc_stop_signals[k], NULL, &now) == 0 && now.sa_handler != SIG_IGN)
-      sigaction(agc_stop_signals[k], &act, NULL);
+    if (sigaction(stop_signals[k], NULL, &now) == 0 && now.sa_handler != SIG_IGN)
+      sigaction(stop_signals[k], &act, NULL);
   }
 }
 
-int agc_io_stop_signal(void) { return stop_signal; }
+int agc_io_stop_signal(void) { return atomic_load(&stop.signal); }
+
+void agc_io_children_stopped(void) {
+  atomic_store(&stop.held, false);
+  int now = atomic_load(&stop.now);
+  if (!now) return;
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, now);
+  pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+  stop_at_once(now);
+  _exit(128 + now);
+}
 
 static int queue_work(agc_loop *loop, job *j) {
   sigset_t saved;
@@ -374,20 +417,6 @@ static int queue_work(agc_loop *loop, job *j) {
   int rc = uv_queue_work(&loop->uv, &j->work, run_work, work_finished);
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
   return rc;
-}
-
-bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
-  DIR *dir = opendir("/proc/self/fd");
-  if (!dir) return false;
-  int own = dirfd(dir);
-  for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
-    char *end = NULL;
-    long fd = strtol(e->d_name, &end, 10);
-    if (end == e->d_name || *end || fd < 0 || fd == own || fd > INT32_MAX) continue;
-    if (visit((int)fd, data)) break;
-  }
-  closedir(dir);
-  return true;
 }
 
 bool agc_io_init(void) {
@@ -574,6 +603,13 @@ static void release_handles(agc_vm *vm) {
   }
 }
 
+void agc_io_goodbye(agc_vm *vm) {
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    agc_resource *r = vm->registry->items[k];
+    if (r->goodbye && r->native) r->goodbye(r->native);
+  }
+}
+
 static bool flushing(const agc_vm *vm) {
   for (size_t k = registry_count(vm); k-- > 0;) {
     const job *j = job_at(vm, k);
@@ -620,7 +656,6 @@ void agc_io_flush_files(agc_vm *vm) {
 }
 
 static bool close_all(agc_vm *vm) {
-  agc_processes_stop(vm);
   agc_io_flush_files(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
@@ -697,9 +732,16 @@ bool agc_io_close(agc_vm *vm) {
   return true;
 }
 
-void agc_io_watch_stop(agc_vm *vm) { (void)vm; }
+void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
+  (void)vm;
+  (void)driver;
+}
 
 int agc_io_stop_signal(void) { return 0; }
+
+void agc_io_children_stopped(void) {}
+
+void agc_io_goodbye(agc_vm *vm) { (void)vm; }
 
 void agc_io_flush_files(agc_vm *vm) { (void)vm; }
 #endif
