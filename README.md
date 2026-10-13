@@ -3,7 +3,7 @@
 Interpreter for the Agentica language: a Racket front end and a bytecode VM
 in C. Agentica is Ruby
 with static types: Ruby-like syntax, checked before running, with immutable
-values. The language is defined in [`docs/grammar.md`](docs/grammar.md); the
+values. The language is defined in [`docs/grammar/`](docs/grammar.md); the
 self-contained reference for agents writing Agentica is the
 [`agentica-programming` skill](.agents/skills/agentica-programming/SKILL.md).
 Planned syntax is in
@@ -127,7 +127,7 @@ inside each root. The Unix user root defaults to
 `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`.
 Windows uses `%LOCALAPPDATA%/agentica/lib/` and no default system roots.
 These roots never override `std/`; ordinary relative imports still resolve
-from the importing file. See [the language reference](docs/grammar.md#standard-library-and-external-libraries)
+from the importing file. See [the language reference](docs/grammar/05b-modules.md#standard-library-and-external-libraries)
 for path validation and precedence rules.
 
 ### Exit codes

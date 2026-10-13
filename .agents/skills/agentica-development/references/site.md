@@ -33,8 +33,11 @@ rule that a site page shows.
   in `tour/`, one Library page per builtin module in `library/`, and
   `vm.md`, a top-level page on the Aurora VM and its libraries.
 - Order and titles come from front matter (`title`, `weight`).
-- `docs/grammar.md` is mounted as the language specification
-  (`/reference/`).
+- `docs/grammar/*.md` is the language specification (`/reference/`): the
+  content adapter `content/_content.gotmpl` reads the files through an assets
+  mount (`hugo.toml`) and joins them, in file-name order, into one page. A new
+  file in `docs/grammar/` appears there by itself; the adapter fails the build
+  when fewer than 13 files are found, so change that number with the files.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 - When the language or a builtin changes, update the matching site page too.

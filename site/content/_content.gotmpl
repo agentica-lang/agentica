@@ -1,0 +1,9 @@
+{{- $parts := resources.Match "grammar/*.md" -}}
+{{- if lt (len $parts) 13 -}}
+  {{- errorf "the language specification: expected the 13 files of docs/grammar/, found %d" (len $parts) -}}
+{{- end -}}
+{{- $text := "" -}}
+{{- range sort $parts "Name" -}}
+  {{- $text = printf "%s%s\n\n" $text .Content -}}
+{{- end -}}
+{{- .AddPage (dict "path" "reference" "title" "Language specification" "content" (dict "mediaType" "text/markdown" "value" $text)) -}}

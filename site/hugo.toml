@@ -30,8 +30,12 @@ disableKinds = ["taxonomy", "term", "rss"]
   target = "content"
 
 [[module.mounts]]
-  source = "../docs/grammar.md"
-  target = "content/reference.md"
+  source = "assets"
+  target = "assets"
+
+[[module.mounts]]
+  source = "../docs/grammar"
+  target = "assets/grammar"
 
 [[cascade]]
   title = "Language specification"

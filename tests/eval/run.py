@@ -71,7 +71,8 @@ def prepare(work: Path, task: str, arm: str) -> None:
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
     if arm == "grammar":
         (work / "docs").mkdir()
-        shutil.copy(ROOT / "docs" / "grammar.md", work / "docs" / "grammar.md")
+        parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
+        (work / "docs" / "grammar.md").write_text("\n".join(part.read_text() for part in parts))
         shutil.copytree(ROOT / "examples", work / "examples")
 
 

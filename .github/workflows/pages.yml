@@ -6,6 +6,7 @@ on:
     paths:
       - 'site/**'
       - 'docs/grammar.md'
+      - 'docs/grammar/**'
       - '.github/workflows/pages.yml'
       - 'Makefile'
   workflow_dispatch:

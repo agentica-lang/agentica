@@ -3,7 +3,7 @@
 This document closes roadmap step 7b. It fixes the decisions that 7c
 (lowering), 7d (bytecode emitter) and 7e (VM core) build on, and the library
 choices and safety rules that 7h and 7i need. The language does not change.
-`grammar.md` stays the contract. The VM is the only backend: 7i deleted the
+`docs/grammar/` stays the contract. The VM is the only backend: 7i deleted the
 Racket evaluator, which the VM replaced step by step. Roadmap step 7b lists each decision in one line; this document
 gives the details and reasons. The VM's codename is Aurora (Aurora VM). Only
 the docs use it: the binary (`agentica-vm`), the `AGENTICA_VM*` variables, the

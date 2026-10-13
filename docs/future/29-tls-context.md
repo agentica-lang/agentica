@@ -13,7 +13,7 @@ HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, ha
 HttpClientOptions(..., ca_file: String)
 ```
 
-(`src/builtins.rkt:66` and `src/builtins.rkt:67`, `docs/grammar.md:798`; the HTTP forms are those of [section 30.3](30-hybrid-http.md#303-the-api-after-phase-20).) Every call names its trust or its key pair by file path. So the runtime either loads and parses the files on every call (a system CA bundle is about 150 certificates) or keeps a hidden cache keyed by path, which goes stale when a file changes. Phase 20's `HttpClient` builds one OpenSSL `SSL_CTX` per client (§30.5), which helps HTTP clients only. And every new option (a minimum version, ALPN, a client certificate) would be one more argument on each of these calls.
+(`src/builtins.rkt:66` and `src/builtins.rkt:67`, `docs/grammar/06d-io-and-network.md`; the HTTP forms are those of [section 30.3](30-hybrid-http.md#303-the-api-after-phase-20).) Every call names its trust or its key pair by file path. So the runtime either loads and parses the files on every call (a system CA bundle is about 150 certificates) or keeps a hidden cache keyed by path, which goes stale when a file changes. Phase 20's `HttpClient` builds one OpenSSL `SSL_CTX` per client (§30.5), which helps HTTP clients only. And every new option (a minimum version, ALPN, a client certificate) would be one more argument on each of these calls.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms): one way to do each thing, values stay immutable, types stay static. Security rules of `docs/vm/10-io-tls-processes-http.md` §10.3 do not move: certificates are always verified, the hostname is always checked, there is no path that turns verification off.
 
