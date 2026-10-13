@@ -174,12 +174,16 @@ static void resume(agc_vm *vm, agc_task *t) {
   t->retry = false;
 }
 
-static void trace_spawn(const agc_vm *vm, const agc_task *t, uint64_t parent) {
+static void trace_spawn(const agc_vm *vm, const agc_task *t, const agc_task *parent) {
   const agc_trace *tr = &vm->rt->trace;
   if (!AGC_TRACE_ON(tr, AGC_TRACE_SCHED) || !t->frame_count) return;
   const agc_string *name = vm->rt->program->functions[t->frames[0].function].name;
-  AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=%" PRIu64 " fn=%.*s", t->id, parent,
-            agc_trace_len(name->bytes), name->data);
+  if (parent && parent->group)
+    AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=group:%" PRIu64 " fn=%.*s", t->id,
+              parent->parent ? parent->parent->id : 0, agc_trace_len(name->bytes), name->data);
+  else
+    AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=%" PRIu64 " fn=%.*s", t->id, parent ? parent->id : 0,
+              agc_trace_len(name->bytes), name->data);
 }
 
 static void trace_turn(const agc_vm *vm, const agc_task *t, agc_turn_result r, bool ran) {
@@ -349,7 +353,7 @@ static void check_stop(agc_vm *vm) {
 agc_outcome agc_vm_run(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_task_enter(vm, vm->main, vm->rt->program->entry);
-    trace_spawn(vm, vm->main, 0);
+    trace_spawn(vm, vm->main, NULL);
     enqueue(vm, vm->main);
     for (;;) {
       agc_task *t = dequeue(vm);
@@ -405,7 +409,7 @@ agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   child->test = vm->task->test;
   agc_task_call(vm, child, fn, args, argc, span);
   adopt(parent, child);
-  trace_spawn(vm, child, vm->task->id);
+  trace_spawn(vm, child, parent);
   enqueue(vm, child);
   return child;
 }
