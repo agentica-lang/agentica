@@ -71,7 +71,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  box-shadow: var(--search-shadow);
+  box-shadow: var(--shadow);
 
   &[hidden] {
     display: none;
