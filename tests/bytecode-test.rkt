@@ -46,7 +46,7 @@
       (unless (member module fallback-modules)
         (check-not-false (member key vm-builtins) (format "~a is not in vm-builtins" key)))))
 
-  (test-case "the evaluator paths refuse the captured process builtins at their call"
+  (test-case "the evaluator paths refuse the VM-only process and task builtins at their call"
     (define (refused-at text)
       (define checked (check (parse (lex (source "test.agc" text)))))
       (when (diagnostic? checked) (error 'bytecode-test "~a" (format-diagnostic checked)))
@@ -56,7 +56,8 @@
       (list (source-position-line start) (source-position-column start)))
     (check-equal? (refused-at "def main() -> Void\n  p = Process.spawn_captured(\"sh\", [], \".\", 1)\nend\n") '(2 7))
     (check-equal? (refused-at "def show(p: Process) -> Void\n  puts(Process.output(p, 1))\nend\n\ndef main() -> Void\nend\n")
-                  '(2 8)))
+                  '(2 8))
+    (check-equal? (refused-at "def main() -> Void\n  puts(Task.pending_count())\nend\n") '(2 8)))
 
   (test-case "adjacent steps merge into one STEP with one span each"
     (define program (ir->bytecode (lower-text "def main() -> Void\n  puts(\"hi\")\nend\n")))
