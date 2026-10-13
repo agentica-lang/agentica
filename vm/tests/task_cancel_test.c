@@ -15,12 +15,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 10
+#define MAX_FNS 11
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -35,6 +35,12 @@ typedef struct {
 } prog;
 
 typedef void (*checker)(agc_vm *vm, int64_t n);
+
+typedef struct {
+  agc_vm *vm;
+  int64_t tag;
+  agc_poller *poller;
+} pool_request;
 
 static int64_t marks[32];
 static size_t mark_count;
@@ -53,6 +59,10 @@ static FILE *quiet;
 static int64_t port;
 static int accepted[8];
 static int accepted_count;
+static int gate[2] = {-1, -1};
+static int idle[2] = {-1, -1};
+static int cancel_calls;
+static _Atomic bool on_loop;
 
 static agc_value ext_done(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -93,6 +103,93 @@ static agc_value napped(agc_vm *vm, void *data, agc_value context) {
 }
 
 static const agc_io_kind nap_io = {NULL, napped, napped, NULL, false, "nap", NULL};
+
+static agc_value nap_again(agc_vm *vm) {
+  assert(++tries < 1000);
+  agc_io_start(vm, &nap_io, NULL, agc_void(), 5);
+  agc_task_park(vm, true);
+  return agc_void();
+}
+
+static void pool_work(void *data) {
+  const pool_request *q = data;
+  char c;
+  if (q->tag == 1)
+    while (read(gate[0], &c, 1) < 0 && errno == EINTR) {}
+}
+
+static void pool_ready(void *data, int status) {
+  (void)data;
+  (void)status;
+  assert(false);
+}
+
+static bool pool_more(void *data, agc_io_job *job) {
+  (void)job;
+  pool_request *q = data;
+  if (q->tag != 2) return false;
+  int err = 0;
+  q->poller = agc_poller_open(q->vm, idle[0], &err);
+  assert(q->poller);
+  agc_poller_wait(q->poller, false, pool_ready, q);
+  on_loop = true;
+  return true;
+}
+
+static bool pool_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
+  (void)deadline;
+  pool_request *q = data;
+  cancel_calls++;
+  agc_poller_pause(q->poller);
+  return true;
+}
+
+static agc_value pool_done(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  free(data);
+  done_calls++;
+  return agc_void();
+}
+
+static void pool_drop(void *data) {
+  pool_request *q = data;
+  if (q->poller) agc_poller_close(q->poller);
+  free(q);
+  dropped++;
+}
+
+static const agc_io_kind pool_io = {pool_work, pool_done, pool_done, pool_drop, false, "pool", pool_cancel};
+
+static agc_value test_pool_job(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  pool_request *q = calloc(1, sizeof(pool_request));
+  assert(q);
+  q->vm = vm;
+  q->tag = agc_as_int(vm, args[0]);
+  agc_io_start_then(vm, &pool_io, q, agc_void(), 30000, pool_more);
+  return agc_void();
+}
+
+static agc_value test_gate(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)vm;
+  (void)args;
+  (void)span;
+  assert(write(gate[1], "x", 1) == 1);
+  return agc_void();
+}
+
+static agc_value test_settled(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t want = agc_as_int(vm, args[0]);
+  if (want == 0 ? on_loop : done_calls + dropped >= want) {
+    tries = 0;
+    return agc_void();
+  }
+  return nap_again(vm);
+}
 
 static agc_value test_mark(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -189,10 +286,7 @@ static agc_value test_until(agc_vm *vm, agc_value *args, uint32_t span) {
     tries = 0;
     return agc_void();
   }
-  assert(++tries < 1000);
-  agc_io_start(vm, &nap_io, NULL, agc_void(), 5);
-  agc_task_park(vm, true);
-  return agc_void();
+  return nap_again(vm);
 }
 
 static agc_value test_close(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -216,6 +310,9 @@ static const agc_builtin test_builtins[] = {
   {"Test.close", 1, test_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.io_short", 1, test_io_short, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.pool", 1, test_pool_job, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.gate", 1, test_gate, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.settled", 1, test_settled, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -295,6 +392,10 @@ static void build_tasks(prog *p) {
   call_reg(p, F_SHORT, B_IO_SHORT, 0, 1);
   mark_arg(p, F_SHORT);
   finish_fn(p, F_SHORT);
+
+  call_reg(p, F_POOL, B_POOL, 0, 1);
+  mark_arg(p, F_POOL);
+  finish_fn(p, F_POOL);
 }
 
 static void new_prog(prog *p) {
@@ -335,6 +436,8 @@ static void reset(void) {
   mark_count = 0;
   done_calls = 0;
   dropped = 0;
+  cancel_calls = 0;
+  on_loop = false;
   self_returned = false;
   tries = 0;
   client = agc_void();
@@ -619,6 +722,50 @@ static void test_pool(void) {
   close(listener);
   assert(agc_io_close(&vm));
 }
+
+static void check_pool_phase(agc_vm *vm, int64_t n) {
+  if (n == 1) {
+    assert(cancelled(reg_task(vm, 0)) && cancel_calls == 0 && dropped == 0 && done_calls == 0);
+  } else {
+    assert(cancel_calls == 0 && dropped == 0 && done_calls == 1 && mark_count == 0);
+  }
+}
+
+static void test_cancel_pool_phase(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_POOL, 1);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_int(&p, F_MAIN, B_GATE, 0);
+  call_int(&p, F_MAIN, B_SETTLED, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  run_done(&p, check_pool_phase);
+}
+
+static void check_loop_phase(agc_vm *vm, int64_t n) {
+  if (n == 1) {
+    assert(cancelled(reg_task(vm, 0)) && cancel_calls == 1);
+  } else {
+    assert(dropped == 1 && done_calls == 0 && mark_count == 0);
+  }
+}
+
+static void test_cancel_loop_phase(void) {
+  assert(pipe(idle) == 0);
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_POOL, 2);
+  call_int(&p, F_MAIN, B_SETTLED, 0);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_int(&p, F_MAIN, B_SETTLED, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  run_done(&p, check_loop_phase);
+  assert(fcntl(idle[0], F_GETFD) == -1 && errno == EBADF);
+  close(idle[1]);
+}
 #endif
 
 int main(void) {
@@ -634,6 +781,11 @@ int main(void) {
   test_children_move();
   test_timer_fired_then_cancel();
   test_pool();
+  assert(pipe(gate) == 0);
+  test_cancel_pool_phase();
+  close(gate[0]);
+  close(gate[1]);
+  test_cancel_loop_phase();
   fclose(quiet);
 #endif
   puts("task cancel tests passed");

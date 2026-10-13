@@ -12,7 +12,11 @@
 #endif
 
 #ifdef __linux__
+#include <fcntl.h>
 #include <poll.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 #endif
 
 #define INPUT_CHUNK ((size_t)64 * 1024)
@@ -24,6 +28,9 @@
 #ifdef __linux__
 typedef struct {
   int fd;
+  bool socket;
+  agc_io_job *job;
+  agc_poller *poller;
   size_t room;
   ssize_t got;
   uint8_t data[];
@@ -33,6 +40,9 @@ typedef struct {
 void agc_input_open(agc_vm *vm, int fd, bool flush_out) {
   agc_input *in = &vm->rt->in;
   in->fd = fd;
+  in->poll_fd = -1;
+  in->poll_tried = in->poll_socket = false;
+  in->poller = NULL;
   in->flush_out = flush_out;
   in->pending_eof = false;
   in->reading = false;
@@ -131,6 +141,71 @@ static void read_drop(void *data) { free(data); }
 
 static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL};
 
+static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL};
+
+static bool read_once(read_request *q) {
+  for (;;) {
+    ssize_t n = q->socket ? recv(q->fd, q->data, q->room, MSG_DONTWAIT) : read(q->fd, q->data, q->room);
+    if (n >= 0) {
+      q->got = n;
+      return true;
+    }
+    if (errno == EINTR) continue;
+    if (errno == EAGAIN || errno == EWOULDBLOCK) return false;
+    q->got = -1;
+    return true;
+  }
+}
+
+static void stdin_ready(void *data, int status) {
+  read_request *q = data;
+  if (status < 0)
+    q->got = -1;
+  else if (!read_once(q))
+    return;
+  agc_poller_pause(q->poller);
+  agc_io_ready(q->job);
+}
+
+/* A pipe or terminal is reopened, so only the VM's file description is
+   non-blocking; a socket is read with MSG_DONTWAIT (10.2.2, Stdin). */
+static void watch_stdin(agc_vm *vm, agc_input *in) {
+  if (in->poll_tried) return;
+  in->poll_tried = true;
+  struct stat info;
+  int flags = fcntl(in->fd, F_GETFL);
+  if (flags < 0 || (flags & O_ACCMODE) == O_WRONLY || fstat(in->fd, &info) != 0 || S_ISREG(info.st_mode) ||
+      S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode))
+    return;
+  in->poll_socket = S_ISSOCK(info.st_mode);
+  int fd;
+  if (in->poll_socket) {
+    fd = fcntl(in->fd, F_DUPFD_CLOEXEC, 3);
+  } else {
+    char path[32];
+    snprintf(path, sizeof path, "/proc/self/fd/%d", in->fd);
+    fd = open(path, O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+  }
+  if (fd < 0) return;
+  int err = 0;
+  in->poller = agc_poller_open(vm, fd, &err);
+  if (in->poll_socket) fcntl(fd, F_SETFL, flags);
+  if (!in->poller) {
+    close(fd);
+    return;
+  }
+  in->poll_fd = fd;
+}
+
+void agc_input_close(agc_vm *vm) {
+  agc_input *in = &vm->rt->in;
+  if (!in->poller) return;
+  agc_poller_pause(in->poller);
+  agc_poller_close(in->poller);
+  in->poller = NULL;
+  in->poll_fd = -1;
+}
+
 static int start_read(agc_vm *vm, agc_input *in) {
   if (in->reading) {
     agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
@@ -139,13 +214,23 @@ static int start_read(agc_vm *vm, agc_input *in) {
   }
   size_t room = read_room(in);
   if (in->flush_out) agc_flush(vm);
-  read_request *q = malloc(sizeof(read_request) + room);
+  watch_stdin(vm, in);
+  read_request *q = calloc(1, sizeof(read_request) + room);
   if (!q) agc_out_of_memory();
-  q->fd = in->fd;
+  q->fd = in->poller ? in->poll_fd : in->fd;
+  q->socket = in->poll_socket;
+  q->poller = in->poller;
   q->room = room;
-  q->got = 0;
   in->reading = true;
-  agc_io_start(vm, &read_io, q, agc_void(), -1);
+  if (!in->poller) {
+    agc_io_start(vm, &read_io, q, agc_void(), -1);
+  } else {
+    q->job = agc_io_start(vm, &poll_read_io, q, agc_void(), -1);
+    if (read_once(q))
+      agc_io_ready(q->job);
+    else
+      agc_poller_wait(q->poller, false, stdin_ready, q);
+  }
   vm->task->retry = true;
   return FILL_WAIT;
 }
@@ -164,6 +249,8 @@ static int start_read(agc_vm *vm, agc_input *in) {
     return -1;
   }
 }
+
+void agc_input_close(agc_vm *vm) { (void)vm; }
 #endif
 
 static int fill(agc_vm *vm) {

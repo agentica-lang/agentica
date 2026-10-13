@@ -41,11 +41,19 @@ struct agc_io_job {
   uv_timer_t timer;
   const agc_io_kind *kind;
   void *data;
+  agc_more_fn more;
   agc_loop *loop;
   job *ready_next;
   size_t slot;
   uint64_t started_ns, ended_ns;
-  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush;
+  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush, on_loop;
+};
+
+struct agc_poller {
+  uv_poll_t handle;
+  int fd;
+  void (*ready)(void *data, int status);
+  void *data;
 };
 #endif
 
@@ -161,9 +169,15 @@ static void mark_ready(job *j) {
   loop->ready_tail = j;
 }
 
+/* A job's `more` step (agc_io_start_then) may keep it waiting on the loop after
+   its pool work (a descriptor that can wait forever); agc_io_ready ends it. */
 static void work_finished(uv_work_t *req, int status) {
   (void)status;
   job *j = (job *)(void *)req;
+  if (!j->consumed && !j->detached && j->more && j->more(j->data, j)) {
+    j->on_loop = true;
+    return;
+  }
   j->work_done = true;
   mark_ready(j);
 }
@@ -274,6 +288,10 @@ static void discard(agc_vm *vm, agc_value result) {
   agc_unregister(vm, r);
 }
 
+/* Only a loop wait can be cancelled: a pool job's work runs to its end
+   (docs/vm/14-core-invariants.md, 14.3). */
+static bool cancellable(const job *j) { return j->kind->cancel && (!j->kind->work || j->on_loop); }
+
 /* A detached job (its task was cancelled) ends here, between turns: its
    result is dropped, its `expired` half never runs, so it never closes a
    task's handle, and the turn cost of `done` is not charged to the current
@@ -281,7 +299,7 @@ static void discard(agc_vm *vm, agc_value result) {
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
   if (!j->dropping && !j->work_done) {
-    if (!j->timer_fired || !j->kind->cancel || !j->kind->cancel(vm, j->data, r->context, true)) return;
+    if (!j->timer_fired || !cancellable(j) || !j->kind->cancel(vm, j->data, r->context, true)) return;
     j->dropping = true;
   }
   close_timer(j);
@@ -422,6 +440,41 @@ static int queue_work(agc_loop *loop, job *j) {
   return rc;
 }
 
+static void poll_ready(uv_poll_t *handle, int status, int events) {
+  (void)events;
+  agc_poller *p = (agc_poller *)(void *)handle;
+  p->ready(p->data, status);
+}
+
+static void poller_closed(uv_handle_t *handle) {
+  agc_poller *p = (agc_poller *)(void *)handle;
+  close(p->fd);
+  free(p);
+}
+
+agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
+  agc_poller *p = calloc(1, sizeof(agc_poller));
+  if (!p) agc_out_of_memory();
+  int rc = uv_poll_init(&loop_of(vm)->uv, &p->handle, fd);
+  if (rc != 0) {
+    free(p);
+    *err = -rc;
+    return NULL;
+  }
+  p->fd = fd;
+  return p;
+}
+
+void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
+  p->ready = ready;
+  p->data = data;
+  if (uv_poll_start(&p->handle, writing ? UV_WRITABLE : UV_READABLE, poll_ready) != 0) ready(data, UV_EBADF);
+}
+
+void agc_poller_pause(agc_poller *p) { uv_poll_stop(&p->handle); }
+
+void agc_poller_close(agc_poller *p) { uv_close((uv_handle_t *)&p->handle, poller_closed); }
+
 bool agc_io_init(void) {
   if (getenv("UV_USE_IO_URING")) return false;
   setenv("UV_USE_IO_URING", "0", 1);
@@ -433,13 +486,14 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task) {
-  if (kind->work && kind->cancel) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
+                               int64_t timeout_ms, const agc_task *task, agc_more_fn more) {
+  if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
   j->kind = kind;
   j->data = data;
+  j->more = more;
   j->loop = loop;
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
@@ -470,18 +524,24 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   return r;
 }
 
-agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task);
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                              agc_more_fn more) {
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
   return r->native;
 }
 
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL);
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+  return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
+}
+
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL);
   job *j = r->native;
   j->detached = j->flush = true;
+  return j;
 }
 
 void agc_io_ready(agc_io_job *j) {
@@ -574,7 +634,7 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
     result = j->kind->expired(vm, j->data, context);
   }
   trace_finish(vm, r, j, done, result);
-  if (j->kind->external) j->work_done = true;
+  if (j->kind->external || j->on_loop) j->work_done = true;
   close_pending(vm, context);
   sweep(vm);
   return result;
@@ -587,7 +647,7 @@ void agc_io_detach(agc_vm *vm, agc_task *t) {
   job *j = r->native;
   j->detached = true;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "detach job=%" PRIu64 " kind=%s task=%" PRIu64, r->id, j->kind->name, t->id);
-  if (j->kind->cancel && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
+  if (cancellable(j) && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
   if (j->dropping || j->work_done || j->timer_fired) mark_ready(j);
 }
 
@@ -664,9 +724,10 @@ static bool close_all(agc_vm *vm) {
     job *j = job_at(vm, k);
     if (!j) continue;
     j->consumed = true;
-    if (j->kind->external) j->work_done = true;
+    if (j->kind->external || j->on_loop) j->work_done = true;
     close_timer(j);
   }
+  agc_input_close(vm);
   release_handles(vm);
   if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
@@ -701,7 +762,7 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 
 void agc_io_ready(agc_io_job *j) { (void)j; }
 
-void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
   (void)kind;
   (void)data;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
