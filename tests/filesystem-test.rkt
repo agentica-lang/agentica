@@ -37,6 +37,13 @@
 (define-runtime-path fifo-peer "fixtures/fifo-peer.py")
 (define mkfifo (find-executable-path "mkfifo"))
 
+(define (python-ready? what)
+  (cond
+    [(not (vm-built? what)) #f]
+    [python #t]
+    [(getenv "CI") (error 'filesystem "Python 3 is required in CI")]
+    [else (displayln (format "SKIP ~a: python3 is unavailable" what)) #f]))
+
 (define (fifo-ready? what)
   (cond
     [(not (vm-built? what)) #f]
@@ -44,7 +51,7 @@
     [(getenv "CI") (error 'filesystem "mkfifo and python3 are required in CI")]
     [else (displayln (format "SKIP ~a: mkfifo or python3 is unavailable" what)) #f]))
 
-(define (run-vm-bounded root text #:inherit? [inherit? #f] #:input [input #f] #:one-pool-thread [one? #f]
+(define (run-vm-bounded root text #:peer [peer #f] #:input [input #f] #:one-pool-thread [one? #f]
                         #:keep-stdin [keep-stdin? #f] . arguments)
   (define source (build-path root "program.agc"))
   (define bytecode (path->string (build-path root "program.agcb")))
@@ -54,8 +61,8 @@
   (when one? (environment-variables-set! env #"UV_THREADPOOL_SIZE" #"1"))
   (define-values (process out in err)
     (parameterize ([current-environment-variables env])
-      (apply subprocess #f #f #f (if inherit? python vm-file)
-             (append (if inherit? (list (path->string stop-peer) "inherit" (path->string vm-file)) '())
+      (apply subprocess #f #f #f (if peer python vm-file)
+             (append (if peer (list (path->string stop-peer) peer (path->string vm-file)) '())
                      (list "--allow-run" "--" bytecode) arguments))))
   (when input (write-string input in))
   (unless keep-stdin? (close-output-port in))
@@ -236,7 +243,7 @@
          (check-equal? (take result 2) (list 0 "ok()\nok(\"x\")\n"))))))
 
   (test-case "file calls cannot reopen the VM's own pipes, so a later spawn does not deadlock"
-    (when (vm-built? "the private pipe test")
+    (when (python-ready? "the private pipe test")
       (with-temp-dir
        (lambda (root)
          (define result
@@ -248,25 +255,22 @@
              "      path = \"/proc/self/fd/\" + name\n"
              "      IO.inspect([File.read_text(path, 100).ok?, File.open(path, \"append\", 100).ok?])\n"
              "    end\n  end\n"
-             "  p = Process.spawn(\"true\", [], 1000).unwrap!\n  IO.inspect(Process.wait(p, 1000))\nend\n")))
+             "  p = Process.spawn(\"true\", [], 1000).unwrap!\n  IO.inspect(Process.wait(p, 1000))\nend\n")
+            #:peer "clean"))
          (define lines (string-split (second result) "\n"))
          (check-equal? (first result) 0)
          (check-equal? (last lines) "ok(0)")
          (check-equal? (remove-duplicates (drop-right lines 1)) '("[false, false]"))))))
 
   (test-case "pipes the VM got at start stay readable: an inherited descriptor and a piped stdin"
-    (when (vm-built? "the inherited pipe test")
-      (cond
-        [python
-         (with-temp-dir
-          (lambda (root)
-            (define program
-              (string-append "def main() -> Void\n  f = File.open(System.args()[0], \"read\", 1000).unwrap!\n"
-                             "  IO.inspect(File.read_line(f, 1000))\nend\n"))
-            (check-equal? (run-vm-bounded root program #:inherit? #t) '(0 "ok(\"inherited\")\n"))
-            (check-equal? (run-vm-bounded root program #:input "piped\n" "/dev/stdin") '(0 "ok(\"piped\")\n"))))]
-        [(getenv "CI") (error 'filesystem "Python 3 is required in CI")]
-        [else (displayln "SKIP the inherited pipe test: python3 is unavailable")])))
+    (when (python-ready? "the inherited pipe test")
+      (with-temp-dir
+       (lambda (root)
+         (define program
+           (string-append "def main() -> Void\n  f = File.open(System.args()[0], \"read\", 1000).unwrap!\n"
+                          "  IO.inspect(File.read_line(f, 1000))\nend\n"))
+         (check-equal? (run-vm-bounded root program #:peer "inherit") '(0 "ok(\"inherited\")\n"))
+         (check-equal? (run-vm-bounded root program #:input "piped\n" "/dev/stdin") '(0 "ok(\"piped\")\n"))))))
 
   (test-case "file-summary example reads a command-line path"
     (define input-path (build-path examples-dir "hello.agc"))
