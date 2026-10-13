@@ -40,6 +40,7 @@
                     ("Task.spawn" ((function (Fn A R)) (argument A)) (Task R) task-spawn "Task.spawn" (concurrency) "Start a named function with one argument in a lightweight task.")
                     ("Task.await" ((task (Task R))) R task-await "Task.await" (concurrency) "Wait for a task and return its cached result; task failures terminate the execution.")
                     ("Task.sleep" ((milliseconds Int)) Void #f "Task.sleep" (concurrency) "Suspend this task for nonnegative milliseconds; zero yields execution.")
+                    ("Task.pending_count" () Int #f "Task.pending_count" (concurrency) "Count the tasks of this run that have not ended, not counting main; VM only.")
                     ("File.open" ((path String) (mode String) (timeout_ms Int)) (Result FileHandle) #f "File.open" (filesystem) "Open a regular file for read, write, or append with a deadline.")
                     ("File.read_bytes" ((handle FileHandle) (max_bytes Int) (timeout_ms Int)) (Result (List Int)) #f "File.read_bytes" (filesystem) "Read up to max_bytes; empty means EOF.")
                     ("File.read_line" ((handle FileHandle) (timeout_ms Int)) (Result String) #f "File.read_line" (filesystem) "Read one bounded UTF-8 line, removing LF or CRLF.")
@@ -233,7 +234,7 @@
   (filter (lambda (name) (not (std-only-name? name))) (hash-keys builtins)))
 
 (define vm-only-builtins '("HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
-                           "Process.spawn_captured" "Process.output"))
+                           "Process.spawn_captured" "Process.output" "Task.pending_count"))
 
 (define (builtin-ref name [arity #f])
   (define entry (hash-ref builtins name #f))

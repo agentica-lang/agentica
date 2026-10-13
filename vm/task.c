@@ -209,10 +209,17 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static agc_value builtin_pending_count(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return agc_int((int64_t)pending_tasks(vm));
+}
+
 const agc_builtin agc_task_builtins[] = {
   {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.sleep", 1, builtin_sleep, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Task.pending_count", 0, builtin_pending_count, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];
