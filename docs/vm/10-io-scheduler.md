@@ -285,9 +285,11 @@
     run. When a task ends normally, the handles it still owns go to its
     parent (`agc_give_owned`), so a handle moved to a helper task and
     returned with it is still closed if the parent crashes later. At the
-    end of the run, `agc_io_close` starts the same `OP_CLOSE` job for
-    every file still open (`close_files`), then waits for all file close
-    jobs, the crashed tasks' ones too (`finish_flushes`): with no limit
+    end of the run, `vm/main.c` first flushes stdout, so a stuck file
+    does not hold back the program's last output. Then `agc_io_close`
+    starts the same `OP_CLOSE` job for every file still open
+    (`close_files`), then waits for all file close jobs, the crashed
+    tasks' ones too (`finish_flushes`): with no limit
     by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
     a deadline `uv_timer_t` stops the wait after MS ms, and `vm/main.c`
     prints one warning line (`agc_print_flush_timeout`) and keeps the
