@@ -246,7 +246,8 @@
     program can cancel a task yet). Each task records its `parent` (the
     task that spawned it; `main` has none) and a list of its running
     children (`children`, linked through `prev_sibling` and
-    `next_sibling`). When a task ends, normally or cancelled, it leaves
+    `next_sibling`; newest first, and no order is promised). When a task
+    ends, normally or cancelled, it leaves
     its parent's list and its running children move to its parent, so a
     grandchild whose parent ended is still a descendant of the item
     above it. `agc_task_cancel(vm, t)` cancels `t` and its running
@@ -281,7 +282,10 @@
     program reaches it: a task can only await tasks created before it
     (there are no channels and no way to pass a task its own handle), so
     awaits form no cycle, and every other wait holds a libuv request or
-    timer. It guards against VM bugs.
+    timer. It guards against VM bugs. A ready list that is not empty
+    (jobs marked ready during a turn, such as a detached job) is drained
+    even when the loop has nothing alive, and `agc_io_poll` does not
+    block in `UV_RUN_ONCE` while that list is not empty.
   - Under the black-box rule (§1) a multi-task run must stop with
     `RUNTIME-STEP-LIMIT` when it runs away, and the `--max-steps` sweep
     (§12.1) needs each limit to give the full outcome or the step limit
@@ -415,19 +419,26 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   the handle's lock until then, and ends between turns, when the drain
   meets it: its `done` half runs and the result is dropped (its turn cost
   is not charged to the current task), the lock passes to the head
-  waiter as at a release, and the job is swept. Its `expired` half never
-  runs, so a detached job never closes a handle. A kind may set a
-  `cancel` half, called once at the detach and again when the job's
-  timer fires before its work ends; when it returns true the job ends
-  then without a result, through `drop`. `HttpWire.exchange` uses it:
+  waiter as at a release, and the job is swept. A handle that the
+  dropped result would have handed out (a `File.open`, a `TCP.connect`,
+  `listen` or `accept`) is closed then, since no task can reach it. Its
+  `expired` half never runs, so a detached job never closes a handle
+  that a task holds. A kind may set a `cancel` half (it gets the job's
+  context), called once at the detach and again when the drain meets the
+  job after its timer fired before its work ended, also when the timer
+  fired before the cancel (the task was woken but had not run yet); when
+  it returns true the job ends then without a result, through `drop`.
+  No pool kind may have one, since `drop` must never free data a pool
+  thread still uses (`agc_io_start` refuses it). `HttpWire.exchange` uses it:
   an exchange that waits for its TLS setup or for a pool slot leaves the
   queue, and one that holds a slot but has not sent its request (still
   connecting) closes that connection, so the slot passes to the next
   waiter (or becomes free); an exchange that has sent its request runs
-  to its end, and its connection is then closed, never pooled. The TCP
-  and process kinds use it at the deadline for everything but a send: a
-  read, accept, connect or wait leaves its handle (`drop` unlinks the
-  request) without the `expired` half that would close it; a send waits
+  to its end, and its connection is then closed, never pooled or
+  retried. The TCP and process kinds use it at the deadline for
+  everything but a send: a read, accept or wait leaves its handle (`drop`
+  unlinks the request) without the `expired` half that would close it, a
+  connect or listen closes the socket or listener it was opening; a send waits
   for its write callback, since the write request lives in the handle's
   state. A pool job (files, stdin) cannot be stopped, so it ends when its
   work ends. A job on the ready list is never swept until the drain

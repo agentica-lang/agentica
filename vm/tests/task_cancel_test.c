@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef __linux__
 #include <arpa/inet.h>
@@ -14,12 +15,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 9
+#define MAX_FNS 10
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -35,6 +36,7 @@ typedef void (*checker)(agc_vm *vm, int64_t n);
 static int64_t marks[32];
 static size_t mark_count;
 static int done_calls;
+static int dropped;
 static int released;
 static bool self_returned;
 static int tries;
@@ -64,9 +66,20 @@ static agc_value ext_expired(agc_vm *vm, void *data, agc_value context) {
   return agc_int(-1);
 }
 
-static void ext_drop(void *data) { free(data); }
+static void ext_drop(void *data) {
+  free(data);
+  dropped++;
+}
+
+static bool ext_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return deadline;
+}
 
 static const agc_io_kind ext_io = {NULL, ext_done, ext_expired, ext_drop, true, "test", NULL};
+static const agc_io_kind short_io = {NULL, ext_done, ext_expired, ext_drop, true, "short", ext_cancel};
 
 static agc_value napped(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -95,17 +108,32 @@ static agc_value test_check(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
-static agc_value test_io(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  int64_t tag = agc_as_int(vm, args[0]);
-  int64_t timeout = 30000;
+static agc_value handle_io(agc_vm *vm, const agc_io_kind *kind, int64_t tag, int64_t timeout) {
   agc_lock_status status = agc_handle_wait(vm, handle, &timeout);
   if (status == AGC_LOCK_WAIT) return agc_void();
   assert(status == AGC_LOCK_TAKEN);
   int64_t *data = malloc(sizeof(int64_t));
   assert(data);
   *data = tag;
-  jobs[tag] = agc_io_start(vm, &ext_io, data, agc_handle_value(handle), timeout);
+  jobs[tag] = agc_io_start(vm, kind, data, agc_handle_value(handle), timeout);
+  return agc_void();
+}
+
+static agc_value test_io(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return handle_io(vm, &ext_io, agc_as_int(vm, args[0]), 30000);
+}
+
+static agc_value test_io_short(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return handle_io(vm, &short_io, agc_as_int(vm, args[0]), 20);
+}
+
+static agc_value test_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t ms = agc_as_int(vm, args[0]);
+  struct timespec delay = {0, (long)ms * 1000000L};
+  while (nanosleep(&delay, &delay) != 0) {}
   return agc_void();
 }
 
@@ -182,6 +210,8 @@ static const agc_builtin test_builtins[] = {
   {"Test.http", 1, test_http, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.until", 1, test_until, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.close", 1, test_close, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.io_short", 1, test_io_short, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -257,6 +287,10 @@ static void build_tasks(prog *p) {
   emit(p, F_HTTP, AGC_OP_CALL_BUILTIN, 1, B_HTTP, 1);
   mark_arg(p, F_HTTP);
   emit(p, F_HTTP, AGC_OP_RETURN, 1, 0, 1);
+
+  call_reg(p, F_SHORT, B_IO_SHORT, 0, 1);
+  mark_arg(p, F_SHORT);
+  finish_fn(p, F_SHORT);
 }
 
 static void new_prog(prog *p) {
@@ -285,6 +319,7 @@ static void release_count(void *native) { (*(int *)native)++; }
 static void reset(void) {
   mark_count = 0;
   done_calls = 0;
+  dropped = 0;
   self_returned = false;
   tries = 0;
   client = agc_void();
@@ -383,6 +418,46 @@ static void test_states(void) {
   assert(released == 1);
 }
 
+static void check_cancel_check(prog *p, uint32_t reg) {
+  call_int(p, F_MAIN, B_CHECK, 1);
+  call_reg(p, F_MAIN, B_CANCEL, reg, 1);
+  call_int(p, F_MAIN, B_CHECK, 2);
+}
+
+static void run_done(prog *p, checker c) {
+  finish_fn(p, F_MAIN);
+  reset();
+  check = c;
+  agc_vm vm;
+  agc_outcome o = run(&vm, p);
+  assert(o.kind == AGC_DONE);
+  settle(&vm);
+}
+
+static void check_timer_ready(agc_vm *vm, int64_t n) {
+  agc_task *a = reg_task(vm, 0);
+  if (n == 1) {
+    assert(a->state == AGC_TASK_READY && a->parked && handle->holder == a->parked);
+  } else if (n == 2) {
+    assert(cancelled(a) && handle->holder && dropped == 0);
+  } else {
+    assert(!handle->holder && dropped == 1 && done_calls == 0 && mark_count == 0);
+  }
+}
+
+static void test_timer_fired_then_cancel(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_SHORT, 1);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_BLOCK, 60);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  check_cancel_check(&p, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 3);
+  run_done(&p, check_timer_ready);
+}
+
 static void check_await(agc_vm *vm, int64_t n) {
   (void)n;
   agc_task *s = reg_task(vm, 0), *w = reg_task(vm, 2);
@@ -467,17 +542,9 @@ static void test_children_move(void) {
   call_int(&p, F_MAIN, B_SLEEP, 0);
   call_int(&p, F_MAIN, B_SLEEP, 0);
   call_int(&p, F_MAIN, B_SLEEP, 0);
-  call_int(&p, F_MAIN, B_CHECK, 1);
-  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
-  call_int(&p, F_MAIN, B_CHECK, 2);
-  finish_fn(&p, F_MAIN);
-  reset();
-  check = check_children;
-  agc_vm vm;
-  agc_outcome o = run(&vm, &p);
-  assert(o.kind == AGC_DONE);
+  check_cancel_check(&p, 0);
+  run_done(&p, check_children);
   assert(mark_count == 1 && marks[0] == 8);
-  settle(&vm);
 }
 
 static void check_pool(agc_vm *vm, int64_t n) {
@@ -531,7 +598,7 @@ static void test_pool(void) {
   for (int k = 0; k < accepted_count; k++)
     if (accepted[k] >= 0) close(accepted[k]);
   close(listener);
-  agc_io_close(&vm);
+  assert(agc_io_close(&vm));
 }
 #endif
 
@@ -544,6 +611,7 @@ int main(void) {
   test_ready_then_await();
   test_self_cancel();
   test_children_move();
+  test_timer_fired_then_cancel();
   test_pool();
 #endif
   puts("task cancel tests passed");

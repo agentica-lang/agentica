@@ -95,7 +95,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
-    adopt(t->parent, child);
+    if (t->parent) adopt(t->parent, child);
   }
   leave_parent(t);
   agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
@@ -154,7 +154,7 @@ void agc_task_cancel(agc_vm *vm, agc_task *root) {
     if (t == root) break;
     t = up;
   }
-  agc_charge(vm, count);
+  if (vm->task && vm->task->state == AGC_TASK_RUNNING) agc_charge(vm, count);
 }
 
 static void resume(agc_vm *vm, agc_task *t) {

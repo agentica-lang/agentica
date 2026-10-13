@@ -63,7 +63,7 @@ struct exchange {
   uint8_t *request;
   size_t request_len, seen, fields;
   int interim, status;
-  bool head_only, keep, sent, write_failed, queued, in_body, detached, written, reused, retried, idempotent;
+  bool head_only, keep, sent, write_failed, queued, in_body, detached, written, reused, retried, idempotent, cancelled;
   agc_http_body body;
   uint8_t *field_data;
   field_size *field_sizes;
@@ -282,7 +282,7 @@ static void free_slot(origin *o) {
 
 static bool retry(exchange *x, failure why) {
   agc_conn *conn = x->conn;
-  if (!conn || !x->reused || x->retried || !x->idempotent || x->c->closed) return false;
+  if (!conn || !x->reused || x->retried || !x->idempotent || x->cancelled || x->c->closed) return false;
   if (why != F_EOF && why != F_READ && why != F_WRITE) return false;
   if (x->in_body || x->seen || x->interim || agc_inbuf_pending(agc_conn_input(conn))) return false;
   origin *o = x->o;
@@ -734,8 +734,11 @@ static agc_value exchange_expired(agc_vm *vm, void *data, agc_value context) {
 
 static void exchange_drop(void *data) { free_exchange(data); }
 
-static bool exchange_cancel(void *data, bool deadline) {
+static bool exchange_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
   exchange *x = data;
+  x->cancelled = true;
   if (deadline || x->at != X_EXCHANGE) {
     detach(x, "cancel");
     return true;

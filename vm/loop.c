@@ -214,10 +214,23 @@ static agc_value take_context(agc_vm *vm, agc_resource *r) {
 /* A detached job (its task was cancelled) ends here, between turns: its
    result is dropped, its `expired` half never runs, so it never closes a
    handle, and the turn cost of `done` is not charged to the current task. */
+static void discard(agc_vm *vm, agc_value result) {
+  if (!agc_is(result, AGC_T_RESULT) || !agc_as_result(vm, result)->ok) return;
+  agc_value v = agc_as_result(vm, result)->value;
+  agc_resource *r = agc_is(v, AGC_T_HANDLE)     ? agc_as_handle(vm, v)
+                    : agc_is(v, AGC_T_SOCKET)   ? agc_as_socket(vm, v)->state
+                    : agc_is(v, AGC_T_LISTENER) ? agc_as_listener(vm, v)->state
+                                                : NULL;
+  if (!r || !r->native || r->holder) return;
+  r->release(r->native);
+  r->native = NULL;
+  agc_unregister(vm, r);
+}
+
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
   if (!j->dropping && !j->work_done) {
-    if (!j->timer_fired || !j->kind->cancel || !j->kind->cancel(j->data, true)) return;
+    if (!j->timer_fired || !j->kind->cancel || !j->kind->cancel(vm, j->data, r->context, true)) return;
     j->dropping = true;
   }
   close_timer(j);
@@ -230,8 +243,10 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
     if (data) j->kind->drop(data);
   } else {
     int64_t cost = vm->task->turn_cost;
-    trace_finish(vm, r, j, true, j->kind->done(vm, data, context));
+    agc_value result = j->kind->done(vm, data, context);
     vm->task->turn_cost = cost;
+    trace_finish(vm, r, j, true, result);
+    discard(vm, result);
   }
   sweep(vm);
 }
@@ -286,6 +301,7 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+  if (kind->work && kind->cancel) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
@@ -335,9 +351,10 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   if (uv_loop_alive(&vm->loop->uv)) {
     const agc_trace *tr = &vm->rt->trace;
     uint64_t before = AGC_TRACE_ON(tr, AGC_TRACE_IO) ? agc_trace_now() : 0;
-    uv_run(&vm->loop->uv, wait ? UV_RUN_ONCE : UV_RUN_NOWAIT);
-    if (wait || vm->loop->ready)
-      AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, wait ? "once" : "nowait",
+    bool once = wait && !vm->loop->ready;
+    uv_run(&vm->loop->uv, once ? UV_RUN_ONCE : UV_RUN_NOWAIT);
+    if (once || vm->loop->ready)
+      AGC_TRACE(tr, AGC_TRACE_IO, "poll mode=%s us=%" PRIu64, once ? "once" : "nowait",
                 (agc_trace_now() - before) / 1000u);
   } else if (!vm->loop->ready) {
     return false;
@@ -418,8 +435,8 @@ void agc_io_detach(agc_vm *vm, agc_task *t) {
   job *j = r->native;
   j->detached = true;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "detach job=%" PRIu64 " kind=%s task=%" PRIu64, r->id, j->kind->name, t->id);
-  if (j->kind->cancel && j->kind->cancel(j->data, false)) j->dropping = true;
-  if (j->dropping || j->work_done) mark_ready(j);
+  if (j->kind->cancel && j->kind->cancel(vm, j->data, r->context, false)) j->dropping = true;
+  if (j->dropping || j->work_done || j->timer_fired) mark_ready(j);
 }
 
 static bool held(const agc_resource *r) {

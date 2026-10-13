@@ -414,7 +414,9 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   return agc_stream_timed_out();
 }
 
-static bool request_cancel(void *data, bool deadline) {
+static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
   const request *q = data;
   return deadline && q->kind != REQ_SEND;
 }

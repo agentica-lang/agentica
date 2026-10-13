@@ -198,7 +198,7 @@ typedef struct {
   void (*drop)(void *data);
   bool external;
   const char *name;
-  bool (*cancel)(void *data, bool deadline);
+  bool (*cancel)(agc_vm *vm, void *data, agc_value context, bool deadline);
 } agc_io_kind;
 
 typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
