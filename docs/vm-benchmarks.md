@@ -1,154 +1,62 @@
 # VM benchmarks
 
-Speed numbers for the roadmap's 7g speed check, and the HTTP sanity check of roadmap 20c (last section). Phase 12 adds a cross-language section later.
+Speed of the VM against CPython, and the HTTP sanity check of roadmap 20c.
 
 ## How to run
 
 ```sh
-make build vm exe          # exe is optional: dist/agentica is timed whenever it exists, so rebuild it after a change or leave it out with --runners
-make bench                 # same as: python3 benchmarks/run.py
+make bench                                                      # builds the VM, then runs every program
 python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners vm,python
 ```
 
-`benchmarks/run.py` (Python standard library only) runs each program in `benchmarks/programs/` on three runners:
+`benchmarks/run.py` runs each program in `benchmarks/programs/` on these runners:
 
-| Runner | Command | What is timed |
-|---|---|---|
-| `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included; since the VM became the default this is the source → result path on the VM (Racket front end, then `agentica-vm`), so tables recorded before that time the evaluator, which 7i deleted |
-| `vm` | `racket src/main.rkt compile f.agc -o f.agcb`, then `dist/agentica-vm -- f.agcb` | only the VM run; compiling happens once, untimed |
-| `python` | the interpreter running the script (`sys.executable`) on `benchmarks/python/<name>.py SIZE` | the whole run, an idiomatic CPython version as an outside reference |
+- `exe`: `dist/agentica f.agc`, the whole path from source, start-up included. It runs only when `dist/agentica` exists, so run `make exe` first.
+- `vm`: `dist/agentica-vm` on precompiled bytecode. Only the VM run is timed.
+- `python`: the CPython twin in `benchmarks/python/`.
 
-The `vm` runner times only the VM on precompiled bytecode. A user who runs a source file with `agentica f.agc` also pays for starting Racket, checking and compiling; the `exe` runner shows that whole path now that the VM is the default.
+Options: `--runs N` (timed runs, default 5), `--size N` (scales the work of every program), `--only a,b`, `--runners exe,vm,python`, and `--no-startup` to skip the `hello.agc` start-up check.
 
-For each program and runner it does one warm-up run under GNU `/usr/bin/time -f %M` for the peak RSS (without GNU time the RSS column shows `n/a`), then `--runs` timed runs (default 5), and reports the median and the minimum wall time. Every run must print the same stdout as the first runner that succeeded; a different output is a `mismatch`, and a `failed` or `mismatch` row (start-up rows included) makes the script exit 1. A program the VM cannot compile yet is reported as `unsupported` with a one-line summary of the `LOWER-UNSUPPORTED` diagnostic. `hello.agc` start-up is measured apart (`--no-startup` skips it).
+Every runner must print the same output, or the row is a mismatch and the script exits 1. The Python twins are idiomatic, not step-by-step copies, so a ratio compares two idiomatic programs.
 
-`--size N` multiplies the work of every program: each `.agc` has a `def scale() -> Int` that returns 1, which the script rewrites to N in a temporary copy, and each Python version takes N as its first argument. Size 1 kept every program at a few seconds at most on the old evaluator.
+## Results
 
-The programs print a deterministic checksum and use only fixed inputs (a seeded linear congruential generator where they need data):
+Latest run: 2026-10-11, median of 5 runs at size 1, on an AMD Ryzen 5 3550H (4 cores, 12 GB RAM), Debian 13, Racket 9.3 CS, gcc 14.2, Python 3.13.5. The host is shared with CI, so the numbers are rough.
 
-| Program | Work |
-|---|---|
-| `knight-tour` | Warnsdorff search with backtracking on 8x8 from 22 start squares |
-| `maze-bfs` | four 40x40 generated mazes, breadth-first search with `Map` queues, as in `examples/maze-bfs.agc` |
-| `traveling-salesman` | branch and bound over 9 generated cities, as in `examples/traveling-salesman.agc` |
-| `arithmetic` | Collatz lengths of 1..2500 (`Int` `%`, `/`, `*`, `while`) |
-| `strings` | 2,000 lines built with `+` and interpolation |
-| `lists` | 30 rounds of `push` to 1,000 items, `filter`, `map`, `reduce`, `sort`, `any?`, indexing |
-| `maps` | 5 rounds of 6,000 `put`/`get` counts over 1,009 keys, `has_key?`, `delete`, `keys` |
-| `calls` | recursive `fib(20)`/`fib(21)` and 40,000 small helper calls |
-| `case` | an `enum` instruction list run 5,000 times through `case`, plus `case` on `Int` literals |
-| `string-library` | 300 rounds of `split`, `trim`, `upcase`, `join`, `replace`, `downcase` (final sigma), `index_of` and `at` over every code point of non-ASCII text |
+| Program | Work | VM s | Python s | VM / Python (below 1 is faster) |
+|---|---|---:|---:|---:|
+| knight-tour | Warnsdorff search with backtracking, 8x8, 22 starts | 0.037 | 0.031 | 1.2 |
+| maze-bfs | breadth-first search over four 40x40 mazes | 0.059 | 0.044 | 1.3 |
+| traveling-salesman | branch and bound over 9 cities | 0.031 | 0.030 | 1.0 |
+| arithmetic | Collatz lengths of 1 to 2500 | 0.044 | 0.040 | 1.1 |
+| strings | 2,000 lines built with `+` and interpolation | 0.019 | 0.026 | 0.7 |
+| string-library | split, trim, upcase, join, replace and more over non-ASCII text | 0.034 | 0.045 | 0.8 |
+| lists | 30 rounds of `push` to 1,000 items, then filter, map, reduce, sort | 0.089 | 0.030 | 3.0 |
+| maps | 5 rounds of 6,000 `put` and `get` over 1,009 keys | 0.094 | 0.024 | 3.9 |
+| calls | recursive `fib` and 40,000 small helper calls | 0.021 | 0.037 | 0.6 |
+| case | an enum instruction list run 5,000 times through `case` | 0.022 | 0.069 | 0.3 |
 
-The VM has the `List` and `Map` library since PR #80 and the `String` library since PR #81; of `docs/vm/12-testing-and-pr-plan.md` §12.2 item 6b only `Float`, `Time` and `Random` are still missing, and none of these programs needs them. The programs stay written the idiomatic way (`push`, `size`, `set`, `put`, `get`). The tables below were measured before PR #80, so their VM rows for `knight-tour`, `maze-bfs`, `traveling-salesman`, `lists` and `maps` come from a later run, described under the programs table.
+At size 1 each run takes 20 to 100 ms, so the ratios are rough. The VM rows for knight-tour, maze-bfs, traveling-salesman, lists and maps come from a run on the PR #80 branch (`--runs 3`), and string-library from PR #81 (also `--runs 3`), on the same host.
 
-The Python versions are idiomatic CPython, not step-by-step copies: they compute the same result but use Python's own tools. `strings` builds each line with `"".join` over f-string parts where the Agentica version uses repeated `+`; `arithmetic` sums a list comprehension; `knight_tour` and `traveling_salesman` mutate one `visited` list and path in place and undo the change on backtrack, where Agentica builds new values; `maze_bfs` uses a `deque` and a `set`. So a ratio against Python compares two idiomatic programs, not two interpreters on identical steps.
+Start-up on precompiled bytecode: the VM takes about 1 ms and 2 MB, and CPython takes 19 ms and 8 MB.
 
-## Results, 2026-10-11
+At size 20 (`--runners vm,python --size 20 --no-startup`), the VM takes 1.06 s on arithmetic against 0.57 s for CPython, 0.31 s on strings against 0.16 s, 0.39 s on calls against 0.26 s, and 0.37 s on case against 0.40 s.
 
-These numbers come from before 7i, when the script still had an `evaluator` runner (`--legacy-eval`); since 7i the ratio column is "vs python" (Python's median divided by the runner's median).
+## Conclusions
 
-The host is shared with the self-hosted CI runners, so other jobs may run at the same time: treat the numbers as rough (the evaluator's median and minimum differ by up to 30% in places).
-
-- Machine: AMD Ryzen 5 3550H (4 cores, 8 threads), 12 GB RAM.
-- OS: Debian GNU/Linux 13 (trixie), Linux 6.12.107+deb13-amd64.
-- Tools: Racket v9.3 [cs], gcc 14.2.0 (Debian 14.2.0-19), `make vm` flags (`-O2`, Boehm GC from the submodule), Python 3.13.5.
-- Code: `master` at `b28c1b1`, `python3 benchmarks/run.py` (size 1, 5 runs).
-
-### Start-up (`hello.agc`)
-
-| Runner | Median s | Min s | Max RSS MB |
-|---|---:|---:|---:|
-| evaluator | 0.845 | 0.692 | 144.1 |
-| exe | 0.615 | 0.559 | 140.4 |
-| vm | 0.001 | 0.001 | 1.7 |
-| python (`-c "print('hello')"`) | 0.019 | 0.018 | 8.3 |
-
-### Programs (size 1)
-
-"vs evaluator" is the evaluator's median divided by the runner's median. The evaluator and `exe` times include their 0.6 to 0.8 s start-up.
-
-| Program | Runner | Median s | Min s | Max RSS MB | vs evaluator |
-|---|---|---:|---:|---:|---:|
-| knight-tour | evaluator | 2.311 | 2.299 | 144.1 | 1.0x |
-| knight-tour | exe | 1.283 | 1.235 | 148.7 | 1.8x |
-| knight-tour | vm | 0.037 | 0.033 | 2.4 | 33.3x* |
-| knight-tour | python | 0.031 | 0.027 | 9.1 | 74.0x |
-| maze-bfs | evaluator | 0.955 | 0.870 | 144.1 | 1.0x |
-| maze-bfs | exe | 1.036 | 0.983 | 144.5 | 0.9x |
-| maze-bfs | vm | 0.059 | 0.050 | 3.0 | 18.5x* |
-| maze-bfs | python | 0.044 | 0.039 | 9.6 | 21.6x |
-| traveling-salesman | evaluator | 1.331 | 1.310 | 146.1 | 1.0x |
-| traveling-salesman | exe | 1.218 | 1.194 | 148.1 | 1.1x |
-| traveling-salesman | vm | 0.031 | 0.030 | 2.1 | 38.5x* |
-| traveling-salesman | python | 0.030 | 0.027 | 9.2 | 43.8x |
-| arithmetic | evaluator | 2.065 | 1.513 | 143.9 | 1.0x |
-| arithmetic | exe | 1.453 | 1.416 | 148.1 | 1.4x |
-| arithmetic | vm | 0.044 | 0.041 | 1.9 | 46.4x |
-| arithmetic | python | 0.040 | 0.039 | 8.8 | 51.4x |
-| strings | evaluator | 0.893 | 0.745 | 144.7 | 1.0x |
-| strings | exe | 0.873 | 0.759 | 148.8 | 1.0x |
-| strings | vm | 0.019 | 0.019 | 1.9 | 47.1x |
-| strings | python | 0.026 | 0.021 | 8.8 | 33.9x |
-| lists | evaluator | 1.205 | 1.160 | 143.8 | 1.0x |
-| lists | exe | 1.332 | 1.256 | 159.6 | 0.9x |
-| lists | vm | 0.089 | 0.083 | 2.2 | 15.3x* |
-| lists | python | 0.030 | 0.027 | 9.0 | 40.1x |
-| maps | evaluator | 1.005 | 0.980 | 144.1 | 1.0x |
-| maps | exe | 0.973 | 0.942 | 148.4 | 1.0x |
-| maps | vm | 0.094 | 0.091 | 2.4 | 11.1x* |
-| maps | python | 0.024 | 0.023 | 9.0 | 42.3x |
-| calls | evaluator | 1.195 | 1.181 | 144.1 | 1.0x |
-| calls | exe | 1.256 | 1.176 | 149.7 | 1.0x |
-| calls | vm | 0.021 | 0.021 | 1.8 | 57.2x |
-| calls | python | 0.037 | 0.035 | 8.8 | 32.7x |
-| case | evaluator | 0.994 | 0.991 | 144.2 | 1.0x |
-| case | exe | 1.041 | 1.030 | 148.6 | 1.0x |
-| case | vm | 0.022 | 0.021 | 1.9 | 46.1x |
-| case | python | 0.069 | 0.068 | 12.4 | 14.5x |
-
-\* From a later run on the PR #80 branch: `python3 benchmarks/run.py --runs 3 --only knight-tour,maze-bfs,traveling-salesman,lists,maps`, on the same shared host, so other jobs may have run at the same time. The ratio is against that run's evaluator medians (knight-tour 1.249 s, maze-bfs 1.097 s, traveling-salesman 1.180 s, lists 1.368 s, maps 1.043 s); CPython there took 0.028 to 0.036 s for each of the five.
-
-At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are dominated by the evaluator's start-up. A second run with more work shows the VM against CPython (`--runners vm,python --only arithmetic,strings,calls,case --size 20 --no-startup`):
-
-| Program | VM median s | Python median s | VM max RSS MB | Python max RSS MB |
-|---|---:|---:|---:|---:|
-| arithmetic | 1.056 | 0.573 | 1.9 | 9.1 |
-| strings | 0.313 | 0.157 | 1.8 | 8.8 |
-| calls | 0.391 | 0.262 | 2.0 | 8.9 |
-| case | 0.374 | 0.397 | 1.9 | 12.1 |
-
-### Reading
-
-- Start-up: the VM starts in about 1 ms and 2 MB on precompiled bytecode; the evaluator needs 0.6 to 0.8 s and about 145 MB (Racket CS boot plus loading the front end), and the `raco exe` build is only slightly faster. Running a source file on the VM (`agentica --vm f.agc`) still goes through that Racket front end, so its real start-up is the evaluator's plus the compile time, not 1 ms; the source → result runners of roadmap 7g will measure it.
-- Where it runs, the VM is about 45x to 60x faster than the evaluator per program at size 1, start-up included. Most of that gap is the evaluator's start-up: subtracting the `hello.agc` median leaves about 1.2 s for `arithmetic` (about 28x the VM), 0.35 s for `calls` (about 17x) and 0.15 s for `case` (about 7x), while `strings` is within the noise of start-up. Larger sizes are needed to compare the evaluator's run time itself.
-- Against CPython the VM is in the same range: as fast on `case`, 1.5x to 2x slower on `arithmetic`, `strings` and `calls` at size 20, with about a fifth of the memory. Instruction dispatch and Int arithmetic are the first hot-spot candidates for the next 7g item. The `strings` gap is weaker evidence, since the Python twin uses `"".join` rather than repeated `+`; profile before blaming string concatenation.
-- The evaluator, start-up included, is 14.5x to 74x slower than CPython on every program.
-- With the `List`/`Map` library (PR #80) the three real programs, `lists` and `maps` run on the VM in 31 to 94 ms at size 1, 11x to 39x faster than the evaluator with its start-up. `knight-tour` and `traveling-salesman` are about as fast as CPython; `maze-bfs`, `lists` and `maps` are 1.6x to 3.1x slower, which fits arrays copied on every `push`/`set`: `List.append` copies the whole array, so building a list with n pushes is O(n²) (persistent vectors come with 8d, which the roadmap puts before any dispatch micro-optimization) and map puts that copy a HAMT path.
-- `string-library` was added after this run with the `String` library on the VM (PR #81, `--runs 3`): at size 1 the evaluator takes 3.645 s, the VM 0.034 s (107x) and Python 0.045 s; at size 20 the VM takes 0.327 s and Python 0.103 s (1.9 MB against 9.3 MB). `at` over non-ASCII text is O(1) per call through the VM's string cursor (`docs/vm/02-reference-behavior.md` §2.3); the Python twin uses `sum` over the characters and `str.find`.
+- Start-up is cheap on bytecode but not yet measured from source. A source file goes through the Racket front end first, so the `exe` numbers for source → result are still missing (roadmap 7g).
+- At size 20 the VM is 1.5 to 2 times slower than CPython on arithmetic, strings and calls, and as fast on case. It uses about a fifth of the memory: about 2 MB against 9 to 12 MB. The strings twin uses `"".join`, not repeated `+`, so profile before blaming string concatenation.
+- Lists and maps are the slow spots: at size 1 they take 3.0 and 3.9 times CPython's time. `List.append` copies the whole array, so n pushes take O(n²) time, and a map `put` copies a HAMT path. Persistent vectors (roadmap 8d) come before any dispatch micro-optimization.
+- Instruction dispatch and Int arithmetic are the first candidates for the next speed item (roadmap 7g).
 
 ## HTTP sanity check
 
-`benchmarks/http_bench.py` (not a CI gate; needs Python 3.10 or newer; Python's standard library, Node's `http` module and `taskset`, no third-party code) compares the VM server, `examples/http_server.agc serve` on `dist/agentica-vm`, with three single-process servers that send the same body and the same headers as far as each allows (`Content-Type: text/plain; charset=utf-8`, `Date`, `Content-Length`, body `hello\n`): Node's `http` module (which also sends `Connection: keep-alive` and `Keep-Alive`), a Python `asyncio.start_server` server with a small hand-written HTTP/1.1 keep-alive loop, and Python's `ThreadingHTTPServer` (with `disable_nagle_algorithm`; it also sends `Server`). The servers live in `benchmarks/http.js` and `benchmarks/http_bench.py` (`--serve`).
-
-The load client is the same for every server: Node's `http` with a keep-alive `http.Agent`, in 4 processes that share the connections, each connection sending `GET /` requests one after another (`benchmarks/http.js client`). Each process reports its CPU use, so a saturated client shows as a "Max client CPU" near 100% (it comes from `process.cpuUsage()`, which counts the garbage collector's threads too, so it can go above 100%); each client also counts the sockets it opened and the run fails when one opens more than its share of the connections, so a server that closes keep-alive connections is caught; the server's CPU use comes from `/proc`. Latency is per request, from the client's send to the end of the response, over all requests of the run.
-
-To keep a shared machine from skewing one server, each round runs every server once, interleaved, with the order rotated each round (VM, Node, asyncio, threading in round 1; at each connection level, then the VM client), each on a freshly started server after a short warm-up; the table shows the median of the rounds and their spread. The server runs under `taskset` on CPU 0 and the clients on CPUs 2 to 7 (CPU 1 is left to the driver and the system; change with `--server-cpus` and `--client-cpus`). Before each round the script samples `/proc/stat` for `--sample` seconds (5) while no benchmark process runs, and starts the round only when at least `--min-idle` (0.90) of all CPUs were idle; otherwise it waits `--wait` seconds and samples again, up to `--retries` times, and the output marks a round that stayed busy. After each round it compares the CPU time that all CPUs spent working with the CPU time of the script's own servers and clients (from `getrusage`); when the difference averages more than `--max-outside` (0.5) CPUs over the round, the round is marked disturbed. The output lists the idle share and the outside CPU use of every round (the load average is not used: it decays slowly, so the benchmark's own load would flag the rounds after the first). The last line runs a VM client program (`std/http`, 8 tasks on one pool) against the Node server.
+`benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer, and Node for the load client and one server. It compares `examples/http_server.agc serve` on the VM with three single-process servers (Node `http`, a Python asyncio server, and Python's `ThreadingHTTPServer`). Every server gets the same keep-alive load from Node clients in 4 processes. The rounds run interleaved under `taskset`, and a round starts only when the machine is idle.
 
 ```sh
 make vm
-python3 benchmarks/http_bench.py                     # 40000 requests per run, 8 and 64 connections, 3 rounds
+python3 benchmarks/http_bench.py                                          # 40000 requests per run, 8 and 64 connections, 3 rounds
 python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```
 
-Results: to be measured on an idle machine (the host also runs CI runners and other builds, and the first runs of the script were taken under a load average of 14 to 21, so they only validated it).
-
-| Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
-|---:|---|---:|---|---:|---:|---:|---:|
-| 8 | VM (`examples/http_server.agc`) | | | | | | |
-| 8 | Node `http` | | | | | | |
-| 8 | Python asyncio | | | | | | |
-| 8 | Python `ThreadingHTTPServer` | | | | | | |
-| 64 | VM (`examples/http_server.agc`) | | | | | | |
-| 64 | Node `http` | | | | | | |
-| 64 | Python asyncio | | | | | | |
-| 64 | Python `ThreadingHTTPServer` | | | | | | |
+Results are not recorded yet. They need an idle-machine run (roadmap [20c-bench](roadmap/20-hybrid-http.md)), and the script marks any round that ran on a busy machine.
