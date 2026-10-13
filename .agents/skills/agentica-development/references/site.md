@@ -49,8 +49,9 @@ rule that a site page shows.
   it from the page source.
 - `_partials/markdown-links.html` points links at the other pages' `.md` URLs
   (and `#anchor` links at the page's own `.md`), sharing
-  `_partials/link-target.html` with `render-link.html`. It skips code fences,
-  code spans and images. `home.llms.txt` runs
+  `_partials/link-target.html` with `render-link.html`. It skips top-level
+  ``` fences and backtick code spans, and images (not `~~~` fences, fences of
+  4 or more backticks, or indented fences). `home.llms.txt` runs
   `_partials/markdown-links-check.html`, which fails the build if that
   rewrite changes.
 - Fence attributes become plain text. `{expect="CHECK-X"}` adds

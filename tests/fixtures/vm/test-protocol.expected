@@ -1,20 +1,16 @@
 {
-  "exit": 1,
+  "exit": 0,
   "code": null,
-  "steps": 65,
+  "steps": 70,
   "stdout": [
     "main reads: IO.gets reached the end of input",
-    "ok(\"task crashed: RUNTIME-TEST-RUN at @fixtures/vm/test-protocol.agc:2:3: call Test.run from main, outside every test\")",
+    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
     "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
     "partial",
     "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
     "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"guess\"}",
-    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":24},\"start\":{\"column\":7,\"line\":24}},\"token\":\"k3y\"}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":20},\"start\":{\"column\":7,\"line\":20}},\"token\":\"k3y\"}",
     ""
   ],
-  "stderr": [
-    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"call Test.run from main, outside every test\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":3,\"line\":2}},\"task\":true}",
-    "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-TEST-RUN at @fixtures/vm/test-protocol.agc:2:3: call Test.run from main, outside every test\"}",
-    ""
-  ]
+  "stderr": []
 }

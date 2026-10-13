@@ -1,0 +1,14 @@
+{
+  "exit": 1,
+  "code": null,
+  "steps": 13,
+  "stdout": [
+    "ok(\"task crashed: RUNTIME-TEST-RUN at @fixtures/vm/test-run-task.agc:2:3: call Test.run from main, outside every test\")",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"@fixtures/vm/test-run-task.agc\",\"message\":\"call Test.run from main, outside every test\",\"range\":{\"end\":{\"column\":15,\"line\":2},\"start\":{\"column\":3,\"line\":2}},\"task\":true}",
+    "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-TEST-RUN at @fixtures/vm/test-run-task.agc:2:3: call Test.run from main, outside every test\"}",
+    ""
+  ]
+}

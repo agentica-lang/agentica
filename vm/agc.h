@@ -314,7 +314,7 @@ typedef enum { AGC_INPUT_OK, AGC_INPUT_EOF, AGC_INPUT_WAIT, AGC_INPUT_FAILED } a
 
 typedef struct {
   int fd;
-  bool flush_out, pending_eof, reading, reserved, protocol;
+  bool flush_out, pending_eof, reading, reserved;
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;
