@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 9
-description: Start, await and pause lightweight tasks.
+description: Start, await, pause and count lightweight tasks.
 ---
 
 Tasks run functions at the same time in one program. The tour page
@@ -99,4 +99,42 @@ end
 
 ```output
 21
+```
+
+## Task.pending_count
+
+```text
+Task.pending_count() -> Int
+```
+
+Gives how many tasks of this run have not ended yet, not counting `main`. A
+task that waits to run, sleeps or waits for another task counts; so does the
+task that asks, unless it is `main`. A task that has returned no longer
+counts, even when nothing awaited it. This function runs only on the VM.
+
+```agentica
+def wait_for(task: Task[Int]) -> Int
+  return Task.await(task)
+end
+
+def nap(ms: Int) -> Int
+  Task.sleep(ms)
+  return ms
+end
+
+def main() -> Void
+  puts(Task.pending_count())
+  first = Task.spawn(&nap, 20)
+  second = Task.spawn(&wait_for, first)
+  puts(Task.pending_count())
+  puts(Task.await(second))
+  puts(Task.pending_count())
+end
+```
+
+```output
+0
+2
+20
+0
 ```
