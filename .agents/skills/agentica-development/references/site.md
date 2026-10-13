@@ -18,7 +18,8 @@ rule that a site page shows.
 ## Content
 
 - The user docs live in `site/content`: Getting started, the Language tour
-  in `tour/`, and one Library page per builtin module in `library/`.
+  in `tour/`, one Library page per builtin module in `library/`, and
+  `vm.md`, a top-level page on the Aurora VM and its libraries.
 - Order and titles come from front matter (`title`, `weight`).
 - `docs/grammar.md` is mounted as the language specification
   (`/reference/`).
