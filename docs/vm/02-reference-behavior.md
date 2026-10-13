@@ -276,7 +276,7 @@ fails when the committed file differs from what the generator prints.
   `RUNTIME-JSON-ENCODE` at the call span. `JSON.float` of a big integer is
   `strtod` of its text (correctly rounded like `exact->inexact`), an error
   value when that is infinite. The VM writes this text with its own
-  encoder in `vm/json.c` (one explicit stack for values and Json nodes).
+  encoder in `vm/json_value.c` (one explicit stack for values and Json nodes).
 
 ### 2.5 Diagnostics, streams and exit codes
 

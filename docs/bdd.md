@@ -108,7 +108,7 @@ Object key order does not affect JSON equality: both lines are compared by their
 | `then_exit(code, ms)` | `Process.wait(p, ms)`; a timeout is `RUNTIME-BDD-TIMEOUT`; then `Process.output` must not be truncated (`RUNTIME-BDD-OUTPUT-LIMIT`); then the code is compared. |
 | `then_stdout(expected)`, `then_stderr(expected)` | The program must have exited (`Process.wait(p, 1)`), else `RUNTIME-BDD-CONTEXT` ("complete output requires program exit"). `Process.output(p, 5000)`: stdout is what no line step has read yet; stderr is all of it. |
 
-The VM stores a parsed object's members sorted by key bytes, with a duplicate key keeping its last value, and encodes them in that order (`vm/json.c`), so `JSON.encode(JSON.parse(x))` is canonical and the JSON comparison is one line in `std/bdd`; no JSON parser or sort is written in Agentica. The Gherkin and pattern scanners run in the runner, which has no step limit; what runs in the scenario child (the predefined steps, the JSON comparison) spends the child's step budget, and builtins such as `JSON.parse` and `JSON.encode` cost steps per call, not per byte, so a long JSON line stays cheap.
+The VM stores a parsed object's members sorted by key bytes, with a duplicate key keeping its last value, and encodes them in that order (`vm/json_value.c`), so `JSON.encode(JSON.parse(x))` is canonical and the JSON comparison is one line in `std/bdd`; no JSON parser or sort is written in Agentica. The Gherkin and pattern scanners run in the runner, which has no step limit; what runs in the scenario child (the predefined steps, the JSON comparison) spends the child's step budget, and builtins such as `JSON.parse` and `JSON.encode` cost steps per call, not per byte, so a long JSON line stays cheap.
 
 ## Step programs
 
