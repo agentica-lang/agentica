@@ -6,18 +6,20 @@ description: Install Agentica, run your first program, check it and read its err
 
 ## Install
 
-Agentica runs on [Racket](https://racket-lang.org/) CS 9.3 or newer. It has no
-other dependencies. Get the source and build the `agentica` command:
+Agentica programs run on a bytecode VM written in C. The `agentica` command checks a program and compiles it to bytecode with a front end written in [Racket](https://racket-lang.org/), then runs it on the VM.
+
+To build from source you need Racket CS 9.3 or newer, a C11 compiler (gcc or clang) and `make`. Get the source with the VM's third-party libraries, and build the `agentica` command:
 
 ```sh
 git clone https://github.com/sonic182/agentica.git
 cd agentica
+git submodule update --init
 make exe
 ```
 
-This writes `dist/agentica`. Put that directory on your `PATH`, or call the
-command by its full path. You can also run the interpreter without building
-it: `racket src/main.rkt file.agc` does the same as `agentica file.agc`.
+This writes `dist/agentica` and the VM next to it, `dist/agentica-vm`. Put that directory on your `PATH`, or call the command by its full path. You can also skip `make exe`: after `make vm`, `racket src/main.rkt file.agc` does the same as `agentica file.agc`, with the VM from `dist/`.
+
+The release archive for Linux x86-64 needs none of these tools: it bundles Racket and `agentica-vm`, and runs on glibc 2.28 or newer.
 
 ## Hello, world
 
@@ -140,6 +142,7 @@ Split text; an empty separator gives characters.
 |---|---|
 | `--max-steps N` | stops the program after `N` steps (`RUNTIME-STEP-LIMIT`) |
 | `--seed N` | makes `Random` repeat the same numbers |
+| `--flush-timeout MS` | waits at most `MS` milliseconds for file data to be written at the end of the run; when time runs out, the run still ends and prints a warning (no limit by default) |
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
 | `--version` | prints the version |
