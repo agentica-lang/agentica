@@ -223,7 +223,8 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception
     Unicode Character Database): Unicode License v3;
   - picohttpparser (`vm/third_party/picohttpparser`): MIT, with its notice
     at the top of `picohttpparser.h`;
-  - OpenSSL 3: Apache-2.0 (planned);
+  - OpenSSL 3 (`vm/third_party/openssl`): Apache-2.0, with its license in
+    `LICENSE.txt`;
   - Racket CS (MIT or Apache-2.0) and the Chez Scheme it embeds
     (Apache-2.0), bundled in the release archives, which ship their
     license files and Chez Scheme's `NOTICE` in `licenses/racket/`.
@@ -231,4 +232,5 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception
   The release archives ship these notices in `licenses/`: `bdwgc/NOTICE`,
   `libuv/LICENSE` and `LICENSE-extra`, `yyjson/LICENSE`,
   `picohttpparser/LICENSE` (the notice from `picohttpparser.h`),
-  `unicode/LICENSE.txt` (also in this repository) and `racket/`.
+  `openssl/LICENSE.txt`, `unicode/LICENSE.txt` (also in this repository)
+  and `racket/`.
