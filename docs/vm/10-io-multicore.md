@@ -45,11 +45,11 @@ CPU-bound work that one scheduler cannot serve.
   takes effect within one turn budget.
 - **Park and wake protocol.** Each task has an atomic state: RUNNING,
   PARKING, PARKED or WOKEN. To park, the task sets RUNNING to PARKING before
-  it registers its wait (before it links its job on the I/O inbox, joins a
+  it registers its wait (before it posts its start request, joins a
   waiter list or registers on another task's result). Then it re-checks its
   wait condition and its cancel flag; if either is satisfied, it unregisters
-  and goes back to RUNNING with one CAS that accepts PARKING or WOKEN. A job
-  already linked on the inbox cannot be unlinked, so for a job "unregisters"
+  and goes back to RUNNING with one CAS that accepts PARKING or WOKEN. A
+  request already posted cannot be recalled, so for a job "unregisters"
   means the task detaches it, when the cancel flag ended the wait, and the
   job runs to its end (§16.11). If the outcome (§16.5) is already set, the
   task consumes the job instead.
