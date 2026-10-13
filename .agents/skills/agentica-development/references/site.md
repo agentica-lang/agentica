@@ -38,6 +38,7 @@ rule that a site page shows.
   mount (`hugo.toml`) and joins them, in file-name order, into one page. A new
   file in `docs/grammar/` appears there by itself; the adapter fails the build
   when fewer than 10 files are found, so change that number with the files.
+- The adapter rewrites two kinds of joined link: a sibling grammar link `](NN-name.md#anchor)` becomes `](#anchor)`, and `](../../site/content/library/NAME.md)` becomes `](/library/NAME/)`; other relative links stay as written.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 - When the language or a builtin changes, update the matching site page too.

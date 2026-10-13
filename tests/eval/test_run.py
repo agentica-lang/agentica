@@ -101,7 +101,11 @@ class PrepareTests(unittest.TestCase):
                 run.prepare(work, "sample", "grammar")
 
             grammar = (work / "docs" / "grammar.md").read_text(encoding="utf-8")
-            self.assertTrue(grammar.startswith("# Agentica"))
+            markers = ("# Agentica", "\n## 1. What we want", "\n## 4. Lexical", "\n## 7. Diagnostics",
+                       "\n## 8. Examples", "\n### Programs that must be rejected")
+            positions = [grammar.find(marker) for marker in markers]
+            self.assertTrue(all(position >= 0 for position in positions), positions)
+            self.assertEqual(positions, sorted(positions))
 
 
 class DockerBoundaryTests(unittest.TestCase):
