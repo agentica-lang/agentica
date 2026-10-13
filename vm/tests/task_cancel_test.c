@@ -549,33 +549,23 @@ static void test_ready_then_await(void) {
   assert(agc_io_close(&vm));
 }
 
-static void test_self_cancel(void) {
+static void run_self(uint32_t fn, int closed) {
   prog p;
   new_prog(&p);
-  spawn(&p, F_MAIN, 0, F_SELF, 1);
+  spawn(&p, F_MAIN, 0, fn, 1);
   call_reg(&p, F_MAIN, B_AWAIT, 0, 99);
   finish_fn(&p, F_MAIN);
   reset();
   agc_vm vm;
   agc_outcome o = run(&vm, &p);
   assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-TASK-CANCELLED") == 0 && o.span == 99);
-  assert(self_returned && mark_count == 1 && marks[0] == 1);
+  assert(self_returned && owned_closed == closed && mark_count == 1 && marks[0] == 1);
   assert(agc_io_close(&vm));
 }
 
-static void test_self_drop(void) {
-  prog p;
-  new_prog(&p);
-  spawn(&p, F_MAIN, 0, F_DROP, 1);
-  call_reg(&p, F_MAIN, B_AWAIT, 0, 99);
-  finish_fn(&p, F_MAIN);
-  reset();
-  agc_vm vm;
-  agc_outcome o = run(&vm, &p);
-  assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-TASK-CANCELLED") == 0 && o.span == 99);
-  assert(self_returned && owned_closed == 1 && mark_count == 1 && marks[0] == 1);
-  assert(agc_io_close(&vm));
-}
+static void test_self_cancel(void) { run_self(F_SELF, 0); }
+
+static void test_self_drop(void) { run_self(F_DROP, 1); }
 
 static void check_children(agc_vm *vm, int64_t n) {
   agc_task *item = reg_task(vm, 0);

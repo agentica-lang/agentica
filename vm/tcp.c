@@ -501,23 +501,32 @@ static void begin_tls(net *n, agc_tls *t) {
   if (n->in.error) handshake_failed(n, AGC_TLS_WANT_READ);
 }
 
-static bool handshake_accept(net *l, tcp_link *k, request *q) {
+static net *accept_link(net *l, tcp_link *k, int *rc) {
   k->backlog = false;
   net *c = make_net(&l->trace, l->loop, NULL, 0, false);
   tcp_link *link = new_link(c);
-  int rc = uv_accept((uv_stream_t *)&k->tcp, (uv_stream_t *)&link->tcp);
-  if (rc) {
+  *rc = uv_accept((uv_stream_t *)&k->tcp, (uv_stream_t *)&link->tcp);
+  if (*rc) {
     drop_link(link);
+    return NULL;
+  }
+  c->conn = link;
+  c->connected = true;
+  c->parent = l->id;
+  uv_tcp_nodelay(&link->tcp, 1);
+  return c;
+}
+
+static bool handshake_accept(net *l, tcp_link *k, request *q) {
+  int rc = 0;
+  net *c = accept_link(l, k, &rc);
+  if (!c) {
     q->accept_rc = rc;
     ready(q);
     shut(l, "accept");
     return false;
   }
-  c->conn = link;
-  c->connected = true;
   c->secure = true;
-  c->parent = l->id;
-  uv_tcp_nodelay(&link->tcp, 1);
   c->users++;
   c->opener = q;
   q->child = c;
@@ -1211,19 +1220,12 @@ agc_conn *agc_conn_accept(agc_conn *l) {
   tcp_link *k = l->conn;
   while (k && !k->backlog) k = k->next;
   if (!k) return NULL;
-  k->backlog = false;
-  net *c = make_net(&l->trace, l->loop, NULL, 0, false);
-  tcp_link *link = new_link(c);
-  int rc = uv_accept((uv_stream_t *)&k->tcp, (uv_stream_t *)&link->tcp);
-  if (rc) {
+  int rc = 0;
+  net *c = accept_link(l, k, &rc);
+  if (!c) {
     AGC_TRACE(&l->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", l->id, -rc);
-    drop_link(link);
     return NULL;
   }
-  c->conn = link;
-  c->connected = true;
-  c->parent = l->id;
-  uv_tcp_nodelay(&link->tcp, 1);
   if (!l->secure) return c;
   c->secure = true;
   c->tls = agc_tls_server(l->config, &c->failure);
