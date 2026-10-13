@@ -237,11 +237,11 @@ The implementation uses Lists: push, pop, peek, size and empty? are O(n)
 with the current host list operations; new is O(1). No constant-time FIFO
 performance is promised.
 
-#### HTTP client (`std/http`)
+#### HTTP client and server (`std/http`)
 
 HTTP is the `std/http` library, imported with `import "std/http" as HTTP`
-(`HTTP` is the documented alias; any other alias works too). It has the
-client only: there is no HTTP server until roadmap 20c brings it back.
+(`HTTP` is the documented alias; any other alias works too). It has a
+client and a server.
 
 ```text
 HTTP.client_options() -> HttpClientOptions
@@ -283,6 +283,76 @@ out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`).
 `std/http` calls the internal module `HttpWire`, which no other module can
 name (`CHECK-UNKNOWN-NAME`).
 
+```text
+HTTP.server_options() -> HttpServerOptions
+HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.local_port(server: HttpServer) -> Int
+HTTP.wait(server: HttpServer) -> Result[Void]
+HTTP.close_server(server: HttpServer) -> Void
+```
+
+```agentica
+import "std/http" as HTTP
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  if request.method == "GET" and request.path == "/"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n"))
+  end
+  return ok(HttpResponse(status: 404, headers: [], body: "not found\n"))
+end
+
+def main() -> Void
+  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  client = HTTP.client(HTTP.client_options()).unwrap!
+  response = HTTP.get(client, "http://127.0.0.1:#{HTTP.local_port(server)}/").unwrap!
+  puts(response.status)
+  HTTP.close_client(client)
+  HTTP.close_server(server)
+end
+```
+
+`listen` opens a TCP listener (port 0 picks a free port, which
+`local_port` returns) and `listen_tls` a TLS one from PEM files, then
+serve in the background: each connection runs in its own task, which
+reads a request, calls the handler, writes its response and, with
+keep-alive, reads the next one. The handler gets a whole request:
+`HttpRequest(method: String, target: String, path: String, headers:
+List[Header], body: String)`, where `target` is the request target as sent,
+`path` is the part before `?`, header names are lowercase and the body is
+valid UTF-8. It returns a whole `HttpResponse`; the server adds
+`Content-Length` (except on 204 and 304, which must have an empty body),
+`Date` unless the handler set it, and `Connection: close` when either side
+asked for it, and sends no body for `HEAD`. A handler that returns
+`error(message)`, or a response that cannot be sent (a status outside 200
+to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, a
+body with 204 or 304), gives the client a 500 with an empty body and
+closes the connection; stderr gets one line, `http: handler error:
+<message>` or `http: invalid response: <reason>`. The handler has no time
+limit. A runtime error in a handler crashes its connection task: the
+client sees the connection close, the server goes on, and the run reports
+the crash as any task crash (it exits 1 at the end unless something
+observed it).
+
+`server_options()` gives `HttpServerOptions(request_timeout_ms: 30000,
+idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)`,
+with the client's option checks. `request_timeout_ms` bounds the wait for
+the first byte of a connection's first request, then the rest of each
+request from its first byte, and, from the handler's return, the write of
+its response; `idle_timeout_ms` bounds the wait for a later request on a
+kept-alive connection. At most `max_connections` connections are served at
+once; more wait in the listener's backlog. Requests the server rejects
+before the handler runs get an empty answer and a close: 400 for a
+malformed request or a body that is not UTF-8, 413 for a body over
+`max_body_bytes` (before any `100 Continue` when the `Content-Length` is
+over), 417 for an `Expect` other than `100-continue`, 431 for a line, the
+head or the header count over the limits, 501 for `CONNECT`, `Upgrade` and
+`Transfer-Encoding` other than one `chunked`, and 505 for any version but
+`HTTP/1.1`. `wait` returns `ok()` once the server is closed.
+`close_server` closes the listener, ends every connection, and cancels the
+handlers and every task they spawned; it is idempotent. When `main`
+returns, the run ends whatever the server is doing.
+
 Migration from the builtin `HTTP` module, which roadmap 7i removed: add
 `import "std/http" as HTTP`; `HTTP.client()` becomes
 `HTTP.client(HTTP.client_options())`; `get`, `post` and `request` return a
@@ -291,11 +361,16 @@ whole `HttpResponse`, so `HTTP.text(response.body, t)` becomes
 are gone (send a whole `HTTP.request`; streaming is planned on channels), and
 there is no replacement yet for binary bodies: a response body that is not
 UTF-8 is now an error; `max_body_bytes` defaults to 1 MiB instead of 64 MiB;
-`timeout_ms` now covers the whole response, not only the headers; the
-server (`listen`, `listen_tls`, the writer calls) returns with 20c, which
-replaces `Request` and the `HttpWriter` calls with handlers that return an
-`HttpResponse`. `Request`, `Response`, `HttpBody`, `HttpWriter`, `HttpServer`
-and `HttpServerOptions` are no longer types.
+`timeout_ms` now covers the whole response, not only the headers. The
+server came back in 20c with handlers that return an `HttpResponse`: a
+handler `def handle(request: Request, writer: HttpWriter) -> Void` that
+called `HTTP.respond(writer, status, headers, text, timeout_ms)` becomes
+`def handle(request: HttpRequest) -> Result[HttpResponse]` that returns
+`ok(HttpResponse(status: status, headers: headers, body: text))`;
+`HTTP.begin`, `write`, `write_bytes` and `finish` are gone (no streaming
+responses, no trailers), and `HttpServerOptions` has `request_timeout_ms`
+instead of `header_timeout_ms`. `Request`, `Response`, `HttpBody` and
+`HttpWriter` are no longer types.
 
 #### BDD steps (`std/bdd`)
 
@@ -452,8 +527,8 @@ The grammar determines what can be written. The following rules determine which 
 | `Fn[A, ..., R]` | Function value (`&name` or a block); final type is its return, preceding types are parameters |
 | `Task[R]` | Opaque lightweight task with exactly one result type |
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
-| Network handles | Opaque `Socket`, `Listener`, `HttpClient` |
-| Builtin records | `Header`, `HttpResponse`, `HttpClientOptions` |
+| Network handles | Opaque `Socket`, `Listener`, `HttpClient`, `HttpServer` |
+| Builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions` |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -889,7 +964,7 @@ Task.unobserved_crash() -> Result[String]
 
 Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
 
-A runtime error in a task other than `main` is a crash: it ends only that task, and the rest of the program goes on. Its diagnostic is printed on stderr when it happens, with ` in a task` after the code (`--json` adds `"task": true`). Its running descendants are cancelled; no program can await one of them, since only the crashed subtree holds them (with `Task.map` and the HTTP server, a later `Task.await` on a cancelled task will give `error("task: cancelled")` when `R` is a `Result`, and RUNTIME-TASK-CANCELLED otherwise). The files, sockets, listeners and processes it owns are closed: a handle belongs to the task that opened it, and one passed directly as the `Task.spawn` argument moves to the new task (a handle inside a struct, list or block does not move). When a task returns normally, the handles it still owns go to its parent task. Other tasks that use a closed handle get its closed error. An `HttpClient` is never closed by a crash. `Task.await` on a crashed task returns `error(text)` when `R` is a `Result`, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`; otherwise the awaiter halts with RUNTIME-TASK-CRASHED at its own await, with that text as the message, so the crash moves up through awaits. Each await of a crashed task gives the same outcome. These still end the whole run: a runtime error in `main`, RUNTIME-STEP-LIMIT, an internal VM error, and System.exit in any task (the run ends with its code). The first of these outcomes wins.
+A runtime error in a task other than `main` is a crash: it ends only that task, and the rest of the program goes on. Its diagnostic is printed on stderr when it happens, with ` in a task` after the code (`--json` adds `"task": true`). Its running descendants are cancelled; no program can await one of them, since only the crashed subtree holds them (with `Task.map`, a later `Task.await` on a cancelled task will give `error("task: cancelled")` when `R` is a `Result`, and RUNTIME-TASK-CANCELLED otherwise; `HTTP.close_server` cancels only tasks no program holds). The files, sockets, listeners and processes it owns are closed: a handle belongs to the task that opened it, and one passed directly as the `Task.spawn` argument moves to the new task (a handle inside a struct, list or block does not move). When a task returns normally, the handles it still owns go to its parent task. Other tasks that use a closed handle get its closed error. An `HttpClient` is never closed by a crash. `Task.await` on a crashed task returns `error(text)` when `R` is a `Result`, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`; otherwise the awaiter halts with RUNTIME-TASK-CRASHED at its own await, with that text as the message, so the crash moves up through awaits. Each await of a crashed task gives the same outcome. These still end the whole run: a runtime error in `main`, RUNTIME-STEP-LIMIT, an internal VM error, and System.exit in any task (the run ends with its code). The first of these outcomes wins.
 
 A crash is observed when an await returns its error or halts with RUNTIME-TASK-CRASHED, or when `Test.run` reports it. When `main` returns and a crash was never observed, the run exits 1 and prints one summary line on stderr: `2 task crashes were not observed; first: task crashed: ...` (`--json`: `{"unobserved_crashes":2,"first":"task crashed: ..."}`). `Task.unobserved_crash()` returns `ok(text)` for the first crash no await has observed, or `error("no unobserved crash")`; calling it does not observe the crash.
 
@@ -934,9 +1009,10 @@ Each test's task gets its own `Random` generator, seeded from the run's seed (`-
 ### TCP, TLS and HTTP
 
 Networking uses the existing expression syntax and lightweight tasks.
-`TCP`, `TLS`, `HttpWire`, `Socket`, `Listener`, `HttpClient`, `Header`,
-`HttpResponse` and `HttpClientOptions` are reserved; `HTTP` is not, since it
-is the import alias of `std/http` ("HTTP client (`std/http`)" in the modules
+`TCP`, `TLS`, `HttpWire`, `Socket`, `Listener`, `HttpClient`, `HttpServer`,
+`Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions` and
+`HttpServerOptions` are reserved; `HTTP` is not, since it is the import
+alias of `std/http` ("HTTP client and server (`std/http`)" in the modules
 section). Handles are opaque: no constructor, equality, fields or JSON
 encoding; inspect prints their type in angle brackets. Handles belong to
 their run and close when it ends.
@@ -993,12 +1069,14 @@ Builtin records are immutable and use the existing named-field constructors:
 | Record | Fields |
 | --- | --- |
 | Header | name: String, value: String |
+| HttpRequest | method: String, target: String, path: String, headers: List[Header], body: String |
 | HttpResponse | status: Int, headers: List[Header], body: String |
 | HttpClientOptions | timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String |
+| HttpServerOptions | request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int |
 
 Header values use the HTTP Latin-1 byte range; names must be HTTP tokens.
 CR/LF injection, control characters and user-supplied framing headers are
-rejected. The HTTP calls are in "HTTP client (`std/http`)".
+rejected. The HTTP calls are in "HTTP client and server (`std/http`)".
 
 ### Files and paths
 

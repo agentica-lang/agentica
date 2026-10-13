@@ -105,7 +105,7 @@ Notes on the language rules of each library area: what the checker enforces and 
 ## TCP, TLS and HTTP
 
 - builtin-types.rkt centralizes opaque atoms and builtin record field layouts; the checker and lowering read it. Handles cannot be constructed, compared or JSON encoded. Grammar and the programming reference describe the same public API.
-- TCP and TLS are C builtins (`vm/tcp.c`, `vm/tls_openssl.c`); HTTP is `std/http` in Agentica over the std-only `HttpWire` builtins (`vm/http_*.c`), imported as `HTTP`. There is no HTTP server until roadmap 20c. See `references/vm.md`.
+- TCP and TLS are C builtins (`vm/tcp.c`, `vm/tls_openssl.c`); HTTP is `std/http` in Agentica over the std-only `HttpWire` builtins (`vm/http_*.c`), imported as `HTTP`; the server (20c) runs each connection as a task in the server's task group. See `references/vm.md`.
 - tests/vm-tcp-test.rkt, vm-tls-test.rkt and vm-http-test.rkt use independent Node and Python standard-library peers. CI installs Node 24 and Python 3; absence fails CI and visibly skips locally. Checked-in localhost test certificates exercise trusted TLS, untrusted certificates and hostname rejection.
 
 ## Files and paths

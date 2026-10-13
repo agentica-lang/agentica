@@ -29,7 +29,7 @@ Read only the files the task needs:
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths |
 | [references/processes.md](references/processes.md) | starts other programs (`Process`) |
 | [references/tasks.md](references/tasks.md) | runs work concurrently (`Task`) |
-| [references/network.md](references/network.md) | uses TCP, TLS, or the HTTP client (`import "std/http" as HTTP`) |
+| [references/network.md](references/network.md) | uses TCP, TLS, or the HTTP client or server (`import "std/http" as HTTP`) |
 | [references/bdd.md](references/bdd.md) | writes `.feature` specifications or a BDD step program (`import "std/bdd" as BDD`, run by `agentica test`) |
 | [references/testing.md](references/testing.md) | writes unit tests (`Test.test`, `Test.eq`, `Test.run`) |
 | [references/diagnostics.md](references/diagnostics.md) | hits a diagnostic code whose meaning or fix is unclear |
@@ -82,8 +82,8 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 | `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Fn[A, ..., R]` | function value (a block or `&name`); last type is the return, preceding types are parameters; `Fn[Void]` takes no arguments |
 | `Task[R]` | opaque lightweight task; exactly one result type |
-| Network handles | opaque `Socket`, `Listener`, `HttpClient` |
-| Builtin records | `Header`, `HttpResponse`, `HttpClientOptions` |
+| Network handles | opaque `Socket`, `Listener`, `HttpClient`, `HttpServer` |
+| Builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions` |
 | `Name` | a struct you declare; fields are typed and immutable |
 
 Type names start with an uppercase letter. Variable, function, and field names start with a lowercase letter or `_`.

@@ -56,8 +56,8 @@ line over 1 MiB, which also closes the socket.
 
 HTTP is a library written in Agentica. Import it with
 `import "std/http" as HTTP`; an `HTTP.` call without the import is
-`CHECK-UNKNOWN-NAME` with a help that shows the import. There is only a
-client: no HTTP server until it comes back in a later release (roadmap 20c).
+`CHECK-UNKNOWN-NAME` with a help that shows the import. It has a client
+(this section) and a server (the next one).
 
 ```text
 HTTP.client_options() -> HttpClientOptions
@@ -104,11 +104,81 @@ def main() -> Void
 end
 ```
 
+## HTTP server (`std/http`)
+
+```text
+HTTP.server_options() -> HttpServerOptions
+HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.local_port(server: HttpServer) -> Int
+HTTP.wait(server: HttpServer) -> Result[Void]
+HTTP.close_server(server: HttpServer) -> Void
+```
+
+| Record | Fields |
+| --- | --- |
+| HttpRequest | method: String, target: String, path: String, headers: List[Header], body: String |
+| HttpServerOptions | request_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int |
+
+A handler takes the whole request and returns the whole response:
+
+```agentica
+import "std/http" as HTTP
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  if request.method == "GET" and request.path == "/"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n"))
+  end
+  return ok(HttpResponse(status: 404, headers: [], body: "not found\n"))
+end
+
+def main() -> Void
+  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  puts(HTTP.local_port(server))
+  IO.flush()
+  HTTP.wait(server).unwrap!
+end
+```
+
+`listen` (TCP) and `listen_tls` (PEM certificate and key files) return at
+once and serve in the background; port 0 picks a free port, which
+`local_port` returns. Each connection runs in its own task with keep-alive.
+`target` is the request target as sent, `path` the part before `?`; header
+names are lowercase and the body is valid UTF-8. A handler gets no other
+argument: pass data to it through the request, a file or a socket. The
+server adds `Content-Length` (not on 204 and 304, which need an empty
+body), `Date` unless the handler set it, and `Connection: close` when the
+request or the response asked for it; `HEAD` gets no body. A handler
+`error(message)`, or a response that cannot be sent (status outside 200 to
+599, a bad header, a `Content-Length` or `Transfer-Encoding` header, a body
+with 204 or 304), sends a 500 with an empty body, closes the connection and
+writes `http: handler error: <message>` or `http: invalid response:
+<reason>` on stderr. A runtime error in a handler ends only its
+connection (the client sees a close; the run exits 1 at the end as for any
+unobserved task crash). Handlers have no time limit.
+
+`server_options()` gives a 30 s `request_timeout_ms` (the first byte of a
+connection's first request, then each whole request from its first byte,
+then the write of each response from the handler's return), a 30 s
+`idle_timeout_ms` (between requests on one connection), 128 connections at
+once (more wait) and a 1 MiB body limit, with the client's option checks.
+Bad requests never reach the handler: the server answers 400, 413, 417,
+431, 501 or 505 itself and closes. `close_server` closes the listener and
+every connection and cancels the handlers and the tasks they spawned;
+`wait` returns `ok()` once the server is closed. When `main` returns, the
+server stops with the run.
+
 The builtin `HTTP` module of earlier releases is gone: `HTTP.client()`
 becomes `HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)`
-becomes `response.body`, and `read`, `trailers`, `close_body`,
-`request_stream`, the server calls and the `Request`, `Response`, `HttpBody`,
-`HttpWriter`, `HttpServer` and `HttpServerOptions` types no longer exist.
+becomes `response.body`, and `read`, `trailers`, `close_body` and
+`request_stream` no longer exist. A server handler that took a `Request`
+and an `HttpWriter` and called `HTTP.respond(writer, status, headers, text,
+timeout_ms)` now takes an `HttpRequest` and returns
+`ok(HttpResponse(status: status, headers: headers, body: text))`;
+`HTTP.begin`, `write`, `write_bytes` and `finish` are gone, and
+`HttpServerOptions` has `request_timeout_ms` instead of
+`header_timeout_ms`. The `Request`, `Response`, `HttpBody` and `HttpWriter`
+types no longer exist.
 Binary bodies have no replacement yet: a body that is not UTF-8 is an error.
 `max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers
 the whole response, not only the headers.
