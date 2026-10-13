@@ -13,7 +13,7 @@ Specified in [`docs/future/39-semantic-cli.md` section 39](../future/39-semantic
     - `AGENTS.md` (the diagnostic prefixes under "Conventions");
     - the programming skill (a new `references/queries.md`, its row in "When to read a reference", `references/diagnostics.md`);
     - `site/content/getting-started.md` (the command);
-    - the development skill (`SKILL.md`, the diagnostic-code row around line 104; `references/stages.md`, the codes by stage around line 57, and a note on `src/query.rkt`).
+    - the development skill (`SKILL.md`, the diagnostic-code row around line 105; `references/stages.md`, the codes by stage around line 57, and a note on `src/query.rkt`).
 - [ ] **26b: `agentica symbol` and `agentica refs` on declarations (§39.3, §39.4, §39.6 to §39.9).**
   - **Linker** (`src/modules.rkt`):
     - `link-programs`: several roots into one program with shared tables, each module visited once, every module prefixed `@N::`, roots included; each root linked as a transaction (§39.8): a root whose lex, parse or link fails, in its file or a dependency, is left out with its diagnostic, its added modules are dropped, and later roots that reach a failed module are skipped with the same diagnostic; `link-program` keeps its behavior;
