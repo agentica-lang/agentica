@@ -19,7 +19,7 @@ Task is a builtin module over Racket primitives using function values (5j) and a
 
 - Task inputs travel through one argument and results through Task.await; channels (§27.2) provide repeated exchanges.
 - Immutable values can be shared safely, but ports, future sockets and contextual services are resources with state. They still need ownership or synchronization rules.
-- Task diagnostics already terminate the whole evaluation, even when unawaited; Result.error remains a normal result.
+- Task diagnostics terminate the whole evaluation today, even when unawaited; with task crash isolation (§37, planned) a diagnostic in a task other than `main` ends only that task. Result.error remains a normal result.
 
 ### Future process polling
 
