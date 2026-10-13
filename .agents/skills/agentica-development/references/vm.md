@@ -87,6 +87,7 @@ make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Conf
 make vm-third-party                  # only libgc, yyjson, picohttpparser and libuv for this mode
 make -s vm-third-party-key           # their build key (compile lines, compiler, submodule commits and local diffs); CI caches by its hash
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
+make vm CCACHE=                      # without ccache (it is used when installed)
 make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
@@ -138,6 +139,14 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   removed `--vm` and `--legacy-eval` flags are unknown, a missing VM, runs it once in-process to cover
   the pipe path, and checks `--driver-pid`.
 
+- Each mode compiles `vm/*.c`, `vm/tests/*.c` and the drivers once into
+  `$(VM_BUILD)/obj/` with `-MMD -MP` (dependency files beside the objects),
+  and every binary links from them (`VM_LINK`); a new `vm/*.c` file goes
+  in `VM_SRC` only. `$(VM_BUILD)/obj-flags` recompiles the mode when the
+  compile line changes; `tls_openssl.o` also follows the OpenSSL stamp.
+  Compiles run through `$(CCACHE)` (found on `PATH`; `CCACHE=` turns it
+  off; `CCACHE_BASEDIR` is the checkout and `CCACHE_NOHASHDIR=1`, so
+  worktrees share hits), the vendored OpenSSL too, but not its key.
 - `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.

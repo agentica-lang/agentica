@@ -35,9 +35,17 @@
   compiler, flag or version change always does. `make vm-openssl` builds
   only the two archives.
   The Agentica version is read from `src/version.rkt` with `sed`, so the VM
-  build needs no Racket. Output `dist/agentica-vm`. The compiler flags are
-  recorded in `build/vm/flags`, so switching between a normal and a
-  sanitizer build always relinks.
+  build needs no Racket. Output `dist/agentica-vm`. Each mode compiles
+  `vm/*.c` once into `build/vm/<mode>/obj/` (with `-MMD -MP`, so an edited
+  header recompiles only its users; `build/vm/<mode>/obj-flags` holds the
+  compile line) and links the VM, the fuzz driver and every C test from
+  those objects. The link flags are recorded in `build/vm/flags`, so
+  switching between a normal and a sanitizer build always relinks. Every
+  compile goes through ccache when it is on `PATH` (`CCACHE=` turns it
+  off), with `CCACHE_BASEDIR` set to the checkout and
+  `CCACHE_NOHASHDIR=1`, so worktrees at other paths share hits (their
+  debug info may name the first worktree's directory). The release turns
+  it off.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and

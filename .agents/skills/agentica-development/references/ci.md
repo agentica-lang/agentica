@@ -77,8 +77,12 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 - `vm-sanitizers` caches the sanitizer and GC-stress builds of
   yyjson, picohttpparser and libuv (and `build/vm/gc.o` for GC stress),
   with their `third-party-flags` (and `gc-flags`) stamps. The key is the
-  hash of `make -s vm-third-party-key`. The VM and test binaries are not
-  cached.
+  hash of `make -s vm-third-party-key`. The VM objects and binaries are
+  not cached with `actions/cache`.
+- Every compile goes through ccache: the Makefile finds it on `PATH`, and
+  the runner image (ccache 4.12) points `CCACHE_DIR` at a volume that both
+  runners share (`CCACHE_MAXSIZE=5G`), so hits carry across jobs and
+  pull requests. The release sets `CCACHE=` and never uses it.
 - `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`. The C tests
   still run one after another.
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
