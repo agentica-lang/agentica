@@ -81,7 +81,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 ```sh
 git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
 make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; the system OpenSSL 3 from pkg-config, dynamic: Debian libssl-dev pkg-config)
-make vm AGENTICA_OPENSSL=vendored             # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
+make vm AGENTICA_OPENSSL=vendored    # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
 make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-third-party                  # only libgc, yyjson, picohttpparser and libuv for this mode
@@ -552,8 +552,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   (`docs/vm/10-dependencies-and-platforms.md` §10.0). The default `system`
   links the system OpenSSL dynamically with `pkg-config --cflags --libs
   openssl`; the stamp `$(VM_BUILD)/openssl-system` (the first
-  prerequisite of every VM binary and `vm-lint`) fails first, with a clear
-  message, when `pkg-config` or the package is missing or older than
+  prerequisite of every VM binary and `vm-lint`, order-only for every VM
+  object, so it runs before any `vm/*.c` compile) fails with a clear
+  message when `pkg-config` or the package is missing or older than
   `OSSL_MIN` (3.0.0: the code uses 3.0 APIs such as
   `SSL_CTX_load_verify_file` and `OPENSSL_VERSION_STRING`), and
   `vm/tls_openssl.c` has an `#error` for older versions and LibreSSL. The
