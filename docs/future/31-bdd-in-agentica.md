@@ -73,7 +73,7 @@ agentica test [PATH...] [--steps FILE]          (Racket driver, src/bdd-driver.r
 
 `std/bdd/match.agc` (21d) compiles and matches patterns by hand, with no regular expressions, and gives the same answers as `compile-step-pattern` and `match-step-pattern` (`src/bdd.rkt:221-244`):
 
-- **Compiling.** A pattern is literal text and placeholders. `{string}` and `{int}` are the only placeholders; any other `{...}` is `RUNTIME-BDD-PATTERN` ("only {string} and {int} are supported"), and a `{` or `}` left over is `RUNTIME-BDD-PATTERN` ("unmatched pattern braces"). The result is a list of pieces: `Literal(text)`, `IntCapture`, `StringCapture` (a private enum).
+- **Compiling.** A pattern is literal text and placeholders. `{string}` and `{int}` are the only placeholders; any other `{...}` is `RUNTIME-BDD-PATTERN` ("only {string} and {int} are supported"), and a `{` or `}` left over is `RUNTIME-BDD-PATTERN` ("unmatched pattern braces"). The result is the literal before the first placeholder, then one slot per placeholder: its capture, `IntCapture` or `StringCapture` (a private enum), and the literal after it.
 - **Matching** is a whole-text match, tried piece by piece with backtracking (recursion depth is the number of pieces):
   - a literal must appear exactly at the current position;
   - `{int}` is an optional `-` and one or more ASCII digits; the candidates are tried from the longest to the shortest, the order of the greedy regular expression today;
