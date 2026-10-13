@@ -142,6 +142,7 @@ Split text; an empty separator gives characters.
 |---|---|
 | `--max-steps N` | stops the program after `N` steps (`RUNTIME-STEP-LIMIT`) |
 | `--seed N` | makes `Random` repeat the same numbers |
+| `--flush-timeout MS` | waits at most `MS` milliseconds for file data to be written at the end of the run; when time runs out, the run still ends and prints a warning (no limit by default) |
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
 | `--version` | prints the version |

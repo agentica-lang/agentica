@@ -36,8 +36,9 @@ bytecode file and runs `agentica-vm`, which runs every program. It finds the
 VM next to the `agentica` executable (`bin/` of the release archive), or in
 `dist/` of the checkout for `racket src/main.rkt`; `AGENTICA_VM=path` picks
 another VM, and a missing VM exits 2. It passes `--max-steps`, `--seed`,
-`--allow-run`, `--ai`, `--json` and the program arguments. It is tested on
-Linux only; elsewhere the VM has no guard against outliving the driver
+`--flush-timeout`, `--allow-run`, `--ai`, `--json` and the program arguments.
+It is tested on Linux only; elsewhere the VM has no guard against outliving
+the driver
 (macOS skips only the parent check, while the `O_NOFOLLOW`, privacy and inode
 checks run on every non-Windows system, and Windows skips both checks).
 `agentica test` runs on the VM too; its step API is the `std/bdd` module (see
@@ -73,7 +74,7 @@ into its `bin/`, as the release archive does. `compiled/` and `dist/` are in `.g
 ## Usage
 
 ```sh
-racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <file.agc>
+racket src/main.rkt [--dump] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <file.agc>
 racket src/main.rkt help String.to_int --json
 ```
 
@@ -93,6 +94,7 @@ racket src/main.rkt examples/hello.agc
 | `help NAME --json` | Describe a builtin from the shared catalog, without a program file. Unknown targets exit 2. |
 | `--max-steps N` | Limit expression/statement entries, including loop conditions; exhaustion is RUNTIME-STEP-LIMIT. Positive N only. Unlimited by default; check never runs. Not a blocking-I/O timeout. |
 | `--seed N` | Seed `Random` with N (0..2147483647) so runs repeat; `agentica test` passes it to handlers and programs under test. Without it, each run is seeded from OS randomness. |
+| `--flush-timeout MS` | Wait at most MS milliseconds (a non-negative integer) for open files to flush at the end of the run. No limit by default. When time runs out the run still ends, with the same exit code, and prints a warning on stderr. |
 | `--dump-ir` | Print the lowered VM IR instead of running it (VM subset only; see `docs/vm/`). |
 | `compile FILE -o OUT` | Subcommand, only as the first argument: write VM bytecode for `dist/agentica-vm` (built by `make vm`). |
 
