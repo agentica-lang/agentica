@@ -79,17 +79,18 @@
   (test-case "failed and explicitly closed processes leave the active registry"
     (define executable (path->string (find-executable-path "racket")))
     (define counts '())
+    (define probe
+      (make-output-port 'probe always-evt
+                        (lambda (data start end non-block? breakable?)
+                          (set! counts (cons (hash-count (current-process-registry)) counts))
+                          (- end start))
+                        void))
     (define text
-      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    BDD.assert(not Result.ok?(failed), \"failed spawn\")\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    BDD.assert(true, \"closed process\")\n  end\nend\n\n" executable))
-    (define result
-      (evaluate (compile-program text) #:allow-run #t
-                #:err (open-output-nowhere)
-                #:builtin-handler
-                (lambda (name arguments span)
-                  (set! counts (cons (hash-count (current-process-registry)) counts))
-                  (void))))
+      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    puts(Result.ok?(failed))\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    puts(\"closed\")\n  end\nend\n\n" executable))
+    (define result (evaluate (compile-program text) #:allow-run #t #:out probe #:err (open-output-nowhere)))
     (check-pred void? result)
-    (check-equal? counts '(0 0 0 0 0 0)))
+    (check-true (>= (length counts) 6))
+    (check-true (andmap zero? counts) (~s counts)))
   (cond
     [(not node)
      (if (getenv "CI") (error 'process-test "Node.js is required in CI")
@@ -119,7 +120,7 @@
          "def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn(\"agentica-nonexistent-command-5l\", [], 1000)))\n  IO.inspect(Result.ok?(Process.spawn(\"\", [], 1000)))\n  nul = Result.unwrap!(String.from_bytes([0]))\n  IO.inspect(Result.ok?(Process.spawn(\"node\", [nul], 1000)))\nend\n\n")
          "false\nfalse\nfalse\n"))
 
-     (test-case "BDD capability reaches custom handlers and programs under test"
+     (test-case "BDD handlers can always spawn and programs under test need --allow-run"
        (define directory (make-temporary-file "agentica-process-bdd~a" 'directory))
        (dynamic-wind void
          (lambda ()
@@ -132,12 +133,19 @@
              "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))"
              "" ", \"child\"") (build-path directory "child.agc"))
            (display-to-file
-             (string-append "def handler(args: List[String]) -> Void\n" (spawn "args" ", \"handler\"")
-               "  BDD.assert(Result.unwrap!(Process.read_line(p, 5000)) == \"[\\\"handler\\\"]\", \"argv\")\n  Result.unwrap!(Process.wait(p, 5000))\nend\n\ndef main() -> Void\n  BDD.step(\"the handler can spawn\", &handler)\nend\n\n") steps)
+             (string-append "import \"std/bdd\" as BDD\n\ndef handler(ctx: BDD.Context, args: List[String]) -> BDD.Context\n"
+               (spawn "args" ", \"handler\"")
+               "  checked = BDD.assert(ctx, Result.unwrap!(Process.read_line(p, 5000)) == \"[\\\"handler\\\"]\", \"argv\")\n"
+               "  Result.unwrap!(Process.wait(p, 5000))\n  return checked\nend\n\n"
+               "def main() -> Void\n  BDD.run([BDD.step(\"the handler can spawn\", &handler)])\nend\n") steps)
            (define args (list "test" (path->string feature) "--steps" (path->string steps) "--json"))
            (define denied (apply cli args))
            (check-equal? (car denied) 1)
-           (check-equal? (hash-ref (string->jsexpr (cadr denied)) 'passed) 0)
+           (define report (string->jsexpr (cadr denied)))
+           (check-equal? (hash-ref report 'passed) 1)
+           (check-equal? (map (lambda (item) (hash-ref item 'status))
+                              (hash-ref (car (hash-ref report 'files)) 'scenarios))
+                         '("failed" "passed"))
            (define allowed (apply cli (append args '("--allow-run"))))
            (check-equal? (car allowed) 0)
            (check-equal? (hash-ref (string->jsexpr (cadr allowed)) 'passed) 2))

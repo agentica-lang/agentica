@@ -144,7 +144,7 @@
                    ("  client = Result.unwrap!(HTTP.client())\n  JSON.encode(client)" CHECK-NOT-ENCODABLE)
                    ("  header = Header(name: \"x\", value: 1)" CHECK-TYPE-MISMATCH))])
       (check-equal? (check-code (main-with (car entry))) (cadr entry))))
-  (test-case "function values check references, parameters, returns and BDD handlers"
+  (test-case "function values check references, parameters and returns"
     (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n\n")
     (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))
     (for ([entry '(("  f: Fn[String, Int] = &double" CHECK-TYPE-MISMATCH)
@@ -153,10 +153,12 @@
                    ("  value = (&double).call()" CHECK-ARITY)
                    ("  value = (&double).call(\"x\")" CHECK-TYPE-MISMATCH)
                    ("  value = 1.call()" CHECK-TYPE-MISMATCH)
-                   ("  BDD.step(\"double\", &double)" CHECK-TYPE-MISMATCH)
                    ("  text = JSON.encode(&double)" CHECK-NOT-ENCODABLE))])
-      (check-equal? (check-code (string-append prefix (main-with (car entry)))) (cadr entry)))
-    (check-ok "def handler(args: List[String]) -> Void\nend\n\ndef main() -> Void\n  BDD.step(\"hello\", &handler)\nend\n\n"))
+      (check-equal? (check-code (string-append prefix (main-with (car entry)))) (cadr entry))))
+  (test-case "a BDD call without its import points to std/bdd"
+    (define problem (check-text (main-with "  BDD.run([])")))
+    (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-NAME)
+    (check-regexp-match #rx"import \"std/bdd\" as BDD" (diagnostic-help problem)))
   (test-case "the section 8 programs pass"
     (check-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n")
     (check-ok (string-append

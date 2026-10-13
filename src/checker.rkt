@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "HttpWire" "Time" "Random" "Range")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "HttpWire" "Time" "Random" "Range")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -975,6 +975,7 @@
               (format "unknown function \"~a\"" (display-name name))
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
+                         (and (string-prefix? name "BDD.") "import \"std/bdd\" as BDD")
                          (did-you-mean name (hash-keys functions) #:shared (public-builtin-names)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))

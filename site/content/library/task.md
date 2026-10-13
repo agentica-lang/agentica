@@ -111,6 +111,8 @@ Gives how many tasks of this run have not ended yet, not counting `main`. A
 task that waits to run, sleeps or waits for another task counts; so does the
 task that asks, unless it is `main`. A task that has returned no longer
 counts, even when nothing awaited it. This function runs only on the VM.
+`std/bdd` uses it to fail a [BDD](/library/bdd/) step that leaves tasks
+running.
 
 ```agentica
 def wait_for(task: Task[Int]) -> Int

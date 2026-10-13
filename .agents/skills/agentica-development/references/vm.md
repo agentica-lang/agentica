@@ -107,7 +107,7 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
 - `agentica file.agc` runs on the VM by default (Linux only for now,
   `docs/vm/08-loader-and-cli.md` §9; `--vm` is accepted and does nothing):
   `src/main.rkt` lowers the checked program; on `LOWER-UNSUPPORTED` (today
-  only `HTTP` and `BDD` builtins, which are not in
+  only `HTTP` builtins, which are not in
   `vm-builtins` in `src/lower.rkt`; `tests/bytecode-test.rkt` checks that
   every other catalog implementation is there) it prints `agentica: <the
   lowering's message>; running on the legacy evaluator` on stderr (not with
@@ -115,8 +115,9 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   `fallback-notice?` (`tests/cli-in-process.rkt`): prefix, builtin name and
   suffix, never the whole text. The hidden `--legacy-eval` flag (stripped by
   `split-legacy-flag` from the options before the file) forces the
-  evaluator; `agentica test` and the BDD driver (`default-bdd-command` in
-  `src/bdd.rkt` adds `--legacy-eval`) stay on it until BDD runs on the VM.
+  evaluator. `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
+  the step program and `std/bdd/runner` and starts the runner VM with
+  `--driver-pid` (see `references/stages.md`).
   Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`
   flag. The VM then deletes its input right after reading it; on Linux it
@@ -126,7 +127,7 @@ racket src/main.rkt --legacy-eval prog.agc   # force the frozen evaluator
   2 s, then `SIGKILL`, so the VM can kill its children.
   The driver deletes the file too (VM never ran, failed early, break), and
   copies stdin/stdout/stderr through pipes only when they are not file
-  streams. The VM is found by `AGENTICA_VM`, else `dist/` of the checkout
+  streams. The VM is found (`find-vm` in `src/vm-launch.rkt`) by `AGENTICA_VM`, else `dist/` of the checkout
   (module source path), else next to a `raco exe` executable (the release
   archive has it in `bin/`); no `define-runtime-path`, since `raco
   distribute` would copy the VM. A missing VM exits 2, never a silent

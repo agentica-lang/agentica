@@ -75,8 +75,12 @@ export def from_json(text: String) -> Result[Error]
                   original: root))
 end
 
-# For an error built from fields: a kept `--json` object is written as it is.
+# For an error built from fields. An error from `from_json` is returned unchanged, since its kept object is what the
+# report writes, so the text and the JSON cannot disagree.
 export def with_actual(problem: Error, actual: String) -> Error
+  if not JSON.null?(problem.original)
+    return problem
+  end
   return Error(code: problem.code, message: problem.message, span: problem.span, end_line: problem.end_line,
                expected: problem.expected, actual: Detail.Known(actual), original: problem.original)
 end

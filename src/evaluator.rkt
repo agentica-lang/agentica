@@ -4,7 +4,6 @@
          "builtins.rkt"
          "ast.rkt"
          "diagnostic.rkt"
-         "bdd.rkt"
          "runtime-values.rkt"
          "task.rkt"
          "builtin-types.rkt" "network.rkt" "filesystem.rkt" "process.rkt" "http-wire.rkt" "http-client.rkt" "http-server.rkt"
@@ -71,7 +70,6 @@
                   #:max-steps [max-steps #f]
                   #:entrypoint [entrypoint "main"]
                   #:arguments [arguments '()]
-                  #:builtin-handler [builtin-handler #f]
                   #:require-complete-tasks? [require-complete? #f]
                   #:allow-run [allow-run? (current-process-allowed?)]
                   #:seed [seed #f])
@@ -113,14 +111,14 @@
                       [current-process-closing process-closing?]
                       [current-process-custodian (current-custodian)]
                       [current-process-allowed? allow-run?])
-         (evaluate-with-ports program program-args entrypoint arguments builtin-handler
+         (evaluate-with-ports program program-args entrypoint arguments
                               functions struct-fields enum-names run)))
      max-steps (program-span program) #:require-complete? require-complete?
      #:cleanup (lambda ()
                  (process-close-all! processes process-lock process-closing?)
                  (filesystem-close-all! file-handles file-registry-lock file-registry-closing?)))))
 
-(define (evaluate-with-ports program program-args entrypoint entry-arguments builtin-handler
+(define (evaluate-with-ports program program-args entrypoint entry-arguments
                              functions struct-fields enum-names run)
   (define scopes '())
   (define return-to #f)
@@ -432,7 +430,7 @@
       (define span (call-span expression))
       (define (invoke-network callback args)
         (evaluate-with-ports program program-args callback args
-                             builtin-handler functions struct-fields enum-names run))
+                             functions struct-fields enum-names run))
       (define (spawn-network thunk cust)
         (task-spawn run thunk span #:custodian cust))
       (define (request client method url headers text)
@@ -477,7 +475,7 @@
          (task-spawn run
            (lambda ()
              (evaluate-with-ports program program-args callback (list (cadr arguments))
-                                  builtin-handler functions struct-fields enum-names run)) span)]
+                                  functions struct-fields enum-names run)) span)]
         [("Task.await")
          (define value (task-await run (car arguments) span))
          (if (or (diagnostic? value) (exit-code? value)) (escape value) value)]
@@ -488,19 +486,6 @@
                  (node-span (car (call-args expression)))))
          (sleep (/ duration 1000))
          (void)]
-        [("BDD.run" "BDD.step" "BDD.doc_string" "BDD.table" "BDD.assert" "BDD.set" "BDD.get"
-          "BDD.given_program" "BDD.when_line" "BDD.when_input" "BDD.when_eof" "BDD.then_line"
-          "BDD.then_json_line" "BDD.then_stdin_open" "BDD.then_exit" "BDD.then_stdout" "BDD.then_stderr")
-         (unless builtin-handler
-           (bail 'RUNTIME-BDD-CONTEXT "BDD needs a runner context" span))
-         (define value (builtin-handler name arguments span))
-         (cond
-           [(diagnostic? value) (escape value)]
-           [(bdd-result? value)
-            (if (bdd-result-ok? value)
-                (result-ok (bdd-result-value value))
-                (result-error (bdd-result-value value)))]
-           [else value])]
         [("puts") (displayln (value->text (car arguments))) (void)]
         [("ok") (result-ok (if (null? arguments) (void) (car arguments)))]
         [("error") (result-error (car arguments))]

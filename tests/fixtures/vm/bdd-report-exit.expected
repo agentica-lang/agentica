@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4254,
+  "steps": 4460,
   "stdout": [
     "no files: exit 1",
     "0 passed, 0 failed, 0 not executed, 0 file errors",
@@ -29,6 +29,8 @@
     "PASS X / passes",
     "1 passed, 0 failed, 0 not executed, 1 file errors",
     "{\"exit_code\":1,\"failed\":0,\"file_errors\":1,\"files\":[{\"error\":{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"/specs/steps.agc\",\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"labels\":[{\"range\":{\"end\":{\"column\":8,\"line\":2},\"start\":{\"column\":7,\"line\":2}},\"text\":\"this is Int\"}],\"message\":\"operator expects two values of the same type\",\"range\":{\"end\":{\"column\":10,\"line\":2},\"start\":{\"column\":9,\"line\":2}}},\"feature\":\"\",\"path\":\"/specs/steps.agc\",\"scenarios\":[],\"status\":\"failed\"},{\"error\":null,\"feature\":\"X\",\"path\":\"/specs/x.feature\",\"scenarios\":[{\"duration_ms\":0,\"error\":null,\"example\":null,\"location\":{\"column\":3,\"file\":\"/specs/x.feature\",\"line\":2},\"name\":\"passes\",\"status\":\"passed\",\"steps\":[{\"error\":null,\"location\":{\"column\":3,\"file\":\"/specs/x.feature\",\"line\":3},\"status\":\"passed\",\"text\":\"a step\"}],\"tags\":[]}],\"status\":\"passed\"}],\"not_executed\":0,\"ok\":false,\"passed\":1}",
+    "FAIL /specs/steps.agc | /specs/steps.agc:2:9 [CHECK-TYPE-MISMATCH] operator expects two values of the same type; expected \"Int\"; actual \"String\"",
+    "0 passed, 0 failed, 0 not executed, 1 file errors",
     "missing JSON key \"range\"",
     "escapes: exit 1",
     "FAIL X / a\"b\\c",

@@ -46,6 +46,8 @@ agentica test specs/
 
 The exit code is `0` when every scenario passes, `1` when one fails, and `2`
 when the tests could not run. `--ai` and `--json` change the report format.
+`--seed N` makes `Random` repeat in steps and programs. A program under test
+can start other programs only with `agentica test --allow-run`.
 
 ## Built-in steps
 
@@ -64,7 +66,7 @@ These steps work without any code. `{string}` is text in double quotes and
 | `I receive a JSON line within {int} milliseconds:` | compares the next line as JSON, in any key order |
 | `stdin remains open` | checks that the program still runs |
 | `the program exits with code {int} within {int} milliseconds` | waits for the exit code |
-| `stdout is:` / `stderr is:` | compares all the output after the program ends |
+| `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
 
 `Given`, `When`, `Then`, `And` and `But` all match the same steps.
 `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and
@@ -72,26 +74,31 @@ Data Tables are supported.
 
 ## Your own steps
 
-Write steps in Agentica. A step file has a `main` that only registers steps
-with `BDD.step`. Load it with `--steps`:
+Write steps in Agentica, in a step program: a program whose `main` builds a
+list of steps with `BDD.step` and passes it to `BDD.run`. Load it with
+`--steps`:
 
 ```sh
 agentica test specs/ --steps steps.agc
 ```
 
 ```agentica {mode="check"}
-def remember(args: List[String]) -> Void
-  BDD.set("count", JSON.from(String.to_int!(args[0])))
+import "std/bdd" as BDD
+
+def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return BDD.set(ctx, "count", JSON.from(String.to_int!(args[0])))
 end
 
-def check_count(args: List[String]) -> Void
-  count = JSON.int(BDD.get("count").unwrap!).unwrap!
-  BDD.assert(count == String.to_int!(args[0]), "wrong count")
+def check_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  count = JSON.int(BDD.get(ctx, "count").unwrap!).unwrap!
+  return BDD.assert(ctx, count == String.to_int!(args[0]), "wrong count")
 end
 
 def main() -> Void
-  BDD.step("I remember {int}", &remember)
-  BDD.step("the count is {int}", &check_count)
+  BDD.run([
+    BDD.step("I remember {int}", &remember),
+    BDD.step("the count is {int}", &check_count),
+  ])
 end
 ```
 
@@ -103,29 +110,50 @@ Feature: Memory
     Then the count is 3
 ```
 
+A step gets the context of its scenario, `ctx`, and returns it. Every `BDD`
+call takes the context first and returns it: keep the one it returns. The
+next step of the scenario gets the context the step returned.
+
 Every `Then` step must make at least one check with a `BDD` function.
 
-## BDD.step
+Each scenario runs in its own process, so a step that crashes, calls
+`System.exit` or loops forever fails only its scenario. `main` runs again for
+each scenario: it should only build the list of steps and call `BDD.run`.
+Run on its own, a step program only prints how to run it and exits with
+code 2. Steps can import other files and start other programs with
+`Process.spawn`. A step must not read standard input.
+
+## BDD.step and BDD.run
 
 ```text
-BDD.step(pattern: String, handler: Fn[List[String], Void]) -> Void
+BDD.step(pattern: String, handler: Fn[BDD.Context, List[String], BDD.Context]) -> BDD.Step
+BDD.run(steps: List[BDD.Step]) -> Void
 ```
 
-Registers a step. The handler gets the `{string}` and `{int}` captures as
-strings, in order. A block works too:
+`BDD.step` makes a step. The handler gets the context and the `{string}`
+and `{int}` captures as strings, in order. A block works too, and it can use
+the variables around it:
 
 ```agentica {mode="check"}
+import "std/bdd" as BDD
+
 def main() -> Void
-  BDD.step("the answer is {int}") do |args|
-    BDD.assert(args[0] == "42", "wrong answer")
-  end
+  answer = "42"
+  BDD.run([
+    BDD.step("the answer is {int}") do |ctx, args|
+      BDD.assert(ctx, args[0] == answer, "wrong answer")
+    end,
+  ])
 end
 ```
+
+`BDD.run` adds the built-in steps in front of the list and runs the steps
+that `agentica test` asks for. It never returns.
 
 ## BDD.assert
 
 ```text
-BDD.assert(condition: Bool, message: String) -> Void
+BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
 ```
 
 Fails the scenario with the message when the condition is `false`.
@@ -133,88 +161,88 @@ Fails the scenario with the message when the condition is `false`.
 ## BDD.set and BDD.get
 
 ```text
-BDD.set(name: String, value: Json) -> Void
-BDD.get(name: String) -> Result[Json]
+BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
+BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 ```
 
-Keep JSON values between the steps of one scenario. Each scenario starts
-empty; a missing name gives an error Result.
+Keep JSON values between the steps of one scenario. `BDD.set` returns the
+context with the value; each scenario starts empty, and a missing name gives
+an error Result.
 
 ## BDD.doc_string and BDD.table
 
 ```text
-BDD.doc_string() -> String
-BDD.table() -> List[List[String]]
+BDD.doc_string(ctx: BDD.Context) -> String
+BDD.table(ctx: BDD.Context) -> List[List[String]]
 ```
 
 Read the Doc String or the Data Table under the current step.
 
 ```agentica {mode="check"}
-def check_rows(args: List[String]) -> Void
-  rows = BDD.table()
-  BDD.assert(rows.size == 3, "expected a header and two rows")
+import "std/bdd" as BDD
+
+def check_rows(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  rows = BDD.table(ctx)
+  return BDD.assert(ctx, rows.size == 3, "expected a header and two rows")
 end
 
-def send_body(args: List[String]) -> Void
-  BDD.when_line(BDD.doc_string())
+def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  return BDD.when_line(ctx, BDD.doc_string(ctx))
 end
 
 def main() -> Void
-  BDD.step("the table has two rows:", &check_rows)
-  BDD.step("I send the record:", &send_body)
+  BDD.run([
+    BDD.step("the table has two rows:", &check_rows),
+    BDD.step("I send the record:", &send_body),
+  ])
 end
 ```
 
 ## Driving the program
 
 ```text
-BDD.given_program(path: String) -> Void
-BDD.when_line(text: String) -> Void
-BDD.when_input(text: String) -> Void
-BDD.when_eof() -> Void
-BDD.then_line(expected: String, timeout_ms: Int) -> Void
-BDD.then_json_line(expected: String, timeout_ms: Int) -> Void
-BDD.then_stdin_open() -> Void
-BDD.then_exit(code: Int, timeout_ms: Int) -> Void
-BDD.then_stdout(expected: String) -> Void
-BDD.then_stderr(expected: String) -> Void
+BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
+BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
+BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
+BDD.when_eof(ctx: BDD.Context) -> BDD.Context
+BDD.then_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
+BDD.then_json_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
+BDD.then_stdin_open(ctx: BDD.Context) -> BDD.Context
+BDD.then_exit(ctx: BDD.Context, code: Int, timeout_ms: Int) -> BDD.Context
+BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
-These do what the built-in steps do, so your own steps can combine them:
+These do what the built-in steps do, so your own steps can combine them.
+`BDD.given_program` returns the context that holds the program: pass that one
+on.
 
 ```agentica {mode="check"}
-def ask(args: List[String]) -> Void
-  BDD.given_program("../greet.agc")
-  BDD.when_line(args[0])
+import "std/bdd" as BDD
+
+def ask(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  started = BDD.given_program(ctx, "../greet.agc")
+  return BDD.when_line(started, args[0])
 end
 
-def greeted(args: List[String]) -> Void
-  BDD.then_line("Hello, #{args[0]}!", 2000)
-  BDD.then_exit(0, 2000)
+def greeted(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  checked = BDD.then_line(ctx, "Hello, #{args[0]}!", 2000)
+  return BDD.then_exit(checked, 0, 2000)
 end
 
 def main() -> Void
-  BDD.step("I greet {string}", &ask)
-  BDD.step("{string} is greeted", &greeted)
+  BDD.run([
+    BDD.step("I greet {string}", &ask),
+    BDD.step("{string} is greeted", &greeted),
+  ])
 end
 ```
 
-## BDD.run
+`stdout is:` compares the output that no line step has read yet. Output is
+kept up to 1 MiB on each stream.
 
-```text
-BDD.run(feature_path: String, step_files: List[String]) -> Result[Json]
-```
+## Running tests from a program
 
-Runs features from a program and gives the report as JSON. The `ok` field of
-the report says whether every test passed.
-
-```agentica {mode="check"}
-def main() -> Void
-  report = BDD.run("specs", ["steps.agc"]).unwrap!
-  passed = JSON.bool(report.get("ok").unwrap!).unwrap!
-  puts(report.get("passed").unwrap!)
-  if !passed
-    System.exit(1)
-  end
-end
-```
+There is no function that runs features from a program. Start
+`agentica test --json` with `Process.spawn` (it needs `--allow-run`) and read
+the report it prints.

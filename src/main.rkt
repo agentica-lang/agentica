@@ -1,12 +1,11 @@
 #lang racket
 
 (require file/sha1
-         (only-in ffi/unsafe -> _fun _int get-ffi-obj)
          json
          (only-in "ast.rkt" program-span)
          racket/os
          racket/random
-         "bdd-runner.rkt"
+         "bdd-driver.rkt"
          "builtins.rkt"
          "bytecode.rkt"
          "checker.rkt"
@@ -17,22 +16,8 @@
          "parser.rkt"
          "modules.rkt"
          "source.rkt"
-         "version.rkt")
-
-(define vm-name (if (eq? (system-type) 'windows) "agentica-vm.exe" "agentica-vm"))
-
-(define (find-vm)
-  (define override (getenv "AGENTICA_VM"))
-  (define here (variable-reference->module-source (#%variable-reference)))
-  (cond
-    [(and override (not (equal? override ""))) (path->complete-path override)]
-    [(path? here)
-     (define-values (directory _name _dir?) (split-path here))
-     (simplify-path (build-path directory 'up "dist" vm-name) #f)]
-    [else
-     (define run (find-system-path 'run-file))
-     (define program (normalize-path (or (find-executable-path run) run)))
-     (build-path (path-only program) vm-name)]))
+         "version.rkt"
+         "vm-launch.rkt")
 
 (define (temporary-bytecode-path)
   (build-path (find-system-path 'temp-dir)
@@ -47,16 +32,6 @@
 (define (delete-temporary path)
   (with-handlers ([exn:fail:filesystem? void])
     (delete-file path)))
-
-(define unix-kill (get-ffi-obj "kill" #f (_fun _int _int -> _int) (lambda () #f)))
-(define sigterm 15)
-(define vm-grace-seconds 2)
-
-(define (stop-vm process)
-  (when (eq? (subprocess-status process) 'running)
-    (when unix-kill (unix-kill (subprocess-pid process) sigterm))
-    (unless (and unix-kill (sync/timeout vm-grace-seconds process))
-      (subprocess-kill process #t))))
 
 (define (run-vm-process vm bytecode-file options program-args)
   (define (stream port) (and (file-stream-port? port) port))
@@ -137,8 +112,8 @@
      #:program "agentica"
      #:argv (list->vector argv)
      #:usage-help
-     "Programs run on the bytecode VM. A program that uses HTTP or BDD"
-     "runs on the legacy evaluator, with a notice on stderr, and so does agentica test."
+     "Programs run on the bytecode VM. A program that uses HTTP"
+     "runs on the legacy evaluator, with a notice on stderr."
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]
      [("--vm") "accepted for compatibility: programs run on the VM by default" (void)]
@@ -160,22 +135,18 @@
      [("--ai") "print diagnostics as compact text for an agent" (set! style 'ai)]
      [("--json") "print diagnostics as one JSON object" (set! style 'json)]
      #:multi
-     [("--steps") path "load Agentica BDD step definitions" (set! step-files (append step-files (list path)))]
+     [("--steps") path "the step program of agentica test" (set! step-files (append step-files (list path)))]
      #:args arguments
      arguments))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "test"))
     (for ([argument (in-list (cdr raw-arguments))])
       (when (member argument '("--ai" "--json"))
         (set! style (if (equal? argument "--json") 'json 'ai))))
-    (define (show-report report)
-      (displayln (if (eq? style 'json) (jsexpr->string report)
-                     (format-bdd-report report #:ai? (eq? style 'ai))))
-      (exit (hash-ref report 'exit_code)))
+    (define (show-report code text)
+      (display text)
+      (exit code))
     (define (usage-error message)
-      (show-report (bdd-error-report
-                    (diagnostic 'RUNTIME-BDD-USAGE message
-                                (source-span (source "<arguments>" "")
-                                             (source-position 0 1 1) (source-position 0 1 1))))))
+      (call-with-values (lambda () (bdd-usage-report message style)) show-report))
     (define paths '())
     (let loop ([arguments (cdr raw-arguments)])
       (cond
@@ -194,8 +165,11 @@
         [(string-prefix? (car arguments) "--")
          (usage-error (format "unknown option ~a" (car arguments)))]
         [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
-    (define report (run-bdd (if (null? paths) '("specs/") paths) #:steps step-files #:allow-run allow-run? #:seed seed))
-    (show-report report))
+    (call-with-values
+     (lambda ()
+       (run-agentica-test (if (null? paths) '("specs/") paths) step-files
+                          #:style style #:allow-run allow-run? #:seed seed #:vm (find-vm)))
+     show-report))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
     ;; Only help consumes a trailing option; program args stay untouched.
     (when (equal? (last raw-arguments) "--json")
@@ -259,7 +233,7 @@
     (when refusal (fail! refusal)))
   (define (run-evaluator)
     (define result (evaluate checked #:args program-args #:max-steps max-steps #:allow-run allow-run?
-                             #:seed seed #:builtin-handler (make-bdd-service)))
+                             #:seed seed))
     (cond
       [(diagnostic? result) (fail! result)]
       [(exit-code? result) (exit (exit-code-code result))]))

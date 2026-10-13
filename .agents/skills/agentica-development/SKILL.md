@@ -38,13 +38,10 @@ src/
   parser.rkt      # parse: (listof token) -> program | diagnostic
   builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
   checker.rkt     # check: program -> program | diagnostic
-  evaluator.rkt   # frozen: runs only the fallback (HTTP, BDD, agentica test) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
+  evaluator.rkt   # frozen: runs only the fallback (HTTP) until 7i; evaluate: program -> 'nil | diagnostic (RUNTIME-)
   runtime-values.rkt # shared runtime values, results and immutable map updates
   task.rkt        # coroutine task results, supervision, global budget and cleanup
   json.rkt        # opaque Json wrapper and strict input guard around Racket read-json
-  gherkin.rkt     # English feature parser, expansion and source locations
-  bdd.rkt         # scenario context, assertions and supervised local process streams
-  bdd-runner.rkt  # deterministic step registration/resolution, execution and reports
   modules.rkt     # import linking: std/, pkg/ and relative files, aliases, exports, cycles; runs before check
   stdlib.rkt      # std/ Agentica sources embedded at compile time
   builtin-types.rkt # opaque handle types and builtin record layouts (Request, Header, FileInfo, ...)
@@ -58,7 +55,9 @@ src/
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
-  main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (the evaluator only on LOWER-UNSUPPORTED, with a notice, or with the hidden --legacy-eval; `check` only, --dump the tree, --dump-ir, `compile -o`); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
+  bdd-driver.rkt  # agentica test: compiles the step program and the embedded std/bdd/runner, runs the runner VM, infrastructure report
+  vm-launch.rkt   # find-vm, stop-vm and running-executable, shared by main.rkt and bdd-driver.rkt
+  main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (the evaluator only on LOWER-UNSUPPORTED, with a notice, or with the hidden --legacy-eval; `check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
   value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
@@ -79,21 +78,23 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   third_party/picohttpparser # picohttpparser submodule pinned to v1.4 (HTTP heads)
   third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9, built static per mode into build/vm/<mode>/openssl (needs Perl)
 tests/
-  <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, gherkin, bdd, filesystem, process, tcp, http
+  <stage>-test.rkt      # lexer, parser, checker, evaluator, modules, task, bdd, filesystem, process, tcp, http
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
   bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, LOWER-UNSUPPORTED, compile exit codes
   vm-diff-{1..4}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on dist/agentica-vm in three formats against their <name>.expected goldens (make goldens), with a --max-steps sweep
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
-  bdd-integration.rkt, network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
+  bdd-test.rkt, bdd-integration.rkt # agentica test over the CLI (in-process main): step programs, isolation, programs under test
+  network-support.rkt, fixtures/ # shared helpers and independent Node.js peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
   queue.agc http.agc    # std/queue, std/http
-  bdd/gherkin.agc bdd/match.agc bdd/report.agc  # std/bdd/gherkin, match, report: internal pieces of the BDD rewrite (phase 21); see references/stages.md
+  bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
+  bdd/gherkin.agc bdd/match.agc bdd/report.agc bdd/runner.agc  # internal to agentica test; see references/stages.md
 examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth
