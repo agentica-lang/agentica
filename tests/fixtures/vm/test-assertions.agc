@@ -22,6 +22,10 @@ def later(ms: Int) -> Int
   return ms
 end
 
+def check_in_task(n: Int) -> Result[Void]
+  return Test.eq(n, 4)
+end
+
 def main() -> Void
   outside = Test.eq(1, 2)
   puts("outside a test: #{outside.message}")
@@ -74,6 +78,14 @@ def main() -> Void
     Test.test("an unobserved crash") do
       Task.spawn(&divide, 0)
       Task.sleep(0)
+      ok()
+    end,
+    Test.test("an assertion in a spawned task") do
+      Task.await(Task.spawn(&check_in_task, 3))
+      ok()
+    end,
+    Test.test("Test.run inside a test") do
+      Test.run([])
       ok()
     end,
     Test.test("Json compares as canonical text") do

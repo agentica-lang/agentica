@@ -194,14 +194,16 @@ static agc_task *unobserved_of(const agc_vm *vm, const agc_task *test) {
   return NULL;
 }
 
+static void observe_test(agc_vm *vm, const agc_task *test) {
+  for (agc_task *t = vm->crashes; t; t = t->crash_next)
+    if (t->test == test) agc_task_observe(vm, t);
+}
+
 static void report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
   cancel_leftovers(vm, vm->task, t);
   agc_task *crashed = unobserved_of(vm, t);
   if (t->crashed) {
-    agc_task_observe(vm, t);
     write_fail(vm, t->crash_code, t->crash_message, t->crash_span, NULL);
-  } else if (t->cancelled) {
-    write_fail(vm, "RUNTIME-TASK-CANCELLED", lit("the test task was cancelled"), c->span, NULL);
   } else if (t->note) {
     write_fail(vm, "RUNTIME-TEST-ASSERTION", t->note->message, t->note->span, t->note);
   } else if (!agc_as_result(vm, t->result)->ok) {
@@ -210,11 +212,11 @@ static void report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
     write_fail(vm, "RUNTIME-TEST-PENDING-TASKS", lit("the test returned while its tasks were still running"), c->span,
                NULL);
   } else if (crashed) {
-    agc_task_observe(vm, crashed);
     write_fail(vm, "RUNTIME-TASK-CRASHED", crashed->crash, c->span, NULL);
   } else {
     write_event(vm, "pass");
   }
+  observe_test(vm, t);
 }
 
 static bool wait_for(agc_vm *vm, agc_task *target) {
@@ -228,11 +230,20 @@ static bool wait_for(agc_vm *vm, agc_task *target) {
 
 static const agc_test_case *next_test(agc_vm *vm, const agc_list *tests, const agc_string *line, uint32_t span) {
   int64_t index = 0;
-  if (agc_parse_int((const uint8_t *)line->data, line->bytes, &index) == AGC_NUMBER_OK && index >= 0 &&
+  bool digits = line->bytes > 0 && (line->bytes == 1 || line->data[0] != '0');
+  for (size_t k = 0; k < line->bytes; k++) digits = digits && line->data[k] >= '0' && line->data[k] <= '9';
+  if (digits && agc_parse_int((const uint8_t *)line->data, line->bytes, &index) == AGC_NUMBER_OK &&
       (uint64_t)index < tests->len)
     return case_at(vm, tests, (size_t)index);
   write_fail(vm, "RUNTIME-BDD-INFRA", agc_around("invalid test index ", line, ""), span, NULL);
   agc_exit(vm, 1);
+}
+
+/* Ends the run as a return from main would: a crash nobody observed, such
+   as one outside every test, makes it exit 1 with the summary line. */
+static _Noreturn void finish_run(agc_vm *vm) {
+  agc_flush(vm);
+  agc_exit(vm, agc_report_unobserved(vm) ? 1 : 0);
 }
 
 /* Run mode is a retry builtin: each wake re-enters here and goes on from the
@@ -241,6 +252,8 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *tests = agc_as_list(vm, args[0]);
   agc_test_run *r = vm->task->test_run;
   if (!r) {
+    if (vm->task->test || vm->test_active)
+      agc_fail(vm, "RUNTIME-TEST-RUN", "Test.run cannot run inside a test or next to another Test.run", span);
     check_names(vm, tests);
     run_mode mode = mode_of(vm);
     if (mode == MODE_NONE) {
@@ -250,10 +263,11 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     }
     if (mode == MODE_LIST) {
       write_list(vm, tests);
-      agc_exit(vm, 0);
+      finish_run(vm);
     }
     r = agc_alloc(sizeof(agc_test_run));
     vm->task->test_run = r;
+    vm->test_active = true;
   }
   for (;;) {
     if (r->current) {
@@ -264,10 +278,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     agc_string *line = NULL;
     agc_input_status status = agc_input_line(vm, &line);
     if (status == AGC_INPUT_WAIT) return agc_void();
-    if (status != AGC_INPUT_OK) {
-      agc_flush(vm);
-      agc_exit(vm, 0);
-    }
+    if (status != AGC_INPUT_OK) finish_run(vm);
     r->test = next_test(vm, tests, line, span);
     r->current = start_test(vm, r->test);
   }

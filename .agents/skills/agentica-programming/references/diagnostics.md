@@ -66,6 +66,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-TEST-ASSERTION` | a failed `Test.eq`, `Test.ok?`, `Test.error?` or `Test.assert` in a test, at the assertion (see `testing.md`) |
 | `RUNTIME-TEST-ERROR` | a test block returned `error(message)`, at the `Test.test` call |
 | `RUNTIME-TEST-NAME` | an empty or repeated test name, at that `Test.test` call |
+| `RUNTIME-TEST-RUN` | `Test.run` called inside a test or while another `Test.run` runs; call it once, from `main` |
 | `RUNTIME-TEST-PENDING-TASKS` | a test returned while tasks it spawned were still running; await them |
 | `LOWER-UNSUPPORTED` | the VM cannot run this form; exit 1 before anything runs. Every checked program runs on the VM today, so seeing it is an interpreter bug to report |
 

@@ -392,7 +392,7 @@ struct agc_vm {
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
   agc_task *crashes, *crashes_tail;
   uint64_t tasks_done, gc_seen, crash_count, observed_count;
-  bool yield, in_turn;
+  bool yield, in_turn, test_active;
   jmp_buf fail, turn;
 };
 
@@ -609,6 +609,7 @@ agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 void agc_task_observe(agc_vm *vm, agc_task *t);
+bool agc_report_unobserved(agc_vm *vm);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 void agc_task_park(agc_vm *vm, bool retry);

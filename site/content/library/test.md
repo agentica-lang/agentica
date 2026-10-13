@@ -47,7 +47,7 @@ Builds a test from a name and a block. A `TestCase` has no fields; it keeps the 
 Test.run(tests: List[TestCase]) -> Void
 ```
 
-Serves the test runner and never returns. Each test runs in its own task, so a test that crashes fails alone and the next test still runs. Running the file as a normal program prints `run this file with agentica test` on stderr and exits 2; running test files with `agentica test` comes in a later release.
+Serves the test runner and never returns. Call it once, from `main`: inside a test it fails with `RUNTIME-TEST-RUN`. Each test runs in its own task, so a test that crashes fails alone and the next test still runs. Running the file as a normal program prints `run this file with agentica test` on stderr and exits 2; running test files with `agentica test` comes in a later release.
 
 A test fails, in this order, with:
 
@@ -57,6 +57,8 @@ A test fails, in this order, with:
 - tasks it started and left running (`RUNTIME-TEST-PENDING-TASKS`); they are stopped before the next test;
 - a task it started that crashed and was not awaited (`RUNTIME-TASK-CRASHED`, with the crash text).
 
+A crash outside every test, such as one in a task that `main` started, that nothing awaited fails the whole file.
+
 Each test gets its own random generator, seeded from the run's seed and the test's name, so a test sees the same `Random` values whether it runs alone or with the others.
 
 ## Test.eq
@@ -65,7 +67,7 @@ Each test gets its own random generator, seeded from the run's seed and the test
 Test.eq(actual: T, expected: T) -> Result[Void]
 ```
 
-Compares two values of the same type. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys. When the values differ, the error shows both in the `inspect` form, with any `Json` as its JSON text.
+Compares two values of the same type. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys. When the values differ, the test reports `values are not equal` and the error shows both in the `inspect` form, with any `Json` as its JSON text.
 
 ```agentica
 struct Point

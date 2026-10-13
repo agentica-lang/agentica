@@ -43,7 +43,7 @@
                     ("Task.pending_count" () Int #f "Task.pending_count" (concurrency) "Count the tasks of this run that have not ended, not counting main; VM only.")
                     ("Task.unobserved_crash" () (Result String) #f "Task.unobserved_crash" (concurrency) "Return the text of the first task crash no await has observed, or an error.")
                     ("Test.test" ((name String) (body (Fn (Result Void)))) TestCase #f "Test.test" () "Build a test case from a name and a block that returns Result[Void]; Test.run runs it.")
-                    ("Test.run" ((tests (List TestCase))) Void #f "Test.run" (stdin stdout concurrency) "Serve agentica test: list the tests or run each in its own task; never returns.")
+                    ("Test.run" ((tests (List TestCase))) Void #f "Test.run" (stdin stdout stderr process concurrency) "Serve agentica test: list the tests or run each in its own task; never returns.")
                     ("Test.eq" ((actual T) (expected T)) (Result Void) test-eq "Test.eq" (test) "Compare two values of a type with equality (Json as canonical text); a failure is recorded on the test.")
                     ("Test.ok?" ((result (Result T))) (Result Void) test-result "Test.ok?" (test) "Check that a Result is ok; a failure is recorded on the test.")
                     ("Test.error?" ((result (Result T))) (Result Void) test-result "Test.error?" (test) "Check that a Result is an error; a failure is recorded on the test.")

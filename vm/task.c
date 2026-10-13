@@ -282,6 +282,13 @@ static agc_task *first_unobserved(const agc_vm *vm) {
   return NULL;
 }
 
+bool agc_report_unobserved(agc_vm *vm) {
+  const agc_task *first = first_unobserved(vm);
+  if (!first) return false;
+  agc_print_unobserved(vm->rt->err, vm->crash_count - vm->observed_count, first->crash, vm->rt->style);
+  return true;
+}
+
 void agc_task_observe(agc_vm *vm, agc_task *t) {
   if (t->observed) return;
   t->observed = true;
@@ -328,9 +335,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
       agc_io_poll(vm, false);
     }
     vm->rt->outcome.kind = AGC_DONE;
-    const agc_task *first = first_unobserved(vm);
-    if (first) {
-      agc_print_unobserved(vm->rt->err, vm->crash_count - vm->observed_count, first->crash, vm->rt->style);
+    if (agc_report_unobserved(vm)) {
       vm->rt->outcome.kind = AGC_EXITED;
       vm->rt->outcome.exit_code = 1;
     }
