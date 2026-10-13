@@ -1,6 +1,7 @@
+import "std/test/report" as Report
 import "std/bdd/gherkin" as Gherkin
 
-def at(span: Gherkin.Span) -> String
+def at(span: Report.Span) -> String
   return "#{span.file}:#{span.line}:#{span.column}-#{span.end_column}"
 end
 
@@ -11,8 +12,8 @@ def show(text: String) -> Void
       for scenario in feature.scenarios
         example = "none"
         case scenario.example
-          Gherkin.Example.Row(row) -> example = at(row)
-          Gherkin.Example.NoExample -> example = "none"
+          Report.Example.Row(row) -> example = at(row)
+          Report.Example.NoExample -> example = "none"
         end
         puts("scenario #{scenario.name.inspect} #{scenario.tags} #{at(scenario.span)} example #{example}")
         for step in scenario.steps

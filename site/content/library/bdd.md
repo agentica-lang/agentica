@@ -245,6 +245,8 @@ end
 `stdout is:` compares the output that no line step has read yet. Output is
 kept up to 1 MiB on each stream.
 
+A failed `then_*` check compares with `Test.eq` and reports `expected` and `actual` as `Test.eq` does, in the inspect form: a line or output in quotes, an exit code as a number, a JSON line as its canonical text (sorted keys). The text report prints them as they are; an undefined or ambiguous step's `actual` is the step text in quotes.
+
 ## Running tests from a program
 
 There is no function that runs features from a program. Start

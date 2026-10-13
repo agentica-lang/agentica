@@ -1,3 +1,4 @@
+import "std/test/report" as Report
 import "std/bdd/match" as Match
 import "std/bdd/gherkin" as Gherkin
 
@@ -28,7 +29,7 @@ def report(patterns: List[Match.Pattern], step: Gherkin.Step) -> Void
 end
 
 def run(definitions: List[String], feature: String) -> Void
-  where = Gherkin.Span(file: "steps.agc", line: 1, column: 1, end_column: 1)
+  where = Report.Span(file: "steps.agc", line: 1, column: 1, end_column: 1)
   case Match.compile(definitions, where)
     Gherkin.Outcome.Done(patterns) ->
       case Gherkin.parse("sample.feature", feature)

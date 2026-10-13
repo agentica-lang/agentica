@@ -1,4 +1,4 @@
-import "std/bdd/report" as Report
+import "std/test/report" as Report
 import "std/bdd/match" as Match
 import "std/bdd/gherkin" as Gherkin
 
@@ -52,7 +52,7 @@ def run_scenario(patterns: List[Match.Pattern], item: Gherkin.Scenario) -> Repor
   if bad >= 0
     case resolved[bad]
       Gherkin.Outcome.Failed(problem) ->
-        verdict = Report.Verdict.Fail(Report.with_actual(Report.from_diagnostic(problem), item.steps[bad].text))
+        verdict = Report.Verdict.Fail(Report.with_actual(Report.error_at(problem.code, problem.message, problem.span), item.steps[bad].text.inspect))
       Gherkin.Outcome.Done(_) -> verdict = Report.Verdict.Pass
     end
   end
@@ -74,7 +74,7 @@ def run_scenario(patterns: List[Match.Pattern], item: Gherkin.Scenario) -> Repor
             if hit.index == 0
               remembered = hit.captures[0]
             elsif hit.captures[0] != remembered
-              found = assertion(step, hit.captures[0], remembered)
+              found = assertion(step, hit.captures[0].inspect, remembered.inspect)
               status = Report.StepStatus.Failed(found)
               verdict = Report.Verdict.Fail(found)
             end
@@ -98,7 +98,7 @@ end
 
 def run_file(patterns: List[Match.Pattern], path: String, text: String) -> Report.FileResult
   case Gherkin.parse(path, text)
-    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, Report.from_diagnostic(problem))
+    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, Report.error_at(problem.code, problem.message, problem.span))
     Gherkin.Outcome.Done(feature) ->
       scenarios = feature.scenarios.map do |item| run_scenario(patterns, item) end
       return Report.FileResult(path: path, feature: feature.name, scenarios: scenarios, verdict: Report.Verdict.Pass)
@@ -106,7 +106,7 @@ def run_file(patterns: List[Match.Pattern], path: String, text: String) -> Repor
 end
 
 def compiled(definitions: List[String]) -> List[Match.Pattern]
-  where = Gherkin.Span(file: "steps.agc", line: 1, column: 1, end_column: 1)
+  where = Report.Span(file: "steps.agc", line: 1, column: 1, end_column: 1)
   case Match.compile(definitions, where)
     Gherkin.Outcome.Done(patterns) -> return patterns
     Gherkin.Outcome.Failed(_) -> return []

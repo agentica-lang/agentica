@@ -1,4 +1,14 @@
-import "gherkin" as Gherkin
+export struct Span
+  file: String
+  line: Int
+  column: Int
+  end_column: Int
+end
+
+export enum Example
+  NoExample
+  Row(Span)
+end
 
 export enum Detail
   Unknown
@@ -8,7 +18,7 @@ end
 export struct Error
   code: String
   message: String
-  span: Gherkin.Span
+  span: Span
   end_line: Int
   expected: Detail
   actual: Detail
@@ -28,15 +38,15 @@ end
 
 export struct StepResult
   text: String
-  location: Gherkin.Span
+  location: Span
   status: StepStatus
 end
 
 export struct ScenarioResult
   name: String
   tags: List[String]
-  location: Gherkin.Span
-  example: Gherkin.Example
+  location: Span
+  example: Example
   duration_ms: Int
   steps: List[StepResult]
   verdict: Verdict
@@ -56,9 +66,9 @@ struct Totals
   exit_code: Int
 end
 
-export def from_diagnostic(problem: Gherkin.Diagnostic) -> Error
-  return Error(code: problem.code, message: problem.message, span: problem.span, end_line: problem.span.line,
-               expected: Detail.Unknown, actual: Detail.Unknown, original: JSON.null())
+export def error_at(code: String, message: String, span: Span) -> Error
+  return Error(code: code, message: message, span: span, end_line: span.line, expected: Detail.Unknown,
+               actual: Detail.Unknown, original: JSON.null())
 end
 
 # Reads a diagnostic as `--json` writes it and keeps the whole object, so the report writes every key unchanged
@@ -68,7 +78,7 @@ export def from_json(text: String) -> Result[Error]
   range = try JSON.get(root, "range")
   start = try JSON.get(range, "start")
   stop = try JSON.get(range, "end")
-  span = Gherkin.Span(file: try text_at(root, "file"), line: try int_at(start, "line"), column: try int_at(start, "column"),
+  span = Span(file: try text_at(root, "file"), line: try int_at(start, "line"), column: try int_at(start, "column"),
                       end_column: try int_at(stop, "column"))
   return ok(Error(code: try text_at(root, "code"), message: try text_at(root, "message"), span: span,
                   end_line: try int_at(stop, "line"), expected: detail_at(root, "expected"), actual: detail_at(root, "actual"),
@@ -176,8 +186,8 @@ end
 def scenario_json(item: ScenarioResult) -> Json
   example = JSON.null()
   case item.example
-    Gherkin.Example.Row(span) -> example = location_json(span)
-    Gherkin.Example.NoExample -> example = JSON.null()
+    Example.Row(span) -> example = location_json(span)
+    Example.NoExample -> example = JSON.null()
   end
   fields: Map[String, Json] = {
     "name": JSON.from(item.name),
@@ -211,7 +221,7 @@ def step_json(step: StepResult) -> Json
   return JSON.object(fields)
 end
 
-def location_json(span: Gherkin.Span) -> Json
+def location_json(span: Span) -> Json
   fields: Map[String, Json] = {"file": JSON.from(span.file), "line": JSON.from(span.line), "column": JSON.from(span.column)}
   return JSON.object(fields)
 end
@@ -272,7 +282,7 @@ end
 
 def detail_text(label: String, detail: Detail) -> String
   case detail
-    Detail.Known(value) -> return "; #{label} #{value.inspect}"
+    Detail.Known(value) -> return "; #{label} #{value}"
     Detail.Unknown -> return ""
   end
 end

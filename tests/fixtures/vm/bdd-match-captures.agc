@@ -1,8 +1,9 @@
+import "std/test/report" as Report
 import "std/bdd/match" as Match
 import "std/bdd/gherkin" as Gherkin
 
 def show(pattern: String, text: String) -> Void
-  where = Gherkin.Span(file: "steps.agc", line: 1, column: 1, end_column: 1)
+  where = Report.Span(file: "steps.agc", line: 1, column: 1, end_column: 1)
   case Match.compile([pattern], where)
     Gherkin.Outcome.Done(patterns) ->
       found = Match.captures(patterns[0], text)

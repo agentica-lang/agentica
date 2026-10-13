@@ -1,14 +1,9 @@
-export struct Span
-  file: String
-  line: Int
-  column: Int
-  end_column: Int
-end
+import "std/test/report" as Report
 
 export struct Diagnostic
   code: String
   message: String
-  span: Span
+  span: Report.Span
 end
 
 export enum Outcome[T]
@@ -26,27 +21,22 @@ export struct Step
   kind: String
   text: String
   argument: Argument
-  span: Span
-end
-
-export enum Example
-  NoExample
-  Row(Span)
+  span: Report.Span
 end
 
 export struct Scenario
   name: String
   steps: List[Step]
   tags: List[String]
-  span: Span
-  example: Example
+  span: Report.Span
+  example: Report.Example
 end
 
 export struct Feature
   name: String
   scenarios: List[Scenario]
   tags: List[String]
-  span: Span
+  span: Report.Span
 end
 
 struct Source
@@ -56,7 +46,7 @@ struct Source
 end
 
 struct ExampleRow
-  span: Span
+  span: Report.Span
   bindings: Map[String, String]
   tags: List[String]
 end
@@ -67,11 +57,11 @@ struct Draft
   steps: List[Step]
   examples: List[ExampleRow]
   tags: List[String]
-  span: Span
+  span: Report.Span
 end
 
 struct TableRow
-  span: Span
+  span: Report.Span
   cells: List[String]
 end
 
@@ -279,17 +269,17 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         scenarios = scenarios.push(expanded.unwrap!)
       end
     else
-      scenarios = scenarios.push(Scenario(name: draft.name, steps: steps, tags: tags, span: draft.span, example: Example.NoExample))
+      scenarios = scenarios.push(Scenario(name: draft.name, steps: steps, tags: tags, span: draft.span, example: Report.Example.NoExample))
     end
   end
   return Outcome.Done(Feature(name: title, scenarios: scenarios, tags: feature_tags, span: title_span))
 end
 
-def problem(code: String, message: String, span: Span) -> Diagnostic
+def problem(code: String, message: String, span: Report.Span) -> Diagnostic
   return Diagnostic(code: code, message: message, span: span)
 end
 
-def fail(code: String, message: String, span: Span) -> Outcome[Feature]
+def fail(code: String, message: String, span: Report.Span) -> Outcome[Feature]
   return Outcome.Failed(problem(code, message, span))
 end
 
@@ -304,12 +294,12 @@ def read_lines(file: String, text: String) -> Source
 end
 
 # A location covers its whole raw line; past the end it is the last line.
-def location(src: Source, index: Int) -> Span
+def location(src: Source, index: Int) -> Report.Span
   at = index
   if at >= src.raws.size
     at = src.raws.size - 1
   end
-  return Span(file: src.file, line: at + 1, column: 1, end_column: src.raws[at].length + 1)
+  return Report.Span(file: src.file, line: at + 1, column: 1, end_column: src.raws[at].length + 1)
 end
 
 def rest_of(text: String, start: Int) -> String
@@ -532,7 +522,7 @@ def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: Example
     argument = try substitute_argument(step.argument, row.bindings)
     expanded = expanded.push(Step(kind: step.kind, text: text, argument: argument, span: step.span))
   end
-  return ok(Scenario(name: name, steps: expanded, tags: tags.concat(row.tags), span: draft.span, example: Example.Row(row.span)))
+  return ok(Scenario(name: name, steps: expanded, tags: tags.concat(row.tags), span: draft.span, example: Report.Example.Row(row.span)))
 end
 
 def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Result[Argument]

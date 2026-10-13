@@ -10,7 +10,7 @@ A test file is a program named `*_test.agc` whose `main` calls `Test.run` with a
 
 Checked at `099daa3`:
 
-- `agentica test [PATH...] [--steps FILE]` runs `.feature` files only (`src/bdd-driver.rkt`, `stdlib/bdd/runner.agc`). The driver finds the files; the runner runs each scenario in its own child VM and builds the report with `std/bdd/report` (`stdlib/bdd/report.agc`: `FileResult`, `ScenarioResult`, `json`, `text`, `exit_code`).
+- `agentica test [PATH...] [--steps FILE]` runs `.feature` files only (`src/bdd-driver.rkt`, `stdlib/bdd/runner.agc`). The driver finds the files; the runner runs each scenario in its own child VM and builds the report with `std/bdd/report` (`stdlib/bdd/report.agc`: `FileResult`, `ScenarioResult`, `json`, `text`, `exit_code`). (Both moved to `std/test/runner` and `std/test/report` in 25b.)
 - The record protocol (U+001E, `agentica-bdd `, then JSON on stdout), the step limit per child, the 30-second deadline and the 1 MiB output limits are those of §31.5.
 - `try` already works in a block passed to a function whose parameter is `Fn[..., Result[T]]` (`docs/grammar.md`, "Blocks and closures"), so `Test.test(name) do ... end` with `try` inside needs no checker change.
 - Agentica has no user generics (only enums), and a function cannot learn the span of its caller.
@@ -40,7 +40,7 @@ end
 $ agentica test test/
 PASS test/ports_test.agc / parses a port
 FAIL test/ports_test.agc / rejects zero
-test/ports_test.agc:10:7 [RUNTIME-TEST-ASSERTION] expected an error; actual "ok(0)"
+test/ports_test.agc:10:7 [RUNTIME-TEST-ASSERTION] expected an error; actual ok(0)
 PASS test/ports_test.agc / default is below 1024
 2 passed, 1 failed, 0 not executed, 0 file errors
 ```
@@ -76,7 +76,7 @@ The request named the feature `std/test`. Its functions cannot be written in Age
 - `Test.run` works on runtime state no Agentica code can see: the assertion records, the crash of a test task, its descendants.
 - A builtin module cannot share its name with an import alias (§30.7), so splitting the six functions between a builtin and an `std/test` module would give two names for one API.
 
-The runner and the report stay in Agentica (`std/bdd/runner`, `std/bdd/report`, §36.6). `Test` and `TestCase` become reserved names (`CHECK-REDEFINED-NAME`); no `.agc` file in the repo uses either.
+The runner and the report stay in Agentica (`std/test/runner`, `std/test/report`, §36.6; 25b moved them from `std/bdd/`, since BDD and unit tests share them, while Gherkin parsing and step matching stay in `std/bdd`). `Test` and `TestCase` become reserved names (`CHECK-REDEFINED-NAME`); no `.agc` file in the repo uses either.
 
 ### 36.5 Discovery, names and filtering
 
@@ -86,13 +86,13 @@ The runner and the report stay in Agentica (`std/bdd/runner`, `std/bdd/report`, 
 
 ### 36.6 Isolation: a child VM per file, a task per test
 
-The runner (`std/bdd/runner`, extended) handles a test file much as it handles a scenario, with the same child start (`--allow-run` included, as for step programs, §31.10), record marker and step budget (§31.5):
+The runner (`std/test/runner`, extended) handles a test file much as it handles a scenario, with the same child start (`--allow-run` included, as for step programs, §31.10), record marker and step budget (§31.5):
 
 1. **List child:** `VM --allow-run --json --max-steps 1000000 --seed N -- FILE.agcb --agentica-test list`. `Test.run` writes one `{"event":"test","name":...,"line":...,"column":...}` record per test, in order, then `ready`. A crash or exit here is a file error (as built in 25a, an unobserved crash outside the tests makes the list child exit 1 with the summary line on stderr, which is such a file error).
 2. **Run child**, one per file: `VM --allow-run --json --max-steps M --seed N -- FILE.agcb --agentica-test run`, with `M` = 1,000,000 × (the number of tests + 1). The runner sends the index of each test to run, one per line, and the child answers `{"event":"pass"}` or `{"event":"fail", ...}` with the fields of the report's error object (as built in 25a: the diagnostic as `--json` writes it, `code`, `file`, `message` and `range`, plus `event`, and `expected` and `actual` when the assertion has them; an index line that is not plain digits naming a test is a `RUNTIME-BDD-INFRA` fail record and exit 1). When stdin ends, the child exits 0, or 1 with the summary line when a crash outside the tests was never observed (25a); the runner reports that exit as a file error, with the stderr summary. The runner sends the next index only after the answer.
 3. **Inside the child,** `Test.run` runs each test as its own task, a child of the task that called `Test.run`, awaits it, and writes the record. Tests run one at a time, in file order; running them in parallel is a later option (`--jobs N`), as for scenarios.
 
-**Records carry raw text.** `expected`, `actual` and messages are the texts as the assertion made them (`ok(0)`, made once by `inspect`); the report quotes them once, in the String inspect form, as it does for BDD. Nothing applies `inspect` twice.
+**Records carry raw text.** `expected`, `actual` and messages are the texts as the assertion made them (`ok(0)`, made once by `inspect`); the report shows them as they are. Nothing applies `inspect` twice. (As built in 25b: BDD's `then_*` checks compare with `Test.eq` and put the same inspect texts in their records, so the report quotes neither kind again; an undefined step's `actual` is the step text's inspect form.)
 
 **With §37:** a crash in a test ends only its task. `Test.run` reports it as that test's failure, with the crash's code and span, and goes on. A crash outside the tests (in `main` before `Test.run`), a step limit, a `System.exit` or the deadline ends the child: the current test fails with that diagnostic (`RUNTIME-BDD-PREMATURE-EXIT`, `RUNTIME-STEP-LIMIT`, `RUNTIME-TEST-TIMEOUT`), and the rest of the file is `not_executed`.
 
@@ -110,7 +110,7 @@ The runner (`std/bdd/runner`, extended) handles a test file much as it handles a
 
 ### 36.8 Report and exit codes
 
-- `std/bdd/report` writes both kinds of file in one report, with the same three formats. A test file is a file entry with `feature: ""` and `kind: "tests"` (a feature file gets `kind: "feature"`); each test is a scenario entry with its name, status, `location` (the `Test.test` call), `duration_ms`, `steps: []`, `error` and `output`.
+- `std/test/report` writes both kinds of file in one report, with the same three formats. A test file is a file entry with `feature: ""` and `kind: "tests"` (a feature file gets `kind: "feature"`); each test is a scenario entry with its name, status, `location` (the `Test.test` call), `duration_ms`, `steps: []`, `error` and `output`.
 - The scenario status gains `not_executed`, and the top-level `not_executed` count (always 0 today) counts the tests not run. The top level gains `seed`.
 - The plain and `--ai` lines are those of BDD, with the file path where a feature name goes: `PASS file / name` or `FAIL file / name`, and the summary (`file:line:column [CODE] message; expected ...; actual ...`) on the next line or after ` | `. The last line counts the tests not executed.
 - Exit codes are unchanged: 0 when everything passes and something ran, 1 when a test, scenario or file fails or nothing was found, 2 for usage errors and `RUNTIME-BDD-INFRA`.

@@ -1,4 +1,5 @@
 import "gherkin" as Gherkin
+import "std/test/report" as Report
 
 enum Capture
   IntCapture
@@ -22,7 +23,7 @@ export struct Resolved
 end
 
 # Checks the definitions in order, each for a duplicate first, then for a bad pattern.
-export def compile(texts: List[String], where: Gherkin.Span) -> Gherkin.Outcome[List[Pattern]]
+export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
   compiled = texts.map do |text| compile_one(text) end
   seen: Map[String, Bool] = {}
   for i in 0...texts.size
@@ -67,7 +68,7 @@ export def captures(pattern: Pattern, text: String) -> Result[List[String]]
   return walk(pattern.slots, 0, chars, pattern.head.size, [])
 end
 
-def failed(code: String, reason: String, text: String, where: Gherkin.Span) -> Gherkin.Outcome[List[Pattern]]
+def failed(code: String, reason: String, text: String, where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
   return Gherkin.Outcome.Failed(Gherkin.Diagnostic(code: code, message: "#{reason}: #{text}", span: where))
 end
 

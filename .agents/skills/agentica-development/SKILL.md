@@ -44,7 +44,7 @@ src/
   version.rkt     # the version string
   lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
   bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
-  bdd-driver.rkt  # agentica test: compiles the step program and the embedded std/bdd/runner, runs the runner VM, infrastructure report
+  bdd-driver.rkt  # agentica test: compiles the step program and the embedded std/test/runner, runs the runner VM, infrastructure report
   vm-launch.rkt   # find-vm, stop-vm and running-executable, shared by main.rkt and bdd-driver.rkt
   main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
@@ -84,7 +84,8 @@ tests/
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
   queue.agc http.agc    # std/queue, std/http
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
-  bdd/gherkin.agc bdd/match.agc bdd/report.agc bdd/runner.agc  # internal to agentica test; see references/stages.md
+  bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/stages.md
+  test/report.agc test/runner.agc  # internal to agentica test: the runner and report shared by unit tests and BDD
 examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth
