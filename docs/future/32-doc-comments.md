@@ -125,7 +125,7 @@ end
 ### 32.7 Order and the evaluator
 
 - **Front end only.** Doc comments change only the lexer, the parser and the CLI, and the AST keeps its shape (§32.4).
-- **When.** Decided by the user on 2026-10-13: 22a and 22b come after 7i, at roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash isolation (§37), unit tests (§36), then HTTP 20c, which also took what was left of 20d; placed there by the owner on 2026-10-13) and after the evaluation pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit separators (§33) and before `Task.map` and channels (order step 7.3). They are no longer an exception to "new features are VM-only and come after 7i".
+- **When.** Decided by the user on 2026-10-13: 22a and 22b come after 7i, at roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash isolation (§37), unit tests (§36), then HTTP 20c, which also took what was left of 20d; placed there by the owner on 2026-10-13) and after the evaluation pilot (order step 7.2.2, added by the owner on 2026-10-13), and before digit separators (§33) and before `Task.map` (order step 7.3); channels come earlier, at row 7.2.1e. They are no longer an exception to "new features are VM-only and come after 7i".
   - `stdlib/http.agc` (HTTP 20a and 20c) is documented in 22a.
 - **How the VM is affected.** It runs programs with doc comments as before, because docs never reach it.
 

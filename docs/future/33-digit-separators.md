@@ -57,4 +57,4 @@ end
 ### 33.5 Order
 
 - **Front end only:** the lexer and the docs. The token value is the same `Int` or `Float`, so the AST, the checker, lowering, the bytecode, and the VM do not change.
-- **When:** decided by the user on 2026-10-13, 23a comes after 7i, right after phase 22 (22a, 22b), at roadmap order step 7.2a, before `Task.map` and channels (order step 7.3). It is no longer an exception to "new features are VM-only and come after 7i".
+- **When:** decided by the user on 2026-10-13, 23a comes after 7i, right after phase 22 (22a, 22b), at roadmap order step 7.2a, before `Task.map` (order step 7.3); channels come earlier, at row 7.2.1e. It is no longer an exception to "new features are VM-only and come after 7i".

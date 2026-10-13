@@ -554,15 +554,18 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 - **libuv (7h, in: loop, files and tasks)**: `docs/vm/10-io-scheduler.md` §10.2.2 describes the
   loop with its run queue; only the scheduler (`vm/task.c`, through `agc_io_poll`) calls
   `uv_run`, and libuv callbacks only set flags (tasks will also queue the
-  task). N=1 today; the design target is N scheduler threads (M:N,
-  `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the server
-  measurement and the evaluation round), built on split structures
-  (read-only runtime; per-scheduler loop, run queue, registry and turn
-  counter; per-task stack, registers and frame). Once tasks land, a
+  task). N=1 today; the design target (`docs/vm/16-architecture.md` §16, rules per
+  thread in `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the server
+  measurement and the evaluation round) is N scheduler threads that pull from
+  one global run queue and one I/O thread, the main thread, with the only libuv
+  loop, built on split structures (read-only runtime; global run queue; the
+  loop and its inbox on the I/O thread, and the registry there or shared
+  under a lock, which is open in §16.11; per-scheduler turn counter;
+  per-task stack, registers and frame). Once tasks land, a
   builtin or opcode whose work grows with its input sets a turn cost
   (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins); it is taken from the turn only, never
   from `steps_left`, so it never changes how `--max-steps` stops a program. Only the
-  scheduler that owns a loop calls `uv_run` on it. New code adds no
+  thread that owns the loop calls `uv_run` on it (the scheduler with N=1, the I/O thread with N>1). New code adds no
   mutable `static` or global variable in `vm/` (the exceptions are listed
   in `docs/vm/10-io-multicore.md` §10.2.3); state goes in the runtime, scheduler or task
   struct, and lazy init uses `pthread_once` or runs at start-up.

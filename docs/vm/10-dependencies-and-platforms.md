@@ -154,9 +154,10 @@ the gap blocks `Process`, stdin and `File` on Windows, and the choice is
 libuv. Its cost is about 200 lines to drive OpenSSL through memory BIOs.
 
 libuv also stays for multicore (10.2.3); we do not replace it with raw
-epoll or io_uring. libuv works with one loop per thread, which is what
-one loop per scheduler needs. It gives the thread pool for files (epoll
-cannot poll regular files), process spawn, signals and DNS, which we would
+epoll or io_uring. libuv works with one loop per thread; the model of §16
+has one loop, on the I/O thread, with the thread pool beside it. It gives
+the thread pool for files (epoll cannot poll regular files), process
+spawn, signals and DNS, which we would
 otherwise write ourselves on each platform. libuv types stay inside the I/O
 layer (`vm/loop.c`, added in 7h, and the builtin files that use it), so a later swap to
 raw epoll or io_uring stays local if measurements ever ask for it.

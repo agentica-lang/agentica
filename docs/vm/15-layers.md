@@ -1,6 +1,6 @@
 ## 15. VM layers
 
-**Status:** planned by the owner on 2026-10-13, row 7.2.1b of the [roadmap](../roadmap/README.md) (checklist in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). No behavior change: the goldens do not move.
+**Status:** planned by the owner on 2026-10-13, row 7.2.1b of the [roadmap](../roadmap/README.md) (checklist in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). No behavior change: the goldens do not move. It follows the architecture note [§16](16-architecture.md) (row 7.2.1c), which names the threads and queues behind the port.
 
 The C VM gets a light layering: three layers (core, services, adapters) with one-way dependencies, plus a driver on top that wires them; one small port between the services and the core; one header per layer; and a CI check that keeps the direction. It is not DDD and not a plugin system: calls stay direct, and function pointers stay where they already are (callbacks), not as tables around every module.
 
@@ -48,6 +48,8 @@ The port is what a service needs from the core to do I/O and to wait, as §14 al
 | Charge, fail, write | `agc_charge`, `agc_charge_bytes` (`interp.c:84`, `90`), `agc_value_units`, `agc_fail`, `agc_fail_text`, `agc_exit`, `agc_write`, `agc_flush` |
 | Program lookups | `agc_builtin_struct` (`builtins.c:456`) |
 | The test child protocol | `agc_protocol_line` (`input.c:290`, used by `testing.c:273`); 25c removes it (V10) |
+
+Behind the port sit the two queues of [§16.4](16-architecture.md#164-two-directions): waking and enqueueing a task is the push to the global run queue, and the requests to the I/O thread's inbox are start, cancel, stop or extend its timer, release and the libuv steps of a job's halves; which port function posts each is open ([§16.11](16-architecture.md#1611-open)). With N = 1, as built, they are direct calls on one thread ([§16.9](16-architecture.md#169-as-built-n--1)). A service reaches the queues only through the port. The libuv code of a service (§15.1, "libuv is not wrapped") would run in the start step of the request, on the I/O thread (§16.9).
 
 The core calls services back only through function pointers that a service handed over: the job kind (`agc_io_kind`), `agc_close_fn` and `agc_release_fn` of a resource, a task's `agc_end_fn` (20c), and `agc_builtin_fn` of a builtin. It never calls a service by name.
 
@@ -169,9 +171,11 @@ Not violations: `loader.c:460` calls `agc_find_builtin` (core); the core's other
 
 ### 15.7 Implementation PRs
 
-Two PRs, both VM-only and mechanical, both with no change to the goldens. They wait for HTTP 20c and for the blocked-read fix (both change `input.c`, `files.c` and the HTTP services, so the moves would conflict), and come before 25c and 24b, so that 25c's new `Process` builtins and 24b's ownership change are written on the port. Each PR first maps the calls again on the tree it starts from (as in §15.6) and updates §15 where 20c or the fix changed them.
+Two PRs, both VM-only and mechanical, both with no change to the goldens. HTTP 20c and the blocked-read fix, which changed `input.c`, `files.c` and the HTTP services, are done, so the moves no longer conflict with them. The PRs come before 25c and 24b, so that 25c's new `Process` builtins and 24b's ownership change are written on the port. Each PR first maps the calls again on the tree it starts from (as in §15.6) and updates §15 where the tree has moved.
 
 1. **Moves.** V1 (`json_value.c`), V2 (`builtin_tables.c`), V3 (the resource field), V4 (`agc_error_value`) and V5 (`agc_task_join`). Both new files join `VM_SRC` in the `Makefile`. `agc.h` stays one header in this PR. It runs `make dup-check`: the jscpd baseline (`.jscpd-baseline.json`) holds fingerprints, so a moved clone can show up as new; remove the copy rather than grow the baseline.
 2. **Headers and the check.** Split `agc.h` into `value.h`, `port.h`, `core.h` and `services.h` (§15.4), with each `.c` file including its layer's header and each header compiled on its own; update the places that name `agc.h` (§15.4); add `vm/tools/check-layers.sh`, `make vm-layers`, its negative self-test and the CI step (§15.5); tick row 7.2.1b and add the layers to the development skill (`references/vm.md`: the file table and a "which layer" note; `references/ci.md`: the new check).
+
+Order (the owner, 2026-10-13): after the architecture note (§16, row 7.2.1c), and before the asynchronous process close and the flush limit (row 7.2.1d), channels (17b, row 7.2.1e), stdout and stderr on the loop (row 7.2.1f), and 25c and 24b (row 7.2.1a).
 
 After that, a PR that adds a `vm/*.c` file puts it in a layer list, and a reviewer checks a new port function against §14 like any core change.
