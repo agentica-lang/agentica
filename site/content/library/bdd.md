@@ -48,6 +48,8 @@ The exit code is `0` when every scenario passes, `1` when one fails, and `2`
 when the tests could not run. `--ai` and `--json` change the report format.
 `--seed N` makes `Random` repeat in steps and programs. A program under test
 can start other programs only with `agentica test --allow-run`.
+`agentica test` refuses a shared temporary directory without the sticky bit
+(exit `2`); set `TMPDIR` to a private folder.
 
 ## Built-in steps
 

@@ -206,6 +206,7 @@
        (make-directory outside)
        (display-to-file "keep" (build-path outside "lock"))
        (make-file-or-directory-link outside (build-path temporary "agentica-bdd-fedcba9876543210"))
+       (make-directory (build-path temporary "agentica-bdd-00ff"))
        (define-values (later later-output later-input later-errors)
          (parameterize ([current-environment-variables environment])
            (start-cli (list "test" (in directory "missing.feature")))))
@@ -216,7 +217,8 @@
        (close-input-port later-output)
        (close-input-port later-errors)
        (close-output-port held)
-       (check-equal? (map path->string (directory-list temporary)) '("agentica-bdd-0123456789abcdef" "agentica-bdd-fedcba9876543210"))
+       (check-equal? (map path->string (directory-list temporary))
+                     '("agentica-bdd-00ff" "agentica-bdd-0123456789abcdef" "agentica-bdd-fedcba9876543210"))
        (check-equal? (file->string (build-path outside "lock")) "keep"))))
 
   (test-case "a temporary directory others can write to without the sticky bit is refused"
@@ -244,4 +246,6 @@
        (file-or-directory-permissions temporary #o1777)
        (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
        (file-or-directory-permissions temporary #o775)
-       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))))))
+       (check-equal? (status-and-code) '(1 "CHECK-BDD-EMPTY"))
+       (file-or-directory-permissions temporary #o2775)
+       (check-equal? (status-and-code) '(2 "RUNTIME-BDD-INFRA"))))))
