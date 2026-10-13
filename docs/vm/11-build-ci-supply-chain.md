@@ -139,7 +139,7 @@ OpenSSL takes a few minutes to build, so CI caches each mode's
 `openssl-flags` stamp with
 `actions/cache`, keyed by `openssl-<mode>-` and the hash of `make -s
 vm-openssl-key` for that mode: the `test` job caches the release mode,
-`vm-sanitizers` the sanitize and GC-stress modes, and a `warm-openssl` job
+`vm-sanitizers` the sanitize and GC-stress modes, and a `warm-third-party` job
 on `master` pushes fills all three, since a pull request can restore only
 its own caches or `master`'s. A hit leaves the stamp unchanged, so make
 does not rebuild. The release workflow does not cache: it builds OpenSSL
