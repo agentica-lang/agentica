@@ -9,15 +9,22 @@ CS 9.3.
 CI runs its checks on pull requests, on the self-hosted Linux runner
 (`docker-runner` label).
 
-- `test`: `make vm vm-test`, `make test`, `make vm-latency` right after
-  `make test`, and the example smoke tests. It also checks that
-  `vm/unicode_data.c` is up to date. That check is skipped when the
-  generator, the table and the Makefile's `vm-unicode` rule match an earlier
-  passing check.
-- `dup-check`: `make dup-check`. It is its own job, so a clone or an npm
-  outage does not hide the test results.
-- `vm-sanitizers`: `make vm-lint`, the ASan golden, bytecode, trace, TCP and
-  TLS tests, the fuzz smoke and the GC stress build. The TCP tests need
+- `test`: first the `changes` step (below), then `make -j vm vm-test test-bdd`
+  (one make: the C tests run in parallel and `dist/agentica` is built beside
+  them), `make test` with the process and module tests on `dist/agentica`
+  (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make vm-latency` alone
+  after that, the example smoke runs (in parallel), the vendored OpenSSL
+  check, and last `make dup-check` (it runs even when an earlier step fails,
+  so a clone or an npm outage does not hide the test results). It also
+  checks that `vm/unicode_data.c` is up to date. That check is skipped when
+  the generator, the table and the Makefile's `vm-unicode` rule match an
+  earlier passing check. The vendored check stays last: it rebuilds
+  `build/vm/release/obj` with other flags, so nothing that runs `make vm`
+  may run beside it.
+- `dup-check` as a job runs only on `master` pushes (it saves the npm cache).
+- `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
+  `make vm-lint`, one `make -j vm vm-test vm-fuzz`, the ASan golden,
+  bytecode, trace, TCP and TLS tests, and the GC stress build. The TCP tests need
   Node; the TLS tests need Node and Python 3. The job sets
   `AGENTICA_SWEEP=sampled`, so its golden and GC-stress runs sample the
   `--max-steps` sweep with a seed from `GITHUB_SHA` (the `test` job keeps
@@ -40,8 +47,9 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
 
 ### When `vm-sanitizers` runs
 
-A first `changes` job diffs the pull request merge commit against its base
-(`git diff HEAD^1 HEAD`). It runs `vm-sanitizers` only when the VM,
+The first steps of the `test` job (the `changes` step, checkout with
+`fetch-depth: 2`) diff the pull request merge commit against its base
+(`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
 - `vm/`, `src/lower.rkt`, `src/bytecode.rkt`, `src/version.rkt`,
@@ -57,7 +65,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   pattern is `stdlib/*`; in a shell `case`, `*` also matches `/`);
 - the Makefile, `.gitmodules`, `.clang-tidy`, `ci.yml`.
 
-Otherwise it shows as skipped. If `changes` fails, `vm-sanitizers` still
+Otherwise it shows as skipped. If the `changes` step does not set its outputs, `vm-sanitizers` still
 runs. A manual run always runs it. Front-end changes (checker, AST,
 builtins, `main.rkt`) skip `vm-sanitizers` on purpose; the `test` job still
 runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
@@ -79,18 +87,17 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   hash of `make -s vm-openssl-key AGENTICA_OPENSSL=vendored` (the Configure and
   make command lines, compiler version, OpenSSL version and submodule
   commit). `warm-third-party` saves it; `test` only restores it.
-- `vm-sanitizers` caches the sanitizer and GC-stress builds of
-  yyjson, picohttpparser and libuv (and `build/vm/gc.o` for GC stress),
-  with their `third-party-flags` (and `gc-flags`) stamps. The key is the
-  hash of `make -s vm-third-party-key`. The VM objects and binaries are
-  not cached with `actions/cache`.
+- The sanitizer and GC-stress builds of yyjson, picohttpparser, libuv and
+  `build/vm/gc.o` are not cached with `actions/cache`: with the ccache volume
+  warm they rebuild in under a second, less than restoring the caches took.
 - Every compile goes through ccache: the Makefile finds it on `PATH`, and
   the runner image (ccache 4.12) points `CCACHE_DIR` at a volume that both
   runners share (`CCACHE_MAXSIZE=5G`), so hits carry across jobs and
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
-- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`. The C tests
-  still run one after another.
+- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"` and `raco test`
+  with `-j "$(nproc)"`. `make vm-test` and `make vm-lint` run their C tests
+  and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
   three jobs that fill caches under the PR jobs' keys:
@@ -98,8 +105,7 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   - `warm-unicode` runs the unicode check (a separate job, so a stale table
     fails `master` without losing the compiled-files cache);
   - `warm-third-party` builds the vendored release-mode OpenSSL and runs
-    the vendored link check, then builds the other third-party libraries
-    in the sanitizer and GC-stress modes.
+    the vendored link check.
 
   These exist because a pull request can restore caches saved on its own
   merge ref or on `master`, never another pull request's.

@@ -10,7 +10,7 @@
   `vm/agc.h`, that an out-of-subset program gets `LOWER-UNSUPPORTED`, and the
   `compile` exit codes; `tests/lower-test.rkt` comes with the wider lowering.
 - `tests/vm-diff-*-test.rkt` (from the first VM PR, completed in 7f, golden
-  tests since the VM became the default; four shards of
+  tests since the VM became the default; eight shards of
   `tests/vm-diff-common.rkt`) run each fixture of `tests/fixtures/vm/` on
   `dist/agentica-vm` with `--json` and compare the exit code, stdout, the
   program's own stderr and the diagnostic code with its golden,
@@ -72,7 +72,7 @@
   workflow runs these shards against the zig-built release VM too. This covers 2.1 and 4.4, so the IR needs no step test. `Random`
   fixtures print only what does not depend on the generator's numbers,
   since seeded sequences differ by backend (7.4).
-- The fourth shard also runs the extras: the CLI on the VM (styles, the
+- The eighth shard runs only the extras: the CLI on the VM (styles, the
   removed `--vm` and `--legacy-eval` flags, a missing or non-executable VM, `--seed`, stdin, `System.args`), the `--driver-pid`
   rules, signals, inherited descriptors, PATH lookup, a stuck FIFO, a
   non-UTF-8 working directory, invalid UTF-8 arguments, deep tail calls,
