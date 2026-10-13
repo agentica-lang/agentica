@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "BDD" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "HttpWire" "Time" "Random" "Range")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "HttpWire" "Time" "Random" "Range")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)

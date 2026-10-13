@@ -2,7 +2,7 @@
 
 (require (except-in rackunit check) racket/runtime-path json
          "../src/modules.rkt" "../src/checker.rkt" "../src/evaluator.rkt"
-         "../src/diagnostic.rkt" "../src/source.rkt" "../src/bdd-runner.rkt")
+         "../src/diagnostic.rkt" "../src/source.rkt")
 
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path example "../examples/json-modules.agc")
@@ -326,14 +326,25 @@
        (define-values (limited-out problem) (run (build-path directory "root.agc") #:max-steps 30))
        (check-equal? (diagnostic-code problem) 'RUNTIME-STEP-LIMIT))))
 
-  (test-case "BDD can register imported handlers"
+  (test-case "a BDD step program imports its handlers, which share std/bdd"
     (with-files
-     '(("steps.agc" . "import \"assertions\" as Assertions\ndef main() -> Void\n  BDD.step(\"it works\", &Assertions.verify)\nend\n\n")
-       ("assertions.agc" . "import \"std/queue\" as Queue\nexport def verify(args: List[String]) -> Void\n  q = Queue.push(Queue.new(), \"imported handler\")\n  BDD.assert(Result.unwrap!(Queue.peek(q)) == \"imported handler\", \"imported handler\")\nend\n\n")
+     '(("steps.agc" . "import \"std/bdd\" as BDD\nimport \"assertions\" as Assertions\n\ndef main() -> Void\n  BDD.run([BDD.step(\"it works\", &Assertions.verify)])\nend\n\n")
+       ("assertions.agc" . "import \"std/bdd\" as Spec\nimport \"std/queue\" as Queue\n\nexport def verify(ctx: Spec.Context, args: List[String]) -> Spec.Context\n  q = Queue.push(Queue.new(), \"imported handler\")\n  return Spec.assert(ctx, Result.unwrap!(Queue.peek(q)) == \"imported handler\", \"imported handler\")\nend\n\n")
        ("test.feature" . "Feature: Modules\nScenario: Imported handler\nThen it works\n"))
      (lambda (directory)
-       (define report (run-bdd (list (build-path directory "test.feature"))
-                               #:steps (list (build-path directory "steps.agc"))))
+       (define executable (getenv "AGENTICA_TEST_EXECUTABLE"))
+       (define arguments (list "test" "--json" (path->string (build-path directory "test.feature"))
+                               "--steps" (path->string (build-path directory "steps.agc"))))
+       (define-values (process output input errors)
+         (if executable
+             (apply subprocess #f #f #f executable arguments)
+             (apply subprocess #f #f #f (find-system-path 'exec-file) main-file arguments)))
+       (close-output-port input)
+       (define report (string->jsexpr (port->string output)))
+       (close-input-port output)
+       (close-input-port errors)
+       (subprocess-wait process)
+       (check-equal? (subprocess-status process) 0)
        (check-true (hash-ref report 'ok)))))
 
   (test-case "combined JSON module example runs through the CLI"
