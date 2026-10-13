@@ -1,9 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 141,
+  "steps": 140,
   "stdout": [
-    "false",
+    "error(\"network: end of input\")",
     "ok(\"hello 100\")",
     "ok(\"hello\")",
     "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/tcp-crash-echo.agc:8:11: division by zero\")",

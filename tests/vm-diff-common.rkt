@@ -318,7 +318,8 @@
   (define parsed
     (and (equal? (first result) 1)
          (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr (substring body start)))))
-  (define code (and (hash? parsed) (string? (hash-ref parsed 'code #f)) (hash-ref parsed 'code)))
+  (define code (and (hash? parsed) (not (hash-ref parsed 'task #f)) (string? (hash-ref parsed 'code #f))
+                    (hash-ref parsed 'code)))
   (list (first result) (second result) (if code (substring stderr 0 start) stderr) code))
 
 (define (text-code stderr)
@@ -482,36 +483,42 @@
        (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name)))))
 
 (define (json-crash-free text)
-  (for/fold ([kept '()] [codes '()] #:result (values (string-join (reverse kept) "\n") (reverse codes)))
+  (for/fold ([kept '()] [codes '()] [summaries '()]
+             #:result (values (string-join (reverse kept) "\n") (reverse codes) (reverse summaries)))
             ([line (in-list (regexp-split #rx"\n" text))])
     (define parsed (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr line)))
     (cond
-      [(and (hash? parsed) (eq? (hash-ref parsed 'task #f) #t)) (values kept (cons (hash-ref parsed 'code) codes))]
-      [(and (hash? parsed) (hash-has-key? parsed 'unobserved_crashes)) (values kept codes)]
-      [else (values (cons line kept) codes)])))
+      [(and (hash? parsed) (eq? (hash-ref parsed 'task #f) #t))
+       (values kept (cons (hash-ref parsed 'code) codes) summaries)]
+      [(and (hash? parsed) (hash-has-key? parsed 'unobserved_crashes))
+       (values kept codes (cons (list (hash-ref parsed 'unobserved_crashes) (hash-ref parsed 'first)) summaries))]
+      [else (values (cons line kept) codes summaries)])))
 
 (define (text-crash-free text)
   (define plain-header #px"^.*:[0-9]+:[0-9]+ error\\[([A-Z]+-[A-Z0-9-]+)\\] in a task$")
   (define ai-header #px"^\\[([A-Z]+-[A-Z0-9-]+)\\] in a task$")
+  (define summary #px"^([0-9]+) task crash(?:es were| was) not observed; first: (.*)$")
   (define (after-caret lines)
     (define rest (memf (lambda (line) (regexp-match? #px"^ +\\| [ \t]*\\^+$" line)) lines))
     (if rest (cdr rest) '()))
-  (let loop ([lines (regexp-split #rx"\n" text)] [kept '()] [codes '()])
+  (let loop ([lines (regexp-split #rx"\n" text)] [kept '()] [codes '()] [summaries '()])
     (cond
-      [(null? lines) (values (string-join (reverse kept) "\n") (reverse codes))]
-      [(and (>= (length lines) 6) (equal? (first lines) "check failed: 1 error") (equal? (second lines) "")
-            (regexp-match ai-header (third lines)))
-       => (lambda (found) (loop (drop lines 6) kept (cons (cadr found) codes)))]
+      [(null? lines) (values (string-join (reverse kept) "\n") (reverse codes) (reverse summaries))]
+      [(and (>= (length lines) 4) (regexp-match ai-header (first lines)))
+       => (lambda (found) (loop (drop lines 4) kept (cons (cadr found) codes) summaries))]
       [(regexp-match plain-header (car lines))
-       => (lambda (found) (loop (after-caret (cdr lines)) kept (cons (cadr found) codes)))]
-      [(regexp-match? #px"^[0-9]+ task crash(es were| was) not observed; first: " (car lines)) (loop (cdr lines) kept codes)]
-      [else (loop (cdr lines) (cons (car lines) kept) codes)])))
+       => (lambda (found) (loop (after-caret (cdr lines)) kept (cons (cadr found) codes) summaries))]
+      [(regexp-match summary (car lines))
+       => (lambda (found)
+            (loop (cdr lines) kept codes (cons (list (string->number (cadr found)) (caddr found)) summaries)))]
+      [else (loop (cdr lines) (cons (car lines) kept) codes summaries)])))
 
 (define (check-text-format on-vm full message)
   (check-equal? (take on-vm 2) (take full 2) message)
-  (define-values (stderr text-crashes) (text-crash-free (third on-vm)))
-  (define-values (expected json-crashes) (json-crash-free (third full)))
+  (define-values (stderr text-crashes text-summaries) (text-crash-free (third on-vm)))
+  (define-values (expected json-crashes json-summaries) (json-crash-free (third full)))
   (check-equal? text-crashes json-crashes message)
+  (check-equal? text-summaries json-summaries message)
   (check-true (string-prefix? stderr expected) message)
   (define diagnostic (substring stderr (min (string-length stderr) (string-length expected))))
   (if (fourth full)

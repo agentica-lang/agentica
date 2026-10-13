@@ -279,7 +279,12 @@
     task when the caller owns it (`agc_owned_of`). A closing file is
     marked `closing`: its lock waiters are woken, and `agc_handle_wait`
     lets every caller through on a closing handle, so each builtin
-    returns the closed error.
+    returns the closed error. A handle made outside a turn (in the
+    `done` half of a detached job) gets no owner; `discard` closes it,
+    except a process, whose `release_proc` would kill every child of the
+    run. At the end of the run, `agc_io_close` first waits up to 1 s
+    (`finish_flushes`) for the close jobs of crashed tasks' files, so
+    their buffered writes reach the disk.
   - Task cancellation (20b, the core that `close_server` (20c),
     `Task.map` (17a) and task crash isolation (phase 24) build on; a
     program cancels tasks only through a crash, which cancels the

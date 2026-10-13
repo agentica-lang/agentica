@@ -659,9 +659,12 @@
     (define span (call-span expression))
     (define entry (builtin-ref name (length arguments)))
     (define implementation (and entry (builtin-implementation entry)))
-    (define key (if (and (equal? implementation "Task.await") (result-type? (type-of expression)))
-                    "Task.await_result"
-                    implementation))
+    (define key
+      (cond
+        [(not (equal? implementation "Task.await")) implementation]
+        [(not (type-of expression)) (error 'lower "Task.await has no checked type")]
+        [(result-type? (type-of expression)) "Task.await_result"]
+        [else implementation]))
     (define builtin? (and key (member key vm-builtins) #t))
     (when (and entry (not builtin?))
       (unsupported (format "the builtin ~a" name) span))

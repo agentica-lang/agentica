@@ -3,6 +3,8 @@
 #include <inttypes.h>
 #include <string.h>
 
+static const char in_task[] = " in a task";
+
 typedef struct {
   const char *text;
   size_t start, end, chars;
@@ -47,8 +49,6 @@ static void put_json(FILE *err, const char *text, size_t len) {
   fputc('"', err);
 }
 
-static const char in_task[] = " in a task";
-
 static bool trimmed(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r'; }
 
 static void print_json(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
@@ -71,7 +71,8 @@ static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome
   source_line l = line_of(source, span->start_line);
   while (l.start < l.end && trimmed(l.text[l.start])) l.start++;
   while (l.end > l.start && trimmed(l.text[l.end - 1])) l.end--;
-  fprintf(err, "check failed: 1 error\n\n[%s]%s\n  message: ", outcome->code, task ? in_task : "");
+  if (!task) fputs("check failed: 1 error\n\n", err);
+  fprintf(err, "[%s]%s\n  message: ", outcome->code, task ? in_task : "");
   put_text(err, outcome->message, outcome->message_len);
   fputs("\n  at: ", err);
   put_text(err, source->name->data, source->name->bytes);
@@ -121,6 +122,25 @@ void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *ou
   fflush(err);
 }
 
+static size_t breaks(const char *text, size_t len) {
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++) n += text[i] == '\n' || text[i] == '\r';
+  return n;
+}
+
+static char *put_line(char *put, const char *text, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (text[i] == '\n' || text[i] == '\r') {
+      *put++ = '\\';
+      *put++ = text[i] == '\n' ? 'n' : 'r';
+    } else {
+      *put++ = text[i];
+    }
+  }
+  return put;
+}
+
+/* One line: line breaks in the path or the message are written as \n, \r. */
 agc_string *agc_crash_text(const agc_program *p, const agc_outcome *outcome) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_string *name = p->sources[span->source].name;
@@ -128,8 +148,9 @@ agc_string *agc_crash_text(const agc_program *p, const agc_outcome *outcome) {
   int n = snprintf(at, sizeof at, ":%u:%u: ", (unsigned)span->start_line, (unsigned)span->start_column);
   static const char head[] = "task crashed: ", mid[] = " at ";
   size_t code = strlen(outcome->code);
+  size_t extra = breaks(name->data, name->bytes) + breaks(outcome->message, outcome->message_len);
   size_t len = agc_size_add(agc_size_add(sizeof head - 1 + code + sizeof mid - 1, name->bytes),
-                            agc_size_add((size_t)n, outcome->message_len));
+                            agc_size_add(agc_size_add((size_t)n, outcome->message_len), extra));
   char *text = agc_alloc_atomic(len);
   char *put = text;
   memcpy(put, head, sizeof head - 1);
@@ -138,11 +159,10 @@ agc_string *agc_crash_text(const agc_program *p, const agc_outcome *outcome) {
   put += code;
   memcpy(put, mid, sizeof mid - 1);
   put += sizeof mid - 1;
-  if (name->bytes) memcpy(put, name->data, name->bytes);
-  put += name->bytes;
+  put = put_line(put, name->data, name->bytes);
   memcpy(put, at, (size_t)n);
   put += n;
-  if (outcome->message_len) memcpy(put, outcome->message, outcome->message_len);
+  put_line(put, outcome->message, outcome->message_len);
   return agc_utf8_decode((const uint8_t *)text, len, "\xEF\xBF\xBD", false);
 }
 

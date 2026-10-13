@@ -43,6 +43,16 @@
       (define key (builtin-implementation variant))
       (check-not-false (member key vm-builtins) (format "~a is not in vm-builtins" key))))
 
+  (test-case "Task.await takes the Result entry only when R is a Result"
+    (define (await-key result-type body)
+      (define program
+        (ir->bytecode
+         (lower-text (format "def f(n: Int) -> ~a\n  return ~a\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\n  IO.inspect(Task.await(t))\nend\n"
+                             result-type body))))
+      (filter (lambda (name) (string-prefix? name "Task.await")) (map car (bc-program-builtins program))))
+    (check-equal? (await-key "Result[Int]" "ok(n)") '("Task.await_result"))
+    (check-equal? (await-key "Int" "n") '("Task.await")))
+
   (test-case "adjacent steps merge into one STEP with one span each"
     (define program (ir->bytecode (lower-text "def main() -> Void\n  puts(\"hi\")\nend\n")))
     (define main (list-ref (bc-program-functions program) (bc-program-entry program)))

@@ -634,6 +634,7 @@ int main(void) {
   test_children_move();
   test_timer_fired_then_cancel();
   test_pool();
+  fclose(quiet);
 #endif
   puts("task cancel tests passed");
   return 0;

@@ -13,7 +13,10 @@ Tasks run functions at the same time in one program. The tour page
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and gives a handle to it.
+Starts `function(argument)` in a new task and gives a handle to it. A file,
+socket, listener or process belongs to the task that opened it. When the
+argument itself is such a handle, it moves to the new task, so a crash of the
+new task closes it. A handle inside a struct or a list stays with its owner.
 
 ```agentica
 def greet(name: String) -> String
@@ -137,8 +140,7 @@ Task.pending_count() -> Int
 Gives how many tasks of this run have not ended yet, not counting `main`. A
 task that waits to run, sleeps or waits for another task counts; so does the
 task that asks, unless it is `main`. A task that has returned or crashed no
-longer counts, even when nothing awaited it. This function runs only on the VM.
-`std/bdd` uses it to fail a [BDD](/library/bdd/) step that leaves tasks
+longer counts, even when nothing awaited it. `std/bdd` uses it to fail a [BDD](/library/bdd/) step that leaves tasks
 running.
 
 ```agentica

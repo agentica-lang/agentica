@@ -29,6 +29,21 @@
 (define (literal text) (format "~s" text))
 
 (module+ test
+  (test-case "the run waits for the close of a crashed task's file, so its buffered write reaches the disk"
+    (with-temp-dir
+     (lambda (root)
+       (define path (path->string (build-path root "crash.txt")))
+       (define-values (output result)
+         (run-program
+          (string-append
+           "def writer(path: String) -> Result[Int]\n  f = try File.open(path, \"write\", 1000)\n"
+           "  try File.write(f, \"hello world\\n\", 1000)\n  n = 0\n  return ok(1 / n)\nend\n\n"
+           "def main() -> Void\n  t = Task.spawn(&writer, System.args()[0])\n  puts(Task.await(t).ok?)\nend\n")
+          #:args (list path)))
+       (check-equal? output "false\n")
+       (check-equal? result (void))
+       (check-equal? (file->string path) "hello world\n"))))
+
   (test-case "file-summary example reads a command-line path"
     (define input-path (build-path examples-dir "hello.agc"))
     (define-values (output result)

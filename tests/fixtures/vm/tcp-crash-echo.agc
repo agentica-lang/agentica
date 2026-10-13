@@ -14,7 +14,7 @@ end
 def ask(client: Client) -> Result[String]
   socket = try TCP.connect("127.0.0.1", client.port, 5000)
   try TCP.send(socket, client.line + "\n", 5000)
-  reply = TCP.read_line(socket, 5000)
+  reply = TCP.read_line(socket, 1000)
   TCP.close(socket)
   return reply
 end
@@ -24,7 +24,7 @@ def main() -> Void
   port = TCP.local_port(listener)
   first = Task.spawn(&ask, Client(port: port, line: "boom"))
   crashed = Task.spawn(&echo, Result.unwrap!(TCP.accept(listener, 5000)))
-  puts(Task.await(first).ok?)
+  IO.inspect(Task.await(first))
   second = Task.spawn(&ask, Client(port: port, line: "hello"))
   served = Task.spawn(&echo, Result.unwrap!(TCP.accept(listener, 5000)))
   IO.inspect(Task.await(second))

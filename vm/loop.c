@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#define FLUSH_MS 1000
 
 #ifdef __linux__
 #include <signal.h>
@@ -33,7 +36,7 @@ struct agc_io_job {
   job *ready_next;
   size_t slot;
   uint64_t started_ns, ended_ns;
-  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping;
+  bool work_done, timer_fired, timer_closing, timer_closed, consumed, queued, detached, dropping, flush;
 };
 #endif
 
@@ -69,7 +72,7 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
 }
 
 void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close) {
-  r->owner = vm->task;
+  r->owner = vm->in_turn ? vm->task : NULL;
   r->close = close;
 }
 
@@ -242,7 +245,9 @@ static void close_pending(agc_vm *vm, agc_value context) {
 
 static void discard(agc_vm *vm, agc_value result) {
   if (!agc_is(result, AGC_T_RESULT) || !agc_as_result(vm, result)->ok) return;
-  agc_resource *r = agc_owned_of(vm, agc_as_result(vm, result)->value);
+  agc_value v = agc_as_result(vm, result)->value;
+  if (agc_is(v, AGC_T_PROCESS)) return;
+  agc_resource *r = agc_owned_of(vm, v);
   if (!r || !r->native || r->holder) return;
   r->release(r->native);
   r->native = NULL;
@@ -328,7 +333,7 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms) {
+                               int64_t timeout_ms, const agc_task *task) {
   if (kind->work && kind->cancel) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
@@ -344,7 +349,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   if (AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
     j->started_ns = agc_trace_now();
     AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s task=%" PRIu64 " timeout_ms=%" PRId64, r->id,
-              kind->name, vm->task->id, timeout_ms);
+              kind->name, task ? task->id : 0, timeout_ms);
   }
   if (timeout_ms >= 0) {
     uv_update_time(&loop->uv);
@@ -366,7 +371,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms);
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
@@ -374,8 +379,9 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1);
-  ((job *)r->native)->detached = true;
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL);
+  job *j = r->native;
+  j->detached = j->flush = true;
 }
 
 void agc_io_ready(agc_io_job *j) {
@@ -500,7 +506,30 @@ static void release_handles(agc_vm *vm) {
   }
 }
 
+static bool flushing(const agc_vm *vm) {
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    const job *j = job_at(vm, k);
+    if (j && j->flush && !j->work_done) return true;
+  }
+  return false;
+}
+
+/* A crashed task's file close flushes its buffer; the run waits for it. */
+static void finish_flushes(agc_vm *vm) {
+  struct timespec pause = {0, 1000000L};
+  uv_update_time(&vm->loop->uv);
+  uint64_t deadline = uv_now(&vm->loop->uv) + FLUSH_MS;
+  while (flushing(vm)) {
+    uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
+    if (!flushing(vm)) return;
+    uv_update_time(&vm->loop->uv);
+    if (uv_now(&vm->loop->uv) >= deadline) return;
+    nanosleep(&pause, NULL);
+  }
+}
+
 static bool close_all(agc_vm *vm) {
+  if (vm->loop) finish_flushes(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
     if (!j) continue;
