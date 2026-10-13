@@ -1,19 +1,25 @@
 import "std/bdd/gherkin" as Gherkin
 import "std/bdd/match" as Match
 import "report" as Report
+import "child" as Child
+import "units" as Units
 
 struct Config
   vm: String
   steps_bytecode: String
   steps_source: String
   steps_error: String
+  steps_given: Bool
   agentica: List[String]
   count: Int
   empty_path: String
+  empty_message: String
   style: String
   allow_run: Bool
   seeded: Bool
   seed: Int
+  only: String
+  test_timeout_ms: Int
 end
 
 enum Listing
@@ -24,6 +30,9 @@ end
 struct Entry
   path: String
   problem: String
+  kind: String
+  bytecode: String
+  front_end: String
 end
 
 struct StepEnd
@@ -54,6 +63,11 @@ export def main() -> Void
     System.exit(2)
   end
   config = decoded.unwrap!
+  token = IO.gets().unwrap_or("")
+  if token == ""
+    IO.warn("the BDD runner needs the run token on its standard input")
+    System.exit(2)
+  end
   # The driver writes one feature file or discovery error per line after the settings.
   read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
   closed = File.close(handle, 5000)
@@ -61,11 +75,15 @@ export def main() -> Void
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
     System.exit(2)
   end
-  files = run_all(config, read.map do |entry| entry.unwrap! end)
+  seed = config.seed
+  if not config.seeded
+    seed = Random.int(0, 2147483647)
+  end
+  files = matched(config, run_all(seeded(config, seed), token, read.map do |entry| entry.unwrap! end))
   if config.style == "json"
-    puts(Report.json(files))
+    puts(Report.json(files, seed))
   else
-    puts(Report.text(files, config.style == "ai"))
+    puts(Report.text(files, config.style == "ai", seed))
   end
   code = Report.exit_code(files)
   if code != 0
@@ -73,27 +91,68 @@ export def main() -> Void
   end
 end
 
-def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
+def run_all(config: Config, token: String, entries: List[Entry]) -> List[Report.FileResult]
+  if entries.size == 0
+    problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
+    return [Report.file_error(config.empty_path, "", problem)]
+  end
+  listing = Listing.Ready([])
+  if entries.any? do |entry| entry.kind == "feature" and entry.problem == "" end
+    listing = steps_listing(config)
+  elsif config.steps_given and config.steps_error != ""
+    listing = steps_listing(config)
+  end
+  case listing
+    Listing.Broken(problem) ->
+      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, token, [], entry) end
+      return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
+    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, token, patterns, entry) end
+  end
+end
+
+def matched(config: Config, files: List[Report.FileResult]) -> List[Report.FileResult]
+  if config.only == "" or files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
+    return files
+  end
+  problem = Child.located("CHECK-BDD-EMPTY", "no test or scenario name contains #{config.only.inspect}", config.empty_path)
+  return files.push(Report.file_error(config.empty_path, "", problem))
+end
+
+def failed?(verdict: Report.Verdict) -> Bool
+  case verdict
+    Report.Verdict.Fail(_) -> return true
+    Report.Verdict.Pass -> return false
+    Report.Verdict.NotExecuted -> return false
+  end
+end
+
+def steps_listing(config: Config) -> Listing
   where = Report.Span(file: config.steps_source, line: 1, column: 1, end_column: 1)
   if config.steps_error != ""
     parsed = Report.from_json(config.steps_error)
-    fallback = Report.error_at("RUNTIME-BDD-INFRA", parsed.message, where)
-    return [Report.file_error(config.steps_source, parsed.unwrap_or(fallback))]
+    return Listing.Broken(parsed.unwrap_or(Report.error_at("RUNTIME-BDD-INFRA", parsed.message, where)))
   end
-  patterns: List[Match.Pattern] = []
-  case list_steps(config, where)
-    Listing.Broken(problem) -> return [Report.file_error(config.steps_source, problem)]
-    Listing.Ready(found) -> patterns = found
+  return list_steps(config, where)
+end
+
+def run_entry(config: Config, token: String, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
+  if entry.problem != ""
+    return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
-  if entries.size == 0
-    return [Report.file_error(config.empty_path, located("CHECK-BDD-EMPTY", "no .feature files found", config.empty_path))]
+  if entry.kind == "tests"
+    settings = Units.Settings(vm: config.vm, seed: config.seed, token: token, only: config.only,
+                              timeout_ms: config.test_timeout_ms)
+    return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
-  return entries.map do |entry|
-    if entry.problem != ""
-      return Report.file_error(entry.path, located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
-    end
-    return run_file(config, patterns, entry.path)
-  end
+  return run_file(config, patterns, entry.path)
+end
+
+def seeded(config: Config, seed: Int) -> Config
+  return Config(vm: config.vm, steps_bytecode: config.steps_bytecode, steps_source: config.steps_source,
+                steps_error: config.steps_error, steps_given: config.steps_given, agentica: config.agentica, count: config.count,
+                empty_path: config.empty_path, empty_message: config.empty_message, style: config.style,
+                allow_run: config.allow_run, seeded: true, seed: seed, only: config.only,
+                test_timeout_ms: config.test_timeout_ms)
 end
 
 # The list child writes the patterns of BDD.run in order and exits, so its stdout is read once at the end.
@@ -112,19 +171,19 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   if output.unwrap!.truncated
     return Listing.Broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "step program output exceeds 1 MiB", where))
   end
-  records = output.unwrap!.stdout.split("\n").filter do |line| line.include?(marker()) end.map do |line| record_of(line) end
-  failures = records.filter do |record| event_of(record) == "fail" end
+  records = output.unwrap!.stdout.split("\n").filter do |line| line.include?(Child.marker()) end.map do |line| Child.record_of(line) end
+  failures = records.filter do |record| Child.event_of(record) == "fail" end
   if failures.size > 0
     return Listing.Broken(record_error(failures[0], where))
   end
-  if not records.any? do |record| event_of(record) == "ready" end
-    crash = stderr_diagnostic(output.unwrap!.stderr)
+  if not records.any? do |record| Child.event_of(record) == "ready" end
+    crash = Child.stderr_diagnostic(output.unwrap!.stderr, where)
     if crash.ok?
       return Listing.Broken(crash.unwrap!)
     end
     return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
-  texts = records.filter do |record| event_of(record) == "step" end.map do |record| text_of(record, "pattern") end
+  texts = records.filter do |record| Child.event_of(record) == "step" end.map do |record| Child.text_of(record, "pattern") end
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
     Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))
@@ -134,17 +193,19 @@ end
 def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Report.FileResult
   text = File.read_text(path, 5000)
   if text.message == "filesystem: file exceeds 1048576 bytes"
-    return Report.file_error(path, located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
+    return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
   end
   if not text.ok?
-    return Report.file_error(path, located("RUNTIME-BDD-INFRA", text.message, path))
+    return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", text.message, path))
   end
   case Gherkin.parse(path, text.unwrap!)
-    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, from_diagnostic(problem))
+    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, "feature", from_diagnostic(problem))
     Gherkin.Outcome.Done(feature) ->
       base = Path.resolve(Path.join([path, ".."]).unwrap_or(path)).unwrap_or(path)
-      scenarios = feature.scenarios.map do |item| run_scenario(config, patterns, base, item) end
-      return Report.FileResult(path: path, feature: feature.name, scenarios: scenarios, verdict: Report.Verdict.Pass)
+      chosen = feature.scenarios.filter do |item| config.only == "" or item.name.include?(config.only) end
+      scenarios = chosen.map do |item| run_scenario(config, patterns, base, item) end
+      return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios,
+                               verdict: Report.Verdict.Pass, output: "")
   end
 end
 
@@ -169,12 +230,13 @@ def run_scenario(config: Config, patterns: List[Match.Pattern], base: String, it
       case run.verdict
         Report.Verdict.Fail(problem) -> status = Report.StepStatus.Failed(problem)
         Report.Verdict.Pass -> status = Report.StepStatus.Passed
+        Report.Verdict.NotExecuted -> status = Report.StepStatus.NotExecuted
       end
     end
     Report.StepResult(text: item.steps[i].text, location: item.steps[i].span, status: status)
   end
   return Report.ScenarioResult(name: item.name, tags: item.tags, location: item.span, example: item.example,
-                               duration_ms: Time.monotonic_ms() - started, steps: steps, verdict: run.verdict)
+                               duration_ms: Time.monotonic_ms() - started, steps: steps, verdict: run.verdict, output: "")
 end
 
 # One child VM per scenario: the settings line, then one line per step, each answered by records on the child's stdout.
@@ -195,7 +257,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     "seed": JSON.from(config.seed),
   }
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
-  sent = Process.send(p, JSON.encode(JSON.object(fields)) + "\n", left(deadline))
+  sent = Process.send(p, JSON.encode(JSON.object(fields)) + "\n", Child.left(deadline))
   if not sent.ok?
     run = Run(failed_at: 0, verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, item.steps[0].span)))
   end
@@ -203,7 +265,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
   i = 0
   while i < count and run.failed_at == count
     step = item.steps[i]
-    sent = Process.send(p, step_line(i, found[i], patterns, step) + "\n", left(deadline))
+    sent = Process.send(p, step_line(i, found[i], patterns, step) + "\n", Child.left(deadline))
     answer = StepEnd(verdict: Report.Verdict.Pass, asserts: 0)
     if sent.ok?
       answer = await_step(p, i, deadline, step.span, step.kind == "Then")
@@ -214,10 +276,11 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     case answer.verdict
       Report.Verdict.Fail(_) -> run = Run(failed_at: i, verdict: answer.verdict)
       Report.Verdict.Pass -> i += 1
+      Report.Verdict.NotExecuted -> i += 1
     end
   end
   if run.failed_at == count
-    Process.close_stdin(p, left(deadline))
+    Process.close_stdin(p, Child.left(deadline))
     ending = await_exit(p, deadline, item.span)
     case ending
       Report.Verdict.Fail(_) -> run = Run(failed_at: count, verdict: ending)
@@ -225,6 +288,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
         if total == 0
           run = Run(failed_at: count, verdict: failure("RUNTIME-BDD-NO-ASSERTION", "scenario performed no BDD assertions", item.span))
         end
+      Report.Verdict.NotExecuted -> run = Run(failed_at: count, verdict: ending)
     end
   end
   Process.close(p)
@@ -263,17 +327,17 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
   asserts = 0
   output = 0
   while true
-    line = Process.read_line(p, left(deadline))
+    line = Process.read_line(p, Child.left(deadline))
     if not line.ok?
       return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), asserts: asserts)
     end
     text = line.unwrap!
-    at = text.index_of(marker())
+    at = text.index_of(Child.marker())
     record = JSON.null()
     if at.ok?
-      record = record_of(text)
+      record = Child.record_of(text)
     end
-    event = event_of(record)
+    event = Child.event_of(record)
     if event == ""
       output += text.length + 1
     else
@@ -305,16 +369,16 @@ end
 
 # After the last step the child exits 0 when its stdin ends; anything else fails the scenario.
 def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
-  line = Process.read_line(p, left(deadline))
+  line = Process.read_line(p, Child.left(deadline))
   while line.ok?
     text = line.unwrap!
-    if text.include?(marker()) and event_of(record_of(text)) == "fail"
-      return Report.Verdict.Fail(record_error(record_of(text), span))
+    if text.include?(Child.marker()) and Child.event_of(Child.record_of(text)) == "fail"
+      return Report.Verdict.Fail(record_error(Child.record_of(text), span))
     end
-    line = Process.read_line(p, left(deadline))
+    line = Process.read_line(p, Child.left(deadline))
   end
   if line.message == "process: end of input"
-    code = Process.wait(p, left(deadline))
+    code = Process.wait(p, Child.left(deadline))
     if code.ok? and code.unwrap! == 0
       return Report.Verdict.Pass
     end
@@ -332,15 +396,15 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   if message != "process: end of input"
     return Report.error_at("RUNTIME-BDD-IO", message, span)
   end
-  output = Process.output(p, left(deadline))
+  output = Process.output(p, Child.left(deadline))
   if not output.ok?
     return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
   end
-  crash = stderr_diagnostic(output.unwrap!.stderr)
+  crash = Child.stderr_diagnostic(output.unwrap!.stderr, span)
   if crash.ok?
     return crash.unwrap!
   end
-  code = Process.wait(p, left(deadline))
+  code = Process.wait(p, Child.left(deadline))
   return Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
 end
 
@@ -351,32 +415,9 @@ def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   return read_failure(p, message, deadline, span)
 end
 
-# A child that halts writes its --json diagnostic as the last line of stderr;
-# the lines of task crashes carry "task": true and are skipped.
-def stderr_diagnostic(stderr: String) -> Result[Report.Error]
-  lines = stderr.split("\n").filter do |line| line != "" and not task_crash?(line) end
-  if lines.size == 0
-    return error("no diagnostic")
-  end
-  return Report.from_json(lines[lines.size - 1])
-end
-
-def task_crash?(line: String) -> Bool
-  parsed = JSON.parse(line)
-  return parsed.ok? and JSON.get(parsed.unwrap!, "task").ok?
-end
-
 def record_error(record: Json, span: Report.Span) -> Report.Error
-  return Report.Error(code: text_of(record, "code"), message: text_of(record, "message"), span: span, end_line: span.line,
-                      expected: detail_of(record, "expected"), actual: detail_of(record, "actual"), original: JSON.null())
-end
-
-def detail_of(record: Json, key: String) -> Report.Detail
-  found = JSON.get(record, key)
-  if found.ok? and JSON.string(found.unwrap!).ok?
-    return Report.Detail.Known(JSON.string(found.unwrap!).unwrap!)
-  end
-  return Report.Detail.Unknown
+  return Report.Error(code: Child.text_of(record, "code"), message: Child.text_of(record, "message"), span: span, end_line: span.line,
+                      expected: Child.detail_of(record, "expected"), actual: Child.detail_of(record, "actual"), original: JSON.null())
 end
 
 def resolved_of(outcome: Gherkin.Outcome[Match.Resolved]) -> Match.Resolved
@@ -394,36 +435,8 @@ def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Erro
 end
 
 def vm_args(config: Config, steps: Int, mode: String) -> List[String]
-  seed: List[String] = []
-  if config.seeded
-    seed = ["--seed", config.seed.to_s]
-  end
-  return ["--allow-run", "--json", "--max-steps", steps.to_s].concat(seed).concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
-end
-
-def left(deadline: Int) -> Int
-  remaining = deadline - Time.monotonic_ms()
-  if remaining < 1
-    return 1
-  end
-  return remaining
-end
-
-def record_of(line: String) -> Json
-  at = line.index_of(marker()).unwrap_or(0) + marker().length
-  return JSON.parse(line.slice(at, line.length - at)).unwrap_or(JSON.null())
-end
-
-def event_of(record: Json) -> String
-  return text_of(record, "event")
-end
-
-def text_of(record: Json, key: String) -> String
-  found = JSON.get(record, key)
-  if found.ok?
-    return JSON.string(found.unwrap!).unwrap_or("")
-  end
-  return ""
+  return ["--allow-run", "--json", "--max-steps", steps.to_s, "--seed", config.seed.to_s, "--", config.steps_bytecode,
+          "--agentica-bdd", mode]
 end
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
@@ -434,10 +447,3 @@ def from_diagnostic(problem: Gherkin.Diagnostic) -> Report.Error
   return Report.error_at(problem.code, problem.message, problem.span)
 end
 
-def located(code: String, message: String, path: String) -> Report.Error
-  return Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
-end
-
-def marker() -> String
-  return String.from_code(30) + "agentica-bdd "
-end

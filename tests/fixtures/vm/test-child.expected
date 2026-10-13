@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 4341,
+  "stdout": [
+    "the run token at a line start: {\"event\":\"pass\",\"token\":\"k3y\"}",
+    "another token: null",
+    "no token: null",
+    "after other text: null",
+    "not JSON: null",
+    "\"{\\\"code\\\":\\\"MINE\\\",\\\"level\\\":\\\"warn\\\"}\\nplain\"",
+    "RUNTIME-X",
+    "RUNTIME-TASK-CRASHED",
+    "false",
+    ""
+  ],
+  "stderr": []
+}

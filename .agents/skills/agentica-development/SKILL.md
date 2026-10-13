@@ -76,6 +76,8 @@ tests/
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
   bdd-test.rkt, bdd-integration.rkt # agentica test over the CLI (in-process main): step programs, isolation, programs under test
+  unit-test-test.rkt    # agentica test on *_test.agc files (fixtures in fixtures/unit/) and the std/ unit tests in std/
+  std/                  # *_test.agc unit tests of the std/ modules
   fixtures/             # golden fixtures and independent Node.js and Python peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
@@ -85,7 +87,7 @@ stdlib/                 # std/ modules written in Agentica, embedded by src/stdl
   queue.agc http.agc    # std/queue, std/http
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/stages.md
-  test/report.agc test/runner.agc  # internal to agentica test: the runner and report shared by unit tests and BDD
+  test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-protocol helpers, shared by unit tests and BDD
 examples/               # small programs per feature; README.md lists them
 docs/
   grammar.md   # language grammar, the source of truth

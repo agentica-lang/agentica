@@ -147,7 +147,12 @@ Split text; an empty separator gives characters.
 | `--dump` | prints the checked program tree instead of running it |
 | `--version` | prints the version |
 
-`agentica test` runs `.feature` specifications; see [BDD](/library/bdd/).
+`agentica test` runs unit test files (`*_test.agc`, see [Test](/library/test/)) and `.feature` specifications (see [BDD](/library/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.
+
+```sh
+agentica test
+agentica test test/ports_test.agc --only port
+```
 
 Programs run on a bytecode VM.
 

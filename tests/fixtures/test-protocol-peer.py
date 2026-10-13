@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import threading
 
 MARKER = "\x1eagentica-bdd "
 TOKEN = "peer-token-7"
@@ -30,7 +31,12 @@ def record(line):
 
 def listed(vm, bytecode):
     child = start(vm, bytecode, "list")
-    out, _ = child.communicate(TOKEN + "\n", timeout=30)
+    try:
+        out, _ = child.communicate(TOKEN + "\n", timeout=30)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.communicate()
+        raise SystemExit("the list child did not end within 30 seconds")
     records = [found for found in map(record, out.split("\n")) if found]
     if not records or records[-1].get("event") != "ready":
         raise SystemExit("the list child did not answer ready: " + out)
@@ -39,6 +45,20 @@ def listed(vm, bytecode):
 
 def run(vm, bytecode, count):
     child = start(vm, bytecode, "run")
+    drain = threading.Thread(target=child.stderr.read)
+    drain.start()
+    try:
+        results = answers(child, count)
+        child.stdin.close()
+        child.stdout.read()
+        return results, child.wait(timeout=30)
+    finally:
+        child.kill()
+        child.wait()
+        drain.join()
+
+
+def answers(child, count):
     child.stdin.write(TOKEN + "\n")
     results = []
     for index in range(count):
@@ -56,9 +76,7 @@ def run(vm, bytecode, count):
                 continue
             results.append([found["event"], found.get("code"), output])
             break
-    child.stdin.close()
-    child.stdout.read()
-    return results, child.wait(timeout=30)
+    return results
 
 
 def main():

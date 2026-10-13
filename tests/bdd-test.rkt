@@ -214,7 +214,7 @@
     (with-suite
      `(("a.feature" . "Feature: A\nScenario: a\nThen 1 is fine\n"))
      (lambda (directory)
-       (for ([arguments '(("--steps") ("--unknown") ("--steps" "a.agc" "--steps" "b.agc"))])
+       (for ([arguments '(("--steps") ("--only") ("--unknown") ("--steps" "a.agc" "--steps" "b.agc"))])
          (match-define (list status report) (apply json-test arguments))
          (check-equal? status 2 (~a arguments))
          (check-equal? (hash-ref (file-error report) 'code) "RUNTIME-BDD-USAGE"))

@@ -137,15 +137,20 @@
       (display text)
       (exit code))
     (define (usage-error message)
-      (call-with-values (lambda () (bdd-usage-report message style)) show-report))
+      (call-with-values (lambda () (bdd-usage-report message style seed)) show-report))
     (define paths '())
+    (define only #f)
     (let loop ([arguments (cdr raw-arguments)])
       (cond
         [(null? arguments) (void)]
-        [(equal? (car arguments) "--steps")
+        [(member (car arguments) '("--steps" "--only"))
          (when (null? (cdr arguments))
            (usage-error "option needs a value"))
-         (set! step-files (append step-files (list (cadr arguments))))
+         (cond
+           [(equal? (car arguments) "--steps") (set! step-files (append step-files (list (cadr arguments))))]
+           [only (usage-error "one --only TEXT")]
+           [(equal? (cadr arguments) "") (usage-error "--only needs a non-empty TEXT")]
+           [else (set! only (cadr arguments))])
          (loop (cddr arguments))]
         [(member (car arguments) '("--json" "--ai"))
          (set! style (if (equal? (car arguments) "--json") 'json 'ai))
@@ -158,7 +163,7 @@
         [else (set! paths (append paths (list (car arguments)))) (loop (cdr arguments))]))
     (call-with-values
      (lambda ()
-       (run-agentica-test (if (null? paths) '("specs/") paths) step-files
+       (run-agentica-test paths step-files #:only (or only "")
                           #:style style #:allow-run allow-run? #:seed seed #:vm (find-vm)))
      show-report))
   (when (and (pair? raw-arguments) (equal? (car raw-arguments) "help"))
@@ -186,7 +191,7 @@
   (unless (if compile?
               (and (= (length arguments) 3) (equal? (cadr arguments) "-o") (not dump?) (not dump-ir?))
               (>= (length arguments) 1))
-    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))

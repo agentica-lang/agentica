@@ -28,6 +28,7 @@ end
 export enum Verdict
   Pass
   Fail(Error)
+  NotExecuted
 end
 
 export enum StepStatus
@@ -50,18 +51,22 @@ export struct ScenarioResult
   duration_ms: Int
   steps: List[StepResult]
   verdict: Verdict
+  output: String
 end
 
 export struct FileResult
   path: String
   feature: String
+  kind: String
   scenarios: List[ScenarioResult]
   verdict: Verdict
+  output: String
 end
 
 struct Totals
   passed: Int
   failed: Int
+  not_executed: Int
   file_errors: Int
   exit_code: Int
 end
@@ -95,8 +100,12 @@ export def with_actual(problem: Error, actual: String) -> Error
                expected: problem.expected, actual: Detail.Known(actual), original: problem.original)
 end
 
-export def file_error(path: String, problem: Error) -> FileResult
-  return FileResult(path: path, feature: "", scenarios: [], verdict: Verdict.Fail(problem))
+export def file_error(path: String, kind: String, problem: Error) -> FileResult
+  return file_failure(path, kind, problem, "")
+end
+
+export def file_failure(path: String, kind: String, problem: Error, output: String) -> FileResult
+  return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
 # 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error is RUNTIME-BDD-INFRA or
@@ -105,13 +114,14 @@ export def exit_code(files: List[FileResult]) -> Int
   return totals(files).exit_code
 end
 
-export def json(files: List[FileResult]) -> Json
+export def json(files: List[FileResult], seed: Int) -> Json
   sums = totals(files)
   fields: Map[String, Json] = {
     "ok": JSON.from(sums.exit_code == 0),
     "passed": JSON.from(sums.passed),
     "failed": JSON.from(sums.failed),
-    "not_executed": JSON.from(0),
+    "not_executed": JSON.from(sums.not_executed),
+    "seed": JSON.from(seed),
     "file_errors": JSON.from(sums.file_errors),
     "exit_code": JSON.from(sums.exit_code),
     "files": JSON.array(files.map do |file| file_json(file) end),
@@ -120,20 +130,20 @@ export def json(files: List[FileResult]) -> Json
 end
 
 # The plain text (ai false) or the --ai text, without a final newline.
-export def text(files: List[FileResult], ai: Bool) -> String
+export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
   sums = totals(files)
-  separator = "\n"
-  if ai
-    separator = " | "
+  chunks = files.map do |file| file_text(file, ai) end
+  last = "#{sums.passed} passed, #{sums.failed} failed, #{sums.not_executed} not executed, #{sums.file_errors} file errors"
+  if sums.exit_code != 0
+    last = "#{last}, seed #{seed}"
   end
-  chunks = files.map do |file| file_text(file, separator) end
-  last = "#{sums.passed} passed, #{sums.failed} failed, 0 not executed, #{sums.file_errors} file errors"
   return chunks.filter do |chunk| chunk != "" end.push(last).join("\n")
 end
 
 def totals(files: List[FileResult]) -> Totals
   scenarios = files.reduce(0) do |n, file| n + file.scenarios.size end
-  passed = files.reduce(0) do |n, file| n + file.scenarios.filter do |item| not failed?(item.verdict) end.size end
+  passed = files.reduce(0) do |n, file| n + file.scenarios.filter do |item| status(item.verdict) == "passed" end.size end
+  skipped = files.reduce(0) do |n, file| n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size end
   file_errors = files.filter do |file| failed?(file.verdict) end.size
   severe = files.any? do |file|
     severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end
@@ -144,28 +154,28 @@ def totals(files: List[FileResult]) -> Totals
   elsif severe
     code = 2
   end
-  return Totals(passed: passed, failed: scenarios - passed, file_errors: file_errors, exit_code: code)
+  return Totals(passed: passed, failed: scenarios - passed - skipped, not_executed: skipped, file_errors: file_errors,
+                exit_code: code)
 end
 
 def failed?(verdict: Verdict) -> Bool
-  case verdict
-    Verdict.Pass -> return false
-    Verdict.Fail(_) -> return true
-  end
+  return status(verdict) == "failed"
 end
 
 def severe?(verdict: Verdict) -> Bool
   case verdict
-    Verdict.Pass -> return false
     Verdict.Fail(problem) -> return problem.code == "RUNTIME-BDD-INFRA" or problem.code == "RUNTIME-BDD-USAGE"
+    Verdict.Pass -> return false
+    Verdict.NotExecuted -> return false
   end
 end
 
 def status(verdict: Verdict) -> String
-  if failed?(verdict)
-    return "failed"
+  case verdict
+    Verdict.Pass -> return "passed"
+    Verdict.Fail(_) -> return "failed"
+    Verdict.NotExecuted -> return "not_executed"
   end
-  return "passed"
 end
 
 def file_json(file: FileResult) -> Json
@@ -176,9 +186,11 @@ def file_json(file: FileResult) -> Json
   fields: Map[String, Json] = {
     "path": JSON.from(file.path),
     "feature": JSON.from(file.feature),
+    "kind": JSON.from(file.kind),
     "status": JSON.from(state),
     "scenarios": JSON.array(file.scenarios.map do |item| scenario_json(item) end),
     "error": verdict_json(file.verdict),
+    "output": JSON.from(file.output),
   }
   return JSON.object(fields)
 end
@@ -198,6 +210,7 @@ def scenario_json(item: ScenarioResult) -> Json
     "duration_ms": JSON.from(item.duration_ms),
     "steps": JSON.array(item.steps.map do |step| step_json(step) end),
     "error": verdict_json(item.verdict),
+    "output": JSON.from(item.output),
   }
   return JSON.object(fields)
 end
@@ -228,8 +241,9 @@ end
 
 def verdict_json(verdict: Verdict) -> Json
   case verdict
-    Verdict.Pass -> return JSON.null()
     Verdict.Fail(problem) -> return error_json(problem)
+    Verdict.Pass -> return JSON.null()
+    Verdict.NotExecuted -> return JSON.null()
   end
 end
 
@@ -257,21 +271,43 @@ def put_detail(fields: Map[String, Json], key: String, detail: Detail) -> Map[St
   end
 end
 
-def file_text(file: FileResult, separator: String) -> String
+def file_text(file: FileResult, ai: Bool) -> String
   head: List[String] = []
   case file.verdict
-    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator}#{summary(problem)}"]
+    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem)}#{output_text(file.output, ai)}"]
     Verdict.Pass -> head = []
+    Verdict.NotExecuted -> head = []
   end
-  lines = file.scenarios.map do |item| scenario_text(file.feature, item, separator) end
+  label = file.feature
+  if file.kind == "tests"
+    label = file.path
+  end
+  lines = file.scenarios.map do |item| scenario_text(label, item, ai) end
   return head.concat(lines).join("\n")
 end
 
-def scenario_text(feature: String, item: ScenarioResult, separator: String) -> String
+def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   case item.verdict
-    Verdict.Pass -> return "PASS #{feature} / #{item.name}"
-    Verdict.Fail(problem) -> return "FAIL #{feature} / #{item.name}#{separator}#{summary(problem)}"
+    Verdict.Pass -> return "PASS #{label} / #{item.name}"
+    Verdict.NotExecuted -> return "NOT RUN #{label} / #{item.name}"
+    Verdict.Fail(problem) -> return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem)}#{output_text(item.output, ai)}"
   end
+end
+
+def separator(ai: Bool) -> String
+  if ai
+    return " | "
+  end
+  return "\n"
+end
+
+def output_text(output: String, ai: Bool) -> String
+  if output == ""
+    return ""
+  elsif ai
+    return " | output #{output.inspect}"
+  end
+  return "\n" + output.split("\n").map do |line| "  #{line}" end.join("\n")
 end
 
 def summary(problem: Error) -> String

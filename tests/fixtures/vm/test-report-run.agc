@@ -79,11 +79,12 @@ def run_scenario(patterns: List[Match.Pattern], item: Gherkin.Scenario) -> Repor
               verdict = Report.Verdict.Fail(found)
             end
         end
+      Report.Verdict.NotExecuted -> status = Report.StepStatus.NotExecuted
     end
     results = results.push(Report.StepResult(text: step.text, location: step.span, status: status))
   end
   return Report.ScenarioResult(name: item.name, tags: item.tags, location: item.span, example: item.example,
-                               duration_ms: item.steps.size, steps: results, verdict: verdict)
+                               duration_ms: item.steps.size, steps: results, verdict: verdict, output: "")
 end
 
 def first_failure(resolved: List[Gherkin.Outcome[Match.Resolved]]) -> Int
@@ -98,10 +99,10 @@ end
 
 def run_file(patterns: List[Match.Pattern], path: String, text: String) -> Report.FileResult
   case Gherkin.parse(path, text)
-    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, Report.error_at(problem.code, problem.message, problem.span))
+    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, "feature", Report.error_at(problem.code, problem.message, problem.span))
     Gherkin.Outcome.Done(feature) ->
       scenarios = feature.scenarios.map do |item| run_scenario(patterns, item) end
-      return Report.FileResult(path: path, feature: feature.name, scenarios: scenarios, verdict: Report.Verdict.Pass)
+      return Report.FileResult(path: path, feature: feature.name, kind: "feature", scenarios: scenarios, verdict: Report.Verdict.Pass, output: "")
   end
 end
 
@@ -120,8 +121,8 @@ def main() -> Void
     run_file(patterns, "/specs/b.feature", "Scenario: first\n  Given a number 1\n"),
     run_file(patterns, "/specs/c.feature", "Feature: Empty\n"),
   ]
-  puts(Report.json(files))
-  puts(Report.text(files, false))
-  puts(Report.text(files, true))
+  puts(Report.json(files, 7))
+  puts(Report.text(files, false, 7))
+  puts(Report.text(files, true, 7))
   puts("exit #{Report.exit_code(files)}")
 end
