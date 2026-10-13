@@ -11,7 +11,7 @@ Measured by the owner on master on 2026-10-13:
 - `agentica check hello.agc` takes about 0.5 s and 148 MB of RSS. Almost all of it is Racket start-up.
 - The release is about 89 MB: `dist/agentica` is 17 MB, `dist/runtime/` (from `raco distribute`) is 66 MB, and `agentica-vm` is 7 MB.
 - The Racket front end is about 5,600 lines after 7i: `src/lexer.rkt`, `parser.rkt` (with `ast.rkt`), `modules.rkt`, `checker.rkt` (with `builtins.rkt` and `builtin-types.rkt`), `lower.rkt`, `bytecode.rkt`, `main.rkt` and `bdd-driver.rkt`, plus the shared `source.rkt`, `token.rkt`, `diagnostic.rkt`, `version.rkt` and `vm-launch.rkt`. 7i removes `runtime-values.rkt` with the other runtime modules, so it is not ported.
-- `src/main.rkt` compiles to a 0600 temporary `.agcb` and starts `agentica-vm` as a child. `agentica test` starts a runner VM written in Agentica (§31), so part of the tool is already Agentica.
+- `src/main.rkt` compiles to a 0600 temporary `.agcb` and starts `agentica-vm` as a child. `agentica test` starts a runner VM written in Agentica (`docs/bdd.md`), so part of the tool is already Agentica.
 - An `.agcb` holds the format version (3), the Agentica version, and the path and full text of every source file (`write-program`, `src/bytecode.rkt:203`). The paths are absolute (`path->complete-path`, `src/modules.rkt:9,15,26`). The loader rejects a file built for another Agentica version (`vm/loader.c:402`).
 
 ### 35.2 Goal and success criteria
@@ -72,7 +72,7 @@ Replacing rackunit itself is a separate decision: the test suite stays on Racket
 
 ### 35.4 Stages to port
 
-One PR per step, in this order, each with differential tests against the Racket stage. This is the method of 21c to 21e (§31): during development a throwaway harness runs both stages over the whole corpus and compares their output; CI gets golden fixtures. The corpus is `examples/`, `stdlib/`, `tests/fixtures/`, the site examples, and every input of `tests/<stage>-test.rkt`, diagnostics included. Each golden is the Racket stage's output in a stable text form under `tests/fixtures/frontend/<stage>/`. While both stages exist, both must match it. After Racket is deleted, the goldens stay.
+One PR per step, in this order, each with differential tests against the Racket stage. This is the method of 21c to 21e (`docs/bdd.md`): during development a throwaway harness runs both stages over the whole corpus and compares their output; CI gets golden fixtures. The corpus is `examples/`, `stdlib/`, `tests/fixtures/`, the site examples, and every input of `tests/<stage>-test.rkt`, diagnostics included. Each golden is the Racket stage's output in a stable text form under `tests/fixtures/frontend/<stage>/`. While both stages exist, both must match it. After Racket is deleted, the goldens stay.
 
 | Step | Racket stage | Compared output |
 |---|---|---|
@@ -82,7 +82,7 @@ One PR per step, in this order, each with differential tests against the Racket 
 | 4 | Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
-| 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests of §31.11 |
+| 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/bdd-test.rkt`, `tests/bdd-integration.rkt`) |
 | 8 | CLI driver (`src/main.rkt`, the output forms of `diagnostic.rkt`, `version.rkt`, `vm-launch.rkt`) | Exit codes, stdout and stderr of every CLI test. The single binary and embedding (35.6) land here, and the self-hosted front end becomes the default |
 
 Notes:

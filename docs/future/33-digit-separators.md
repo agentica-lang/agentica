@@ -6,9 +6,9 @@
 
 Checked at `5622598`:
 
-- `INTEGER = DIGIT, { DIGIT }` and `FLOAT = DIGIT, { DIGIT }, ".", DIGIT, { DIGIT }` (`docs/grammar.md:103-104`). The text says the core has no numeric separators (`docs/grammar.md:112`).
-- The lexer reads a run of digits, then a `.` and more digits only when a digit follows the `.` (`src/lexer.rkt:195-207`). That is why `1..5` lexes as two integers around `..`, never as a Float (`docs/grammar.md:323`). The value is `string->number` of the lexeme (`src/lexer.rkt:206`).
-- A name may start with `_` (`docs/grammar.md:60`, `src/lexer.rkt:169`). So `1_000` lexes today as the integer `1` and the name `_000`, and the parser stops with `PARSE-UNEXPECTED-TOKEN` at `_000`. No valid program today has a `_` right after the digits of a number.
+- `INTEGER = DIGIT, { DIGIT }` and `FLOAT = DIGIT, { DIGIT }, ".", DIGIT, { DIGIT }` (`docs/grammar/04-lexical.md`, "Literals"). The text says the core has no numeric separators (`docs/grammar/04-lexical.md`).
+- The lexer reads a run of digits, then a `.` and more digits only when a digit follows the `.` (`src/lexer.rkt:195-207`). That is why `1..5` lexes as two integers around `..`, never as a Float (`docs/grammar/05-syntax.md`). The value is `string->number` of the lexeme (`src/lexer.rkt:206`).
+- A name may start with `_` (`docs/grammar/04-lexical.md`, `src/lexer.rkt:169`). So `1_000` lexes today as the integer `1` and the name `_000`, and the parser stops with `PARSE-UNEXPECTED-TOKEN` at `_000`. No valid program today has a `_` right after the digits of a number.
 - The lexer has five codes: `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`.
 - An `Int` literal above the 64-bit range is `CHECK-INT-RANGE` in the checker (`src/checker.rkt:468-472`).
 

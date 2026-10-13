@@ -71,7 +71,8 @@ def prepare(work: Path, task: str, arm: str) -> None:
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
     if arm == "grammar":
         (work / "docs").mkdir()
-        shutil.copy(ROOT / "docs" / "grammar.md", work / "docs" / "grammar.md")
+        parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
+        (work / "docs" / "grammar.md").write_text("\n".join(part.read_text(encoding="utf-8") for part in parts), encoding="utf-8")
         shutil.copytree(ROOT / "examples", work / "examples")
 
 
@@ -356,11 +357,11 @@ def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch
     passed, failure, code = 0, None, None
     for case in cases:
         container = f"agentica-grade-{uuid.uuid4().hex}"
-        expected = case.with_suffix(".out").read_text().rstrip("\n")
+        expected = case.with_suffix(".out").read_text(encoding="utf-8").rstrip("\n")
         try:
             jailed = (docker_prefix(work, args.image, container, network=False, pass_env=[])
                       if args.sandbox == "docker" else jail_prefix(grade_root, network=False)) + cmd
-            done = subprocess.run(jailed, cwd=work, env=env, input=case.read_text(), capture_output=True, text=True, timeout=CASE_TIMEOUT)
+            done = subprocess.run(jailed, cwd=work, env=env, input=case.read_text(encoding="utf-8"), capture_output=True, text=True, timeout=CASE_TIMEOUT)
             actual, err, returncode = done.stdout.rstrip("\n"), done.stderr, done.returncode
         except subprocess.TimeoutExpired:
             actual, err, returncode = None, "timeout", None
@@ -414,8 +415,8 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
     row.update(grade(solution, task, arm, args, scratch, name))
     run_dir = results / name
     run_dir.mkdir(parents=True)
-    (run_dir / "agent.jsonl").write_text(out)
-    (run_dir / "agent.stderr").write_text(err)
+    (run_dir / "agent.jsonl").write_text(out, encoding="utf-8")
+    (run_dir / "agent.stderr").write_text(err, encoding="utf-8")
     copy_candidate(solution, run_dir / solution.name)
     with WRITE_LOCK:
         with (results / "results.jsonl").open("a") as handle:
@@ -424,7 +425,7 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
 
 
 def summarize(results: Path) -> None:
-    rows = [json.loads(line) for line in (results / "results.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (results / "results.jsonl").read_text(encoding="utf-8").splitlines()]
     groups = {}
     for row in rows:
         groups.setdefault((row["task"], row["arm"]), []).append(row)
@@ -438,7 +439,7 @@ def summarize(results: Path) -> None:
         kinds = ", ".join(sorted({f"{r['failure']}:{r['code']}" if r["code"] else str(r["failure"]) for r in rs if r["failure"]})) or "-"
         out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {mean('seconds')} | {mean('failing_runs')} | {kinds} |")
     text = "\n".join(out) + "\n"
-    (results / "summary.md").write_text(text)
+    (results / "summary.md").write_text(text, encoding="utf-8")
     print(text)
 
 

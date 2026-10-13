@@ -5,7 +5,7 @@ description: "Develops the Agentica interpreter: the Racket front end (lexer, pa
 
 # Agentica development
 
-Agentica is a small statically typed language: a Racket front end compiles it to bytecode for a C VM. The grammar is `docs/grammar.md`; planned syntax is in `docs/future/`; the phases and the active checklist are `docs/roadmap/`.
+Agentica is a small statically typed language: a Racket front end compiles it to bytecode for a C VM. The grammar is `docs/grammar/` (index `docs/grammar.md`); planned syntax is in `docs/future/`; the phases and the active checklist are `docs/roadmap/`.
 
 Read the active phase in the roadmap before adding code. Implement only what that phase asks for: the roadmap explicitly forbids placeholder modules and empty nodes for later phases.
 
@@ -93,7 +93,8 @@ stdlib/                 # std/ modules written in Agentica, embedded by src/stdl
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-protocol helpers, shared by unit tests and BDD
 examples/               # small programs per feature; examples/README.md lists them
 docs/
-  grammar.md   # language grammar, the source of truth
+  grammar.md   # index of the language grammar
+  grammar/     # the language definition, one file per section; the source of truth
   future/      # planned syntax, not implemented (one file per section)
   roadmap/     # phases and the active checklist (README.md: current order and rules)
   vm/          # bytecode VM design (phase 7): IR, bytecode, C values, safety rules, PR plan
@@ -109,7 +110,7 @@ docs/
 | builtin | `src/builtins.rkt` metadata; checker generic rule; the VM implementation (`vm-builtins` in `src/lower.rkt`, `vm/`, see `references/vm.md`) with a golden fixture; exercise a real checked call |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`; the VM toolchain adds `LOWER-` and `BYTECODE-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
-| language rule or example | `docs/grammar.md`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
+| language rule or example | `docs/grammar/`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
 | test | `tests/<stage>-test.rkt` |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/agc.h` (same order), `vm/loader.c`, `vm/interp.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
 | VM builtin | `src/lower.rkt` (accept the call, emit `call-builtin` with the catalog implementation key and arity), `vm/builtins.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
