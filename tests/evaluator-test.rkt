@@ -624,8 +624,7 @@
         ("Result.unwrap_or" "Result.unwrap_or(r, 7)" "7\n")
         ("Result.message" "Result.message(r)" "\"bad\"\n")))
     (for ([name (in-list (sort (hash-keys builtins) string<?))]
-          #:unless (or (string-prefix? name "BDD.")
-                       (member name vm-only-builtins)
+          #:unless (or (member name vm-only-builtins)
                        (member 'filesystem (builtin-effects (hash-ref builtins name)))
                        (member 'network (builtin-effects (hash-ref builtins name)))
                        (member 'subprocess (builtin-effects (hash-ref builtins name)))))

@@ -195,6 +195,7 @@
              [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span
                          #:help (cond
+                                  [(equal? alias "BDD") "import \"std/bdd\" as BDD"]
                                   [(equal? alias "Result")
                                    "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"]
                                   [variant-hint?

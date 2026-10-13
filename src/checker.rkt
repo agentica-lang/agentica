@@ -975,6 +975,7 @@
               (format "unknown function \"~a\"" (display-name name))
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
+                         (and (string-prefix? name "BDD.") "import \"std/bdd\" as BDD")
                          (did-you-mean name (hash-keys functions) #:shared (public-builtin-names)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))

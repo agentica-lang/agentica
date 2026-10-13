@@ -221,8 +221,8 @@
                                      #:help (string-append
                                              "a program that imports \"std/http\" (even for a pure helper such as "
                                              "header_values) or calls Process.spawn_captured, Process.output or "
-                                             "Task.pending_count runs only on the VM; keep HTTP and BDD builtins, "
-                                             "--legacy-eval and agentica test step files out of it"))))
+                                             "Task.pending_count, or imports \"std/bdd\", runs only on the VM; keep HTTP "
+                                             "builtins and --legacy-eval out of it"))))
                 #f))
     #f))
 
