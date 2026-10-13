@@ -408,7 +408,7 @@ and docs:
   handler that closes its own server, which no program can reach.
 - **20d** the switch to `import "std/http" as HTTP` and the removal of
   the builtin `HTTP` module: done by 7i (owner decision of 2026-10-13),
-  before 20b and 20c. The performance sanity check (`benchmarks/http.py`,
+  before 20b and 20c. The performance sanity check (`benchmarks/http_bench.py`,
   not a gate, now against Python's standard library) and the hints for
   the removed server builtins moved into 20c.
 

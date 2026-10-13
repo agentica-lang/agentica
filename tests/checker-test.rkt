@@ -198,6 +198,11 @@
       (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-NAME)
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
       (check-regexp-match (cadr entry) (diagnostic-help problem))))
+  (test-case "the removed Request and HttpWriter types point to the std/http handler"
+    (for ([entry '(("Request" #rx"HttpRequest") ("HttpWriter" #rx"return ok\\(HttpResponse"))])
+      (define problem (check-text (format "def handle(x: ~a) -> Void\nend\n\ndef main() -> Void\nend\n\n" (car entry))))
+      (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-TYPE (car entry))
+      (check-regexp-match (cadr entry) (diagnostic-help problem))))
   (test-case "the section 8 programs pass"
     (check-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n")
     (check-ok (string-append

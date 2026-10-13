@@ -1,19 +1,22 @@
-import os
-import sys
-
-sys.path = [p for p in sys.path if os.path.abspath(p or ".") != os.path.dirname(os.path.abspath(__file__))]
-
 import argparse
 import asyncio
 import email.utils
 import http.server
 import json
+import os
+import resource
+import select
 import shutil
+import signal
 import statistics
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
+
+if sys.version_info < (3, 10):
+    raise SystemExit("benchmarks/http_bench.py needs Python 3.10 or newer")
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = ROOT / "src" / "main.rkt"
@@ -21,6 +24,8 @@ VM = Path(os.environ.get("AGENTICA_VM", ROOT / "dist" / "agentica-vm"))
 SERVER = ROOT / "examples" / "http_server.agc"
 NODE_FILE = ROOT / "benchmarks" / "http.js"
 TICKS = os.sysconf("SC_CLK_TCK")
+START_TIMEOUT = 30.0
+CLIENT_TIMEOUT = 600.0
 
 CLIENT = """import "std/http" as HTTP
 
@@ -125,6 +130,10 @@ async def asyncio_main():
         await server.serve_forever()
 
 
+def terminate(signum, frame):
+    raise SystemExit(128 + signum)
+
+
 def pin(command: list[str], cpus: str | None) -> list[str]:
     return ["taskset", "-c", cpus, *command] if cpus else command
 
@@ -133,13 +142,30 @@ def compile_program(source: Path, output: Path):
     subprocess.run(["racket", str(MAIN), "compile", str(source), "-o", str(output)], check=True)
 
 
+def read_line(fd: int, timeout: float) -> bytes:
+    deadline = time.monotonic() + timeout
+    line = b""
+    while not line.endswith(b"\n"):
+        left = deadline - time.monotonic()
+        if left <= 0 or not select.select([fd], [], [], left)[0]:
+            return line
+        byte = os.read(fd, 1)
+        if not byte:
+            return line
+        line += byte
+    return line
+
+
 def start(command: list[str]) -> tuple[subprocess.Popen, int]:
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    line = process.stdout.readline()
-    if not line.strip().isdigit():
+    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        line = read_line(process.stdout.fileno(), START_TIMEOUT)
+        if not line.strip().isdigit():
+            raise SystemExit(f"{command} printed no port within {START_TIMEOUT:.0f} s: {line!r}")
+        return process, int(line)
+    except BaseException:
         stop(process)
-        raise SystemExit(f"{command} printed no port: {line!r}")
-    return process, int(line)
+        raise
 
 
 def stop(process: subprocess.Popen):
@@ -149,6 +175,9 @@ def stop(process: subprocess.Popen):
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait()
+    for pipe in (process.stdin, process.stdout):
+        if pipe:
+            pipe.close()
 
 
 def cpu_seconds(pid: int) -> float:
@@ -159,15 +188,31 @@ def cpu_seconds(pid: int) -> float:
 def load(node: str, port: int, connections: int, requests: int, processes: int, cpus: str | None) -> dict:
     share = connections // processes
     command = [node, str(NODE_FILE), "client", str(port), str(share), str(requests // processes)]
-    clients = [subprocess.Popen(pin(command, cpus), stdout=subprocess.PIPE, text=True) for _ in range(processes)]
+    clients = []
     results = []
-    for client in clients:
-        out, _ = client.communicate(timeout=600)
-        if client.returncode != 0:
-            raise SystemExit("a load client failed")
-        results.append(json.loads(out))
+    try:
+        for _ in range(processes):
+            clients.append(subprocess.Popen(pin(command, cpus), stdout=subprocess.PIPE, text=True))
+        for client in clients:
+            try:
+                out, _ = client.communicate(timeout=CLIENT_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                raise SystemExit(f"a load client ran over {CLIENT_TIMEOUT:.0f} s")
+            if client.returncode != 0:
+                raise SystemExit("a load client failed")
+            results.append(json.loads(out))
+    finally:
+        for client in clients:
+            if client.poll() is None:
+                client.kill()
+            client.wait()
+            if client.stdout:
+                client.stdout.close()
     if any(r["failures"] for r in results):
         raise SystemExit("some requests failed")
+    for r in results:
+        if r["new_sockets"] > share:
+            raise SystemExit(f"keep-alive was not used: a client opened {r['new_sockets']} sockets for {share} connections")
     latencies = sorted(x for r in results for x in r["latencies"])
     seconds = max(r["seconds"] for r in results)
     return {
@@ -180,43 +225,81 @@ def load(node: str, port: int, connections: int, requests: int, processes: int, 
 
 
 def measure(node: str, command: list[str], args, connections: int, server_cpus, client_cpus) -> dict:
-    process, port = start(pin(command, server_cpus))
+    process = None
     try:
+        process, port = start(pin(command, server_cpus))
         processes = min(args.client_processes, connections)
         load(node, port, connections, max(connections * 50, args.requests // 10), processes, client_cpus)
         before = cpu_seconds(process.pid)
         run = load(node, port, connections, args.requests, processes, client_cpus)
         run["server_cpu"] = (cpu_seconds(process.pid) - before) / run["seconds"]
     finally:
-        stop(process)
+        if process:
+            stop(process)
     return run
 
 
 def vm_client(node: str, bytecode: Path, args, server_cpus, client_cpus) -> float:
-    process, port = start(pin([node, str(NODE_FILE), "server"], server_cpus))
+    process = None
     try:
+        process, port = start(pin([node, str(NODE_FILE), "server"], server_cpus))
         each = args.requests // 8
         started = time.perf_counter()
         command = [str(VM), "--", str(bytecode), f"http://127.0.0.1:{port}/", "8", str(each)]
-        result = subprocess.run(pin(command, client_cpus), capture_output=True, text=True, check=True)
+        try:
+            result = subprocess.run(pin(command, client_cpus), capture_output=True, text=True, check=True, timeout=CLIENT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise SystemExit(f"the VM client ran over {CLIENT_TIMEOUT:.0f} s")
         seconds = time.perf_counter() - started
         if result.stdout.strip() != str(each * 8):
             raise SystemExit(f"the VM client got {result.stdout!r}")
     finally:
-        stop(process)
+        if process:
+            stop(process)
     return each * 8 / seconds
 
 
-def quiet_round(args, label: str, body):
+def cpu_times() -> tuple[float, float]:
+    fields = [int(x) for x in Path("/proc/stat").read_text().splitlines()[0].split()[1:]]
+    idle = fields[3] + fields[4]
+    busy = fields[0] + fields[1] + fields[2] + sum(fields[5:8])
+    return busy / TICKS, idle / TICKS
+
+
+def idle_share(seconds: float) -> float:
+    busy_before, idle_before = cpu_times()
+    time.sleep(seconds)
+    busy_after, idle_after = cpu_times()
+    total = (busy_after - busy_before) + (idle_after - idle_before)
+    return (idle_after - idle_before) / total if total > 0 else 0.0
+
+
+def own_cpu() -> float:
+    children = resource.getrusage(resource.RUSAGE_CHILDREN)
+    mine = resource.getrusage(resource.RUSAGE_SELF)
+    return children.ru_utime + children.ru_stime + mine.ru_utime + mine.ru_stime
+
+
+def quiet_round(args, label: str, body) -> dict:
     for attempt in range(args.retries + 1):
-        load_average = os.getloadavg()[0]
-        flagged = load_average > args.max_load
-        print(f"{label}: load average {load_average:.2f}" + (" (busy)" if flagged else ""), file=sys.stderr, flush=True)
-        if flagged and attempt < args.retries:
+        idle = idle_share(args.sample)
+        busy = idle < args.min_idle
+        print(f"{label}: idle share {idle:.1%} before the round" + (" (busy)" if busy else ""), file=sys.stderr, flush=True)
+        if busy and attempt < args.retries:
             time.sleep(args.wait)
             continue
-        return load_average, flagged, body()
-    raise AssertionError
+        break
+    busy_before, _ = cpu_times()
+    own_before = own_cpu()
+    started = time.monotonic()
+    body()
+    elapsed = time.monotonic() - started
+    busy_after, _ = cpu_times()
+    outside = max(0.0, (busy_after - busy_before) - (own_cpu() - own_before)) / elapsed
+    disturbed = outside > args.max_outside
+    print(f"{label}: outside CPU use {outside:.2f} CPUs during the round" + (" (disturbed)" if disturbed else ""),
+          file=sys.stderr, flush=True)
+    return {"idle": idle, "busy": busy, "outside": outside, "disturbed": disturbed}
 
 
 def median_row(runs: list[dict]) -> dict:
@@ -233,7 +316,9 @@ def main():
     parser.add_argument("--server-cpus", default="0", help="taskset CPU list for the server")
     parser.add_argument("--client-cpus", default="2-7", help="taskset CPU list for the load clients")
     parser.add_argument("--no-pin", action="store_true", help="do not pin with taskset")
-    parser.add_argument("--max-load", type=float, default=1.0, help="a round that starts above this 1-min load average is busy")
+    parser.add_argument("--min-idle", type=float, default=0.90, help="a round starts only when this share of all CPUs was idle over the sample")
+    parser.add_argument("--sample", type=float, default=5.0, help="seconds of /proc/stat sampling before each round")
+    parser.add_argument("--max-outside", type=float, default=0.5, help="a round is disturbed when CPUs of work outside the benchmark average above this")
     parser.add_argument("--retries", type=int, default=3, help="repeats of a busy round before it is kept and flagged")
     parser.add_argument("--wait", type=float, default=30.0, help="seconds to wait before repeating a busy round")
     parser.add_argument("--serve", choices=["threading", "asyncio"], help=argparse.SUPPRESS)
@@ -244,6 +329,8 @@ def main():
     if args.serve == "asyncio":
         asyncio.run(asyncio_main())
         return
+    for number in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(number, terminate)
     node = shutil.which("node")
     if not node:
         raise SystemExit("node is required for the load client")
@@ -267,26 +354,29 @@ def main():
         servers = [
             ("VM (`examples/http_server.agc`)", [str(VM), "--", str(bytecode), "serve"]),
             ("Node `http`", [node, str(NODE_FILE), "server"]),
-            ("Python asyncio", [sys.executable, str(Path(__file__)), "--serve", "asyncio"]),
-            ("Python `ThreadingHTTPServer`", [sys.executable, str(Path(__file__)), "--serve", "threading"]),
+            ("Python asyncio", [sys.executable, str(Path(__file__).resolve()), "--serve", "asyncio"]),
+            ("Python `ThreadingHTTPServer`", [sys.executable, str(Path(__file__).resolve()), "--serve", "threading"]),
         ]
         runs = {(level, name): [] for level in levels for name, _ in servers}
         client_runs = []
         rounds = []
         for number in range(1, args.rounds + 1):
+            turn = (number - 1) % len(servers)
+            order = servers[turn:] + servers[:turn]
+
             def one_round():
                 for level in levels:
-                    for name, command in servers:
+                    for name, command in order:
                         runs[(level, name)].append(measure(node, command, args, level, server_cpus, client_cpus))
                 client_runs.append(vm_client(node, work / "client.agcb", args, server_cpus, client_cpus))
-            load_average, flagged, _ = quiet_round(args, f"round {number}", one_round)
-            rounds.append((load_average, flagged))
-    print(f"{args.requests} keep-alive GET / requests per run; {args.rounds} rounds, servers interleaved in each; "
+            rounds.append(quiet_round(args, f"round {number}", one_round))
+    print(f"{args.requests} keep-alive GET / requests per run; {args.rounds} rounds, servers interleaved in each, the order rotated; "
           f"median per server; {os.cpu_count()} CPUs; "
           + (f"server on CPU {server_cpus}, {args.client_processes} Node client processes on CPUs {client_cpus} (taskset)"
              if pinned else f"not pinned, {args.client_processes} Node client processes"))
-    print("1-min load average at the start of each round: "
-          + ", ".join(f"{a:.2f}" + (" (busy)" if f else "") for a, f in rounds))
+    print("Idle share of all CPUs before each round, and CPUs used outside the benchmark during it: "
+          + ", ".join(f"{r['idle']:.1%}" + (" (busy)" if r["busy"] else "") + f", {r['outside']:.2f}"
+                      + (" (disturbed)" if r["disturbed"] else "") for r in rounds))
     print()
     print("| Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |")
     print("|---:|---|---:|---|---:|---:|---:|---:|")
@@ -300,4 +390,5 @@ def main():
           f"{statistics.median(client_runs):,.0f} requests/s (median)")
 
 
-main()
+if __name__ == "__main__":
+    main()

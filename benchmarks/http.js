@@ -21,11 +21,13 @@ function client(port, connections, requests) {
   const latencies = new Float64Array(each * connections);
   let at = 0;
   let failures = 0;
+  let newSockets = 0;
 
   function once() {
     return new Promise((resolve, reject) => {
       const started = process.hrtime.bigint();
       const req = http.request({ host: "127.0.0.1", port, path: "/", agent }, (res) => {
+        if (req.reusedSocket === false) newSockets++;
         let size = 0;
         res.on("data", (part) => (size += part.length));
         res.on("end", () => {
@@ -54,6 +56,7 @@ function client(port, connections, requests) {
       console.log(JSON.stringify({
         requests: at,
         failures,
+        new_sockets: newSockets,
         seconds,
         cpu: (used.user + used.system) / 1e6 / seconds,
         latencies: Array.from(latencies.subarray(0, at)),

@@ -1223,7 +1223,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as HTTP`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
 | `HTTP.get(...)` or another `HTTP.` call without the import | `import "std/http" as HTTP` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |
-| a `Request` or `HttpWriter` parameter (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
+| `Request` or `HttpWriter` as a type, in a parameter, return type or variable (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
 
