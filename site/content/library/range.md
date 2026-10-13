@@ -9,6 +9,8 @@ Both ends are `Int`, and the value has the type `Range`. A range holds only its
 start, its end and its kind, never a list, so `0...1000000000` costs nothing
 until you use it.
 
+An end that is not an `Int` is `CHECK-TYPE-MISMATCH`, as in `"a"..."c"`.
+
 `for` walks through a range in order. A range whose end is before its start is
 empty. Counting up to the largest `Int` does not overflow.
 

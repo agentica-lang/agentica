@@ -79,8 +79,7 @@ ok(5)
 
 ## to_s and inspect
 
-Every value has `to_s`, the text that `puts` prints. `inspect` is the debug
-form: strings keep their quotes.
+Every data value has `to_s`, the text that `puts` prints. A function, a task or a handle, such as a `Listener`, has none: `f.to_s` is `CHECK-UNKNOWN-METHOD`. `inspect` is the debug form: strings keep their quotes.
 
 ```agentica
 def main() -> Void
