@@ -1,6 +1,6 @@
 ## 7. Diagnostics for agents
 
-Each error includes a stable code, file, line, column, a concrete explanation, and the source line with a mark under the span. Spans travel from the tokens to the AST.
+Each error has a stable code, a file, a line and a column, a concrete explanation, and the source line with a mark under the span. Spans travel from the tokens to the AST.
 
 ```text
 example.agc:2:14 error[CHECK-TYPE-MISMATCH]
@@ -10,20 +10,11 @@ expected Int, found String
   |              ^^^^
 ```
 
-When the checker knows a certain fix, the diagnostic ends with a `= help:` line, and secondary spans are marked with `-` and a short note:
+When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
-```text
-example.agc:5:7 error[CHECK-UNKNOWN-NAME]
-unknown function "totl"
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text, or as one JSON object. In `--json` mode, when a diagnostic ends the run, it is the last line of stderr. Task crash lines (with `"task": true`), the unobserved-crash summary (`{"unobserved_crashes": N, "first": "..."}`) and the flush warning of §6 are not the run's diagnostic.
 
-5 |   x = totl(1)
-  |       ^^^^^^^
-  = help: did you mean "total"?
-```
-
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode, when a diagnostic ends the run, the last line of stderr is that diagnostic; what the program itself wrote to stderr comes before it. Task crash lines carry `"task": true` and are not the run's diagnostic: a run can exit 0 with only crash lines, and a run that exits 1 because a crash was never observed ends with the `{"unobserved_crashes": N, "first": "..."}` line instead of a diagnostic. The `{"flush_timeout_ms": ...}` warning of `--flush-timeout` is not a diagnostic either; it comes after the unobserved line and before a diagnostic.
-
-The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running); the VM compiler stages use `LOWER-` and `BYTECODE-`. Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
+The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). The VM compiler stages use `LOWER-` and `BYTECODE-`. Each stage stops at the first error. The diagnostics that an agent most needs to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
 Names and forms from other languages get a `help` that names the Agentica form. A method hint is given only when the suggested method exists for the receiver's type:
 
@@ -55,7 +46,6 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as HTTP`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
 | `HTTP.get(...)` or another `HTTP.` call without the import | `import "std/http" as HTTP` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |
-| `Request` or `HttpWriter` as a type, in a parameter, return type or variable (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
+| `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`) | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
-
