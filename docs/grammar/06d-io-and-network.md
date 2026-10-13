@@ -142,8 +142,8 @@ response; `idle_timeout_ms` bounds the wait for a later request on a
 kept-alive connection. At most `max_connections` connections are served at
 once; more wait in the listener's backlog. Requests the server rejects before
 the handler runs get an empty answer and a close; the status for each case
-(400, 413, 417, 431, 501 or 505) is in [`docs/vm/10-io-http.md`
-§10.7.3](../vm/10-io-http.md#1073-errors-and-status-codes). `wait` returns
+(400, 413, 417, 431, 501 or 505) is in
+[`docs/vm/10-io-http.md` §10.7.3](../vm/10-io-http.md#1073-errors-and-status-codes). `wait` returns
 `ok()` once the server is closed. `close_server` closes the listener, ends
 every connection, and cancels the handlers and every task they spawned; it is
 idempotent. When `main` returns, the run ends whatever the server is doing. If
