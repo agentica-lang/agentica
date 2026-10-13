@@ -42,7 +42,8 @@ test-bdd: exe
 smoke: build vm dist/agentica
 	tests/smoke.sh
 
-# CI runs every check as one of these targets, so the same command works locally.
+# ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
+
 # Compile every Racket test module
 build-tests: build
 	$(RACO) make -j $(JOBS) tests/*.rkt
@@ -56,7 +57,7 @@ test-ci: build vm dist/agentica
 	tests/test-ci.sh
 
 # The distributed executable still finds its std/ modules after its build checkout is gone
-test-distribution: build
+test-distribution: build vm
 	$(RACO) test tests/stdlib-distribution-test.rkt
 
 goldens: build vm

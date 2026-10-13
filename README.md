@@ -70,7 +70,7 @@ A `Makefile` wraps the common commands:
 | `make vm`    | build the VM, `dist/agentica-vm`                            |
 | `make test`  | build the VM, then `raco test tests/`                       |
 | `make goldens` | rewrite the expected outcomes in `tests/fixtures/vm/` from the VM |
-| `make exe`   | build `src/` and the VM, then `raco exe -o dist/agentica src/main.rkt` |
+| `make exe`   | build `src/` and the VM, then `raco exe -o dist/agentica src/main.rkt` when `src/` or `stdlib/` changed |
 | `make clean` | remove every `compiled/` directory and `dist/`              |
 
 The `exe` target gives an executable (`dist/agentica examples/hello.agc`) that

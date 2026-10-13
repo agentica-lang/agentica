@@ -11,7 +11,7 @@ log="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/executable-tests.log"
 exe_tests > "$log" 2>&1 &
 executable_tests=$!
 status=0
-make --no-print-directory test JOBS=6 || status=$?
+"${MAKE:-make}" --no-print-directory test JOBS=6 || status=$?
 if wait "$executable_tests"; then
   echo "::group::process and module tests on the built executable: passed"
 else

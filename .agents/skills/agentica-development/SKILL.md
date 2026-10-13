@@ -20,6 +20,7 @@ racket src/main.rkt check examples/blocks.agc
 make vm vm-test                           # the C VM and its loader tests (references/vm.md)
 make goldens                              # rewrite the VM golden files (references/vm.md)
 make vm-latency                           # task latency test, run alone (references/vm.md)
+make smoke                                # the example smoke runs of CI (tests/smoke.sh; references/ci.md)
 make dup-check                            # jscpd copy-paste check over src/*.rkt and vm/ C code (references/ci.md)
 make site                                 # build the documentation site (references/site.md)
 ```
