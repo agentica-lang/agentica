@@ -778,6 +778,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   }
   p->users = 1;
   pr->state = agc_register(vm, p, release_proc);
+  pr->state->keep_detached = true;
   agc_own(vm, pr->state, close_child);
   return agc_result_value(true, agc_process_value(pr));
 }

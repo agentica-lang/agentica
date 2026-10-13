@@ -164,7 +164,7 @@ struct agc_resource {
   agc_task *waiters, *waiters_tail;
   agc_task *owner;
   agc_close_fn close;
-  bool closing, pool_close;
+  bool closing, pool_close, keep_detached;
 };
 
 typedef struct {
@@ -245,6 +245,11 @@ typedef struct {
   agc_native_kind native;
   agc_cost_rule cost;
 } agc_builtin;
+
+typedef struct {
+  const agc_builtin *entries;
+  const size_t *count;
+} agc_builtin_table;
 
 typedef struct {
   agc_string *name;
@@ -485,6 +490,7 @@ bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
+agc_value agc_error_value(const char *message);
 agc_list *agc_new_list(size_t len);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
@@ -540,6 +546,8 @@ agc_string *agc_change_case(const agc_string *s, bool up);
 agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value);
 agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value);
 agc_string *agc_around(const char *before, const agc_string *part, const char *after);
+extern const agc_builtin agc_core_builtins[];
+extern const size_t agc_core_builtin_count;
 extern const agc_builtin agc_string_builtins[];
 extern const size_t agc_string_builtin_count;
 
@@ -551,6 +559,9 @@ agc_json_status agc_json_parse(const uint8_t *text, size_t len, agc_value *out);
 const char *agc_json_status_message(agc_json_status status);
 agc_string *agc_json_ascii(const char *text, size_t n);
 void *agc_json_grow(void *stack, size_t *capacity, size_t depth, size_t size);
+agc_json *agc_json_container(bool object, size_t n, agc_list **items);
+void agc_json_store(agc_json *node, agc_list *items, size_t k, agc_value v);
+agc_value agc_json_finish(agc_json *node, size_t n);
 void agc_json_put(agc_json_buffer *b, const char *text, size_t n);
 agc_value agc_json_leaf(agc_json_kind kind, agc_value scalar);
 agc_value agc_json_object(agc_json_member *members, size_t n);
@@ -579,6 +590,8 @@ bool agc_test_protocol(agc_vm *vm);
 extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
+extern const agc_builtin_table agc_builtin_tables[];
+extern const size_t agc_builtin_table_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
 
 uint64_t agc_resource_id(agc_vm *vm);
@@ -627,7 +640,6 @@ agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 
 struct uv_stream_s;
 struct uv_write_s;
-agc_value agc_error_value(const char *message);
 agc_value agc_stream_bad_timeout(void);
 agc_value agc_stream_timed_out(void);
 agc_resource *agc_new_lock(agc_vm *vm);
@@ -660,6 +672,7 @@ bool agc_report_unobserved(agc_vm *vm);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 void agc_task_park(agc_vm *vm, bool retry);
+bool agc_task_join(agc_vm *vm, agc_task *target);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
