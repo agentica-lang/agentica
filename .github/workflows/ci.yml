@@ -139,7 +139,7 @@ jobs:
         with:
           submodules: true
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
-      - run: mkdir -p build && make -s vm-openssl-key VM_OPENSSL=vendored > build/openssl-key-release
+      - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - uses: actions/cache@v4
         with:
           path: |
@@ -148,10 +148,10 @@ jobs:
             build/vm/release/openssl/libcrypto.a
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
-      - run: make vm-openssl VM_OPENSSL=vendored
+      - run: make vm-openssl AGENTICA_OPENSSL=vendored
       - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
       - run: |
-          make -j"$(nproc)" build/vm/release/agentica-vm VM_OPENSSL=vendored
+          make -j"$(nproc)" build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
           if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
           ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
           build/vm/release/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "the vendored VM does not report OpenSSL $ossl" >&2; exit 1; }
@@ -263,7 +263,7 @@ jobs:
       - run: diff <(dist/agentica --seed 7 tests/fixtures/vm/random.agc) <(dist/agentica --seed 7 tests/fixtures/vm/random.agc)
         shell: bash
       - run: dist/agentica examples/queue.agc
-      - run: mkdir -p build && make -s vm-openssl-key VM_OPENSSL=vendored > build/openssl-key-release
+      - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - id: vendored
         uses: actions/cache/restore@v4
         with:
@@ -275,7 +275,7 @@ jobs:
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - if: steps.vendored.outputs.cache-hit == 'true'
         run: |
-          make -j"$(nproc)" build/vm/release/agentica-vm VM_OPENSSL=vendored
+          make -j"$(nproc)" build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
           if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
           ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
           build/vm/release/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "the vendored VM does not report OpenSSL $ossl" >&2; exit 1; }

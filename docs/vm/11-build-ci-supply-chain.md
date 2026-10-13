@@ -24,8 +24,8 @@
   object. Nothing in the VM relies on it today; it is upstream's default and
   costs nothing measurable. libuv (7h) is built from its submodule into
   `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL is the system
-  OpenSSL 3 by default (`pkg-config`, dynamic); with `VM_OPENSSL=vendored`
-  (the release) OpenSSL 3.5 LTS (7h) is built
+  OpenSSL 3 by default (`pkg-config`, dynamic); with
+  `AGENTICA_OPENSSL=vendored` (the release) OpenSSL 3.5 LTS (7h) is built
   from its submodule `vm/third_party/openssl` into
   `$(VM_BUILD)/openssl/libssl.a` and `libcrypto.a`, static, per build mode
   (10.0); that build needs Perl. `$(VM_BUILD)/openssl-flags` holds the key of
@@ -144,7 +144,7 @@ links the vendored one. To keep that path tested, a `warm-third-party` job
 on `master` pushes builds the vendored release-mode OpenSSL into a cache
 (`build/vm/release/openssl/include`, `libssl.a`, `libcrypto.a` and the
 `openssl-flags` stamp, keyed by `openssl-release-` and the hash of `make
--s vm-openssl-key VM_OPENSSL=vendored`) and links
+-s vm-openssl-key AGENTICA_OPENSSL=vendored`) and links
 `build/vm/release/agentica-vm` against it; the `test` job restores that
 cache (a pull request can restore only its own caches or `master`'s) and,
 on a hit, links the same binary, checks it with `readelf -d` and
