@@ -150,7 +150,12 @@
        (check-equal? (codes report)
                      '("RUNTIME-BDD-TIMEOUT" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
                        "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO")))))
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO"))
+       (define (details item)
+         (define problem (hash-ref item 'error))
+         (list (hash-ref problem 'expected) (hash-ref problem 'actual)))
+       (check-equal? (map details (list (second (cases report)) (fourth (cases report))))
+                     '(("\"incorrect\"" "\"actual\\n\"") ("0" "3"))))))
 
   (test-case "a JSON line of a few hundred KB fits the step budget"
     (define items (make-list 30000 "abcdefghij"))

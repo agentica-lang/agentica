@@ -126,8 +126,7 @@ export def when_eof(ctx: Context) -> Context
 end
 
 export def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
-  actual = read_line(ctx, timeout_ms)
-  return compare(ctx, actual == expected, expected, actual)
+  return compare_text(ctx, read_line(ctx, timeout_ms), expected)
 end
 
 export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
@@ -138,13 +137,16 @@ export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Co
     halt("RUNTIME-BDD-JSON", "expected and received lines must be valid JSON")
     return ctx
   end
-  return compare(ctx, JSON.encode(left.unwrap!) == JSON.encode(right.unwrap!), expected, actual)
+  return compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
 end
 
 export def then_stdin_open(ctx: Context) -> Context
   p = program(ctx)
-  open = Process.send(p, "", 5000).ok? and not Process.wait(p, 1).ok?
-  return compare(ctx, open, "open stdin and active program", "closed stdin or stopped program")
+  state = "closed stdin or stopped program"
+  if Process.send(p, "", 5000).ok? and not Process.wait(p, 1).ok?
+    state = "open stdin and active program"
+  end
+  return compare_text(ctx, state, "open stdin and active program")
 end
 
 export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
@@ -154,17 +156,15 @@ export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
   check(status.ok?, status.message)
   finished(p)
   actual = status.unwrap!
-  return compare(ctx, actual == code, code.to_s, actual.to_s)
+  return compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
 end
 
 export def then_stdout(ctx: Context, expected: String) -> Context
-  actual = finished(exited(program(ctx))).stdout
-  return compare(ctx, actual == expected, expected, actual)
+  return compare_text(ctx, finished(exited(program(ctx))).stdout, expected)
 end
 
 export def then_stderr(ctx: Context, expected: String) -> Context
-  actual = finished(exited(program(ctx))).stderr
-  return compare(ctx, actual == expected, expected, actual)
+  return compare_text(ctx, finished(exited(program(ctx))).stderr, expected)
 end
 
 def predefined() -> List[Step]
@@ -351,9 +351,13 @@ def check(fine: Bool, message: String) -> Void
   halt("RUNTIME-BDD-IO", message)
 end
 
-def compare(ctx: Context, same: Bool, expected: String, actual: String) -> Context
+def compare_text(ctx: Context, actual: String, expected: String) -> Context
+  return compare(ctx, Test.eq(actual, expected), expected.inspect, actual.inspect)
+end
+
+def compare(ctx: Context, checked: Result[Void], expected: String, actual: String) -> Context
   emit("assert")
-  if not same
+  if not checked.ok?
     fields: Map[String, Json] = {
       "event": JSON.from("fail"),
       "code": JSON.from("RUNTIME-BDD-ASSERTION"),

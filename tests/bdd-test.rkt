@@ -91,7 +91,7 @@
        (check-equal? (list (hash-ref assertion 'file) (start-line assertion)) (list (in directory "b.feature") 3))
        (define crash (hash-ref (third results) 'error))
        (check-equal? (list (hash-ref crash 'file) (start-line crash)) (list (path->string handlers) 35))
-       (check-equal? (hash-ref (hash-ref (sixth results) 'error) 'actual) "missing definition"))))
+       (check-equal? (hash-ref (hash-ref (sixth results) 'error) 'actual) "\"missing definition\""))))
 
   (test-case "tasks may assert, must end before the handler returns, and a crashing task fails its scenario"
     (with-suite
@@ -162,7 +162,7 @@
        (check-equal? (map (lambda (item) (hash-ref item 'status)) (cases report)) '("passed" "failed" "failed"))
        (check-equal? (code-of (second (cases report))) "RUNTIME-BDD-ASSERTION")
        (check-equal? (code-of (third (cases report))) "CHECK-BDD-AMBIGUOUS")
-       (check-equal? (hash-ref (hash-ref (third (cases report)) 'error) 'actual) "value is 1")
+       (check-equal? (hash-ref (hash-ref (third (cases report)) 'error) 'actual) "\"value is 1\"")
        (for ([entry '(("duplicate.agc" "RUNTIME-BDD-DUPLICATE" 1) ("predefined.agc" "RUNTIME-BDD-DUPLICATE" 1)
                       ("pattern.agc" "RUNTIME-BDD-PATTERN" 1) ("type.agc" "CHECK-TYPE-MISMATCH" 9)
                       ("silent.agc" "RUNTIME-BDD-CONTEXT" 1) ("loops.agc" "RUNTIME-STEP-LIMIT" 4))])

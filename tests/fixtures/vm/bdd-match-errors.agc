@@ -1,8 +1,9 @@
+import "std/test/report" as Report
 import "std/bdd/match" as Match
 import "std/bdd/gherkin" as Gherkin
 
 def check(definitions: List[String]) -> Void
-  where = Gherkin.Span(file: "steps.agc", line: 1, column: 1, end_column: 12)
+  where = Report.Span(file: "steps.agc", line: 1, column: 1, end_column: 12)
   case Match.compile(definitions, where)
     Gherkin.Outcome.Done(patterns) -> puts("compiled #{patterns.size}")
     Gherkin.Outcome.Failed(problem) ->

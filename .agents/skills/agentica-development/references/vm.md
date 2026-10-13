@@ -117,7 +117,7 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   Every catalog implementation is in `vm-builtins` in `src/lower.rkt`
   (`tests/bytecode-test.rkt` checks it), so no builtin reaches it today.
   `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
-  the step program and `std/bdd/runner` and starts the runner VM with
+  the step program and `std/test/runner` and starts the runner VM with
   `--driver-pid` (see `references/stages.md`).
   Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
   in the temp directory and runs the VM with the hidden `--driver-pid PID`

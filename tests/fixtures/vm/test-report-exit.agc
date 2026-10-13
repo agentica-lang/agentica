@@ -1,8 +1,8 @@
-import "std/bdd/report" as Report
+import "std/test/report" as Report
 import "std/bdd/gherkin" as Gherkin
 
-def at(line: Int) -> Gherkin.Span
-  return Gherkin.Span(file: "/specs/x.feature", line: line, column: 3, end_column: 12)
+def at(line: Int) -> Report.Span
+  return Report.Span(file: "/specs/x.feature", line: line, column: 3, end_column: 12)
 end
 
 def problem(code: String) -> Report.Error
@@ -12,7 +12,7 @@ end
 
 def scenario(name: String, verdict: Report.Verdict) -> Report.ScenarioResult
   steps = [Report.StepResult(text: "a step", location: at(3), status: Report.StepStatus.Passed)]
-  return Report.ScenarioResult(name: name, tags: [], location: at(2), example: Gherkin.Example.NoExample, duration_ms: 0,
+  return Report.ScenarioResult(name: name, tags: [], location: at(2), example: Report.Example.NoExample, duration_ms: 0,
                                steps: steps, verdict: verdict)
 end
 
@@ -53,7 +53,7 @@ def main() -> Void
   puts(Report.from_json("{\"code\":\"X\"}").message)
   odd = "a\"b\\c\nd\t" + String.from_code(233) + String.from_code(1) + String.from_code(127)
   multi = Report.Error(code: "RUNTIME-DIVISION-BY-ZERO", message: odd, span: at(5), end_line: 7,
-                       expected: Report.Detail.Known(odd), actual: Report.Detail.Known(""), original: JSON.null())
+                       expected: Report.Detail.Known(odd.inspect), actual: Report.Detail.Known("".inspect), original: JSON.null())
   files = [feature([scenario(odd, Report.Verdict.Fail(multi))])]
   show("escapes", files)
   puts(Report.text(files, false))
