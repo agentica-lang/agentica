@@ -1,5 +1,5 @@
-import "gherkin" as Gherkin
-import "match" as Match
+import "std/bdd/gherkin" as Gherkin
+import "std/bdd/match" as Match
 import "report" as Report
 
 struct Config
@@ -74,10 +74,10 @@ export def main() -> Void
 end
 
 def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
-  where = Gherkin.Span(file: config.steps_source, line: 1, column: 1, end_column: 1)
+  where = Report.Span(file: config.steps_source, line: 1, column: 1, end_column: 1)
   if config.steps_error != ""
     parsed = Report.from_json(config.steps_error)
-    fallback = error_at("RUNTIME-BDD-INFRA", parsed.message, where)
+    fallback = Report.error_at("RUNTIME-BDD-INFRA", parsed.message, where)
     return [Report.file_error(config.steps_source, parsed.unwrap_or(fallback))]
   end
   patterns: List[Match.Pattern] = []
@@ -97,20 +97,20 @@ def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
 end
 
 # The list child writes the patterns of BDD.run in order and exits, so its stdout is read once at the end.
-def list_steps(config: Config, where: Gherkin.Span) -> Listing
+def list_steps(config: Config, where: Report.Span) -> Listing
   spawned = Process.spawn_captured(config.vm, vm_args(config, 1000000, "list"), ".", 30000)
   if not spawned.ok?
-    return Listing.Broken(error_at("RUNTIME-BDD-INFRA", spawned.message, where))
+    return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
   p = spawned.unwrap!
   Process.close_stdin(p, 5000)
   output = Process.output(p, 30000)
   Process.close(p)
   if not output.ok?
-    return Listing.Broken(error_at("RUNTIME-BDD-TIMEOUT", "the step program did not list its steps within 30 seconds", where))
+    return Listing.Broken(Report.error_at("RUNTIME-BDD-TIMEOUT", "the step program did not list its steps within 30 seconds", where))
   end
   if output.unwrap!.truncated
-    return Listing.Broken(error_at("RUNTIME-BDD-OUTPUT-LIMIT", "step program output exceeds 1 MiB", where))
+    return Listing.Broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "step program output exceeds 1 MiB", where))
   end
   records = output.unwrap!.stdout.split("\n").filter do |line| line.include?(marker()) end.map do |line| record_of(line) end
   failures = records.filter do |record| event_of(record) == "fail" end
@@ -122,12 +122,12 @@ def list_steps(config: Config, where: Gherkin.Span) -> Listing
     if crash.ok?
       return Listing.Broken(crash.unwrap!)
     end
-    return Listing.Broken(error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
+    return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
   texts = records.filter do |record| event_of(record) == "step" end.map do |record| text_of(record, "pattern") end
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
-    Gherkin.Outcome.Failed(problem) -> return Listing.Broken(Report.from_diagnostic(problem))
+    Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))
   end
 end
 
@@ -140,7 +140,7 @@ def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Rep
     return Report.file_error(path, located("RUNTIME-BDD-INFRA", text.message, path))
   end
   case Gherkin.parse(path, text.unwrap!)
-    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, Report.from_diagnostic(problem))
+    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, from_diagnostic(problem))
     Gherkin.Outcome.Done(feature) ->
       base = Path.resolve(Path.join([path, ".."]).unwrap_or(path)).unwrap_or(path)
       scenarios = feature.scenarios.map do |item| run_scenario(config, patterns, base, item) end
@@ -259,7 +259,7 @@ def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], 
 end
 
 # Reads records until the step ends; text without the marker is handler output, at most 1 MiB per step.
-def await_step(p: Process, index: Int, deadline: Int, span: Gherkin.Span, then_step: Bool) -> StepEnd
+def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_step: Bool) -> StepEnd
   asserts = 0
   output = 0
   while true
@@ -304,7 +304,7 @@ def await_step(p: Process, index: Int, deadline: Int, span: Gherkin.Span, then_s
 end
 
 # After the last step the child exits 0 when its stdin ends; anything else fails the scenario.
-def await_exit(p: Process, deadline: Int, span: Gherkin.Span) -> Report.Verdict
+def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
   line = Process.read_line(p, left(deadline))
   while line.ok?
     text = line.unwrap!
@@ -322,31 +322,31 @@ def await_exit(p: Process, deadline: Int, span: Gherkin.Span) -> Report.Verdict
   return Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
 end
 
-def read_failure(p: Process, message: String, deadline: Int, span: Gherkin.Span) -> Report.Error
+def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
   if message == "network: operation timed out"
-    return error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
+    return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
   end
   if message == "process: output exceeds 1048576 bytes" or message == "process: line exceeds 1048576 bytes"
-    return error_at("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span)
+    return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span)
   end
   if message != "process: end of input"
-    return error_at("RUNTIME-BDD-IO", message, span)
+    return Report.error_at("RUNTIME-BDD-IO", message, span)
   end
   output = Process.output(p, left(deadline))
   if not output.ok?
-    return error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
+    return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
   end
   crash = stderr_diagnostic(output.unwrap!.stderr)
   if crash.ok?
     return crash.unwrap!
   end
   code = Process.wait(p, left(deadline))
-  return error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
+  return Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
 end
 
-def send_failure(p: Process, message: String, deadline: Int, span: Gherkin.Span) -> Report.Error
+def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
   if message == "process: send exceeds 1048576 bytes"
-    return error_at("RUNTIME-BDD-IO", "the step line exceeds 1 MiB after JSON escaping", span)
+    return Report.error_at("RUNTIME-BDD-IO", "the step line exceeds 1 MiB after JSON escaping", span)
   end
   return read_failure(p, message, deadline, span)
 end
@@ -366,7 +366,7 @@ def task_crash?(line: String) -> Bool
   return parsed.ok? and JSON.get(parsed.unwrap!, "task").ok?
 end
 
-def record_error(record: Json, span: Gherkin.Span) -> Report.Error
+def record_error(record: Json, span: Report.Span) -> Report.Error
   return Report.Error(code: text_of(record, "code"), message: text_of(record, "message"), span: span, end_line: span.line,
                       expected: detail_of(record, "expected"), actual: detail_of(record, "actual"), original: JSON.null())
 end
@@ -388,8 +388,8 @@ end
 
 def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Error
   case Match.resolve(patterns, step)
-    Gherkin.Outcome.Failed(problem) -> return Report.with_actual(Report.from_diagnostic(problem), step.text)
-    Gherkin.Outcome.Done(_) -> return error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
+    Gherkin.Outcome.Failed(problem) -> return Report.with_actual(from_diagnostic(problem), step.text.inspect)
+    Gherkin.Outcome.Done(_) -> return Report.error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
   end
 end
 
@@ -426,16 +426,16 @@ def text_of(record: Json, key: String) -> String
   return ""
 end
 
-def failure(code: String, message: String, span: Gherkin.Span) -> Report.Verdict
-  return Report.Verdict.Fail(error_at(code, message, span))
+def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
+  return Report.Verdict.Fail(Report.error_at(code, message, span))
 end
 
-def error_at(code: String, message: String, span: Gherkin.Span) -> Report.Error
-  return Report.from_diagnostic(Gherkin.Diagnostic(code: code, message: message, span: span))
+def from_diagnostic(problem: Gherkin.Diagnostic) -> Report.Error
+  return Report.error_at(problem.code, problem.message, problem.span)
 end
 
 def located(code: String, message: String, path: String) -> Report.Error
-  return error_at(code, message, Gherkin.Span(file: path, line: 1, column: 1, end_column: 1))
+  return Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
 end
 
 def marker() -> String

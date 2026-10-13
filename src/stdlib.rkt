@@ -20,5 +20,5 @@
         "std/bdd.agc" (embed-source "bdd.agc")
         "std/bdd/gherkin.agc" (embed-source "bdd/gherkin.agc")
         "std/bdd/match.agc" (embed-source "bdd/match.agc")
-        "std/bdd/report.agc" (embed-source "bdd/report.agc")
-        "std/bdd/runner.agc" (embed-source "bdd/runner.agc")))
+        "std/test/report.agc" (embed-source "test/report.agc")
+        "std/test/runner.agc" (embed-source "test/runner.agc")))
