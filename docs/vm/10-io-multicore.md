@@ -60,7 +60,8 @@ CPU-bound work that one scheduler cannot serve.
   increment. A wake that finds RUNNING or WOKEN is stale and dropped. The
   scheduler sets WOKEN to RUNNING when the task's turn starts. A resumed
   task re-checks its wait condition, so a wake is only a hint. No wake is
-  lost, and a task is queued at most once.
+  lost, and a task is queued at most once. Which thread pushes after a
+  completion, and which after a timeout or a cancel, is in §16.5.
 - **State split.** As built (`vm/agc.h`): `agc_runtime` (shared), `struct
   agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
   current `task`, the run queue, `loop`, `registry`, the turn counters and
@@ -72,7 +73,7 @@ CPU-bound work that one scheduler cannot serve.
   the task state is a plain READY, RUNNING, PARKED, DONE enum without the
   PARKING and WOKEN steps, which only matter when another thread can wake a
   task; and there are no stream locks, since one thread writes. With N>1
-  every field of the old `struct agc_vm` has a place under §16:
+  the main fields go as follows (§16):
   - Runtime, read-only after start-up: `program` (with its constants),
     `args`, `cwd` (raw bytes, read at start-up by `agc_files_init`),
     `no_files`, and the config. Also in the runtime but shared under rules:
@@ -94,7 +95,8 @@ CPU-bound work that one scheduler cannot serve.
     (see Park and wake protocol).
   - A runtime diagnostic or `System.exit` on any scheduler ends the run
     (6.2): that scheduler records the outcome once and wakes the I/O thread
-    and the idle schedulers; the other schedulers stop at their next `STEP`
+    and the idle schedulers (the flag they wait on changes under the run
+    queue's lock, §16.3); the other schedulers stop at their next `STEP`
     slow path or when they wake, and the exit path (§14.4) runs on the I/O
     thread. Whether it first waits for the schedulers to stop is open
     (§16.11).

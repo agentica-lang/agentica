@@ -142,9 +142,10 @@
   asks for it) the scheduler calls `uv_run(UV_RUN_NOWAIT)`, so ready I/O wakes
   its tasks even while other tasks keep computing. Timers (`Task.sleep`) wake
   the same way, inside `uv_run`. Tasks woken during a `NOWAIT` go behind the
-  tasks already queued. With N=1 the scheduler blocks in `uv_run(UV_RUN_ONCE)` only
-  when its run queue is empty; with N>1 the I/O thread blocks in the loop
-  and an idle scheduler waits on the run queue's condvar (§16.2, 10.2.3).
+  tasks already queued. With N=1 the scheduler blocks in
+  `uv_run(UV_RUN_ONCE)` only when its run queue is empty; with N>1 the I/O
+  thread blocks in the loop and an idle scheduler waits on the run queue's
+  condvar (§16.2, 10.2.3).
   Without channels, a parked task waits on I/O, a timer, or another live
   task, so either some loop has an active handle or some queue is not empty.
   If every scheduler is idle, no loop has an active handle, and tasks are
@@ -183,8 +184,8 @@
   - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
     BEAM's per-process heaps. Only a global heap limit is possible (13).
 - **N=1 first.** The first tasks PR of 7h runs one scheduler, but on the
-  split structures of 10.2.3, so going to N>1 later adds threads, the global run queue with its lock,
-  and the I/O inbox without a rewrite.
+  split structures of 10.2.3, so going to N>1 later adds threads, the
+  global run queue with its lock, and the I/O inbox without a rewrite.
 - **As built (tasks PR).** `vm/task.c` holds the scheduler (`agc_vm_run`,
   the FIFO run queue, wake, park) and the `Task` builtins; `vm/interp.c`
   runs one turn of the current task (`agc_run_turn`, which returns yield,
@@ -302,9 +303,9 @@
     Then `agc_io_flush_files` starts the same `OP_CLOSE` job for every file
     still open
     (`close_files`), then waits for all file close jobs, the crashed
-    tasks' ones too (`finish_flushes`): as built, with no
-    limit by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
-    a deadline `uv_timer_t` stops the wait after MS ms, and `vm/main.c`
+    tasks' ones too (`finish_flushes`): as built, with no limit by
+    default, `uv_run` ONCE until they end; with `--flush-timeout MS`, a
+    deadline `uv_timer_t` stops the wait after MS ms, and `vm/main.c`
     prints one warning line (`agc_print_flush_timeout`) and keeps the
     exit code. The target is a limit that is always on (§14.4, roadmap
     row 7.2.1d): 30 seconds by default, with the same deadline timer.
@@ -430,8 +431,8 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   does (no `AGENTICA_*` variable). libuv reads it once, when the first
   `uv_queue_work` creates the pool, so it must be in the environment when
   the VM starts; changing it later has no effect. The default is 4 and
-  libuv caps it at 1024. There is one pool per process, driven by the one loop
-  (§16). It runs regular-file I/O (stdin too when it is a regular
+  libuv caps it at 1024. There is one pool per process, driven by the
+  one loop (§16). It runs regular-file I/O (stdin too when it is a regular
   file, or when it cannot be reopened, below), opens and path calls, DNS (`getaddrinfo`) and the TLS setup jobs
   that load CA, certificate and key files, so long or many concurrent
   file reads, or slow DNS, queue behind each other. Raise it when a
@@ -482,25 +483,25 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   then prints that file data may not be written. Target (§14.4, roadmap
   row 7.2.1d): the limit is always on, 30 seconds by default, set with
   `--flush-timeout MS` or an environment variable, with no way to turn it
-  off, and a run that hits it prints the same line; (4) the diagnostic or summary is printed and
-  the VM ends with `_exit`. No task is awaited, no other pool job is waited
-  for, no socket is read to its end and the loop is not freed: the OS
-  frees descriptors and memory, and `_exit` skips libuv's destructor,
-  which would join the pool threads. A file whose operation is still
-  running in the pool (`main` returned while a child task's read was in
-  flight) gets no close job and is not waited for: the job still uses its
+  off, and a run that hits it prints the same line; (4) the diagnostic or
+  summary is printed and the VM ends with `_exit`. No task is awaited, no
+  other pool job is waited for, no socket is read to its end and the loop is
+  not freed: the OS frees descriptors and memory, and `_exit` skips libuv's
+  destructor, which would join the pool threads. A file whose operation is
+  still running in the pool (`main` returned while a child task's read was
+  in flight) gets no close job and is not waited for: the job still uses its
   state. Killing the children first means a child that reads one of the
-  program's FIFOs is gone before the flush, so data buffered for it is
-  lost (the flush to a FIFO with no reader fails with `EPIPE`). A file
-  close that fails with `agc_fail` at this point (it runs after the
-  scheduler's frame returned) lands on a fresh `setjmp` in `end_run`,
-  skips the rest of the flush and prints one stderr line, as
-  `--flush-timeout` does (`agentica: file data may not be written: the
-  flush failed (CODE: message)`, or `{"flush_failed":"CODE","warning":...}`
-  with `--json`); the exit code does not change. `agc_io_close`, which closes every
-  resource and frees the loop, is only for in-process harnesses (the
-  fuzzer and the C tests): it flushes the files, then releases every
-  resource (the process guard's release kills the children).
+  program's FIFOs is gone before the flush, so data buffered for it is lost
+  (the flush to a FIFO with no reader fails with `EPIPE`). A file close that
+  fails with `agc_fail` at this point (it runs after the scheduler's frame
+  returned) lands on a fresh `setjmp` in `end_run`, skips the rest of the
+  flush and prints one stderr line, as `--flush-timeout` does (`agentica:
+  file data may not be written: the flush failed (CODE: message)`, or
+  `{"flush_failed":"CODE","warning":...}` with `--json`); the exit code does
+  not change. `agc_io_close`, which closes every resource and frees the
+  loop, is only for in-process harnesses (the fuzzer and the C tests): it
+  flushes the files, then releases every resource (the process guard's
+  release kills the children).
 - **Stop signals.** `agc_io_watch_stop` (called by `vm/main.c` before the
   run) installs a `sigaction` handler for `SIGINT`, `SIGTERM` and `SIGHUP`,
   except a signal the VM started with ignored (`nohup`). A handler gets no
@@ -641,10 +642,10 @@ cannot be made (`agc_poller_open` fails) stays a pool job with one blocking `rea
 pool thread until data comes (§14.1, exceptions). The poller owns its own
 descriptor (a socket is duplicated) and `agc_input_close` closes it. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
 and its `done` half appends the bytes to the shared `agc_input` buffer
-(owned by the runtime, read by the one scheduler today) and wakes the tasks waiting
-for that read. One read is in flight at a time; a second reader parks in
-the input's FIFO. A read with no data at the end of the run is not waited
-for (one exit path). Non-Linux builds keep the blocking read.
+(owned by the runtime, read by the one scheduler today) and wakes the tasks
+waiting for that read. One read is in flight at a time; a second reader
+parks in the input's FIFO. A read with no data at the end of the run is
+not waited for (one exit path). Non-Linux builds keep the blocking read.
 
 How tasks extended it (10.2.1): `agc_io_park` became the place where a task
 leaves its turn. It records the task and the result register, and the

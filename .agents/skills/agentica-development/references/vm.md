@@ -559,8 +559,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   measurement and the evaluation round) is N scheduler threads that pull from
   one global run queue and one I/O thread, the main thread, with the only libuv
   loop, built on split structures (read-only runtime; global run queue; the
-  loop, its inbox and the registry on the I/O thread; per-scheduler turn
-  counter; per-task stack, registers and frame). Once tasks land, a
+  loop and its inbox on the I/O thread, and the registry there or shared
+  under a lock, which is open in §16.11; per-scheduler turn counter;
+  per-task stack, registers and frame). Once tasks land, a
   builtin or opcode whose work grows with its input sets a turn cost
   (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins); it is taken from the turn only, never
   from `steps_left`, so it never changes how `--max-steps` stops a program. Only the
