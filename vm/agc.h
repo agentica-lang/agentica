@@ -165,7 +165,7 @@ struct agc_resource {
   agc_task *waiters, *waiters_tail;
   agc_task *owner;
   agc_close_fn close;
-  bool closing;
+  bool closing, pool_close;
 };
 
 typedef struct {
@@ -318,8 +318,9 @@ typedef struct {
   FILE *out, *err;
   agc_value args;
   agc_string *cwd;
-  bool no_files, no_turn_cost, allow_run, drop_uring_env;
+  bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;
   agc_style style;
+  int64_t flush_timeout;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -531,6 +532,7 @@ uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
 void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close);
 agc_resource *agc_owned_of(agc_vm *vm, agc_value v);
+void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to);
 void agc_close_owned(agc_vm *vm);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
@@ -616,6 +618,7 @@ void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outco
                           bool task);
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
 void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
+void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style);
 
 int agc_fuzz_one(const uint8_t *data, size_t len);
 

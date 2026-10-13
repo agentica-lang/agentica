@@ -4,9 +4,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-#define FLUSH_MS 1000
 
 #ifdef __linux__
 #include <signal.h>
@@ -24,7 +21,9 @@ typedef struct agc_io_job job;
 
 struct agc_loop {
   uv_loop_t uv;
+  uv_timer_t deadline;
   job *ready, *ready_tail;
+  bool expired;
 };
 
 struct agc_io_job {
@@ -82,6 +81,11 @@ agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_LISTENER)) return agc_as_listener(vm, v)->state;
   if (agc_is(v, AGC_T_PROCESS)) return agc_as_process(vm, v)->state;
   return NULL;
+}
+
+void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to) {
+  for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;)
+    if (vm->registry->items[k]->owner == from) vm->registry->items[k]->owner = to;
 }
 
 void agc_close_owned(agc_vm *vm) {
@@ -514,22 +518,42 @@ static bool flushing(const agc_vm *vm) {
   return false;
 }
 
-/* A crashed task's file close flushes its buffer; the run waits for it. */
-static void finish_flushes(agc_vm *vm) {
-  struct timespec pause = {0, 1000000L};
-  uv_update_time(&vm->loop->uv);
-  uint64_t deadline = uv_now(&vm->loop->uv) + FLUSH_MS;
-  while (flushing(vm)) {
-    uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
-    if (!flushing(vm)) return;
-    uv_update_time(&vm->loop->uv);
-    if (uv_now(&vm->loop->uv) >= deadline) return;
-    nanosleep(&pause, NULL);
+static void close_files(agc_vm *vm) {
+  for (size_t k = registry_count(vm); k-- > 0;) {
+    if (k >= registry_count(vm)) continue;
+    agc_resource *r = vm->registry->items[k];
+    if (!r->pool_close || !r->native || held(r)) continue;
+    r->holder = NULL;
+    r->close(vm, r);
   }
 }
 
+static void flush_expired(uv_timer_t *timer) { ((agc_loop *)timer->data)->expired = true; }
+
+/* Every file close flushes its buffer in a pool job; the run waits for them,
+   at most --flush-timeout milliseconds when it is set. */
+static void finish_flushes(agc_vm *vm) {
+  agc_loop *loop = vm->loop;
+  int64_t limit = vm->rt->flush_timeout;
+  if (!flushing(vm)) return;
+  loop->expired = false;
+  if (limit >= 0) {
+    uv_update_time(&loop->uv);
+    uv_timer_init(&loop->uv, &loop->deadline);
+    loop->deadline.data = loop;
+    uv_timer_start(&loop->deadline, flush_expired, (uint64_t)limit, 0);
+  }
+  while (flushing(vm) && !loop->expired)
+    if (!uv_run(&loop->uv, UV_RUN_ONCE)) break;
+  if (limit >= 0) uv_close((uv_handle_t *)&loop->deadline, NULL);
+  vm->rt->flush_expired = flushing(vm);
+}
+
 static bool close_all(agc_vm *vm) {
-  if (vm->loop) finish_flushes(vm);
+  if (vm->loop) {
+    close_files(vm);
+    finish_flushes(vm);
+  }
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
     if (!j) continue;

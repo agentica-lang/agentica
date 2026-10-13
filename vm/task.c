@@ -316,6 +316,7 @@ agc_outcome agc_vm_run(agc_vm *vm) {
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
           break;
         }
+        agc_give_owned(vm, t, t->parent);
         finish_task(vm, t);
       } else if (r == AGC_TURN_YIELD) {
         enqueue(vm, t);

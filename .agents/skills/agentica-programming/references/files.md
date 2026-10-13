@@ -32,12 +32,20 @@ UTF-8. Whole-text helpers and each stream read/write are limited to 1 MiB;
 removes LF or CRLF, accepts a final unterminated line, and returns an error
 for EOF before any line or invalid UTF-8. Byte values are 0..255. Close
 flushes output and is idempotent. Explicit flush and close return Results.
+`File.close` on a handle that is already closing (its owner task crashed)
+returns `ok()` at once; the run still waits for that close's flush.
 
 Timeouts are positive milliseconds and include the serialized handle lock
 wait. Timing out active I/O closes that handle (later calls say the handle is
 closed); timing out while waiting for its lock leaves it open. Output is
 buffered (4096 bytes per handle) until it overflows, `File.flush`,
-`File.close` or the end of the run, so a write error may show there. FIFOs
+`File.close` or the end of the run, so a write error may show there. At the
+end of the run the VM closes every open file and waits for the writes, with
+no limit by default; `agentica --flush-timeout MS` (non-negative, bad values
+exit 2) waits at most MS ms, then ends the run with the same exit code and
+one stderr line, `agentica: file data may not be written: ...`, or
+`{"flush_timeout_ms": MS, "warning": "file data may not be written"}` with
+`--json` (not a diagnostic). FIFOs
 and devices count as files, but the VM reads and writes them with blocking
 calls: a FIFO with no peer may give EOF or an error instead of a timeout,
 and a stuck call keeps one of libuv's pool threads. File calls, stdin

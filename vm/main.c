@@ -213,7 +213,8 @@ static agc_value program_args(int argc, char **argv, int first) {
 }
 
 static const char usage[] =
-  "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--allow-run] [--ai|--json] -- <file.agcb> [args...]\n";
+  "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- "
+  "<file.agcb> [args...]\n";
 
 static int usage_error(void) {
   fputs(usage, stderr);
@@ -229,7 +230,7 @@ static bool once(bool *seen, const char *option) {
   return true;
 }
 
-static bool parse_steps(const char *text, int64_t *steps) {
+static bool parse_count(const char *text, int64_t *count) {
   if (!*text) return false;
   int64_t value = 0;
   bool clamped = false;
@@ -239,9 +240,11 @@ static bool parse_steps(const char *text, int64_t *steps) {
       clamped = true;
   }
   if (clamped) value = INT64_MAX;
-  *steps = value;
-  return value > 0;
+  *count = value;
+  return true;
 }
+
+static bool parse_steps(const char *text, int64_t *steps) { return parse_count(text, steps) && *steps > 0; }
 
 static bool parse_seed(const char *text, uint32_t *seed) {
   if (!*text) return false;
@@ -287,9 +290,9 @@ static int run(int argc, char **argv) {
   agc_init();
   int64_t max_steps = INT64_MAX;
   agc_style style = AGC_STYLE_PLAIN;
-  int64_t driver = 0;
+  int64_t driver = 0, flush_timeout = -1;
   uint32_t seed = 0;
-  bool seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false, allow_run = false;
+  bool seen_flush = false, seen_steps = false, seen_ai = false, seen_json = false, seen_driver = false, seen_seed = false, allow_run = false;
   int i = 1;
   while (i < argc) {
     const char *arg = argv[i];
@@ -341,6 +344,15 @@ static int run(int argc, char **argv) {
       i += 2;
       continue;
     }
+    if (strcmp(arg, "--flush-timeout") == 0) {
+      if (!once(&seen_flush, arg)) return 2;
+      if (i + 1 >= argc || !parse_count(argv[i + 1], &flush_timeout)) {
+        fputs("agentica-vm: --flush-timeout needs a non-negative integer\n", stderr);
+        return 2;
+      }
+      i += 2;
+      continue;
+    }
     if (strcmp(arg, "--driver-pid") == 0) {
       if (!once(&seen_driver, arg)) return 2;
       if (i + 1 >= argc || !parse_steps(argv[i + 1], &driver)) {
@@ -383,6 +395,7 @@ static int run(int argc, char **argv) {
   agc_vm_init(vm, program, stdout, stderr, max_steps);
   vm->rt->trace = trace;
   vm->rt->style = style;
+  vm->rt->flush_timeout = flush_timeout;
   vm->rt->allow_run = allow_run;
   vm->rt->drop_uring_env = own_uring_env;
   seed_map_hash(vm);
@@ -395,6 +408,7 @@ static int run(int argc, char **argv) {
   agc_outcome outcome = agc_vm_run(vm);
   bool settled = agc_io_close(vm);
   agc_files_close(vm);
+  if (vm->rt->flush_expired) agc_print_flush_timeout(stderr, flush_timeout, style);
   if (outcome.kind != AGC_FAILED && fflush(stdout) != 0) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";

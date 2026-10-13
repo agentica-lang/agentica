@@ -178,3 +178,11 @@ void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, ag
   }
   fflush(err);
 }
+
+void agc_print_flush_timeout(FILE *err, int64_t ms, agc_style style) {
+  if (style == AGC_STYLE_JSON)
+    fprintf(err, "{\"flush_timeout_ms\":%" PRId64 ",\"warning\":\"file data may not be written\"}\n", ms);
+  else
+    fprintf(err, "agentica: file data may not be written: the flush took longer than %" PRId64 " ms\n", ms);
+  fflush(err);
+}

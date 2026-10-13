@@ -13,10 +13,7 @@ Tasks run functions at the same time in one program. The tour page
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and gives a handle to it. A file,
-socket, listener or process belongs to the task that opened it. When the
-argument itself is such a handle, it moves to the new task, so a crash of the
-new task closes it. A handle inside a struct or a list stays with its owner.
+Starts `function(argument)` in a new task and gives a handle to it. A file, socket, listener or process belongs to the task that opened it. When the argument itself is such a handle, it moves to the new task, so a crash of the new task closes it. A handle inside a struct or a list stays with its owner. When a task returns normally, the handles it still owns go back to the task that started it.
 
 ```agentica
 def greet(name: String) -> String

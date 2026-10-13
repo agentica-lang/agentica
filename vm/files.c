@@ -601,7 +601,7 @@ static void work(void *data) {
 
 static void drop(void *data) {
   op *o = data;
-  if (o->owns_st) free_state(o->st);
+  if (o->owns_st && o->st) release_state(o->st);
   free_op(o);
 }
 
@@ -689,7 +689,8 @@ static agc_value closed(agc_vm *vm, void *data, agc_value context) {
 
 static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", NULL};
 
-/* The close of a crashed task's file: pending while a job holds it. */
+/* The close of a crashed task's file, or of a file still open when the run
+   ends: pending while a job holds it. */
 static void close_file(agc_vm *vm, agc_resource *r) {
   r->closing = true;
   r->next_owner = NULL;
@@ -725,6 +726,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_APPEND: {
         agc_resource *r = agc_register(vm, o->st, release_state);
         agc_own(vm, r, close_file);
+        r->pool_close = true;
         o->st = NULL;
         result = agc_result_value(true, agc_handle_value(r));
         break;

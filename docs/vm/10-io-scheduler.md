@@ -282,9 +282,16 @@
     returns the closed error. A handle made outside a turn (in the
     `done` half of a detached job) gets no owner; `discard` closes it,
     except a process, whose `release_proc` would kill every child of the
-    run. At the end of the run, `agc_io_close` first waits up to 1 s
-    (`finish_flushes`) for the close jobs of crashed tasks' files, so
-    their buffered writes reach the disk.
+    run. When a task ends normally, the handles it still owns go to its
+    parent (`agc_give_owned`), so a handle moved to a helper task and
+    returned with it is still closed if the parent crashes later. At the
+    end of the run, `agc_io_close` starts the same `OP_CLOSE` job for
+    every file still open (`close_files`), then waits for all file close
+    jobs, the crashed tasks' ones too (`finish_flushes`): with no limit
+    by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
+    a deadline `uv_timer_t` stops the wait after MS ms, and `vm/main.c`
+    prints one warning line (`agc_print_flush_timeout`) and keeps the
+    exit code.
   - Task cancellation (20b, the core that `close_server` (20c),
     `Task.map` (17a) and task crash isolation (phase 24) build on; a
     program cancels tasks only through a crash, which cancels the
@@ -408,17 +415,21 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
 - **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
   it ended: open handles are closed (the evaluator's cleanup), timers are
   closed, the loop runs once without waiting, and the loop is freed when no
-  job is left. Closing a handle writes its pending output. `agc_io_close`
-  returns false when a job is still stuck in the OS (a read on a silent
-  FIFO, say); `vm/main.c` then flushes stdout and stderr and ends with
-  `_exit`, because a normal exit would run libuv's destructor, which joins
-  the pool threads and would wait for that read. The flush of a handle's
-  write buffer at the end of run is a blocking write, so it can block on a
-  FIFO whose reader stopped reading, as Racket's flush in
-  `filesystem-close-all!` does (parity). A handle whose operation is still
-  running in the pool (`main` returned while a child task's read was in
-  flight) is not released: the job still uses its state. It is released
-  after the loop's last run once that job's work is done; otherwise it
+  job is left. Closing a file writes its pending output in an `OP_CLOSE`
+  pool job (§10.2.1, Owners), and the run waits for those jobs: without a
+  limit by default, so a write to a FIFO whose reader stopped reading
+  keeps the run open, as Racket's flush in `filesystem-close-all!` does;
+  `--flush-timeout MS` bounds that wait and then prints that file data may
+  not be written. `agc_io_close` returns false when a job is still stuck
+  in the OS (a read on a silent FIFO, or a flush past `--flush-timeout`);
+  `vm/main.c` then flushes stdout and stderr and ends with `_exit`,
+  because a normal exit would run libuv's destructor, which joins the
+  pool threads and would wait for that job. A file whose operation is
+  still running in the pool (`main` returned while a child task's read
+  was in flight) gets no close job and is not waited for: the job still
+  uses its state. It is released (`release_state`, a direct write on the
+  loop thread) after the loop's last run once that job's work is done;
+  otherwise it
   stays registered, `agc_io_close` returns false, and the process ends
   with `_exit` as above.
 - **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a

@@ -94,6 +94,7 @@
   (define max-steps #f)
   (define allow-run? #f)
   (define seed #f)
+  (define flush-timeout #f)
   (define step-files '())
   (define raw-arguments
     (command-line
@@ -115,6 +116,11 @@
         (eprintf "agentica: --seed needs an integer from 0 to 2147483647\n")
         (exit 2))
       (set! seed parsed)]
+     [("--flush-timeout") ms "wait at most MS milliseconds for file data at the end of the run"
+      (unless (regexp-match? #px"^[0-9]+$" ms)
+        (eprintf "agentica: --flush-timeout needs a non-negative integer\n")
+        (exit 2))
+      (set! flush-timeout ms)]
      [("--dump") "print the checked tree instead of running it" (set! dump? #t)]
      [("--dump-ir") "print the lowered VM IR instead of running it" (set! dump-ir? #t)]
      [("--ai") "print diagnostics as compact text for an agent" (set! style 'ai)]
@@ -180,7 +186,7 @@
   (unless (if compile?
               (and (= (length arguments) 3) (equal? (cadr arguments) "-o") (not dump?) (not dump-ir?))
               (>= (length arguments) 1))
-    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
+    (eprintf "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [check] <source-file> [args...]\n       agentica [--ai|--json] compile <source-file> -o <file.agcb>\n       agentica help NAME [--json]\n       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE]\n")
     (exit 2))
   (define source-file (car arguments))
   (define program-args (cdr arguments))
@@ -230,6 +236,7 @@
     (define options
       (append (if max-steps (list "--max-steps" (number->string max-steps)) '())
               (if seed (list "--seed" (number->string seed)) '())
+              (if flush-timeout (list "--flush-timeout" flush-timeout) '())
               (if allow-run? '("--allow-run") '())
               (case style [(ai) '("--ai")] [(json) '("--json")] [else '()])))
     (define status
