@@ -30,6 +30,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM th
 - New features are VM-only. They are tested with golden outputs and independent Node/Python peers.
 - When a phase item is finished, tick it in the roadmap and update the development skill.
 - When the language or a builtin changes, update the matching site page too.
+- Do not hard-wrap prose in `site/content/`: one line per paragraph or list item. Code blocks keep their line breaks.
 - When the language changes, update `docs/grammar.md` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md`, and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 5,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.
 
 ## Working style
