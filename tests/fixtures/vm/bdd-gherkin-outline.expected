@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 11147,
+  "steps": 11850,
   "stdout": [
     "feature \"streaming\" [\"@stream\"] sample.feature:2:1-19",
     "scenario \"value 1\" [\"@stream\", \"@case\", \"@examples\"] sample.feature:8:1-28 example sample.feature:21:1-10",

@@ -1,5 +1,7 @@
 ## 18. Front-end implementation language
 
+**Decided:** on 2026-10-13 the owner chose self-hosting, for one binary and a fast start. The plan is [§35](35-self-hosting.md); the text below is the history of the question.
+
 **Today:** the front-end (lexer, parser, linker, checker, lowering, bytecode) is written in Racket; the VM is C. The front-end stays in Racket while the language still changes: Phase 8 and the open JSON work (adapters, optional JSON fields, CBOR; sections 15–17). The reference evaluator is also Racket, until it is removed in roadmap 7i.
 
 **Why not now:**

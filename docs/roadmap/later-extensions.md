@@ -24,6 +24,6 @@
 ### Open decisions
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
-- [ ] Front-end implementation language: Racket for now; revisit (self-hosting, or Rust) only once the grammar is stable and startup time or binary size call for it ([`docs/future/18-front-end-language.md` section 18](../future/18-front-end-language.md#18-front-end-implementation-language)). Order step 11 decides it, with the source → result start-up of the server measurement (7j) and the evaluation round (6c); a rewrite starts only if those numbers show that the Racket front end hurts.
+- [x] Front-end implementation language: decided by the owner on 2026-10-13: self-hosting, for one binary and a fast start, as a long-term item after the current order ([`docs/future/35-self-hosting.md` section 35](../future/35-self-hosting.md#35-self-hosted-front-end-and-a-single-binary)). Section 18 keeps the history of the question.
 
-The open items in this section are outside the current implementation order, except the front-end language, which order step 11 decides.
+The open items in this section are outside the current implementation order.

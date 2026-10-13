@@ -93,7 +93,10 @@
 
 (define (take-lock directory)
   (define port (open-output-file (lock-file directory) #:exists 'error #:permissions #o600))
-  (unless (port-try-file-lock? port 'exclusive)
+  (define locked?
+    (with-handlers ([(lambda (_) #t) (lambda (failure) (close-output-port port) (raise failure))])
+      (port-try-file-lock? port 'exclusive)))
+  (unless locked?
     (close-output-port port)
     (error 'agentica "cannot lock ~a" directory))
   port)
@@ -114,13 +117,30 @@
     (define path (build-path temporary name))
     (define held (and (regexp-match? stale-name (path->bytes name)) (not (equal? path own)) (abandoned? path owner)))
     (when held
-      (with-handlers ([exn:fail? void])
-        (delete-directory/files path #:must-exist? #f))
+      (remove-run-directory path)
       (close-output-port held))))
 
-(define (shared-and-not-sticky? temporary)
-  (define mode (hash-ref (file-or-directory-stat temporary) 'mode))
-  (and (not (zero? (bitwise-and mode #o002))) (zero? (bitwise-and mode #o1000))))
+(define (remove-run-directory directory)
+  (with-handlers ([exn:fail? void])
+    (for ([name (in-list (directory-list directory))]
+          #:unless (equal? (path->bytes name) #"lock"))
+      (delete-directory/files (build-path directory name) #:must-exist? #f))
+    (delete-directory/files directory #:must-exist? #f)))
+
+(define (shared-and-not-sticky? temporary own)
+  (define stat (file-or-directory-stat temporary))
+  (define mine (file-or-directory-stat own #t))
+  (define mode (hash-ref stat 'mode))
+  (define (set? bits) (not (zero? (bitwise-and mode bits))))
+  (define (same? key) (equal? (hash-ref stat key) (hash-ref mine key)))
+  (and (not (set? #o1000))
+       (or (set? #o002)
+           (and (set? #o020)
+                (not (and (same? 'user-id) (same? 'group-id) (not (set? #o2000))))))))
+
+(define (message-line text pick)
+  (define lines (string-split text "\n"))
+  (if (null? lines) "no diagnostic" (pick lines)))
 
 (define (compile-steps path directory)
   (cond
@@ -174,27 +194,36 @@
                             (path->string vm) style)]
     [else
      (define temporary (find-system-path 'temp-dir))
-     (define directory (build-path temporary (format "agentica-bdd-~a" (bytes->hex-string (crypto-random-bytes 16)))))
+     (define (random-name prefix) (build-path temporary (string-append prefix (bytes->hex-string (crypto-random-bytes 16)))))
+     (define directory (random-name "agentica-bdd-"))
+     (define current (random-name "agentica-bdd-new-"))
      (define created? #f)
      (define lock #f)
      (with-handlers ([exn:break? raise])
-       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (car (string-split (exn-message failure) "\n")) (path->string temporary) style))])
-         (if (shared-and-not-sticky? temporary)
-             (infrastructure-report
-              (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
-              (path->string temporary) style)
-             (dynamic-wind
-               (lambda ()
-                 (parameterize-break #f
-                   (make-directory directory #o700)
-                   (set! created? #t)
-                   (set! lock (take-lock directory))))
-               (lambda ()
-                 (sweep-stale temporary directory)
-                 (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
-               (lambda ()
-                 (when lock (close-output-port lock))
-                 (when created? (delete-directory/files directory #:must-exist? #f)))))))]))
+       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (message-line (exn-message failure) car) (path->string temporary) style))])
+         (dynamic-wind
+           (lambda ()
+             (parameterize-break #f
+               (make-directory current #o700)
+               (set! created? #t)))
+           (lambda ()
+             (cond
+               [(shared-and-not-sticky? temporary current)
+                (infrastructure-report
+                 (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
+                 (path->string temporary) style)]
+               [else
+                (parameterize-break #f
+                  (set! lock (take-lock current))
+                  (rename-file-or-directory current directory)
+                  (set! current directory))
+                (sweep-stale temporary directory)
+                (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm)]))
+           (lambda ()
+             (parameterize-break #f
+               (when created? (remove-run-directory current))
+               (with-handlers ([exn:fail? void])
+                 (when lock (close-output-port lock))))))))]))
 
 (define (run-in directory paths step-file style allow-run? seed vm)
   (define runner-file (build-path directory "runner.agcb"))
@@ -233,5 +262,5 @@
          (values status out)
          (infrastructure-report
           (format "the BDD runner failed with exit code ~a: ~a" status
-                  (let ([lines (string-split err "\n")]) (if (null? lines) "no diagnostic" (last lines))))
+                  (message-line err last))
           (path->string vm) style))]))
