@@ -26,17 +26,16 @@ A job that is cancelled is detached (`agc_io_detach`): a loop job is stopped by 
 
 ### 14.4 Ending
 
-**Rule.** One exit path, always bounded. **When `main` ends, the program ends.** The steps are:
+**Rule.** One exit path. Every step of it is bounded, except the file flush, which waits until it is done unless `--flush-timeout` sets a limit (the owner's choice in phase 24, as Erlang's `flush_timeout`: no limit by default). **When `main` ends, the program ends.** The steps are:
 
 1. kill child processes;
-2. flush stdout, stderr and open files, within `--flush-timeout`;
+2. flush stdout, stderr and open files (the file flush with no limit by default, or within `--flush-timeout`);
 3. exit.
 
 Nothing else is joined or drained: no task is awaited, no pool job is waited for, no socket is read to its end. `System.exit`, a crash of `main` and SIGTERM (and SIGINT, SIGHUP) take the same path.
 
 As built (`agc_vm_run` in `vm/task.c`, then `vm/main.c` and `agc_io_close` in `vm/loop.c`): `main`'s return breaks the scheduler loop; `vm/main.c` flushes stdout; `close_files` starts a close job for each open file and `finish_flushes` waits for them; then `release_handles` frees the rest, and the process guard kills the children (`close_children` in `vm/process.c`); if a job is still stuck, `vm/main.c` flushes stdout and stderr and ends with `_exit`, so libuv's destructor does not join the pool. Where this differs from the rule (targets):
 
-- The flush wait has no limit unless `--flush-timeout` is given. Target: always a bound (the default value is open).
 - Children are killed after the files flush, not before.
 - A stop signal goes through the process guard only while a child runs: it kills the children and raises the signal again, with no flush. With no child, the signal's default action ends the VM. Target: the same three steps.
 
