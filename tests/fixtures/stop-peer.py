@@ -23,16 +23,20 @@ def drive(command):
     os._exit(0)
 
 
-def inherit(command):
-    read, write = os.pipe()
-    os.write(write, b"inherited\n")
-    os.close(write)
-    vm = subprocess.run(command + ["/proc/self/fd/%d" % read], pass_fds=(read,), stdout=subprocess.PIPE)
+def relay(command, **options):
+    vm = subprocess.run(command, stdout=subprocess.PIPE, close_fds=True, **options)
     sys.stdout.write(vm.stdout.decode())
     sys.exit(vm.returncode)
 
 
+def inherit(command):
+    read, write = os.pipe()
+    os.write(write, b"inherited\n")
+    os.close(write)
+    relay(command + ["/proc/self/fd/%d" % read], pass_fds=(read,))
+
+
 if __name__ == "__main__":
-    {"fill": lambda: fill(sys.argv[2]), "drive": lambda: drive(sys.argv[2:]), "inherit": lambda: inherit(sys.argv[2:])}[
+    {"fill": lambda: fill(sys.argv[2]), "drive": lambda: drive(sys.argv[2:]), "inherit": lambda: inherit(sys.argv[2:]), "clean": lambda: relay(sys.argv[2:])}[
         sys.argv[1]
     ]()
