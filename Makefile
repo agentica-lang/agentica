@@ -3,8 +3,9 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
+NEED_EXE := $(if $(wildcard dist/agentica),,exe)
 
-.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build test exe clean test-bdd smoke goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -33,6 +34,11 @@ vm-latency: build vm
 
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+
+# Example smoke runs on racket src/main.rkt and dist/agentica, in parallel (tests/smoke.sh).
+# dist/agentica is built only when it is missing; run make exe to refresh it.
+smoke: build vm $(NEED_EXE)
+	tests/smoke.sh
 
 goldens: build vm
 	racket tests/vm-diff-common.rkt

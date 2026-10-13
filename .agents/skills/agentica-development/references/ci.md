@@ -13,7 +13,7 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them), `make test` with the process and module tests on `dist/agentica`
   (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make vm-latency` alone
-  after that, the example smoke runs (in parallel), the vendored OpenSSL
+  after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
   test results). `make test` runs with `JOBS=6` beside the two executable-test

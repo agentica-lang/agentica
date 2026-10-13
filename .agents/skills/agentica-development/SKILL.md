@@ -24,7 +24,7 @@ make dup-check                            # jscpd copy-paste check over src/*.rk
 make site                                 # build the documentation site (references/site.md)
 ```
 
-Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the process and module tests against the compiled executable, and every example smoke run; it is the source of truth for that list. It also runs `make dup-check` (`references/ci.md`): a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the process and module tests against the compiled executable, and `make smoke` (every example smoke run, listed in `tests/smoke.sh`); it is the source of truth for that list. It also runs `make dup-check` (`references/ci.md`): a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 
 ## Repository map
 

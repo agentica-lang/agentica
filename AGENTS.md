@@ -6,6 +6,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM th
 
 - `make test`: build the VM, then run all tests in parallel (`raco test -j $(nproc) tests/`; `JOBS=8` sets the workers).
 - `make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"`: a subset. One stage: `raco test tests/<stage>-test.rkt`.
+- `make smoke`: the example smoke runs of CI, in parallel (`tests/smoke.sh`; builds the VM and `dist/agentica` first if needed).
 - `racket src/main.rkt examples/hello.agc`: run a program on the VM (after `make vm`). `racket src/main.rkt check file.agc`: check only.
 - `make vm`: build `dist/agentica-vm` (run `git submodule update --init` first). `make vm-test`: the C tests.
 - `make goldens`: rewrite the VM golden files after an intended change; commit them.
