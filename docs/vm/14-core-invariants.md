@@ -62,6 +62,6 @@ Items in the plan to re-check with this rule before they start:
 | Item | Question |
 |---|---|
 | VM metrics (phase 18, §28) | It adds a metrics thread and hooks in the core. Could a dump at exit, or an outside reader of the VM's state, do the job? |
-| VM layers (7l, §21) | Does each layer replace code, or only add a boundary? |
+| VM layers (7l, §21; its first part is row 7.2.1b, §15) | Does each layer replace code, or only add a boundary? (§15 answers for the first part.) |
 | JIT (7m, §22) | Required by the roadmap; it must keep the same five rules and add no runtime of its own. |
 | Multicore schedulers (gated, §10.2.3) | Gated on the numbers of steps 9 and 10. If built, each rule above must still hold per scheduler, with one exit path for the process. |
