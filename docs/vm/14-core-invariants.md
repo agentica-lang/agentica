@@ -32,7 +32,7 @@ A job that is cancelled is detached (`agc_io_detach`): a loop job is stopped by 
 
 ### 14.4 Ending
 
-**Rule.** One exit path. Every step of it is bounded, the file flush included: its limit is always on, 30 seconds by default, set with `--flush-timeout MS` or an environment variable (for example `AGENTICA_FLUSH_TIMEOUT_MS`), and there is no way to turn it off. The owner decided this on 2026-10-13; it replaces the choice of phase 24 (as Erlang's `flush_timeout`: no limit by default). At exit, stdout and stderr count as part of the file flush. **When `main` ends, the program ends.** The steps are:
+**Rule.** One exit path. Every step of it is bounded, the file flush included. Target (row 7.2.1d): the limit is always on, 30 seconds by default, set with `--flush-timeout MS` or an environment variable (for example `AGENTICA_FLUSH_TIMEOUT_MS`), and there is no way to turn it off. The owner decided this on 2026-10-13; it replaces the choice of phase 24 (as Erlang's `flush_timeout`: no limit by default). At exit, stdout and stderr count as part of the file flush. **When `main` ends, the program ends.** The steps are:
 
 1. kill child processes;
 2. flush stdout, stderr and open files (the file flush within the flush limit);

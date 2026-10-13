@@ -641,7 +641,7 @@ cannot be made (`agc_poller_open` fails) stays a pool job with one blocking `rea
 pool thread until data comes (§14.1, exceptions). The poller owns its own
 descriptor (a socket is duplicated) and `agc_input_close` closes it. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
 and its `done` half appends the bytes to the shared `agc_input` buffer
-(owned by the runtime, served by scheduler 0) and wakes the tasks waiting
+(owned by the runtime, read by the one scheduler today) and wakes the tasks waiting
 for that read. One read is in flight at a time; a second reader parks in
 the input's FIFO. A read with no data at the end of the run is not waited
 for (one exit path). Non-Linux builds keep the blocking read.

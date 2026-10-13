@@ -26,8 +26,8 @@ CPU-bound work that one scheduler cannot serve.
   (10.2.1).
 - **Run queue and idle schedulers.** One global run queue (§16.3). A new
   task, a task whose turn ended and a woken task are pushed at its tail. A
-  scheduler pops one task, or a small batch, under the queue's lock, never
-  the whole list. An idle scheduler waits on the queue's condvar and never
+  scheduler pops one task under the queue's lock, never the whole list and
+  never a batch. An idle scheduler waits on the queue's condvar and never
   spins; a push signals one. Requeueing a preempted task does not touch the
   shared packed word (Stall check), since the task never stops being live.
 - **Waking.** Whoever wakes a task pushes it on the global run queue, after
@@ -48,7 +48,9 @@ CPU-bound work that one scheduler cannot serve.
   it registers its wait (before it links its job on the I/O inbox, joins a
   waiter list or registers on another task's result). Then it re-checks its
   wait condition and its cancel flag; if either is satisfied, it unregisters
-  and goes back to RUNNING with one CAS that accepts PARKING or WOKEN.
+  and goes back to RUNNING with one CAS that accepts PARKING or WOKEN. A job
+  already linked on the inbox cannot be unlinked, so for a job "unregisters"
+  means the task detaches it and the job runs to its end (§16.11).
   Otherwise it CASes PARKING to PARKED. Registering on another task's result
   is done under that task's lock and fails if the result is already
   published. A waker acts only on PARKING (CAS to WOKEN, no queue: the
@@ -113,14 +115,17 @@ CPU-bound work that one scheduler cannot serve.
   is set, writes are dropped; the check is made under the stream lock. The
   final diagnostic that `vm/main.c` prints is exempt. Until stdout and
   stderr move onto the loop (roadmap row 7.2.1f, §14.1), a write blocks the
-  scheduler thread that does it. Only the order in which output from
-  different tasks interleaves is not repeatable.
+  scheduler thread that does it. Once a write can park, this lock cannot be
+  held across the park; what replaces it is open (§16.11). Only the order
+  in which output from different tasks interleaves is not repeatable.
 - **The I/O thread blocks in its loop.** With nothing to do it blocks in
   `uv_run(UV_RUN_ONCE)`. The inbox's `uv_async_t` is ref'd while schedulers
   run, so the loop stays alive with no other handle; a request calls
   `uv_async_send` on it. When the run ends, the I/O thread unrefs it so the
-  loop can close. With N=1 as built there is no inbox handle, and the plain
-  "no active handles" check of 10.2.1 still holds.
+  loop can close; this is for in-process harnesses only, since the real
+  binary ends with `_exit` and closes no loop (Shutdown, below). With N=1
+  as built there is no inbox handle, and the plain "no active handles"
+  check of 10.2.1 still holds.
 - **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s
   return value. One 64-bit atomic word packs the idle scheduler count
   (schedulers waiting on the run queue's condvar) and the live count (jobs
@@ -150,9 +155,11 @@ CPU-bound work that one scheduler cannot serve.
   with `GC_register_my_thread`; the libuv pool threads stay unregistered on
   purpose, since they never touch GC memory. The main thread, which becomes
   the I/O thread, is registered too. The runtime struct stays on the main
-  thread's stack, which Boehm scans, for the whole run. The run queue and
-  the inbox live in GC memory or are registered as roots, so a head in
-  `malloc` memory never hides a task or job from the collector (§16.5).
+  thread's stack, which Boehm scans, for the whole run. The run queue
+  lives in GC memory or is registered as a root, so a head in `malloc`
+  memory never hides a task from the collector. Jobs and the inbox are
+  `malloc` memory and hold no GC pointer; a GC resource owns each job
+  (§16.5).
   Collections stop the world; that cost is accepted and measured (round 2
   benchmarks, which also measure contention on the packed word of the Stall
   check and on the run queue's lock). Boehm stops threads with signals,
