@@ -2,7 +2,7 @@ RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
-VM_DIFF_TESTS = tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
+VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 
 .PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
@@ -68,7 +68,7 @@ site-serve: site-sass
 
 # The C VM (docs/vm/11-build-ci-supply-chain.md section 11). libgc is built from the pinned submodule.
 # make vm                 dist/agentica-vm
-# make vm-test            C tests in vm/tests/
+# make vm-test            C tests in vm/tests/, run in parallel
 # make vm SANITIZE=1      clang with ASan and UBSan, no libgc
 # Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
@@ -77,7 +77,7 @@ site-serve: site-sass
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
-# make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations
+# make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
 #                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
@@ -331,7 +331,7 @@ $(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/test
 	$(VM_LINK)
 
 vm-test: $(VM_TESTS)
-	for t in $(VM_TESTS); do $$t || exit 1; done
+	printf '%s\n' $(VM_TESTS) | xargs -P $(JOBS) -n 1 env
 
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
@@ -360,9 +360,21 @@ CLANG_TIDY ?= clang-tidy
 VM_LINT_SKIP := vm/unicode_data.c
 VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 
-.PHONY: vm-lint
-vm-lint: $(OSSL_DEP) $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
+.PHONY: vm-lint vm-lint-check vm-lint-release vm-lint-sanitize vm-lint-gcstress
+vm-lint: vm-lint-release vm-lint-sanitize vm-lint-gcstress
+
+vm-lint-check: $(OSSL_DEP) $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
 	@$(CLANG_TIDY) --list-checks -checks=misc-use-internal-linkage | grep -q misc-use-internal-linkage || { echo "clang-tidy 19+ required" >&2; exit 1; }
-	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -I $(GC_DIR)/include
-	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -DAGC_NO_GC -fsanitize=address,undefined
-	$(CLANG_TIDY) --quiet $(VM_LINT_SRC) -- $(VM_WARN) $(OSSL_INC) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
+
+vm-lint-release vm-lint-sanitize vm-lint-gcstress: vm-lint-check
+
+LINT = printf '%s\n' $(VM_LINT_SRC) | xargs -P $(JOBS) -I{} $(CLANG_TIDY) --quiet {} -- $(VM_WARN) $(OSSL_INC)
+
+vm-lint-release:
+	$(LINT) -I $(GC_DIR)/include
+
+vm-lint-sanitize:
+	$(LINT) -DAGC_NO_GC -fsanitize=address,undefined
+
+vm-lint-gcstress:
+	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS

@@ -49,16 +49,17 @@
   (error 'vm-diff "AGENTICA_SWEEP must be full or sampled, not ~s" sweep-mode))
 (define runaway-limit 500)
 (define vm-turn-steps 2000)
-(define shard-count 4)
+(define shard-count 8)
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
   (environment-variables-set! (current-environment-variables) name #f))
 
 (define heavy-fixtures
-  '(("tail-calls.agc" . 1) ("files-large.agc" . 1) ("stack-overflow.agc" . 2) ("map-large.agc" . 2) ("enums-case.agc" . 2)
-    ("callback-overflow.agc" . 3) ("results.agc" . 3) ("list-chunks.agc" . 3)))
-(define light-shard-rotation '(1 2 3 4))
-(define extras-shard 4)
+  '(("files-large.agc" . 1) ("process-limits.agc" . 1) ("tcp-exit.agc" . 2) ("json-decode-deep.agc" . 3) ("map-large.agc" . 3)
+    ("http-server-slow.agc" . 4) ("task-concurrent.agc" . 5) ("tcp-limits.agc" . 5) ("tcp-tasks.agc" . 5)
+    ("process-timeouts.agc" . 6) ("callback-overflow.agc" . 7) ("tcp-errors.agc" . 7)))
+(define light-shard-rotation '(1 2 3 4 5 6 7))
+(define extras-shard 8)
 (define fixture-input (make-parameter #""))
 (define fixture-args (make-parameter '()))
 (define fixture-allow-run (make-parameter #f))

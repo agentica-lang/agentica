@@ -21,7 +21,8 @@
   env)
 
 (define (start bytecode mode no-turn-cost?)
-  (parameterize ([current-environment-variables (environment no-turn-cost?)])
+  (parameterize ([current-environment-variables (environment no-turn-cost?)]
+                 [current-subprocess-custodian-mode 'kill])
     (define-values (process out in err)
       (subprocess #f #f (current-error-port) vm-file "--" (path->string bytecode) mode))
     (values process out in)))
@@ -36,6 +37,26 @@
   (subprocess-wait process)
   (close-input-port out)
   (close-output-port in))
+
+(define (concurrently . thunks)
+  (define custodian (make-custodian))
+  (dynamic-wind
+    void
+    (lambda ()
+      (define workers
+        (for/list ([thunk (in-list thunks)])
+          (define outcome (box #f))
+          (define worker
+            (parameterize ([current-custodian custodian])
+              (thread (lambda ()
+                        (set-box! outcome (with-handlers ([exn:fail? (lambda (e) (cons 'raised e))])
+                                            (cons 'returned (thunk))))))))
+          (cons worker outcome)))
+      (for/list ([worker (in-list workers)])
+        (thread-wait (car worker))
+        (define outcome (unbox (cdr worker)))
+        (if (eq? (car outcome) 'raised) (raise (cdr outcome)) (cdr outcome))))
+    (lambda () (custodian-shutdown-all custodian))))
 
 (define (sleep-worst bytecode no-turn-cost?)
   (define-values (process out in) (start bytecode "sleep" no-turn-cost?))
@@ -106,8 +127,9 @@
                (check-equal? (port->string out) "ok()\ntrue\n"))
              (lambda () (stop process out in))))
          (test-case "without turn costs the same check fails"
-           (define sleep (sleep-worst bytecode #t))
-           (define echo (echo-worst bytecode #t))
+           (define-values (sleep echo)
+             (apply values (concurrently (lambda () (sleep-worst bytecode #t))
+                                         (lambda () (echo-worst bytecode #t)))))
            (printf "VM latency without turn costs: sleep wake ~a ms, stdin echo ~a ms\n" sleep (round echo))
            (check-true (> sleep limit-ms) (format "sleep wake ~a ms" sleep))
            (check-true (> echo limit-ms) (format "stdin echo ~a ms" echo))))

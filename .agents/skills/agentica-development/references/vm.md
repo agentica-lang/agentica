@@ -78,7 +78,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `tests/vm-tls-test.rkt` | the VM against independent peers (`tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`, certificates in `tests/fixtures/tls/` from `make-certs.sh`): a client against Node servers (one-byte records, abrupt EOF, a reset, 100,000-byte lines, the 1 MiB limit, a silent peer, wrong host, expired, self-signed, TLS 1.0/1.1 only, plain text, a stalled handshake), system trust through `SSL_CERT_FILE`, a Python TLS 1.2 server, a Python HTTPS server that sees `close_notify` on an idle and an active `HttpClient` connection when `main` returns (`client_goodbye`), a VM server with two Node clients (TLS 1.3 and 1.2), a Python client and a client that does not trust it; VM programs that are their own peers for handshake errors on both sides, timeouts and a pending handshake, and the end of a run with TLS work pending (`tls` trace); every case runs once (no step sweep), in about 5 s; needs Node and Python 3 in CI |
 | `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
 | `vm/third_party/picohttpparser` | picohttpparser submodule (MIT, the notice is at the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only `vm/http_pico.c` includes its header |
-| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..4}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into four shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 1, 2, 3, 4; shard 4 also runs the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue` |
+| `tests/vm-diff-common.rkt`, `tests/vm-diff-{1..8}-test.rkt`, `tests/fixtures/vm/` | golden tests (`<name>.expected` next to each fixture, `make goldens` rewrites them from the VM), split into eight shards (`heavy-fixtures` pins the costly fixtures to a shard, the rest cycle through shards 1 to 7; shard 8 runs only the CLI and VM-only tests); every top-level `*.agc` is a program, and modules they import live in `tests/fixtures/vm/lib/` (`imports.agc`, `linked.agc`) or, for `pkg/`, in `tests/fixtures/vm/agc_libs/` (`linked.agc`); `std-queue.agc` imports `std/queue` |
 | `tests/bytecode-test.rkt` | step merging, which returns become `TAIL_CALL`, `LOWER-UNSUPPORTED`, opcode sync, `compile` exit codes |
 
 ## Commands
@@ -142,7 +142,7 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   pass through; add new options to the pass-through list in `src/main.rkt`
   as the VM gains them. A new builtin goes into `vm-builtins` with its C
   implementation.
-  `tests/vm-diff-4-test.rkt` checks the CLI against the goldens (with
+  `tests/vm-diff-8-test.rkt` checks the CLI against the goldens (with
   `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), that the
   removed `--vm` and `--legacy-eval` flags are unknown, a missing VM, runs it once in-process to cover
   the pipe path, and checks `--driver-pid`.
@@ -171,7 +171,7 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   flags change. Run `make build` (raco make) before many `compile` calls, or
   each one recompiles `src/`.
 - Golden tests (`docs/vm/README.md` §1, `docs/vm/12-testing-and-pr-plan.md`
-  §12.1): `tests/vm-diff-1-test.rkt` … `vm-diff-4-test.rkt` run each fixture
+  §12.1): `tests/vm-diff-1-test.rkt` … `vm-diff-8-test.rkt` run each fixture
   of `tests/fixtures/vm/` on the VM and compare exit code, stdout, program
   stderr and diagnostic code with its `<name>.expected`, plus a
   `--max-steps` sweep. Shared code is in `tests/vm-diff-common.rkt`; each
@@ -200,10 +200,10 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   by `total-steps`, may be lower but at most `T + max(10, T / 10)`
   (`check-steps`, which catches over-charging), and the last sweep limit,
   `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. With
-  `AGENTICA_SWEEP=sampled` (the ASan job and `make vm-gc-stress`) each
+  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`) each
   fixture runs only 1, 2, T - 1, T, the last limit and 8 limits drawn one
-  from each eighth of 3 to T - 2 (`sampled-limits`); the release build
-  keeps the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
+  from each eighth of 3 to T - 2 (`sampled-limits`); local `make test`,
+  the release and the weekly `sweep.yml` keep the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
   first 8 hex digits of `GITHUB_SHA` or `git rev-parse HEAD`, plus the
   fixture name, so it rotates with the commit and is fixed within a run.
   Each shard prints the seed, and a failed limit names it: rerun with that
@@ -234,7 +234,7 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   Fixture stdin comes from a file; pipe stdin is covered by the large-input
   test and the CLI tests. `compile-file` mirrors the `compile`
   pipeline of `src/main.rkt` and must follow it when that pipeline changes
-  (shard 4 compares its bytes with the CLI `compile`).
+  (shard 8 compares its bytes with the CLI `compile`).
   The batch script needs an `sh` on PATH (MSYS2 on Windows; untested while
   the macOS and Windows runs are paused). It starts with `exec 2>/dev/null`,
   so a VM crash shows up in that run's `.status` (128 + signal) and fails

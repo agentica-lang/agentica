@@ -98,9 +98,10 @@ jobs:
         env:
           AGENTICA_VM_BINARY: dist/agentica-vm
           AGENTICA_REQUIRE_VM: '1'
+          AGENTICA_SWEEP: full
         run: |
           make build
-          raco test -j 2 tests/vm-diff-1-test.rkt tests/vm-diff-2-test.rkt tests/vm-diff-3-test.rkt tests/vm-diff-4-test.rkt
+          raco test -j 4 tests/vm-diff-*-test.rkt
       - name: Build and smoke-test
         run: |
           make exe

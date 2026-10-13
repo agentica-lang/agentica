@@ -167,9 +167,7 @@ The sanitizer and GC-stress builds of yyjson, picohttpparser and libuv
 `$(VM_BUILD)/third-party-flags` and `build/vm/gc-flags`, the output of
 `make -s vm-third-party-key` (compile lines, compiler and `ar` versions,
 and each submodule's commit, diff and untracked files, or a checksum of
-its files when it is not a git checkout), not source times. So
-`vm-sanitizers` caches them as `third-party-<mode>-` keyed by the hash of
-that output, and `warm-third-party` fills those caches on `master`.
+its files when it is not a git checkout), not source times. CI does not cache them (ccache rebuilds in under a second); `make -s vm-third-party-key` stays for local use.
 
 The release workflow does not cache: it builds OpenSSL
 with the pinned `zig cc` against glibc 2.28, the `objdump -T` floor check
