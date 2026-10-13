@@ -54,7 +54,7 @@ test-exe: build vm dist/agentica
 
 # make test with JOBS=6 and test-exe running beside it (tests/test-ci.sh)
 test-ci: build vm dist/agentica
-	tests/test-ci.sh
+	+MAKE='$(MAKE)' tests/test-ci.sh
 
 # The distributed executable still finds its std/ modules after its build checkout is gone
 test-distribution: build vm
