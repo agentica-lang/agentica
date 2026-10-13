@@ -16,20 +16,20 @@ Specified in [`docs/future/39-semantic-cli.md` section 39](../future/39-semantic
     - the development skill (`SKILL.md`, the diagnostic-code row around line 104; `references/stages.md`, the codes by stage around line 57, and a note on `src/query.rkt`).
 - [ ] **26b: `agentica symbol` and `agentica refs` on declarations (§39.3, §39.4, §39.6 to §39.9).**
   - **Linker** (`src/modules.rkt`):
-    - `link-programs`: several roots into one program with shared tables, each module visited once, every module prefixed `@N::`, roots included; a root whose lex, parse or link fails is left out with its diagnostic; `link-program` keeps its behavior;
+    - `link-programs`: several roots into one program with shared tables, each module visited once, every module prefixed `@N::`, roots included; each root linked as a transaction (§39.8): a root whose lex, parse or link fails, in its file or a dependency, is left out with its diagnostic, its added modules are dropped, and later roots that reach a failed module are skipped with the same diagnostic; `link-program` keeps its behavior;
     - modules keyed by canonical path, the roots included, so one file has one name;
-    - the side tables `#:origins` (linked identity to module key, source name and declaration span) and `#:uses` (each name use to its linked identity, with the name's span).
-  - **Parser and AST** (`src/parser.rkt`, `src/ast.rkt`): a `name-span` on `field-access` and `method-call`, used for the field name of a construction and a read.
+    - the side tables `#:origins` (linked identity to module key, source name and declaration span) and `#:uses` (each name use to its linked identity, with the name's span), and each module's alias table (`imports`) returned for 26c.
+  - **Parser and AST** (`src/parser.rkt`, `src/ast.rkt`): a `name-span` on `field-access` and `method-call`, for the field name of a read. The field names of a construction are `named-arg` nodes, whose span already starts at the name.
   - **Query** (`src/query.rkt`): `PATH...` expansion (§39.4), the name forms of §39.4 with `std/` forms, builtins from the `help` catalog, references of functions, structs, enums and variants from `#:uses`, the file-name rule, `skipped`.
-  - **Field refs** need a check: `check` gets `#:require-main? #f`, and field reads come from the `resolved` struct of each `field-access`.
+  - **Field refs** need a check: `check` gets `#:require-main? #f`, and the struct of a field read is the `#:types` entry of the access's target (`check-struct-field` records nothing; the `resolved` field is for builtin methods only).
   - **Diagnostics:** `QUERY-NOT-FOUND` and `QUERY-AMBIGUOUS-NAME` at `<arguments>`, with their helps.
   - **Tests:** the `symbol` and `refs` cases of §39.13.
   - **Docs:** `docs/grammar.md` (the commands and the new codes), the programming skill (`references/queries.md`, with "run `refs` before the edit"; `references/diagnostics.md`), the site page of 26a, the development skill (`references/stages.md`: the linker's side tables).
 - [ ] **26c: `agentica type-at` and the position form of `refs` (§39.3, §39.5).**
   - **Parser and AST:** a span for the `for` loop variable and for each `variant-pattern` binding.
   - **Checker:** a `#:locals` table, each use of a parameter or local to its binding span, for the position form of `refs` on a local and for `type-at`'s definition.
-  - **Query:** the innermost expression or name at a position, its type from the `#:types` table, printed through `FILE`'s import aliases (§39.5); its definition from `#:uses`, the field's struct or `#:locals`; checks only `FILE` and its imports.
-  - **Diagnostics:** `QUERY-NO-EXPRESSION` at the position.
+  - **Query:** the innermost expression or name at a position, its type from the `#:types` table, printed through `FILE`'s import aliases from the linker's alias table (§39.5); its definition from `#:uses`, the target's struct in `#:types` for a field, or `#:locals`; checks only `FILE` and its imports.
+  - **Diagnostics:** `QUERY-NO-EXPRESSION` at the position, clamped to the end of the line or of the file (§39.7).
   - **Tests:** the `type-at` and position-form cases of §39.13.
   - **Docs:** as in 26b.
 - No CHANGELOG: the project adds none in the private alpha.
