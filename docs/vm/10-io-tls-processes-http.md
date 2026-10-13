@@ -99,8 +99,8 @@ the behaviour is the same with both.
   close as TCP does. The end of the run does not close sockets one by one
   (10.2.2): `agc_io_goodbye` calls the `goodbye` hook `tcp.c` sets on each
   socket resource, which sends that same one write, and `_exit` closes the
-  descriptor. HTTP client connections have no hook yet, so the end of the
-  run gives them no `close_notify` (20c can add one).
+  descriptor. An `HttpClient` has the same hook for its idle and active
+  connections (10.7.1).
 - **Messages** keep Racket's shapes: "ssl-connect: connect failed
   (detail)", "port->ssl-ports: accept failed (detail)",
   "ssl-load-certificate-chain!: load failed from: \"path\" (detail)",
@@ -686,12 +686,12 @@ the I/O layer.
   a Python raw-socket peer (`tests/fixtures/http-peer.py`). The server-side
   cases over a socket come with the server (20c).
 
-### 10.7 HTTP on the VM: the hybrid split (phase 20; the client is built)
+### 10.7 HTTP on the VM: the hybrid split (phase 20; the client and the server are built)
 
-Status after 7i: the builtin `HTTP` module is gone (deleted with the
-evaluator, decided by the owner on 2026-10-13), so `std/http` is the only
-HTTP, imported as `HTTP`, and it has the client only until 20c brings the
-server.
+Status after 7i and 20c: the builtin `HTTP` module is gone (deleted with
+the evaluator, decided by the owner on 2026-10-13), so `std/http` is the
+only HTTP, imported as `HTTP`, with the client (20a, 10.7.1) and the server
+(20c, 10.7.2).
 
 Planned in `docs/future/30-hybrid-http.md` §30 and roadmap phase 20. HTTP is
 split between a small C builtin module, `HttpWire`, and the Agentica module
@@ -728,7 +728,7 @@ split between a small C builtin module, `HttpWire`, and the Agentica module
 
 #### 10.7.1 As built: the client (20a)
 
-`HttpWire` has the three client builtins; the server ones come in 20c.
+`HttpWire` has three client builtins; the server ones are in 10.7.2.
 
 ```text
 HttpWire.client(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String) -> Result[HttpClient]
@@ -791,6 +791,10 @@ HttpWire.close_client(client: HttpClient) -> Void
   body byte; on timeout the connection is closed and the call returns
   "network: operation timed out". `close_client` closes idle connections
   and fails every call in flight with "http: client is closed".
+- At the end of the run the exit path's `goodbye` hook (`client_goodbye`,
+  added in 20c) sends one non-blocking TLS `close_notify` on each HTTPS
+  connection of an `HttpClient`, idle or in use (`agc_conn_goodbye`), as
+  tcp.c does for its sockets.
 - Errors are `http: ` plus the text of 10.6, or the network error text of
   tcp.c for DNS, connect, TLS, read and write failures.
 - `HttpResponse`, `Header`, `HttpClientOptions` and `FileInfo` carry their
@@ -799,3 +803,114 @@ HttpWire.close_client(client: HttpClient) -> Void
 - Turn cost (`AGC_COST_SIZE`): charged when the call ends, after the
   exchange is freed, for the header list, the request's bytes (head and
   body) and the response's body and header fields.
+
+#### 10.7.2 As built: the server (20c)
+
+```text
+HttpWire.read_request(socket: Socket, first_byte_timeout_ms: Int, timeout_ms: Int, max_body_bytes: Int) -> Result[HttpRequest]
+HttpWire.write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout_ms: Int) -> Result[Bool]
+HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
+HttpWire.accept(server: HttpServer) -> Result[Socket]
+HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void
+HttpWire.close_server(server: HttpServer) -> Void
+HttpWire.wait(server: HttpServer) -> Result[Void]
+HttpWire.local_port(server: HttpServer) -> Int
+```
+
+- `vm/http_server.c` (Linux; a stub table elsewhere) holds them, on tcp.c's
+  connection object (`vm/net.h`) with a watch callback, as the client does.
+  Header lists and the header writer are shared with the client in
+  `vm/http_fields.c`.
+- `read_request` waits up to `first_byte_timeout_ms` for the first byte of
+  a request (bytes already buffered, or a raw byte heard on the socket, so
+  a TLS handshake counts), then restarts its job's timer with `timeout_ms`
+  (`agc_io_extend`), which bounds the rest of the request. The checks run
+  in the order of §30.4: the parse errors of 10.6, any `Upgrade` header
+  (501), an `Expect` other than one `100-continue` (417), a
+  `Content-Length` over `max_body_bytes` (413), then `100 Continue` when
+  `Expect` asked for it and the body is still to come, then the body and
+  its UTF-8 check (400). Every error answer is written by C:
+  `HTTP/1.1 CODE REASON`, `Content-Length: 0` and `Connection: close`.
+  After it is sent the write side is shut (`agc_conn_half_close`, with
+  `close_notify` over TLS) and input is read and dropped until the peer
+  closes or the request's deadline, so request bytes the server never read
+  cannot turn the close into a reset that loses the answer. Then the
+  socket closes and the call returns `error("http: <reason>")`. EOF before
+  the first byte is `error("network: end of input")`; EOF in the middle of
+  a request is "http: connection closed before the request was complete";
+  the deadline closes the socket and returns "network: operation timed
+  out" with no answer. Header names are lowercased and values decoded as
+  Latin-1; `path` is the target before `?`. When the request is complete
+  the socket stops reading (`agc_conn_pause`) until the next
+  `read_request`, so a client that pipelines bytes while a response is
+  written cannot grow the input buffer.
+- `write_response` builds the whole response before it writes: a status
+  of 200 to 599 (the reason phrase is the standard one, or empty), the
+  header checks of the client (`Content-Length` and `Transfer-Encoding`
+  are refused: "Content-Length and Transfer-Encoding are set by the
+  server"), no body with 204 or 304, a `Date` header unless the handler set
+  one, `Content-Length` except on 204 and 304, and the body unless the
+  request's method is `HEAD`. The connection closes when the request or
+  the response has `Connection: close` (`agc_http_list_closes`, the same
+  token check as the client's `agc_http_closes`): then the handler's
+  `Connection` headers are dropped and one `Connection: close` is sent, so
+  the header cannot contradict itself. A bad response is
+  `error("http: invalid response: <reason>")` with nothing written.
+  Otherwise the call returns `ok(true)` when the connection stays open and
+  `ok(false)` after a closing response, which gets the same lingering close
+  as the error answers before the socket closes. `timeout_ms` bounds the
+  write, and the lingering, from the call; a deadline during the lingering
+  still returns `ok(false)`.
+- `server` makes the `HttpServer` and runs `f(server)`, the accept loop of
+  `std/http`, as a task of the group, so `close_server` cancels it with the
+  connections and a server closed inside `Test.run` leaves no task running.
+  The `HttpServer` handle holds the listener, the number of open
+  connections, `max_connections` (1 to 65536) and the jobs of tasks parked
+  in `accept` or `wait`, and a group node: a task that never runs
+  (`agc_task_group`), the parent of the connection tasks. `accept` returns
+  an accepted socket once fewer than `max_connections` are open, and parks
+  otherwise; the listener's watch, a freed slot and the close wake it.
+  Accept failures are traced and retried. A TLS socket is returned before
+  its handshake: tcp.c makes the session at accept and runs the handshake
+  on the first read or write, under that call's timeout.
+- `spawn` starts `f(socket)` as a child of the group
+  (`agc_task_spawn_in`), moves the socket to it, marks it `hidden` and sets
+  its end hook (`agc_task.end`), which closes the socket and frees the
+  slot when the task ends in any way. The children of a connection task
+  that ended move to the group, as 20b's rule moves them to any parent.
+- `close_server` (also the close of an owned server when its owner
+  crashes) is idempotent: it closes the listener, wakes `accept` (which
+  then returns "http: server is closed") and `wait` (which returns
+  `ok()`), and drops the group (`agc_task_drop`): it marks the subtree,
+  cancels it with `agc_task_cancel`, and closes every handle a task of it
+  owns (`agc_close_owned`), so the connection sockets and the sockets a
+  handler's spawned task opened close too. A handler that closes its own
+  server stops after that builtin, as a running task does under 20b; no
+  program can do that today (a handler cannot reach its `HttpServer`), and
+  the C test of `agc_task_drop` covers it.
+- A crash in a connection task ends that connection (§37.5): its socket
+  closes and its client sees the close with no response. Connection tasks
+  are `hidden`: no await can observe them, so of their unobserved crashes
+  only the first per test (or per run outside `Test.run`) is kept in the
+  crash list, and the others are counted on it. With observed crashes
+  leaving the list, the list stays bounded however many handlers crash.
+- `std/http` runs the accept loop in the group and, for each socket,
+  `spawn`s the connection loop: `read_request` (the first request waits
+  `request_timeout_ms` for its first byte, later ones `idle_timeout_ms`),
+  the handler with no time limit, then `write_response` with a fresh
+  `request_timeout_ms`. A handler `error` or a response that
+  `write_response` refuses gives a 500 with `Connection: close` and one
+  `IO.warn` line (`http: handler error: ...` or `http: invalid response:
+  ...`). The loop ends when `write_response` returns anything but
+  `ok(true)`.
+- The server's connections are tcp.c sockets, so the end of the run gives
+  them `close_notify` there (10.3).
+- Turn cost (`AGC_COST_SIZE`): `read_request` charges the body, the header
+  count and their bytes when it ends; `write_response` charges the
+  response's bytes.
+- Tests: the `http-server*` goldens; `tests/vm-http-test.rkt` runs a VM
+  server (plain and TLS) against `tests/fixtures/http-server-peer.py` (the
+  hostile list of 10.6 on raw sockets, with status and close, the `Expect`
+  cases, pipelining, `http.client`, the `max_connections` wait, a silent
+  TLS client and a plain request on the TLS port) and
+  `tests/fixtures/http-server-peer.js` (Node `http`).

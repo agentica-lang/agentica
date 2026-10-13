@@ -168,6 +168,30 @@ end
 AGC
   )
 
+(define https-goodbye-program
+  #<<AGC
+import "std/http" as HTTP
+
+struct Call
+  pool: HttpClient
+  url: String
+end
+
+def hang(call: Call) -> Result[HttpResponse]
+  return HTTP.get(call.pool, call.url)
+end
+
+def main() -> Void
+  base = "https://localhost:#{Result.unwrap!(IO.gets())}"
+  options = HttpClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, ca_file: "#{System.args()[0]}/ca.pem")
+  pool = Result.unwrap!(HTTP.client(options))
+  puts(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body)
+  Task.spawn(&hang, Call(pool: pool, url: "#{base}/hang"))
+  puts(Result.unwrap!(HTTP.get(pool, "#{base}/ping")).body)
+end
+AGC
+  )
+
 (define handshake-program
   #<<AGC
 struct Dial
@@ -404,6 +428,26 @@ AGC
               (check-equal? (take result 2)
                             (list 0 "python TLSv1.2 FROM AGENTICA\nerror(\"network: end of input\")\n")
                             (third result))
+              (check-true (finished? server))
+              (check-equal? (subprocess-status server) 0))
+            (lambda () (stop server server-out))))
+
+        (test-case "main returns with an idle and an active HTTPS client connection: both get close_notify"
+          (define-values (server server-out server-in server-err)
+            (subprocess #f #f (current-error-port) python python-peer-file "http"))
+          (dynamic-wind
+            void
+            (lambda ()
+              (close-output-port server-in)
+              (define port (next-line server-out))
+              (define bytecode (compile-text work "https-goodbye" https-goodbye-program))
+              (define result
+                (parameterize ([current-environment-variables (vm-environment)])
+                  (run-process vm-file #:timeout run-timeout #:input (string->bytes/utf-8 (string-append port "\n"))
+                               "--" (path->string bytecode) (path->string certs))))
+              (check-equal? (take result 2) (list 0 "ok\nok\n") (third result))
+              (check-equal? (list (next-line server-out) (next-line server-out))
+                            (list "close_notify /hang" "close_notify /ping"))
               (check-true (finished? server))
               (check-equal? (subprocess-status server) 0))
             (lambda () (stop server server-out))))

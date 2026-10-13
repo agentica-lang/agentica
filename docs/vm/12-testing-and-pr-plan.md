@@ -327,7 +327,7 @@ those that need files, processes, tasks or the network by name:
 `file-summary`, `process-tool`, `concurrency`, `tcp_echo`, `http_get` and
 `http_server`.
 
-### 12.3 Plan for HTTP and `TlsContext` (planned)
+### 12.3 Plan for HTTP and `TlsContext` (HTTP 20a to 20c built)
 
 The C-only HTTP PR that 7h planned (10.6) is replaced by phase 20
 (`docs/future/30-hybrid-http.md` §30, roadmap `20-hybrid-http.md`). After
@@ -378,14 +378,39 @@ and docs:
   answers the TLS handshake (`max_connections` 1): a waiter leaves the
   FIFO, and a slot granted to a cancelled task passes to the next waiter.
 - **20c** the server: `HttpWire.read_request`, `write_response` and the
-  task group, `HttpRequest`, and the server part of `std/http.agc`;
-  golden fixtures of a client and a server in one program,
-  `close_server` during a handler, and every hostile request of 10.6
-  from a Python raw-socket peer on port 0.
+  task group, `HttpRequest`, and the server part of `std/http.agc`
+  (10.7.2). Done: the goldens are `http-server` (option checks and
+  defaults, GET with a query, keep-alive on one slot, POST with repeated
+  headers and a UTF-8 body, `HEAD`, 204, 304, 404, bodies at and over
+  the limit, `Connection: close`, a handler `error` and an unsendable
+  response with their stderr lines, a non-UTF-8 body and `HTTP/1.0` from
+  a raw `TCP` client, `close_server` and `wait` twice),
+  `http-server-close` (`close_server` while a handler sleeps: its next
+  line and the task it spawned never print, and a task left by a handler
+  that returned is cancelled; their sockets close),
+  `http-server-slow` (a handler that sleeps past `request_timeout_ms`
+  still answers; `main` returns while a handler runs) and
+  `http-server-crash` (crashing handlers close only their connection;
+  three crashes, one summary). A side `TCP` listener tells `main` that a
+  handler started, so none of them depends on timing.
+  `tests/vm-http-test.rkt` runs a VM server, plain and TLS, against
+  `tests/fixtures/http-server-peer.py` (every hostile request of 10.6 on
+  a raw socket with its status and the close, a bad start line left open
+  and a partial head, `Expect: 100-continue` with a `Content-Length` over
+  the limit giving 413 and no `100 Continue`, `100 Continue` then the
+  body, three pipelined requests, `http.client` with a chunked upload,
+  `HEAD` and keep-alive, two held connections and a third that waits for
+  a slot, HTTPS keep-alive, a client that never handshakes and a plain
+  request on the TLS port) and `tests/fixtures/http-server-peer.js` (Node
+  `http`: a chunked upload, `Expect`, keep-alive with `HEAD`, three
+  concurrent clients on two slots). `vm/tests/task_cancel_test.c` adds a
+  task that drops its own subtree (`agc_task_drop`), the case of a
+  handler that closes its own server, which no program can reach.
 - **20d** the switch to `import "std/http" as HTTP` and the removal of
   the builtin `HTTP` module: done by 7i (owner decision of 2026-10-13),
   before 20b and 20c. The performance sanity check (`benchmarks/http.py`,
-  not a gate, now against Python's standard library) moved into 20c.
+  not a gate, now against Python's standard library) and the hints for
+  the removed server builtins moved into 20c.
 
 Golden fixtures stay timing-free (a fixture is its own client and server,
 only `main` prints); anything that depends on a timeout goes in

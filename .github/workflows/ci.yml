@@ -262,6 +262,7 @@ jobs:
       - run: diff <(dist/agentica --seed 7 tests/fixtures/vm/random.agc) <(dist/agentica --seed 7 tests/fixtures/vm/random.agc)
         shell: bash
       - run: dist/agentica examples/queue.agc
+      - run: dist/agentica examples/http_server.agc
       - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - id: vendored
         uses: actions/cache/restore@v4

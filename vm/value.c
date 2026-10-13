@@ -314,6 +314,13 @@ agc_value agc_test_case_value(agc_test_case *c) {
   return v;
 }
 
+agc_value agc_http_server_value(agc_http_server *s) {
+  agc_value v;
+  v.tag = AGC_T_HTTP_SERVER;
+  v.as.p = s;
+  return v;
+}
+
 uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
@@ -474,6 +481,11 @@ agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v) {
 
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_TEST) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_HTTP_SERVER) wrong_tag(vm);
   return v.as.p;
 }
 

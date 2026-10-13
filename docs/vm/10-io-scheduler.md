@@ -250,7 +250,11 @@
     the turn ends as any turn (`agc_turn_finish`, `trace_turn` with
     `why=fail`); the crash text (`task crashed: CODE at FILE:LINE:COLUMN:
     MESSAGE`, `agc_crash_text`) is stored on the task, which joins the
-    run's list of crashes; the diagnostic is printed on stderr in the
+    run's list of unobserved crashes (an observe takes it out; of the
+    crashes of `hidden` tasks, the HTTP connection tasks of 20c that no
+    await can observe, only the first per test, or per run outside
+    `Test.run`, joins it, and the others count on it as `quiet_more`, so
+    a server whose handlers keep crashing does not grow the list); the diagnostic is printed on stderr in the
     run's style with ` in a task` (`"task":true` in `--json`); the task
     leaves its job, lock, await and stdin FIFOs as a cancelled task does
     (a `next_owner` turn passes on); its subtree is marked
@@ -284,7 +288,10 @@
     except a process, whose `release_proc` would kill every child of the
     run. When a task ends normally, the handles it still owns go to its
     parent (`agc_give_owned`), so a handle moved to a helper task and
-    returned with it is still closed if the parent crashes later. At the
+    returned with it is still closed if the parent crashes later. A
+    cancelled task's handles are neither given back nor closed, except
+    under `agc_task_drop` (20c, `close_server`), which marks the subtree
+    as a crash does, cancels it and closes the handles it owns. At the
     end of the run, `vm/main.c` first kills the children and flushes
     stdout, so a stuck file does not hold back the program's last output.
     Then `agc_io_flush_files` starts the same `OP_CLOSE` job for every file
@@ -298,7 +305,15 @@
   - Task cancellation (20b, the core that `close_server` (20c),
     `Task.map` (17a) and task crash isolation (phase 24) build on; a
     program cancels tasks only through a crash, which cancels the
-    crashed task's descendants). Each task records its `parent` (the
+    crashed task's descendants, and through `HTTP.close_server`, which
+    cancels the server's connection tasks and theirs). A group node
+    (`agc_task_group`, 20c) is a task that never runs and has no id: it
+    is the parent of an `HttpServer`'s connection tasks
+    (`agc_task_spawn_in`), so the children of a handler that ended move
+    to it and a cancel of the group reaches them; it is not counted in
+    `pending_count` and gets no `cancel` trace line. A task's optional
+    `end` hook runs once when it ends in any way (the connection task's
+    hook closes its socket and frees its slot). Each task records its `parent` (the
     task that spawned it; `main` has none) and a list of its running
     children (`children`, linked through `prev_sibling` and
     `next_sibling`; newest first, and no order is promised). When a task

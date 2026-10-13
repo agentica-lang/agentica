@@ -166,7 +166,7 @@ Codes are prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`.
 - [`examples/file-summary.agc`](examples/file-summary.agc): read a file given as an argument.
 - [`examples/concurrency.agc`](examples/concurrency.agc): lightweight tasks with `Task.spawn` and `Task.await`.
 - [`examples/process-tool.agc`](examples/process-tool.agc): run another program (needs `--allow-run`).
-- [`examples/tcp_echo.agc`](examples/tcp_echo.agc), [`examples/http_get.agc`](examples/http_get.agc): TCP, and an HTTP client with `import "std/http" as HTTP` (the HTTP server comes back with roadmap 20c).
+- [`examples/tcp_echo.agc`](examples/tcp_echo.agc), [`examples/http_get.agc`](examples/http_get.agc), [`examples/http_server.agc`](examples/http_server.agc): TCP, and an HTTP client and server with `import "std/http" as HTTP` (`http_server.agc serve` keeps serving and prints its port).
 - [`examples/queue.agc`](examples/queue.agc): the embedded `std/queue` library.
 - [`examples/json-modules.agc`](examples/json-modules.agc): a program split across files (`examples/modules/json-tools.agc`).
 - [`examples/mcp/stdio.agc`](examples/mcp/stdio.agc): a minimal MCP stdio server.

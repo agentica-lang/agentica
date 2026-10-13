@@ -56,7 +56,9 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
   net.h           # tcp.c's connection object (agc_conn) for other C modules
   http_parse.h http_pico.c http_body.c  # HTTP head adapter (the only file that includes picohttpparser) and body decoder
+  http_fields.h http_fields.c  # header lists and byte buffers shared by the HTTP client and server
   http_client.c   # HttpWire client builtins: the pool, called only by stdlib/http.agc (Linux)
+  http_server.c   # HttpWire server builtins: read_request, write_response and the HttpServer task group (Linux)
   task.c          # scheduler (run queue, turns, park and wake), task cancellation and the Task builtins
   testing.c equal.c # the Test builtins (unit tests, roadmap 25a); agc_equal, the deep value compare Test.eq uses
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
@@ -80,7 +82,7 @@ tests/
   std/                  # *_test.agc unit tests of the std/ modules
   fixtures/             # golden fixtures and independent Node.js and Python peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
-  vm-http-test.rkt      # the std/http client against Python peers (fixtures/http-peer.py): http.server, ssl, hostile raw responses
+  vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
   vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full stdout, Ctrl-C through the CLI
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)

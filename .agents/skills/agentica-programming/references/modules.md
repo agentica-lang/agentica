@@ -88,13 +88,16 @@ The implementation uses Lists: push, pop, peek, size and empty? are O(n)
 with the current host list operations; new is O(1). No constant-time FIFO
 performance is promised.
 
-## HTTP client (`std/http`)
+## HTTP client and server (`std/http`)
 
-`std/http` is the HTTP client, written in Agentica:
-`import "std/http" as HTTP`. It has `HTTP.client_options()`,
+`std/http` is the HTTP client and server, written in Agentica:
+`import "std/http" as HTTP`. The client has `HTTP.client_options()`,
 `HTTP.client(options)`, `HTTP.get`, `HTTP.post`, `HTTP.request`,
 `HTTP.header_values` and `HTTP.close_client`; calls return
-`Result[HttpResponse]` with the whole body as a `String`. There is no HTTP
-server yet. Details are in `network.md`.
+`Result[HttpResponse]` with the whole body as a `String`. The server has
+`HTTP.server_options()`, `HTTP.listen`, `HTTP.listen_tls`,
+`HTTP.local_port`, `HTTP.wait` and `HTTP.close_server`; a handler takes an
+`HttpRequest` and returns `Result[HttpResponse]`. Details are in
+`network.md`.
 
 `import "std/bdd" as BDD` is the step API of `agentica test`; see `bdd.md`.

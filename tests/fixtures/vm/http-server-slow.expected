@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 1350,
+  "stdout": [
+    "\"slow /slow\"",
+    "hanging",
+    "main returns while a handler runs",
+    ""
+  ],
+  "stderr": []
+}

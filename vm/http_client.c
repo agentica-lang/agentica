@@ -1,4 +1,4 @@
-#include "http_parse.h"
+#include "http_fields.h"
 #include "net.h"
 
 #ifdef __linux__
@@ -21,15 +21,6 @@ typedef struct exchange exchange;
 typedef enum { X_CONFIG, X_WAIT, X_CONNECT, X_EXCHANGE, X_DONE } phase;
 
 typedef enum { F_NONE, F_CONN, F_CONFIG, F_CLOSED, F_PROTOCOL, F_READ, F_WRITE, F_EOF } failure;
-
-typedef struct {
-  size_t name, value;
-} field_size;
-
-typedef struct {
-  uint8_t *data;
-  size_t len, cap;
-} bytes;
 
 struct idle {
   agc_conn *conn;
@@ -61,12 +52,11 @@ struct exchange {
   agc_conn *conn, *broken;
   exchange *next, *run_next, *active_next;
   uint8_t *request;
-  size_t request_len, seen, fields;
+  size_t request_len, seen;
   int interim, status;
   bool head_only, keep, sent, write_failed, queued, in_body, detached, written, reused, retried, idempotent, cancelled;
   agc_http_body body;
-  uint8_t *field_data;
-  field_size *field_sizes;
+  agc_http_fields fields;
 };
 
 struct client {
@@ -87,25 +77,8 @@ struct client {
 };
 
 static const char client_closed[] = "http: client is closed";
-static const char *const header_fields[] = {"name", "value"};
 static const char *const response_fields[] = {"status", "headers", "body"};
 static const char *const managed_headers[] = {"host", "content-length", "transfer-encoding", "connection"};
-
-static void put(bytes *b, const void *data, size_t n) {
-  if (!n) return;
-  if (b->cap - b->len < n) {
-    size_t cap = b->cap ? b->cap : 256;
-    while (cap - b->len < n) cap = agc_size_mul(cap, 2);
-    uint8_t *bigger = realloc(b->data, cap);
-    if (!bigger) agc_out_of_memory();
-    b->data = bigger;
-    b->cap = cap;
-  }
-  memcpy(b->data + b->len, data, n);
-  b->len += n;
-}
-
-static void put_text(bytes *b, const char *text) { put(b, text, strlen(text)); }
 
 static void settle_client(client *c) {
   if (c->users || c->callbacks) return;
@@ -327,41 +300,6 @@ static void protocol_error(exchange *x, agc_http_error error) {
   complete(x, F_PROTOCOL);
 }
 
-static bool closes(const agc_http_head *head) {
-  for (size_t k = 0; k < head->count; k++) {
-    if (!agc_http_named(head->fields[k].name, "connection")) continue;
-    agc_http_slice v = head->fields[k].value;
-    size_t start = 0;
-    for (size_t at = 0; at <= v.len; at++) {
-      if (at < v.len && v.data[at] != ',') continue;
-      if (agc_http_named(agc_http_trim((agc_http_slice){v.data + start, at - start}), "close")) return true;
-      start = at + 1;
-    }
-  }
-  return false;
-}
-
-static void keep_fields(exchange *x, const agc_http_head *head) {
-  size_t total = 0;
-  for (size_t k = 0; k < head->count; k++) total += head->fields[k].name.len + head->fields[k].value.len;
-  x->fields = head->count;
-  x->field_sizes = calloc(head->count ? head->count : 1, sizeof(field_size));
-  x->field_data = malloc(total ? total : 1);
-  if (!x->field_sizes || !x->field_data) agc_out_of_memory();
-  size_t at = 0;
-  for (size_t k = 0; k < head->count; k++) {
-    const agc_http_field *f = &head->fields[k];
-    for (size_t b = 0; b < f->name.len; b++) {
-      uint8_t ch = f->name.data[b];
-      x->field_data[at++] = ch >= 'A' && ch <= 'Z' ? (uint8_t)(ch + 32) : ch;
-    }
-    if (f->value.len) memcpy(x->field_data + at, f->value.data, f->value.len);
-    at += f->value.len;
-    x->field_sizes[k].name = f->name.len;
-    x->field_sizes[k].value = f->value.len;
-  }
-}
-
 static void consume(agc_inbuf *in, size_t n) {
   in->start += n;
   in->scanned = 0;
@@ -395,8 +333,8 @@ static bool head_step(exchange *x, agc_inbuf *in) {
     return true;
   }
   x->status = head.status;
-  keep_fields(x, &head);
-  if (closes(&head)) x->keep = false;
+  agc_http_fields_keep(&x->fields, &head);
+  if (agc_http_closes(&head)) x->keep = false;
   if (x->head_only || head.status == 204 || head.status == 304) {
     bool announced = head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0);
     if (announced && !x->head_only) x->keep = false;
@@ -617,6 +555,14 @@ static void release_client(void *native) {
   settle_client(c);
 }
 
+static void client_goodbye(void *native) {
+  const client *c = native;
+  for (const origin *o = c->origins; o; o = o->next)
+    for (const idle *k = o->idle; k; k = k->next) agc_conn_goodbye(k->conn);
+  for (const exchange *x = c->active; x; x = x->active_next)
+    if (x->conn) agc_conn_goodbye(x->conn);
+}
+
 static void detach(exchange *x, const char *why) {
   if (x->detached) return;
   client *c = x->c;
@@ -651,48 +597,21 @@ static void free_exchange(exchange *x) {
   prune(c);
   agc_http_body_free(&x->body);
   free(x->request);
-  free(x->field_data);
-  free(x->field_sizes);
+  agc_http_fields_free(&x->fields);
   free(x);
   c->users--;
   settle_client(c);
-}
-
-static agc_string *latin1(const uint8_t *data, size_t len) {
-  size_t extra = 0;
-  for (size_t k = 0; k < len; k++) extra += data[k] >= 0x80;
-  agc_string *s = agc_new_string(agc_size_add(len, extra), len);
-  size_t at = 0;
-  for (size_t k = 0; k < len; k++) {
-    if (data[k] < 0x80) {
-      s->data[at++] = (char)data[k];
-    } else {
-      s->data[at++] = (char)(0xC0 | (data[k] >> 6));
-      s->data[at++] = (char)(0x80 | (data[k] & 0x3F));
-    }
-  }
-  return s;
 }
 
 static agc_value response_value(agc_vm *vm, const exchange *x) {
   const uint8_t *data = x->body.data ? x->body.data : (const uint8_t *)"";
   size_t chars;
   if (!agc_utf8_chars(data, x->body.len, &chars)) return agc_error_value("http: response body is not valid UTF-8");
-  uint32_t header_type = agc_builtin_struct(vm, "Header", header_fields, 2);
   uint32_t response_type = agc_builtin_struct(vm, "HttpResponse", response_fields, 3);
-  agc_list *headers = agc_new_list(x->fields);
-  size_t at = 0;
-  for (size_t k = 0; k < x->fields; k++) {
-    agc_struct *h = agc_new_struct(header_type, 2);
-    size_t name = x->field_sizes[k].name, value = x->field_sizes[k].value;
-    h->fields[0] = agc_string_value(agc_make_string((const char *)x->field_data + at, name, name));
-    h->fields[1] = agc_string_value(latin1(x->field_data + at + name, value));
-    at += name + value;
-    headers->items[k] = agc_struct_value(h);
-  }
+  agc_value headers = agc_http_header_list(vm, &x->fields);
   agc_struct *r = agc_new_struct(response_type, 3);
   r->fields[0] = agc_int(x->status);
-  r->fields[1] = agc_list_value(headers);
+  r->fields[1] = headers;
   r->fields[2] = agc_string_value(agc_make_string((const char *)data, x->body.len, chars));
   return agc_result_value(true, agc_struct_value(r));
 }
@@ -719,7 +638,7 @@ static agc_value exchange_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   exchange *x = data;
   agc_value result = x->failed == F_NONE ? response_value(vm, x) : failure_value(vm, x);
-  uint64_t cost = x->units + x->body.len / AGC_COST_BYTES + x->fields;
+  uint64_t cost = x->units + x->body.len / AGC_COST_BYTES + x->fields.count;
   free_exchange(x);
   agc_charge(vm, cost);
   return result;
@@ -763,76 +682,45 @@ static bool text_is(const agc_string *s, const char *text) {
   return s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0;
 }
 
-static const char *put_value(bytes *b, const agc_string *value) {
-  for (size_t at = 0; at < value->bytes;) {
-    uint32_t cp = agc_utf8_next((const uint8_t *)value->data, value->bytes, &at);
-    if (cp > 255 || !agc_http_value_byte((uint8_t)cp)) return "http: header values must be Latin-1 text without control characters";
-    uint8_t ch = (uint8_t)cp;
-    put(b, &ch, 1);
-  }
-  return NULL;
-}
-
-static const char *put_headers(agc_vm *vm, bytes *b, const agc_list *headers, size_t *count) {
-  size_t block = b->len;
-  for (size_t k = 0; k < headers->len; k++) {
-    const agc_struct *h = agc_as_struct(vm, headers->items[k]);
-    if (h->n != 2) return "http: invalid header";
-    const agc_string *name = agc_as_string(vm, h->fields[0]);
-    const agc_string *value = agc_as_string(vm, h->fields[1]);
-    if (!agc_http_token((const uint8_t *)name->data, name->bytes)) return "http: header names must be HTTP tokens";
-    agc_http_slice slice = {(const uint8_t *)name->data, name->bytes};
-    for (size_t m = 0; m < sizeof managed_headers / sizeof managed_headers[0]; m++)
-      if (agc_http_named(slice, managed_headers[m])) return "http: Host, Content-Length, Transfer-Encoding and Connection are set by the client";
-    size_t start = b->len;
-    put(b, name->data, name->bytes);
-    put_text(b, ": ");
-    const char *bad = put_value(b, value);
-    if (bad) return bad;
-    put_text(b, "\r\n");
-    if (b->len - start > AGC_HTTP_MAX_LINE + 2) return "http: a header line is too large";
-    if (++*count > AGC_HTTP_MAX_HEADERS) return "http: too many headers";
-  }
-  if (b->len - block > AGC_HTTP_MAX_BLOCK) return "http: headers are too large";
-  return NULL;
-}
-
-static const char *build_request(agc_vm *vm, bytes *b, const agc_value *args, bool secure) {
+static const char *build_request(agc_vm *vm, agc_http_bytes *b, const agc_value *args, bool secure) {
   const agc_string *host = agc_as_string(vm, args[2]);
   int64_t port = agc_as_int(vm, args[3]);
   const agc_string *method = agc_as_string(vm, args[4]);
   const agc_string *target = agc_as_string(vm, args[5]);
   const agc_string *body = agc_as_string(vm, args[7]);
   if (!agc_http_token((const uint8_t *)method->data, method->bytes) || text_is(method, "CONNECT"))
-    return "http: invalid method";
-  if (target->bytes == 0) return "http: invalid request target";
+    return "invalid method";
+  if (target->bytes == 0) return "invalid request target";
   for (size_t k = 0; k < target->bytes; k++)
-    if ((uint8_t)target->data[k] < 33 || (uint8_t)target->data[k] > 126) return "http: invalid request target";
-  put(b, method->data, method->bytes);
-  put_text(b, " ");
-  put(b, target->data, target->bytes);
-  put_text(b, " HTTP/1.1\r\nHost: ");
+    if ((uint8_t)target->data[k] < 33 || (uint8_t)target->data[k] > 126) return "invalid request target";
+  agc_http_put(b, method->data, method->bytes);
+  agc_http_put_text(b, " ");
+  agc_http_put(b, target->data, target->bytes);
+  agc_http_put_text(b, " HTTP/1.1\r\nHost: ");
   bool literal = memchr(host->data, ':', host->bytes) != NULL;
-  if (literal) put_text(b, "[");
-  put(b, host->data, host->bytes);
-  if (literal) put_text(b, "]");
+  if (literal) agc_http_put_text(b, "[");
+  agc_http_put(b, host->data, host->bytes);
+  if (literal) agc_http_put_text(b, "]");
   char number[64];
   if (port != (secure ? 443 : 80)) {
     snprintf(number, sizeof number, ":%" PRId64, port);
-    put_text(b, number);
+    agc_http_put_text(b, number);
   }
-  put_text(b, "\r\n");
+  agc_http_put_text(b, "\r\n");
   size_t count = 1;
   bool post = text_is(method, "POST") || text_is(method, "PUT") || text_is(method, "PATCH");
   if (body->bytes || post) {
     snprintf(number, sizeof number, "Content-Length: %zu\r\n", body->bytes);
-    put_text(b, number);
+    agc_http_put_text(b, number);
     count++;
   }
-  const char *bad = put_headers(vm, b, agc_as_list(vm, args[6]), &count);
+  const char *bad = agc_http_put_headers(vm, b, agc_as_list(vm, args[6]), managed_headers,
+                                         sizeof managed_headers / sizeof managed_headers[0],
+                                         "Host, Content-Length, Transfer-Encoding and Connection are set by the client", NULL,
+                                         &count);
   if (bad) return bad;
-  put_text(b, "\r\n");
-  put(b, body->data, body->bytes);
+  agc_http_put_text(b, "\r\n");
+  agc_http_put(b, body->data, body->bytes);
   return NULL;
 }
 
@@ -872,11 +760,11 @@ static agc_value builtin_exchange(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!agc_is(bad, AGC_T_VOID)) return bad;
   if ((int64_t)agc_as_string(vm, args[7])->bytes > c->max_body)
     return agc_error_value("http: request body exceeds max_body_bytes");
-  bytes request = {0};
+  agc_http_bytes request = {0};
   const char *problem = build_request(vm, &request, args, secure);
   if (problem) {
     free(request.data);
-    return agc_error_value(problem);
+    return agc_http_error_result("http: ", problem);
   }
   exchange *x = calloc(1, sizeof(exchange));
   if (!x) agc_out_of_memory();
@@ -932,6 +820,7 @@ static agc_value builtin_client(agc_vm *vm, agc_value *args, uint32_t span) {
   c->on_timer = timer_fired;
   agc_http_client *hc = agc_alloc(sizeof(agc_http_client));
   hc->state = agc_register(vm, c, release_client);
+  hc->state->goodbye = client_goodbye;
   return agc_result_value(true, agc_http_client_value(hc));
 }
 

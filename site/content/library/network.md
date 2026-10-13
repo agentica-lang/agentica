@@ -1,11 +1,11 @@
 ---
 title: TCP, TLS and HTTP
 weight: 12
-description: TCP and TLS sockets and the HTTP/1.1 client of std/http.
+description: TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
 ---
 
 Network functions return a `Result` and take timeouts in milliseconds. Sockets,
-listeners and clients are handles: `IO.inspect` prints only their type (such as
+listeners, clients and servers are handles: `IO.inspect` prints only their type (such as
 `<Socket>` or `<Listener>`), they cannot be compared, and they are closed when
 the program ends. Most examples here open real connections, so they are
 checked but not run.
@@ -157,7 +157,7 @@ end
 HTTP is the `std/http` library, written in Agentica. Import it with
 `import "std/http" as HTTP`; a call to `HTTP.get` without the import fails
 with `CHECK-UNKNOWN-NAME` and a help that shows the import. It has a client
-only: an HTTP server comes back in a later release.
+(this section) and a server (the next one).
 
 Every call is whole: it returns after the whole response arrived, and the body
 is a `String`, which must be valid UTF-8. Status codes such as 404 or 500 are
@@ -242,6 +242,77 @@ end
 ["a=1", "b=2"]
 ```
 
+## HTTP server
+
+The server is part of `std/http` too. A handler takes the whole request and returns the whole response; the server reads requests, calls the handler and writes its answers, one task per connection, with keep-alive.
+
+### HTTP.listen and HTTP.server_options
+
+```text
+HTTP.server_options() -> HttpServerOptions
+HTTP.listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+HTTP.local_port(server: HttpServer) -> Int
+```
+
+`listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a PEM certificate and key. Port 0 picks a free port, which `local_port` returns. The `HttpRequest` has `method`, `target` (as sent, with the query), `path` (the target before `?`), `headers` (names in lowercase) and `body` (valid UTF-8). This program serves itself and fetches its own page:
+
+```agentica
+import "std/http" as HTTP
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  if request.method == "GET" and request.path == "/"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello"))
+  end
+  return ok(HttpResponse(status: 404, headers: [], body: "not found"))
+end
+
+def main() -> Void
+  server = HTTP.listen("127.0.0.1", 0, &handle, HTTP.server_options()).unwrap!
+  client = HTTP.client(HTTP.client_options()).unwrap!
+  base = "http://127.0.0.1:#{HTTP.local_port(server)}"
+  response = HTTP.get(client, base + "/").unwrap!
+  puts("#{response.status} #{response.body}")
+  puts(HTTP.get(client, base + "/missing").unwrap!.status)
+  HTTP.close_client(client)
+  HTTP.close_server(server)
+end
+```
+
+```output
+200 hello
+404
+```
+
+The server adds `Content-Length` (not on 204 and 304, whose body must be empty), a `Date` header unless the handler set one, and `Connection: close` when the request or the response asked for it. A `HEAD` request gets the headers without the body. When the handler returns `error(message)`, or a response that cannot be sent (a status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, a body with 204 or 304), the client gets a 500 with an empty body, the connection closes, and stderr gets one line: `http: handler error: <message>` or `http: invalid response: <reason>`. A runtime error in a handler ends only its connection: the client sees the connection close, and the program goes on, but it exits with code 1 at the end, as for any task crash nothing awaited.
+
+`server_options()` gives a 30 s `request_timeout_ms`, a 30 s `idle_timeout_ms`, 128 `max_connections` and a 1 MiB `max_body_bytes`, with the same checks as the client options. `request_timeout_ms` bounds the wait for the first request on a connection, then each whole request from its first byte, then the sending of each response from the moment the handler returns; the handler itself has no time limit. `idle_timeout_ms` bounds the wait between requests on a kept connection. Connections over `max_connections` wait until one closes. Bad requests never reach the handler: the server answers 400 (malformed, or a body that is not UTF-8), 413 (a body over `max_body_bytes`), 417 (an `Expect` other than `100-continue`), 431 (headers too long or too many), 501 (`CONNECT`, `Upgrade`) or 505 (not `HTTP/1.1`) and closes the connection.
+
+### HTTP.wait and HTTP.close_server
+
+```text
+HTTP.wait(server: HttpServer) -> Result[Void]
+HTTP.close_server(server: HttpServer) -> Void
+```
+
+`close_server` stops accepting, closes every connection and cancels the running handlers and every task they started. Calling it again does nothing. `wait` returns `ok()` once the server is closed, so a program that only serves waits on it. When `main` returns, the server stops with the program.
+
+```agentica {mode="check"}
+import "std/http" as HTTP
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "you asked for #{request.path}"))
+end
+
+def main() -> Void
+  options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 5000, max_connections: 64, max_body_bytes: 65536)
+  server = HTTP.listen("0.0.0.0", 8080, &handle, options).unwrap!
+  puts("listening on #{HTTP.local_port(server)}")
+  IO.flush()
+  HTTP.wait(server).unwrap!
+end
+```
+
 ### Moving from the builtin HTTP module
 
 Earlier versions had a builtin `HTTP` module. Add the import, then:
@@ -254,5 +325,8 @@ Earlier versions had a builtin `HTTP` module. Add the import, then:
 | binary bodies read with `HTTP.read` | no replacement yet: a body that is not UTF-8 is an error |
 | `max_body_bytes` of 64 MiB by default | 1 MiB by default |
 | `timeout_ms` for the response headers | `timeout_ms` for the whole response |
-| `HTTP.listen`, `HTTP.respond` and the other server calls | no server yet; it comes back in a later release |
-| `Request`, `Response`, `HttpBody`, `HttpWriter`, `HttpServer`, `HttpServerOptions` | `HttpResponse`; the others are gone |
+| a handler `def handle(request: Request, writer: HttpWriter) -> Void` | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
+| `HTTP.respond(writer, status, headers, text, timeout)` | `return ok(HttpResponse(status: status, headers: headers, body: text))` |
+| `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` | one whole `HttpResponse`; streaming responses are planned |
+| `header_timeout_ms` in `HttpServerOptions` | `request_timeout_ms` |
+| `Request`, `Response`, `HttpBody`, `HttpWriter` | `HttpRequest` and `HttpResponse`; the others are gone |

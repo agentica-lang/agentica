@@ -1,0 +1,37 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 10686,
+  "stdout": [
+    "HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)",
+    "error(\"http: every option must be positive\")",
+    "error(\"http: max_connections must be at most 65536\")",
+    "error(\"http: max_body_bytes must be at most 67108864\")",
+    "<HttpServer>",
+    "200 [\"yes\"] [\"27\"] [] [GET /hello?x=1 /hello [] []]",
+    "200 [\"yes\"] [\"23\"] [] [GET /again /again [] []]",
+    "200 [\"yes\"] [\"37\"] [] [POST /form /form [\"a\", \"b\"] [ñandú]]",
+    "200 [\"yes\"] [\"22\"] [] []",
+    "204 [\"yes\"] [] [] []",
+    "304 [\"yes\"] [] [] []",
+    "404 [\"yes\"] [\"9\"] [] [not found]",
+    "200 [\"yes\"] [\"40\"] [] [POST /limit /limit [] [0123456789abcdef]]",
+    "200 [] [\"3\"] [\"close\"] [bye]",
+    "200 [\"yes\"] [\"35\"] [] [GET /after-close /after-close [] []]",
+    "500 [] [\"0\"] [\"close\"] []",
+    "500 [] [\"0\"] [\"close\"] []",
+    "413 [] [\"0\"] [\"close\"] []",
+    "error: http: body exceeds max_body_bytes",
+    "200 [\"yes\"] [\"23\"] [] [GET /still /still [] []]",
+    "HTTP/1.1 400 Bad Request",
+    "HTTP/1.1 505 HTTP Version Not Supported",
+    "ok()",
+    "ok()",
+    ""
+  ],
+  "stderr": [
+    "http: handler error: the handler failed",
+    "http: invalid response: Content-Length and Transfer-Encoding are set by the server",
+    ""
+  ]
+}
