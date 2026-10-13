@@ -5,7 +5,7 @@ Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-
 - [ ] **24a: crashes end only their task (§37.3 to §37.8).**
   - **VM:**
     - `agc_vm_run` (`vm/task.c`) sets the failure target once per turn; a fatal outcome (a crash in `main`, `RUNTIME-STEP-LIMIT`, `RUNTIME-INTERNAL`, an exit) ends the run as today, anything else crashes the current task;
-    - the crash, in the order of §37.8: finish the turn, store and print the diagnostic (text, `--ai`, `--json` with `"task": true`), cancel the descendants (20b's `agc_task_cancel`), start the deferred close of the owned handles and channels, pass on a `next_owner` turn, wake the awaiters;
+    - the crash, in the order of §37.8: finish the turn, store and print the diagnostic (text, `--ai`, `--json` with `"task": true`), cancel the descendants (20b's `agc_task_cancel`), close the owned handles and channels by kind, pass on a `next_owner` turn, wake the awaiters;
     - owners on user-visible handles only (file, socket, listener, process, server; not the process guard or job resources); a handle passed directly as the `Task.spawn` argument moves to the new task (nested ones and channels do not); `HttpClient` exempt;
     - the close per kind (§37.5): mark closing and wake every lock waiter with the closed error; files by an `OP_CLOSE` pool job, pending while a job holds them (run by `agc_io_finish`, or where 20b releases a detached holder); sockets, listeners and TLS by `disown`; processes by `close_proc`, never `release_proc`; servers by `close_server`;
     - the two `Task.await` entries; the `Result` entry gives `error("task: cancelled")` for any cancelled task; a crashed task counts as done for `Task.pending_count`;
