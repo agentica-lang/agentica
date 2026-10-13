@@ -11,7 +11,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM th
 - `make vm`: build `dist/agentica-vm` (run `git submodule update --init` first). `make vm-test`: the C tests.
 - `make goldens`: rewrite the VM golden files after an intended change; commit them.
 - `make site`: build the documentation site; run it before merging a site change.
-- CI steps call make targets, so every CI check runs locally with the same command.
+- The steps of `ci.yml`, of `sweep.yml` and the test steps of `release.yml` call make targets, so those checks run locally with the same command. `site-examples.yml`, `platforms.yml`, `fuzz.yml` and the packaging steps of `release.yml` are still inline.
 
 ## Layout
 

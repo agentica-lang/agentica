@@ -4,19 +4,26 @@ Read this before changing `.github/workflows/`, the Makefile, or before
 adding VM source files, test peers or fixtures. Everything runs on Racket
 CS 9.3.
 
-## Every CI check is a make target
+## The checks of ci.yml, sweep.yml and the release are make targets
 
-CI steps call `make` targets, so every check runs locally with the same
-command. Only setup stays in the YAML: checkout, toolchain and `apt`
-installs, caches and their keys, and the `changes` step. A new check gets a
-target first (in `.PHONY` and with a one-line comment), then a step that
-calls it. Targets that are not obvious:
+The steps of `ci.yml` and `sweep.yml`, and the test steps of `release.yml`,
+call `make` targets, so those checks run locally with the same command. In
+those files only setup stays in the YAML: checkout, toolchain and `apt`
+installs, caches and their keys, and the `changes` step. Still inline are
+`site-examples.yml`, `platforms.yml`, `fuzz.yml` (its `make vm-fuzz` was
+already a target) and the packaging steps of `release.yml` (the `strip` and
+ELF checks, `make exe`, `raco distribute`, the archive). A new check in
+`ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
+comment), then a step that calls it. Targets that are not obvious:
 
 - `build-tests` compiles every test module; `test-ci` runs `make test
   JOBS=6` with `test-exe` (the process and module tests on `dist/agentica`)
   beside it (`tests/test-ci.sh`); `smoke` is the example smoke runs
-  (`tests/smoke.sh`). `test-exe`, `test-ci` and `smoke` build `dist/agentica`
-  only when it is missing; `make exe` refreshes it.
+  (`tests/smoke.sh`). `dist/agentica` is a real Makefile rule over
+  `src/*.rkt` and `stdlib/*.agc`, and `exe`, `test-bdd`, `test-exe`,
+  `test-ci` and `smoke` all use it, so a pull never leaves a stale
+  executable and an up-to-date one is not rebuilt. The `vm` target is only
+  built before it, never a reason to rebuild it.
 - `vm-unicode-check` regenerates `vm/unicode_data.c` and fails if it changed.
 - `vendored-check` links the VM against the vendored OpenSSL and checks it
   (static, the submodule's version); `vendored-test` adds the TLS and HTTP
@@ -24,13 +31,14 @@ calls it. Targets that are not obvious:
 - `vm-lint` includes the clang-tidy 19 version check; `vm-trace-off` builds
   with `TRACE=0` and checks `--version`.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
-  Racket tests that run against the VM in the sanitizer job.
+  Racket tests that run against the VM in the sanitizer job. They and
+  `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
+  earlier step built.
 - `vm-diff-build` and `vm-diff-test` are the golden tests; `sweep-full` runs
   them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`). `test-distribution`
   is the release's distributed-executable test.
 
 ## Pull requests (`.github/workflows/ci.yml`)
-
 
 CI runs its checks on pull requests, on the self-hosted Linux runner
 (`docker-runner` label).
@@ -168,7 +176,10 @@ checks that floor with `objdump -T`, checks that OpenSSL is linked
 statically (in the build and in the unpacked archive) and that `--version`
 names the submodule's OpenSSL version. It ships the VM in the archive's
 `bin/` next to `agentica`, with the VM's third-party licenses in
-`licenses/`. Tags,
+`licenses/`. Its test steps are targets: `make vm-diff-test` runs the golden
+tests on the release VM (`AGENTICA_VM_BINARY=dist/agentica-vm`, with the
+full sweep), and `make test-distribution` runs the distributed-executable
+test. Tags,
 versions and the Racket bundle are in SKILL.md, "Releases".
 
 ## Copy-paste check (jscpd)

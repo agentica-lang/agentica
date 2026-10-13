@@ -3,7 +3,7 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
-NEED_EXE := $(if $(wildcard dist/agentica),,exe)
+EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 
 .PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-diff-build vm-diff-test sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
@@ -19,9 +19,11 @@ build:
 test: build vm
 	$(RACO) test -j $(JOBS) $(TESTS)
 
-exe: build vm
+dist/agentica: $(EXE_INPUTS) | build vm
 	mkdir -p dist
 	$(RACO) exe -o dist/agentica src/main.rkt
+
+exe: dist/agentica
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
 # dist/agentica is timed only when present; rebuild it with make exe first, or pass --runners vm,python
@@ -36,8 +38,8 @@ test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 
 # Example smoke runs on racket src/main.rkt and dist/agentica, in parallel (tests/smoke.sh).
-# dist/agentica is built only when it is missing; run make exe to refresh it.
-smoke: build vm $(NEED_EXE)
+# dist/agentica is rebuilt when a file in src/ or stdlib/ is newer than it.
+smoke: build vm dist/agentica
 	tests/smoke.sh
 
 # CI runs every check as one of these targets, so the same command works locally.
@@ -46,11 +48,11 @@ build-tests: build
 	$(RACO) make -j $(JOBS) tests/*.rkt
 
 # The process and module tests on the built executable (tests/test-ci.sh exe)
-test-exe: build vm $(NEED_EXE)
+test-exe: build vm dist/agentica
 	tests/test-ci.sh exe
 
 # make test with JOBS=6 and test-exe running beside it (tests/test-ci.sh)
-test-ci: build vm $(NEED_EXE)
+test-ci: build vm dist/agentica
 	tests/test-ci.sh
 
 # The distributed executable still finds its std/ modules after its build checkout is gone
@@ -386,6 +388,7 @@ vm-trace-off:
 vm-diff-build: build vm
 	$(RACO) make -j $(JOBS) $(VM_DIFF_TESTS)
 
+# vm-diff-test and vm-sanitize-* do not depend on vm on purpose: they test the VM that an earlier step built.
 vm-diff-test: build
 	$(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
