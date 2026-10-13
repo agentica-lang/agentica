@@ -47,9 +47,9 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 33 | Digit separators | [`33-digit-separators.md`](33-digit-separators.md) | Planned (roadmap phase 23, after phase 22, order step 7.2a) |
 | 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Candidate (roadmap 7g); needs a measurement |
 | 35 | Self-hosted front end and a single binary | [`35-self-hosting.md`](35-self-hosting.md) | Planned, long-term (after the current roadmap order) |
-| 36 | Unit tests (`std/test`) | [`36-unit-tests.md`](36-unit-tests.md) | Planned (roadmap phase 25, order step 7.1, after phase 24) |
-| 37 | Task crash isolation | [`37-task-crash-isolation.md`](37-task-crash-isolation.md) | Planned (roadmap phase 24, order step 7.1, after 20b); semantics for the owner to review |
+| 36 | Unit tests (`std/test`) | [`36-unit-tests.md`](36-unit-tests.md) | Planned (roadmap phase 25, after phase 24, before 20c) |
+| 37 | Task crash isolation | [`37-task-crash-isolation.md`](37-task-crash-isolation.md) | Planned (roadmap phase 24, after 7i and 20b); semantics for the owner to review |
 
-New features are VM-only: they come after the evaluator is deleted (roadmap 7i; exceptions: HTTP 20a to 20d, task crash isolation and unit tests, see the roadmap rules) and get no Racket twin ([roadmap rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).
+New features are VM-only: they come after the evaluator is deleted (roadmap 7i; exception: HTTP 20a to 20d, see the roadmap rules) and get no Racket twin ([roadmap rules](../roadmap/README.md#rules-for-the-catch-up-and-new-features)).
 
 The rule "New library features: `std/` first" (a new pure library feature starts as a `std/` module written in Agentica, not as a builtin) lives in the roadmap: [`../roadmap/README.md`](../roadmap/README.md#new-library-features-std-first).

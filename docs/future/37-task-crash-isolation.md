@@ -1,6 +1,6 @@
 ## 37. Task crash isolation
 
-**Status:** planned (roadmap [phase 24](../roadmap/24-task-crash-isolation.md)). The order was decided by the owner on 2026-10-13: after HTTP 20b (the task cancellation core, which this section needs) and before unit tests (§36), HTTP 20c and 20d, and 7i (§37.9). The semantics below are a proposal for the owner to review.
+**Status:** planned (roadmap [phase 24](../roadmap/24-task-crash-isolation.md)). The order was decided by the owner on 2026-10-13: after 7i and HTTP 20b (the task cancellation core, which this section needs), and before unit tests (§36) and HTTP 20c (§37.9). The semantics below are a proposal for the owner to review.
 
 The idea in one paragraph, in the style of Erlang: a runtime error in a task other than `main` ends only that task. Its awaiters get an error `Result`, its descendants are cancelled, the handles it owns are closed, and the rest of the program goes on. A crash in `main` still ends the program, and a crash nobody handles still prints its diagnostic and makes the run fail at the end, so nothing fails silently. Links, monitors and supervisors are later work, written in Agentica on top of this (§37.10).
 
@@ -63,7 +63,7 @@ This prints `failed: task crashed: RUNTIME-DIVISION-BY-ZERO at parse.agc:3:17: d
 
 ### 37.5 Handles of a crashed task
 
-A handle is **owned** by the task that opened it: `File.open`, `TCP.connect`, `TCP.listen`, `TLS.*`, `Process.spawn` and `spawn_captured`, `HTTP.client`, the `std/http` server. The resource registry records the owner when the handle is made. A handle passed to another task keeps its owner.
+A handle is **owned** by the task that opened it: `File.open`, `TCP.connect`, `TCP.listen`, `TLS.*`, `Process.spawn` and `spawn_captured`, an `HttpClient` of `std/http`, the `std/http` server. The resource registry records the owner when the handle is made. A handle passed to another task keeps its owner.
 
 - **Owned handles are closed.** The VM closes each one as if its owner had called the close builtin at the moment of the crash: a file closes, a socket closes, a process is stopped and reaped as at the end of a run (`SIGKILL`, or `SIGTERM` first for a captured child, §31.9), a server is closed as by `close_server` (20c), and its handlers are cancelled. The close takes the handle's lock in turn, so an operation another task has in flight on it ends first; later calls by other tasks get the normal "closed" error `Result`. This is Erlang's rule for ports: a port closes when its owner dies. A program that wants a handle to outlive a task opens it in the long-lived task (the owner-task pattern of §27.5).
 - **A handle lock passes on.** A crash happens while the task runs, so it holds no lock for an I/O job. But it may crash inside a builtin's retry while it is the `next_owner` of a lock, or while it holds one. Then ownership passes to the head waiter, which is woken, as at a release (§10.2.2), with 20b's code.
@@ -87,7 +87,6 @@ The cancelled descendants follow 20b: their I/O jobs are detached, and tasks par
 - **`File.open` with a block (§25.9)** and every other sentence of `docs/future/` that says a diagnostic "ends the whole run" mean, after this section, "ends the task", which is the whole run only in `main`.
 - **HTTP server (20c).** A handler runs inside its connection task, so a handler crash ends that connection: the socket is closed (it is owned by the connection task) and the client sees the connection close with no response; the server goes on. Answering 500 instead would need the handler in its own task; that is a later choice for `std/http`.
 - **BDD (§31).** `std/bdd` checks `Task.crashed_count()` after each handler (§37.4). The runner ignores stderr lines with `"task": true` when it reads a child's last diagnostic. A crash in the handler itself (in `main`'s task in the scenario child) still ends the child, as today.
-- **The evaluator** is frozen and keeps "any crash ends the run" for the programs it still runs (the builtin `HTTP` module until 20d). `Task.crashed_count` is VM-only: the driver refuses it on an evaluator path with `LOWER-UNSUPPORTED`, through `vm-only-builtins` (§31.9).
 
 ### 37.8 VM design
 
@@ -99,12 +98,12 @@ The cancelled descendants follow 20b: their I/O jobs are detached, and tasks par
 
 ### 37.9 Order
 
-Decided by the owner on 2026-10-13: 7i (first item, the VM as the default backend, done) → 20b → §37 (phase 24) → §36 (phase 25) → 20c → 22 → 23, with 20d and the deletion of the evaluator after 20c, as before (roadmap order step 7.1).
+Decided by the owner on 2026-10-13: 7i (delete the evaluator and the builtin `HTTP` module) → 20b → §37 (phase 24) → §36 (phase 25) → 20c → 22 → 23. 7i removes the builtin `HTTP` module with the evaluator, and 20c brings the server back in `std/http` (roadmap order step 7.1).
 
 - §37 needs 20b: the parent and children links and `agc_task_cancel`.
 - Unit tests (§36) come right after, because they use it for isolation inside a test file.
 - HTTP 20c does not depend on §37 or §36 and could go before them; the owner chose to put them first.
-- §37 is VM-only and lands before the evaluator is deleted, like HTTP 20a to 20d: an exception to "new features come after 7i", listed in the roadmap rules.
+- §37 comes after 7i, so it is VM-only like every new feature; the evaluator is gone and needs no rule.
 
 ### 37.10 Later, in Agentica on top of this
 

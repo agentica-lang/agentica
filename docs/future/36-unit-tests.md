@@ -1,6 +1,6 @@
 ## 36. Unit tests (`std/test`)
 
-**Status:** planned (roadmap [phase 25](../roadmap/25-unit-tests.md)). Decided by the owner on 2026-10-13: Agentica gets minimal unit tests in the style of ExUnit, run by `agentica test` next to the BDD features. The order, decided the same day: after task crash isolation (§37, phase 24) and before HTTP 20c, doc comments (phase 22) and digit separators (phase 23) (§36.9).
+**Status:** planned (roadmap [phase 25](../roadmap/25-unit-tests.md)). Decided by the owner on 2026-10-13: Agentica gets minimal unit tests in the style of ExUnit, run by `agentica test` next to the BDD features. The order, decided the same day: after 7i and task crash isolation (§37, phase 24), and before HTTP 20c, doc comments (phase 22) and digit separators (phase 23) (§36.9).
 
 The idea in one paragraph: a test file is a program named `*_test.agc` whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks. Each block returns `Result[Void]`, and the assertions (`Test.eq`, `Test.ok?`, `Test.error?`, `Test.assert`) return `Result[Void]` too, so they chain with `try`: Agentica has no exceptions. `agentica test` finds test files and `.feature` files in the same pass and writes one report, with the same text, `--ai` and `--json` shapes and the same exit codes as BDD. Each test file runs in its own child VM through the BDD runner (§31.5), and each test runs as its own task, so with §37 a crash fails only that test.
 
@@ -118,8 +118,8 @@ The runner (`std/bdd/runner`, extended) handles a test file as it handles a scen
 
 ### 36.9 Order and the evaluator
 
-- Decided by the owner on 2026-10-13: 7i (first item, done) → 20b → §37 (phase 24) → §36 (phase 25) → 20c → 22 → 23. It is after §37 so that a crash fails one test, not the rest of the file.
-- `Test` is VM-only and lands before the evaluator is deleted, like HTTP 20a to 20d: the driver refuses it on an evaluator path with `LOWER-UNSUPPORTED` (`vm-only-builtins`, §31.9). `agentica test` already runs only on the VM (21f), so nothing else changes.
+- Decided by the owner on 2026-10-13: 7i (delete the evaluator and the builtin `HTTP` module) → 20b → §37 (phase 24) → §36 (phase 25) → 20c → 22 → 23. It is after §37 so that a crash fails one test, not the rest of the file.
+- `Test` comes after 7i, so it is VM-only like every new feature and needs no evaluator rule. `agentica test` already runs only on the VM (21f).
 - **First users,** in the same phase: unit tests for `std/queue` and `std/http`'s pure helpers in `tests/std/`, run by a rackunit test through `agentica test --json`. The internal `std/bdd/*` modules and the self-hosted front end (§35) follow in their own PRs.
 
 ### 36.10 Later: doctests

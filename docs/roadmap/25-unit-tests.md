@@ -1,10 +1,10 @@
 ## Phase 25: Unit tests
 
-Specified in [`docs/future/36-unit-tests.md` section 36](../future/36-unit-tests.md#36-unit-tests-stdtest). Phase 25 adds the builtin `Test` module and runs `*_test.agc` files with `agentica test`, next to the features, through the BDD runner and report. It comes after task crash isolation (phase 24), so a crash fails one test, and before HTTP 20c, 20d and 7i (order step 7.1, decided by the owner on 2026-10-13). It is VM-only, an exception to "new features come after 7i" (roadmap rules). It has two PRs, each with its own tests and docs.
+Specified in [`docs/future/36-unit-tests.md` section 36](../future/36-unit-tests.md#36-unit-tests-stdtest). Phase 25 adds the builtin `Test` module and runs `*_test.agc` files with `agentica test`, next to the features, through the BDD runner and report. It comes after task crash isolation (phase 24), so a crash fails one test, and before HTTP 20c (order step 7.1, decided by the owner on 2026-10-13). It comes after 7i, so it is VM-only, like every new feature. It has two PRs, each with its own tests and docs.
 
 - [ ] **25a: the `Test` module (§36.3, §36.4).**
   - **VM:** `Test.test` (the `TestCase` record with its call span), `Test.eq` (equality of §25.4 plus `Json` by canonical text, with an explicit stack), `Test.ok?`, `Test.error?`, `Test.assert`, the assertion records on the nearest test task, and `Test.run` (list and run modes, one task per test, the pending-task and unobserved-crash checks, the records of §36.6, the per-test seed).
-  - **Front end:** the catalog entries; `Test.eq` needs a type with equality (`CHECK-TYPE-MISMATCH`); `Test` and `TestCase` reserved; the names in `vm-only-builtins`.
+  - **Front end:** the catalog entries; `Test.eq` needs a type with equality (`CHECK-TYPE-MISMATCH`); `Test` and `TestCase` reserved.
   - **Tests:** the golden fixtures and checker tests of §36.12.
   - **Docs:** `docs/grammar.md` (the `Test` module, reserved names); the programming skill (`references/testing.md`, its row in "When to read a reference", `references/diagnostics.md`); `site/content/library/test.md`; the development skill.
 - [ ] **25b: `agentica test` runs test files (§36.5 to §36.8).**

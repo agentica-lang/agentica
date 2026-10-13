@@ -1,6 +1,6 @@
 ## Phase 24: Task crash isolation
 
-Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-task-crash-isolation.md#37-task-crash-isolation). Phase 24 is VM work with a small language change: a runtime error in a task other than `main` ends only that task. It needs HTTP 20b (the task cancellation core) and comes right after it, before unit tests (phase 25), HTTP 20c and 20d, and 7i (order step 7.1, decided by the owner on 2026-10-13). It is VM-only, an exception to "new features come after 7i" (roadmap rules). It has one PR, with its own tests and docs. The semantics are a proposal for the owner to review.
+Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-task-crash-isolation.md#37-task-crash-isolation). Phase 24 is VM work with a small language change: a runtime error in a task other than `main` ends only that task. It comes after 7i and needs HTTP 20b (the task cancellation core), so it comes right after 20b, before unit tests (phase 25) and HTTP 20c (order step 7.1, decided by the owner on 2026-10-13). It is VM-only, like every feature after 7i. It has one PR, with its own tests and docs. The semantics are a proposal for the owner to review.
 
 - [ ] **24a: crashes end only their task (§37.3 to §37.8).**
   - **VM:**
@@ -10,7 +10,7 @@ Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-
     - `Task.await` of a crashed task: `error(text)` when `R` is a `Result`, else `RUNTIME-TASK-CRASHED` at the await span; the crash is then observed;
     - `Task.crashed_count()`, a new builtin; a run whose `main` returns with an unobserved crash exits 1;
     - the audit of every `agc_fail`, `agc_fail_text` and `on_limit` site in `vm/`, so no failure leaves runtime state half-done, and a fuzzer mode that runs the mutant's body in a task.
-  - **Front end:** the `Task.crashed_count` catalog entry and its place in `vm-only-builtins`.
+  - **Front end:** the `Task.crashed_count` catalog entry.
   - **`std/bdd`:** check `Task.crashed_count()` after each handler (`RUNTIME-TASK-CRASHED`); the runner skips stderr lines with `"task": true` when it reads a child's last diagnostic.
   - **Tests:** the golden fixtures of §37.11; the C cases in `vm/tests/task_cancel_test.c` (lock, `next_owner`, pool slot, subtree cleanup); the latency case in `tests/vm-latency-test.rkt`; a BDD case where a task crashes unawaited in a step; `make bench` within noise.
   - **Docs:**
