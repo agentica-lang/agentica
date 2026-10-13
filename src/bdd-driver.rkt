@@ -89,21 +89,41 @@
   (define files (sort (remove-duplicates (map path->string targets)) string<?))
   (append (reverse errors) (for/list ([file (in-list files)]) (hasheq 'path file 'problem ""))))
 
-(define stale-name #rx"^agentica-bdd-([0-9]+)-[0-9a-f]+$")
+(define stale-name #rx"^agentica-bdd-[0-9a-f]+$")
+
+(define (lock-file directory)
+  (build-path directory "lock"))
+
+(define (take-lock directory)
+  (define port (open-output-file (lock-file directory) #:exists 'error #:permissions #o600))
+  (unless (port-try-file-lock? port 'exclusive)
+    (close-output-port port)
+    (error 'agentica "cannot lock ~a" directory))
+  port)
+
+(define (abandoned? path owner)
+  (with-handlers ([exn:fail? (lambda (_) #f)])
+    (and (eq? (file-or-directory-type path #t) 'directory)
+         (equal? (hash-ref (file-or-directory-stat path #t) 'user-id) owner)
+         (eq? (file-or-directory-type (lock-file path) #t) 'file)
+         (let ([port (open-output-file (lock-file path) #:exists 'update)])
+           (if (port-try-file-lock? port 'exclusive)
+               port
+               (begin (close-output-port port) #f))))))
 
 (define (sweep-stale temporary own)
-  (when (directory-exists? "/proc/self")
-    (define owner (hash-ref (file-or-directory-stat own) 'user-id))
-    (for ([name (in-list (with-handlers ([exn:fail? (lambda (_) '())]) (directory-list temporary)))])
-      (define found (regexp-match stale-name (path->bytes name)))
-      (define path (build-path temporary name))
-      (when (and found
-                 (not (equal? path own))
-                 (not (directory-exists? (build-path "/proc" (bytes->string/utf-8 (cadr found)))))
-                 (with-handlers ([exn:fail? (lambda (_) #f)])
-                   (equal? (hash-ref (file-or-directory-stat path #t) 'user-id) owner)))
-        (with-handlers ([exn:fail? void])
-          (delete-directory/files path #:must-exist? #f))))))
+  (define owner (hash-ref (file-or-directory-stat own #t) 'user-id))
+  (for ([name (in-list (with-handlers ([exn:fail:filesystem? (lambda (_) '())]) (directory-list temporary)))])
+    (define path (build-path temporary name))
+    (define held (and (regexp-match? stale-name (path->bytes name)) (not (equal? path own)) (abandoned? path owner)))
+    (when held
+      (with-handlers ([exn:fail? void])
+        (delete-directory/files path #:must-exist? #f))
+      (close-output-port held))))
+
+(define (shared-and-not-sticky? temporary)
+  (define mode (hash-ref (file-or-directory-stat temporary) 'mode))
+  (and (not (zero? (bitwise-and mode #o022))) (zero? (bitwise-and mode #o1000))))
 
 (define (compile-steps path directory)
   (cond
@@ -157,16 +177,27 @@
                             (path->string vm) style)]
     [else
      (define temporary (find-system-path 'temp-dir))
-     (define directory
-       (build-path temporary (format "agentica-bdd-~a-~a" (getpid) (bytes->hex-string (crypto-random-bytes 16)))))
+     (define directory (build-path temporary (format "agentica-bdd-~a" (bytes->hex-string (crypto-random-bytes 16)))))
      (define created? #f)
+     (define lock #f)
      (with-handlers ([exn:break? raise])
-       (dynamic-wind
-         (lambda () (parameterize-break #f (make-directory directory #o700) (set! created? #t)))
-         (lambda ()
-           (sweep-stale temporary directory)
-           (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
-         (lambda () (when created? (delete-directory/files directory #:must-exist? #f)))))]))
+       (with-handlers ([exn:fail? (lambda (failure) (infrastructure-report (car (string-split (exn-message failure) "\n")) (path->string temporary) style))])
+         (if (shared-and-not-sticky? temporary)
+             (infrastructure-report
+              (format "the temporary directory ~a is shared and not sticky; set TMPDIR to a private folder" temporary)
+              (path->string temporary) style)
+             (dynamic-wind
+               (lambda ()
+                 (parameterize-break #f
+                   (make-directory directory #o700)
+                   (set! created? #t)
+                   (set! lock (take-lock directory))))
+               (lambda ()
+                 (sweep-stale temporary directory)
+                 (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
+               (lambda ()
+                 (when lock (close-output-port lock))
+                 (when created? (delete-directory/files directory #:must-exist? #f)))))))]))
 
 (define (run-in directory paths step-file style allow-run? seed vm)
   (define runner-file (build-path directory "runner.agcb"))
