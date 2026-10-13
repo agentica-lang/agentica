@@ -30,7 +30,7 @@ LuaJIT style: a value is a `double`, and the other types live in the payload bit
 - Floats stay inline, with no tag to check.
 - A 64-bit `Int` does not fit in the free bits (about 48 to 51). Large Ints would need heap boxes, which means allocation and GC pressure in arithmetic, or the language would have to narrow `Int`'s range.
 - The classic layout puts the tag in the high bits, so a stored pointer is not a valid address and Boehm cannot see it.
-- The pointer-favouring variant (JavaScriptCore style: raw pointers, doubles offset by 2^48) keeps pointers visible to Boehm, but it still cannot hold a 64-bit Int.
+- The pointer-favouring variant (JavaScriptCore style: doubles are offset by a large power of two, so raw pointers keep their top bits clear) keeps pointers visible to Boehm, but it still cannot hold a 64-bit Int.
 
 ### 38.4 Low-bit pointer tagging (8 bytes)
 
