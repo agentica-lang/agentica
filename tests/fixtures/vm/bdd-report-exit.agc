@@ -1,0 +1,60 @@
+import "std/bdd/report" as Report
+import "std/bdd/gherkin" as Gherkin
+
+def at(line: Int) -> Gherkin.Span
+  return Gherkin.Span(file: "/specs/x.feature", line: line, column: 3, end_column: 12)
+end
+
+def problem(code: String) -> Report.Error
+  return Report.Error(code: code, message: "went wrong", span: at(2), end_line: 2, expected: Report.Detail.Unknown,
+                      actual: Report.Detail.Unknown, original: JSON.null())
+end
+
+def scenario(name: String, verdict: Report.Verdict) -> Report.ScenarioResult
+  steps = [Report.StepResult(text: "a step", location: at(3), status: Report.StepStatus.Passed)]
+  return Report.ScenarioResult(name: name, tags: [], location: at(2), example: Gherkin.Example.NoExample, duration_ms: 0,
+                               steps: steps, verdict: verdict)
+end
+
+def feature(scenarios: List[Report.ScenarioResult]) -> Report.FileResult
+  return Report.FileResult(path: "/specs/x.feature", feature: "X", scenarios: scenarios, verdict: Report.Verdict.Pass)
+end
+
+# As `agentica --json check` writes it, with a help line added.
+def front_end() -> String
+  label = "{\"range\":{\"end\":{\"column\":8,\"line\":2},\"start\":{\"column\":7,\"line\":2}},\"text\":\"this is Int\"}"
+  return ("{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"/specs/steps.agc\"," +
+    "\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"labels\":[#{label}]," +
+    "\"message\":\"operator expects two values of the same type\",\"range\":{\"end\":{\"column\":10,\"line\":2}," +
+    "\"start\":{\"column\":9,\"line\":2}}}")
+end
+
+def show(label: String, files: List[Report.FileResult]) -> Void
+  puts("#{label}: exit #{Report.exit_code(files)}")
+  puts(Report.text(files, true))
+end
+
+def main() -> Void
+  passing = scenario("passes", Report.Verdict.Pass)
+  show("no files", [])
+  show("one pass", [feature([passing])])
+  show("no scenarios", [feature([])])
+  show("one failure", [feature([passing, scenario("fails", Report.Verdict.Fail(problem("RUNTIME-BDD-TIMEOUT")))])])
+  show("infra file", [Report.file_error("/specs/steps.agc", problem("RUNTIME-BDD-INFRA")), feature([passing])])
+  show("usage", [Report.file_error("<arguments>", problem("RUNTIME-BDD-USAGE"))])
+  show("infra scenario", [feature([scenario("crashes", Report.Verdict.Fail(problem("RUNTIME-BDD-INFRA")))])])
+  checked = Report.from_json(front_end())
+  if checked.ok?
+    files = [Report.file_error("/specs/steps.agc", checked.unwrap!), feature([passing])]
+    show("front end", files)
+    puts(Report.json(files))
+  end
+  puts(Report.from_json("{\"code\":\"X\"}").message)
+  odd = "a\"b\\c\nd\t" + String.from_code(233) + String.from_code(1) + String.from_code(127)
+  multi = Report.Error(code: "RUNTIME-DIVISION-BY-ZERO", message: odd, span: at(5), end_line: 7,
+                       expected: Report.Detail.Known(odd), actual: Report.Detail.Known(""), original: JSON.null())
+  files = [feature([scenario(odd, Report.Verdict.Fail(multi))])]
+  show("escapes", files)
+  puts(Report.text(files, false))
+  puts(Report.json(files))
+end
