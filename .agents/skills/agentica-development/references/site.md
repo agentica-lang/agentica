@@ -42,7 +42,10 @@ Fence attributes:
 
 - `{mode="check"}` only checks. Use it for examples that touch files,
   processes, the network or other outside state.
-- `{expect="CODE"}` expects that diagnostic.
+- `{expect="CODE"}` expects that diagnostic. `render-codeblock.html` shows
+  `error[CODE]` in a box below the code, labeled "Runtime error" for
+  `RUNTIME-` codes and "Does not compile" otherwise. It shows only the code,
+  so the page cannot drift from the diagnostic message.
 - `{file="name.agc"}` is a module that the page's other blocks can import.
 
 ## Deploy
