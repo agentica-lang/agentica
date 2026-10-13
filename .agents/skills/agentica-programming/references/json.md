@@ -47,7 +47,7 @@ as Int. Maps decoded from JSON use sorted key order.
 - String/Bool extraction requires that exact kind. Int extraction requires a signed 64-bit integer; `1.0` and `1e0` are not Int. Float extraction accepts integers and decimal/exponent numbers, with normal binary64 rounding, and rejects conversion overflow. Parsed integers may exceed Int bounds until extracted.
 - List extraction returns array elements as Json values, including heterogeneous arrays. Null stays inside Json; there is no null extractor yet.
 - Encode accepts Int, Float, Bool, String, Nil (as null), Json, lists, String-keyed maps, and structs, recursively. Results and Int-keyed maps are `CHECK-NOT-ENCODABLE`, even if empty or nested. Empty literals still need a known type.
-- Encoding is compact; structs follow declaration order, maps follow insertion order. Parsed Json object order is unspecified. Non-finite Floats halt with `RUNTIME-JSON-ENCODE` at the encode call.
+- Encoding is compact; structs follow declaration order, maps follow insertion order. A parsed object encodes with its keys sorted by UTF-8 bytes and each key once (the last duplicate wins), so `JSON.encode(JSON.parse(x))` is canonical: compare two JSON texts by their canonical texts, which ignores key order and keeps array order and number kinds (`1` is not `1.0`). Objects built with `JSON.object` or `JSON.from` have no fixed order. Non-finite Floats halt with `RUNTIME-JSON-ENCODE` at the encode call.
 
 ## Prefer structs for fixed JSON shapes
 

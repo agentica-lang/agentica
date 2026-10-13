@@ -11,8 +11,9 @@ There are two ways to work with JSON:
 - For data whose shape changes, use the `Json` type and the `JSON` functions to
   build and read it.
 
-`Json` values print as JSON text. The order of keys in a parsed or built JSON
-object is not fixed; structs and maps keep their order. Functions whose first parameter is a `Json`
+`Json` values print as JSON text. A parsed JSON object writes its keys sorted
+(see `JSON.parse`); the order of keys in a built JSON object is not fixed;
+structs and maps keep their order. Functions whose first parameter is a `Json`
 are also methods: `JSON.get(j, "a")` is `j.get("a")`.
 
 ## JSON.encode
@@ -118,6 +119,24 @@ end
 ```output
 {"items":[1,2,3]}
 false
+```
+
+A parsed object keeps each key once (the last one wins) and sorts its keys, so
+`JSON.encode(JSON.parse(x))` gives one text per JSON value. Arrays keep their
+order, and `1` stays different from `1.0`.
+
+```agentica
+def main() -> Void
+  a = JSON.encode(JSON.parse("{\"b\": [2, 1], \"a\": 1, \"a\": 3}").unwrap!)
+  b = JSON.encode(JSON.parse("{\"a\":3,\"b\":[2,1]}").unwrap!)
+  puts(a)
+  puts(a == b)
+end
+```
+
+```output
+{"a":3,"b":[2,1]}
+true
 ```
 
 ## JSON.get and JSON.at

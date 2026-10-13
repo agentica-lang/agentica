@@ -1,0 +1,26 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 2778,
+  "stdout": [
+    "compiled 0",
+    "compiled 3",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-DUPLICATE steps.agc:1:1-12",
+    "RUNTIME-BDD-DUPLICATE steps.agc:1:1-12",
+    "RUNTIME-BDD-DUPLICATE steps.agc:1:1-12",
+    "RUNTIME-BDD-PATTERN steps.agc:1:1-12",
+    "RUNTIME-BDD-DUPLICATE steps.agc:1:1-12",
+    ""
+  ],
+  "stderr": []
+}

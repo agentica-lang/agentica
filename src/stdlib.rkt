@@ -17,4 +17,5 @@
 (define stdlib-sources
   (hash "std/queue.agc" (embed-source "queue.agc")
         "std/http.agc" (embed-source "http.agc")
-        "std/bdd/gherkin.agc" (embed-source "bdd/gherkin.agc")))
+        "std/bdd/gherkin.agc" (embed-source "bdd/gherkin.agc")
+        "std/bdd/match.agc" (embed-source "bdd/match.agc")))
