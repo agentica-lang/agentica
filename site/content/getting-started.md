@@ -145,6 +145,8 @@ Split text; an empty separator gives characters.
 | `--flush-timeout MS` | waits at most `MS` milliseconds for file data to be written at the end of the run; when time runs out, the run still ends and prints a warning (no limit by default) |
 | `--allow-run` | lets the program start other programs with `Process.spawn` |
 | `--dump` | prints the checked program tree instead of running it |
+| `--dump-ir` | prints the lowered VM IR instead of running the program |
+| `compile FILE -o OUT` | writes the program as VM bytecode; `agentica-vm -- OUT` runs it |
 | `--version` | prints the version |
 
 `agentica test` runs unit test files (`*_test.agc`, see [Test](/library/test/)) and `.feature` specifications (see [BDD](/library/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.
