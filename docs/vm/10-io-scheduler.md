@@ -1,13 +1,17 @@
 ### 10.2 Rules for 7h
 
-- The design target is multicore: N scheduler threads (M:N, as in BEAM,
-  10.2.3), each running the interpreter and its own libuv loop. The first
-  tasks PR of 7h runs N=1, but on the structures built for N schedulers.
-  N>1 is built only if a measured server needs it (roadmap order). Tasks are
-  VM stacks. A blocking builtin starts a libuv request, parks its task, and
-  the scheduler runs another ready task (10.2.1). Only the scheduler that
-  owns a loop calls `uv_run` on it. libuv and OpenSSL callbacks only copy
-  results and mark tasks ready.
+- The design target is multicore (§16): N scheduler threads that run the
+  interpreter and pull ready tasks from one global run queue, and one I/O
+  thread, the main thread, with the only libuv loop (10.2.3). The first
+  tasks PR of 7h runs N=1, with the scheduler and the loop on one thread,
+  but on the structures built for N schedulers. N>1 is built only if a
+  measured server needs it (roadmap order). Tasks are VM stacks. A blocking
+  builtin starts a libuv request, parks its task, and the scheduler runs
+  another ready task (10.2.1). Only the thread that owns the loop calls
+  `uv_run` on it: the I/O thread, which with N=1 is the scheduler's own
+  thread. libuv callbacks only copy results and mark tasks ready; with
+  N>1, TLS and HTTP parsing run on the scheduler that resumes the task
+  (§16.2).
 - Racket threads are preemptive, so the scheduler also switches tasks that do
   not block, by reductions (10.2.1). Cross-task output order is not compared.
 - Builtins that take a function (`Task.spawn`; the HTTP server's
@@ -37,10 +41,10 @@
   which task runs; the scheduler is ours. Raw epoll or io_uring would make us
   rewrite the file thread pool, processes, signals and DNS ourselves, on each
   platform.
-- **Run queue.** Each scheduler has its own FIFO run queue of ready tasks. A
-  new task, a task whose turn ended, and a task woken by a libuv callback
-  all go to the back of their scheduler's queue. With N>1, an idle scheduler
-  steals ready tasks from other queues (10.2.3).
+- **Run queue.** One FIFO run queue of ready tasks. A new task, a task
+  whose turn ended, and a task woken by a libuv callback all go to its back.
+  With N>1 it is the global run queue that every scheduler pops from, under
+  its lock (§16.3, 10.2.3).
 - **Reductions, as in BEAM.** Each turn has a budget of steps, counted by
   `STEP` like `--max-steps` (`STEP n` counts n). It starts at 2000 and is
   tuned by measurement in 7h; 7g gives the cost of `STEP` with one task. When
@@ -138,8 +142,9 @@
   asks for it) the scheduler calls `uv_run(UV_RUN_NOWAIT)`, so ready I/O wakes
   its tasks even while other tasks keep computing. Timers (`Task.sleep`) wake
   the same way, inside `uv_run`. Tasks woken during a `NOWAIT` go behind the
-  tasks already queued. The scheduler blocks in `uv_run(UV_RUN_ONCE)` only
-  when its run queue is empty and, with N>1, it found nothing to steal.
+  tasks already queued. With N=1 the scheduler blocks in `uv_run(UV_RUN_ONCE)` only
+  when its run queue is empty; with N>1 the I/O thread blocks in the loop
+  and an idle scheduler waits on the run queue's condvar (§16.2, 10.2.3).
   Without channels, a parked task waits on I/O, a timer, or another live
   task, so either some loop has an active handle or some queue is not empty.
   If every scheduler is idle, no loop has an active handle, and tasks are
@@ -178,8 +183,8 @@
   - Per-task memory quotas are out of scope: the Boehm heap is shared, unlike
     BEAM's per-process heaps. Only a global heap limit is possible (13).
 - **N=1 first.** The first tasks PR of 7h runs one scheduler, but on the
-  split structures of 10.2.3, so going to N>1 later adds threads, stealing
-  and the I/O hand-off without a rewrite.
+  split structures of 10.2.3, so going to N>1 later adds threads, the global run queue with its lock,
+  and the I/O inbox without a rewrite.
 - **As built (tasks PR).** `vm/task.c` holds the scheduler (`agc_vm_run`,
   the FIFO run queue, wake, park) and the `Task` builtins; `vm/interp.c`
   runs one turn of the current task (`agc_run_turn`, which returns yield,
@@ -297,11 +302,12 @@
     Then `agc_io_flush_files` starts the same `OP_CLOSE` job for every file
     still open
     (`close_files`), then waits for all file close jobs, the crashed
-    tasks' ones too (`finish_flushes`): with no limit
-    by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
+    tasks' ones too (`finish_flushes`): as built, with no
+    limit by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
     a deadline `uv_timer_t` stops the wait after MS ms, and `vm/main.c`
     prints one warning line (`agc_print_flush_timeout`) and keeps the
-    exit code.
+    exit code. The target is a limit that is always on (§14.4, roadmap
+    row 7.2.1d): 30 seconds by default, with the same deadline timer.
   - Task cancellation (20b, the core that `close_server` (20c),
     `Task.map` (17a) and task crash isolation (phase 24) build on; a
     program cancels tasks only through a crash, which cancels the
@@ -424,8 +430,8 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   does (no `AGENTICA_*` variable). libuv reads it once, when the first
   `uv_queue_work` creates the pool, so it must be in the environment when
   the VM starts; changing it later has no effect. The default is 4 and
-  libuv caps it at 1024. There is one pool per process, shared by every
-  loop (10.2.3). It runs regular-file I/O (stdin too when it is a regular
+  libuv caps it at 1024. There is one pool per process, driven by the one loop
+  (§16). It runs regular-file I/O (stdin too when it is a regular
   file, or when it cannot be reopened, below), opens and path calls, DNS (`getaddrinfo`) and the TLS setup jobs
   that load CA, certificate and key files, so long or many concurrent
   file reads, or slow DNS, queue behind each other. Raise it when a
@@ -470,10 +476,13 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   (3) stdout and stderr are flushed (retried on `EINTR`), and
   `agc_io_flush_files` closes every open file, whose pending output an
   `OP_CLOSE` pool job writes (§10.2.1, Owners), and waits for those jobs:
-  without a limit by default, so a write to a FIFO whose reader stopped
-  reading keeps the run open, as Racket's flush in `filesystem-close-all!`
-  does; `--flush-timeout MS` bounds that wait and then prints that file
-  data may not be written; (4) the diagnostic or summary is printed and
+  as built, without a limit by default, so a write to a FIFO whose reader
+  stopped reading keeps the run open, as Racket's flush in
+  `filesystem-close-all!` does; `--flush-timeout MS` bounds that wait and
+  then prints that file data may not be written. Target (§14.4, roadmap
+  row 7.2.1d): the limit is always on, 30 seconds by default, set with
+  `--flush-timeout MS` or an environment variable, with no way to turn it
+  off, and a run that hits it prints the same line; (4) the diagnostic or summary is printed and
   the VM ends with `_exit`. No task is awaited, no other pool job is waited
   for, no socket is read to its end and the loop is not freed: the OS
   frees descriptors and memory, and `_exit` skips libuv's destructor,
@@ -646,7 +655,7 @@ when the task runs again, the same completion code calls `done` or
 `UV_RUN_NOWAIT` between turns and `UV_RUN_ONCE` only when the run queue is
 empty. Handles got a per-handle lock (the evaluator's semaphore), as
 built above. It is a task-level lock: waiters park in a FIFO, and it is
-never an OS mutex. With N>1 (10.2.3) each scheduler has its own
-loop, and an operation on a handle owned by another scheduler goes through
-the I/O hand-off.
+never an OS mutex. With N>1 (§16, 10.2.3) there is one loop, on the
+I/O thread, and a task on any scheduler reaches a handle through the I/O
+inbox.
 
