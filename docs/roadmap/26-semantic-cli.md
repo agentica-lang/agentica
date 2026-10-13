@@ -9,7 +9,7 @@ Specified in [`docs/future/39-semantic-cli.md` section 39](../future/39-semantic
   - **Diagnostics:** `QUERY-USAGE` at `<arguments>`; exit codes of §39.7 (1 for a lex or parse error, 2 for `QUERY-USAGE`).
   - **Tests** (`tests/query-test.rkt`, fixtures in `tests/fixtures/query/`): the `outline` and `QUERY-USAGE` cases of §39.13, `summary` included.
   - **Docs:**
-    - `docs/grammar.md`: a short "Code queries" paragraph next to "Builtin discovery and execution budget", and `QUERY-` in the list of stage prefixes (§7, around line 1116);
+    - `docs/grammar/06b-builtins.md`: a short "Code queries" paragraph next to "Builtin discovery and execution budget"; and `docs/grammar/07-diagnostics.md`: `QUERY-` in the list of stage prefixes;
     - `AGENTS.md` (the diagnostic prefixes under "Conventions");
     - the programming skill (a new `references/queries.md`, its row in "When to read a reference", `references/diagnostics.md`);
     - `site/content/getting-started.md` (the command);

@@ -12,7 +12,7 @@ Specified in [`docs/future/33-digit-separators.md` section 33](../future/33-digi
       - `_1` and `0.._n` keep `_1` and `_n` as names.
     - A golden fixture (`tests/fixtures/vm/digit-separators.agc` and its `.expected`) that prints a few separated literals, a range and `String.to_int("1_000")`, which stays an error, and has one `case` with a `1_000 ->` arm and one with a `-1_000 ->` arm.
   - **Docs:**
-    - `docs/grammar.md`: the `INTEGER` and `FLOAT` EBNF (lines 103-104), the sentence that says there are no numeric separators (line 112), and the lexical rules;
+    - `docs/grammar/04-lexical.md`: the `INTEGER` and `FLOAT` EBNF, the sentence that says there are no numeric separators, and the lexical rules;
     - the programming skill: one line in the lexical part of `SKILL.md`, and `LEX-INVALID-NUMBER` in the lexer-code table of `references/diagnostics.md` (around line 19);
     - `site/content/tour/numbers.md`: a short section with a complete runnable example and its `output` block;
     - the development skill: `references/stages.md`, the lexer notes and `LEX-INVALID-NUMBER` in its lexer-code table (around line 53).
