@@ -1,6 +1,6 @@
 # VM benchmarks
 
-Speed numbers for the roadmap's 7g speed check. The server measurement (roadmap 7j) adds a server section here, and phase 12 a cross-language section, later.
+Speed numbers for the roadmap's 7g speed check, and the HTTP sanity check of roadmap 20c (last section). Phase 12 adds a cross-language section later.
 
 ## How to run
 
@@ -125,3 +125,30 @@ At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are domin
 - The evaluator, start-up included, is 14.5x to 74x slower than CPython on every program.
 - With the `List`/`Map` library (PR #80) the three real programs, `lists` and `maps` run on the VM in 31 to 94 ms at size 1, 11x to 39x faster than the evaluator with its start-up. `knight-tour` and `traveling-salesman` are about as fast as CPython; `maze-bfs`, `lists` and `maps` are 1.6x to 3.1x slower, which fits arrays copied on every `push`/`set`: `List.append` copies the whole array, so building a list with n pushes is O(n²) (persistent vectors come with 8d, which the roadmap puts before any dispatch micro-optimization) and map puts that copy a HAMT path.
 - `string-library` was added after this run with the `String` library on the VM (PR #81, `--runs 3`): at size 1 the evaluator takes 3.645 s, the VM 0.034 s (107x) and Python 0.045 s; at size 20 the VM takes 0.327 s and Python 0.103 s (1.9 MB against 9.3 MB). `at` over non-ASCII text is O(1) per call through the VM's string cursor (`docs/vm/02-reference-behavior.md` §2.3); the Python twin uses `sum` over the characters and `str.find`.
+
+## HTTP sanity check
+
+`benchmarks/http_bench.py` (not a CI gate; needs Python 3.10 or newer; Python's standard library, Node's `http` module and `taskset`, no third-party code) compares the VM server, `examples/http_server.agc serve` on `dist/agentica-vm`, with three single-process servers that send the same body and the same headers as far as each allows (`Content-Type: text/plain; charset=utf-8`, `Date`, `Content-Length`, body `hello\n`): Node's `http` module (which also sends `Connection: keep-alive` and `Keep-Alive`), a Python `asyncio.start_server` server with a small hand-written HTTP/1.1 keep-alive loop, and Python's `ThreadingHTTPServer` (with `disable_nagle_algorithm`; it also sends `Server`). The servers live in `benchmarks/http.js` and `benchmarks/http_bench.py` (`--serve`).
+
+The load client is the same for every server: Node's `http` with a keep-alive `http.Agent`, in 4 processes that share the connections, each connection sending `GET /` requests one after another (`benchmarks/http.js client`). Each process reports its CPU use, so a saturated client shows as a "Max client CPU" near 100% (it comes from `process.cpuUsage()`, which counts the garbage collector's threads too, so it can go above 100%); each client also counts the sockets it opened and the run fails when one opens more than its share of the connections, so a server that closes keep-alive connections is caught; the server's CPU use comes from `/proc`. Latency is per request, from the client's send to the end of the response, over all requests of the run.
+
+To keep a shared machine from skewing one server, each round runs every server once, interleaved, with the order rotated each round (VM, Node, asyncio, threading in round 1; at each connection level, then the VM client), each on a freshly started server after a short warm-up; the table shows the median of the rounds and their spread. The server runs under `taskset` on CPU 0 and the clients on CPUs 2 to 7 (CPU 1 is left to the driver and the system; change with `--server-cpus` and `--client-cpus`). Before each round the script samples `/proc/stat` for `--sample` seconds (5) while no benchmark process runs, and starts the round only when at least `--min-idle` (0.90) of all CPUs were idle; otherwise it waits `--wait` seconds and samples again, up to `--retries` times, and the output marks a round that stayed busy. After each round it compares the CPU time that all CPUs spent working with the CPU time of the script's own servers and clients (from `getrusage`); when the difference averages more than `--max-outside` (0.5) CPUs over the round, the round is marked disturbed. The output lists the idle share and the outside CPU use of every round (the load average is not used: it decays slowly, so the benchmark's own load would flag the rounds after the first). The last line runs a VM client program (`std/http`, 8 tasks on one pool) against the Node server.
+
+```sh
+make vm
+python3 benchmarks/http_bench.py                     # 40000 requests per run, 8 and 64 connections, 3 rounds
+python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
+```
+
+Results: to be measured on an idle machine (the host also runs CI runners and other builds, and the first runs of the script were taken under a load average of 14 to 21, so they only validated it).
+
+| Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
+|---:|---|---:|---|---:|---:|---:|---:|
+| 8 | VM (`examples/http_server.agc`) | | | | | | |
+| 8 | Node `http` | | | | | | |
+| 8 | Python asyncio | | | | | | |
+| 8 | Python `ThreadingHTTPServer` | | | | | | |
+| 64 | VM (`examples/http_server.agc`) | | | | | | |
+| 64 | Node `http` | | | | | | |
+| 64 | Python asyncio | | | | | | |
+| 64 | Python `ThreadingHTTPServer` | | | | | | |

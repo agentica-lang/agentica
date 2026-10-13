@@ -178,7 +178,7 @@ timeout_ms)` now takes an `HttpRequest` and returns
 `HTTP.begin`, `write`, `write_bytes` and `finish` are gone, and
 `HttpServerOptions` has `request_timeout_ms` instead of
 `header_timeout_ms`. The `Request`, `Response`, `HttpBody` and `HttpWriter`
-types no longer exist.
+types no longer exist; the checker prints these hints as help.
 Binary bodies have no replacement yet: a body that is not UTF-8 is an error.
 `max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers
 the whole response, not only the headers.
