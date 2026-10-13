@@ -169,7 +169,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         for row in block.rows.drop(1)
           rows = rows.push(ExampleRow(span: row.span, bindings: bind(headers, row.cells), tags: example_tags))
         end
-        current = Draft(name: current.name, outline: true, steps: current.steps, examples: rows, tags: current.tags, span: current.span)
+        current = with_examples(current, rows)
         mode = "examples"
       else
         if has_current
@@ -285,22 +285,22 @@ export def parse(file: String, text: String) -> Outcome[Feature]
   return Outcome.Done(Feature(name: title, scenarios: scenarios, tags: feature_tags, span: title_span))
 end
 
+def problem(code: String, message: String, span: Span) -> Diagnostic
+  return Diagnostic(code: code, message: message, span: span)
+end
+
 def fail(code: String, message: String, span: Span) -> Outcome[Feature]
-  return Outcome.Failed(Diagnostic(code: code, message: message, span: span))
+  return Outcome.Failed(problem(code, message, span))
 end
 
 def read_lines(file: String, text: String) -> Source
-  raws: List[String] = []
-  texts: List[String] = []
-  for part in text.split("\n")
-    raw = part
+  raws = text.split("\n").map do |part|
     if part.end_with?("\r")
-      raw = part.slice(0, part.length - 1)
+      return part.slice(0, part.length - 1)
     end
-    raws = raws.push(raw)
-    texts = texts.push(raw.strip)
+    part
   end
-  return Source(file: file, raws: raws, texts: texts)
+  return Source(file: file, raws: raws, texts: raws.map do |raw| raw.strip end)
 end
 
 # A location covers its whole raw line; past the end it is the last line.
@@ -407,6 +407,10 @@ def with_steps(draft: Draft, steps: List[Step]) -> Draft
   return Draft(name: draft.name, outline: draft.outline, steps: steps, examples: draft.examples, tags: draft.tags, span: draft.span)
 end
 
+def with_examples(draft: Draft, rows: List[ExampleRow]) -> Draft
+  return Draft(name: draft.name, outline: draft.outline, steps: draft.steps, examples: rows, tags: draft.tags, span: draft.span)
+end
+
 def active_steps(mode: String, background: List[Step], current: Draft, has_current: Bool) -> List[Step]
   if mode == "background"
     return background
@@ -432,14 +436,14 @@ def read_table(src: Source, start: Int) -> Outcome[Table]
     where = location(src, cursor)
     cells = table_row(src.texts[cursor])
     if not cells.ok?
-      return Outcome.Failed(Diagnostic(code: "PARSE-GHERKIN-TABLE", message: cells.message, span: where))
+      return Outcome.Failed(problem("PARSE-GHERKIN-TABLE", cells.message, where))
     end
     found = cells.unwrap!
     if rows.size == 0
       width = found.size
     end
     if found.size != width
-      return Outcome.Failed(Diagnostic(code: "PARSE-GHERKIN-TABLE", message: "table rows must have the same width", span: where))
+      return Outcome.Failed(problem("PARSE-GHERKIN-TABLE", "table rows must have the same width", where))
     end
     rows = rows.push(TableRow(span: where, cells: found))
     cursor += 1
@@ -453,23 +457,23 @@ def read_doc(src: Source, start: Int) -> Outcome[Doc]
   opening = src.texts[start]
   indent = String.index_of(src.raws[start], opening).unwrap_or(0)
   if not doc_delimiter?(opening)
-    return Outcome.Failed(Diagnostic(code: "PARSE-GHERKIN-ARGUMENT", message: "invalid Doc String delimiter", span: where))
+    return Outcome.Failed(problem("PARSE-GHERKIN-ARGUMENT", "invalid Doc String delimiter", where))
   end
-  content: List[String] = []
   cursor = start + 1
-  while cursor < src.texts.size
-    if src.texts[cursor] == "\"\"\""
-      return Outcome.Done(Doc(text: content.join("\n"), next: cursor + 1))
-    end
-    value = src.raws[cursor]
-    blanks = blank_prefix(value)
-    if indent < blanks
-      blanks = indent
-    end
-    content = content.push(rest_of(value, blanks))
+  while cursor < src.texts.size and src.texts[cursor] != "\"\"\""
     cursor += 1
   end
-  return Outcome.Failed(Diagnostic(code: "PARSE-GHERKIN-ARGUMENT", message: "unterminated Doc String", span: where))
+  if cursor >= src.texts.size
+    return Outcome.Failed(problem("PARSE-GHERKIN-ARGUMENT", "unterminated Doc String", where))
+  end
+  content = src.raws.take(cursor).drop(start + 1).map do |value|
+    blanks = blank_prefix(value)
+    if indent < blanks
+      return rest_of(value, indent)
+    end
+    rest_of(value, blanks)
+  end
+  return Outcome.Done(Doc(text: content.join("\n"), next: cursor + 1))
 end
 
 def table_row(row: String) -> Result[List[String]]
