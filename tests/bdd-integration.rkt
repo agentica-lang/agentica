@@ -119,6 +119,8 @@
        ("oversized.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\nend\n")
        ("flood.agc" . "def main() -> Void\n  IO.warn(String.join(List.repeat(\"x\", 1048576), \"\"))\n  line = IO.gets()\nend\n")
        ("where.agc" . "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n")
+       ("json.agc" . "def main() -> Void\n  puts(\"{\\\"b\\\": \\\"3\\\", \\\"a\\\": 1}\")\nend\n")
+       ("quotes.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"\\\"\", 300000), \"\"))\nend\n")
        ("steps.agc" . ,(string-append
                         "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
                         "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
@@ -144,18 +146,25 @@
          "Scenario: later\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 3 within 5000 milliseconds\n"
          "And stdout is:\n" (doc "actual\n") "And stderr is:\n" (doc "warning\n")
          "Scenario: handler flood\nGiven the handler floods stdout\n"
-         "Scenario: step line over 1 MiB\nGiven the Agentica program \"output.agc\"\nWhen I send input:\n" (doc (make-string 600000 #\")))
+         "Scenario: step line over 1 MiB\nGiven the Agentica program \"output.agc\"\nWhen I send input:\n" (doc (make-string 600000 #\"))
+         "Scenario: JSON mismatch\nGiven the Agentica program \"json.agc\"\n"
+         "Then I receive a JSON line within 5000 milliseconds:\n" (doc "{\"a\": 1, \"b\": 3}")
+         "Scenario: long mismatch\nGiven the Agentica program \"quotes.agc\"\n"
+         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x"))
         (build-path directory "lifecycle.feature") #:exists 'append)
        (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
        (check-equal? (codes report)
                      '("RUNTIME-BDD-TIMEOUT" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
                        "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO"))
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"))
        (define (details item)
          (define problem (hash-ref item 'error))
          (list (hash-ref problem 'expected) (hash-ref problem 'actual)))
-       (check-equal? (map details (list (second (cases report)) (fourth (cases report))))
-                     '(("\"incorrect\"" "\"actual\\n\"") ("0" "3"))))))
+       (check-equal? (map details (list (second (cases report)) (fourth (cases report)) (list-ref (cases report) 11)))
+                     '(("\"incorrect\"" "\"actual\\n\"") ("0" "3") ("{\"a\":1,\"b\":3}" "{\"a\":1,\"b\":\"3\"}")))
+       (define long (cadr (details (list-ref (cases report) 12))))
+       (check-equal? (string-length long) (+ 65536 (string-length "... (534468 more characters)")))
+       (check-true (string-suffix? long "\\... (534468 more characters)")))))
 
   (test-case "a JSON line of a few hundred KB fits the step budget"
     (define items (make-list 30000 "abcdefghij"))

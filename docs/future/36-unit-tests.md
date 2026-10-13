@@ -10,7 +10,7 @@ A test file is a program named `*_test.agc` whose `main` calls `Test.run` with a
 
 Checked at `099daa3`:
 
-- `agentica test [PATH...] [--steps FILE]` runs `.feature` files only (`src/bdd-driver.rkt`, `stdlib/bdd/runner.agc`). The driver finds the files; the runner runs each scenario in its own child VM and builds the report with `std/bdd/report` (`stdlib/bdd/report.agc`: `FileResult`, `ScenarioResult`, `json`, `text`, `exit_code`).
+- `agentica test [PATH...] [--steps FILE]` runs `.feature` files only (`src/bdd-driver.rkt`, `stdlib/bdd/runner.agc`). The driver finds the files; the runner runs each scenario in its own child VM and builds the report with `std/bdd/report` (`stdlib/bdd/report.agc`: `FileResult`, `ScenarioResult`, `json`, `text`, `exit_code`). (Both moved to `std/test/runner` and `std/test/report` in 25b.)
 - The record protocol (U+001E, `agentica-bdd `, then JSON on stdout), the step limit per child, the 30-second deadline and the 1 MiB output limits are those of §31.5.
 - `try` already works in a block passed to a function whose parameter is `Fn[..., Result[T]]` (`docs/grammar.md`, "Blocks and closures"), so `Test.test(name) do ... end` with `try` inside needs no checker change.
 - Agentica has no user generics (only enums), and a function cannot learn the span of its caller.
