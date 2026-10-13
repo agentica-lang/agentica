@@ -4,6 +4,40 @@ Read this before changing `.github/workflows/`, the Makefile, or before
 adding VM source files, test peers or fixtures. Everything runs on Racket
 CS 9.3.
 
+## The checks of ci.yml, sweep.yml and the release are make targets
+
+The steps of `ci.yml` and `sweep.yml`, and the test steps of `release.yml`,
+call `make` targets, so those checks run locally with the same command. In
+those files only setup stays in the YAML: checkout, toolchain and `apt`
+installs, caches and their keys, and the `changes` step. Still inline are
+`site-examples.yml`, `platforms.yml`, `fuzz.yml` (its `make vm-fuzz` was
+already a target) and the packaging steps of `release.yml` (the `strip` and
+ELF checks, `make exe`, `raco distribute`, the archive). A new check in
+`ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
+comment), then a step that calls it. Targets that are not obvious:
+
+- `build-tests` compiles every test module; `test-ci` runs `make test
+  JOBS=6` with `test-exe` (the process and module tests on `dist/agentica`)
+  beside it (`tests/test-ci.sh`); `smoke` is the example smoke runs
+  (`tests/smoke.sh`). `dist/agentica` is a real Makefile rule over
+  `src/*.rkt` and `stdlib/*.agc`, and `exe`, `test-bdd`, `test-exe`,
+  `test-ci` and `smoke` all use it, so a pull never leaves a stale
+  executable and an up-to-date one is not rebuilt. The `vm` target is only
+  built before it, never a reason to rebuild it.
+- `vm-unicode-check` regenerates `vm/unicode_data.c` and fails if it changed.
+- `vendored-check` links the VM against the vendored OpenSSL and checks it
+  (static, the submodule's version); `vendored-test` adds the TLS and HTTP
+  tests on that binary.
+- `vm-lint` includes the clang-tidy 19 version check; `vm-trace-off` builds
+  with `TRACE=0` and checks `--version`.
+- `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
+  Racket tests that run against the VM in the sanitizer job. They and
+  `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
+  earlier step built.
+- `vm-diff-build` and `vm-diff-test` are the golden tests; `sweep-full` runs
+  them with `AGENTICA_SWEEP=full` (the weekly `sweep.yml`). `test-distribution`
+  is the release's distributed-executable test.
+
 ## Pull requests (`.github/workflows/ci.yml`)
 
 CI runs its checks on pull requests, on the self-hosted Linux runner
@@ -13,7 +47,7 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   (one make: the C tests run in parallel and `dist/agentica` is built beside
   them), `make test` with the process and module tests on `dist/agentica`
   (`AGENTICA_TEST_EXECUTABLE`) running alongside it, `make vm-latency` alone
-  after that, the example smoke runs (in parallel), the vendored OpenSSL
+  after that, `make smoke` (the example smoke runs in `tests/smoke.sh`, in parallel), the vendored OpenSSL
   check (the last step that builds), and then `make dup-check` (it runs even
   when an earlier step fails, so a clone or an npm outage does not hide the
   test results). `make test` runs with `JOBS=6` beside the two executable-test
@@ -76,8 +110,8 @@ runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
 that path list in `ci.yml` in step with new VM files.
 
 Only a manual run, or a pull request that changes `vm/trace.*` or
-`vm/tests/trace_test.c`, also runs `make vm vm-test TRACE=0` and checks
-that `--version` says `trace off`.
+`vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm vm-test
+TRACE=0`, then it checks that `--version` says `trace off`).
 
 Pull requests and `master` pushes that change only docs, the site or
 Markdown skip the whole CI workflow. A newer push cancels an older run.
@@ -99,8 +133,8 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
   runners share (`CCACHE_MAXSIZE=5G`), so hits carry across jobs and
   pull requests. PR jobs can write to that volume, so the release sets
   `CCACHE=` (in the job env and on the `make` line) and never uses it.
-- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"` and `raco test`
-  with `-j "$(nproc)"`. `make vm-test` and `make vm-lint` run their C tests
+- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
+  `make vm-sanitize-test` runs `raco test -j 4`. `make vm-test` and `make vm-lint` run their C tests
   and clang-tidy files in parallel (`xargs -P $(JOBS)`).
 - A `master` push runs no tests. It runs only `dup-check` (which also saves
   the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
@@ -125,7 +159,7 @@ Actions → Run workflow:
   seed.
 
 `sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff` shards on
-the release VM with `AGENTICA_SWEEP=full`. Nothing else in CI runs on a schedule.
+the release VM with `AGENTICA_SWEEP=full` (`make sweep-full`). Nothing else in CI runs on a schedule.
 
 macOS and Windows are paused until further notice: `platforms.yml` is not
 run and only Linux is required. Their platform code is kept but untested;
@@ -142,7 +176,10 @@ checks that floor with `objdump -T`, checks that OpenSSL is linked
 statically (in the build and in the unpacked archive) and that `--version`
 names the submodule's OpenSSL version. It ships the VM in the archive's
 `bin/` next to `agentica`, with the VM's third-party licenses in
-`licenses/`. Tags,
+`licenses/`. Its test steps are targets: `make vm-diff-test` runs the golden
+tests on the release VM (`AGENTICA_VM_BINARY=dist/agentica-vm`, with the
+full sweep), and `make test-distribution` runs the distributed-executable
+test. Tags,
 versions and the Racket bundle are in SKILL.md, "Releases".
 
 ## Copy-paste check (jscpd)

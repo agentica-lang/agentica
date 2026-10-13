@@ -62,7 +62,7 @@ jobs:
           key: racket-zo-test-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
           restore-keys: racket-zo-test-9.3-
       - run: git ls-files -z | xargs -0 touch
-      - run: make build && raco make -j "$(nproc)" tests/*.rkt
+      - run: make build-tests
 
   warm-unicode:
     if: github.event_name == 'push'
@@ -91,7 +91,7 @@ jobs:
           path: build/unicode-checked
           key: unicode-checked-9.3-${{ hashFiles('vm/tools/gen-unicode.rkt', 'vm/unicode_data.c', 'build/vm-unicode.mk') }}
       - if: steps.unicode.outputs.cache-hit != 'true'
-        run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
+        run: make vm-unicode-check
 
   warm-third-party:
     if: github.event_name == 'push'
@@ -112,11 +112,7 @@ jobs:
             build/vm/release/openssl-flags
           key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - run: make vm-openssl AGENTICA_OPENSSL=vendored
-      - run: |
-          make -j"$(nproc)" build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
-          if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
-          ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
-          build/vm/release/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "the vendored VM does not report OpenSSL $ossl" >&2; exit 1; }
+      - run: make vendored-check
 
   dup-check:
     if: github.event_name == 'push'
@@ -200,7 +196,7 @@ jobs:
           key: racket-zo-${{ github.job }}-9.3-${{ hashFiles('src/**', 'stdlib/**', 'tests/**/*.rkt') }}
           restore-keys: racket-zo-${{ github.job }}-9.3-
       - run: git ls-files -z | xargs -0 touch
-      - run: make build && raco make -j "$(nproc)" tests/*.rkt
+      - run: make build-tests
       - run: |
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
@@ -212,50 +208,12 @@ jobs:
           path: build/unicode-checked
           key: unicode-checked-9.3-${{ hashFiles('vm/tools/gen-unicode.rkt', 'vm/unicode_data.c', 'build/vm-unicode.mk') }}
       - if: steps.unicode.outputs.cache-hit != 'true'
-        run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
+        run: make vm-unicode-check
       - name: make test, with the process and module tests on the built executable alongside
-        run: |
-          log="$RUNNER_TEMP/executable-tests.log"
-          AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/process-test.rkt tests/modules-test.rkt > "$log" 2>&1 &
-          executable_tests=$!
-          status=0
-          make test JOBS=6 || status=$?
-          if wait "$executable_tests"; then
-            echo "::group::process and module tests on the built executable: passed"
-          else
-            echo "::error::the process and module tests failed on the built executable"
-            status=1
-            echo "::group::process and module tests on the built executable: failed"
-          fi
-          cat "$log"
-          echo "::endgroup::"
-          exit "$status"
+        run: make test-ci
       - run: make vm-latency
       - name: Example smoke runs
-        shell: bash
-        run: |
-          xargs -d '\n' -P "$(nproc)" -I{} bash -c 'out=$({} 2>&1) || { echo "::error::failed: {}"; echo "$out"; exit 1; }' <<'EOF'
-          racket src/main.rkt --allow-run examples/process-tool.agc
-          racket src/main.rkt examples/dispatch.agc
-          racket src/main.rkt examples/concurrency.agc
-          racket src/main.rkt examples/hello.agc
-          racket src/main.rkt examples/classify.agc
-          racket src/main.rkt examples/tasks.agc
-          racket src/main.rkt examples/inventory.agc
-          racket src/main.rkt examples/strings.agc
-          racket src/main.rkt examples/result.agc
-          racket src/main.rkt examples/blocks.agc
-          racket src/main.rkt examples/json.agc
-          dist/agentica examples/json-modules.agc
-          dist/agentica check examples/json-modules.agc
-          dist/agentica examples/hello.agc
-          dist/agentica examples/tasks.agc
-          dist/agentica examples/file-summary.agc examples/hello.agc
-          dist/agentica --allow-run examples/process-tool.agc
-          diff <(dist/agentica --seed 7 tests/fixtures/vm/random.agc) <(dist/agentica --seed 7 tests/fixtures/vm/random.agc)
-          dist/agentica examples/queue.agc
-          dist/agentica examples/http_server.agc
-          EOF
+        run: make smoke
       - run: mkdir -p build && make -s vm-openssl-key AGENTICA_OPENSSL=vendored > build/openssl-key-release
       - id: vendored
         uses: actions/cache/restore@v4
@@ -269,12 +227,7 @@ jobs:
       - if: steps.vendored.outputs.cache-hit != 'true'
         run: echo "::notice::Vendored OpenSSL check skipped - no cached release-mode OpenSSL for this key; warm-third-party checks it on master"
       - if: steps.vendored.outputs.cache-hit == 'true'
-        run: |
-          make -j"$(nproc)" build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
-          if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
-          ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
-          build/vm/release/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "the vendored VM does not report OpenSSL $ossl" >&2; exit 1; }
-          AGENTICA_VM_BINARY=build/vm/release/agentica-vm raco test -j 2 tests/vm-tls-test.rkt tests/vm-http-test.rkt
+        run: make vendored-test
       - if: ${{ !cancelled() }}
         run: make dup-check
 
@@ -325,21 +278,12 @@ jobs:
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
           command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
       - name: make vm-lint
-        run: |
-          clang-tidy --version
-          major=$(clang-tidy --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -n 1)
-          if [ -z "$major" ] || [ "$major" -lt 19 ]; then
-            echo "clang-tidy ${major:-unknown} is too old: misc-use-internal-linkage needs clang-tidy 19 or newer" >&2
-            exit 1
-          fi
-          make vm-lint
+        run: make vm-lint
       - if: github.event_name == 'workflow_dispatch' || needs.test.outputs.trace == 'true'
-        run: |
-          make -j"$(nproc)" vm vm-test TRACE=0
-          dist/agentica-vm --version | grep -q 'trace off'
+        run: make vm-trace-off
       - run: make -j"$(nproc)" vm vm-test vm-fuzz
       - if: ${{ !cancelled() }}
-        run: make build && raco make -j "$(nproc)" tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
+        run: make vm-sanitize-build
       - if: ${{ !cancelled() }}
-        run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
+        run: make vm-sanitize-test
       - run: make -j"$(nproc)" vm-gc-stress JOBS=4

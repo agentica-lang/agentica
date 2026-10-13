@@ -3,8 +3,9 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
+EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 
-.PHONY: build test exe clean test-bdd goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-unicode vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-diff-build vm-diff-test sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -18,9 +19,11 @@ build:
 test: build vm
 	$(RACO) test -j $(JOBS) $(TESTS)
 
-exe: build vm
+dist/agentica: $(EXE_INPUTS) | build vm
 	mkdir -p dist
 	$(RACO) exe -o dist/agentica src/main.rkt
+
+exe: dist/agentica
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
 # dist/agentica is timed only when present; rebuild it with make exe first, or pass --runners vm,python
@@ -33,6 +36,29 @@ vm-latency: build vm
 
 test-bdd: exe
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
+
+# Example smoke runs on racket src/main.rkt and dist/agentica, in parallel (tests/smoke.sh).
+# dist/agentica is rebuilt when a file in src/ or stdlib/ is newer than it.
+smoke: build vm dist/agentica
+	tests/smoke.sh
+
+# ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
+
+# Compile every Racket test module
+build-tests: build
+	$(RACO) make -j $(JOBS) tests/*.rkt
+
+# The process and module tests on the built executable (tests/test-ci.sh exe)
+test-exe: build vm dist/agentica
+	tests/test-ci.sh exe
+
+# make test with JOBS=6 and test-exe running beside it (tests/test-ci.sh)
+test-ci: build vm dist/agentica
+	+MAKE='$(MAKE)' tests/test-ci.sh
+
+# The distributed executable still finds its std/ modules after its build checkout is gone
+test-distribution: build vm
+	$(RACO) test tests/stdlib-distribution-test.rkt
 
 goldens: build vm
 	racket tests/vm-diff-common.rkt
@@ -353,8 +379,53 @@ vm-gc-stress: build
 	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
 	  $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
+# Build the VM and its C tests with the trace points compiled out, and check that --version says so
+vm-trace-off:
+	$(MAKE) -j$(JOBS) vm vm-test TRACE=0
+	dist/agentica-vm$(EXE) --version | grep -q 'trace off'
+
+# The golden tests (tests/vm-diff-*-test.rkt): compile them, then run them on the VM that is built
+# (AGENTICA_VM_BINARY names another one)
+vm-diff-build: build vm
+	$(RACO) make -j $(JOBS) $(VM_DIFF_TESTS)
+
+# vm-diff-test and vm-sanitize-* do not depend on vm on purpose: they test the VM that an earlier step built.
+vm-diff-test: build
+	$(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+
+# The golden tests with the full --max-steps sweep (weekly in CI)
+sweep-full: vm-diff-build
+	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
+
+# The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
+VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt
+SANITIZE_JOBS ?= 4
+
+vm-sanitize-build: build
+	$(RACO) make -j $(JOBS) $(VM_RKT_TESTS)
+
+vm-sanitize-test: vm-sanitize-build
+	$(RACO) test -j $(SANITIZE_JOBS) $(VM_RKT_TESTS)
+
+# Link the VM against the vendored OpenSSL and check that it is static and the version is the submodule's
+vendored-check:
+	$(MAKE) -j$(JOBS) build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
+	@if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
+	@ossl=$$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $$2; sep = "." }' vm/third_party/openssl/VERSION.dat); \
+	  build/vm/release/agentica-vm --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored VM does not report OpenSSL $$ossl" >&2; exit 1; }
+
+# vendored-check, then the TLS and HTTP tests on that binary
+vendored-test: vendored-check
+	AGENTICA_VM_BINARY=build/vm/release/agentica-vm $(RACO) test -j 2 tests/vm-tls-test.rkt tests/vm-http-test.rkt
+
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c
+
+# vm-unicode, then fail when vm/unicode_data.c changed; build/unicode-checked is CI's cache marker
+vm-unicode-check: vm-unicode
+	git diff --exit-code vm/unicode_data.c
+	mkdir -p build
+	touch build/unicode-checked
 
 CLANG_TIDY ?= clang-tidy
 VM_LINT_SKIP := vm/unicode_data.c
@@ -364,6 +435,9 @@ VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
 vm-lint: vm-lint-release vm-lint-sanitize vm-lint-gcstress
 
 vm-lint-check: $(OSSL_DEP) $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
+	@$(CLANG_TIDY) --version
+	@major=$$($(CLANG_TIDY) --version | sed -n 's/.*version \([0-9][0-9]*\).*/\1/p' | head -n 1); \
+	  if [ -z "$$major" ] || [ "$$major" -lt 19 ]; then echo "clang-tidy $${major:-unknown} is too old: misc-use-internal-linkage needs clang-tidy 19 or newer" >&2; exit 1; fi
 	@$(CLANG_TIDY) --list-checks -checks=misc-use-internal-linkage | grep -q misc-use-internal-linkage || { echo "clang-tidy 19+ required" >&2; exit 1; }
 
 vm-lint-release vm-lint-sanitize vm-lint-gcstress: vm-lint-check

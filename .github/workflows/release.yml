@@ -99,16 +99,14 @@ jobs:
           AGENTICA_VM_BINARY: dist/agentica-vm
           AGENTICA_REQUIRE_VM: '1'
           AGENTICA_SWEEP: full
-        run: |
-          make build
-          raco test -j 4 tests/vm-diff-*-test.rkt
+        run: make vm-diff-test JOBS=4
       - name: Build and smoke-test
         run: |
           make exe
           ./dist/agentica examples/hello.agc
           ./dist/agentica --version
           ./dist/agentica examples/queue.agc
-          raco test tests/stdlib-distribution-test.rkt
+          make test-distribution
       - name: Package distributed executable
         run: |
           name="agentica-${{ steps.version.outputs.version }}-linux-x86_64"

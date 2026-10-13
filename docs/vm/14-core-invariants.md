@@ -15,8 +15,8 @@ Each rule says what is **as built** today and what is **being built** or is a **
 Known exceptions, as built:
 
 - **Fallbacks that still use a pool thread.** stdin is reopened through `/proc/self/fd/N` (N is 0, or in protocol mode the reserved descriptor that holds the real stdin) so that only the VM's file description is non-blocking; when that reopen fails (no `/proc`, or `EACCES` after `su` or `sudo -u` changed the user that owns the terminal), a socket's `F_DUPFD` fails, the poller cannot be made (`agc_poller_open` fails) or stdin is write-only, stdin stays a pool job with a blocking read, as before. A regular file whose read can block (`/proc/kmsg`, some `/sys` files) is a regular file to `fstat`, so it goes to the pool; such a read keeps one pool thread until it returns. A regular file that reports size 0 (`/proc`, `/sys`) is read to EOF, at most 1 MiB.
-- **stdout and stderr writes block.** `puts`, `print`, `IO.inspect` and `IO.warn` write through `agc_write` to a blocking `FILE *` (`vm/interp.c`), so a full stdout pipe stalls every task. Decided: kept for now, as the simplest form. A stop signal interrupts such a write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4).
-- **Reaping a process blocks the loop thread.** `Process.close` and an owned process's close (`close_proc` → `shut` → `reap` in `vm/process.c`), and `outlast` at the end of the run, poll with `nanosleep` for at most `REAP_SECONDS` (1 s). It is bounded, but it is neither a park nor a job timer (§14.2).
+- **stdout and stderr writes block.** `puts`, `print`, `IO.inspect` and `IO.warn` write through `agc_write` to a blocking `FILE *` (`vm/interp.c`), so a full stdout pipe stalls every task. Decided: kept for now, as the simplest form. A stop signal interrupts such a write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4). Decided by the owner on 2026-10-13: they move onto the loop later, on top of the parking mechanism of channels (17b), as roadmap row 7.2.1f; until then they stay blocking writes. With N > 1 they are locked per stream (§16.8).
+- **Reaping a process blocks the loop thread.** `Process.close` and an owned process's close (`close_proc` → `shut` → `reap` in `vm/process.c`), and `outlast` at the end of the run, poll with `nanosleep` for at most `REAP_SECONDS` (1 s). It is bounded, but it is neither a park nor a job timer (§14.2). Roadmap row 7.2.1d removes it for `Process.close` and an owned process's close: libuv's exit callback reaps the child, `Process.close` parks the calling task on a job with a timer, and a close during a crash is fire-and-forget. Whether `outlast` at the end of the run changes too is open; it is on the exit path and bounded (§14.4).
 
 ### 14.2 Timeouts
 
@@ -32,17 +32,18 @@ A job that is cancelled is detached (`agc_io_detach`): a loop job is stopped by 
 
 ### 14.4 Ending
 
-**Rule.** One exit path. Every step of it is bounded, except the file flush, which waits until it is done unless `--flush-timeout` sets a limit (the owner's choice in phase 24, as Erlang's `flush_timeout`: no limit by default). At exit, stdout and stderr count as part of the file flush: unbounded by default, bounded by `--flush-timeout`. **When `main` ends, the program ends.** The steps are:
+**Rule.** One exit path. Every step of it is bounded, the file flush included. Target (row 7.2.1d): the limit is always on, 30 seconds by default, set with `--flush-timeout MS` or an environment variable (for example `AGENTICA_FLUSH_TIMEOUT_MS`), and there is no way to turn it off. The owner decided this on 2026-10-13; it replaces the choice of phase 24 (as Erlang's `flush_timeout`: no limit by default). At exit, stdout and stderr count as part of the file flush. **When `main` ends, the program ends.** The steps are:
 
 1. kill child processes;
-2. flush stdout, stderr and open files (the file flush with no limit by default, or within `--flush-timeout`);
+2. flush stdout, stderr and open files (the file flush within the flush limit);
 3. exit.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than the file flush is waited for, no socket is read to its end. `System.exit` and a crash of `main` take the same path. So does the first stop signal (SIGTERM, SIGINT, SIGHUP), flush included; a second stop signal exits at once without flushing, so a flush that cannot end (a FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM, `vm/main.c`) never makes the VM unkillable. A second signal that comes before the children are stopped waits for step 1, so children are never left behind.
 
 As built (`end_run` in `vm/main.c`, §10.2.2 "End of run" and "Stop signals"): `main`'s return, `System.exit`, a diagnostic, the step limit and the first stop signal (`check_stop` in `vm/task.c`, or `EINTR` on a stdout write) all reach `end_run`, which kills the children (`agc_processes_stop` → `close_children` in `vm/process.c`, about 2 seconds at most), sends one non-blocking TLS `close_notify` per finished TLS session, of a `TCP` socket or of an `HttpClient` connection (`agc_io_goodbye`), flushes stdout and stderr, closes the files and waits for their flush jobs (`agc_io_flush_files`), prints the diagnostic or summary and ends with `_exit`, or by the stop signal raised again, so libuv's destructor never joins the pool. A second stop signal before `agc_processes_stop` returns is recorded and acted on right after it (an `alarm` bounds that at 3 seconds); later, it ends the VM at once. A driven VM whose driver is gone takes that immediate path on its first signal. `agc_io_close` (close every resource, free the loop) is only for the in-process harnesses. Where this differs from the rule (targets):
 
-- The `fflush` of stdout and stderr is not bounded by `--flush-timeout`.
+- The file flush has no limit unless `--flush-timeout` is given. The target is the always-on limit above (roadmap row 7.2.1d, with the asynchronous process close of §14.1).
+- The `fflush` of stdout and stderr is not bounded by the flush limit.
 
 Known exceptions, outside the exit path: the out-of-memory and GC abort handlers end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none either; both leave children running.
 
@@ -62,7 +63,8 @@ Items in the plan to re-check with this rule before they start:
 
 | Item | Question |
 |---|---|
-| VM metrics (phase 18, §28) | It adds a metrics thread and hooks in the core. Could a dump at exit, or an outside reader of the VM's state, do the job? |
+| VM metrics (phase 18, §28) | It adds a metrics thread and hooks in the core. Could a dump at exit, or an outside reader of the VM's state, do the job? 18d adds one add on the allocation path while nobody asks (§28.12): it must pass the overhead check or change rule 4 of §28.2 first. |
 | VM layers (7l, §21; its first part is row 7.2.1b, §15) | Does each layer replace code, or only add a boundary? (§15 answers for the first part.) |
 | JIT (7m, §22) | Required by the roadmap; it must keep the same five rules and add no runtime of its own. |
-| Multicore schedulers (gated, §10.2.3) | Gated on the numbers of steps 9 and 10. If built, each rule above must still hold per scheduler, with one exit path for the process. |
+| Multicore schedulers (gated, §16 and §10.2.3) | Gated on the numbers of steps 9 and 10. If built: schedulers that pull from one global run queue and one I/O thread with the only loop. Each rule above must still hold as §16.6 maps it, with one exit path for the process (`end_run` on the I/O thread). |
+| K I/O threads, local run queues with work stealing (§16.10) | Only if measurements ask. Does the model of §16 stop being enough, and does the change keep one way to wake a task and one place for each handle? |
