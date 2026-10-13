@@ -109,3 +109,6 @@ becomes `HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)`
 becomes `response.body`, and `read`, `trailers`, `close_body`,
 `request_stream`, the server calls and the `Request`, `Response`, `HttpBody`,
 `HttpWriter`, `HttpServer` and `HttpServerOptions` types no longer exist.
+Binary bodies have no replacement yet: a body that is not UTF-8 is an error.
+`max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers
+the whole response, not only the headers.

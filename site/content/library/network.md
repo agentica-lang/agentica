@@ -251,5 +251,8 @@ Earlier versions had a builtin `HTTP` module. Add the import, then:
 | `HTTP.client()` | `HTTP.client(HTTP.client_options())` |
 | `HTTP.text(response.body, timeout)` | `response.body` |
 | `HTTP.read`, `HTTP.trailers`, `HTTP.close_body`, `HTTP.request_stream` | a whole `HTTP.request`; streaming is planned |
+| binary bodies read with `HTTP.read` | no replacement yet: a body that is not UTF-8 is an error |
+| `max_body_bytes` of 64 MiB by default | 1 MiB by default |
+| `timeout_ms` for the response headers | `timeout_ms` for the whole response |
 | `HTTP.listen`, `HTTP.respond` and the other server calls | no server yet; it comes back in a later release |
 | `Request`, `Response`, `HttpBody`, `HttpWriter`, `HttpServer`, `HttpServerOptions` | `HttpResponse`; the others are gone |

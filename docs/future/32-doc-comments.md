@@ -1,6 +1,6 @@
 ## 32. Doc comments
 
-**Status:** planned (roadmap [phase 22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets documentation comments written as `##` lines, in the style of Rust's `///`, so that a later tool can generate documentation from the code. Phase 22 is front end only. It comes after 7i and the rest of roadmap order step 7.1 (task crash isolation and unit tests among it, §32.7).
+**Status:** planned (roadmap [phase 22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets documentation comments written as `##` lines, in the style of Rust's `///`, so that a later tool can generate documentation from the code. Phase 22 is front end only. It comes after 7i, HTTP 20b, task crash isolation (§37), unit tests (§36) and HTTP 20c (roadmap order step 7.2.1, §32.7).
 
 The idea in one paragraph: a run of lines that start with `##` documents the declaration on the next line. `#` stays an ordinary comment that tools ignore. The text is Markdown. A `##` run at the top of a file documents the module. The parser keeps each run with its declaration, and two tools read it: `agentica doc`, which prints a module's exported API with its docs, and `agentica help`, which learns to show `std/` functions. No tags such as `@param` are needed, because the types are in the signature.
 
@@ -125,8 +125,8 @@ end
 ### 32.7 Order and the evaluator
 
 - **Front end only.** Doc comments change only the lexer, the parser and the CLI, and the AST keeps its shape (§32.4).
-- **When.** Decided by the user on 2026-10-13: 22a and 22b come after 7i, at roadmap order step 7.2a: after the rest of order step 7.1 (20b, task crash isolation (§37) and unit tests (§36), then 20c and 20d, placed there by the owner on 2026-10-13), and before digit separators (§33) and before `Task.map` and channels (order step 7.3). They are no longer an exception to "new features are VM-only and come after 7i".
-  - `stdlib/http.agc` (HTTP 20a to 20d) is documented in 22a.
+- **When.** Decided by the user on 2026-10-13: 22a and 22b come after 7i, at roadmap order step 7.2a: after order step 7.2.1 (HTTP 20b, task crash isolation (§37), unit tests (§36), then HTTP 20c, which also took what was left of 20d; placed there by the owner on 2026-10-13), and before digit separators (§33) and before `Task.map` and channels (order step 7.3). They are no longer an exception to "new features are VM-only and come after 7i".
+  - `stdlib/http.agc` (HTTP 20a and 20c) is documented in 22a.
 - **How the VM is affected.** It runs programs with doc comments as before, because docs never reach it.
 
 ### 32.8 Later, to evaluate

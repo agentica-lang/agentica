@@ -426,13 +426,13 @@ get an empty table, so the lowerer's keys fail at load as unknown imports.
   thread stops the watchers. The loop runs between turns, so a CPU-bound
   task delays the cleanup by at most one turn. A blocking write to stdout
   delays it until that write ends, which may be never: if nobody reads the
-  VM's stdout any more (for example `agentica --vm prog.agc | less` after
+  VM's stdout any more (for example `agentica prog.agc | less` after
   the pager stopped reading and the driver died), the VM stays blocked in
   `write`, never runs its loop, and neither it nor its children react to
   the `SIGTERM` (the parent-death signal of 9 included); the VM has no
   alarm fallback for this. A VM killed by `SIGKILL`, or ended by the
   out-of-memory exit (70, 6.3), leaves its children running (they get EOF
-  or `EPIPE` when they next touch a pipe). `agentica --vm` stops the VM
+  or `EPIPE` when they next touch a pipe). `agentica` stops the VM
   with `SIGTERM` and kills it only after 2 seconds (9), so a cleanup that
   takes longer than that leaves the rest of the children running.
 - **Black-box differences.**

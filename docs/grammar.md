@@ -1,6 +1,6 @@
 # Agentica: grammar and language design
 
-Status: implemented by the interpreter in Racket (`src/`). This document describes what the interpreter accepts; remaining proposals live in [`future/`](future/README.md).
+Status: implemented by the interpreter: a Racket front end (`src/`) that compiles to bytecode for the C VM (`vm/`), which runs every program. This document describes what the interpreter accepts; remaining proposals live in [`future/`](future/README.md).
 
 ## 1. What we want to validate
 
@@ -288,7 +288,10 @@ Migration from the builtin `HTTP` module, which roadmap 7i removed: add
 `HTTP.client(HTTP.client_options())`; `get`, `post` and `request` return a
 whole `HttpResponse`, so `HTTP.text(response.body, t)` becomes
 `response.body`; `HTTP.read`, `trailers`, `close_body` and `request_stream`
-are gone (send a whole `HTTP.request`; streaming is planned on channels); the
+are gone (send a whole `HTTP.request`; streaming is planned on channels), and
+there is no replacement yet for binary bodies: a response body that is not
+UTF-8 is now an error; `max_body_bytes` defaults to 1 MiB instead of 64 MiB;
+`timeout_ms` now covers the whole response, not only the headers; the
 server (`listen`, `listen_tls`, the writer calls) returns with 20c, which
 replaces `Request` and the `HttpWriter` calls with handlers that return an
 `HttpResponse`. `Request`, `Response`, `HttpBody`, `HttpWriter`, `HttpServer`
@@ -591,7 +594,7 @@ more = Map.put(stock, "kiwi", 7)
 - If a literal repeats a key, the last value wins; the key keeps its first-insertion position. Replacing a key with `Map.put` also preserves its position.
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
 - There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
-- This interpreter uses Racket immutable hashes: lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
+- The VM keeps a map as a persistent hash array mapped trie (a HAMT, 32-way): lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log32 n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 
 ### Methods on builtin types
 
@@ -751,7 +754,7 @@ Random.float() -> Float
 
 `Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. `agentica --seed N test` passes the seed to every scenario's step program and to the programs under test. Each task has its own generator: the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
 
-- `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both use Racket's buffered input port.
+- `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both read stdin through the VM's own input buffer, filled by reads on the I/O thread pool, so other tasks keep running while one waits for input.
 - `IO.read_bytes(count)` waits for exactly `count` bytes or EOF and returns a list of integers in `0 .. 255`, with no UTF-8 decoding. A short final read succeeds; EOF before any bytes is `ok([])`. Zero returns `ok([])` without consuming input, even before EOF. Counts must be `0 .. 1048576` (1 MiB per call), bounding eager allocation; invalid counts return an error without consuming input. Input-port failures also return an error. Larger streams can be processed in multiple reads.
 - `String.from_bytes(data)` checks every integer is `0 .. 255`, then decodes UTF-8 strictly. Empty bytes produce `ok("")`; invalid, overlong, surrogate, or incomplete sequences return an error, never replacement characters. Byte reads may split a multibyte character; decode only when its complete bytes are available. Existing text and byte readers share one port; text readers should only be used at a complete character boundary.
 - `IO.eof?()` peeks at the next byte without consuming it. It can block while awaiting data or EOF, but never waits to decode a whole UTF-8 character. It is not a readiness poll. Reads have no timeout, and the step budget cannot interrupt blocking I/O.
@@ -875,7 +878,7 @@ end
 
 ### Lightweight tasks
 
-`Task` is reserved. Tasks use Racket coroutine threads for I/O concurrency, without new keywords or CPU parallelism. A block can be the task function when it is passed through a `Fn` variable or parameter.
+`Task` is reserved. Tasks are cooperative tasks on one VM scheduler, for I/O concurrency without new keywords or CPU parallelism; a task yields when it waits for I/O, a timer or another task, and at the end of each turn. A block can be the task function when it is passed through a `Fn` variable or parameter.
 
 ```text
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
@@ -884,9 +887,9 @@ Task.sleep(milliseconds: Int) -> Void
 Task.pending_count() -> Int
 ```
 
-Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Handles belong to one execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
+Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
 
-Any task diagnostic terminates the whole evaluation with its original code and span, even when unawaited. System.exit in any task terminates the evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending tasks: explicitly await work that must finish. External interruption also cancels tasks and closes resources created under the execution custodian, preserving caller-supplied ports.
+Any task diagnostic ends the whole run with its original code and span, even when unawaited. System.exit in any task ends the run with its code. The first of these outcomes wins. Returning from the entrypoint ends the run, and pending tasks never run again: explicitly await work that must finish. At the end of a run, however it ends, the VM flushes and closes open files, closes sockets and listeners, and stops and reaps the child processes it started; stdin, stdout and stderr stay open.
 
 Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, arguments and contextual builtin services. Shared streams have no cross-task ordering guarantee; coordinate who reads input. All tasks, including nested tasks, share the execution's synchronized --max-steps counter.
 
@@ -1036,7 +1039,7 @@ Process.spawn_captured(command: String, args: List[String], dir: String, timeout
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
 ~~~
 
-- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks and HTTP callbacks. BDD step handlers can always launch programs, because `agentica test` runs every scenario's child VM with `--allow-run`; `agentica test --allow-run` only passes the flag on to the programs under test.
+- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks. BDD step handlers can always launch programs, because `agentica test` runs every scenario's child VM with `--allow-run`; `agentica test --allow-run` only passes the flag on to the programs under test.
 - A command with no `/` is a bare name: it is looked up in each `PATH` entry in order. The working directory is never added: empty `PATH` entries are skipped, so a program in the current directory runs as `./name`, while an explicit relative entry such as `.` or `bin` resolves against the working directory, as in the shell. A command that contains `/` is a path, relative to the inherited working directory unless it is absolute. A name that is not found, or that names a directory, is "executable is unavailable". Children inherit the environment. Arguments are passed directly without shell interpolation. Empty commands, NUL-containing arguments, and unavailable executables fail. On Windows only `.exe` and `.com` programs run; other files, such as batch files, fail. A file that is found but cannot be executed (no execute permission, a bad format) is an error Result from `spawn`.
 - Timeouts are positive milliseconds, including lock wait. Read and write locks are independent. A timeout after starting stream I/O kills and closes the child; timing out while waiting for its lock preserves it. Waiting for exit times out without terminating the child.
 - Sends accept at most 1048576 UTF-8 bytes or integers 0..255 and flush before succeeding. Invalid data consumes nothing. read_bytes accepts 0..1048576 and waits for that count or EOF: short/empty EOF succeeds, and zero consumes nothing.

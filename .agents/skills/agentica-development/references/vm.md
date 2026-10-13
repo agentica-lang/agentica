@@ -817,9 +817,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   NUL); `agc_outcome` has `message_len`, and `vm/diag.c` prints by length.
   `agc_outcome.text` is never read: it keeps the String reachable while
   `message` points into its data, so do not remove it.
-- Maps keep the evaluator's order exactly: a HAMT from key to value plus
-  the same reversed cons list of keys as `mapping` in
-  `src/runtime-values.rkt`. A new key conses one cell; a replaced key
+- Maps keep insertion order exactly, as the old evaluator did: a HAMT from
+  key to value plus a reversed cons list of keys (the old `mapping` of the
+  deleted `src/runtime-values.rkt`). A new key conses one cell; a replaced key
   keeps its cell. Never keep order in an array copied on every put. The
   hash is keyed per run, so nothing observable may depend on it; the
   printer, `Map.keys` and `Map.values` walk the key list, not the trie.
