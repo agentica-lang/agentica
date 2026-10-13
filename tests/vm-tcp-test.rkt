@@ -347,7 +347,7 @@ AGC
              (check-true (for/or ([line (in-list (file->lines trace))]) (regexp-match? #rx" io lock_wait " line))
                          "a writer waited for the lock"))))
 
-        (test-case "main returns while tasks wait on sockets: the run ends and every socket closes"
+        (test-case "main returns while tasks wait on sockets: the run ends and the peer sees every socket close"
           (with-peer
            (lambda (ports events)
              (define trace (build-path work "exit.trace"))
@@ -360,9 +360,7 @@ AGC
              (check-true (< (- (current-inexact-milliseconds) started) 20000))
              (define lines (file->lines trace))
              (define (seen? rx) (for/or ([line (in-list lines)]) (regexp-match? rx line)))
-             (check-true (seen? #rx" io close resources=0 settled=1$") (string-join lines "\n"))
-             (check-equal? (for/sum ([line (in-list lines)]) (if (regexp-match? #rx" io tcp_close .* why=exit$" line) 1 0))
-                           4)
+             (check-true (seen? #rx" io end code=0 signal=0$") (string-join lines "\n"))
              (check-true (seen? #rx" io tcp_listen listener=") "listen is traced")
              (check-true (seen? #rx" io tcp_connected socket=") "connect is traced")
              (check-equal? (next-line events) "closed watch")))))

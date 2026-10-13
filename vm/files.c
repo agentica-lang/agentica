@@ -4,9 +4,11 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/magic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 #define LIMIT ((size_t)1048576)
@@ -44,6 +46,12 @@ typedef struct {
   bool dir, owns_st;
   int64_t size, mtime;
 } op;
+
+typedef struct {
+  struct stat pipe;
+  int fd;
+  bool found;
+} pipe_search;
 
 typedef struct {
   char *data;
@@ -315,6 +323,37 @@ static bool write_target(const char *path) {
   return errno != ELOOP;
 }
 
+static bool same_file(int fd, const struct stat *file) {
+  struct stat info;
+  return fstat(fd, &info) == 0 && info.st_dev == file->st_dev && info.st_ino == file->st_ino;
+}
+
+static bool same_pipe(int fd, void *data) {
+  pipe_search *s = data;
+  s->found = fd > 2 && fd != s->fd && same_file(fd, &s->pipe);
+  return s->found;
+}
+
+/* A path like /proc/self/fd/N can reopen a pipe the VM itself uses (libuv's
+   signal pipes, a child's stdio); reading or writing it would corrupt the
+   runtime. Only the standard descriptors' pipes stay reachable. */
+static bool private_pipe(int fd) {
+  pipe_search s = {.fd = fd};
+  struct statfs fs;
+  if (fstat(fd, &s.pipe) != 0 || !S_ISFIFO(s.pipe.st_mode) || fstatfs(fd, &fs) != 0 || fs.f_type != PIPEFS_MAGIC)
+    return false;
+  for (int k = 0; k <= 2; k++)
+    if (same_file(k, &s.pipe)) return false;
+  return !agc_each_fd(same_pipe, &s) || s.found;
+}
+
+static int checked(op *o, int fd) {
+  if (fd < 0 || !private_pipe(fd)) return fd;
+  close(fd);
+  fail_op(o, FS_NOT_REGULAR, 0);
+  return -1;
+}
+
 static int open_for(op *o, bool reading, bool append) {
   if (reading) {
     struct stat info;
@@ -331,7 +370,7 @@ static int open_for(op *o, bool reading, bool append) {
     }
     int fd = open(o->path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) fail_op(o, FS_OPEN, errno);
-    return fd;
+    return checked(o, fd);
   }
   if (!write_target(o->path)) {
     fail_op(o, FS_NOT_REGULAR, 0);
@@ -344,7 +383,7 @@ static int open_for(op *o, bool reading, bool append) {
   }
   int fd = open(o->path, O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC | (append ? O_APPEND : O_TRUNC), 0666);
   if (fd < 0) fail_op(o, errno == EISDIR ? FS_IS_DIR : FS_OPEN, errno);
-  return fd;
+  return checked(o, fd);
 }
 
 static void work_read_text(op *o) {

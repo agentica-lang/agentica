@@ -6,6 +6,8 @@
 #include <string.h>
 
 #ifdef __linux__
+#include <dirent.h>
+#include <errno.h>
 #include <signal.h>
 #include <uv.h>
 #endif
@@ -22,6 +24,7 @@ typedef struct agc_io_job job;
 struct agc_loop {
   uv_loop_t uv;
   uv_timer_t deadline;
+  uv_async_t wake;
   job *ready, *ready_tail;
   bool expired;
 };
@@ -196,16 +199,22 @@ static void sweep(agc_vm *vm) {
   }
 }
 
-static agc_loop *loop_of(agc_vm *vm) {
+static agc_loop *new_loop(agc_vm *vm) {
   if (vm->loop) return vm->loop;
   agc_loop *loop = malloc(sizeof(agc_loop));
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
   if (uv_loop_init(&loop->uv) != 0) {
     free(loop);
-    agc_fail(vm, "RUNTIME-INTERNAL", "cannot start the event loop", 0);
+    return NULL;
   }
   vm->loop = loop;
+  return loop;
+}
+
+static agc_loop *loop_of(agc_vm *vm) {
+  agc_loop *loop = new_loop(vm);
+  if (!loop) agc_fail(vm, "RUNTIME-INTERNAL", "cannot start the event loop", 0);
   return loop;
 }
 
@@ -318,12 +327,67 @@ void agc_io_block_stop(sigset_t *saved) {
   pthread_sigmask(SIG_BLOCK, &block, saved);
 }
 
+/* A signal handler gets no context: the stop request and the async handle
+   that wakes the loop for it are the only process-wide state. */
+static volatile sig_atomic_t stop_signal; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static uv_async_t *stop_wake; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/* The first stop signal asks the run to end through the one exit path; a
+   second one ends the process at once. */
+static void stop_requested(int sig) {
+  int saved = errno;
+  if (stop_signal) {
+    signal(sig, SIG_DFL);
+    raise(sig);
+  } else {
+    stop_signal = sig;
+    if (stop_wake) uv_async_send(stop_wake);
+  }
+  errno = saved;
+}
+
+static void stop_woken(uv_async_t *wake) { (void)wake; }
+
+void agc_io_watch_stop(agc_vm *vm) {
+  agc_loop *loop = new_loop(vm);
+  if (loop && uv_async_init(&loop->uv, &loop->wake, stop_woken) == 0) {
+    uv_unref((uv_handle_t *)&loop->wake);
+    stop_wake = &loop->wake;
+  }
+  struct sigaction act;
+  memset(&act, 0, sizeof act);
+  act.sa_handler = stop_requested;
+  sigemptyset(&act.sa_mask);
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) sigaddset(&act.sa_mask, agc_stop_signals[k]);
+  for (size_t k = 0; k < AGC_STOP_SIGNALS; k++) {
+    struct sigaction now;
+    if (sigaction(agc_stop_signals[k], NULL, &now) == 0 && now.sa_handler != SIG_IGN)
+      sigaction(agc_stop_signals[k], &act, NULL);
+  }
+}
+
+int agc_io_stop_signal(void) { return stop_signal; }
+
 static int queue_work(agc_loop *loop, job *j) {
   sigset_t saved;
   agc_io_block_stop(&saved);
   int rc = uv_queue_work(&loop->uv, &j->work, run_work, work_finished);
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
   return rc;
+}
+
+bool agc_each_fd(bool (*visit)(int fd, void *data), void *data) {
+  DIR *dir = opendir("/proc/self/fd");
+  if (!dir) return false;
+  int own = dirfd(dir);
+  for (struct dirent *e = readdir(dir); e; e = readdir(dir)) {
+    char *end = NULL;
+    long fd = strtol(e->d_name, &end, 10);
+    if (end == e->d_name || *end || fd < 0 || fd == own || fd > INT32_MAX) continue;
+    if (visit((int)fd, data)) break;
+  }
+  closedir(dir);
+  return true;
 }
 
 bool agc_io_init(void) {
@@ -549,11 +613,15 @@ static void finish_flushes(agc_vm *vm) {
   vm->rt->flush_expired = flushing(vm);
 }
 
+void agc_io_flush_files(agc_vm *vm) {
+  if (!vm->loop) return;
+  close_files(vm);
+  finish_flushes(vm);
+}
+
 static bool close_all(agc_vm *vm) {
-  if (vm->loop) {
-    close_files(vm);
-    finish_flushes(vm);
-  }
+  agc_processes_stop(vm);
+  agc_io_flush_files(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
     job *j = job_at(vm, k);
     if (!j) continue;
@@ -628,4 +696,10 @@ bool agc_io_close(agc_vm *vm) {
   (void)vm;
   return true;
 }
+
+void agc_io_watch_stop(agc_vm *vm) { (void)vm; }
+
+int agc_io_stop_signal(void) { return 0; }
+
+void agc_io_flush_files(agc_vm *vm) { (void)vm; }
 #endif

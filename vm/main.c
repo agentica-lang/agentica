@@ -158,6 +158,49 @@ static bool bind_to_driver(int64_t driver) {
 }
 #endif
 
+/* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
+   then standard output and the files, then the exit. Nothing else is
+   drained: the OS frees descriptors and memory. */
+static int end_run(agc_vm *vm, agc_outcome outcome) {
+  agc_processes_stop(vm);
+  bool stdout_ok = fflush(stdout) == 0;
+  fflush(stderr);
+  agc_io_flush_files(vm);
+  agc_files_close(vm);
+  if (vm->rt->flush_expired) agc_print_flush_timeout(stderr, vm->rt->flush_timeout, vm->rt->style);
+  if (outcome.kind != AGC_FAILED && (!stdout_ok || fflush(stdout) != 0)) {
+    outcome.kind = AGC_FAILED;
+    outcome.code = "RUNTIME-INTERNAL";
+    outcome.message = "cannot write to standard output";
+    outcome.message_len = strlen(outcome.message);
+    outcome.span = 0;
+  }
+  int code = 0;
+  if (outcome.kind == AGC_FAILED) {
+    agc_print_diagnostic(stderr, vm->rt->program, &outcome, vm->rt->style, false);
+    code = 1;
+  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
+    code = (int)outcome.exit_code;
+  }
+  int sig = agc_io_stop_signal();
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, sig);
+  fflush(stdout);
+  fflush(stderr);
+#ifdef __linux__
+  if (sig) {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, sig);
+    signal(sig, SIG_DFL);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+    raise(sig);
+  }
+  _exit(code);
+#else
+  return code;
+#endif
+}
+
 #ifdef _WIN32
 static int private_trace_fd(int fd) { return fd; }
 #else
@@ -424,36 +467,8 @@ static int run(int argc, char **argv) {
   bool reserved = agc_test_protocol(vm);
   agc_input_open(vm, reserved ? reserve_stdin() : 0, isatty(1));
   vm->rt->in.reserved = reserved;
-  agc_outcome outcome = agc_vm_run(vm);
-  bool stdout_ok = fflush(stdout) == 0;
-  bool settled = agc_io_close(vm);
-  agc_files_close(vm);
-  if (vm->rt->flush_expired) agc_print_flush_timeout(stderr, flush_timeout, style);
-  if (outcome.kind != AGC_FAILED && (!stdout_ok || fflush(stdout) != 0)) {
-    outcome.kind = AGC_FAILED;
-    outcome.code = "RUNTIME-INTERNAL";
-    outcome.message = "cannot write to standard output";
-    outcome.message_len = strlen(outcome.message);
-    outcome.span = 0;
-  }
-  int code = 0;
-  if (outcome.kind == AGC_FAILED) {
-    agc_print_diagnostic(stderr, program, &outcome, style, false);
-    code = 1;
-  } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
-    code = (int)outcome.exit_code;
-  }
-#ifdef __linux__
-  if (!settled) {
-    AGC_TRACE(&trace, AGC_TRACE_IO, "hard_exit code=%d", code);
-    fflush(stdout);
-    fflush(stderr);
-    _exit(code);
-  }
-#else
-  (void)settled;
-#endif
-  return code;
+  agc_io_watch_stop(vm);
+  return end_run(vm, agc_vm_run(vm));
 }
 
 #ifdef _WIN32

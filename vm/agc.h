@@ -571,12 +571,17 @@ void agc_io_ready(agc_io_job *j);
 #ifdef __linux__
 extern const int agc_stop_signals[AGC_STOP_SIGNALS];
 void agc_io_block_stop(sigset_t *saved);
+bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 #endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
+void agc_io_watch_stop(agc_vm *vm);
+int agc_io_stop_signal(void);
+void agc_io_flush_files(agc_vm *vm);
+void agc_processes_stop(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
 void agc_files_close(agc_vm *vm);
 char *agc_host_path(agc_vm *vm, const agc_string *s);

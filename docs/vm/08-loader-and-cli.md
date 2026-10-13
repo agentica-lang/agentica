@@ -147,7 +147,7 @@ and cost one predictable branch each.
   limit. When it runs out, `vm/main.c` prints `agentica: file data may
   not be written: the flush took longer than MS ms`, or
   `{"flush_timeout_ms":MS,"warning":"file data may not be written"}` with
-  `--json`, after `agc_io_close` and before a diagnostic, and keeps the
+  `--json`, after the file flush and before a diagnostic, and keeps the
   exit code. `--ai` and `--json` may both appear; the last one
   wins, as with `command-line`. Giving one option twice prints `agentica-vm:
   the --ai option can only be specified once`. Racket's `command-line`
@@ -267,13 +267,16 @@ and cost one predictable branch each.
   libuv callbacks have no runtime pointer. Task ids come from the runtime's
   `next_task_id` (main is 1); job and handle ids are resource ids from the
   scheduler's registry. Event names: `sched` spawn, turn (`steps`, `cost`,
-  `why`), wake (`by=job|await|lock|stdin`), cancel, stall, fail, exit; `io`
+  `why`), wake (`by=job|await|lock|stdin`), cancel, stall, fail, stop
+  (`signal`, a stop signal ends the run), exit; `io`
   start, done, timeout (`us` from the job start to its `done` callback,
   `result=ok|error|value`; lock jobs have none, `lock_handoff` and
   `lock_timeout` cover them), lock_wait, lock_handoff, lock_timeout, stdin,
   poll (`mode=once|nowait`, `us` blocked; a `nowait` poll that found no
-  finished job writes nothing), close (`resources` left in the
-  registry, `settled`), hard_exit, and the TCP events of 10.3.1:
+  finished job writes nothing), end (`code`, `signal`: the one exit
+  path is done and `_exit` or the signal follows; the harnesses'
+  `agc_io_close` writes close with `resources` and `settled` instead),
+  and the TCP events of 10.3.1:
   tcp_connect (`socket`, `host`, `port`), tcp_connected, tcp_connect_error
   (`error`, one per failed address), tcp_listen (`listener`, `host`, the
   bound `port`, the number of bound `addresses`), tcp_accept (`listener`,
@@ -285,7 +288,7 @@ and cost one predictable branch each.
   directory is not one), exit, close, term (the `SIGTERM` of a captured
   child), kill, reap, eof (`pipe=stdin|stdout|stderr`), truncated
   (`pipe=stdout|stderr`, a captured stream past 1 MiB),
-  stderr, guard_start, guard_stop (`raise`), signal, guard_cleanup;
+  stderr, guard_cleanup;
   `loader` file, format, tables, done, reject (`reason`, `pos`); `gc`
   collect (`at=turn|end`); `tls` (10.3) tls_handshake (`socket`, or
   `socket=0` and the `listener` on the server side, `role=client|server`,

@@ -237,8 +237,8 @@
     only a hint, as 10.2.3 asks). A task whose bottom frame returns, or
     leaves through `try`, is done; its registers and frames are dropped.
   - Cancellation: when `main` returns, the run ends; ready and parked
-    tasks never run again, and `agc_io_close` closes their timers and
-    jobs as before. `System.exit` in any task, and a failure in `main`,
+    tasks never run again, and the one exit path (End of run, below)
+    neither waits for their jobs nor closes them one by one. `System.exit` in any task, and a failure in `main`,
     `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL` in any task, end the run at
     once through `agc_fail`/`agc_exit`.
   - Crashes (phase 24, `docs/future/37-task-crash-isolation.md` §37).
@@ -285,9 +285,10 @@
     run. When a task ends normally, the handles it still owns go to its
     parent (`agc_give_owned`), so a handle moved to a helper task and
     returned with it is still closed if the parent crashes later. At the
-    end of the run, `vm/main.c` first flushes stdout, so a stuck file
-    does not hold back the program's last output. Then `agc_io_close`
-    starts the same `OP_CLOSE` job for every file still open
+    end of the run, `vm/main.c` first kills the children and flushes
+    stdout, so a stuck file does not hold back the program's last output.
+    Then `agc_io_flush_files` starts the same `OP_CLOSE` job for every file
+    still open
     (`close_files`), then waits for all file close jobs, the crashed
     tasks' ones too (`finish_flushes`): with no limit
     by default, `uv_run` ONCE until they end; with `--flush-timeout MS`,
@@ -414,26 +415,40 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   than the pool has threads, or uses FIFOs or devices that may block.
 - **Descriptors** open with `O_CLOEXEC` (and `O_NONBLOCK` before the kind
   check, then blocking for reads and writes in the pool).
-- **End of run.** `vm/main.c` calls `agc_io_close` after the run, however
-  it ended: open handles are closed (the evaluator's cleanup), timers are
-  closed, the loop runs once without waiting, and the loop is freed when no
-  job is left. Closing a file writes its pending output in an `OP_CLOSE`
-  pool job (§10.2.1, Owners), and the run waits for those jobs: without a
-  limit by default, so a write to a FIFO whose reader stopped reading
-  keeps the run open, as Racket's flush in `filesystem-close-all!` does;
-  `--flush-timeout MS` bounds that wait and then prints that file data may
-  not be written. `agc_io_close` returns false when a job is still stuck
-  in the OS (a read on a silent FIFO, or a flush past `--flush-timeout`);
-  `vm/main.c` then flushes stdout and stderr and ends with `_exit`,
-  because a normal exit would run libuv's destructor, which joins the
-  pool threads and would wait for that job. A file whose operation is
-  still running in the pool (`main` returned while a child task's read
-  was in flight) gets no close job and is not waited for: the job still
-  uses its state. It is released (`release_state`, a direct write on the
-  loop thread) after the loop's last run once that job's work is done;
-  otherwise it
-  stays registered, `agc_io_close` returns false, and the process ends
-  with `_exit` as above.
+- **End of run: one exit path.** However the run ends (`main` returns,
+  `System.exit`, a runtime error of `main`, the step limit or a stop
+  signal), `end_run` in `vm/main.c` takes the same fixed steps and nothing
+  else: (1) `agc_processes_stop` kills the children (§10.4, Close); (2)
+  stdout and stderr are flushed, and `agc_io_flush_files` closes every open
+  file, whose pending output an `OP_CLOSE` pool job writes (§10.2.1,
+  Owners), and waits for those jobs: without a limit by default, so a
+  write to a FIFO whose reader stopped reading keeps the run open, as
+  Racket's flush in `filesystem-close-all!` does; `--flush-timeout MS`
+  bounds that wait and then prints that file data may not be written; (3)
+  the diagnostic or summary is printed and the VM ends with `_exit`. No
+  task is awaited, no other pool job is waited for, no socket is closed one
+  by one and the loop is not freed: the OS frees descriptors and memory,
+  and `_exit` skips libuv's destructor, which would join the pool threads.
+  A file whose operation is still running in the pool (`main` returned
+  while a child task's read was in flight) gets no close job and is not
+  waited for: the job still uses its state. `agc_io_close`, which closes
+  every resource and frees the loop, is only for in-process harnesses (the
+  fuzzer and the C tests); it takes the same first two steps.
+- **Stop signals.** `agc_io_watch_stop` (called by `vm/main.c` before the
+  run) installs a `sigaction` handler for `SIGINT`, `SIGTERM` and `SIGHUP`,
+  except a signal the VM started with ignored (`nohup`). The handler keeps
+  the first signal in a `volatile sig_atomic_t` and wakes the loop with
+  `uv_async_send` (an unreferenced `uv_async_t`, so it never keeps the loop
+  alive); a handler gets no context, so these two are the VM's only
+  process-wide state. The scheduler checks the flag after every turn and
+  before it waits (`check_stop` in `vm/task.c`) and ends the run as an
+  exit with code 128 + signal; `end_run` takes the steps above and then
+  raises the signal again with its default action, so the VM ends by it.
+  A second stop signal ends the VM at once (the handler restores the
+  default action and raises it), so the flush with no limit can always be
+  cut short. The handler has no `SA_RESTART`: a write to stdout that nobody
+  reads returns `EINTR` and the run still ends. A CPU-bound task delays
+  the stop by at most one turn.
 - **Per-handle lock (tasks PR, as built).** A `FileHandle` resource has a
   `holder` (the job resource of the operation in flight on it), a
   `next_owner` task and a FIFO of waiting tasks, all on the GC

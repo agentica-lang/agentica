@@ -94,7 +94,9 @@ File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 
 Opens a file for streaming. The mode is `"read"`, `"write"` (create or empty the file) or `"append"`. `close` writes pending data; closing twice is fine. A `close` on a file that is already being closed (its task crashed) returns `ok()` at once; the run still waits for that close to write the data.
 
-Open files are closed when the program ends, and the run waits until their pending data is written. `agentica --flush-timeout MS app.agc` waits at most MS milliseconds: when time runs out, the run ends with the same exit code and prints one line on stderr saying that file data may not be written. Without the flag the wait has no limit, so a write to a FIFO that nobody reads keeps the program from ending.
+Open files are closed when the program ends, and the run waits until their pending data is written. `agentica --flush-timeout MS app.agc` waits at most MS milliseconds: when time runs out, the run ends with the same exit code and prints one line on stderr saying that file data may not be written. Without the flag the wait has no limit, so a write to a FIFO that nobody reads keeps the program from ending. The same happens when the program is stopped with `SIGINT`, `SIGTERM` or `SIGHUP`: running child programs are stopped first, then the files are written, then the program ends by that signal. A second signal ends it at once.
+
+A path that reopens one of the program's own internal pipes, such as `/proc/self/fd/5`, gives `error("filesystem: path does not refer to a regular file")`. Standard input, output and error can still be opened by path.
 
 ```agentica {mode="check"}
 def main() -> Void
