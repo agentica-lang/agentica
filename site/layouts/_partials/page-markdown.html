@@ -7,11 +7,16 @@
 {{- end -}}
 {{- $body = partial "markdown-links.html" (dict "page" . "body" $body) -}}
 {{- range findRESubmatch "(?m)^```agentica \\{[^}\\n]*file=\"([^\"]+)\"[^}\\n]*\\}$" $body -}}
-  {{- $named := printf "`%s`:\n\n%s" (index . 1) (index . 0) -}}
+  {{- $line := index . 0 -}}
+  {{- $fence := "```agentica" -}}
+  {{- range findRESubmatch `expect="[^"]+"` $line -}}
+    {{- $fence = printf "%s {%s}" $fence (index . 0) -}}
+  {{- end -}}
+  {{- $named := printf "`%s`:\n\n%s" (index . 1) $line -}}
   {{- if strings.Contains $body $named -}}
-    {{- $body = replace $body $named (printf "`%s`:\n\n```agentica" (index . 1)) -}}
+    {{- $body = replace $body $named (printf "`%s`:\n\n%s" (index . 1) $fence) -}}
   {{- else -}}
-    {{- $body = replace $body (index . 0) (printf "File `%s`:\n\n```agentica" (index . 1)) -}}
+    {{- $body = replace $body $line (printf "File `%s`:\n\n%s" (index . 1) $fence) -}}
   {{- end -}}
 {{- end -}}
 {{- $body = replaceRE "(?ms)^```agentica \\{[^}\\n]*expect=\"(RUNTIME-[^\"]+)\"[^}\\n]*\\}\\n(.*?)^```$" "```agentica\n${2}```\n\nRuntime error: `error[${1}]`" $body -}}
