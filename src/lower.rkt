@@ -22,14 +22,14 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient TestCase))
+(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient HttpServer TestCase))
 
 (define builtin-structs
-  (for/list ([name (in-list '("FileInfo" "Header" "HttpResponse" "HttpClientOptions" "ProcessOutput"))])
+  (for/list ([name (in-list '("FileInfo" "Header" "HttpRequest" "HttpResponse" "HttpClientOptions" "HttpServerOptions" "ProcessOutput"))])
     (define fields (hash-ref builtin-records name))
     (ir-struct name (map car fields) (map cdr fields))))
 
-(define builtin-struct-needs (hash "HttpResponse" '("Header")))
+(define builtin-struct-needs (hash "HttpResponse" '("Header") "HttpRequest" '("Header")))
 
 (define (mentions-struct? type name)
   (cond
@@ -182,6 +182,8 @@
                       "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"
                       "TLS.connect" "TLS.listen"
                       "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
+                      "HttpWire.read_request" "HttpWire.write_response" "HttpWire.server" "HttpWire.accept"
+                      "HttpWire.spawn" "HttpWire.close_server" "HttpWire.wait" "HttpWire.local_port"
                       "Process.spawn_captured" "Process.output" "Task.pending_count"
                       "Task.await_result" "Task.unobserved_crash"
                       "Test.test" "Test.run" "Test.eq" "Test.ok?" "Test.error?" "Test.assert"))

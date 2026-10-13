@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 2102,
+  "stdout": [
+    "200 returned",
+    "left",
+    "[\"sleeping\", \"spawned\"]",
+    "error(\"network: end of input\")",
+    "error(\"network: end of input\")",
+    "error(\"network: end of input\")",
+    "error: http: connection closed before the response was complete",
+    "ok()",
+    "after close: refused",
+    ""
+  ],
+  "stderr": []
+}

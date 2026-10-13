@@ -15,12 +15,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 10
+#define MAX_FNS 11
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_DROP, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_DROP };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -42,6 +42,7 @@ static int done_calls;
 static int dropped;
 static int released;
 static bool self_returned;
+static int owned_closed;
 static int tries;
 static checker check;
 static agc_resource *handle;
@@ -155,6 +156,21 @@ static agc_value test_self(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static void close_handle(agc_vm *vm, agc_resource *r) {
+  (void)vm;
+  (void)r;
+  owned_closed++;
+}
+
+static agc_value test_drop(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  agc_own(vm, handle, close_handle);
+  agc_task_drop(vm, vm->task);
+  self_returned = true;
+  return agc_void();
+}
+
 static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
 static agc_value test_http(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -216,6 +232,7 @@ static const agc_builtin test_builtins[] = {
   {"Test.close", 1, test_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.io_short", 1, test_io_short, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.drop_self", 1, test_drop, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -295,6 +312,11 @@ static void build_tasks(prog *p) {
   call_reg(p, F_SHORT, B_IO_SHORT, 0, 1);
   mark_arg(p, F_SHORT);
   finish_fn(p, F_SHORT);
+
+  mark_arg(p, F_DROP);
+  call_reg(p, F_DROP, B_DROP, 0, 1);
+  call_int(p, F_DROP, B_MARK, 995);
+  finish_fn(p, F_DROP);
 }
 
 static void new_prog(prog *p) {
@@ -336,6 +358,7 @@ static void reset(void) {
   done_calls = 0;
   dropped = 0;
   self_returned = false;
+  owned_closed = 0;
   tries = 0;
   client = agc_void();
   memset(jobs, 0, sizeof jobs);
@@ -540,6 +563,20 @@ static void test_self_cancel(void) {
   assert(agc_io_close(&vm));
 }
 
+static void test_self_drop(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_DROP, 1);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 99);
+  finish_fn(&p, F_MAIN);
+  reset();
+  agc_vm vm;
+  agc_outcome o = run(&vm, &p);
+  assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-TASK-CANCELLED") == 0 && o.span == 99);
+  assert(self_returned && owned_closed == 1 && mark_count == 1 && marks[0] == 1);
+  assert(agc_io_close(&vm));
+}
+
 static void check_children(agc_vm *vm, int64_t n) {
   agc_task *item = reg_task(vm, 0);
   if (n == 1) {
@@ -631,6 +668,7 @@ int main(void) {
   test_parked_await();
   test_ready_then_await();
   test_self_cancel();
+  test_self_drop();
   test_children_move();
   test_timer_fired_then_cancel();
   test_pool();

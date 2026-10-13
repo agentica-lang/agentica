@@ -30,7 +30,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_STOP_SIGNALS 3
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER
 } agc_tag;
 
 typedef struct {
@@ -184,6 +184,14 @@ typedef struct {
 typedef struct {
   agc_resource *state;
 } agc_http_client;
+
+typedef struct {
+  agc_resource *state;
+  agc_value listener;
+  agc_task *group;
+} agc_http_server;
+
+typedef void (*agc_end_fn)(agc_vm *vm, agc_task *t);
 
 typedef struct {
   agc_string *name;
@@ -366,12 +374,15 @@ struct agc_task {
   int64_t turn_cost;
   uint64_t lock_deadline, input_seen;
   agc_task_state state;
-  bool cancelled, crashed, observed, drop_handles, left_children;
+  bool cancelled, crashed, observed, drop_handles, left_children, group, hidden;
   agc_value result;
   agc_string *crash, *crash_message;
   const char *crash_code;
   uint32_t crash_span;
-  agc_task *crash_next;
+  agc_task *crash_next, *crash_prev, *quiet;
+  uint64_t quiet_more;
+  agc_end_fn end;
+  void *end_data;
   agc_task *test;
   agc_test_note *note;
   agc_test_run *test_run;
@@ -390,7 +401,7 @@ struct agc_vm {
   agc_loop *loop;
   agc_resource *process_guard;
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
-  agc_task *crashes, *crashes_tail;
+  agc_task *crashes, *crashes_tail, *quiet;
   uint64_t tasks_done, gc_seen, crash_count, observed_count;
   bool yield, in_turn;
   jmp_buf fail, turn;
@@ -428,6 +439,7 @@ agc_value agc_socket_value(agc_socket *s);
 agc_value agc_listener_value(agc_listener *l);
 agc_value agc_http_client_value(agc_http_client *c);
 agc_value agc_test_case_value(agc_test_case *c);
+agc_value agc_http_server_value(agc_http_server *s);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -447,6 +459,7 @@ agc_socket *agc_as_socket(agc_vm *vm, agc_value v);
 agc_listener *agc_as_listener(agc_vm *vm, agc_value v);
 agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
+agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
 char *agc_cstr(const agc_string *s);
 uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
@@ -548,6 +561,8 @@ extern const agc_builtin agc_tcp_builtins[];
 extern const size_t agc_tcp_builtin_count;
 extern const agc_builtin agc_http_builtins[];
 extern const size_t agc_http_builtin_count;
+extern const agc_builtin agc_http_server_builtins[];
+extern const size_t agc_http_server_builtin_count;
 bool agc_test_protocol(agc_vm *vm);
 extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
@@ -568,6 +583,7 @@ bool agc_io_init(void);
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
+void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #ifdef __linux__
 extern const int agc_stop_signals[AGC_STOP_SIGNALS];
 void agc_io_block_stop(sigset_t *saved);
@@ -609,6 +625,10 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
 agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
+agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                            uint32_t span);
+agc_task *agc_task_group(agc_vm *vm);
+void agc_task_drop(agc_vm *vm, agc_task *root);
 void agc_task_observe(agc_vm *vm, agc_task *t);
 bool agc_report_unobserved(agc_vm *vm);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);

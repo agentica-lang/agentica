@@ -62,10 +62,11 @@
       (check-equal? result (void) (car entry))
       (check-equal? output (cdr entry) (car entry))))
 
-  (test-case "file, task and process examples give their expected output"
+  (test-case "file, task, process and HTTP examples give their expected output"
     (define (example name) (path->string (build-path examples-dir name)))
     (check-equal? (cli (example "concurrency.agc")) '(0 "42\n14\n" ""))
     (check-equal? (cli (example "file-summary.agc") (example "hello.agc")) '(0 "39\n" ""))
+    (check-equal? (cli (example "http_server.agc")) '(0 "200\nhello\n\n404\nok()\n" ""))
     (define tool (cli "--allow-run" (example "process-tool.agc")))
     (check-equal? (first tool) 0 (third tool))
     (check-regexp-match #rx"^Welcome to Racket v[0-9.]+ \\[cs\\]\\.\n$" (second tool))

@@ -6,8 +6,11 @@
          "vm-diff-common.rkt")
 
 (define-runtime-path peer-file "fixtures/http-peer.py")
+(define-runtime-path server-peer-file "fixtures/http-server-peer.py")
+(define-runtime-path server-node-file "fixtures/http-server-peer.js")
 (define-runtime-path certs "fixtures/tls")
 (define python (find-executable-path "python3"))
+(define node (find-executable-path "node"))
 (define wait-seconds 30)
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"SSL_CERT_FILE" #"SSL_CERT_DIR")])
@@ -32,6 +35,37 @@
       (unless (sync/timeout 5 process) (subprocess-kill process #t))
       (subprocess-wait process)
       (close-input-port out))))
+
+(define (node-ready?)
+  (cond
+    [node #t]
+    [(getenv "CI") (error 'vm-http "Node is required in CI")]
+    [else (displayln "SKIP VM HTTP server tests with Node: node is unavailable") #f]))
+
+(define (next-line port)
+  (define line (sync/timeout wait-seconds (read-line-evt port 'linefeed)))
+  (unless (string? line) (error 'vm-http "no line within ~a s: ~s" wait-seconds line))
+  line)
+
+(define (run-peer program . arguments)
+  (define-values (process out in err) (apply subprocess #f #f #f program arguments))
+  (close-output-port in)
+  (define output (box ""))
+  (define errors (box ""))
+  (define readers
+    (list (thread (lambda () (set-box! output (port->string out))))
+          (thread (lambda () (set-box! errors (port->string err))))))
+  (dynamic-wind
+    void
+    (lambda ()
+      (unless (sync/timeout 120 process) (error 'vm-http "the peer did not finish"))
+      (for-each thread-wait readers)
+      (list (subprocess-status process) (string-split (unbox output) "\n") (unbox errors)))
+    (lambda ()
+      (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
+      (subprocess-wait process)
+      (close-input-port out)
+      (close-input-port err))))
 
 (define (vm-environment)
   (define environment (environment-variables-copy (current-environment-variables)))
@@ -189,6 +223,126 @@ end
 AGC
   )
 
+(define server-program
+  #<<AGC
+import "std/http" as HTTP
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{request.body}"))
+end
+
+def main() -> Void
+  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
+  server = Result.unwrap!(HTTP.listen("127.0.0.1", 0, &handle, options))
+  certs = System.args()[0]
+  secure = Result.unwrap!(HTTP.listen_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options))
+  puts("#{HTTP.local_port(server)} #{HTTP.local_port(secure)}")
+  IO.flush()
+  IO.read()
+  HTTP.close_server(server)
+  HTTP.close_server(secure)
+  IO.inspect(HTTP.wait(server))
+  IO.inspect(HTTP.wait(secure))
+end
+AGC
+  )
+
+(define server-python-lines
+  '("length-and-chunked 400 closed"
+    "two-lengths 400 closed"
+    "equal-lengths 200 closed"
+    "equal-length-list 200 closed"
+    "gzip 501 closed"
+    "gzip-chunked 501 closed"
+    "two-encodings 501 closed"
+    "huge-chunk 413 closed"
+    "bad-chunk 400 closed"
+    "bare-lf 400 closed"
+    "long-line 431 closed"
+    "long-head 431 closed"
+    "headers-100 200 closed"
+    "headers-101 431 closed"
+    "headers-150 431 closed"
+    "long-trailer 431 closed"
+    "many-trailers 431 closed"
+    "bad-trailer 400 closed"
+    "http-1 505 closed"
+    "http-2 505 closed"
+    "http-1.10 505 closed"
+    "http-2.0 505 closed"
+    "http-1.0 505 closed"
+    "http-2.0-headers 505 closed"
+    "bad-version 400 closed"
+    "leading-crlf 200 closed"
+    "absolute-target 400 closed"
+    "non-ascii-target 400 closed"
+    "star-get 400 closed"
+    "star-options 200 closed"
+    "bad-method 400 closed"
+    "connect 501 closed"
+    "upgrade 501 closed"
+    "fold 400 closed"
+    "expect-other 417 closed"
+    "over-limit 413 closed"
+    "chunked-over-limit 413 closed"
+    "non-utf8 400 closed"
+    "no-host 400 closed"
+    "two-hosts 400 closed"
+    "short-505 505 closed quick"
+    "bad-line-open 400 closed quick"
+    "partial-head none closed bounded"
+    "expect-over-limit HTTP/1.1 413 Content Too Large False closed"
+    "expect-continue HTTP/1.1 100 Continue 200 POST /expect hello closed"
+    "pipelined ['GET /one ', 'POST /two abc', 'GET /three '] closed"
+    "client-chunked 200 POST /chunked abñcd"
+    "client-head 200 11 b''"
+    "client-again 200 GET /again  True"
+    "slots 2 waiting"
+    "slot-freed 200 GET /waiting  closed"
+    "tls-keep-alive 200 GET /one  200 POST /two over tls True"
+    "tls-silent closed bounded"
+    "tls-plain closed"))
+
+(define server-node-lines
+  '("node-chunked 200 true POST /chunked abñcd"
+    "node-expect true 200 POST /expect hello"
+    "node-keep-alive GET /first  GET /again  true true"
+    "node-head 200 11 \"\""
+    "node-concurrent 3 true"))
+
+(define (check-server work)
+  (define source (build-path work "server.agc"))
+  (define bytecode (build-path work "server.agcb"))
+  (display-to-file server-program source #:exists 'replace)
+  (compile-file source bytecode)
+  (define-values (process out in err)
+    (parameterize ([current-environment-variables (vm-environment)])
+      (subprocess #f #f #f vm-file "--" (path->string bytecode) (path->string certs))))
+  (dynamic-wind
+    void
+    (lambda ()
+      (define ports (string-split (next-line out)))
+      (define port (first ports))
+      (define python-run (run-peer python server-peer-file port "2" (second ports) (path->string certs)))
+      (check-equal? (first python-run) 0 (third python-run))
+      (check-equal? (second python-run) server-python-lines)
+      (when (node-ready?)
+        (define node-run (run-peer node server-node-file port "2"))
+        (check-equal? (first node-run) 0 (third node-run))
+        (check-equal? (second node-run) server-node-lines))
+      (close-output-port in)
+      (check-not-false (sync/timeout wait-seconds process) "the VM server finishes")
+      (check-equal? (next-line out) "ok()")
+      (check-equal? (next-line out) "ok()")
+      (check-equal? (subprocess-status process) 0)
+      (check-equal? (port->string err) ""))
+    (lambda ()
+      (unless (port-closed? in) (close-output-port in))
+      (when (eq? (subprocess-status process) 'running) (subprocess-kill process #t))
+      (subprocess-wait process)
+      (close-input-port out)
+      (close-input-port err))))
+
 (module+ test
   (when (and (peer-ready?) (vm-built? "VM HTTP tests"))
     (define work (make-temporary-directory "agentica-vm-http~a"))
@@ -253,5 +407,7 @@ AGC
                                 "http: connection closed before the response was complete"
                                 "204  0"
                                 "200 ok 2")
-                          "raw")))))
+                          "raw"))))
+        (test-case "the VM server against Python raw sockets, Python http.client and Node http clients"
+          (check-server work)))
       (lambda () (delete-directory/files work)))))

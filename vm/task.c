@@ -93,7 +93,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->cursor = NULL;
   t->turn_cost = 0;
   t->left_children = t->children != NULL;
-  vm->tasks_done++;
+  if (!t->group) vm->tasks_done++;
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
@@ -101,6 +101,9 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   }
   leave_parent(t);
   agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+  agc_end_fn end = t->end;
+  t->end = NULL;
+  if (end) end(vm, t);
 }
 
 static void leave_ready(agc_vm *vm, const agc_task *t) {
@@ -134,7 +137,7 @@ static void end_cancelled(agc_vm *vm, agc_task *t) {
 
 static void cancel_one(agc_vm *vm, agc_task *t) {
   t->cancelled = true;
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
+  if (!t->group) AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
   if (t->state == AGC_TASK_RUNNING)
     vm->yield = true;
   else
@@ -231,6 +234,21 @@ static void mark_subtree(agc_task *root) {
   }
 }
 
+void agc_task_drop(agc_vm *vm, agc_task *root) {
+  if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
+  mark_subtree(root);
+  agc_task_cancel(vm, root);
+  agc_close_owned(vm);
+}
+
+/* No await can observe a hidden task (an HTTP connection task), so of its
+   unobserved crashes only the first per test is kept; the others are
+   counted on it, which bounds the list in a long-running server. */
+static agc_task **quiet_slot(agc_vm *vm, const agc_task *t) {
+  if (!t->hidden) return NULL;
+  return t->test ? &t->test->quiet : &vm->quiet;
+}
+
 /* Runs under the run-level target: a failure here ends the run. */
 static void crash(agc_vm *vm, agc_task *t) {
   agc_outcome *o = &vm->rt->outcome;
@@ -240,12 +258,19 @@ static void crash(agc_vm *vm, agc_task *t) {
   t->crash_message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD", false);
   t->crash_span = o->span;
   t->crashed = true;
-  if (vm->crashes_tail)
-    vm->crashes_tail->crash_next = t;
-  else
-    vm->crashes = t;
-  vm->crashes_tail = t;
   vm->crash_count++;
+  agc_task **quiet = quiet_slot(vm, t);
+  if (quiet && *quiet) {
+    (*quiet)->quiet_more++;
+  } else {
+    if (quiet) *quiet = t;
+    t->crash_prev = vm->crashes_tail;
+    if (vm->crashes_tail)
+      vm->crashes_tail->crash_next = t;
+    else
+      vm->crashes = t;
+    vm->crashes_tail = t;
+  }
   agc_print_diagnostic(vm->rt->err, vm->rt->program, o, vm->rt->style, true);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
@@ -292,7 +317,18 @@ bool agc_report_unobserved(agc_vm *vm) {
 void agc_task_observe(agc_vm *vm, agc_task *t) {
   if (t->observed) return;
   t->observed = true;
-  vm->observed_count++;
+  vm->observed_count += 1 + t->quiet_more;
+  agc_task **quiet = quiet_slot(vm, t);
+  if (quiet && *quiet == t) *quiet = NULL;
+  if (t->crash_prev)
+    t->crash_prev->crash_next = t->crash_next;
+  else if (vm->crashes == t)
+    vm->crashes = t->crash_next;
+  if (t->crash_next)
+    t->crash_next->crash_prev = t->crash_prev;
+  else if (vm->crashes_tail == t)
+    vm->crashes_tail = t->crash_prev;
+  t->crash_next = t->crash_prev = NULL;
 }
 
 agc_outcome agc_vm_run(agc_vm *vm) {
@@ -344,15 +380,33 @@ agc_outcome agc_vm_run(agc_vm *vm) {
   return vm->rt->outcome;
 }
 
-agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
+agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                            uint32_t span) {
   agc_task *child = agc_new_task(vm);
   child->input_seen = vm->rt->in.eof_seq;
   child->test = vm->task->test;
   agc_task_call(vm, child, fn, args, argc, span);
-  adopt(vm->task, child);
+  adopt(parent, child);
   trace_spawn(vm, child, vm->task->id);
   enqueue(vm, child);
   return child;
+}
+
+agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
+  return agc_task_spawn_in(vm, vm->task, fn, args, argc, span);
+}
+
+/* A node of the task tree that never runs: the parent of an HTTP server's
+   connection tasks, so cancelling it reaches every one of them and their
+   descendants. It has no id and is not counted as a task. */
+agc_task *agc_task_group(agc_vm *vm) {
+  agc_task *g = agc_alloc(sizeof(agc_task));
+  g->group = true;
+  g->state = AGC_TASK_PARKED;
+  g->result = agc_void();
+  g->test = vm->task->test;
+  adopt(vm->task, g);
+  return g;
 }
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {

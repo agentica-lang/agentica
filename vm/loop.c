@@ -80,6 +80,7 @@ agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_SOCKET)) return agc_as_socket(vm, v)->state;
   if (agc_is(v, AGC_T_LISTENER)) return agc_as_listener(vm, v)->state;
   if (agc_is(v, AGC_T_PROCESS)) return agc_as_process(vm, v)->state;
+  if (agc_is(v, AGC_T_HTTP_SERVER)) return agc_as_http_server(vm, v)->state;
   return NULL;
 }
 
@@ -394,6 +395,11 @@ void agc_io_ready(agc_io_job *j) {
   mark_ready(j);
 }
 
+void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
+  if (j->consumed || j->timer_closing || j->timer_fired || j->work_done) return;
+  uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
+}
+
 bool agc_io_poll(agc_vm *vm, bool wait) {
   if (!vm->loop) return false;
   if (uv_loop_alive(&vm->loop->uv)) {
@@ -594,6 +600,11 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 void agc_io_ready(agc_io_job *j) { (void)j; }
+
+void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
+  (void)j;
+  (void)timeout_ms;
+}
 
 void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
   (void)kind;

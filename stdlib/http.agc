@@ -5,21 +5,32 @@ struct Target
   target: String
 end
 
+struct Service
+  server: HttpServer
+  handler: Fn[HttpRequest, Result[HttpResponse]]
+  options: HttpServerOptions
+end
+
 export def client_options() -> HttpClientOptions
   return HttpClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 4, max_body_bytes: 1048576, ca_file: "")
 end
 
 export def client(options: HttpClientOptions) -> Result[HttpClient]
-  if options.timeout_ms <= 0 or options.idle_timeout_ms <= 0 or options.max_connections <= 0 or options.max_body_bytes <= 0
+  try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  return HttpWire.client(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes, options.ca_file)
+end
+
+def check_options(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int) -> Result[Void]
+  if timeout_ms <= 0 or idle_timeout_ms <= 0 or max_connections <= 0 or max_body_bytes <= 0
     return error("http: every option must be positive")
   end
-  if options.max_connections > 65536
+  if max_connections > 65536
     return error("http: max_connections must be at most 65536")
   end
-  if options.max_body_bytes > 67108864
+  if max_body_bytes > 67108864
     return error("http: max_body_bytes must be at most 67108864")
   end
-  return HttpWire.client(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes, options.ca_file)
+  return ok()
 end
 
 export def close_client(pool: HttpClient) -> Void
@@ -146,4 +157,98 @@ def parse_url(url: String) -> Result[Target]
     return error("http: the port must be 1..65535")
   end
   return ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
+end
+
+export def server_options() -> HttpServerOptions
+  return HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)
+end
+
+export def listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  listener = try TCP.listen(host, port)
+  return ok(start(listener, handler, options))
+end
+
+export def listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
+  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+  listener = try TLS.listen(host, port, cert_file, key_file)
+  return ok(start(listener, handler, options))
+end
+
+export def local_port(server: HttpServer) -> Int
+  return HttpWire.local_port(server)
+end
+
+export def wait(server: HttpServer) -> Result[Void]
+  return HttpWire.wait(server)
+end
+
+export def close_server(server: HttpServer) -> Void
+  HttpWire.close_server(server)
+end
+
+def start(listener: Listener, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> HttpServer
+  server = HttpWire.server(listener, options.max_connections)
+  Task.spawn(&accept_all, Service(server: server, handler: handler, options: options))
+  return server
+end
+
+def accept_all(service: Service) -> Void
+  while true
+    case HttpWire.accept(service.server)
+      ok(socket) -> HttpWire.spawn(service.server, socket) do |s| serve(s, service) end
+      error(_) -> return
+    end
+  end
+end
+
+def serve(socket: Socket, service: Service) -> Void
+  options = service.options
+  wait_ms = options.request_timeout_ms
+  while true
+    case HttpWire.read_request(socket, wait_ms, options.request_timeout_ms, options.max_body_bytes)
+      ok(request) ->
+        if not answer(socket, request, service)
+          return
+        end
+      error(_) -> return
+    end
+    wait_ms = options.idle_timeout_ms
+  end
+end
+
+def answer(socket: Socket, request: HttpRequest, service: Service) -> Bool
+  head = request.method == "HEAD"
+  timeout = service.options.request_timeout_ms
+  case service.handler.call(request)
+    ok(response) ->
+      close = closes?(request.headers) or closes?(response.headers)
+      case HttpWire.write_response(socket, response, head, close, timeout)
+        ok(_) -> return not close
+        error(message) ->
+          if String.starts_with?(message, "http: invalid response: ")
+            IO.warn(message)
+            failed(socket, head, timeout)
+          end
+      end
+    error(message) ->
+      IO.warn("http: handler error: #{message}")
+      failed(socket, head, timeout)
+  end
+  return false
+end
+
+def failed(socket: Socket, head: Bool, timeout: Int) -> Void
+  HttpWire.write_response(socket, HttpResponse(status: 500, headers: [], body: ""), head, true, timeout)
+end
+
+def closes?(headers: List[Header]) -> Bool
+  for value in header_values(headers, "connection")
+    for token in String.split(value, ",")
+      if String.downcase(String.trim(token)) == "close"
+        return true
+      end
+    end
+  end
+  return false
 end

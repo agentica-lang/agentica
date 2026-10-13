@@ -418,7 +418,7 @@
          (define problem (checked (build-path directory "root.agc")))
          (check-true (diagnostic? problem) body)
          (check-false (regexp-match? #rx"HttpWire" (or (diagnostic-help problem) "")) body))))
-    (for ([name '("HttpWire" "HttpResponse")])
+    (for ([name '("HttpWire" "HttpResponse" "HttpRequest" "HttpServer" "HttpServerOptions")])
       (with-files
        (list (cons "root.agc" (format "struct ~a\n  n: Int\nend\n\ndef main() -> Void\nend\n\n" name)))
        (lambda (directory)

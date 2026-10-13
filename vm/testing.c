@@ -199,8 +199,10 @@ static agc_task *unobserved_of(const agc_vm *vm, const agc_task *test) {
 }
 
 static void observe_test(agc_vm *vm, const agc_task *test) {
-  for (agc_task *t = vm->crashes; t; t = t->crash_next)
+  for (agc_task *t = vm->crashes, *next; t; t = next) {
+    next = t->crash_next;
     if (t->test == test) agc_task_observe(vm, t);
+  }
 }
 
 static void report(agc_vm *vm, agc_task *t, const agc_test_case *c) {

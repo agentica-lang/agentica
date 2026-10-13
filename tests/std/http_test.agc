@@ -5,6 +5,10 @@ def options(timeout_ms: Int, max_connections: Int) -> HttpClientOptions
                            max_body_bytes: 1048576, ca_file: "")
 end
 
+def answer(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: request.path))
+end
+
 def main() -> Void
   Test.run([
     Test.test("default client options") do
@@ -13,6 +17,15 @@ def main() -> Void
     Test.test("client options are checked") do
       try Test.eq(HTTP.client(options(0, 4)).message, "http: every option must be positive")
       Test.eq(HTTP.client(options(1000, 65537)).message, "http: max_connections must be at most 65536")
+    end,
+    Test.test("default server options") do
+      Test.eq(HTTP.server_options(), HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576))
+    end,
+    Test.test("server options are checked before listening") do
+      bad = HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 0, max_connections: 1, max_body_bytes: 16)
+      try Test.eq(HTTP.listen("127.0.0.1", 0, &answer, bad).message, "http: every option must be positive")
+      wide = HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 65537, max_body_bytes: 16)
+      Test.eq(HTTP.listen_tls("127.0.0.1", 0, "none.pem", "none.pem", &answer, wide).message, "http: max_connections must be at most 65536")
     end,
     Test.test("header values match names in any case") do
       headers = [Header(name: "Set-Cookie", value: "a=1"), Header(name: "Content-Type", value: "text/plain"),

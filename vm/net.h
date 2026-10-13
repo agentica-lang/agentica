@@ -21,7 +21,15 @@ void agc_conn_hold(agc_conn *c, bool hold);
 agc_inbuf *agc_conn_input(agc_conn *c);
 void agc_conn_read(agc_conn *c);
 void agc_conn_shut(agc_conn *c, const char *why);
+void agc_conn_half_close(agc_conn *c);
 void agc_conn_release(agc_conn *c);
+void agc_conn_retain(agc_conn *c);
+void agc_conn_unobserve(agc_conn *c, const void *watcher);
+bool agc_conn_closed(const agc_conn *c);
+uint64_t agc_conn_heard(const agc_conn *c);
+agc_conn *agc_conn_accept(agc_conn *l);
+agc_value agc_conn_socket(agc_vm *vm, agc_conn *c);
+void agc_net_close(agc_vm *vm, agc_resource *r, const char *why);
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f);
 
 #endif
