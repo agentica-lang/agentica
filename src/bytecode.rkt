@@ -63,17 +63,17 @@
         [(list 'Map _ item) (add1 (nesting item))]
         [_ 0]))
     (define (type! type)
-      (hash-ref type-index type
+      (define entry
+        (match type
+          ['Int '(0)] ['Float '(1)] ['Bool '(2)] ['String '(3)]
+          [(list 'List item) (list 4 (type! item))]
+          [(list 'Map 'String value) (list 5 (type! value))]
+          [(list 'Struct name) (list 6 (hash-ref struct-index name))]))
+      (hash-ref type-index entry
                 (lambda ()
-                  (define entry
-                    (match type
-                      ['Int '(0)] ['Float '(1)] ['Bool '(2)] ['String '(3)]
-                      [(list 'List item) (list 4 (type! item))]
-                      [(list 'Map 'String value) (list 5 (type! value))]
-                      [(list 'Struct name) (list 6 (hash-ref struct-index name))]))
                   (set! types (cons entry types))
                   (set! type-count (add1 type-count))
-                  (hash-set! type-index type (sub1 type-count))
+                  (hash-set! type-index entry (sub1 type-count))
                   (sub1 type-count))))
     (define decodable
       (for/list ([entry (in-list structs)] [index (in-naturals)] #:when (ir-struct-types entry))

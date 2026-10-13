@@ -38,14 +38,17 @@
   build needs no Racket. Output `dist/agentica-vm`. Each mode compiles
   `vm/*.c` once into `build/vm/<mode>/obj/` (with `-MMD -MP`, so an edited
   header recompiles only its users; `build/vm/<mode>/obj-flags` holds the
-  compile line) and links the VM, the fuzz driver and every C test from
-  those objects. The link flags are recorded in `build/vm/flags`, so
+  compile line and the compiler's `--version`) and links the VM, the fuzz
+  driver and every C test from those objects. `build/vm/flags` holds the compile and link line, so
   switching between a normal and a sanitizer build always relinks. Every
-  compile goes through ccache when it is on `PATH` (`CCACHE=` turns it
-  off), with `CCACHE_BASEDIR` set to the checkout and
-  `CCACHE_NOHASHDIR=1`, so worktrees at other paths share hits (their
-  debug info may name the first worktree's directory). The release turns
-  it off.
+  compile goes through ccache when it is on `PATH` and its cache directory
+  is writable (`CCACHE=` turns it off), with `CCACHE_BASEDIR` set to the
+  checkout. The `-g` modes pass `-fdebug-prefix-map=$(CURDIR)=.` to the VM,
+  third-party and vendored OpenSSL compiles (and map `$(PWD)` too when the
+  checkout is reached through a symlink), so debug info names `.` and
+  worktrees at other paths share hits. The CI ccache
+  volume is shared and PR jobs can write to it, so the release passes
+  `CCACHE=` and never reads it.
 - `make vm-test`: small C tests in `vm/tests/` with plain `assert`.
 - `make vm SANITIZE=1`: clang with ASan and UBSan,
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and

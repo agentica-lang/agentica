@@ -326,3 +326,9 @@ end
 ## Diagnostics
 
 Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break if x`, `loop do`, `puts(x) if ok`) are rejected with a `help` line that names the Agentica form.
+
+## More documentation
+
+This skill is complete for writing programs. For more detail or anything missing, read `https://sonic182.github.io/agentica/llms.txt` (an index of Markdown pages) or `https://sonic182.github.io/agentica/llms-full.txt` (all pages in one file).
+
+The site follows the latest version. For the installed binary, `agentica help NAME --json` is the authority.
