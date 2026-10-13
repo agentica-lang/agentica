@@ -3,6 +3,7 @@
 (require rackunit json racket/runtime-path "cli-in-process.rkt")
 
 (define-runtime-path stream-spec "bdd/specs/json-lines.feature")
+(define-runtime-path main-file "../src/main.rkt")
 
 (define (json-test #:before [before '()] . arguments)
   (define result (apply run-main-in-process (append before (list "test" "--json") arguments)))
@@ -39,6 +40,34 @@
       [(or (not state) (equal? (cadr state) "Z")) #t]
       [(> (current-inexact-milliseconds) deadline) #f]
       [else (sleep 0.02) (wait)])))
+
+(define (eventually? ready?)
+  (define deadline (+ (current-inexact-milliseconds) 20000))
+  (let wait ()
+    (cond
+      [(ready?) #t]
+      [(> (current-inexact-milliseconds) deadline) #f]
+      [else (sleep 0.05) (wait)])))
+
+(define (command-lines-mention? text)
+  (for/or ([entry (in-list (directory-list "/proc"))]
+           #:when (regexp-match? #rx"^[0-9]+$" (path->string entry)))
+    (define line
+      (with-handlers ([exn:fail? (lambda (_) #"")])
+        (file->bytes (build-path "/proc" entry "cmdline"))))
+    (regexp-match? (regexp-quote (string->bytes/utf-8 text)) line)))
+
+(define (start-cli arguments)
+  (define executable (getenv "AGENTICA_TEST_EXECUTABLE"))
+  (if executable
+      (apply subprocess #f #f #f executable arguments)
+      (apply subprocess #f #f #f (find-system-path 'exec-file) (path->string main-file) arguments)))
+
+(define holder-program
+  (string-append
+   "def main() -> Void\n"
+   "  p = Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$ > pid.txt; echo started; exec sleep 60\"], 5000).unwrap!\n"
+   "  started = Process.read_line(p, 5000).unwrap!\n  puts(\"ready\")\n  IO.flush()\n  line = IO.gets()\nend\n"))
 
 (define (doc text)
   (string-append "  \"\"\"\n  " text "\n  \"\"\"\n"))
@@ -90,6 +119,11 @@
        ("oversized.agc" . "def main() -> Void\n  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\nend\n")
        ("flood.agc" . "def main() -> Void\n  IO.warn(String.join(List.repeat(\"x\", 1048576), \"\"))\n  line = IO.gets()\nend\n")
        ("where.agc" . "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n")
+       ("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
+                        "    puts(String.join(List.repeat(String.join(List.repeat(\"x\", 1000), \"\"), 1100), \"\\n\"))\n"
+                        "    ctx\n  end])\nend\n"))
        ("lifecycle.feature" . "Feature: Lifecycle\n"))
      (lambda (directory)
        (display-to-file
@@ -108,12 +142,15 @@
          "Scenario: working directory\nGiven the Agentica program \"where.agc\"\nThen I receive the line \"" (path->string (path->directory-path directory))
          "\" within 5000 milliseconds\n"
          "Scenario: later\nGiven the Agentica program \"output.agc\"\nThen the program exits with code 3 within 5000 milliseconds\n"
-         "And stdout is:\n" (doc "actual\n") "And stderr is:\n" (doc "warning\n"))
+         "And stdout is:\n" (doc "actual\n") "And stderr is:\n" (doc "warning\n")
+         "Scenario: handler flood\nGiven the handler floods stdout\n"
+         "Scenario: step line over 1 MiB\nGiven the Agentica program \"output.agc\"\nWhen I send input:\n" (doc (make-string 600000 #\")))
         (build-path directory "lifecycle.feature") #:exists 'append)
-       (define report (json-test (path->string directory)))
+       (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
        (check-equal? (codes report)
                      '("RUNTIME-BDD-TIMEOUT" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f)))))
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO")))))
 
   (test-case "a JSON line of a few hundred KB fits the step budget"
     (define items (make-list 30000 "abcdefghij"))
@@ -126,10 +163,7 @@
 
   (test-case "a failed scenario leaves no process of its program behind"
     (with-suite
-     `(("holder.agc" . ,(string-append
-                         "def main() -> Void\n"
-                         "  p = Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$ > pid.txt; echo started; exec sleep 60\"], 5000).unwrap!\n"
-                         "  started = Process.read_line(p, 5000).unwrap!\n  puts(\"ready\")\n  IO.flush()\n  line = IO.gets()\nend\n"))
+     `(("holder.agc" . ,holder-program)
        ("holder.feature" . ,(string-append "Feature: Cleanup\nScenario: held\nGiven the Agentica program \"holder.agc\"\n"
                                            "Then I receive the line \"ready\" within 5000 milliseconds\n"
                                            "And the program exits with code 0 within 200 milliseconds\n")))
@@ -137,4 +171,40 @@
        (define report (json-test "--allow-run" (in directory "holder.feature")))
        (check-equal? (codes report) '("RUNTIME-BDD-TIMEOUT"))
        (define pid (string-trim (file->string (build-path directory "pid.txt"))))
-       (check-true (gone? pid) pid)))))
+       (check-true (gone? pid) pid))))
+
+  (test-case "killing the driver stops the runner, the scenario VM and the program, and a later run removes its folder"
+    (with-suite
+     `(("holder.agc" . ,holder-program)
+       ("holder.feature" . ,(string-append "Feature: Killed\nScenario: held\nGiven the Agentica program \"holder.agc\"\n"
+                                           "Then I receive the line \"ready\" within 5000 milliseconds\n"
+                                           "And the program exits with code 0 within 20000 milliseconds\n")))
+     (lambda (directory)
+       (define temporary (build-path directory "tmp"))
+       (make-directory temporary)
+       (define environment (environment-variables-copy (current-environment-variables)))
+       (environment-variables-set! environment #"TMPDIR" (path->bytes temporary))
+       (define-values (driver output input errors)
+         (parameterize ([current-environment-variables environment])
+           (start-cli (list "test" "--allow-run" (in directory "holder.feature")))))
+       (close-output-port input)
+       (define pid-file (build-path directory "pid.txt"))
+       (check-true (eventually? (lambda () (and (file-exists? pid-file) (regexp-match? #rx"[0-9]" (file->string pid-file))))))
+       (subprocess-kill driver #t)
+       (subprocess-wait driver)
+       (close-input-port output)
+       (close-input-port errors)
+       (define pid (string-trim (file->string pid-file)))
+       (check-true (gone? pid) pid)
+       (check-true (eventually? (lambda () (not (command-lines-mention? (path->string temporary))))))
+       (check-equal? (length (directory-list temporary)) 1)
+       (define-values (later later-output later-input later-errors)
+         (parameterize ([current-environment-variables environment])
+           (start-cli (list "test" (in directory "missing.feature")))))
+       (close-output-port later-input)
+       (port->string later-output)
+       (port->string later-errors)
+       (subprocess-wait later)
+       (close-input-port later-output)
+       (close-input-port later-errors)
+       (check-equal? (directory-list temporary) '())))))

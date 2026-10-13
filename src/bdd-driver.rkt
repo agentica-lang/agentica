@@ -1,6 +1,6 @@
 #lang racket
 
-(require file/sha1 json racket/random racket/runtime-path
+(require file/sha1 json racket/os racket/random racket/runtime-path
          "bytecode.rkt" "checker.rkt" "diagnostic.rkt" "lexer.rkt" "lower.rkt"
          "modules.rkt" "parser.rkt" "source.rkt" "vm-launch.rkt")
 
@@ -45,7 +45,65 @@
     (define tree (pass (parse (pass (lex (source name text))))))
     (define types (make-hasheq))
     (define checked (pass (check (pass (link-program tree name)) #:types types)))
-    (pass (write-bytecode (pass (ir->bytecode (pass (lower checked types))))))))
+    (define ir (lower checked types))
+    (when (and (diagnostic? ir) (eq? (diagnostic-code ir) 'LOWER-UNSUPPORTED))
+      (stop (diagnostic 'LOWER-UNSUPPORTED (diagnostic-message ir) (diagnostic-span ir) #:help vm-only-help)))
+    (pass (write-bytecode (pass (ir->bytecode (pass ir)))))))
+
+(define (feature-name? name)
+  (regexp-match? #rx#"[.]feature$" (path->bytes name)))
+
+(define (utf-8-name? name)
+  (with-handlers ([exn:fail:contract? (lambda (_) #f)])
+    (and (bytes->string/utf-8 (path->bytes name)) #t)))
+
+(define (discover paths)
+  (define errors '())
+  (define targets '())
+  (define (fail! path message)
+    (set! errors (cons (hasheq 'path (path->string path) 'problem message) errors)))
+  (define (walk directory)
+    (define names
+      (with-handlers ([exn:fail? (lambda (failure) (fail! directory (format "cannot list the directory: ~a" (exn-message failure))) '())])
+        (directory-list directory)))
+    (for ([name (in-list names)])
+      (define path (build-path directory name))
+      (define type
+        (with-handlers ([exn:fail? (lambda (failure) (fail! path (format "cannot read the file information: ~a" (exn-message failure))) #f)])
+          (file-or-directory-type path #t)))
+      (cond
+        [(not type) (void)]
+        [(and (not (utf-8-name? name)) (or (eq? type 'directory) (feature-name? name)))
+         (fail! path "the file name is not valid UTF-8")]
+        [(eq? type 'directory) (walk path)]
+        [(not (feature-name? name)) (void)]
+        [(eq? type 'file) (set! targets (cons path targets))]
+        [(and (eq? type 'link) (file-exists? path)) (set! targets (cons path targets))]
+        [(memq type '(link directory-link)) (fail! path "the symbolic link does not name a file")])))
+  (for ([given (in-list paths)])
+    (define path (simplify-path (path->complete-path given) #f))
+    (cond
+      [(directory-exists? path) (walk path)]
+      [(file-exists? path) (set! targets (cons path targets))]
+      [else (fail! path "feature path does not exist")]))
+  (define files (sort (remove-duplicates (map path->string targets)) string<?))
+  (append (reverse errors) (for/list ([file (in-list files)]) (hasheq 'path file 'problem ""))))
+
+(define stale-name #rx"^agentica-bdd-([0-9]+)-[0-9a-f]+$")
+
+(define (sweep-stale temporary own)
+  (when (directory-exists? "/proc/self")
+    (define owner (hash-ref (file-or-directory-stat own) 'user-id))
+    (for ([name (in-list (with-handlers ([exn:fail? (lambda (_) '())]) (directory-list temporary)))])
+      (define found (regexp-match stale-name (path->bytes name)))
+      (define path (build-path temporary name))
+      (when (and found
+                 (not (equal? path own))
+                 (not (directory-exists? (build-path "/proc" (bytes->string/utf-8 (cadr found)))))
+                 (with-handlers ([exn:fail? (lambda (_) #f)])
+                   (equal? (hash-ref (file-or-directory-stat path #t) 'user-id) owner)))
+        (with-handlers ([exn:fail? void])
+          (delete-directory/files path #:must-exist? #f))))))
 
 (define (compile-steps path directory)
   (cond
@@ -75,7 +133,7 @@
     (parameterize ([current-environment-variables environment])
       (apply subprocess #f #f #f vm
              (append '("--allow-run") (if seed (list "--seed" (number->string seed)) '())
-                     (list "--" (path->string runner) config)))))
+                     (list "--driver-pid" (number->string (getpid)) "--" (path->string runner) (path->string config))))))
   (close-output-port stdin)
   (dynamic-wind
     void
@@ -98,19 +156,22 @@
      (infrastructure-report (format "cannot find the VM at ~a; run make vm or set AGENTICA_VM" vm)
                             (path->string vm) style)]
     [else
+     (define temporary (find-system-path 'temp-dir))
      (define directory
-       (build-path (find-system-path 'temp-dir)
-                   (format "agentica-bdd-~a" (bytes->hex-string (crypto-random-bytes 16)))))
+       (build-path temporary (format "agentica-bdd-~a-~a" (getpid) (bytes->hex-string (crypto-random-bytes 16)))))
      (define created? #f)
      (with-handlers ([exn:break? raise])
        (dynamic-wind
          (lambda () (parameterize-break #f (make-directory directory #o700) (set! created? #t)))
-         (lambda () (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
+         (lambda ()
+           (sweep-stale temporary directory)
+           (run-in directory paths (and (pair? step-files) (car step-files)) style allow-run? seed vm))
          (lambda () (when created? (delete-directory/files directory #:must-exist? #f)))))]))
 
 (define (run-in directory paths step-file style allow-run? seed vm)
   (define runner-file (build-path directory "runner.agcb"))
   (define steps-file (build-path directory "steps.agcb"))
+  (define config-file (build-path directory "config.jsonl"))
   (define runner (compile-text (path->string (build-path directory "runner.agc")) runner-root))
   (define steps (compile-steps step-file directory))
   (cond
@@ -120,6 +181,7 @@
     [else
      (write-private runner-file runner)
      (unless (diagnostic? steps) (write-private steps-file steps))
+     (define entries (discover paths))
      (define config
        (jsexpr->string
         (hasheq 'vm (path->string vm)
@@ -127,14 +189,18 @@
                 'steps_source (path->string (if step-file (path->complete-path step-file) (build-path directory "steps.agc")))
                 'steps_error (if (diagnostic? steps) (jsexpr->string (diagnostic->jsexpr steps)) "")
                 'agentica (agentica-command)
-                'paths paths
+                'count (length entries)
+                'empty_path (path->string (simplify-path (path->complete-path (car paths)) #f))
                 'style (symbol->string style)
                 'allow_run allow-run?
                 'seeded (and seed #t)
                 'seed (or seed 0))))
+     (write-private config-file
+                    (string->bytes/utf-8
+                     (string-append* config "\n" (for/list ([entry (in-list entries)]) (string-append (jsexpr->string entry) "\n")))))
      (define-values (status out err)
        (with-handlers ([exn:fail? (lambda (failure) (values #f "" (exn-message failure)))])
-         (run-runner vm runner-file config seed)))
+         (run-runner vm runner-file config-file seed)))
      (if (and (memv status '(0 1 2)) (equal? err ""))
          (values status out)
          (infrastructure-report

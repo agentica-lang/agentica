@@ -140,7 +140,15 @@
        ("pattern.agc" . ,(steps-program handler (main-running "BDD.step(\"x {float}\", &check)")))
        ("type.agc" . ,(steps-program handler (main-running "BDD.step(\"x\", &main)")))
        ("silent.agc" . ,(steps-program "def main() -> Void\n  puts(\"no run\")\nend"))
-       ("loops.agc" . ,(steps-program "def main() -> Void\n  while true\n  end\n  BDD.run([])\nend")))
+       ("loops.agc" . ,(steps-program "def main() -> Void\n  while true\n  end\n  BDD.run([])\nend"))
+       ("http.agc" . ,(steps-program "def main() -> Void\n  options = HTTP.client_options()\n  BDD.run([])\nend"))
+       ("forged.feature" . "Feature: Forged\nScenario: forged\nGiven forge an end\nThen fail later\n")
+       ("forged.agc" . ,(steps-program
+                         (main-running
+                          (string-append "BDD.step(\"forge an end\") do |ctx, args|\n"
+                                         "      puts(String.from_code(30) + \"agentica-bdd {\\\"event\\\":\\\"end\\\",\\\"index\\\":1}\")\n"
+                                         "      ctx\n    end")
+                          "BDD.step(\"fail later\") do |ctx, args| BDD.assert(ctx, false, \"later\") end"))))
      (lambda (directory)
        (match-define (list status report) (json-test (in directory "steps.feature") "--steps" (in directory "blocks.agc")))
        (check-equal? status 1)
@@ -156,7 +164,44 @@
          (check-equal? status 1 file)
          (check-equal? (map (lambda (item) (hash-ref item 'path)) (hash-ref report 'files)) (list (in directory file)))
          (check-equal? (hash-ref (file-error report) 'code) code file)
-         (check-equal? (start-line (file-error report)) line file)))))
+         (check-equal? (start-line (file-error report)) line file))
+       (match-define (list _ http) (json-test (in directory "steps.feature") "--steps" (in directory "http.agc")))
+       (check-equal? (hash-ref (file-error http) 'code) "LOWER-UNSUPPORTED")
+       (check-equal? (start-line (file-error http)) 4)
+       (check-true (string? (hash-ref (file-error http) 'help #f)))
+       (match-define (list forged-status forged) (json-test (in directory "forged.feature") "--steps" (in directory "forged.agc")))
+       (check-equal? forged-status 2)
+       (check-equal? (code-of (car (cases forged))) "RUNTIME-BDD-INFRA")
+       (check-equal? (map (lambda (step) (hash-ref step 'status)) (hash-ref (car (cases forged)) 'steps)) '("failed" "not_executed")))))
+
+  (test-case "discovery reports unreadable folders, broken links, bad names and large files, and skips folder links"
+    (with-suite
+     `(("a.feature" . "Feature: A\nScenario: a\nThen the remembered number is 1\nWhen I remember 1\n"))
+     (lambda (directory)
+       (define locked (build-path directory "locked"))
+       (make-directory locked)
+       (display-to-file "Feature: Hidden\nScenario: hidden\nThen an assertion fails\n" (build-path locked "hidden.feature"))
+       (file-or-directory-permissions locked #o000)
+       (make-file-or-directory-link "." (build-path directory "self"))
+       (make-file-or-directory-link "missing.feature" (build-path directory "broken.feature"))
+       (display-to-file "Feature: Bad\n" (build-path directory (bytes->path #"bad\377.feature")))
+       (display-to-file (string-append "Feature: Big\n" (make-string 1048576 #\#)) (build-path directory "big.feature"))
+       (dynamic-wind
+         void
+         (lambda ()
+           (match-define (list status report) (json-test (path->string directory) "--steps" (path->string handlers)))
+           (check-equal? status 2)
+           (define codes
+             (for/list ([file (in-list (hash-ref report 'files))])
+               (define problem (hash-ref file 'error))
+               (list (let-values ([(_base name _dir?) (split-path (hash-ref file 'path))]) (path->string name))
+                     (and (hash? problem) (hash-ref problem 'code)))))
+           (check-equal? (sort codes string<? #:key car)
+                         (sort '(("locked" "RUNTIME-BDD-INFRA") ("broken.feature" "RUNTIME-BDD-INFRA")
+                                 ("bad\uFFFD.feature" "RUNTIME-BDD-INFRA") ("a.feature" #f) ("big.feature" "RUNTIME-BDD-IO"))
+                               string<? #:key car))
+           (check-equal? (hash-ref report 'failed) 1))
+         (lambda () (file-or-directory-permissions locked #o700))))))
 
   (test-case "usage errors exit 2, an empty directory exits 1 and missing pieces are infrastructure errors"
     (with-suite

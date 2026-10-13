@@ -8,7 +8,8 @@ struct Config
   steps_source: String
   steps_error: String
   agentica: List[String]
-  paths: List[String]
+  count: Int
+  empty_path: String
   style: String
   allow_run: Bool
   seeded: Bool
@@ -20,9 +21,9 @@ enum Listing
   Broken(Report.Error)
 end
 
-struct Found
-  errors: List[Report.FileResult]
-  targets: List[String]
+struct Entry
+  path: String
+  problem: String
 end
 
 struct StepEnd
@@ -38,16 +39,29 @@ end
 export def main() -> Void
   args = System.args()
   if args.size != 1
-    IO.warn("usage: the BDD runner takes its configuration as one JSON argument")
+    IO.warn("usage: the BDD runner takes the path of its configuration file")
     System.exit(2)
   end
-  decoded = JSON.decode(args[0], Config)
+  opened = File.open(args[0], "read", 5000)
+  if not opened.ok?
+    IO.warn("cannot open the BDD runner configuration: #{opened.message}")
+    System.exit(2)
+  end
+  handle = opened.unwrap!
+  decoded = JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Config)
   if not decoded.ok?
     IO.warn("invalid BDD runner configuration: #{decoded.message}")
     System.exit(2)
   end
   config = decoded.unwrap!
-  files = run_all(config)
+  # The driver writes one feature file or discovery error per line after the settings.
+  read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
+  closed = File.close(handle, 5000)
+  if read.any? do |entry| not entry.ok? end
+    IO.warn("invalid BDD runner configuration: a feature entry does not decode")
+    System.exit(2)
+  end
+  files = run_all(config, read.map do |entry| entry.unwrap! end)
   if config.style == "json"
     puts(Report.json(files))
   else
@@ -59,7 +73,7 @@ export def main() -> Void
   end
 end
 
-def run_all(config: Config) -> List[Report.FileResult]
+def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
   where = Gherkin.Span(file: config.steps_source, line: 1, column: 1, end_column: 1)
   if config.steps_error != ""
     parsed = Report.from_json(config.steps_error)
@@ -71,12 +85,15 @@ def run_all(config: Config) -> List[Report.FileResult]
     Listing.Broken(problem) -> return [Report.file_error(config.steps_source, problem)]
     Listing.Ready(found) -> patterns = found
   end
-  found = discover(config.paths)
-  if found.targets.size == 0 and found.errors.size == 0
-    path = Path.resolve(config.paths[0]).unwrap_or(config.paths[0])
-    return [Report.file_error(path, located("CHECK-BDD-EMPTY", "no .feature files found", path))]
+  if entries.size == 0
+    return [Report.file_error(config.empty_path, located("CHECK-BDD-EMPTY", "no .feature files found", config.empty_path))]
   end
-  return found.errors.concat(found.targets.map do |path| run_file(config, patterns, path) end)
+  return entries.map do |entry|
+    if entry.problem != ""
+      return Report.file_error(entry.path, located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
+    end
+    return run_file(config, patterns, entry.path)
+  end
 end
 
 # The list child writes the patterns of BDD.run in order and exits, so its stdout is read once at the end.
@@ -114,50 +131,11 @@ def list_steps(config: Config, where: Gherkin.Span) -> Listing
   end
 end
 
-def discover(paths: List[String]) -> Found
-  resolved = paths.map do |path| Path.resolve(path).unwrap_or(path) end
-  missing = resolved.filter do |path| not File.stat(path, 5000).ok? end
-  errors = missing.map do |path|
-    Report.file_error(path, located("RUNTIME-BDD-INFRA", "feature path does not exist", path))
-  end
-  listed = resolved.filter do |path| File.stat(path, 5000).ok? end.map do |path|
-    if File.stat(path, 5000).unwrap!.kind == "directory"
-      return walk(path)
-    end
-    return path
-  end
-  empty: Map[String, Bool] = {}
-  unique = listed.join("\n").split("\n").filter do |path| path != "" end.reduce(empty) do |seen, path|
-    seen.put(path, true)
-  end
-  return Found(errors: errors, targets: unique.keys.sort)
-end
-
-# The .feature files under a directory, one per line, so a deep tree is joined once per level.
-def walk(directory: String) -> String
-  names = Dir.list(directory, 5000)
-  if not names.ok?
-    return ""
-  end
-  found = names.unwrap!.map do |name|
-    path = Path.join([directory, name]).unwrap_or(directory)
-    info = File.stat(path, 5000)
-    if not info.ok?
-      return ""
-    end
-    if info.unwrap!.kind == "directory"
-      return walk(path)
-    end
-    if info.unwrap!.kind == "file" and name.end_with?(".feature")
-      return path
-    end
-    return ""
-  end
-  return found.filter do |path| path != "" end.join("\n")
-end
-
 def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Report.FileResult
   text = File.read_text(path, 5000)
+  if text.message == "filesystem: file exceeds 1048576 bytes"
+    return Report.file_error(path, located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
+  end
   if not text.ok?
     return Report.file_error(path, located("RUNTIME-BDD-INFRA", text.message, path))
   end
@@ -218,14 +196,20 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
   }
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
   sent = Process.send(p, JSON.encode(JSON.object(fields)) + "\n", left(deadline))
+  if not sent.ok?
+    run = Run(failed_at: 0, verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, item.steps[0].span)))
+  end
   total = 0
   i = 0
   while i < count and run.failed_at == count
     step = item.steps[i]
+    sent = Process.send(p, step_line(i, found[i], patterns, step) + "\n", left(deadline))
+    answer = StepEnd(verdict: Report.Verdict.Pass, asserts: 0)
     if sent.ok?
-      sent = Process.send(p, step_line(i, found[i], patterns, step) + "\n", left(deadline))
+      answer = await_step(p, i, deadline, step.span, step.kind == "Then")
+    else
+      answer = StepEnd(verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, step.span)), asserts: 0)
     end
-    answer = await_step(p, deadline, step.span, step.kind == "Then")
     total += answer.asserts
     case answer.verdict
       Report.Verdict.Fail(_) -> run = Run(failed_at: i, verdict: answer.verdict)
@@ -275,7 +259,7 @@ def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], 
 end
 
 # Reads records until the step ends; text without the marker is handler output, at most 1 MiB per step.
-def await_step(p: Process, deadline: Int, span: Gherkin.Span, then_step: Bool) -> StepEnd
+def await_step(p: Process, index: Int, deadline: Int, span: Gherkin.Span, then_step: Bool) -> StepEnd
   asserts = 0
   output = 0
   while true
@@ -285,19 +269,27 @@ def await_step(p: Process, deadline: Int, span: Gherkin.Span, then_step: Bool) -
     end
     text = line.unwrap!
     at = text.index_of(marker())
-    output += at.unwrap_or(text.length + 1)
+    record = JSON.null()
+    if at.ok?
+      record = record_of(text)
+    end
+    event = event_of(record)
+    if event == ""
+      output += text.length + 1
+    else
+      output += at.unwrap_or(0)
+    end
     if output > 1048576
       return StepEnd(verdict: failure("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span), asserts: asserts)
-    end
-    event = ""
-    if at.ok?
-      event = event_of(record_of(text))
     end
     if event == "assert"
       asserts += 1
     elsif event == "fail"
-      return StepEnd(verdict: Report.Verdict.Fail(record_error(record_of(text), span)), asserts: asserts)
+      return StepEnd(verdict: Report.Verdict.Fail(record_error(record, span)), asserts: asserts)
     elsif event == "end"
+      if JSON.int(JSON.get(record, "index").unwrap_or(JSON.null())).unwrap_or(-1) != index
+        return StepEnd(verdict: failure("RUNTIME-BDD-INFRA", "the step program broke the BDD record protocol", span), asserts: asserts)
+      end
       if then_step and asserts == 0
         return StepEnd(verdict: failure("RUNTIME-BDD-NO-ASSERTION", "Then must perform a BDD assertion", span), asserts: asserts)
       end
@@ -315,6 +307,10 @@ end
 def await_exit(p: Process, deadline: Int, span: Gherkin.Span) -> Report.Verdict
   line = Process.read_line(p, left(deadline))
   while line.ok?
+    text = line.unwrap!
+    if text.include?(marker()) and event_of(record_of(text)) == "fail"
+      return Report.Verdict.Fail(record_error(record_of(text), span))
+    end
     line = Process.read_line(p, left(deadline))
   end
   if line.message == "process: end of input"
@@ -346,6 +342,13 @@ def read_failure(p: Process, message: String, deadline: Int, span: Gherkin.Span)
   end
   code = Process.wait(p, left(deadline))
   return error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
+end
+
+def send_failure(p: Process, message: String, deadline: Int, span: Gherkin.Span) -> Report.Error
+  if message == "process: send exceeds 1048576 bytes"
+    return error_at("RUNTIME-BDD-IO", "the step line exceeds 1 MiB after JSON escaping", span)
+  end
+  return read_failure(p, message, deadline, span)
 end
 
 # A child that halts writes its --json diagnostic as the last line of stderr.

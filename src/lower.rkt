@@ -4,6 +4,7 @@
 
 (provide lower
          check-vm-only
+         vm-only-help
          format-ir
          vm-builtins
          (struct-out ir-program)
@@ -208,6 +209,13 @@
                    #t)))
   (reverse names))
 
+(define vm-only-help
+  (string-append
+   "a program that imports \"std/http\" (even for a pure helper such as "
+   "header_values) or calls Process.spawn_captured, Process.output or "
+   "Task.pending_count, or imports \"std/bdd\", runs only on the VM; keep HTTP "
+   "builtins and --legacy-eval out of it"))
+
 (define (check-vm-only program reason)
   (let/ec found
     (walk-ast program
@@ -218,11 +226,7 @@
                                      (format "this program needs the VM: ~a calls ~a, which only the VM runs, but ~a"
                                              (source-name (source-span-source span)) (call-name node) reason)
                                      span
-                                     #:help (string-append
-                                             "a program that imports \"std/http\" (even for a pure helper such as "
-                                             "header_values) or calls Process.spawn_captured, Process.output or "
-                                             "Task.pending_count, or imports \"std/bdd\", runs only on the VM; keep HTTP "
-                                             "builtins and --legacy-eval out of it"))))
+                                     #:help vm-only-help)))
                 #f))
     #f))
 
