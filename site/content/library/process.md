@@ -148,4 +148,73 @@ def main() -> Void
 end
 ```
 
-The program's standard error goes straight to your program's standard error.
+The program's standard error goes straight to your program's standard error,
+unless you start it with `Process.spawn_captured`.
+
+## Process.spawn_captured
+
+```text
+Process.spawn_captured(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
+```
+
+Starts a program in the folder `dir` (`"."` is the current folder) and keeps
+its output: standard output and standard error are read all the time into
+buffers of 1 MiB each, so the program never blocks on a full pipe, and its
+standard error is never printed. `Process.read_line` and `Process.read_bytes`
+read standard output as usual. The command is found as for `Process.spawn`,
+from the current folder, not from `dir`.
+
+When more than 1 MiB of standard output is waiting, or standard error passes
+1 MiB, the rest is dropped and every read of standard output gives
+`error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0,
+timeout)` gives that error at once, so you can check for it without waiting.
+
+Closing a captured program asks it to stop first (`SIGTERM`) and kills it one
+second later if it still runs, so a program that is itself an Agentica program
+can stop its own children. These two functions run only on the VM.
+
+```agentica {mode="check"}
+def main() -> Void
+  p = Process.spawn_captured("pwd", [], "/", 1000).unwrap!
+  puts(Process.read_line(p, 1000))
+  Process.close(p)
+end
+```
+
+```text
+ok("/")
+```
+
+## Process.output
+
+```text
+Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
+```
+
+Waits until a captured program has closed its standard output and standard
+error, and gives `ProcessOutput(stdout: String, stderr: String, truncated:
+Bool)`: the standard output you have not read yet, all of standard error, and
+whether some output was dropped. It reads nothing away, so you can call it
+again. A program from `Process.spawn` gives
+`error("process: output is not captured")`.
+
+```agentica {mode="check"}
+def main() -> Void
+  p = Process.spawn_captured("sh", ["-c", "echo one; echo two; echo oops >&2"], ".", 1000).unwrap!
+  puts(Process.read_line(p, 1000))
+  out = Process.output(p, 1000).unwrap!
+  puts(out.stdout)
+  puts(out.stderr)
+  puts(out.truncated)
+  Process.close(p)
+end
+```
+
+```text
+ok("one")
+two
+
+oops
+
+false
+```

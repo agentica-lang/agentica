@@ -170,7 +170,8 @@ builtins copy what they need into their GC state.
 loop). 7h: files (done on Linux, 2.8, 10.2.2), tasks (done, 10.2.1), processes (done, 10.4), TCP (done, 10.3.1), TLS (done,
 10.3), HTTP. BDD gets no C builtins: it is written in Agentica (`std/bdd`,
 `docs/future/31-bdd-in-agentica.md` §31); the VM adds only
-`Process.spawn_captured`, `Process.output` and `Task.pending_count`.
+`Process.spawn_captured`, `Process.output` (both done, 21a, 10.4) and
+`Task.pending_count`.
 
 ### 7.3 Builtin safety and streams
 
