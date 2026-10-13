@@ -1,6 +1,6 @@
 ## 36. Unit tests (`Test`)
 
-**Status:** planned (roadmap [phase 25](../roadmap/25-unit-tests.md), order in §36.9). Decided by the owner on 2026-10-13: Agentica gets minimal unit tests in the style of ExUnit, run by `agentica test` next to the BDD features.
+**Status:** the `Test` module is done (roadmap [phase 25](../roadmap/25-unit-tests.md), 25a); `agentica test` for test files is planned (25b). Order in §36.9. Decided by the owner on 2026-10-13: Agentica gets minimal unit tests in the style of ExUnit, run by `agentica test` next to the BDD features.
 
 A test file is a program named `*_test.agc` whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks. Each block returns `Result[Void]`, and the assertions (`Test.eq`, `Test.ok?`, `Test.error?`, `Test.assert`) return `Result[Void]` too, so they chain with `try`: Agentica has no exceptions. `agentica test` finds test files and `.feature` files in the same pass and writes one report, with the same text, `--ai` and `--json` shapes and the same exit codes as BDD. Each test file runs in its own child VM through the BDD runner (§31.5), and each test runs as its own task, so with §37 a crash fails only that test.
 

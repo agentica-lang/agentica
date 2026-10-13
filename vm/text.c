@@ -108,6 +108,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_SOCKET)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Socket>");
   if (agc_is(v, AGC_T_LISTENER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Listener>");
   if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpClient>");
+  if (agc_is(v, AGC_T_TEST)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TestCase>");
   if (agc_is(v, AGC_T_RANGE)) {
     const agc_range *r = agc_as_range(vm, v);
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",
@@ -136,8 +137,16 @@ static void append(builder *b, const char *text, size_t len) {
   b->s->chars += len;
 }
 
-static void append_item(agc_vm *vm, builder *b, agc_value v) {
-  if (agc_is(v, AGC_T_STRING)) {
+static void append_string(builder *b, const agc_string *s) {
+  if (s->bytes) memcpy(reserve(b, s->bytes), s->data, s->bytes);
+  b->s->bytes += s->bytes;
+  b->s->chars += s->chars;
+}
+
+static void append_item(agc_vm *vm, builder *b, agc_value v, bool json) {
+  if (json && agc_is(v, AGC_T_JSON)) {
+    append_string(b, agc_json_encode(vm, v, 0));
+  } else if (agc_is(v, AGC_T_STRING)) {
     const agc_string *s = agc_as_string(vm, v);
     size_t chars;
     size_t len = agc_write_form(s, NULL, &chars);
@@ -148,12 +157,6 @@ static void append_item(agc_vm *vm, builder *b, agc_value v) {
     char text[AGC_SCALAR_TEXT];
     append(b, text, agc_scalar_text(vm, v, text));
   }
-}
-
-static void append_string(builder *b, const agc_string *s) {
-  if (s->bytes) memcpy(reserve(b, s->bytes), s->data, s->bytes);
-  b->s->bytes += s->bytes;
-  b->s->chars += s->chars;
 }
 
 static bool compound(agc_value v) {
@@ -223,7 +226,7 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   return true;
 }
 
-static agc_string *compound_debug(agc_vm *vm, agc_value root) {
+static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json) {
   builder b;
   b.cap = 64;
   b.s = agc_new_string(b.cap, 0);
@@ -233,7 +236,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
   agc_value item = root;
   for (;;) {
     if (!compound(item)) {
-      append_item(vm, &b, item);
+      append_item(vm, &b, item, json);
     } else if (open_value(vm, &b, item)) {
       if (depth == capacity) {
         size_t bigger = agc_size_mul(capacity, 2);
@@ -262,7 +265,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root) {
     }
     if (agc_is(top->value, AGC_T_MAP)) {
       agc_value key = top->keys[top->next++];
-      append_item(vm, &b, key);
+      append_item(vm, &b, key, json);
       append(&b, ": ", 2);
       if (!agc_map_get(vm, agc_as_map(vm, top->value), key, &item))
         agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
@@ -278,9 +281,10 @@ agc_string *agc_text(agc_vm *vm, agc_value v) {
   return agc_debug(vm, v);
 }
 
-agc_string *agc_debug(agc_vm *vm, agc_value v) {
+static agc_string *debug_text(agc_vm *vm, agc_value v, bool json) {
+  if (json && agc_is(v, AGC_T_JSON)) return agc_json_encode(vm, v, 0);
   if (compound(v)) {
-    agc_string *text = compound_debug(vm, v);
+    agc_string *text = compound_debug(vm, v, json);
     agc_charge_bytes(vm, text->bytes);
     return text;
   }
@@ -297,3 +301,9 @@ agc_string *agc_debug(agc_vm *vm, agc_value v) {
   agc_write_form(s, result->data, &chars);
   return result;
 }
+
+agc_string *agc_debug(agc_vm *vm, agc_value v) { return debug_text(vm, v, false); }
+
+/* The inspect form, except that a Json at any depth is its canonical text
+   (docs/future/36-unit-tests.md §36.3), for Test.eq's expected and actual. */
+agc_string *agc_test_text(agc_vm *vm, agc_value v) { return debug_text(vm, v, true); }

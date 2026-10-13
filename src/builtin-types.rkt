@@ -2,7 +2,7 @@
 
 (provide opaque-types builtin-records)
 
-(define opaque-types '(Socket Listener HttpClient FileHandle Process))
+(define opaque-types '(Socket Listener HttpClient FileHandle Process TestCase))
 
 (define builtin-records
   (hash "Header" '(("name" . String) ("value" . String))

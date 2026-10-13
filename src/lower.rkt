@@ -22,7 +22,7 @@
 (define int-min (- (expt 2 63)))
 (define int-max (sub1 (expt 2 63)))
 
-(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient))
+(define value-types '(Int Float Bool Nil String Range Json FileHandle Process Socket Listener HttpClient TestCase))
 
 (define builtin-structs
   (for/list ([name (in-list '("FileInfo" "Header" "HttpResponse" "HttpClientOptions" "ProcessOutput"))])
@@ -183,7 +183,8 @@
                       "TLS.connect" "TLS.listen"
                       "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
                       "Process.spawn_captured" "Process.output" "Task.pending_count"
-                      "Task.await_result" "Task.unobserved_crash"))
+                      "Task.await_result" "Task.unobserved_crash"
+                      "Test.test" "Test.run" "Test.eq" "Test.ok?" "Test.error?" "Test.assert"))
 
 (define (walk-ast node visit)
   (define seen (make-hasheq))

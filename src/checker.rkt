@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "Time" "Random" "Range")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "Time" "Random" "Range" "Test")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -671,28 +671,28 @@
                (encodable-type? (cdr field) (cons name seen))))]
         [else #f]))
 
-    (define (printable-type? type [seen '()])
+    (define (data-type? type [seen '()])
       (cond
         [(or (primitive-type? type) (memq type '(Json Range)) (type-variable? type)) #t]
-        [(list-type? type) (printable-type? (cadr type) seen)]
-        [(map-type? type) (and (printable-type? (cadr type) seen) (printable-type? (caddr type) seen))]
-        [(result-type? type) (or (eq? (cadr type) 'Void) (printable-type? (cadr type) seen))]
+        [(list-type? type) (data-type? (cadr type) seen)]
+        [(map-type? type) (and (data-type? (cadr type) seen) (data-type? (caddr type) seen))]
+        [(result-type? type) (or (eq? (cadr type) 'Void) (data-type? (cadr type) seen))]
         [(or (struct-type? type) (enum-type? type))
          (define key (cons (car type) (cadr type)))
          (and (for/and ([argument (in-list (cddr type))])
-                (printable-type? argument seen))
+                (data-type? argument seen))
               (or (and (member key seen) #t)
                   (let ([seen (cons key seen)])
                     (if (struct-type? type)
                         (for/and ([field (in-list (hash-ref structs (cadr type)))])
-                          (printable-type? (cdr field) seen))
+                          (data-type? (cdr field) seen))
                         (for*/and ([payload (in-hash-values (cdr (hash-ref enums (cadr type))))]
                                    [field (in-list payload)])
-                          (printable-type? field seen))))))]
+                          (data-type? field seen))))))]
         [else #f]))
 
     (define (ensure-printable! type span)
-      (unless (printable-type? type)
+      (unless (data-type? type)
         (bail 'CHECK-TYPE-MISMATCH
               (format "~a has no to_s, so it cannot be printed or interpolated" (type->string type))
               span
@@ -938,6 +938,17 @@
            (bail 'CHECK-RESULT-TYPE "an error needs an expected Result type" span
                  #:help "add a Result[T] annotation, for example r: Result[Int] = error(message)"))
          expected]
+        [(test-eq)
+         (define actual (check-expression (car arguments) #f))
+         (define wanted (check-expression (cadr arguments) actual))
+         (unless (equal? actual wanted) (mismatch! actual wanted (node-span (cadr arguments))))
+         (unless (data-type? actual)
+           (bail 'CHECK-TYPE-MISMATCH
+                 (format "Test.eq needs a type with equality, found ~a" (type->string actual))
+                 (node-span (car arguments))
+                 #:help "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, Results, structs and enums of those"))
+         '(Result Void)]
+        [(test-result) (result-argument) '(Result Void)]
         [(result-ok) (result-argument) 'Bool]
         [(result-message) (result-argument) 'String]
         [(result-unwrap)
@@ -1131,14 +1142,14 @@
 
     (define (receiver-method-names kind target)
       (remove-duplicates
-       (append (method-names kind) (if (printable-type? target) '("to_s" "inspect") '()))))
+       (append (method-names kind) (if (data-type? target) '("to_s" "inspect") '()))))
 
     (define (check-method expression target-node name arguments span expected record!
                           #:target-type [known #f])
       (define target (or known (check-expression target-node #f)))
       (define kind (receiver-kind target))
       (define resolved-name (or (and kind (resolve-method kind name))
-                                (and (member name '("to_s" "inspect")) (printable-type? target)
+                                (and (member name '("to_s" "inspect")) (data-type? target)
                                      (if (equal? name "to_s") 'text 'inspect))))
       (unless resolved-name
         (bail 'CHECK-UNKNOWN-METHOD
@@ -1162,7 +1173,7 @@
                                  (did-you-mean name (receiver-method-names kind target))
                                  (format "~a methods: ~a" (type->string target)
                                          (string-join (sort (receiver-method-names kind target) string<?) ", ")))]
-                       [(printable-type? target) (did-you-mean name '("to_s" "inspect"))]
+                       [(data-type? target) (did-you-mean name '("to_s" "inspect"))]
                        [else #f])))
       (define receiver (typed-target target-node target))
       (cond

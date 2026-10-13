@@ -92,6 +92,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frame_capacity = 0;
   t->cursor = NULL;
   t->turn_cost = 0;
+  t->left_children = t->children != NULL;
   vm->tasks_done++;
   while (t->children) {
     agc_task *child = t->children;
@@ -235,6 +236,9 @@ static void crash(agc_vm *vm, agc_task *t) {
   agc_outcome *o = &vm->rt->outcome;
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "crash task=%" PRIu64 " code=%s", t->id, o->code);
   t->crash = agc_crash_text(vm->rt->program, o);
+  t->crash_code = o->code;
+  t->crash_message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD", false);
+  t->crash_span = o->span;
   t->crashed = true;
   if (vm->crashes_tail)
     vm->crashes_tail->crash_next = t;
@@ -278,7 +282,7 @@ static agc_task *first_unobserved(const agc_vm *vm) {
   return NULL;
 }
 
-static void observe(agc_vm *vm, agc_task *t) {
+void agc_task_observe(agc_vm *vm, agc_task *t) {
   if (t->observed) return;
   t->observed = true;
   vm->observed_count++;
@@ -335,16 +339,23 @@ agc_outcome agc_vm_run(agc_vm *vm) {
   return vm->rt->outcome;
 }
 
-static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
+agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
   agc_task *child = agc_new_task(vm);
-  agc_random_seed(&child->random, agc_random_next(&vm->task->random));
   child->input_seen = vm->rt->in.eof_seq;
-  agc_task_call(vm, child, args[0], args[1], span);
+  child->test = vm->task->test;
+  agc_task_call(vm, child, fn, args, argc, span);
   adopt(vm->task, child);
-  agc_resource *moved = agc_owned_of(vm, args[1]);
-  if (moved && moved->owner == vm->task) moved->owner = child;
   trace_spawn(vm, child, vm->task->id);
   enqueue(vm, child);
+  return child;
+}
+
+static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t seed = agc_random_next(&vm->task->random);
+  agc_task *child = agc_task_spawn(vm, args[0], &args[1], 1, span);
+  agc_random_seed(&child->random, seed);
+  agc_resource *moved = agc_owned_of(vm, args[1]);
+  if (moved && moved->owner == vm->task) moved->owner = child;
   return agc_task_value(child);
 }
 
@@ -353,7 +364,7 @@ static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool resu
   vm->task->awaiting = NULL;
   if (target->state == AGC_TASK_DONE) {
     if (target->crashed) {
-      observe(vm, target);
+      agc_task_observe(vm, target);
       if (result) return agc_result_value(false, agc_string_value(target->crash));
       agc_fail_text(vm, "RUNTIME-TASK-CRASHED", target->crash, span);
     }

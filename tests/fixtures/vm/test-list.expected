@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 9,
+  "stdout": [
+    "\u001eagentica-bdd {\"column\":5,\"event\":\"test\",\"line\":3,\"name\":\"first\"}",
+    "\u001eagentica-bdd {\"column\":5,\"event\":\"test\",\"line\":7,\"name\":\"second \\\"quoted\\\"\"}",
+    "\u001eagentica-bdd {\"event\":\"ready\"}",
+    ""
+  ],
+  "stderr": []
+}
