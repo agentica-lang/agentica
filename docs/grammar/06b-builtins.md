@@ -62,33 +62,7 @@ gets!() -> String
 
 To work with maps and lists there are two builtin modules, `Map` and `List`, called as `Module.function(...)`. Their functions are generic, so the checker treats them specially. The names `Map` and `List` are reserved and cannot be redefined.
 
-```text
-Map.has_key?(map: Map[K, V], key: K) -> Bool
-Map.keys(map: Map[K, V]) -> List[K]
-Map.size(map: Map[K, V]) -> Int
-Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]
-Map.get(map: Map[K, V], key: K) -> Result[V]
-Map.get(map: Map[K, V], key: K, default: V) -> V
-Map.delete(map: Map[K, V], key: K) -> Map[K, V]
-Map.values(map: Map[K, V]) -> List[V]
-List.size(list: List[T]) -> Int
-List.append(list: List[T], value: T) -> List[T]
-List.set(list: List[T], index: Int, value: T) -> List[T]
-List.repeat(value: T, count: Int) -> List[T]
-List.reverse(list: List[T]) -> List[T]
-List.map(list: List[A], f: Fn[A, B]) -> List[B]
-List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
-List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
-List.concat(a: List[T], b: List[T]) -> List[T]
-List.take(list: List[T], count: Int) -> List[T]
-List.drop(list: List[T], count: Int) -> List[T]
-List.at(list: List[T], index: Int) -> T
-List.sort(list: List[T]) -> List[T]
-List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]
-List.each(list: List[A], f: Fn[A, Void]) -> Void
-List.any?(list: List[A], f: Fn[A, Bool]) -> Bool
-List.all?(list: List[A], f: Fn[A, Bool]) -> Bool
-```
+The signatures of the `Map` and `List` functions are in `agentica help NAME --json` and in the library pages [`map.md`](../../site/content/library/map.md) and [`list.md`](../../site/content/library/list.md).
 
 Callbacks (`List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) take a block, a named function reference (`&name`) or a function-valued variable. They run exactly once per element, left to right, and use the caller's execution budget and error handling. Callback parameter and return types must match exactly; `map` callbacks must return data, not Void. Callback signatures (`&name`, a `Fn` variable, or a block with annotated parameters such as `do |x: Int|`) infer empty input lists and empty `reduce` initial values. `List.each` calls `f` on each element in order; `List.any?` and `List.all?` stop at the first element that decides the answer.
 
@@ -115,56 +89,23 @@ Expected types flow into these operations for contextual empty collections and R
 The `String` module works on text. `String.length` and `String.slice` count Unicode characters, not bytes; a `slice` out of range is a runtime error. With a non-empty `sep`, `String.split(s, sep)` keeps every part, even empty ones at the ends or between two separators, so `String.join(String.split(s, sep), sep)` gives back `s`; `String.split("", sep)` is `[""]`. `String.split(s, "")` returns a list with one Unicode character per element. The conversions `String.to_int!` and `String.to_float!` accept decimal numbers with an optional sign; `to_int!` fails with `RUNTIME-INVALID-NUMBER` if the text is not a decimal integer and with `RUNTIME-INTEGER-OVERFLOW` if it is outside the range of `Int`, while `to_float!` rejects text that is not a real decimal with `RUNTIME-INVALID-NUMBER`.
 
 ```text
-String.length(s: String) -> Int
-String.upcase(s: String) -> String
-String.downcase(s: String) -> String
-String.trim(s: String) -> String
-String.split(s: String, separator: String) -> List[String]
-String.join(parts: List[String], separator: String) -> String
-String.contains?(s: String, part: String) -> Bool
-String.starts_with?(s: String, prefix: String) -> Bool
-String.ends_with?(s: String, suffix: String) -> Bool
-String.replace(s: String, from: String, to: String) -> String
-String.slice(s: String, start: Int, length: Int) -> String
-String.index_of(s: String, part: String) -> Result[Int]
-String.at(s: String, index: Int) -> String
-String.reverse(s: String) -> String
-String.code(c: String) -> Int
-String.from_code(n: Int) -> String
-String.from_int(n: Int) -> String
-String.from_float(x: Float) -> String
-String.from_bytes(data: List[Int]) -> Result[String]
-String.to_int(s: String) -> Result[Int]
-String.to_float(s: String) -> Result[Float]
-String.to_int!(s: String) -> Int
-String.to_float!(s: String) -> Float
 Float.from_int(n: Int) -> Float
 Float.to_int(x: Float) -> Result[Int]
 Float.to_int!(x: Float) -> Int
 ```
+
+The signatures of the `String` functions are in `agentica help NAME --json` and in [`string.md`](../../site/content/library/string.md); those of `Float` are in [`numbers.md`](../../site/content/library/numbers.md).
 
 `String.index_of` returns the character index of the first match, `ok(0)` for an empty part, and an error when the part is absent. `String.at` reads one character at a zero-based index and halts with `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument outside the string. `String.reverse` reverses Unicode characters. `String.code` returns the code point of a one-character string; `String.from_code` builds one from a Unicode scalar value (0..0x10FFFF, without surrogates). Both halt with `RUNTIME-INVALID-CHARACTER` at their argument on other input. `Float.from_int` converts to the nearest Float. `Float.to_int` truncates toward zero; NaN and infinity are errors, and results outside `Int` are errors. `Float.to_int!` halts instead, with `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
 
 The `IO` module writes and reads through the standard ports; `IO.warn` writes to standard error. `IO.inspect` prints any value in a stable debug form and returns it. `IO.gets` returns `ok(line)` without its terminator (LF, CR, or CRLF), or an error value at EOF. A blank line is `ok("")`, not EOF. `IO.gets!` returns the line directly and halts with `RUNTIME-END-OF-INPUT` at EOF; `IO.eof?` lets you check first. The `System` module exposes the program arguments and ends the run with a code.
 
 ```text
-IO.puts(value: T) -> Void
-IO.print(value: T) -> Void
-IO.warn(value: T) -> Void
-IO.inspect(value: T) -> T
-IO.gets() -> Result[String]
-IO.gets!() -> String
-IO.read() -> String
-IO.read_bytes(count: Int) -> Result[List[Int]]
-IO.flush() -> Void
-IO.eof?() -> Bool
 System.args() -> List[String]
 System.exit(code: Int) -> Void
-Time.now_ms() -> Int
-Time.monotonic_ms() -> Int
-Random.int(min: Int, max: Int) -> Int
-Random.float() -> Float
 ```
+
+The signatures of the `IO`, `Time` and `Random` functions are in `agentica help NAME --json` and in [`io.md`](../../site/content/library/io.md) and [`system.md`](../../site/content/library/system.md).
 
 `Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. `agentica --seed N test` passes the seed to every scenario's step program and to the programs under test. Each task has its own generator: the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
 

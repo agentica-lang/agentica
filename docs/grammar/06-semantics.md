@@ -20,9 +20,9 @@ The grammar determines what can be written. The following rules determine which 
 | `Fn[A, ..., R]` | Function value (`&name` or a block); final type is its return, preceding types are parameters |
 | `Task[R]` | Opaque lightweight task with exactly one result type |
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
-| Network handles | Opaque `Socket`, `Listener`, `HttpClient`, `HttpServer` |
-| Builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions` |
 | Declared struct | Nominal type, typed and immutable fields |
+
+Network handles (`Socket`, `Listener`, `HttpClient`, `HttpServer`) and the builtin records (`Header`, `HttpRequest`, ...) are described in [TCP, TLS and HTTP](06d-io-and-network.md).
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
 
@@ -120,28 +120,20 @@ List indexes must be between zero and length minus one; a negative or out-of-ran
 for i in 0...3 do
   puts(i)          # 0, 1, 2
 end
-
-3.times do |i|
-  puts(i)          # 0, 1, 2
-end
-
-evens = (0..10).to_a.filter do |n|
-  n % 2 == 0
-end
 ```
 
 - `for x in range` yields each `Int` in order without building a list. A range whose end is before its start is empty; there is no reverse iteration (use `downto`, or `List.reverse` on `to_a`). Iteration up to the largest `Int` does not overflow. Each iteration costs one step (even with an empty body), plus its body. The range is evaluated once, so assigning to its variable in the body does not change the loop.
-- `Range` functions, also methods (`(1..5).size`):
+- `Range` functions:
 
   | Function | Result |
   |---|---|
-  | `Range.size(r: Range) -> Int` | the number of values; `RUNTIME-INTEGER-OVERFLOW` at the receiver when it does not fit in `Int` (`(0..9223372036854775807).size`) |
-  | `Range.to_a(r: Range) -> List[Int]` | the values in order; above 1048576 values, `RUNTIME-INVALID-COUNT` at the receiver |
-  | `Range.include?(r: Range, value: Int) -> Bool` | whether the value is in the range |
-  | `Range.each(r: Range, f: Fn[Int, Void]) -> Void` | calls `f` on each value in order |
-  | `Range.first(r: Range) -> Result[Int]`, `Range.last(r: Range) -> Result[Int]` | the first and last included values; `error("the range is empty")` for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)` |
+  | `Range.size` | the number of values; `RUNTIME-INTEGER-OVERFLOW` at the receiver when it does not fit in `Int` (`(0..9223372036854775807).size`) |
+  | `Range.to_a` | the values in order; above 1048576 values, `RUNTIME-INVALID-COUNT` at the receiver |
+  | `Range.include?` | whether the value is in the range |
+  | `Range.each` | calls `f` on each value in order |
+  | `Range.first`, `Range.last` | the first and last included values; `error("the range is empty")` for an empty range. Unlike Ruby, `(1...5).last` is `ok(4)` |
 
-- `Int` methods for loops, all returning `Void`: `n.times(f)` calls `f` with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, f)` with `a` up to `b` (nothing when `b < a`); `a.downto(b, f)` with `a` down to `b` (nothing when `b > a`). `f` is `Fn[Int, Void]`, usually a block. They are also module functions: `Int.times(n, f)`, `Int.upto(a, b, f)`, `Int.downto(a, b, f)`. Each call of `f` (and `Range.each`'s) costs one step plus the block. A negative literal receiver needs parentheses: `-5.times do ... end` is `-(5.times ...)`, a `CHECK-VOID-VALUE` whose help says to write `(-5).times`.
+- `Int` methods for loops, all returning `Void`: `n.times(f)` calls `f` with `0` to `n - 1` (nothing when `n <= 0`); `a.upto(b, f)` with `a` up to `b` (nothing when `b < a`); `a.downto(b, f)` with `a` down to `b` (nothing when `b > a`). `f` is `Fn[Int, Void]`, usually a block. Each call of `f` (and `Range.each`'s) costs one step plus the block. A negative literal receiver needs parentheses: `-5.times do ... end` is `-(5.times ...)`, a `CHECK-VOID-VALUE` whose help says to write `(-5).times`.
 - Text form: `1..5` and `1...5`, as Ruby's `inspect`; `to_s`, interpolation and `IO.inspect` all show it. Ranges have `==` (start, end and kind match). They are not JSON-encodable and cannot be `Map` keys.
 - Ranges of `String` or `Float` and `step` are not supported.
 
@@ -160,7 +152,7 @@ more = Map.put(stock, "kiwi", 7)
 - If a literal repeats a key, the last value wins; the key keeps its first-insertion position. Replacing a key with `Map.put` also preserves its position.
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
 - There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
-- The VM keeps a map as a persistent hash array mapped trie (a HAMT, 32-way): lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log32 n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
+- Lookup, `Map.has_key?` and `Map.put` take O(log32 n) steps in the map size, excluding key hashing and comparison, so they are effectively constant-time. `Map.size` is O(1); `Map.keys` is O(n). An update shares unchanged storage with the old map instead of copying it.
 
 ### Result and propagation
 
