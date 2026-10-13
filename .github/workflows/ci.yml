@@ -130,37 +130,55 @@ jobs:
       - if: steps.unicode.outputs.cache-hit != 'true'
         run: make vm-unicode && git diff --exit-code vm/unicode_data.c && touch build/unicode-checked
 
-  warm-openssl:
+  warm-third-party:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
     timeout-minutes: 45
-    env:
-      OPENSSL: vendored
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
       - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
-      - run: mkdir -p build && make -s vm-openssl-key SANITIZE=1 > build/openssl-key-sanitize
+      - run: mkdir -p build && make -s vm-openssl-key VM_OPENSSL=vendored > build/openssl-key-release
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/sanitize/openssl/include
-            build/vm/sanitize/openssl/libssl.a
-            build/vm/sanitize/openssl/libcrypto.a
-            build/vm/sanitize/openssl-flags
-          key: openssl-sanitize-${{ hashFiles('build/openssl-key-sanitize') }}
-      - run: make vm-openssl SANITIZE=1
-      - run: mkdir -p build && make -s vm-openssl-key GC_STRESS=1 > build/openssl-key-gcstress
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
+      - run: make vm-openssl VM_OPENSSL=vendored
+      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
+      - run: |
+          make -j"$(nproc)" build/vm/release/agentica-vm VM_OPENSSL=vendored
+          if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
+          ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
+          build/vm/release/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "the vendored VM does not report OpenSSL $ossl" >&2; exit 1; }
+      - run: mkdir -p build && make -s vm-third-party-key SANITIZE=1 > build/third-party-key-sanitize
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/gcstress/openssl/include
-            build/vm/gcstress/openssl/libssl.a
-            build/vm/gcstress/openssl/libcrypto.a
-            build/vm/gcstress/openssl-flags
-          key: openssl-gcstress-${{ hashFiles('build/openssl-key-gcstress') }}
-      - run: make vm-openssl GC_STRESS=1
+            build/vm/sanitize/uv
+            build/vm/sanitize/libuv.a
+            build/vm/sanitize/yyjson.o
+            build/vm/sanitize/picohttpparser.o
+            build/vm/sanitize/third-party-flags
+          key: third-party-sanitize-${{ hashFiles('build/third-party-key-sanitize') }}
+      - run: make -j"$(nproc)" vm-third-party SANITIZE=1
+      - run: mkdir -p build && make -s vm-third-party-key GC_STRESS=1 > build/third-party-key-gcstress
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/vm/gcstress/uv
+            build/vm/gcstress/libuv.a
+            build/vm/gcstress/yyjson.o
+            build/vm/gcstress/picohttpparser.o
+            build/vm/gcstress/third-party-flags
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: third-party-gcstress-${{ hashFiles('build/third-party-key-gcstress') }}
+      - run: make -j"$(nproc)" vm-third-party GC_STRESS=1
 
   dup-check:
     runs-on: [self-hosted, linux, docker-runner]
@@ -245,6 +263,23 @@ jobs:
       - run: diff <(dist/agentica --seed 7 tests/fixtures/vm/random.agc) <(dist/agentica --seed 7 tests/fixtures/vm/random.agc)
         shell: bash
       - run: dist/agentica examples/queue.agc
+      - run: mkdir -p build && make -s vm-openssl-key VM_OPENSSL=vendored > build/openssl-key-release
+      - id: vendored
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
+      - if: steps.vendored.outputs.cache-hit == 'true'
+        run: |
+          make -j"$(nproc)" build/vm/release/agentica-vm VM_OPENSSL=vendored
+          if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
+          ossl=$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $2; sep = "." }' vm/third_party/openssl/VERSION.dat)
+          build/vm/release/agentica-vm --version | grep -qF "OpenSSL $ossl" || { echo "the vendored VM does not report OpenSSL $ossl" >&2; exit 1; }
+          AGENTICA_VM_BINARY=build/vm/release/agentica-vm raco test tests/vm-tls-test.rkt tests/vm-http-test.rkt
 
   vm-sanitizers:
     needs: changes
@@ -254,7 +289,6 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       SANITIZE: '1'
-      OPENSSL: vendored
     steps:
       - uses: actions/checkout@v4
         with:
@@ -289,25 +323,29 @@ jobs:
       - run: git ls-files -z | xargs -0 touch
       - run: clang --version
       - run: python3 --version
-      - run: perl -MIPC::Cmd -MFile::Copy -e 1 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends perl; }
-      - run: mkdir -p build && make -s vm-openssl-key > build/openssl-key-sanitize
+      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
+      - run: mkdir -p build && make -s vm-third-party-key > build/third-party-key-sanitize
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/sanitize/openssl/include
-            build/vm/sanitize/openssl/libssl.a
-            build/vm/sanitize/openssl/libcrypto.a
-            build/vm/sanitize/openssl-flags
-          key: openssl-sanitize-${{ hashFiles('build/openssl-key-sanitize') }}
-      - run: mkdir -p build && make -s vm-openssl-key GC_STRESS=1 SANITIZE=0 > build/openssl-key-gcstress
+            build/vm/sanitize/uv
+            build/vm/sanitize/libuv.a
+            build/vm/sanitize/yyjson.o
+            build/vm/sanitize/picohttpparser.o
+            build/vm/sanitize/third-party-flags
+          key: third-party-sanitize-${{ hashFiles('build/third-party-key-sanitize') }}
+      - run: mkdir -p build && make -s vm-third-party-key GC_STRESS=1 SANITIZE=0 > build/third-party-key-gcstress
       - uses: actions/cache@v4
         with:
           path: |
-            build/vm/gcstress/openssl/include
-            build/vm/gcstress/openssl/libssl.a
-            build/vm/gcstress/openssl/libcrypto.a
-            build/vm/gcstress/openssl-flags
-          key: openssl-gcstress-${{ hashFiles('build/openssl-key-gcstress') }}
+            build/vm/gcstress/uv
+            build/vm/gcstress/libuv.a
+            build/vm/gcstress/yyjson.o
+            build/vm/gcstress/picohttpparser.o
+            build/vm/gcstress/third-party-flags
+            build/vm/gc.o
+            build/vm/gc-flags
+          key: third-party-gcstress-${{ hashFiles('build/third-party-key-gcstress') }}
       - run: command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
       - run: |
           clang-tidy --version
@@ -319,10 +357,10 @@ jobs:
           make vm-lint
       - if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.trace == 'true'
         run: |
-          make vm vm-test TRACE=0
+          make -j"$(nproc)" vm vm-test TRACE=0
           dist/agentica-vm --version | grep -q 'trace off'
-      - run: make vm vm-test
+      - run: make -j"$(nproc)" vm vm-test
       - run: make build && raco make -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt
       - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt
-      - run: make vm-fuzz
-      - run: make vm-gc-stress
+      - run: make -j"$(nproc)" vm-fuzz
+      - run: make -j"$(nproc)" vm-gc-stress

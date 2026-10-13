@@ -24,7 +24,7 @@
   object. Nothing in the VM relies on it today; it is upstream's default and
   costs nothing measurable. libuv (7h) is built from its submodule into
   `$(VM_BUILD)/libuv.a` per build mode (10). OpenSSL is the system
-  OpenSSL 3 by default (`pkg-config`, dynamic); with `OPENSSL=vendored`
+  OpenSSL 3 by default (`pkg-config`, dynamic); with `VM_OPENSSL=vendored`
   (the release) OpenSSL 3.5 LTS (7h) is built
   from its submodule `vm/third_party/openssl` into
   `$(VM_BUILD)/openssl/libssl.a` and `libcrypto.a`, static, per build mode
@@ -96,7 +96,8 @@
   upgraded only by bumping the submodule in a reviewed PR; CI checks out
   with `submodules: true`. `agentica-vm --version` and the release notes
   list the libgc, yyjson, libuv, picohttpparser and OpenSSL versions (for
-  OpenSSL, the one linked in); the release checklist says to
+  OpenSSL, the one that runs: the distro's in a system build); the release
+  checklist says to
   rebuild and release after any High or Critical advisory for libgc,
   yyjson, libuv, picohttpparser or OpenSSL. The release links OpenSSL
   statically, so a fix reaches users only through a submodule bump and a
@@ -136,17 +137,30 @@ get a stub adapter whose calls fail with "TLS needs Linux", and building
 it there will need Perl (MSYS2's `perl` on Windows) when those ports
 resume.
 
-The `test` job and `site-examples.yml` use the system OpenSSL.
-`vm-sanitizers` uses the vendored one, which takes a few minutes to build,
-so CI caches each mode's
-`build/vm/<mode>/openssl/include`, `libssl.a`, `libcrypto.a` and the
-`openssl-flags` stamp with
-`actions/cache`, keyed by `openssl-<mode>-` and the hash of `make -s
-vm-openssl-key` for that mode: `vm-sanitizers` caches the sanitize and
-GC-stress modes, and a `warm-openssl` job on `master` pushes fills both,
-since a pull request can restore only
-its own caches or `master`'s. A hit leaves the stamp unchanged, so make
-does not rebuild. The release workflow does not cache: it builds OpenSSL
+Every CI job, the sanitizer and GC-stress builds included, links the
+system OpenSSL, so no job builds an instrumented OpenSSL (a cold sanitizer
+OpenSSL build took an hour on the shared runner host). Only the release
+links the vendored one. To keep that path tested, a `warm-third-party` job
+on `master` pushes builds the vendored release-mode OpenSSL into a cache
+(`build/vm/release/openssl/include`, `libssl.a`, `libcrypto.a` and the
+`openssl-flags` stamp, keyed by `openssl-release-` and the hash of `make
+-s vm-openssl-key VM_OPENSSL=vendored`) and links
+`build/vm/release/agentica-vm` against it; the `test` job restores that
+cache (a pull request can restore only its own caches or `master`'s) and,
+on a hit, links the same binary, checks it with `readelf -d` and
+`--version`, and runs the TLS and HTTP tests on it. A hit leaves the stamp
+unchanged, so make does not rebuild.
+
+The sanitizer and GC-stress builds of yyjson, picohttpparser and libuv
+(and `build/vm/gc.o`) follow the content stamps
+`$(VM_BUILD)/third-party-flags` and `build/vm/gc-flags`, the output of
+`make -s vm-third-party-key` (compile lines, compiler and `ar` versions,
+and each submodule's commit, diff and untracked files, or a checksum of
+its files when it is not a git checkout), not source times. So
+`vm-sanitizers` caches them as `third-party-<mode>-` keyed by the hash of
+that output, and `warm-third-party` fills those caches on `master`.
+
+The release workflow does not cache: it builds OpenSSL
 with the pinned `zig cc` against glibc 2.28, the `objdump -T` floor check
 covers OpenSSL's symbols too, it fails if `readelf -d` shows `libssl` or
 `libcrypto`, and the archive ships `licenses/openssl/LICENSE.txt`.

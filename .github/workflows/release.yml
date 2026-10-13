@@ -16,7 +16,7 @@ jobs:
       ZIG_VERSION: 0.15.2
       ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
       VM_GLIBC: '2.28'
-      OPENSSL: vendored
+      VM_OPENSSL: vendored
     steps:
       - uses: actions/checkout@v4
         with:
@@ -137,6 +137,7 @@ jobs:
           agentica="$unpacked/$name/bin/agentica"
           "$agentica" examples/hello.agc
           "$agentica" --version
+          if LC_ALL=C readelf -d "$unpacked/$name/bin/agentica-vm" | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the archive's agentica-vm links OpenSSL dynamically" >&2; exit 1; fi
           "$agentica" examples/queue.agc
           diff <("$agentica" --seed 7 tests/fixtures/vm/random.agc) <("$agentica" --seed 7 tests/fixtures/vm/random.agc)
           rm -rf "$unpacked"
