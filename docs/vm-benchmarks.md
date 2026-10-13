@@ -126,25 +126,29 @@ At size 1 the VM programs finish in about 20 to 40 ms, so their ratios are domin
 - With the `List`/`Map` library (PR #80) the three real programs, `lists` and `maps` run on the VM in 31 to 94 ms at size 1, 11x to 39x faster than the evaluator with its start-up. `knight-tour` and `traveling-salesman` are about as fast as CPython; `maze-bfs`, `lists` and `maps` are 1.6x to 3.1x slower, which fits arrays copied on every `push`/`set`: `List.append` copies the whole array, so building a list with n pushes is O(n²) (persistent vectors come with 8d, which the roadmap puts before any dispatch micro-optimization) and map puts that copy a HAMT path.
 - `string-library` was added after this run with the `String` library on the VM (PR #81, `--runs 3`): at size 1 the evaluator takes 3.645 s, the VM 0.034 s (107x) and Python 0.045 s; at size 20 the VM takes 0.327 s and Python 0.103 s (1.9 MB against 9.3 MB). `at` over non-ASCII text is O(1) per call through the VM's string cursor (`docs/vm/02-reference-behavior.md` §2.3); the Python twin uses `sum` over the characters and `str.find`.
 
-## HTTP sanity check, 2026-10-13
+## HTTP sanity check
 
-`benchmarks/http.py` (Python standard library only; not a CI gate) compiles `examples/http_server.agc` and runs it on `dist/agentica-vm` with the `serve` argument, then sends keep-alive `GET /` requests from Python `http.client` threads, one connection per thread. It does the same against the same handler on Python's `ThreadingHTTPServer` (with `disable_nagle_algorithm`, so neither side waits on delayed ACKs), and then runs a small VM client program (`std/http`, one task per connection on one pool) against that Python server. Each setup gets one short warm-up and `--runs` timed runs; the table shows the median.
+`benchmarks/http.py` (not a CI gate; Python's standard library, Node's `http` module and `taskset`, no third-party code) compares the VM server, `examples/http_server.agc serve` on `dist/agentica-vm`, with three single-process servers that send the same body and the same headers as far as each allows (`Content-Type: text/plain; charset=utf-8`, `Date`, `Content-Length`, body `hello\n`): Node's `http` module (which also sends `Connection: keep-alive` and `Keep-Alive`), a Python `asyncio.start_server` server with a small hand-written HTTP/1.1 keep-alive loop, and Python's `ThreadingHTTPServer` (with `disable_nagle_algorithm`; it also sends `Server`). The servers live in `benchmarks/http.js` and `benchmarks/http.py` (`--serve`).
+
+The load client is the same for every server: Node's `http` with a keep-alive `http.Agent`, in 4 processes that share the connections, each connection sending `GET /` requests one after another (`benchmarks/http.js client`). Each process reports its CPU use, so a saturated client shows as a "Max client CPU" near 100%; the server's CPU use comes from `/proc`. Latency is per request, from the client's send to the end of the response, over all requests of the run.
+
+To keep a shared machine from skewing one server, each round runs every server once, interleaved (VM, Node, asyncio, threading, at each connection level, then the VM client), each on a freshly started server after a short warm-up; the table shows the median of the rounds and their spread. The server runs under `taskset` on CPU 0 and the clients on CPUs 2 to 7 (CPU 1 is left to the driver and the system; change with `--server-cpus` and `--client-cpus`). The 1-min load average is read before each round; a round that starts above `--max-load` (1.0) waits `--wait` seconds and is repeated, up to `--retries` times, and the output marks a round that stayed busy. The last line runs a VM client program (`std/http`, 8 tasks on one pool) against the Node server.
 
 ```sh
 make vm
-python3 benchmarks/http.py                     # 20000 requests over 8 connections, 3 runs
-python3 benchmarks/http.py --requests 4000 --connections 4 --runs 1
+python3 benchmarks/http.py                     # 40000 requests per run, 8 and 64 connections, 3 rounds
+python3 benchmarks/http.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```
 
-20,000 requests over 8 connections, median of 3 runs, on an 8-core shared Linux host with Python 3.13.5 (branch `feat/http-server` from master `3a0400b`):
+Results: to be measured on an idle machine (the host also runs CI runners and other builds, and the first runs of the script were taken under a load average of 14 to 21, so they only validated it).
 
-| Setup | Median s | Requests/s |
-|---|---:|---:|
-| VM server (`examples/http_server.agc`) | 3.652 | 5,477 |
-| Python `ThreadingHTTPServer` | 4.147 | 4,822 |
-| VM client against the Python server | 3.028 | 6,605 |
-
-### Reading
-
-- The VM server, one scheduler with a task per connection, is in the same range as Python's threaded server. The Python load generator is bound by the GIL, so the VM server row measures the client as much as the server; it shows no gross cost in the Agentica connection loop, not a peak rate.
-- The VM client row includes the VM start-up (about 1 ms) and the Python server's own cost per request, so it is bounded by that server too.
+| Connections | Server | Requests/s | Min to max | p50 ms | p99 ms | Server CPU | Max client CPU |
+|---:|---|---:|---|---:|---:|---:|---:|
+| 8 | VM (`examples/http_server.agc`) | | | | | | |
+| 8 | Node `http` | | | | | | |
+| 8 | Python asyncio | | | | | | |
+| 8 | Python `ThreadingHTTPServer` | | | | | | |
+| 64 | VM (`examples/http_server.agc`) | | | | | | |
+| 64 | Node `http` | | | | | | |
+| 64 | Python asyncio | | | | | | |
+| 64 | Python `ThreadingHTTPServer` | | | | | | |
