@@ -780,6 +780,44 @@
           (close-input-port out)
           (close-input-port err))))
 
+    (test-case "closing a captured VM child sends SIGTERM first, so the child stops its own children"
+      (define inner (build-path work "captured-inner.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 60\"], 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(60000)\nend\n")
+       inner)
+      (define outer (build-path work "captured-outer.agc"))
+      (display-to-file
+       (string-append
+        "def main() -> Void\n  args = System.args()\n"
+        "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"--allow-run\", \"--\", args[1]], \".\", 60000))\n"
+        "  puts(Result.unwrap!(Process.read_line(child, 60000)))\n"
+        "  if args[2] == \"close\"\n    Process.close(child)\n  else\n    IO.inspect(Process.read_line(child, 200))\n  end\nend\n")
+       outer)
+      (define inner-code (build-path work "captured-inner.agcb"))
+      (define outer-code (build-path work "captured-outer.agcb"))
+      (compile-file inner inner-code)
+      (compile-file outer outer-code)
+      (for ([mode (in-list '("close" "timeout"))])
+        (define pid #f)
+        (dynamic-wind
+          void
+          (lambda ()
+            (define result
+              (parameterize ([fixture-allow-run #t])
+                (run-vm outer-code #f #:timeout run-timeout (path->string vm-file) (path->string inner-code) mode)))
+            (define lines (string-split (second result) "\n"))
+            (set! pid (and (pair? lines) (string->number (first lines)) (first lines)))
+            (check-equal? (first result) 0 mode)
+            (check-equal? (rest lines) (if (equal? mode "close") '() '("error(\"network: operation timed out\")")) mode)
+            (check-pred string? pid mode)
+            (when (string? pid)
+              (check-false (directory-exists? (build-path "/proc" pid)) mode)))
+          (lambda ()
+            (when (and (string? pid) (directory-exists? (build-path "/proc" pid)))
+              (unix-kill (string->number pid) sigkill))))))
+
     (test-case "a signal caught while the VM is blocked is not lost when the last child exits first"
       (define program (build-path work "signal-pending.agc"))
       (display-to-file

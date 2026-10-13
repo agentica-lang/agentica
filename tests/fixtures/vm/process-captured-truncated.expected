@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 45,
+  "stdout": [
+    "error(\"process: output exceeds 1048576 bytes\")",
+    "error(\"process: output exceeds 1048576 bytes\")",
+    "stdout 1048576, stderr 0, truncated true",
+    "ok(0)",
+    ""
+  ],
+  "stderr": []
+}
