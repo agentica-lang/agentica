@@ -159,4 +159,4 @@ The design is split by topic. Section numbers stay as they were, so a reference 
 | 11 | Build, CI and supply chain | [`11-build-ci-supply-chain.md`](11-build-ci-supply-chain.md) |
 | 12, 13 | Testing and first PRs (12.2 is the PR plan); open questions | [`12-testing-and-pr-plan.md`](12-testing-and-pr-plan.md) |
 | 14 | VM core invariants: one way to wait, time out, cancel, end and own a handle; the entry rule for the core | [`14-core-invariants.md`](14-core-invariants.md) |
-| 15 | VM layers: core, services and adapters, the port between them, one header per layer and the CI check (planned, roadmap row 7.2.1b) | [`15-layers.md`](15-layers.md) |
+| 15 | VM layers: core, services and adapters plus the driver, the port between them, one header per layer and the CI check (planned, roadmap row 7.2.1b) | [`15-layers.md`](15-layers.md) |
