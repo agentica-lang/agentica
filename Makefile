@@ -23,7 +23,7 @@ exe: build vm
 	$(RACO) exe -o dist/agentica src/main.rkt
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
-# dist/agentica is timed only when present; rebuild it with make exe first, or pass --runners evaluator,vm,python
+# dist/agentica is timed only when present; rebuild it with make exe first, or pass --runners vm,python
 bench: build vm
 	python3 benchmarks/run.py $(BENCH_ARGS)
 

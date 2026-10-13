@@ -1,10 +1,8 @@
 #lang racket/base
 
-(require racket/runtime-path
-         racket/string)
+(require racket/runtime-path)
 
-(provide run-main-in-process
-         fallback-notice?)
+(provide run-main-in-process)
 
 (define-runtime-path main-file "../src/main.rkt")
 
@@ -38,7 +36,3 @@
             0)))
       (lambda () (custodian-shutdown-all custodian))))
   (list status (get-output-string out) (get-output-string err)))
-
-(define (fallback-notice? text builtin)
-  (and (regexp-match? #rx"^agentica: [^\n]*; running on the legacy evaluator\n$" text)
-       (string-contains? text builtin)))

@@ -95,7 +95,6 @@ def scaled_source(name: str, size: int, workdir: Path) -> Path:
 
 def runners(selected: list[str]) -> dict[str, list[str]]:
     available = {
-        "evaluator": ["racket", str(MAIN), "--legacy-eval"],
         "exe": [str(EXE)] if EXE.exists() else None,
         "vm": [str(VM), "--"] if VM.exists() else None,
         "python": [sys.executable],
@@ -179,8 +178,8 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
 
 
 def table(rows: list[Row]) -> str:
-    baseline = {row.name: row.median for row in rows if row.runner == "evaluator" and row.status == "ok"}
-    lines = ["| program | runner | median s | min s | max RSS MB | vs evaluator | note |",
+    baseline = {row.name: row.median for row in rows if row.runner == "python" and row.status == "ok"}
+    lines = ["| program | runner | median s | min s | max RSS MB | vs python | note |",
              "|---|---|---:|---:|---:|---:|---|"]
     for row in rows:
         if row.status != "ok":
@@ -199,8 +198,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Time Agentica benchmark programs on each runner.")
     parser.add_argument("--runs", type=int, default=5, help="runs per program and runner (default 5)")
     parser.add_argument("--size", type=int, default=1, help="work multiplier for every program (default 1)")
-    parser.add_argument("--runners", default="evaluator,exe,vm,python",
-                        help="comma-separated runners: evaluator, exe, vm, python")
+    parser.add_argument("--runners", default="exe,vm,python",
+                        help="comma-separated runners: exe, vm, python")
     parser.add_argument("--only", default="", help="comma-separated program names")
     parser.add_argument("--no-startup", action="store_true", help="skip the hello.agc start-up check")
     args = parser.parse_args()

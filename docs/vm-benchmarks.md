@@ -7,15 +7,14 @@ Speed numbers for the roadmap's 7g speed check. The server measurement (roadmap 
 ```sh
 make build vm exe          # exe is optional: dist/agentica is timed whenever it exists, so rebuild it after a change or leave it out with --runners
 make bench                 # same as: python3 benchmarks/run.py
-python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners evaluator,vm,python
+python3 benchmarks/run.py --runs 5 --size 1 --only knight-tour,calls --runners vm,python
 ```
 
-`benchmarks/run.py` (Python standard library only) runs each program in `benchmarks/programs/` on four runners:
+`benchmarks/run.py` (Python standard library only) runs each program in `benchmarks/programs/` on three runners:
 
 | Runner | Command | What is timed |
 |---|---|---|
-| `evaluator` | `racket src/main.rkt --legacy-eval f.agc` | the whole run on the frozen evaluator, start-up included |
-| `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included; since the VM became the default this is the source → result path on the VM (Racket front end, then `agentica-vm`), so tables recorded before that time the evaluator |
+| `exe` | `dist/agentica f.agc` (only if it exists; `make bench` does not rebuild it, run `make exe` first) | the whole run, start-up included; since the VM became the default this is the source → result path on the VM (Racket front end, then `agentica-vm`), so tables recorded before that time the evaluator, which 7i deleted |
 | `vm` | `racket src/main.rkt compile f.agc -o f.agcb`, then `dist/agentica-vm -- f.agcb` | only the VM run; compiling happens once, untimed |
 | `python` | the interpreter running the script (`sys.executable`) on `benchmarks/python/<name>.py SIZE` | the whole run, an idiomatic CPython version as an outside reference |
 
@@ -23,7 +22,7 @@ The `vm` runner times only the VM on precompiled bytecode. A user who runs a sou
 
 For each program and runner it does one warm-up run under GNU `/usr/bin/time -f %M` for the peak RSS (without GNU time the RSS column shows `n/a`), then `--runs` timed runs (default 5), and reports the median and the minimum wall time. Every run must print the same stdout as the first runner that succeeded; a different output is a `mismatch`, and a `failed` or `mismatch` row (start-up rows included) makes the script exit 1. A program the VM cannot compile yet is reported as `unsupported` with a one-line summary of the `LOWER-UNSUPPORTED` diagnostic. `hello.agc` start-up is measured apart (`--no-startup` skips it).
 
-`--size N` multiplies the work of every program: each `.agc` has a `def scale() -> Int` that returns 1, which the script rewrites to N in a temporary copy, and each Python version takes N as its first argument. Size 1 keeps every program at a few seconds at most on the evaluator.
+`--size N` multiplies the work of every program: each `.agc` has a `def scale() -> Int` that returns 1, which the script rewrites to N in a temporary copy, and each Python version takes N as its first argument. Size 1 kept every program at a few seconds at most on the old evaluator.
 
 The programs print a deterministic checksum and use only fixed inputs (a seeded linear congruential generator where they need data):
 
@@ -45,6 +44,8 @@ The VM has the `List` and `Map` library since PR #80 and the `String` library si
 The Python versions are idiomatic CPython, not step-by-step copies: they compute the same result but use Python's own tools. `strings` builds each line with `"".join` over f-string parts where the Agentica version uses repeated `+`; `arithmetic` sums a list comprehension; `knight_tour` and `traveling_salesman` mutate one `visited` list and path in place and undo the change on backtrack, where Agentica builds new values; `maze_bfs` uses a `deque` and a `set`. So a ratio against Python compares two idiomatic programs, not two interpreters on identical steps.
 
 ## Results, 2026-10-11
+
+These numbers come from before 7i, when the script still had an `evaluator` runner (`--legacy-eval`); since 7i the ratio column is "vs python" (Python's median divided by the runner's median).
 
 The host is shared with the self-hosted CI runners, so other jobs may run at the same time: treat the numbers as rough (the evaluator's median and minimum differ by up to 30% in places).
 

@@ -1,0 +1,16 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INTEGER-OVERFLOW",
+  "steps": 171,
+  "stdout": [
+    "2",
+    "false",
+    "true",
+    "2.0",
+    "\"ab\"",
+    "total 5",
+    "total 9",
+    ""
+  ],
+  "stderr": []
+}

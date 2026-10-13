@@ -4,26 +4,20 @@
          racket/file
          racket/runtime-path
          racket/list
-         "../src/checker.rkt"
-         "../src/diagnostic.rkt"
-         "../src/evaluator.rkt"
-         "../src/lexer.rkt"
-         "../src/parser.rkt"
-         "../src/source.rkt")
+         "cli-in-process.rkt")
 
 (define-runtime-path examples-dir "../examples")
 
 (define (run-program text #:args [arguments '()])
-  (define result #f)
-  (define output
-    (with-output-to-string
+  (define file (make-temporary-file "agentica-filesystem~a.agc"))
+  (define result
+    (dynamic-wind
+      void
       (lambda ()
-        (set! result
-              (let* ([lexed (lex (source "filesystem-test.agc" text))]
-                     [parsed (if (diagnostic? lexed) lexed (parse lexed))]
-                     [checked (if (diagnostic? parsed) parsed (check parsed))])
-                (if (diagnostic? checked) checked (evaluate checked #:args arguments)))))))
-  (values output result))
+        (display-to-file text file #:exists 'truncate)
+        (apply run-main-in-process (path->string file) arguments))
+      (lambda () (delete-file file))))
+  (values (second result) (if (zero? (first result)) (void) result)))
 
 (define (with-temp-dir proc)
   (define directory (make-temporary-file "agentica-filesystem~a" 'directory))
@@ -207,7 +201,7 @@
        (check-true (string-contains? output "ok(\"\")"))
        (check-true (string-contains? output "ok(\"linked\")")))))
 
-  (test-case "evaluation cleanup closes an unclosed file handle"
+  (test-case "the end of a run flushes and closes an unclosed file handle"
     (with-temp-dir
      (lambda (root)
        (define path (build-path root "cleanup.txt"))

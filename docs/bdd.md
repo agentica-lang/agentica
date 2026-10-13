@@ -159,8 +159,8 @@ Each scenario has a 30-second wall-clock deadline from the start of its child. P
 | a bad step file leaves the other files' steps usable | one step program: a bad one is a file error and no scenario runs |
 | BDD calls outside a scenario: `RUNTIME-BDD-CONTEXT` | impossible to write; a step program that never calls `BDD.run` is `RUNTIME-BDD-CONTEXT` |
 | feature files of any size | at most 1 MiB; a larger one is a `RUNTIME-BDD-IO` file error, exit 1 |
-| programs under test ran on the legacy evaluator | they run like `agentica FILE`: on the VM, so seeded `Random` values follow the VM's generator, and a program that uses the `HTTP` builtins prints the fallback notice on stderr until HTTP 20d |
-| handlers could call the `HTTP` builtins | the step program is compiled for the VM: an `HTTP` builtin call is a `LOWER-UNSUPPORTED` file error; use `std/http` |
+| programs under test ran on the legacy evaluator | they run like `agentica FILE`: on the VM, so seeded `Random` values follow the VM's generator; the builtin `HTTP` module is gone since 7i, so such a program fails with `CHECK-UNKNOWN-NAME` and must import `std/http` as `HTTP` |
+| handlers could call the `HTTP` builtins | the builtin `HTTP` module is gone since 7i: an `HTTP.` call without an import is a `CHECK-UNKNOWN-NAME` file error whose help shows `import "std/http" as HTTP` |
 | a missing or unreadable `--steps` file: `CHECK-IMPORT-IO`, exit 1, scenarios run as undefined | `RUNTIME-BDD-INFRA`, exit 2, no scenario runs |
 | discovery followed links to folders | links to folders are skipped; an unreadable folder, a broken `.feature` link or a name that is not UTF-8 is a `RUNTIME-BDD-INFRA` file error |
 

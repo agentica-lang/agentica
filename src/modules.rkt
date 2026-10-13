@@ -189,13 +189,14 @@
               (identity target member)]
              [(and (std-only-name? name) (not (string? key)))
               (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span
-                    #:help (format "~a is internal to std/http; use import \"std/http\" as Web" alias))]
+                    #:help (format "~a is internal to std/http; use import \"std/http\" as HTTP" alias))]
              ;; Unknown calls belong to the checker, including misspelled
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]
              [else (bail 'CHECK-IMPORT-NAME "unknown module alias" span
                          #:help (cond
                                   [(equal? alias "BDD") "import \"std/bdd\" as BDD"]
+                                  [(equal? alias "HTTP") "import \"std/http\" as HTTP"]
                                   [(equal? alias "Result")
                                    "write Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"]
                                   [variant-hint?

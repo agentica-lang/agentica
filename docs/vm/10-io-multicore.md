@@ -210,9 +210,8 @@ measurement shows CPU-bound work that one scheduler cannot serve.
   cover memory errors and data races in the scheduler code; the
   GC-threaded build is covered only by a GC-stress run with
   `--schedulers 4`); then round 2 of the benchmarks covers multicore
-  (roadmap phase 12) if it landed. Multicore does not block 7i: the
-  evaluator cannot run in parallel anyway. The parity rule stays
+  (roadmap phase 12) if it landed. Multicore did not block 7i. The parity rule stays
   black-box (1): with N=1, exit code, stdout, program stderr and diagnostic
-  codes match the evaluator. The differential, bytecode and golden tests, the `--max-steps`
+  codes match the goldens. The differential, bytecode and golden tests, the `--max-steps`
   sweep and the seeded runs all run the VM with `--schedulers 1`.
 

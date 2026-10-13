@@ -1,7 +1,7 @@
 #lang racket
 
 (provide (struct-out builtin) builtins builtin-ref builtin-signature builtin->jsexpr type->string display-name did-you-mean
-         std-only-modules std-only-name? public-builtin-names vm-only-builtins)
+         std-only-modules std-only-name? public-builtin-names)
 
 ;; Signatures are data; generic rules and runtime implementations stay in their stages.
 (struct builtin (name parameters result rule implementation effects description
@@ -69,29 +69,6 @@
                     ("TCP.local_port" ((listener Listener)) Int #f "TCP.local_port" (network) "Return the actual listening port.")
                     ("TLS.connect" ((host String) (port Int) (ca_file String) (timeout_ms Int)) (Result Socket) #f "TLS.connect" (network) "Connect with certificate and hostname verification; empty CA uses system trust.")
                     ("TLS.listen" ((host String) (port Int) (cert_file String) (key_file String)) (Result Listener) #f "TLS.listen" (network) "Listen with a PEM certificate chain and private key.")
-                    ("HTTP.client_options" () (Struct "HttpClientOptions") #f "HTTP.client_options" (network) "Return default immutable client options; construct HttpClientOptions to customize.")
-                    ("HTTP.server_options" () (Struct "HttpServerOptions") #f "HTTP.server_options" (network) "Return default immutable server options; construct HttpServerOptions to customize.")
-                    ("HTTP.client" () (Result HttpClient) #f "HTTP.client" (network) "Create an HTTP/1.1 connection pool, optionally with client options.")
-                    ("HTTP.close_client" ((client HttpClient)) Void #f "HTTP.close_client" (network) "Close the pool and active exchanges.")
-                    ("HTTP.get" ((client HttpClient) (url String)) (Result (Struct "Response")) #f "HTTP.get" (network) "GET a response with a streaming body.")
-                    ("HTTP.post" ((client HttpClient) (url String) (headers (List (Struct "Header"))) (body String)) (Result (Struct "Response")) #f "HTTP.post" (network) "POST a UTF-8 body.")
-                    ("HTTP.request" ((client HttpClient) (method String) (url String) (headers (List (Struct "Header"))) (body String)) (Result (Struct "Response")) #f "HTTP.request" (network) "Make an HTTP/1.1 request; status errors are ordinary responses.")
-                    ("HTTP.request_stream" ((client HttpClient) (method String) (url String) (headers (List (Struct "Header"))) (length Int) (producer (Fn A HttpWriter (Result Void))) (argument A)) (Result (Struct "Response")) http-producer "HTTP.request_stream" (network) "Stream an upload; -1 length selects chunked; pass context through the producer argument.")
-                    ("HTTP.read" ((body HttpBody) (max_bytes Int) (timeout_ms Int)) (Result (List Int)) #f "HTTP.read" (network) "Read decoded framing bytes progressively; empty means body EOF.")
-                    ("HTTP.text" ((body HttpBody) (timeout_ms Int)) (Result String) #f "HTTP.text" (network) "Collect at most 1 MiB and strictly decode UTF-8.")
-                    ("HTTP.trailers" ((body HttpBody)) (Result (List (Struct "Header"))) #f "HTTP.trailers" (network) "Return trailers after complete body consumption.")
-                    ("HTTP.close_body" ((body HttpBody)) Void #f "HTTP.close_body" (network) "Abandon an unread body and close its connection.")
-                    ("HTTP.header_values" ((headers (List (Struct "Header"))) (name String)) (List String) #f "HTTP.header_values" (network) "Get all matching header values case-insensitively.")
-                    ("HTTP.listen" ((host String) (port Int) (handler (Fn (Struct "Request") HttpWriter Void)) (options (Struct "HttpServerOptions"))) (Result HttpServer) #f "HTTP.listen" (network) "Start an HTTP/1.1 server with independent handler contexts.")
-                    ("HTTP.listen_tls" ((host String) (port Int) (cert_file String) (key_file String) (handler (Fn (Struct "Request") HttpWriter Void)) (options (Struct "HttpServerOptions"))) (Result HttpServer) #f "HTTP.listen_tls" (network) "Start an HTTPS server.")
-                    ("HTTP.local_port" ((server HttpServer)) Int #f "HTTP.local_port" (network) "Return the server's assigned port.")
-                    ("HTTP.wait" ((server HttpServer)) (Result Void) #f "HTTP.wait" (network) "Wait until explicit server close; main return cancels pending services.")
-                    ("HTTP.close_server" ((server HttpServer)) Void #f "HTTP.close_server" (network) "Stop acceptance and cancel active connections and handlers.")
-                    ("HTTP.begin" ((writer HttpWriter) (status Int) (headers (List (Struct "Header"))) (length Int) (timeout_ms Int)) (Result Void) #f "HTTP.begin" (network) "Start a response; -1 length selects chunked.")
-                    ("HTTP.write" ((writer HttpWriter) (text String) (timeout_ms Int)) (Result Void) #f "HTTP.write" (network) "Write UTF-8 data progressively and flush.")
-                    ("HTTP.write_bytes" ((writer HttpWriter) (bytes (List Int)) (timeout_ms Int)) (Result Void) #f "HTTP.write_bytes" (network) "Write at most 1 MiB of bytes progressively and flush.")
-                    ("HTTP.finish" ((writer HttpWriter) (trailers (List (Struct "Header"))) (timeout_ms Int)) (Result Void) #f "HTTP.finish" (network) "Finish the body, validating length and emitting chunked trailers.")
-                    ("HTTP.respond" ((writer HttpWriter) (status Int) (headers (List (Struct "Header"))) (text String) (timeout_ms Int)) (Result Void) #f "HTTP.respond" (network) "Send and finish a complete UTF-8 response.")
                     ("HttpWire.client" ((timeout_ms Int) (idle_timeout_ms Int) (max_connections Int) (max_body_bytes Int) (ca_file String)) (Result HttpClient) #f "HttpWire.client" (network) "Internal to std/http: make a client with its connection pool.")
                     ("HttpWire.exchange" ((client HttpClient) (scheme String) (host String) (port Int) (method String) (target String) (headers (List (Struct "Header"))) (body String)) (Result (Struct "HttpResponse")) #f "HttpWire.exchange" (network) "Internal to std/http: send one whole request and read the whole response.")
                     ("HttpWire.close_client" ((client HttpClient)) Void #f "HttpWire.close_client" (network) "Internal to std/http: close a client and its connections.")
@@ -201,10 +178,6 @@
        entry
        (list (builtin "Map.get" '((map (Map K V)) (key K) (default V))
                       'V 'map-get-default "Map.get" '() (builtin-description entry)))))
-    (when (equal? (builtin-name entry) "HTTP.client")
-      (set-builtin-alternatives! entry
-        (list (builtin "HTTP.client" '((options (Struct "HttpClientOptions")))
-                       '(Result HttpClient) #f "HTTP.client" '(network) (builtin-description entry)))))
     (values (car row) entry)))
 
 (define std-only-modules '("HttpWire"))
@@ -215,9 +188,6 @@
 
 (define (public-builtin-names)
   (filter (lambda (name) (not (std-only-name? name))) (hash-keys builtins)))
-
-(define vm-only-builtins '("HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
-                           "Process.spawn_captured" "Process.output" "Task.pending_count"))
 
 (define (builtin-ref name [arity #f])
   (define entry (hash-ref builtins name #f))

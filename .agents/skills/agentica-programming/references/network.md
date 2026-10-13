@@ -1,17 +1,11 @@
-# TCP, TLS and HTTP/1.1
+# TCP, TLS and HTTP
 
-Networking uses the existing expression syntax and lightweight Racket tasks.
-`TCP`, `TLS`, `HTTP`, `Socket`, `Listener`, `HttpClient`, `HttpServer`,
-`HttpBody`, `HttpWriter`, `Header`, `Request`, `Response`,
-`HttpClientOptions` and `HttpServerOptions` are reserved. Handles are opaque:
-no constructor, equality, fields or JSON encoding; inspect prints their type
-in angle brackets. Handles belong to their evaluation and close when it ends.
-Network access needs no CLI permission flag.
-
-The builtin `HTTP` API below is still the documented one. The VM-only
-`std/http` client (`import "std/http" as Web`; `Web.get`, `Web.post`,
-`Web.request` return `Result[HttpResponse]` with a `String` body) replaces
-it later; see `modules.md`. Do not use both in one program.
+Networking uses the existing expression syntax and lightweight tasks.
+`TCP`, `TLS`, `Socket`, `Listener`, `HttpClient`, `Header`, `HttpResponse`
+and `HttpClientOptions` are reserved. Handles are opaque: no constructor,
+equality, fields or JSON encoding; inspect prints their type in angle
+brackets. Handles belong to their run and close when it ends. Network access
+needs no CLI permission flag.
 
 ```text
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
@@ -58,111 +52,63 @@ without a terminator at EOF, and errors on empty EOF, on a read error (a
 connection reset in the middle of a line is an error, not a line) and on a
 line over 1 MiB, which also closes the socket.
 
-`TCP` and `TLS` programs run on the VM (Linux). A program that uses `HTTP`
-runs on the legacy evaluator.
+## HTTP client (`std/http`)
 
-Builtin records are immutable and use the existing named-field constructors:
+HTTP is a library written in Agentica. Import it with
+`import "std/http" as HTTP`; an `HTTP.` call without the import is
+`CHECK-UNKNOWN-NAME` with a help that shows the import. There is only a
+client: no HTTP server until it comes back in a later release (roadmap 20c).
+
+```text
+HTTP.client_options() -> HttpClientOptions
+HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
+HTTP.close_client(client: HttpClient) -> Void
+HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.header_values(headers: List[Header], name: String) -> List[String]
+```
 
 | Record | Fields |
 | --- | --- |
 | Header | name: String, value: String |
-| Request | method: String, target: String, path: String, headers: List[Header], body: HttpBody |
-| Response | status: Int, headers: List[Header], body: HttpBody |
+| HttpResponse | status: Int, headers: List[Header], body: String |
 | HttpClientOptions | timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String |
-| HttpServerOptions | header_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int |
 
-Request.target preserves the origin-form target including the query; path is
-the part before `?`, with no percent decoding. Incoming header names are
-lowercase. Lists preserve duplicates and order, including Set-Cookie.
-Header values use the HTTP Latin-1 byte range; names must be HTTP tokens.
-CR/LF injection, control characters and user-supplied framing headers are
-rejected. Host is supplied by the client; Content-Length and Transfer-Encoding
-are supplied by framing operations.
+Every call is whole: it returns after the whole response body was read, and
+the body must be valid UTF-8 (at most `max_body_bytes`). `client_options()`
+gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
+body limit and system CA trust; options must be positive, `max_connections`
+at most 65536 and `max_body_bytes` at most 64 MiB. One `timeout_ms` covers
+the whole call. The client keeps idle keep-alive connections per scheme,
+host and port. URLs are `http://` or `https://`; the fragment is dropped,
+user info is rejected and IPv6 hosts go in brackets. The client adds `Host`
+and `Content-Length`; a request that sets `Host`, `Content-Length`,
+`Transfer-Encoding` or `Connection` is an error. Response header names are
+lowercase; `header_values` matches names case-insensitively and keeps
+duplicates in order. 4xx and 5xx are normal responses. Errors are Results:
+protocol and limit errors start with `http: `, and a timeout is
+`network: operation timed out`. There is no streaming, no automatic redirect
+and no gzip decoding.
 
-```text
-HTTP.client_options() -> HttpClientOptions
-HTTP.server_options() -> HttpServerOptions
-HTTP.client() -> Result[HttpClient]
-HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
-HTTP.close_client(client: HttpClient) -> Void
-HTTP.get(client: HttpClient, url: String) -> Result[Response]
-HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Void]], argument: A) -> Result[Response]
-HTTP.read(body: HttpBody, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
-HTTP.text(body: HttpBody, timeout_ms: Int) -> Result[String]
-HTTP.trailers(body: HttpBody) -> Result[List[Header]]
-HTTP.close_body(body: HttpBody) -> Void
-HTTP.header_values(headers: List[Header], name: String) -> List[String]
+```agentica
+import "std/http" as HTTP
+
+def main() -> Void
+  client = Result.unwrap!(HTTP.client(HTTP.client_options()))
+  case HTTP.get(client, "http://127.0.0.1:8080/health")
+    ok(response) -> puts("#{response.status} #{response.body}")
+    error(message) -> IO.warn(message)
+  end
+  HTTP.close_client(client)
+end
 ```
 
-Options helpers return defaults: 30 s operation/header timeout, 30 s idle
-timeout, 4 connections per client origin or 128 server connections, 64 MiB per
-body, and system CA trust. Construct options records to customize them; numeric
-options must be positive, and max_connections is capped at 65536.
-Request acquisition, DNS, connection, TLS and response headers share one
-client timeout. HTTP.wait deliberately waits until explicit close.
-
-The pool groups connections by scheme, hostname and port. Each connection has
-one active exchange. Reuse requires complete upload and complete response
-consumption, including chunk terminators and trailers. Connection: close,
-EOF-framed bodies, invalid framing, or abandoned bodies prevent reuse.
-Closing a client closes its pool and active exchanges. A pending pool wait
-may time out without affecting another exchange.
-
-get/post/request return as soon as response headers are available. HTTP 4xx
-and 5xx are normal Response values. request_stream runs a supervised producer
-concurrently with response reception; length -1 uses chunked, otherwise it is
-the exact byte length. Pass producer data through argument; no closures are
-needed. The producer can finish with trailers; otherwise successful return
-finishes automatically. An error Result aborts the exchange and appears on
-the request or a subsequent body read. Producer diagnostics terminate the
-evaluation with their original location.
-
-read accepts 1..1048576 bytes and returns progress, not an entire requested
-buffer. ok([]) means body EOF. text collects up to 1 MiB within one total
-deadline and decodes UTF-8 strictly. Decode arbitrary streamed chunks only
-after assembling complete characters. trailers requires completed consumption;
-close_body abandons an unread body. Header lookup is case-insensitive.
-Content encoding remains raw: there is no automatic gzip decompression.
-
-```text
-HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Void]
-HTTP.close_server(server: HttpServer) -> Void
-HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Void]
-HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Void]
-HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Void]
-HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Void]
-HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Void]
-```
-
-Connections run concurrently with independent evaluator contexts and one
-shared step budget. Each connection processes requests sequentially. begin
-starts a response with status 200..599; length -1 selects chunked. write and
-write_bytes flush each part, at most 1 MiB per call. Fixed lengths must match
-exactly. finish emits the final chunk/trailers or validates a fixed length.
-respond combines begin/write/finish for a UTF-8 string.
-
-HEAD suppresses response bytes; 204 and 304 have no response body. The server
-supports 100 Continue and rejects unsupported expectations. It finishes a
-valid response on handler return; a handler that never begins a response
-gets 500 and connection close. Unconsumed request bodies close the connection.
-Writers become inactive on handler/producer return. Coordinate ownership:
-immutable records do not make socket operations atomic across tasks.
-
-close_server stops acceptance, cancels handlers and nested tasks, closes all
-connections and wakes wait. It is idempotent. Main return and global failure
-also close services. An awaited task cancelled by resource shutdown reports
-RUNTIME-TASK-CANCELLED; intentional shutdown itself is not a global failure.
-BDD handlers must close services and finish tasks before returning.
-
-HTTP/1.1 supports fixed lengths, chunked transfer, trailers and informational
-responses. Ambiguous framing is rejected. Header limits are 64 KiB, 100
-entries and 8 KiB per line. Body limits apply incrementally. Protocol errors
-before dispatch affect only their connection; body read failures return Results.
-A handler's explicit unwrap failure remains a global diagnostic.
-HTTP/1.0, upgrades, proxies, automatic redirects/retries, cookie management and
-a dedicated SSE API are outside this phase.
+The builtin `HTTP` module of earlier releases is gone: `HTTP.client()`
+becomes `HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)`
+becomes `response.body`, and `read`, `trailers`, `close_body`,
+`request_stream`, the server calls and the `Request`, `Response`, `HttpBody`,
+`HttpWriter`, `HttpServer` and `HttpServerOptions` types no longer exist.
+Binary bodies have no replacement yet: a body that is not UTF-8 is an error.
+`max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers
+the whole response, not only the headers.

@@ -90,13 +90,11 @@ performance is promised.
 
 ## HTTP client (`std/http`)
 
-`std/http` is the new HTTP client, written in Agentica. It runs only on the
-VM, and until the builtin `HTTP` module goes it is imported under another
-alias: `import "std/http" as Web`. It has `Web.client_options()`,
-`Web.client(options)`, `Web.get`, `Web.post`, `Web.request`,
-`Web.header_values` and `Web.close_client`; calls return
-`Result[HttpResponse]` with the whole body as a `String`. Importing it makes
-the program VM-only: do not mix it with `HTTP` builtins in one
-program (`LOWER-UNSUPPORTED`). Details are in `network.md`.
+`std/http` is the HTTP client, written in Agentica:
+`import "std/http" as HTTP`. It has `HTTP.client_options()`,
+`HTTP.client(options)`, `HTTP.get`, `HTTP.post`, `HTTP.request`,
+`HTTP.header_values` and `HTTP.close_client`; calls return
+`Result[HttpResponse]` with the whole body as a `String`. There is no HTTP
+server yet. Details are in `network.md`.
 
 `import "std/bdd" as BDD` is the step API of `agentica test`; see `bdd.md`.

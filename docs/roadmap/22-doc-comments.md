@@ -1,6 +1,6 @@
 ## Phase 22: Doc comments
 
-Specified in [`docs/future/32-doc-comments.md` section 32](../future/32-doc-comments.md#32-doc-comments). Phase 22 is front end only: the lexer, the parser and the CLI. It does not change lowering or the VM. It comes after 7i and the rest of order step 7.1, including task crash isolation (phase 24) and unit tests (phase 25), at order step 7.2a (§32.7). It has two PRs. Each one has its own tests and docs.
+Specified in [`docs/future/32-doc-comments.md` section 32](../future/32-doc-comments.md#32-doc-comments). Phase 22 is front end only: the lexer, the parser and the CLI. It does not change lowering or the VM. It comes after 7i, HTTP 20b, task crash isolation ([phase 24](24-task-crash-isolation.md)), unit tests ([phase 25](25-unit-tests.md)) and HTTP 20c (order step 7.2.1), at order step 7.2a (§32.7). It has two PRs. Each one has its own tests and docs.
 
 - [ ] **22a: `##` doc comments (§32.2 to §32.4).**
   - **Lexer** (`src/lexer.rkt`): one `DOC` token per doc block, with its text and span. `##` after code on a line stays an ordinary comment.

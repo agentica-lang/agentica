@@ -59,7 +59,7 @@
 
 (define prelude
   #<<AGC
-import "std/http" as Web
+import "std/http" as HTTP
 
 struct Fetch
   pool: HttpClient
@@ -85,7 +85,7 @@ def show(r: Result[HttpResponse]) -> Void
 end
 
 def fetch(f: Fetch) -> Result[String]
-  response = try Web.get(f.pool, f.url)
+  response = try HTTP.get(f.pool, f.url)
   return ok(response.body)
 end
 
@@ -111,36 +111,36 @@ AGC
   #<<AGC
 def main() -> Void
   plain = "http://127.0.0.1:#{System.args()[1]}"
-  pool = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
-  hello = Result.unwrap!(Web.get(pool, plain + "/hello"))
-  puts("#{hello.status} #{hello.body} #{Web.header_values(hello.headers, "X-MULTI")}")
-  show(Web.get(pool, plain + "/chunked"))
-  first = Result.unwrap!(Web.get(pool, plain + "/port")).body
-  show(Web.post(pool, plain + "/post", [Header(name: "X-Kind", value: "form")], "a=1&b=ñ"))
-  puts(Result.unwrap!(Web.get(pool, plain + "/port")).body == first)
-  show(Web.get(pool, plain + "/close"))
-  puts(Result.unwrap!(Web.get(pool, plain + "/port")).body != first)
-  show(Web.get(pool, plain + "/nothing"))
-  Web.close_client(pool)
-  slow = Result.unwrap!(Web.client(options(200, 1, 1000, "")))
-  show(Web.get(slow, plain + "/slow"))
-  one = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
+  pool = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  hello = Result.unwrap!(HTTP.get(pool, plain + "/hello"))
+  puts("#{hello.status} #{hello.body} #{HTTP.header_values(hello.headers, "X-MULTI")}")
+  show(HTTP.get(pool, plain + "/chunked"))
+  first = Result.unwrap!(HTTP.get(pool, plain + "/port")).body
+  show(HTTP.post(pool, plain + "/post", [Header(name: "X-Kind", value: "form")], "a=1&b=ñ"))
+  puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body == first)
+  show(HTTP.get(pool, plain + "/close"))
+  puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body != first)
+  show(HTTP.get(pool, plain + "/nothing"))
+  HTTP.close_client(pool)
+  slow = Result.unwrap!(HTTP.client(options(200, 1, 1000, "")))
+  show(HTTP.get(slow, plain + "/slow"))
+  one = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
   a = Task.spawn(&fetch, Fetch(pool: one, url: plain + "/port"))
   b = Task.spawn(&fetch, Fetch(pool: one, url: plain + "/port"))
   c = Task.spawn(&fetch, Fetch(pool: one, url: plain + "/port"))
   puts(same(a, b, c))
-  three = Result.unwrap!(Web.client(options(5000, 3, 1000, "")))
+  three = Result.unwrap!(HTTP.client(options(5000, 3, 1000, "")))
   a = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
   b = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
   c = Task.spawn(&fetch, Fetch(pool: three, url: plain + "/gate"))
   puts(apart(a, b, c))
-  closing = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
+  closing = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
   pending = Task.spawn(&fetch, Fetch(pool: closing, url: plain + "/hold"))
-  watcher = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
-  while Result.unwrap!(Web.get(watcher, plain + "/held")).body == "0"
+  watcher = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  while Result.unwrap!(HTTP.get(watcher, plain + "/held")).body == "0"
     Task.sleep(1)
   end
-  Web.close_client(closing)
+  HTTP.close_client(closing)
   IO.inspect(Task.await(pending))
 end
 AGC
@@ -151,15 +151,15 @@ AGC
 def main() -> Void
   certs = System.args()[0]
   port = System.args()[2]
-  secure = Result.unwrap!(Web.client(options(5000, 1, 1000, certs + "/ca.pem")))
-  show(Web.get(secure, "https://localhost:#{port}/hello"))
-  show(Web.get(secure, "https://LOCALHOST:#{port}/hello"))
-  show(Web.post(secure, "https://127.0.0.1:#{port}/post", [], "over tls"))
-  show(Web.get(secure, "https://localhost:#{port}/notify"))
-  show(Web.get(secure, "https://localhost:#{port}/close"))
-  show(Web.get(secure, "http://localhost:#{port}/hello"))
-  show(Web.get(Result.unwrap!(Web.client(options(5000, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
-  show(Web.get(Result.unwrap!(Web.client(options(5000, 1, 1000, certs + "/missing.pem"))), "https://localhost:#{port}/hello"))
+  secure = Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/ca.pem")))
+  show(HTTP.get(secure, "https://localhost:#{port}/hello"))
+  show(HTTP.get(secure, "https://LOCALHOST:#{port}/hello"))
+  show(HTTP.post(secure, "https://127.0.0.1:#{port}/post", [], "over tls"))
+  show(HTTP.get(secure, "https://localhost:#{port}/notify"))
+  show(HTTP.get(secure, "https://localhost:#{port}/close"))
+  show(HTTP.get(secure, "http://localhost:#{port}/hello"))
+  show(HTTP.get(Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
+  show(HTTP.get(Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/missing.pem"))), "https://localhost:#{port}/hello"))
 end
 AGC
   )
@@ -172,18 +172,18 @@ def main() -> Void
   while String.length(upload) < 4194304
     upload = upload + upload
   end
-  large = Result.unwrap!(Web.client(options(5000, 1, 8388608, "")))
-  show(Web.post(large, raw + "/early", [], upload))
-  hostile = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
-  stale = Result.unwrap!(Web.client(options(5000, 1, 1000, "")))
-  show(Web.get(stale, raw + "/stale"))
-  show(Web.post(stale, raw + "/after", [], "x"))
-  show(Web.get(stale, raw + "/stale"))
-  show(Web.get(stale, raw + "/after"))
-  show(Web.request(stale, "HEAD", raw + "/headlength", [], ""))
-  show(Web.get(stale, raw + "/after"))
+  large = Result.unwrap!(HTTP.client(options(5000, 1, 8388608, "")))
+  show(HTTP.post(large, raw + "/early", [], upload))
+  hostile = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  stale = Result.unwrap!(HTTP.client(options(5000, 1, 1000, "")))
+  show(HTTP.get(stale, raw + "/stale"))
+  show(HTTP.post(stale, raw + "/after", [], "x"))
+  show(HTTP.get(stale, raw + "/stale"))
+  show(HTTP.get(stale, raw + "/after"))
+  show(HTTP.request(stale, "HEAD", raw + "/headlength", [], ""))
+  show(HTTP.get(stale, raw + "/after"))
   for path in ["/http10", "/status99", "/status600", "/upgrade", "/interim15", "/interim16", "/badchunk", "/atlimit", "/big", "/bigchunks", "/barelf", "/fold", "/twolengths", "/smuggle", "/gzip", "/badtrailer", "/truncated", "/headerless", "/nocontent", "/after"]
-    show(Web.get(hostile, raw + path))
+    show(HTTP.get(hostile, raw + path))
   end
 end
 AGC

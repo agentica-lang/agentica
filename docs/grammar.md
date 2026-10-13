@@ -1,6 +1,6 @@
 # Agentica: grammar and language design
 
-Status: implemented by the interpreter in Racket (`src/`). This document describes what the interpreter accepts; remaining proposals live in [`future/`](future/README.md).
+Status: implemented by the interpreter: a Racket front end (`src/`) that compiles to bytecode for the C VM (`vm/`), which runs every program. This document describes what the interpreter accepts; remaining proposals live in [`future/`](future/README.md).
 
 ## 1. What we want to validate
 
@@ -19,7 +19,7 @@ The direction is KISS: Ruby-like syntax, static types, local inference, and few 
 | Data | Variables can be reassigned; lists, maps, and structs are immutable |
 | Numbers | 64-bit `Int`, no implicit conversions |
 | Names | Function names may end in `?` (predicate) or `!` (halting form), independently of whitespace before `(` |
-| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and `HTTP` |
+| Library | Builtin modules `Map`, `List`, `String`, `IO`, `System`, `Result`, `JSON`, `Task`, `File`, `Dir`, `Path`, `TCP` and `TLS`; `std/` modules written in Agentica, such as `std/http` |
 
 Generic enums and exhaustive `case` matching are part of the current language. Other proposals remain in [`future/`](future/README.md).
 
@@ -239,20 +239,18 @@ performance is promised.
 
 #### HTTP client (`std/http`)
 
-Status: the builtin `HTTP` module (below, in "TCP, TLS and HTTP/1.1") stays
-the way to write HTTP programs until the switch of roadmap 20d. `std/http`
-holds the client of the library that replaces it. It runs only on the VM,
-and until 20d it is imported under another alias, such as `Web`, because
-`HTTP` is still a reserved builtin name.
+HTTP is the `std/http` library, imported with `import "std/http" as HTTP`
+(`HTTP` is the documented alias; any other alias works too). It has the
+client only: there is no HTTP server until roadmap 20c brings it back.
 
 ```text
-Web.client_options() -> HttpClientOptions
-Web.client(options: HttpClientOptions) -> Result[HttpClient]
-Web.close_client(client: HttpClient) -> Void
-Web.get(client: HttpClient, url: String) -> Result[HttpResponse]
-Web.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
-Web.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
-Web.header_values(headers: List[Header], name: String) -> List[String]
+HTTP.client_options() -> HttpClientOptions
+HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
+HTTP.close_client(client: HttpClient) -> Void
+HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
+HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+HTTP.header_values(headers: List[Header], name: String) -> List[String]
 ```
 
 `HttpResponse(status: Int, headers: List[Header], body: String)` is a builtin
@@ -283,13 +281,21 @@ errors start with `http: `; connection errors keep the TCP and TLS texts
 `error writing to stream port`), and a timeout is `network: operation timed
 out`. A bracketed host must be an IPv6 literal (hex digits, `:` and `.`).
 `std/http` calls the internal module `HttpWire`, which no other module can
-name (`CHECK-UNKNOWN-NAME`). Importing `std/http` makes the whole program
-VM-only, even when it calls only a pure helper such as `header_values`:
-when the program also needs the legacy evaluator (it uses something the VM
-does not run yet, such as `HTTP`, or it runs under `--legacy-eval`) it
-stops with `LOWER-UNSUPPORTED`
-at the first `HttpWire` call in `std/http.agc`, with a help that says so,
-exit 1, before anything runs.
+name (`CHECK-UNKNOWN-NAME`).
+
+Migration from the builtin `HTTP` module, which roadmap 7i removed: add
+`import "std/http" as HTTP`; `HTTP.client()` becomes
+`HTTP.client(HTTP.client_options())`; `get`, `post` and `request` return a
+whole `HttpResponse`, so `HTTP.text(response.body, t)` becomes
+`response.body`; `HTTP.read`, `trailers`, `close_body` and `request_stream`
+are gone (send a whole `HTTP.request`; streaming is planned on channels), and
+there is no replacement yet for binary bodies: a response body that is not
+UTF-8 is now an error; `max_body_bytes` defaults to 1 MiB instead of 64 MiB;
+`timeout_ms` now covers the whole response, not only the headers; the
+server (`listen`, `listen_tls`, the writer calls) returns with 20c, which
+replaces `Request` and the `HttpWriter` calls with handlers that return an
+`HttpResponse`. `Request`, `Response`, `HttpBody`, `HttpWriter`, `HttpServer`
+and `HttpServerOptions` are no longer types.
 
 #### BDD steps (`std/bdd`)
 
@@ -447,8 +453,8 @@ The grammar determines what can be written. The following rules determine which 
 | `Fn[A, ..., R]` | Function value (`&name` or a block); final type is its return, preceding types are parameters |
 | `Task[R]` | Opaque lightweight task with exactly one result type |
 | `Enum[T, ...]` | User-declared nominal sum type; type parameters are declared on the enum |
-| Network handles | Opaque `Socket`, `Listener`, `HttpClient`, `HttpServer`, `HttpBody`, `HttpWriter` |
-| Builtin records | `Header`, `Request`, `Response`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions` |
+| Network handles | Opaque `Socket`, `Listener`, `HttpClient` |
+| Builtin records | `Header`, `HttpResponse`, `HttpClientOptions` |
 | Declared struct | Nominal type, typed and immutable fields |
 
 Parameters and the return type of functions require an annotation. Local variables can be inferred from the initializer:
@@ -588,7 +594,7 @@ more = Map.put(stock, "kiwi", 7)
 - If a literal repeats a key, the last value wins; the key keeps its first-insertion position. Replacing a key with `Map.put` also preserves its position.
 - Maps are immutable, like lists: there is no `m[key] = value`. `Map.put` returns a new map and leaves the original intact.
 - There is no map equality and no `for` over a map; iterate with `Map.keys`, which returns the keys in insertion order.
-- This interpreter uses Racket immutable hashes: lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
+- The VM keeps a map as a persistent hash array mapped trie (a HAMT, 32-way): lookup, `Map.has_key?`, and `Map.put` are effectively constant-time in map size (technically O(log32 n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 
 ### Methods on builtin types
 
@@ -746,9 +752,9 @@ Random.int(min: Int, max: Int) -> Int
 Random.float() -> Float
 ```
 
-`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. Seeded sequences come from the VM's generator; a program that falls back to the legacy evaluator (it uses `HTTP`) repeats too, with other values. `agentica --seed N test` passes the seed to every scenario's step program and to the programs under test. Each task has its own generator (on the legacy evaluator, tasks share one): the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
+`Time.now_ms()` reads wall-clock time as milliseconds since the Unix epoch; it can jump when the system clock changes. `Time.monotonic_ms()` counts milliseconds from an arbitrary origin and never goes backward; subtract two readings to measure durations. `Random.int(min, max)` returns a uniform `Int` in `min .. max`, both inclusive, over the whole `Int` range; `min > max` halts with `RUNTIME-INVALID-RANGE` at the call. `Random.float()` returns a uniform `Float` in `0.0` up to, but not including, `1.0`. Each run has its own generator. Without `--seed` it is seeded from operating-system randomness, so runs differ. `agentica --seed N program.agc` (N in `0 .. 2147483647`, otherwise exit 2) repeats the same sequence for the same program and input. `agentica --seed N test` passes the seed to every scenario's step program and to the programs under test. Each task has its own generator: the main task is seeded from `--seed`, and each spawn takes one draw from the parent's generator to seed the child, so a task's values depend only on its own calls and on how many tasks its parent spawned before it. With `--seed`, only each task's own values repeat on the VM: how tasks interleave can still depend on timer and thread-pool timing (sleeps, file and stdin reads), even on one scheduler, so a multi-task run as a whole is not repeatable. The generator is not suitable for secrets. `Time` and `Random` are reserved builtin module names: no declaration or import alias may use them.
 
-- `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both use Racket's buffered input port.
+- `IO.read()` drains text until EOF; do not use it to read one message from a peer that keeps stdin open. `IO.gets()` reads a line instead. Both read stdin through the VM's own input buffer, filled by reads on the I/O thread pool, so other tasks keep running while one waits for input.
 - `IO.read_bytes(count)` waits for exactly `count` bytes or EOF and returns a list of integers in `0 .. 255`, with no UTF-8 decoding. A short final read succeeds; EOF before any bytes is `ok([])`. Zero returns `ok([])` without consuming input, even before EOF. Counts must be `0 .. 1048576` (1 MiB per call), bounding eager allocation; invalid counts return an error without consuming input. Input-port failures also return an error. Larger streams can be processed in multiple reads.
 - `String.from_bytes(data)` checks every integer is `0 .. 255`, then decodes UTF-8 strictly. Empty bytes produce `ok("")`; invalid, overlong, surrogate, or incomplete sequences return an error, never replacement characters. Byte reads may split a multibyte character; decode only when its complete bytes are available. Existing text and byte readers share one port; text readers should only be used at a complete character boundary.
 - `IO.eof?()` peeks at the next byte without consuming it. It can block while awaiting data or EOF, but never waits to decode a whole UTF-8 character. It is not a readiness poll. Reads have no timeout, and the step budget cannot interrupt blocking I/O.
@@ -866,13 +872,13 @@ end
 - **Result.** `return value` leaves the block, not the enclosing function. Without `return`, the value of the last expression statement is the block's value. The result type comes from the expected `Fn` (user functions, `each`, `any?`, `all?`, `filter`, and `reduce`, whose result is the accumulator type); for `map` and `sort_by` it comes from the body, where every `return` and the last expression must agree (`CHECK-TYPE-MISMATCH`). A non-`Void` block must give a value on every path (`CHECK-MISSING-RETURN`). When the result is `Void`, the last statement gives no value.
 - **`try`** inside a block returns the error from the block, so the block's result must be `Result[...]` (`CHECK-TRY-CONTEXT` otherwise); write the success as `ok(...)`. The result must be known from the call (a user function's `Fn[..., Result[T]]`), so `try` is not available in `map` and `sort_by` blocks, whose result is inferred.
 - **Capture by value.** A block sees every variable visible where it is written and keeps their values from the moment it is created; later assignments outside do not change it. Assigning to an outer variable inside a block is `CHECK-CAPTURED-ASSIGNMENT`: use `reduce` or a `for` loop. Block parameters and new variables cannot reuse a visible name (`CHECK-SHADOWED-NAME`).
-- **Values.** A block has type `Fn[A, ..., R]` and works wherever a function value does: stored, returned, passed to `Task.spawn` or HTTP callbacks through a variable, or made into a BDD step with `BDD.step(pattern) do |ctx, args| ... end`. It shares the caller's step budget and call-depth limit. Blocks have no equality or JSON form; `IO.inspect` prints `<Fn>`.
+- **Values.** A block has type `Fn[A, ..., R]` and works wherever a function value does: stored, returned, passed to `Task.spawn` through a variable, or made into a BDD step with `BDD.step(pattern) do |ctx, args| ... end`. It shares the caller's step budget and call-depth limit. Blocks have no equality or JSON form; `IO.inspect` prints `<Fn>`.
 
 `List.each` calls `f` on each element in order. `List.any?` and `List.all?` stop at the first element that decides the answer.
 
 ### Lightweight tasks
 
-`Task` is reserved. Tasks use Racket coroutine threads for I/O concurrency, without new keywords or CPU parallelism. A block can be the task function when it is passed through a `Fn` variable or parameter.
+`Task` is reserved. Tasks are cooperative tasks on one VM scheduler, for I/O concurrency without new keywords or CPU parallelism; a task yields when it waits for I/O, a timer or another task, and at the end of each turn. A block can be the task function when it is passed through a `Fn` variable or parameter.
 
 ```text
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
@@ -881,24 +887,25 @@ Task.sleep(milliseconds: Int) -> Void
 Task.pending_count() -> Int
 ```
 
-Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Handles belong to one execution; awaiting one in another halts with RUNTIME-TASK-CONTEXT. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
+Spawn starts a named function immediately with one argument; use a struct for multiple values. Each task has independent scopes, call depth and return handling. Await returns the cached result and may be repeated. False, nil and Result.error are normal results. Tasks have no constructor, equality, fields, indexing or JSON encoding; inspect shows `<Task>`.
 
-Any task diagnostic terminates the whole evaluation with its original code and span, even when unawaited. System.exit in any task terminates the evaluation with its code. The first terminal outcome published by the supervisor wins. Returning from the entrypoint cancels pending tasks: explicitly await work that must finish. External interruption also cancels tasks and closes resources created under the execution custodian, preserving caller-supplied ports.
+Any task diagnostic ends the whole run with its original code and span, even when unawaited. System.exit in any task ends the run with its code. The first of these outcomes wins. Returning from the entrypoint ends the run, and pending tasks never run again: explicitly await work that must finish. At the end of a run, however it ends, the VM flushes and closes open files, closes sockets and listeners, and stops and reaps the child processes it started; stdin, stdout and stderr stay open.
 
 Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, arguments and contextual builtin services. Shared streams have no cross-task ordering guarantee; coordinate who reads input. All tasks, including nested tasks, share the execution's synchronized --max-steps counter.
 
-Pending count (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned is not counted, even when nothing awaited it. A program that calls it runs only on the VM: where it would have to run on the legacy evaluator it stops with `LOWER-UNSUPPORTED` at that call.
+Pending count (VM only) returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned is not counted, even when nothing awaited it.
 
 BDD step handlers may use tasks but must finish them before returning, normally through Task.await: `std/bdd` checks `Task.pending_count()` after each handler, and pending work fails that step with RUNTIME-BDD-PENDING-TASKS; so does a step program whose `main` leaves tasks running when it calls `BDD.run`. Assertions made by tasks count for the step. A context changed in a task is lost unless the handler takes it back from `Task.await`. A task that fails ends the scenario's child VM, which fails only that scenario.
 
-### TCP, TLS and HTTP/1.1
+### TCP, TLS and HTTP
 
-Networking uses the existing expression syntax and lightweight Racket tasks.
-`TCP`, `TLS`, `HTTP`, `HttpWire`, `Socket`, `Listener`, `HttpClient`,
-`HttpServer`, `HttpBody`, `HttpWriter`, `Header`, `Request`, `Response`,
-`HttpResponse`, `HttpClientOptions` and `HttpServerOptions` are reserved. Handles are opaque:
-no constructor, equality, fields or JSON encoding; inspect prints their type
-in angle brackets. Handles belong to their evaluation and close when it ends.
+Networking uses the existing expression syntax and lightweight tasks.
+`TCP`, `TLS`, `HttpWire`, `Socket`, `Listener`, `HttpClient`, `Header`,
+`HttpResponse` and `HttpClientOptions` are reserved; `HTTP` is not, since it
+is the import alias of `std/http` ("HTTP client (`std/http`)" in the modules
+section). Handles are opaque: no constructor, equality, fields or JSON
+encoding; inspect prints their type in angle brackets. Handles belong to
+their run and close when it ends.
 Network access needs no CLI permission flag.
 
 ```text
@@ -952,107 +959,12 @@ Builtin records are immutable and use the existing named-field constructors:
 | Record | Fields |
 | --- | --- |
 | Header | name: String, value: String |
-| Request | method: String, target: String, path: String, headers: List[Header], body: HttpBody |
-| Response | status: Int, headers: List[Header], body: HttpBody |
-| HttpResponse | status: Int, headers: List[Header], body: String (`std/http`, VM only) |
+| HttpResponse | status: Int, headers: List[Header], body: String |
 | HttpClientOptions | timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String |
-| HttpServerOptions | header_timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int |
 
-Request.target preserves the origin-form target including the query; path is
-the part before `?`, with no percent decoding. Incoming header names are
-lowercase. Lists preserve duplicates and order, including Set-Cookie.
 Header values use the HTTP Latin-1 byte range; names must be HTTP tokens.
 CR/LF injection, control characters and user-supplied framing headers are
-rejected. Host is supplied by the client; Content-Length and Transfer-Encoding
-are supplied by framing operations.
-
-```text
-HTTP.client_options() -> HttpClientOptions
-HTTP.server_options() -> HttpServerOptions
-HTTP.client() -> Result[HttpClient]
-HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
-HTTP.close_client(client: HttpClient) -> Void
-HTTP.get(client: HttpClient, url: String) -> Result[Response]
-HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[Response]
-HTTP.request_stream(client: HttpClient, method: String, url: String, headers: List[Header], length: Int, producer: Fn[A, HttpWriter, Result[Void]], argument: A) -> Result[Response]
-HTTP.read(body: HttpBody, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
-HTTP.text(body: HttpBody, timeout_ms: Int) -> Result[String]
-HTTP.trailers(body: HttpBody) -> Result[List[Header]]
-HTTP.close_body(body: HttpBody) -> Void
-HTTP.header_values(headers: List[Header], name: String) -> List[String]
-```
-
-Options helpers return defaults: 30 s operation/header timeout, 30 s idle
-timeout, 4 connections per client origin or 128 server connections, 64 MiB per
-body, and system CA trust. Construct options records to customize them; numeric
-options must be positive, and max_connections is capped at 65536.
-Request acquisition, DNS, connection, TLS and response headers share one
-client timeout. HTTP.wait deliberately waits until explicit close.
-
-The pool groups connections by scheme, hostname and port. Each connection has
-one active exchange. Reuse requires complete upload and complete response
-consumption, including chunk terminators and trailers. Connection: close,
-EOF-framed bodies, invalid framing, or abandoned bodies prevent reuse.
-Closing a client closes its pool and active exchanges. A pending pool wait
-may time out without affecting another exchange.
-
-get/post/request return as soon as response headers are available. HTTP 4xx
-and 5xx are normal Response values. request_stream runs a supervised producer
-concurrently with response reception; length -1 uses chunked, otherwise it is
-the exact byte length. Pass producer data through argument; no closures are
-needed. The producer can finish with trailers; otherwise successful return
-finishes automatically. An error Result aborts the exchange and appears on
-the request or a subsequent body read. Producer diagnostics terminate the
-evaluation with their original location.
-
-read accepts 1..1048576 bytes and returns progress, not an entire requested
-buffer. ok([]) means body EOF. text collects up to 1 MiB within one total
-deadline and decodes UTF-8 strictly. Decode arbitrary streamed chunks only
-after assembling complete characters. trailers requires completed consumption;
-close_body abandons an unread body. Header lookup is case-insensitive.
-Content encoding remains raw: there is no automatic gzip decompression.
-
-```text
-HTTP.listen(host: String, port: Int, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[Request, HttpWriter, Void], options: HttpServerOptions) -> Result[HttpServer]
-HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Void]
-HTTP.close_server(server: HttpServer) -> Void
-HTTP.begin(writer: HttpWriter, status: Int, headers: List[Header], length: Int, timeout_ms: Int) -> Result[Void]
-HTTP.write(writer: HttpWriter, text: String, timeout_ms: Int) -> Result[Void]
-HTTP.write_bytes(writer: HttpWriter, bytes: List[Int], timeout_ms: Int) -> Result[Void]
-HTTP.finish(writer: HttpWriter, trailers: List[Header], timeout_ms: Int) -> Result[Void]
-HTTP.respond(writer: HttpWriter, status: Int, headers: List[Header], text: String, timeout_ms: Int) -> Result[Void]
-```
-
-Connections run concurrently with independent evaluator contexts and one
-shared step budget. Each connection processes requests sequentially. begin
-starts a response with status 200..599; length -1 selects chunked. write and
-write_bytes flush each part, at most 1 MiB per call. Fixed lengths must match
-exactly. finish emits the final chunk/trailers or validates a fixed length.
-respond combines begin/write/finish for a UTF-8 string.
-
-HEAD suppresses response bytes; 204 and 304 have no response body. The server
-supports 100 Continue and rejects unsupported expectations. It finishes a
-valid response on handler return; a handler that never begins a response
-gets 500 and connection close. Unconsumed request bodies close the connection.
-Writers become inactive on handler/producer return. Coordinate ownership:
-immutable records do not make socket operations atomic across tasks.
-
-close_server stops acceptance, cancels handlers and nested tasks, closes all
-connections and wakes wait. It is idempotent. Main return and global failure
-also close services. An awaited task cancelled by resource shutdown reports
-RUNTIME-TASK-CANCELLED; intentional shutdown itself is not a global failure.
-BDD handlers must close services and finish tasks before returning.
-
-HTTP/1.1 supports fixed lengths, chunked transfer, trailers and informational
-responses. Ambiguous framing is rejected. Header limits are 64 KiB, 100
-entries and 8 KiB per line. Body limits apply incrementally. Protocol errors
-before dispatch affect only their connection; body read failures return Results.
-A handler's explicit unwrap failure remains a global diagnostic.
-HTTP/1.0, upgrades, proxies, automatic redirects/retries, cookie management and
-a dedicated SSE API are outside this phase.
+rejected. The HTTP calls are in "HTTP client (`std/http`)".
 
 ### Files and paths
 
@@ -1101,13 +1013,13 @@ absolute path and does not resolve symlinks.
 
 ### Builtin discovery and execution budget
 
-`Map.get` and `HTTP.client` select signatures by arity. Their text help lists all variants; JSON help contains `name`, `description`, `effects`, and `overloads`, whose entries describe each signature. Other builtin help keeps the single-signature JSON format.
+`Map.get` and `ok` select signatures by arity. Their text help lists all variants; JSON help contains `name`, `description`, `effects`, and `overloads`, whose entries describe each signature. Other builtin help keeps the single-signature JSON format.
 
 `agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
 
-Calls nest at most 10000 deep in each task; a deeper call is `RUNTIME-STACK-OVERFLOW` at the call. On the bytecode VM (`agentica-vm`), a tail call (`return f(...)`, a direct call to a user function) replaces the caller's frame and does not count toward this limit, so deep tail recursion runs there while the evaluator stops with `RUNTIME-STACK-OVERFLOW`.
+Calls nest at most 10000 deep in each task; a deeper call is `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)`, a direct call to a user function) replaces the caller's frame and does not count toward this limit, so deep tail recursion runs.
 
 
 ### Processes
@@ -1127,19 +1039,18 @@ Process.spawn_captured(command: String, args: List[String], dir: String, timeout
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
 ~~~
 
-- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks and HTTP callbacks. BDD step handlers can always launch programs, because `agentica test` runs every scenario's child VM with `--allow-run`; `agentica test --allow-run` only passes the flag on to the programs under test.
-- A command with no `/` is a bare name: it is looked up in each `PATH` entry in order. The working directory is never added: empty `PATH` entries are skipped, so a program in the current directory runs as `./name`, while an explicit relative entry such as `.` or `bin` resolves against the working directory, as in the shell. A command that contains `/` is a path, relative to the inherited working directory unless it is absolute. A name that is not found, or that names a directory, is "executable is unavailable". On Windows the evaluator also searches the current directory before `PATH`. Children inherit the environment. Arguments are passed directly without shell interpolation. Empty commands, NUL-containing arguments, and unavailable executables fail. On Windows only `.exe` and `.com` programs run; other files, such as batch files, fail. A file that is found but cannot be executed (no execute permission, a bad format) is an error Result from `spawn` on the VM; on the evaluator, spawn succeeds and the child writes the failure to stderr and exits with a nonzero code.
+- Launching requires agentica --allow-run file.agc. The flag defaults off and precedes the source file; later arguments reach System.args. The test command accepts it before or after the command. Checking and builtin help need no flag. Permission reaches tasks. BDD step handlers can always launch programs, because `agentica test` runs every scenario's child VM with `--allow-run`; `agentica test --allow-run` only passes the flag on to the programs under test.
+- A command with no `/` is a bare name: it is looked up in each `PATH` entry in order. The working directory is never added: empty `PATH` entries are skipped, so a program in the current directory runs as `./name`, while an explicit relative entry such as `.` or `bin` resolves against the working directory, as in the shell. A command that contains `/` is a path, relative to the inherited working directory unless it is absolute. A name that is not found, or that names a directory, is "executable is unavailable". Children inherit the environment. Arguments are passed directly without shell interpolation. Empty commands, NUL-containing arguments, and unavailable executables fail. On Windows only `.exe` and `.com` programs run; other files, such as batch files, fail. A file that is found but cannot be executed (no execute permission, a bad format) is an error Result from `spawn`.
 - Timeouts are positive milliseconds, including lock wait. Read and write locks are independent. A timeout after starting stream I/O kills and closes the child; timing out while waiting for its lock preserves it. Waiting for exit times out without terminating the child.
 - Sends accept at most 1048576 UTF-8 bytes or integers 0..255 and flush before succeeding. Invalid data consumes nothing. read_bytes accepts 0..1048576 and waits for that count or EOF: short/empty EOF succeeds, and zero consumes nothing.
 - read_line consumes a line of at most 1 MiB, strips LF/CRLF, and strictly decodes UTF-8. An unterminated final line succeeds; empty EOF is an error. Invalid UTF-8 consumes the completed line. An oversized line closes the child.
 - close_stdin flushes and closes input idempotently; further sends fail. wait returns the host exit code, including nonzero codes, and can be repeated. It preserves unread stdout and waits for stderr forwarding to finish.
 - Stderr streams separately to the evaluation's error port with a fixed-size buffer. Output has no lifetime cap. A child can block when stdout's pipe fills: use Task to read concurrently with sending or waiting.
 - Handles belong to their evaluation. close force-kills a running child, reaps it, closes owned ports/workers, and is idempotent. Other operations on closed handles fail. Main return, System.exit, diagnostics, task failures, step exhaustion, and external interruption also clean up directly spawned children. Arbitrary descendant trees are outside the cleanup guarantee. Borrowed ports remain open.
-- Operational failures return String error Results. Cross-evaluation access is RUNTIME-PROCESS-CONTEXT; explicit cleanup failures are RUNTIME-PROCESS-CLOSE, at the call span.
+- Operational failures return String error Results. Explicit cleanup failures are RUNTIME-PROCESS-CLOSE, at the call span.
 - Captured processes (VM only). `spawn_captured` works like `spawn` (same lookup, `--allow-run`, environment and cleanup) with three differences. The child starts in `dir`: `"."` keeps the working directory, a relative `dir` resolves against it, an empty `dir` or one with NUL is an error, and a `dir` that is not a directory is "directory is unavailable". The command still resolves against the program's working directory, not `dir`, so `spawn_captured("./sh", [], "/bin", t)` is "executable is unavailable". The VM reads the child's stdout and stderr all the time, so the child never blocks on a full pipe: stdout goes into a buffer that `read_line` and `read_bytes` read, stderr into its own buffer and never to the program's stderr. Past 1 MiB of unread stdout, or 1 MiB of stderr, that stream is marked truncated and further bytes are dropped. Once either stream is truncated, every stdout read returns `error("process: output exceeds 1048576 bytes")`: a read already waiting wakes with it, and `read_bytes(p, 0, t)` returns it at once, so a program can check for a stderr flood without waiting.
 - `output` waits until the child's stdout and stderr both end, then returns the builtin record `ProcessOutput(stdout: String, stderr: String, truncated: Bool)`: the stdout not read yet, all of stderr (invalid UTF-8 becomes U+FFFD), and whether either stream was truncated. It consumes nothing and can be called again. A timeout is `error("network: operation timed out")` and keeps the child; a process from `spawn` gives `error("process: output is not captured")`. `ProcessOutput` is reserved.
 - Closing a captured child (`close`, a stream timeout, the end of the run) sends `SIGTERM`, then `SIGKILL` after one second, so a child that is itself an Agentica program can stop its own children first. `close` and a timeout close the handle at once and never wait; the end of the run waits about one second at most for a captured child before it kills it. Children from `spawn` are still killed at once.
-- A program that calls `spawn_captured` or `output` runs only on the VM: where it would have to run on the legacy evaluator it stops with `LOWER-UNSUPPORTED` at that call.
 
 ## 7. Diagnostics for agents
 
@@ -1164,9 +1075,9 @@ unknown function "totl"
   = help: did you mean "total"?
 ```
 
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it. A program that falls back to the legacy evaluator (it uses `HTTP`) prints a one-line notice on stderr first in the plain and `--ai` modes, never in `--json` mode.
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text or as one JSON object. In `--json` mode the last line of stderr is the diagnostic; what the program itself wrote to stderr comes before it.
 
-The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running); the VM compiler stages use `LOWER-` and `BYTECODE-`. `LOWER-UNSUPPORTED` also means "needs the VM": a program that calls a VM-only builtin (such as `std/http` or `Process.spawn_captured`) but must run on the legacy evaluator stops with it at that call. Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
+The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running); the VM compiler stages use `LOWER-` and `BYTECODE-`. Each stage stops at the first error. The minimal cases to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
 Names and forms from other languages get a `help` that names the Agentica form. A method hint is given only when the suggested method exists for the receiver's type:
 
@@ -1195,7 +1106,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `Result.Some(x)` and other unknown Result variants | `Result.Ok(x)` / `ok(x)`, `Result.Err(m)` / `error(m)` |
 | `Color.Red` with no `Color` enum or import | `enum Color`, or `import "path" as Color` |
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
-| `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as Web`, then `Web.get`, `Web.post` or `Web.request` |
+| `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as HTTP`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
+| `HTTP.get(...)` or another `HTTP.` call without the import | `import "std/http" as HTTP` |
 
 Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
 
@@ -1270,7 +1182,7 @@ These statements are shown as function body fragments. At the top level they wou
 
 ## 9. Guide for whoever implements the prototype
 
-Implement the rules of sections 4–6 first. Keep the grammar, the AST, the checker, the evaluator, and the builtin functions independent. Do not generate host code without preserving the rules of Agentica: for example, `if 1` must be rejected even if the host accepts truthiness.
+Implement the rules of sections 4–6 first. Keep the grammar, the AST, the checker, the VM, and the builtin functions independent. Do not generate host code without preserving the rules of Agentica: for example, `if 1` must be rejected even if the host accepts truthiness.
 
 If a rule turns out to be too costly, change this specification and the examples explicitly before creating a silent exception. The goal is that any agent can consult a short document and predict the behavior of a program.
 

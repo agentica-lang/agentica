@@ -1,6 +1,6 @@
 # Diagnostics
 
-`CHECK-VOID-TYPE` rejects Void in a data type position; `CHECK-VOID-VALUE` rejects using completion as data. Process ownership and explicit cleanup diagnostics are `RUNTIME-PROCESS-CONTEXT` and `RUNTIME-PROCESS-CLOSE` at the call span. Expected process failures return error Results.
+`CHECK-VOID-TYPE` rejects Void in a data type position; `CHECK-VOID-VALUE` rejects using completion as data. A failed explicit cleanup of a process is `RUNTIME-PROCESS-CLOSE` at the call span. Expected process failures return error Results.
 
 A failure prints to stderr and exits 1 (the run stops at the first error):
 
@@ -60,7 +60,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
-| `RUNTIME-INVALID-DURATION`, `RUNTIME-TASK-CONTEXT`, `RUNTIME-TASK-CANCELLED` | negative `Task.sleep` duration, awaiting a task from another execution, awaiting work cancelled by shutdown (see `tasks.md`) |
-| `LOWER-UNSUPPORTED` | from `agentica compile`: the VM cannot run this yet. On a run it also means "needs the VM": the program calls something only the VM runs (`std/http`, `Process.spawn_captured`, `Process.output`, `Task.pending_count`) but must run on the legacy evaluator (it also uses `HTTP`, or it runs under `--legacy-eval`); exit 1 before anything runs. Keep `std/http` and `std/bdd` apart from `HTTP` builtins |
+| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration (see `tasks.md`) |
+| `LOWER-UNSUPPORTED` | the VM cannot run this form; exit 1 before anything runs. Every checked program runs on the VM today, so seeing it is an interpreter bug to report |
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and `RUNTIME-BDD-*` codes; see `bdd.md`.

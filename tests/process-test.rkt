@@ -1,9 +1,6 @@
 #lang racket
 
-(require (except-in rackunit check) racket/runtime-path racket/system json
-         "../src/lexer.rkt" "../src/parser.rkt" "../src/checker.rkt"
-         "../src/source.rkt" "../src/diagnostic.rkt" "../src/evaluator.rkt"
-         "../src/process.rkt" (submod "../src/process.rkt" test-support))
+(require (except-in rackunit check) racket/runtime-path racket/system json)
 
 (define-runtime-path peer "fixtures/process-peer.js")
 (define-runtime-path main-file "../src/main.rkt")
@@ -11,13 +8,6 @@
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
   (environment-variables-set! (current-environment-variables) name #f))
-
-(define (compile-program text)
-  (define tokens (lex (source "process.agc" text)))
-  (define parsed (if (diagnostic? tokens) tokens (parse tokens)))
-  (define checked (if (diagnostic? parsed) parsed (check parsed)))
-  (when (diagnostic? checked) (error 'process-test (format-diagnostic checked)))
-  checked)
 
 (define (spawn mode [extra ""])
   (format "  p = Result.unwrap!(Process.spawn(~s, [~s, ~s~a], 5000))\n"
@@ -27,17 +17,24 @@
   (string-append prefix "def main() -> Void\n" (spawn mode extra) body "\nend\n\n"))
 
 (define (run text #:allowed? [allowed? #t] #:limit [limit #f])
-  (define checked (compile-program text))
-  (define out (open-output-string))
-  (define err (open-output-string))
-  (define ready (make-channel))
-  (define worker
-    (thread (lambda ()
-              (channel-put ready (evaluate checked #:out out #:err err
-                                           #:allow-run allowed? #:max-steps limit)))))
-  (define result (sync/timeout 15 ready))
-  (unless result (kill-thread worker) (error 'process-test "execution timed out"))
-  (values result (get-output-string out) (get-output-string err)))
+  (define file (make-temporary-file "agentica-process~a.agc"))
+  (dynamic-wind
+    void
+    (lambda ()
+      (display-to-file text file #:exists 'truncate)
+      (match-define (list status out err)
+        (apply cli (append (if allowed? '("--allow-run") '()) '("--json")
+                           (if limit (list "--max-steps" (number->string limit)) '())
+                           (list (path->string file)))))
+      (define lines (string-split err "\n"))
+      (define problem
+        (and (pair? lines) (with-handlers ([exn:fail? (lambda (_) #f)]) (string->jsexpr (last lines)))))
+      (cond
+        [(zero? status) (values (void) out err)]
+        [(hash? problem) (values (string->symbol (hash-ref problem 'code)) out
+                                 (string-join (drop-right lines 1) "\n"))]
+        [else (values status out err)]))
+    (lambda () (delete-file file))))
 
 (define (output text [expected ""])
   (define-values (result out err) (run text))
@@ -58,8 +55,10 @@
   (dynamic-wind void
     (lambda ()
       (close-output-port in)
+      (define errors #f)
+      (define reader (thread (lambda () (set! errors (port->string err)))))
       (define text (port->string out))
-      (define errors (port->string err))
+      (thread-wait reader)
       (subprocess-wait child)
       (list (subprocess-status child) text errors))
     (lambda ()
@@ -68,29 +67,6 @@
       (close-input-port err))))
 
 (module+ test
-  (test-case "Windows runs only .exe and .com names"
-    (for ([name (in-list '("x.exe" "X.EXE" "dir\\x.Com" "C:\\Tools\\git.exe"))])
-      (check-true (windows-runnable-name? name) name))
-    (check-true (windows-runnable-name? (string->path "dir/x.Exe")))
-    (for ([name (in-list '("x.bat" "x.BAT" "x.Cmd" "x.bat." "x.bat " "x.bat. ." "dir/x.CMD"
-                           "dir\\x.bAt" "x.exe." "x.com " "x" "x.ps1" "x.bat::$DATA"
-                           "x.exe::$DATA" "x.bat:y.exe" "dir.exe\\x"))])
-      (check-false (windows-runnable-name? name) name)))
-  (test-case "failed and explicitly closed processes leave the active registry"
-    (define executable (path->string (find-executable-path "racket")))
-    (define counts '())
-    (define probe
-      (make-output-port 'probe always-evt
-                        (lambda (data start end non-block? breakable?)
-                          (set! counts (cons (hash-count (current-process-registry)) counts))
-                          (- end start))
-                        void))
-    (define text
-      (format "def main() -> Void\n  for i in [0, 1, 2]\n    failed = Process.spawn(\"/agentica-nonexistent-executable\", [], 1000)\n    puts(Result.ok?(failed))\n    p = Result.unwrap!(Process.spawn(~s, [\"--version\"], 5000))\n    Process.close(p)\n    Process.close(p)\n    puts(\"closed\")\n  end\nend\n\n" executable))
-    (define result (evaluate (compile-program text) #:allow-run #t #:out probe #:err (open-output-nowhere)))
-    (check-pred void? result)
-    (check-true (>= (length counts) 6))
-    (check-true (andmap zero? counts) (~s counts)))
   (cond
     [(not node)
      (if (getenv "CI") (error 'process-test "Node.js is required in CI")
@@ -151,21 +127,11 @@
            (check-equal? (hash-ref (string->jsexpr (cadr allowed)) 'passed) 2))
          (lambda () (delete-directory/files directory))))
 
-     (test-case "cross-evaluation process access reports its own located diagnostic"
-       (define p (evaluate
-         (compile-program (string-append "def get() -> Process\n" (spawn "hold")
-                                         "  return p\nend\n\ndef main() -> Void\nend\n\n"))
-         #:entrypoint "get" #:allow-run #t))
-       (define problem (evaluate
-         (compile-program "def take(p: Process) -> Void\n  Process.close(p)\nend\n\ndef main() -> Void\nend\n\n")
-         #:entrypoint "take" #:arguments (list p)))
-       (check-equal? (diagnostic-code problem) 'RUNTIME-PROCESS-CONTEXT)
-       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2))
      (test-case "permission, literal argv and inherited task capability"
        (define text (program "args" "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(Process.wait(p, 5000))"
                              "" ", \"a b;$x\", \"--allow-run\""))
        (define-values (denied out err) (run text #:allowed? #f))
-       (check-equal? (diagnostic-code denied) 'RUNTIME-UNWRAP-ERROR)
+       (check-equal? denied 'RUNTIME-UNWRAP-ERROR)
        (check-equal? out "")
        (check-equal? (output text) "[\"a b;$x\",\"--allow-run\"]\nok(0)\n"))
 
@@ -234,7 +200,7 @@
          "  IO.inspect(Result.ok?(Process.read_line(p, 5000)))\n  IO.inspect(Result.ok?(Process.wait(p, 1000)))"))
          "false\nfalse\n"))
 
-     (test-case "evaluation outcomes kill and reap children"
+     (test-case "every way a run ends kills and reaps its children"
        (for ([ending (in-list '("" "  System.exit(4)" "  x = 1 / 0"
                                 "  while true\n  end"
                                 "  task = Task.spawn(&crash, 0)\n  Task.sleep(60000)"))])
@@ -244,23 +210,5 @@
                 #:limit (and (string-contains? ending "while") 100)))
          (check-regexp-match #px"^[0-9]+\n$" out)
          (when (string-contains? ending "crash")
-           (check-equal? (diagnostic-code result) 'RUNTIME-DIVISION-BY-ZERO))
-         (check-false (alive? out)))
-       (define-values (input writer) (make-pipe))
-       (define-values (reader output-port) (make-pipe))
-       (define worker
-         (thread (lambda ()
-                   (evaluate (compile-program (program "hold"
-                     "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.flush()\n  s = IO.gets!()"))
-                     #:in input #:out output-port #:allow-run #t))))
-       (check-not-false (sync/timeout 5 reader))
-       (define pid (read-line reader))
-       (kill-thread worker)
-       (let loop ([attempts 30])
-         (when (and (positive? attempts) (alive? pid)) (sleep 0.05) (loop (sub1 attempts))))
-       (check-false (alive? pid))
-       (check-false (port-closed? output-port))
-       (close-output-port output-port)
-       (close-output-port writer)
-       (close-input-port input)
-       (close-input-port reader))]))
+           (check-equal? result 'RUNTIME-DIVISION-BY-ZERO))
+         (check-false (alive? out))))]))

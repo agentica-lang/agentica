@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HTTP" "HttpWire" "Time" "Random" "Range")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "Time" "Random" "Range")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -756,16 +756,6 @@
         (unless (result-type? type) (mismatch! '(Result T) type (node-span (car arguments))))
         type)
       (case (builtin-rule selected)
-        [(http-producer)
-         (for ([argument (in-list (take arguments 5))] [parameter (in-list (take parameters 5))])
-           (check-expression argument (cadr parameter)))
-         (define callback (check-expression (list-ref arguments 5) #f))
-         (unless (and (list? callback) (= (length callback) 4) (eq? (car callback) 'Fn)
-                      (equal? (caddr callback) 'HttpWriter) (equal? (cadddr callback) '(Result Void)))
-           (bail 'CHECK-TYPE-MISMATCH "producer must have type Fn[A, HttpWriter, Result[Void]]"
-                 (node-span (list-ref arguments 5))))
-         (check-expression (list-ref arguments 6) (cadr callback))
-         '(Result (Struct "Response"))]
         [(task-spawn)
          (define callback (check-expression (car arguments) #f))
          (unless (and (list? callback) (= (length callback) 3) (eq? (car callback) 'Fn))
@@ -976,6 +966,7 @@
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
                          (and (string-prefix? name "BDD.") "import \"std/bdd\" as BDD")
+                         (and (string-prefix? name "HTTP.") "import \"std/http\" as HTTP")
                          (did-you-mean name (hash-keys functions) #:shared (public-builtin-names)))))
       (define parameter-types (car entry))
       (define result-type (cadr entry))

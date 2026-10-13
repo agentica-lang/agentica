@@ -1,11 +1,11 @@
 ## 2. Reference behavior (today's VM)
 
-These rules come from the Racket sources, not only from the grammar. The
+These rules came from the Racket sources (the evaluator and its runtime modules, deleted in 7i; the file names in the headings below are historical), not only from the grammar. The
 differential tests (section 12) check only what black-box parity needs
 (exit code, stdout, program stderr, diagnostic code); messages, spans and step counts below
 describe the VM today and may change (1).
 
-### 2.1 Steps (`task-step!` in `src/task.rkt`, `step!` in `src/evaluator.rkt`)
+### 2.1 Steps (formerly `task-step!` in `src/task.rkt`, `step!` in `src/evaluator.rkt`)
 
 - One step is charged when each statement starts (`exec-statement`) and when
   each expression starts (`eval-step-expression`), before its children run.
@@ -252,8 +252,7 @@ fails when the committed file differs from what the generator prints.
   `{k: v}` in insertion order, `Name(f: v, ...)` in declaration order,
   `Enum.Variant` or `Enum.Variant(a, b)`, `ok(v)`, `ok()` for Void,
   `error("msg")`, `<Json>`, `<Fn>`, `<Task>`, `<Socket>`, `<Listener>`,
-  `<HttpClient>`, `<HttpServer>`, `<HttpBody>`, `<HttpWriter>`,
-  `<FileHandle>`, `<Process>`.
+  `<HttpClient>`, `<FileHandle>`, `<Process>`.
 - A list prints its items in debug form even in the text form:
   `puts(["a"])` prints `["a"]`. Only a String at the top is printed raw.
 - Struct and enum names in the tables are display names: the bytecode
@@ -318,7 +317,7 @@ fails when the committed file differs from what the generator prints.
 - `RUNTIME-INTERNAL` is at the program span. Its message text is not part of
   the contract and not compared.
 
-### 2.6 JSON parsing (`read-json-value` in `src/json.rkt`)
+### 2.6 JSON parsing (formerly `read-json-value` in `src/json.rkt`)
 
 - A first pass over the text rejects a raw character below U+0020 inside a
   string with `unescaped control character in a JSON string`. DEL (U+007F)
@@ -361,7 +360,7 @@ fails when the committed file differs from what the generator prints.
   (`symbol<?` on the UTF-8 text) with a stable merge sort, and the last of
   equal keys is kept.
 
-### 2.7 Typed JSON (`src/json-typed.rkt`)
+### 2.7 Typed JSON (formerly `src/json-typed.rkt`)
 
 - `JSON.decode(s, T)` parses `s` like `JSON.parse` (a parse failure is the
   same error value with the `JSON.parse: ` prefix), then walks the target
@@ -390,7 +389,7 @@ fails when the committed file differs from what the generator prints.
   back). Neither recurses, so a
   recursive struct and a deep value are safe (7.3).
 
-### 2.8 Files and paths (`src/filesystem.rkt`)
+### 2.8 Files and paths (formerly `src/filesystem.rkt`)
 
 Every failure is an error value. Its text started as the evaluator's (Racket's
 own messages included, where the evaluator lets them through); error strings

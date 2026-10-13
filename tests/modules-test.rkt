@@ -1,8 +1,8 @@
 #lang racket
 
 (require (except-in rackunit check) racket/runtime-path json
-         "../src/modules.rkt" "../src/checker.rkt" "../src/evaluator.rkt"
-         "../src/diagnostic.rkt" "../src/source.rkt")
+         "../src/modules.rkt" "../src/checker.rkt"
+         "../src/diagnostic.rkt" "../src/source.rkt" "cli-in-process.rkt")
 
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path example "../examples/json-modules.agc")
@@ -25,12 +25,21 @@
   (define linked (load-program path))
   (if (diagnostic? linked) linked (check linked)))
 
-(define (run path #:max-steps [steps #f])
+(define (run-with-errors path #:max-steps [steps #f])
   (define program (checked path))
   (when (diagnostic? program) (error 'modules-test "~a" (format-diagnostic program)))
-  (define out (open-output-string))
-  (define result (evaluate program #:out out #:max-steps steps))
-  (values (get-output-string out) result))
+  (define result
+    (apply run-main-in-process
+           (append '("--json") (if steps (list "--max-steps" (number->string steps)) '())
+                   (list (path->string path)))))
+  (define errors (third result))
+  (values (second result)
+          (if (zero? (first result)) (void) (string->jsexpr (last (string-split errors "\n"))))
+          errors))
+
+(define (run path #:max-steps [steps #f])
+  (define-values (out result errors) (run-with-errors path #:max-steps steps))
+  (values out result))
 
 (module+ test
   (test-case "methods work on values whose types come from another file"
@@ -172,14 +181,12 @@
        ("b.agc" . "export struct Point\n  y: Int\nend\n\n")
        ("root.agc" . "import \"a\" as A\nimport \"b\" as B\n\nstruct Both\n  a: A.Point\n  b: B.Point\nend\n\ndef main() -> Void\n  A.show()\n  p = A.Point(x: 3)\n  puts(p)\n  puts(B.Point(y: 4).inspect)\n  puts([A.Shape.Dot(p)].to_s)\n  puts({\"k\": ok(A.Shape.Empty)})\n  IO.warn(p)\n  IO.warn(JSON.schema(Both))\nend\n\n"))
      (lambda (directory)
-       (define program (checked (build-path directory "root.agc")))
-       (define out (open-output-string))
-       (define err (open-output-string))
-       (check-equal? (evaluate program #:out out #:err err) (void))
-       (check-equal? (get-output-string out)
+       (define-values (out result err) (run-with-errors (build-path directory "root.agc")))
+       (check-equal? result (void))
+       (check-equal? out
                      (string-append "Point(x: 2) Shape.Empty\nPoint(x: 3)\nPoint(y: 4)\n"
                                     "[Shape.Dot(Point(x: 3))]\n{\"k\": ok(Shape.Empty)}\n"))
-       (define warnings (string-split (get-output-string err) "\n"))
+       (define warnings (string-split err "\n"))
        (check-equal? (car warnings) "Point(x: 3)")
        (check-equal? (hash-count (hash-ref (string->jsexpr (cadr warnings)) '$defs)) 2)))
     (with-files
@@ -310,10 +317,9 @@
        ("a.agc" . "export def fail(n: Int) -> Int\n  return 1 / n\nend\n\n"))
      (lambda (directory)
        (define-values (out problem) (run (build-path directory "root.agc")))
-       (check-equal? (diagnostic-code problem) 'RUNTIME-DIVISION-BY-ZERO)
-       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
-       (check-equal? (source-name (source-span-source (diagnostic-span problem)))
-                     (path->string (build-path directory "a.agc"))))))
+       (check-equal? (hash-ref problem 'code) "RUNTIME-DIVISION-BY-ZERO")
+       (check-equal? (hash-ref (hash-ref (hash-ref problem 'range) 'start) 'line) 2)
+       (check-equal? (hash-ref problem 'file) (path->string (build-path directory "a.agc"))))))
 
   (test-case "imported task callbacks keep the execution budget"
     (with-files
@@ -324,7 +330,7 @@
        (check-equal? out "100\n")
        (check-equal? result (void))
        (define-values (limited-out problem) (run (build-path directory "root.agc") #:max-steps 30))
-       (check-equal? (diagnostic-code problem) 'RUNTIME-STEP-LIMIT))))
+       (check-equal? (hash-ref problem 'code) "RUNTIME-STEP-LIMIT"))))
 
   (test-case "a BDD step program imports its handlers, which share std/bdd"
     (with-files
@@ -402,12 +408,12 @@
                        (path->string (build-path directory (car entry))))
          (check-regexp-match #rx"import \"std/http\"" (diagnostic-help problem)))))
     (with-files
-     '(("root.agc" . "import \"std/http\" as Web\ndef main() -> Void\n  Web.close_client(Result.unwrap!(Web.client(Web.client_options())))\nend\n\n"))
+     '(("root.agc" . "import \"std/http\" as HTTP\ndef main() -> Void\n  HTTP.close_client(Result.unwrap!(HTTP.client(HTTP.client_options())))\nend\n\n"))
      (lambda (directory)
        (check-false (diagnostic? (checked (build-path directory "root.agc"))))))
-    (for ([body '("  x = HttpWir.client(1)\n" "  x = close_clien(1)\n" "  x = Web.exchang(1)\n")])
+    (for ([body '("  x = HttpWir.client(1)\n" "  x = close_clien(1)\n" "  x = HTTP.exchang(1)\n")])
       (with-files
-       (list (cons "root.agc" (string-append "import \"std/http\" as Web\ndef main() -> Void\n" body "end\n\n")))
+       (list (cons "root.agc" (string-append "import \"std/http\" as HTTP\ndef main() -> Void\n" body "end\n\n")))
        (lambda (directory)
          (define problem (checked (build-path directory "root.agc")))
          (check-true (diagnostic? problem) body)

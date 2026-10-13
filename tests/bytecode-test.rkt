@@ -37,27 +37,11 @@
   (list (subprocess-status process) stdout-text stderr-text))
 
 (module+ test
-  (test-case "every builtin outside HTTP runs on the VM"
-    (define fallback-modules '("HTTP"))
+  (test-case "every builtin runs on the VM"
     (for* ([entry (in-hash-values builtins)]
            [variant (in-list (cons entry (builtin-alternatives entry)))])
       (define key (builtin-implementation variant))
-      (define module (car (string-split key ".")))
-      (unless (member module fallback-modules)
-        (check-not-false (member key vm-builtins) (format "~a is not in vm-builtins" key)))))
-
-  (test-case "the evaluator paths refuse the VM-only process and task builtins at their call"
-    (define (refused-at text)
-      (define checked (check (parse (lex (source "test.agc" text)))))
-      (when (diagnostic? checked) (error 'bytecode-test "~a" (format-diagnostic checked)))
-      (define problem (check-vm-only checked "test"))
-      (check-equal? (diagnostic-code problem) 'LOWER-UNSUPPORTED)
-      (define start (source-span-start (diagnostic-span problem)))
-      (list (source-position-line start) (source-position-column start)))
-    (check-equal? (refused-at "def main() -> Void\n  p = Process.spawn_captured(\"sh\", [], \".\", 1)\nend\n") '(2 7))
-    (check-equal? (refused-at "def show(p: Process) -> Void\n  puts(Process.output(p, 1))\nend\n\ndef main() -> Void\nend\n")
-                  '(2 8))
-    (check-equal? (refused-at "def main() -> Void\n  puts(Task.pending_count())\nend\n") '(2 8)))
+      (check-not-false (member key vm-builtins) (format "~a is not in vm-builtins" key))))
 
   (test-case "adjacent steps merge into one STEP with one span each"
     (define program (ir->bytecode (lower-text "def main() -> Void\n  puts(\"hi\")\nend\n")))
@@ -153,32 +137,6 @@
                   (for/list ([op (in-list opcodes)])
                     (string-replace (string-upcase (symbol->string op)) "-" "_"))))
 
-  (test-case "lowering rejects programs outside the VM subset"
-    (define (unsupported-at text)
-      (define problem (lower-text text))
-      (check-true (diagnostic? problem))
-      (check-equal? (diagnostic-code problem) 'LOWER-UNSUPPORTED)
-      (define start (source-span-start (diagnostic-span problem)))
-      (list (source-position-line start) (source-position-column start)))
-    (check-equal? (unsupported-at "def main() -> Void\n  ages = {\"Ana\": HttpServerOptions(header_timeout_ms: 1, idle_timeout_ms: 1, max_connections: 1, max_body_bytes: 1)}\n  puts(ages)\nend\n") '(2 10))
-    (check-equal? (unsupported-at "def main() -> Void\n  for m in [HttpServerOptions(header_timeout_ms: 1, idle_timeout_ms: 1, max_connections: 1, max_body_bytes: 1)]\n    puts(m)\n  end\nend\n") '(2 12))
-    (check-equal? (unsupported-at "def show(xs: HttpServerOptions) -> Void\n  print(xs)\nend\n\ndef main() -> Void\nend\n")
-                  '(2 9))
-    (check-equal? (unsupported-at "def show(xs: List[HttpServerOptions]) -> Void\n  puts(\"#{xs}\")\nend\n\ndef main() -> Void\nend\n")
-                  '(2 11))
-    (check-equal? (unsupported-at "def get(m: Map[String, HttpServerOptions]) -> HttpServerOptions\n  return m[\"a\"]\nend\n\ndef main() -> Void\nend\n")
-                  '(2 10))
-    (check-equal? (unsupported-at "def main() -> Void\n  puts(JSON.schema(HttpServerOptions))\nend\n") '(2 20))
-    (check-equal? (unsupported-at "def main() -> Void\n  r = JSON.decode(\"{}\", HttpServerOptions)\nend\n") '(2 7))
-    (check-equal? (unsupported-at "struct Wrap\n  h: HttpServerOptions\n  n: Int\nend\n\ndef main() -> Void\n  puts(JSON.schema(Wrap))\nend\n") '(7 20))
-    (check-equal? (unsupported-at "struct Wrap\n  h: HttpServerOptions\n  n: Int\nend\n\ndef main() -> Void\n  r = JSON.decode(\"{}\", Wrap)\nend\n") '(7 25))
-    (check-equal? (unsupported-at "def main() -> Void\n  c = HTTP.client_options()\nend\n") '(2 7))
-    (check-equal? (unsupported-at "def main() -> Void\n  h = HttpServerOptions(header_timeout_ms: 1, idle_timeout_ms: 1, max_connections: 1, max_body_bytes: 1)\nend\n") '(2 7))
-    (check-equal? (unsupported-at "struct S\n  j: HttpServerOptions\nend\n\ndef main() -> Void\n  s = S(j: HttpServerOptions(header_timeout_ms: 1, idle_timeout_ms: 1, max_connections: 1, max_body_bytes: 1))\nend\n")
-                  '(6 12))
-    (check-equal? (unsupported-at "def f(r: Result[HttpServerOptions]) -> Void\n  case r\n    ok(v) -> puts(v)\n    error(m) -> puts(m)\n  end\nend\n\ndef main() -> Void\nend\n")
-                  '(2 8)))
-
   (test-case "JSON field types are written only for programs that use them, up to 1024 nested levels"
     (define (nested n) (string-append (string-append* (make-list n "List[")) "Int" (make-string n #\])))
     (define (program n use?)
@@ -190,16 +148,17 @@
     (define plain (ir->bytecode (lower-text (program 1025 #f))))
     (check-equal? (vector-length (bc-program-types plain)) 0))
 
-  (test-case "compile exits 1 on unsupported code and 2 on an unwritable output"
+  (test-case "compile exits 1 on a diagnostic and 2 on an unwritable output"
     (define work (make-temporary-directory "agentica-compile~a"))
     (dynamic-wind
       void
       (lambda ()
-        (define unsupported (path->string (build-path work "file.agc")))
-        (display-to-file "def main() -> Void\n  c = HTTP.client_options()\nend\n" unsupported)
-        (define rejected (cli "compile" unsupported "-o" (path->string (build-path work "out.agcb"))))
+        (define rejected-file (path->string (build-path work "file.agc")))
+        (display-to-file "def main() -> Void\n  c = HTTP.client_options()\nend\n" rejected-file)
+        (define rejected (cli "compile" rejected-file "-o" (path->string (build-path work "out.agcb"))))
         (check-equal? (first rejected) 1)
-        (check-true (string-contains? (third rejected) "error[LOWER-UNSUPPORTED]"))
+        (check-true (string-contains? (third rejected) "error[CHECK-UNKNOWN-NAME]"))
+        (check-false (file-exists? (build-path work "out.agcb")))
         (define supported (path->string (build-path work "hello.agc")))
         (display-to-file "def main() -> Void\n  puts(\"hi\")\nend\n" supported)
         (define unwritable (cli "compile" supported "-o" (path->string (build-path work "missing" "out.agcb"))))

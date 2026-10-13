@@ -135,15 +135,25 @@
       (check-equal? (check-code (format "struct ~a\nend\n\ndef main() -> Void\nend\n\n" name))
                     'CHECK-REDEFINED-NAME)))
 
-  (test-case "network handles are opaque and HTTP records and callbacks are checked"
-    (check-ok (string-append
-               "def handler(request: Request, writer: HttpWriter) -> Void\n  HTTP.respond(writer, 200, [], request.path, 1000)\nend\n\n"
-               (main-with "  options: HttpServerOptions = HTTP.server_options()\n  server: Result[HttpServer] = HTTP.listen(\"127.0.0.1\", 0, &handler, options)")))
+  (test-case "network handles are opaque and HTTP records are checked"
     (for ([entry '(("  socket = Socket()" CHECK-UNKNOWN-TYPE)
-                   ("  response = Result.unwrap!(HTTP.get(Result.unwrap!(HTTP.client()), \"http://localhost\"))\n  text: String = response.body" CHECK-TYPE-MISMATCH)
-                   ("  client = Result.unwrap!(HTTP.client())\n  JSON.encode(client)" CHECK-NOT-ENCODABLE)
+                   ("  response = HttpResponse(status: 200, headers: [], body: 1)" CHECK-TYPE-MISMATCH)
                    ("  header = Header(name: \"x\", value: 1)" CHECK-TYPE-MISMATCH))])
-      (check-equal? (check-code (main-with (car entry))) (cadr entry))))
+      (check-equal? (check-code (main-with (car entry))) (cadr entry)))
+    (check-equal? (check-code (string-append "def f(c: HttpClient) -> Void\n  JSON.encode(c)\nend\n\n" (main-with "")))
+                  'CHECK-NOT-ENCODABLE))
+  (test-case "task types reject invalid programs at their boundaries"
+    (define prefix "def identity(n: Int) -> Int\n  return n\nend\n\n")
+    (for ([entry '(("Task.spawn(&identity, \"x\")" CHECK-TYPE-MISMATCH)
+                   ("Task.spawn(7, 0)" CHECK-TYPE-MISMATCH)
+                   ("Task.await(7)" CHECK-TYPE-MISMATCH)
+                   ("t: Task[String] = Task.spawn(&identity, 7)" CHECK-TYPE-MISMATCH)
+                   ("t: Task = Task.spawn(&identity, 7)" CHECK-UNKNOWN-TYPE)
+                   ("Task.spawn(&main, nil)" CHECK-TYPE-MISMATCH)
+                   ("JSON.encode(Task.spawn(&identity, 0))" CHECK-NOT-ENCODABLE)
+                   ("t = Task.spawn(&identity, 0)\n  t == t" CHECK-TYPE-MISMATCH))])
+      (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry)))
+    (check-equal? (check-code "struct Task\n  n: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
   (test-case "function values check references, parameters and returns"
     (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n\n")
     (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))
@@ -155,10 +165,13 @@
                    ("  value = 1.call()" CHECK-TYPE-MISMATCH)
                    ("  text = JSON.encode(&double)" CHECK-NOT-ENCODABLE))])
       (check-equal? (check-code (string-append prefix (main-with (car entry)))) (cadr entry))))
-  (test-case "a BDD call without its import points to std/bdd"
-    (define problem (check-text (main-with "  BDD.run([])")))
-    (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-NAME)
-    (check-regexp-match #rx"import \"std/bdd\" as BDD" (diagnostic-help problem)))
+  (test-case "a BDD or HTTP call without its import points to its std/ module"
+    (for ([entry '(("  BDD.run([])" #rx"import \"std/bdd\" as BDD")
+                   ("  c = HTTP.client_options()" #rx"import \"std/http\" as HTTP"))])
+      (define problem (check-text (main-with (car entry))))
+      (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-NAME)
+      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 2)
+      (check-regexp-match (cadr entry) (diagnostic-help problem))))
   (test-case "the section 8 programs pass"
     (check-ok "def main() -> Void\n  puts(\"hello\")\nend\n\n")
     (check-ok (string-append

@@ -1,6 +1,6 @@
 # Builtin functions
 
-`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `Range`, `IO`, `System`, `Json`, `JSON`, `Fn`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, `HTTP`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
+`puts(value)` writes any value with `to_s` (see the methods section of `SKILL.md`) and a newline; `print` writes it without one. Strings print as is. `gets` / `gets!` are `IO.gets` / `IO.gets!` and may drop their parentheses: `line = gets!.strip`. They cannot name variables or parameters. The names `puts`, `print`, `gets`, `Int`, `Float`, `Bool`, `String`, `Nil`, `Void`, `Process`, `List`, `Map`, `Result`, `Range`, `IO`, `System`, `Json`, `JSON`, `Fn`, `Task`, `File`, `Dir`, `Path`, `TCP`, `TLS`, and the builtin types in the Types table of `SKILL.md` are reserved. `ok` and `error` cannot be user function, local, parameter, loop-variable, or field declarations; they remain ordinary name tokens for calls.
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
@@ -91,7 +91,7 @@ Random.float() -> Float                       # uniform in 0.0 up to, not includ
 
 - A `?` or `!` suffix belongs to a function name regardless of whitespace before `(`: `String.contains? (a, b)`. `!` followed by `=` is not a suffix (`a!=b` means `a != b`). Variables, parameters, and fields cannot have these suffixes. By convention `?` means Bool and `!` halts on failure.
 - Build lists with literals or `List.append`/`List.repeat`; update them with `List.set`. Concatenate lists with `List.concat`. To change a map, use `Map.put`/`Map.delete`; these operations leave the original unchanged.
-- Map lookup, `Map.has_key?`, and `Map.put` use Racket immutable hashes and are effectively constant-time in map size (technically O(log n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
+- Map lookup, `Map.has_key?`, and `Map.put` use the VM's persistent map (a 32-way HAMT) and are effectively constant-time in map size (technically O(log32 n), excluding key hashing/comparison). `Map.size` is O(1); `Map.keys` is O(n). Updates share unchanged storage rather than copying the whole map.
 - Reading a missing map key, an index outside `0 .. length - 1`, or a bad `String.slice` range is a runtime error.
 - `String.index_of` and `String.at` count Unicode characters, like `String.length`. Use `String.code`/`String.from_code` for character arithmetic, and `Float.from_int`/`Float.to_int` to mix Int and Float; arithmetic never converts implicitly.
 
@@ -113,7 +113,7 @@ All collection updates preserve their inputs. `List.append`, `List.set`, and `Li
 
 `n.times do |i| ... end` runs with `0` to `n - 1`; `a.upto(b) do |i| ... end` and `a.downto(b) do |i| ... end` count up or down, both ends included. They return `Void`. A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
 
-`agentica help Map.get` and `agentica help HTTP.client` show their signatures. Their JSON help contains `overloads`, with one entry per arity. Other builtin JSON help retains the single-signature format.
+`agentica help Map.get` and `agentica help ok` show their signatures. Their JSON help contains `overloads`, with one entry per arity. Other builtin JSON help retains the single-signature format.
 
 ## Counted input and flushing
 
