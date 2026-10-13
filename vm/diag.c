@@ -1,5 +1,6 @@
 #include "agc.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 typedef struct {
@@ -46,9 +47,11 @@ static void put_json(FILE *err, const char *text, size_t len) {
   fputc('"', err);
 }
 
+static const char in_task[] = " in a task";
+
 static bool trimmed(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r'; }
 
-static void print_json(FILE *err, const agc_program *p, const agc_outcome *outcome) {
+static void print_json(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_string *name = p->sources[span->source].name;
   fputs("{\"code\":", err);
@@ -57,18 +60,18 @@ static void print_json(FILE *err, const agc_program *p, const agc_outcome *outco
   put_json(err, name->data, name->bytes);
   fputs(",\"message\":", err);
   put_json(err, outcome->message, outcome->message_len);
-  fprintf(err, ",\"range\":{\"end\":{\"column\":%u,\"line\":%u},\"start\":{\"column\":%u,\"line\":%u}}}\n",
+  fprintf(err, ",\"range\":{\"end\":{\"column\":%u,\"line\":%u},\"start\":{\"column\":%u,\"line\":%u}}%s}\n",
           (unsigned)span->end_column, (unsigned)span->end_line, (unsigned)span->start_column,
-          (unsigned)span->start_line);
+          (unsigned)span->start_line, task ? ",\"task\":true" : "");
 }
 
-static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome) {
+static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_source *source = &p->sources[span->source];
   source_line l = line_of(source, span->start_line);
   while (l.start < l.end && trimmed(l.text[l.start])) l.start++;
   while (l.end > l.start && trimmed(l.text[l.end - 1])) l.end--;
-  fprintf(err, "check failed: 1 error\n\n[%s]\n  message: ", outcome->code);
+  fprintf(err, "check failed: 1 error\n\n[%s]%s\n  message: ", outcome->code, task ? in_task : "");
   put_text(err, outcome->message, outcome->message_len);
   fputs("\n  at: ", err);
   put_text(err, source->name->data, source->name->bytes);
@@ -77,7 +80,7 @@ static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome
   fputc('\n', err);
 }
 
-static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outcome) {
+static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
   const agc_span *span = &p->spans[outcome->span];
   const agc_source *source = &p->sources[span->source];
   uint32_t line = span->start_line;
@@ -90,7 +93,7 @@ static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outc
   int gutter = snprintf(NULL, 0, "%u", (unsigned)line);
 
   put_text(err, source->name->data, source->name->bytes);
-  fprintf(err, ":%u:%u error[%s]\n", (unsigned)line, (unsigned)column, outcome->code);
+  fprintf(err, ":%u:%u error[%s]%s\n", (unsigned)line, (unsigned)column, outcome->code, task ? in_task : "");
   put_text(err, outcome->message, outcome->message_len);
   fprintf(err, "\n\n%u | ", (unsigned)line);
   put_text(err, l.text + l.start, l.end - l.start);
@@ -108,12 +111,50 @@ static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outc
   fputc('\n', err);
 }
 
-void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *outcome, agc_style style) {
+void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *outcome, agc_style style, bool task) {
   if (style == AGC_STYLE_JSON)
-    print_json(err, p, outcome);
+    print_json(err, p, outcome, task);
   else if (style == AGC_STYLE_AI)
-    print_ai(err, p, outcome);
+    print_ai(err, p, outcome, task);
   else
-    print_plain(err, p, outcome);
+    print_plain(err, p, outcome, task);
+  fflush(err);
+}
+
+agc_string *agc_crash_text(const agc_program *p, const agc_outcome *outcome) {
+  const agc_span *span = &p->spans[outcome->span];
+  const agc_string *name = p->sources[span->source].name;
+  char at[48];
+  int n = snprintf(at, sizeof at, ":%u:%u: ", (unsigned)span->start_line, (unsigned)span->start_column);
+  static const char head[] = "task crashed: ", mid[] = " at ";
+  size_t code = strlen(outcome->code);
+  size_t len = agc_size_add(agc_size_add(sizeof head - 1 + code + sizeof mid - 1, name->bytes),
+                            agc_size_add((size_t)n, outcome->message_len));
+  char *text = agc_alloc_atomic(len);
+  char *put = text;
+  memcpy(put, head, sizeof head - 1);
+  put += sizeof head - 1;
+  memcpy(put, outcome->code, code);
+  put += code;
+  memcpy(put, mid, sizeof mid - 1);
+  put += sizeof mid - 1;
+  if (name->bytes) memcpy(put, name->data, name->bytes);
+  put += name->bytes;
+  memcpy(put, at, (size_t)n);
+  put += n;
+  if (outcome->message_len) memcpy(put, outcome->message, outcome->message_len);
+  return agc_utf8_decode((const uint8_t *)text, len, "\xEF\xBF\xBD", false);
+}
+
+void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style) {
+  if (style == AGC_STYLE_JSON) {
+    fprintf(err, "{\"unobserved_crashes\":%" PRIu64 ",\"first\":", count);
+    put_json(err, first->data, first->bytes);
+    fputs("}\n", err);
+  } else {
+    fprintf(err, "%" PRIu64 " task %s not observed; first: ", count, count == 1 ? "crash was" : "crashes were");
+    put_text(err, first->data, first->bytes);
+    fputc('\n', err);
+  }
   fflush(err);
 }

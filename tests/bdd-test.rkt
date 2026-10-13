@@ -110,7 +110,7 @@
                                         "      done = tasks.map do |task| Task.await(task) end\n"
                                         "      BDD.set(ctx, \"1\", JSON.from(done.size))\n    end")
                          "BDD.step(\"tasks are pending\") do |ctx, args|\n      task = Task.spawn(&wait, 0)\n      ctx\n    end"
-                         "BDD.step(\"a task crashes\") do |ctx, args|\n      task = Task.spawn(&crash, 0)\n      Task.sleep(60000)\n      ctx\n    end"
+                         "BDD.step(\"a task crashes\") do |ctx, args|\n      task = Task.spawn(&crash, 0)\n      Task.sleep(0)\n      ctx\n    end"
                          "BDD.step(\"later works\") do |ctx, args| BDD.assert(ctx, not BDD.get(ctx, \"1\").ok?, \"state leaked\") end")))
        ("early.agc" . ,(steps-program
                         "def wait(n: Int) -> Int\n  Task.sleep(60000)\n  return n\nend\n"
@@ -119,7 +119,8 @@
        (match-define (list status report) (json-test (in directory "tasks.feature") "--steps" (in directory "steps.agc")))
        (check-equal? status 1)
        (check-equal? (map (lambda (item) (hash-ref item 'status)) (cases report)) '("passed" "failed" "failed" "passed"))
-       (check-equal? (map code-of (take (cdr (cases report)) 2)) '("RUNTIME-BDD-PENDING-TASKS" "RUNTIME-DIVISION-BY-ZERO"))
+       (check-equal? (map code-of (take (cdr (cases report)) 2)) '("RUNTIME-BDD-PENDING-TASKS" "RUNTIME-TASK-CRASHED"))
+       (check-true (string-contains? (hash-ref (hash-ref (caddr (cases report)) 'error) 'message) "RUNTIME-DIVISION-BY-ZERO"))
        (match-define (list _ early) (json-test (in directory "tasks.feature") "--steps" (in directory "early.agc")))
        (check-equal? (hash-ref (file-error early) 'code) "RUNTIME-BDD-PENDING-TASKS")
        (check-equal? (cases early) '()))))

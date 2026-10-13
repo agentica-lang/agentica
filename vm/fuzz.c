@@ -34,7 +34,7 @@ int agc_fuzz_one(const uint8_t *data, size_t len) {
   agc_outcome outcome = agc_vm_run(vm);
   if (outcome.kind == AGC_FAILED)
     for (int style = AGC_STYLE_PLAIN; style <= AGC_STYLE_JSON; style++)
-      agc_print_diagnostic(sink, program, &outcome, (agc_style)style);
+      agc_print_diagnostic(sink, program, &outcome, (agc_style)style, false);
   agc_io_close(vm);
   agc_release_all();
   return 1;

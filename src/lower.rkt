@@ -182,7 +182,8 @@
                       "TCP.send" "TCP.send_bytes" "TCP.recv_bytes" "TCP.read_line" "TCP.close"
                       "TLS.connect" "TLS.listen"
                       "HttpWire.client" "HttpWire.exchange" "HttpWire.close_client"
-                      "Process.spawn_captured" "Process.output" "Task.pending_count"))
+                      "Process.spawn_captured" "Process.output" "Task.pending_count"
+                      "Task.await_result" "Task.unobserved_crash"))
 
 (define (walk-ast node visit)
   (define seen (make-hasheq))
@@ -657,7 +658,10 @@
     (define arguments (call-args expression))
     (define span (call-span expression))
     (define entry (builtin-ref name (length arguments)))
-    (define key (and entry (builtin-implementation entry)))
+    (define implementation (and entry (builtin-implementation entry)))
+    (define key (if (and (equal? implementation "Task.await") (result-type? (type-of expression)))
+                    "Task.await_result"
+                    implementation))
     (define builtin? (and key (member key vm-builtins) #t))
     (when (and entry (not builtin?))
       (unsupported (format "the builtin ~a" name) span))

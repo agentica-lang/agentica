@@ -119,7 +119,9 @@ next step of the scenario gets the context the step returned.
 Every `Then` step must make at least one check with a `BDD` function.
 
 Each scenario runs in its own process, so a step that crashes, calls
-`System.exit` or loops forever fails only its scenario. `main` runs again for
+`System.exit` or loops forever fails only its scenario. Tasks a step starts
+must end before it returns (`RUNTIME-BDD-PENDING-TASKS`), and a task that
+crashed without being awaited fails the step with `RUNTIME-TASK-CRASHED`. `main` runs again for
 each scenario: it should only build the list of steps and call `BDD.run`.
 Run on its own, a step program only prints how to run it and exits with
 code 2. Steps can import other files and start other programs with

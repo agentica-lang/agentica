@@ -1,6 +1,6 @@
 ## 37. Task crash isolation
 
-**Status:** planned (roadmap [phase 24](../roadmap/24-task-crash-isolation.md), order in §37.9). The semantics below are a proposal for the owner to review.
+**Status:** done in roadmap [phase 24](../roadmap/24-task-crash-isolation.md) (order in §37.9), except `close_server` (20c), channels (17b) and `Test.run` (§36), which come with their phases. The fuzzer mode of §37.8 was dropped by the owner.
 
 In the style of Erlang: a runtime error in a task other than `main` ends only that task. Its awaiters get an error `Result`, its descendants are cancelled, the handles and channels it owns are closed, and the rest of the program goes on. A crash in `main` still ends the program, and a crash nobody handles still prints its diagnostic and fails the run at the end.
 

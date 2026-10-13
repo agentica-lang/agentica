@@ -2,7 +2,7 @@
 
 Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-task-crash-isolation.md#37-task-crash-isolation). Phase 24 is VM work with a small language change: a runtime error in a task other than `main` ends only that task. Its place in the order is row 7.1 of the [roadmap](README.md). It has one PR, with its own tests and docs. The semantics are a proposal for the owner to review.
 
-- [ ] **24a: crashes end only their task (§37.3 to §37.8).**
+- [x] **24a: crashes end only their task (§37.3 to §37.8).**
   - **VM:**
     - `agc_vm_run` (`vm/task.c`) sets the failure target once per turn; a fatal outcome (a crash in `main`, `RUNTIME-STEP-LIMIT`, `RUNTIME-INTERNAL`, an exit) ends the run as today, anything else crashes the current task;
     - the crash, in the order of §37.8: finish the turn, store and print the diagnostic (text, `--ai`, `--json` with `"task": true`), cancel the descendants (20b's `agc_task_cancel`), close the owned handles and channels by kind, pass on a `next_owner` turn, wake the awaiters;
@@ -27,5 +27,11 @@ Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-
     - `docs/vm/10-io-scheduler.md` §10.2.1 ("As built", "Cancellation");
     - the development skill (`references/vm.md`).
   - No CHANGELOG: the project adds none in the private alpha.
+  - **Done.** As built:
+    - `agc_vm_run` runs each turn under its own `setjmp` (`vm->turn`, used while `vm->in_turn`); a crash in a task other than `main` goes through `crash` in `vm/task.c`, in the order of §37.8. The second await entry is `Task.await_result`, picked by `src/lower.rkt` when the checker's type of the call is a `Result`.
+    - Owners: `agc_own` records the task that made a file (`vm/files.c`), a socket or listener (`own` in `vm/tcp.c`) or a process (`vm/process.c`) and its close: an `OP_CLOSE` job with no task (`agc_io_detached`), pending while a job holds the file (`close_pending` in `vm/loop.c` runs it after that job's `done` or `expired`, also for a detached job); `disown`; `close_proc`. A closing handle wakes its lock waiters, and `agc_handle_wait` lets them through to the closed error. Servers have no close yet: `close_server` comes with 20c.
+    - The audit found no failure that leaves runtime state half-done: every failure that is not fatal (`RUNTIME-STEP-LIMIT` and `RUNTIME-INTERNAL` end the run) comes before the builtin changes runtime state, or after a finished change (`RUNTIME-PROCESS-CLOSE` after `Process.close` has closed the child). The `malloc`'d temporaries live across a failure only before `RUNTIME-INTERNAL`, which ends the run.
+    - **Dropped by the owner:** the fuzzer mode that runs the mutant's body in a task (no new fuzzers).
+    - Tests are the migrated ones above, `task-crash-result.agc` (the `Result` entry, `Task.unobserved_crash`, the three stderr formats), `task-crash-descendants.agc`, `tcp-crash-echo.agc` (the `tcp_echo` case: only the crashed connection closes, the listener and the next connection work) and the BDD step; `tests/process-test.rkt` ("every way a run ends") now awaits its crashing task and expects `RUNTIME-TASK-CRASHED`; `vm/tests/task_cancel_test.c` now expects a task that awaits a cancelled task to crash. The other cases of §37.11 (the latency case with 10,000 descendants, the C tests of the pending close and the `next_owner` hand-on) were left out by the owner's rule: only the tests that prove "Done when".
 
 **Done when:** a task that divides by zero gives its awaiter `error("task crashed: ...")` while `main` goes on, an unawaited crash prints its diagnostic and makes the run exit 1, a crash in `examples/tcp_echo.agc`'s `echo` closes only its socket, and the fixtures and the latency case pass.

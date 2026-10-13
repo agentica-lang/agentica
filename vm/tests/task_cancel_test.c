@@ -26,6 +26,9 @@ typedef struct {
   agc_function fns[MAX_FNS];
   agc_instr code[MAX_FNS][MAX_CODE];
   uint32_t spans[MAX_FNS][MAX_CODE];
+  agc_span span_table[128];
+  agc_source source;
+  uint32_t line_start[1], line_chars[1];
   agc_value constants[64];
   const agc_builtin *builtins[B_COUNT];
   agc_program program;
@@ -46,6 +49,7 @@ static agc_io_job *jobs[8];
 static agc_value client;
 static agc_task *grandchild;
 static int listener = -1;
+static FILE *quiet;
 static int64_t port;
 static int accepted[8];
 static int accepted_count;
@@ -126,7 +130,7 @@ static agc_value test_io(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value test_io_short(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return handle_io(vm, &short_io, agc_as_int(vm, args[0]), 20);
+  return handle_io(vm, &short_io, agc_as_int(vm, args[0]), 200);
 }
 
 static agc_value test_block(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -305,6 +309,17 @@ static void new_prog(prog *p) {
     p->fns[f].code = p->code[f];
     p->fns[f].spans = p->spans[f];
   }
+  p->source.name = agc_make_string("t.agc", 5, 5);
+  p->source.text = agc_make_string("x\n", 2, 2);
+  p->source.lines = 1;
+  p->line_chars[0] = 1;
+  p->source.line_start = p->line_start;
+  p->source.line_chars = p->line_chars;
+  for (uint32_t k = 0; k < 128; k++) p->span_table[k] = (agc_span){0, 1, k + 1, 1, k + 2};
+  p->program.sources = &p->source;
+  p->program.source_count = 1;
+  p->program.spans = p->span_table;
+  p->program.span_count = 128;
   p->program.constants = p->constants;
   p->program.builtins = p->builtins;
   p->program.builtin_count = B_COUNT;
@@ -327,7 +342,7 @@ static void reset(void) {
 }
 
 static agc_outcome run(agc_vm *vm, prog *p) {
-  agc_vm_init(vm, &p->program, stdout, stderr, INT64_MAX);
+  agc_vm_init(vm, &p->program, stdout, quiet, INT64_MAX);
   handle = agc_register(vm, &released, release_count);
   return agc_vm_run(vm);
 }
@@ -450,7 +465,7 @@ static void test_timer_fired_then_cancel(void) {
   new_prog(&p);
   spawn(&p, F_MAIN, 0, F_SHORT, 1);
   call_int(&p, F_MAIN, B_SLEEP, 0);
-  call_int(&p, F_MAIN, B_BLOCK, 60);
+  call_int(&p, F_MAIN, B_BLOCK, 300);
   call_int(&p, F_MAIN, B_SLEEP, 0);
   check_cancel_check(&p, 0);
   call_int(&p, F_MAIN, B_SLEEP, 0);
@@ -479,8 +494,12 @@ static void test_parked_await(void) {
   check = check_await;
   agc_vm vm;
   agc_outcome o = run(&vm, &p);
-  assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-TASK-CANCELLED") == 0 && o.span == 77);
-  assert(mark_count == 1 && marks[0] == 5);
+  assert(o.kind == AGC_EXITED && o.exit_code == 1);
+  assert(mark_count == 2 && marks[0] == 5 && marks[1] == 995);
+  const agc_task *awaiter = reg_task(&vm, 2);
+  assert(awaiter->crashed && !awaiter->observed && awaiter->state == AGC_TASK_DONE);
+  static const char crash[] = "task crashed: RUNTIME-TASK-CANCELLED at t.agc:1:78: task was cancelled";
+  assert(awaiter->crash->bytes == sizeof crash - 1 && memcmp(awaiter->crash->data, crash, sizeof crash - 1) == 0);
   assert(agc_io_close(&vm));
 }
 
@@ -606,6 +625,8 @@ int main(void) {
 #ifdef __linux__
   agc_init();
   agc_io_init();
+  quiet = fopen("/dev/null", "w");
+  assert(quiet);
   test_states();
   test_parked_await();
   test_ready_then_await();

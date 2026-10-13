@@ -6,6 +6,6 @@ end
 def main() -> Void
   t = Task.spawn(&boom, 5)
   puts("waiting")
-  Task.sleep(5000)
-  puts("never")
+  Task.sleep(10)
+  puts("main goes on")
 end

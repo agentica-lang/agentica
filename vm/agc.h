@@ -146,9 +146,11 @@ typedef struct agc_task agc_task;
 
 typedef void (*agc_release_fn)(void *native);
 
-typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
-
 typedef struct agc_resource agc_resource;
+
+typedef void (*agc_close_fn)(agc_vm *vm, agc_resource *r);
+
+typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
 
 struct agc_resource {
   size_t slot;
@@ -161,6 +163,9 @@ struct agc_resource {
   agc_resource *holder;
   agc_task *next_owner;
   agc_task *waiters, *waiters_tail;
+  agc_task *owner;
+  agc_close_fn close;
+  bool closing;
 };
 
 typedef struct {
@@ -314,6 +319,7 @@ typedef struct {
   agc_value args;
   agc_string *cwd;
   bool no_files, no_turn_cost, allow_run, drop_uring_env;
+  agc_style style;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -346,8 +352,10 @@ struct agc_task {
   int64_t turn_cost;
   uint64_t lock_deadline, input_seen;
   agc_task_state state;
-  bool cancelled;
+  bool cancelled, crashed, observed, drop_handles;
   agc_value result;
+  agc_string *crash;
+  agc_task *crash_next;
   agc_task *next, *wait_next;
   agc_task *waiters, *waiters_tail;
   agc_task *parent, *children, *prev_sibling, *next_sibling;
@@ -363,9 +371,10 @@ struct agc_vm {
   agc_loop *loop;
   agc_resource *process_guard;
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
-  uint64_t tasks_done, gc_seen;
-  bool yield;
-  jmp_buf fail;
+  agc_task *crashes, *crashes_tail;
+  uint64_t tasks_done, gc_seen, crash_count, observed_count;
+  bool yield, in_turn;
+  jmp_buf fail, turn;
 };
 
 void agc_init(void);
@@ -520,6 +529,9 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 
 uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
+void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close);
+agc_resource *agc_owned_of(agc_vm *vm, agc_value v);
+void agc_close_owned(agc_vm *vm);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_unregister(agc_vm *vm, agc_resource *r);
@@ -534,6 +546,7 @@ void agc_io_block_stop(sigset_t *saved);
 #endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
+void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_close(agc_vm *vm);
 void agc_files_init(agc_vm *vm);
@@ -599,7 +612,10 @@ agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
 agc_input_status agc_input_all(agc_vm *vm, agc_string **text);
 agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
 
-void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style);
+void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
+                          bool task);
+agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);
+void agc_print_unobserved(FILE *err, uint64_t count, const agc_string *first, agc_style style);
 
 int agc_fuzz_one(const uint8_t *data, size_t len);
 

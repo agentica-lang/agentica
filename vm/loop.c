@@ -68,6 +68,29 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   return r;
 }
 
+void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close) {
+  r->owner = vm->task;
+  r->close = close;
+}
+
+agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
+  if (agc_is(v, AGC_T_HANDLE)) return agc_as_handle(vm, v);
+  if (agc_is(v, AGC_T_SOCKET)) return agc_as_socket(vm, v)->state;
+  if (agc_is(v, AGC_T_LISTENER)) return agc_as_listener(vm, v)->state;
+  if (agc_is(v, AGC_T_PROCESS)) return agc_as_process(vm, v)->state;
+  return NULL;
+}
+
+void agc_close_owned(agc_vm *vm) {
+  for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;) {
+    if (k >= vm->registry->count) continue;
+    agc_resource *r = vm->registry->items[k];
+    if (!r->owner || !r->owner->drop_handles) continue;
+    r->owner = NULL;
+    r->close(vm, r);
+  }
+}
+
 static void hand_on(agc_vm *vm, agc_resource *handle) {
   agc_task *next = handle->waiters;
   if (!next) return;
@@ -211,22 +234,25 @@ static agc_value take_context(agc_vm *vm, agc_resource *r) {
   return context;
 }
 
-/* A detached job (its task was cancelled) ends here, between turns: its
-   result is dropped, its `expired` half never runs, so it never closes a
-   handle, and the turn cost of `done` is not charged to the current task. */
+static void close_pending(agc_vm *vm, agc_value context) {
+  if (!agc_is(context, AGC_T_HANDLE)) return;
+  agc_resource *handle = agc_as_handle(vm, context);
+  if (handle->closing && handle->native && !handle->holder) handle->close(vm, handle);
+}
+
 static void discard(agc_vm *vm, agc_value result) {
   if (!agc_is(result, AGC_T_RESULT) || !agc_as_result(vm, result)->ok) return;
-  agc_value v = agc_as_result(vm, result)->value;
-  agc_resource *r = agc_is(v, AGC_T_HANDLE)     ? agc_as_handle(vm, v)
-                    : agc_is(v, AGC_T_SOCKET)   ? agc_as_socket(vm, v)->state
-                    : agc_is(v, AGC_T_LISTENER) ? agc_as_listener(vm, v)->state
-                                                : NULL;
+  agc_resource *r = agc_owned_of(vm, agc_as_result(vm, result)->value);
   if (!r || !r->native || r->holder) return;
   r->release(r->native);
   r->native = NULL;
   agc_unregister(vm, r);
 }
 
+/* A detached job (its task was cancelled) ends here, between turns: its
+   result is dropped, its `expired` half never runs, so it never closes a
+   task's handle, and the turn cost of `done` is not charged to the current
+   task. */
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
   if (!j->dropping && !j->work_done) {
@@ -248,6 +274,7 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
     trace_finish(vm, r, j, true, result);
     discard(vm, result);
   }
+  close_pending(vm, context);
   sweep(vm);
 }
 
@@ -300,7 +327,8 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
-agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
+                               int64_t timeout_ms) {
   if (kind->work && kind->cancel) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
@@ -334,10 +362,20 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue file work", 0);
   }
   if (agc_is(context, AGC_T_HANDLE)) agc_as_handle(vm, context)->holder = r;
+  return r;
+}
+
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
-  return j;
+  return r->native;
+}
+
+void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1);
+  ((job *)r->native)->detached = true;
 }
 
 void agc_io_ready(agc_io_job *j) {
@@ -371,6 +409,13 @@ static uint64_t loop_now(agc_vm *vm) {
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_task *t = vm->task;
+  if (handle->closing) {
+    agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
+    if (handle->next_owner == t) handle->next_owner = NULL;
+    t->lock_wait = NULL;
+    t->lock_deadline = 0;
+    return AGC_LOCK_TAKEN;
+  }
   uint64_t deadline = t->lock_deadline;
   uint64_t now = deadline ? loop_now(vm) : 0;
   t->lock_wait = NULL;
@@ -424,6 +469,7 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   }
   trace_finish(vm, r, j, done, result);
   if (j->kind->external) j->work_done = true;
+  close_pending(vm, context);
   sweep(vm);
   return result;
 }
@@ -495,6 +541,12 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 void agc_io_ready(agc_io_job *j) { (void)j; }
+
+void agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  (void)kind;
+  (void)data;
+  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+}
 
 bool agc_io_poll(agc_vm *vm, bool wait) {
   (void)vm;

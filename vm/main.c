@@ -382,6 +382,7 @@ static int run(int argc, char **argv) {
   agc_vm *vm = agc_alloc(sizeof(agc_vm));
   agc_vm_init(vm, program, stdout, stderr, max_steps);
   vm->rt->trace = trace;
+  vm->rt->style = style;
   vm->rt->allow_run = allow_run;
   vm->rt->drop_uring_env = own_uring_env;
   seed_map_hash(vm);
@@ -403,7 +404,7 @@ static int run(int argc, char **argv) {
   }
   int code = 0;
   if (outcome.kind == AGC_FAILED) {
-    agc_print_diagnostic(stderr, program, &outcome, style);
+    agc_print_diagnostic(stderr, program, &outcome, style, false);
     code = 1;
   } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
     code = (int)outcome.exit_code;
