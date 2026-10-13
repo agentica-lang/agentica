@@ -371,6 +371,12 @@ static void stop_at_once(int sig) {
   kill(getpid(), sig);
 }
 
+static void stop_overdue(int sig) {
+  (void)sig;
+  int now = atomic_load(&stop.now);
+  if (now) stop_at_once(now);
+}
+
 static void stop_requested(int sig) {
   int saved = errno;
   int none = 0;
@@ -380,19 +386,18 @@ static void stop_requested(int sig) {
     if (stop.wake) uv_async_send(stop.wake);
   } else if (atomic_load(&stop.held)) {
     none = 0;
-    atomic_compare_exchange_strong(&stop.now, &none, sig);
-    alarm(STOP_GRACE_SECONDS);
+    if (atomic_compare_exchange_strong(&stop.now, &none, sig)) {
+      struct sigaction act = {0};
+      act.sa_handler = stop_overdue;
+      sigemptyset(&act.sa_mask);
+      sigaction(SIGALRM, &act, NULL);
+      alarm(STOP_GRACE_SECONDS);
+    }
     if (stop.wake) uv_async_send(stop.wake);
   } else {
     stop_at_once(sig);
   }
   errno = saved;
-}
-
-static void stop_overdue(int sig) {
-  (void)sig;
-  int now = atomic_load(&stop.now);
-  if (now) stop_at_once(now);
 }
 
 static void stop_woken(uv_async_t *wake) { (void)wake; }
@@ -407,10 +412,8 @@ void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
   atomic_store(&stop.held, true);
   struct sigaction act;
   memset(&act, 0, sizeof act);
-  act.sa_handler = stop_overdue;
-  sigemptyset(&act.sa_mask);
-  sigaction(SIGALRM, &act, NULL);
   act.sa_handler = stop_requested;
+  sigemptyset(&act.sa_mask);
   for (size_t k = 0; k < STOP_SIGNALS; k++) sigaddset(&act.sa_mask, stop_signals[k]);
   for (size_t k = 0; k < STOP_SIGNALS; k++) {
     struct sigaction now;

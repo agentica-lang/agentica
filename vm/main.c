@@ -167,7 +167,12 @@ static bool flush_stream(FILE *stream) {
 }
 
 static void flush_files(agc_vm *vm) {
-  if (setjmp(vm->fail) == 0) agc_io_flush_files(vm);
+  if (setjmp(vm->fail) == 0) {
+    agc_io_flush_files(vm);
+    return;
+  }
+  const agc_outcome *o = &vm->rt->outcome;
+  agc_print_flush_failed(stderr, o->code, o->message, o->message_len, vm->rt->style);
 }
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
@@ -196,15 +201,13 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
   } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
     code = (int)outcome.exit_code;
   }
-#ifdef __linux__
-  sigset_t saved;
-  agc_io_block_stop(&saved);
-#endif
-  int sig = agc_io_stop_signal();
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, sig);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
   flush_stream(stdout);
   flush_stream(stderr);
 #ifdef __linux__
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+  int sig = agc_io_stop_signal();
   if (sig) {
     signal(sig, SIG_DFL);
     pthread_sigmask(SIG_SETMASK, &saved, NULL);
