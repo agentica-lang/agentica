@@ -32,3 +32,20 @@ disableKinds = ["taxonomy", "term", "rss"]
   weight = 4
   [cascade.target]
     path = "/reference"
+
+[outputs]
+  home = ["html", "markdown", "llms", "llmsfull"]
+  section = ["html", "markdown"]
+  page = ["html", "markdown"]
+
+[outputFormats.llms]
+  baseName = "llms"
+  mediaType = "text/plain"
+  isPlainText = true
+  notAlternative = true
+
+[outputFormats.llmsfull]
+  baseName = "llms-full"
+  mediaType = "text/plain"
+  isPlainText = true
+  notAlternative = true

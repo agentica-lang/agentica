@@ -1,0 +1,27 @@
+{{- $page := . -}}
+{{- $body := string .RenderShortcodes -}}
+{{- $title := partial "heading.html" . -}}
+{{- if $title -}}
+  {{- $body = replaceRE `\A\s*#[ \t]+.*(\n|\z)` "" $body 1 -}}
+{{- else -}}
+  {{- $title = .Title -}}
+{{- end -}}
+{{- range findRESubmatch `\[([^\]\n]*)\]\(([^)\s]+)\)` $body -}}
+  {{- $link := partial "link-target.html" (dict "from" $page "dest" (index . 2)) -}}
+  {{- $href := $link.href -}}
+  {{- with $link.page }}{{ with .OutputFormats.Get "markdown" }}{{ $href = printf "%s%s" .Permalink $link.fragment }}{{ end }}{{ end -}}
+  {{- $body = replace $body (index . 0) (cond (eq $href "") (index . 1) (printf "[%s](%s)" (index . 1) $href)) -}}
+{{- end -}}
+{{- $body = replaceRE "(?ms)^```agentica \\{[^}\\n]*expect=\"(RUNTIME-[^\"]+)\"[^}\\n]*\\}\\n(.*?)^```$" "```agentica\n${2}```\n\nRuntime error: `error[${1}]`" $body -}}
+{{- $body = replaceRE "(?ms)^```agentica \\{[^}\\n]*expect=\"([^\"]+)\"[^}\\n]*\\}\\n(.*?)^```$" "```agentica\n${2}```\n\nDoes not compile: `error[${1}]`" $body -}}
+{{- $body = replaceRE "(?m)^```agentica \\{[^}\\n]*file=\"([^\"]+)\"[^}\\n]*\\}$" "File `${1}`:\n\n```agentica" $body -}}
+{{- $body = replaceRE "(?m)^```agentica \\{[^}\\n]*\\}$" "```agentica" $body -}}
+{{- $body = strings.TrimSpace $body -}}
+{{- if .IsSection -}}
+  {{- $items := slice -}}
+  {{- range .Pages.ByWeight -}}
+    {{- $items = $items | append (partial "llms-item.html" .) -}}
+  {{- end -}}
+  {{- $body = printf "%s\n\n## Pages in this section\n\n%s" $body (delimit $items "\n") -}}
+{{- end -}}
+{{- return dict "title" $title "body" $body -}}

@@ -29,6 +29,24 @@ rule that a site page shows.
 - Do not hard-wrap prose in `site/content/`: one line per paragraph or list
   item. Hugo joins the lines anyway. Code blocks keep their own line breaks.
 
+## Markdown and llms.txt
+
+- Every page is also published as Markdown next to its HTML
+  (`/tour/variables/index.md`), through Hugo's built-in `markdown` output
+  format and `layouts/all.markdown.md`. `_partials/page-markdown.html` builds
+  it from the page source: links point to the other pages' `.md` URLs (it
+  shares `_partials/link-target.html` with `render-link.html`), fence
+  attributes become plain text (`Does not compile: error[CODE]`,
+  `File name.agc:`), and a section lists its pages.
+- The home page also renders `/llms.txt` (`home.llms.txt`, an index in menu
+  order) and `/llms-full.txt` (`home.llmsfull.txt`, every page's Markdown with
+  its source URL). Both use absolute URLs from `baseURL`.
+- `_partials/page-actions.html` is the "Copy page" split button at the top of
+  each page. Its menu has View Source (the `.md`) and links that open ChatGPT
+  or Claude with a prompt to read the `.md` URL. `assets/js/page-actions.js`
+  fetches the `.md` for the clipboard; without JS the button is hidden, and
+  without the Clipboard API only the menu shows.
+
 ## Examples are tests
 
 Every `agentica` code block in `site/content` must be a complete program.
