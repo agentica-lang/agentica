@@ -62,7 +62,12 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
 | `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration (see `tasks.md`) |
 | `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); no program can reach it yet (17a and 20c will) |
-| `RUNTIME-TASK-CRASHED` | `Task.await` on a crashed task when `R` is not a `Result`, at the await; the message is the crash text (see `tasks.md`); a BDD step whose task crashed unawaited |
+| `RUNTIME-TASK-CRASHED` | `Task.await` on a crashed task when `R` is not a `Result`, at the await; the message is the crash text (see `tasks.md`); a BDD step or a test whose task crashed unawaited |
+| `RUNTIME-TEST-ASSERTION` | a failed `Test.eq`, `Test.ok?`, `Test.error?` or `Test.assert` in a test, at the assertion (see `testing.md`) |
+| `RUNTIME-TEST-ERROR` | a test block returned `error(message)`, at the `Test.test` call |
+| `RUNTIME-TEST-NAME` | an empty or repeated test name, at that `Test.test` call |
+| `RUNTIME-TEST-RUN` | `Test.run` called inside a test or while another `Test.run` runs; call it once, from `main` |
+| `RUNTIME-TEST-PENDING-TASKS` | a test returned while tasks it spawned were still running; await them |
 | `LOWER-UNSUPPORTED` | the VM cannot run this form; exit 1 before anything runs. Every checked program runs on the VM today, so seeing it is an interpreter bug to report |
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and `RUNTIME-BDD-*` codes; see `bdd.md`.

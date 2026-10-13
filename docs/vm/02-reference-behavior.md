@@ -299,9 +299,9 @@ fails when the committed file differs from what the generator prints.
   `src/diagnostic.rkt`. Columns count characters; source lines split on LF
   with a trailing CR removed. JSON keys come out sorted: `code`, `file`,
   `message`, `range` (`end` before `start`, `column` before `line`).
-- Order: like `fail!` in `src/main.rkt`, the VM writes the diagnostic to
-  stderr and then exits; stdout is flushed by the exit. How the two streams
-  interleave at buffer boundaries is outside the contract.
+- Order: like `fail!` in `src/main.rkt`, the VM flushes stdout, writes the
+  diagnostic to stderr and exits. How the two streams interleave at buffer
+  boundaries is outside the contract.
 - Before each blocking stdin read, `if (isatty(1)) fflush(stdout)`, so
   prompts show up as they do with Racket.
 - SIGPIPE is ignored at startup (Windows has none). Every `fwrite`/`fflush` result is checked; a

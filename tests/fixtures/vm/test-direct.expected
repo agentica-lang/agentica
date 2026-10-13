@@ -1,0 +1,13 @@
+{
+  "exit": 2,
+  "code": null,
+  "steps": 9,
+  "stdout": [
+    "before Test.run",
+    ""
+  ],
+  "stderr": [
+    "run this file with agentica test",
+    ""
+  ]
+}

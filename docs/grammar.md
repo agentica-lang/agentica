@@ -891,7 +891,7 @@ Spawn starts a named function immediately with one argument; use a struct for mu
 
 A runtime error in a task other than `main` is a crash: it ends only that task, and the rest of the program goes on. Its diagnostic is printed on stderr when it happens, with ` in a task` after the code (`--json` adds `"task": true`). Its running descendants are cancelled; no program can await one of them, since only the crashed subtree holds them (with `Task.map` and the HTTP server, a later `Task.await` on a cancelled task will give `error("task: cancelled")` when `R` is a `Result`, and RUNTIME-TASK-CANCELLED otherwise). The files, sockets, listeners and processes it owns are closed: a handle belongs to the task that opened it, and one passed directly as the `Task.spawn` argument moves to the new task (a handle inside a struct, list or block does not move). When a task returns normally, the handles it still owns go to its parent task. Other tasks that use a closed handle get its closed error. An `HttpClient` is never closed by a crash. `Task.await` on a crashed task returns `error(text)` when `R` is a `Result`, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`; otherwise the awaiter halts with RUNTIME-TASK-CRASHED at its own await, with that text as the message, so the crash moves up through awaits. Each await of a crashed task gives the same outcome. These still end the whole run: a runtime error in `main`, RUNTIME-STEP-LIMIT, an internal VM error, and System.exit in any task (the run ends with its code). The first of these outcomes wins.
 
-A crash is observed when an await returns its error or halts with RUNTIME-TASK-CRASHED. When `main` returns and a crash was never observed, the run exits 1 and prints one summary line on stderr: `2 task crashes were not observed; first: task crashed: ...` (`--json`: `{"unobserved_crashes":2,"first":"task crashed: ..."}`). `Task.unobserved_crash()` returns `ok(text)` for the first crash no await has observed, or `error("no unobserved crash")`; calling it does not observe the crash.
+A crash is observed when an await returns its error or halts with RUNTIME-TASK-CRASHED, or when `Test.run` reports it. When `main` returns and a crash was never observed, the run exits 1 and prints one summary line on stderr: `2 task crashes were not observed; first: task crashed: ...` (`--json`: `{"unobserved_crashes":2,"first":"task crashed: ..."}`). `Task.unobserved_crash()` returns `ok(text)` for the first crash no await has observed, or `error("no unobserved crash")`; calling it does not observe the crash.
 
 Returning from the entrypoint ends the run, and pending tasks never run again: explicitly await work that must finish. At the end of a run, however it ends, the VM flushes and closes open files (waiting for the writes; `--flush-timeout` bounds the wait), closes sockets and listeners, and stops and reaps the child processes it started; stdin, stdout and stderr stay open.
 
@@ -900,6 +900,36 @@ Sleep takes nonnegative milliseconds; zero yields. Negative durations halt with 
 Pending count returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the task that calls it (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned or crashed is not counted, even when nothing awaited it.
 
 BDD step handlers may use tasks but must finish them before returning, normally through Task.await: `std/bdd` checks `Task.pending_count()` after each handler, and pending work fails that step with RUNTIME-BDD-PENDING-TASKS; so does a step program whose `main` leaves tasks running when it calls `BDD.run`. Assertions made by tasks count for the step. A context changed in a task is lost unless the handler takes it back from `Task.await`. After the pending check, `std/bdd` checks `Task.unobserved_crash()`: a task that crashed in the step and was not awaited fails that step with RUNTIME-TASK-CRASHED and the crash text as its message. A runtime error in the handler itself ends the scenario's child VM, which fails only that scenario.
+
+### Unit tests (`Test`)
+
+`Test` and `TestCase` are reserved. `Test` is a builtin module for unit tests in the style of ExUnit; it needs no import. A test file is a program whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks.
+
+```text
+Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
+Test.run(tests: List[TestCase]) -> Void
+Test.eq(actual: T, expected: T) -> Result[Void]
+Test.ok?(result: Result[T]) -> Result[Void]
+Test.error?(result: Result[T]) -> Result[Void]
+Test.assert(condition: Bool, message: String) -> Result[Void]
+```
+
+`Test.test` builds a `TestCase`, an opaque value that keeps the name, the block and the span of the `Test.test` call; it has no constructor, fields, equality or JSON encoding, and inspect shows `<TestCase>`. The block returns `Result[Void]`, so `try` works inside it and the last assertion can be its result.
+
+Assertions return `ok()` when they hold and `error(text)` when they do not. `Test.eq` compares by value; both arguments have one type, and that type must be a data type: `Int`, `Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, and lists, maps, Results, structs and enums made of them (`Result[Void]` too). Anything else, such as `Fn`, `Task`, a handle or `TestCase`, is CHECK-TYPE-MISMATCH. Lists compare in order, maps by their keys in any order, structs and enums by type, variant and fields, Results by tag and payload, Floats by IEEE 754, and a `Json` at any depth by its canonical text (sorted keys, as `JSON.encode` writes it). A failed `Test.eq` records the message `values are not equal`; its error text is `expected E; actual A`, where both are the inspect form, with each `Json` as its canonical text. `Test.ok?` gives `expected ok; actual A`, `Test.error?` gives `expected an error; actual A`, and `Test.assert` gives its message.
+
+A failed assertion is also recorded on the test it runs in: the test's own task, or a task spawned inside the test. So `Test.eq(a, b)` as a statement, whose Result is dropped, still fails the test, and the first recorded failure is the one reported. Outside a test, an assertion only returns its Result.
+
+`Test.run` never returns: it ends the run with an exit code. Called inside a test, or while another `Test.run` serves the runner, it fails with RUNTIME-TEST-RUN at the call. It then checks the names: an empty name, or a name used by an earlier test of the list, fails the run with RUNTIME-TEST-NAME at that `Test.test` call. Run directly, as `agentica file.agc`, it then prints `run this file with agentica test` on stderr and exits 2. The test runner (`agentica test`, roadmap 25b) starts the file with the program arguments `--agentica-test list` or `--agentica-test run`, and `Test.run` answers with records on stdout, each one line made of U+001E, `agentica-bdd ` and a JSON object with sorted keys:
+
+- `list` writes `{"column":C,"event":"test","line":L,"name":N}` for each test in order, at the `Test.test` call, then `{"event":"ready"}`, and ends the run. No test runs.
+- `run` reads one test index (from 0) per line on stdin. For each, it runs the test in a new task, a child of the task that called `Test.run`, waits for it, and writes `{"event":"pass"}` or a `fail` record: the diagnostic as `--json` writes it (`code`, `file`, `message`, `range`) plus `"event":"fail"` and, for an assertion, `expected` and `actual` as the raw texts. At the end of stdin it ends the run. A line that is not a test index in plain digits (no sign, no leading zero) is a `fail` record with RUNTIME-BDD-INFRA, and exit 1.
+
+In both modes, the run ends as a return from `main` does: exit 0, or exit 1 with the summary line on stderr when a task crash was never observed, such as a crash outside every test.
+
+A test fails, in this order, with: the crash of its task (its own code, message and span; reporting it observes the crash); else its first recorded assertion (RUNTIME-TEST-ASSERTION at the assertion, its message, and `expected` and `actual` for `Test.eq`, only `actual` for `Test.ok?` and `Test.error?`, neither for `Test.assert`); else the `error(m)` the block returned (RUNTIME-TEST-ERROR with `m`, at the test); else tasks spawned in the test that were still running when its task ended (RUNTIME-TEST-PENDING-TASKS, at the test); else the first crash of such a task that no await observed (RUNTIME-TASK-CRASHED at the test, with the crash text as its message). After the record, every crash of the test's tasks counts as observed, and its tasks still running are cancelled before the next test, whatever the outcome. A crash prints its diagnostic on stderr as any task crash does. A runtime error in `main`, RUNTIME-STEP-LIMIT and `System.exit` in a test still end the whole run.
+
+Each test's task gets its own `Random` generator, seeded from the run's seed (`--seed`, or the one drawn from the operating system) and the test's name, so a test sees the same values whether it runs alone or after other tests.
 
 ### TCP, TLS and HTTP
 
@@ -1019,7 +1049,7 @@ absolute path and does not resolve symlinks.
 
 `Map.get` and `ok` select signatures by arity. Their text help lists all variants; JSON help contains `name`, `description`, `effects`, and `overloads`, whose entries describe each signature. Other builtin help keeps the single-signature JSON format.
 
-`agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects describe I/O only; they are not permission enforcement. Unknown help targets exit 2. Options may also precede `help`.
+`agentica help NAME --json` prints name, arity, parameter types, result, signature, effects, and description from the same catalog used by checking and execution. Effects say what a builtin does besides returning its result: I/O, tasks, or `test` for an assertion that records a failure on its test. They are informational, not permission enforcement; a call to a builtin with no effects whose result is unused is CHECK-UNUSED-VALUE. Unknown help targets exit 2. Options may also precede `help`.
 
 `agentica --max-steps N program.agc` limits execution to N expression/statement entries, including repeated loop conditions across all tasks. N must be a positive integer (bad CLI values exit 2). Runs are unlimited by default; checking never executes or spends the budget. Exhaustion is `RUNTIME-STEP-LIMIT` at the next node to execute. The synchronized counter resets per evaluation. This is not a wall-clock or blocking-I/O timeout.
 

@@ -49,6 +49,32 @@
     (check-equal? (check-code "struct Range\n  a: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME)
     (check-equal? (check-code "enum Range\n  A\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
 
+  (test-case "Test assertions need a type with equality; Test and TestCase are reserved"
+    (define types "struct Box\n  items: List[Int]\n  tags: Map[String, Json]\nend\n\nstruct Hook\n  run: Fn[Int, Int]\nend\n\n")
+    (check-ok (string-append types (main-with (string-append
+                                               "  t = Test.test(\"box\") do\n"
+                                               "    n = try \"1\".to_i\n"
+                                               "    Test.eq(n, 1)\n"
+                                               "    try Test.eq(Box(items: [n], tags: {}), Box(items: [1], tags: {}))\n"
+                                               "    try Test.eq([JSON.null()], [JSON.null()])\n"
+                                               "    try Test.ok?(\"2\".to_i)\n"
+                                               "    Test.error?(\"x\".to_i)\n"
+                                               "  end\n"
+                                               "  Test.run([t])"))))
+    (define different (check-text (main-with "  r = Test.eq(1, \"a\")")))
+    (check-equal? (diagnostic-code different) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span different))) 18)
+    (define function (check-text (main-with "  r = Test.eq(&main, &main)")))
+    (check-equal? (diagnostic-code function) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span function))) 15)
+    (check-equal? (check-code (string-append "def twice(n: Int) -> Int\n  return n * 2\nend\n\n" types
+                                             (main-with "  h = Hook(run: &twice)\n  r = Test.eq(h, h)")))
+                  'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  t = Test.test(\"x\") do\n    1\n  end")) 'CHECK-TYPE-MISMATCH)
+    (for ([name '("Test" "TestCase")])
+      (check-equal? (check-code (format "struct ~a\n  a: Int\nend\n\ndef main() -> Void\nend\n\n" name))
+                    'CHECK-REDEFINED-NAME)))
+
   (test-case "JSON builders and schemas enforce their input contracts"
     (check-ok (main-with "  object = JSON.object({})\n  array = JSON.array([])"))
     (for ([body '("  x = JSON.object({\"a\": 1})" "  x = JSON.array([false])"

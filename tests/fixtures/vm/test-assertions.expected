@@ -1,0 +1,30 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 256,
+  "stdout": [
+    "outside a test: expected 2; actual 1",
+    "\u001eagentica-bdd {\"event\":\"pass\"}",
+    "\u001eagentica-bdd {\"actual\":\"Point(x: 1, tags: [\\\"a\\\"])\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"Point(x: 2, tags: [\\\"b\\\"])\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":70,\"line\":43},\"start\":{\"column\":11,\"line\":43}}}",
+    "\u001eagentica-bdd {\"actual\":\"error(\\\"cannot convert \\\\\\\"x\\\\\\\" to Int\\\")\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"ok(80)\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":34,\"line\":48},\"start\":{\"column\":7,\"line\":48}}}",
+    "\u001eagentica-bdd {\"actual\":\"error(\\\"cannot convert \\\\\\\"x\\\\\\\" to Int\\\")\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"expected ok\",\"range\":{\"end\":{\"column\":27,\"line\":51},\"start\":{\"column\":7,\"line\":51}}}",
+    "\u001eagentica-bdd {\"actual\":\"ok(0)\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"expected an error\",\"range\":{\"end\":{\"column\":30,\"line\":54},\"start\":{\"column\":7,\"line\":54}}}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"two is not below one\",\"range\":{\"end\":{\"column\":49,\"line\":57},\"start\":{\"column\":7,\"line\":57}}}",
+    "\u001eagentica-bdd {\"actual\":\"\\\"a\\\"\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"\\\"b\\\"\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":24,\"line\":60},\"start\":{\"column\":7,\"line\":60}}}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-ERROR\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"not ready\",\"range\":{\"end\":{\"column\":8,\"line\":66},\"start\":{\"column\":5,\"line\":64}}}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":16},\"start\":{\"column\":13,\"line\":16}}}",
+    "\u001eagentica-bdd {\"event\":\"pass\"}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-PENDING-TASKS\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"the test returned while its tasks were still running\",\"range\":{\"end\":{\"column\":8,\"line\":77},\"start\":{\"column\":5,\"line\":74}}}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TASK-CRASHED\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/test-assertions.agc:16:13: division by zero\",\"range\":{\"end\":{\"column\":8,\"line\":82},\"start\":{\"column\":5,\"line\":78}}}",
+    "\u001eagentica-bdd {\"actual\":\"3\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"4\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":23,\"line\":26},\"start\":{\"column\":10,\"line\":26}}}",
+    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-RUN\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"Test.run cannot run inside a test or next to another Test.run\",\"range\":{\"end\":{\"column\":19,\"line\":88},\"start\":{\"column\":7,\"line\":88}}}",
+    "\u001eagentica-bdd {\"actual\":\"[{\\\"a\\\":[true,null],\\\"b\\\":1}]\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"[1.5]\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":37,\"line\":96},\"start\":{\"column\":7,\"line\":96}}}",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":16},\"start\":{\"column\":13,\"line\":16}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":16},\"start\":{\"column\":13,\"line\":16}},\"task\":true}",
+    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"Test.run cannot run inside a test or next to another Test.run\",\"range\":{\"end\":{\"column\":19,\"line\":88},\"start\":{\"column\":7,\"line\":88}},\"task\":true}",
+    ""
+  ]
+}

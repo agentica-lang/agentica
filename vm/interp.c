@@ -217,8 +217,8 @@ static void call_value(agc_vm *vm, agc_task *t, agc_value value, uint32_t window
   if (fn->n) memcpy(R + argc, fn->captured, (size_t)fn->n * sizeof(agc_value));
 }
 
-void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, agc_value arg, uint32_t span) {
-  call_value(vm, t, fn, 0, &arg, 1, 0, span);
+void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
+  call_value(vm, t, fn, 0, args, argc, 0, span);
 }
 
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function) { push_frame(vm, t, function, 0, 0, 0); }
@@ -425,12 +425,8 @@ static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
   if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
   if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
   if (agc_is(x, AGC_T_NIL) && agc_is(y, AGC_T_NIL)) return true;
-  if (agc_is(x, AGC_T_STRING) && agc_is(y, AGC_T_STRING)) {
-    const agc_string *a = agc_as_string(vm, x), *b = agc_as_string(vm, y);
-    if (a->bytes != b->bytes) return false;
-    agc_charge_bytes(vm, a->bytes);
-    return a->bytes == 0 || memcmp(a->data, b->data, a->bytes) == 0;
-  }
+  if (agc_is(x, AGC_T_STRING) && agc_is(y, AGC_T_STRING))
+    return agc_same_string(vm, agc_as_string(vm, x), agc_as_string(vm, y));
   if (agc_is(x, AGC_T_RANGE) && agc_is(y, AGC_T_RANGE)) {
     const agc_range *a = agc_as_range(vm, x), *b = agc_as_range(vm, y);
     return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
