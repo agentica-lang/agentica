@@ -167,31 +167,43 @@ static void stdin_ready(void *data, int status) {
   agc_io_ready(q->job);
 }
 
-/* Stdin that can wait forever (a pipe, a terminal, a socket) waits on the
-   loop. A pipe or terminal is reopened so that only the VM's own file
-   description is non-blocking; a socket keeps its flags and is read with
-   MSG_DONTWAIT. Anything else (a regular file, /dev/null) stays a pool job. */
+/* A pipe or terminal is reopened, so only the VM's file description is
+   non-blocking; a socket is read with MSG_DONTWAIT (10.2.2, Stdin). */
 static void watch_stdin(agc_vm *vm, agc_input *in) {
   if (in->poll_tried) return;
   in->poll_tried = true;
   struct stat info;
-  if (fstat(in->fd, &info) != 0 || S_ISREG(info.st_mode) || S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode)) return;
-  int fd = in->fd;
-  int flags = fcntl(fd, F_GETFL);
+  int flags = fcntl(in->fd, F_GETFL);
+  if (flags < 0 || (flags & O_ACCMODE) == O_WRONLY || fstat(in->fd, &info) != 0 || S_ISREG(info.st_mode) ||
+      S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode))
+    return;
   in->poll_socket = S_ISSOCK(info.st_mode);
-  if (!in->poll_socket) {
+  int fd;
+  if (in->poll_socket) {
+    fd = fcntl(in->fd, F_DUPFD_CLOEXEC, 3);
+  } else {
     char path[32];
     snprintf(path, sizeof path, "/proc/self/fd/%d", in->fd);
     fd = open(path, O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
-    if (fd < 0) return;
   }
-  in->poller = agc_poller_open(vm, fd);
-  if (in->poll_socket && flags >= 0) fcntl(fd, F_SETFL, flags);
+  if (fd < 0) return;
+  int err = 0;
+  in->poller = agc_poller_open(vm, fd, &err);
+  if (in->poll_socket) fcntl(fd, F_SETFL, flags);
   if (!in->poller) {
-    if (fd != in->fd) close(fd);
+    close(fd);
     return;
   }
   in->poll_fd = fd;
+}
+
+void agc_input_close(agc_vm *vm) {
+  agc_input *in = &vm->rt->in;
+  if (!in->poller) return;
+  agc_poller_pause(in->poller);
+  agc_poller_close(in->poller);
+  in->poller = NULL;
+  in->poll_fd = -1;
 }
 
 static int start_read(agc_vm *vm, agc_input *in) {
@@ -237,6 +249,8 @@ static int start_read(agc_vm *vm, agc_input *in) {
     return -1;
   }
 }
+
+void agc_input_close(agc_vm *vm) { (void)vm; }
 #endif
 
 static int fill(agc_vm *vm) {

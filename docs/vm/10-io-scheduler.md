@@ -411,7 +411,7 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   the VM starts; changing it later has no effect. The default is 4 and
   libuv caps it at 1024. There is one pool per process, shared by every
   loop (10.2.3). It runs regular-file I/O (stdin too when it is a regular
-  file), opens and path calls, DNS (`getaddrinfo`) and the TLS setup jobs
+  file, or when it cannot be reopened, below), opens and path calls, DNS (`getaddrinfo`) and the TLS setup jobs
   that load CA, certificate and key files, so long or many concurrent
   file reads, or slow DNS, queue behind each other. Raise it when a
   program keeps more of these calls in flight at once than the pool has
@@ -419,10 +419,12 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
 - **We only wait where the loop can cancel.** Files open with `O_CLOEXEC`
   and `O_NONBLOCK` (so `open` of a FIFO never waits for a peer), and the
   pool work then picks the path with `fstat` and an `epoll_ctl` probe
-  (`pollable` in `vm/files.c`), never by the name: a regular file, a block
-  device, or a device epoll refuses (`/dev/null`, `/dev/zero`, which never
-  wait) is set blocking and served by pool jobs, whose system calls end in
-  bounded time; a pipe, a FIFO, a terminal or another character device
+  (`probe` in `vm/files.c`), never by the name: a regular file, a block
+  device, or a device epoll refuses with `EPERM` (`/dev/null`, `/dev/zero`,
+  which never wait) is set blocking and served by pool jobs, whose system
+  calls end in bounded time; any other probe error, and a poller that
+  cannot be made (`agc_poller_open` returns the libuv error), is the call's
+  error, never a fall back to blocking; a pipe, a FIFO, a terminal or another character device
   that can wait stays non-blocking and is served on the loop through an
   `agc_poller` (a `uv_poll_t`, `vm/loop.c`). A handle call on such a file
   first tries its non-blocking read or write on the loop thread (`step`);
@@ -434,11 +436,15 @@ The first 7h PR had one task; the tasks PR added the run queue (10.2.1,
   A whole-file call (`read_text`, `write_text`, `append_text`) opens in a
   pool job; when the path turns out to be pollable, the job's `more` step
   (`agc_io_then`, run on the loop thread after the work) opens a poller
-  and keeps the same job, timer and parked task waiting on the loop. A
-  pool kind's `cancel` half may drop its data only in that loop phase,
-  never while its work runs. `read_text` of a pipe reads to EOF (at most
-  1 MiB). The end-of-run flush of such a file is a detached loop job,
-  waited for like the pool flush jobs.
+  and keeps the same job, timer and parked task waiting on the loop. The
+  loop calls a `cancel` half only in that loop phase, never while the work
+  runs (`cancellable` in `vm/loop.c`). A poller hang-up or error first
+  repeats the step, so the call reports the real error (`EPIPE` for a
+  reader that left), and `EIO` only when the step would still wait. A
+  timed-out close keeps only the bytes it did not send yet. `read_text` of
+  a pipe reads to EOF (at most 1 MiB), as does `read_text` of a regular
+  file that reports size 0 (`/proc`, `/sys`). The end-of-run flush of such
+  a file is a detached loop job, waited for like the pool flush jobs.
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error of `main`, the step limit or a stop
   signal), `end_run` in `vm/main.c` takes the same fixed steps and nothing
@@ -592,8 +598,11 @@ open file description, so the inherited one, which a shell's terminal
 shares, keeps its flags; `uv_pipe_open` and `uv_tty_init` would change
 it) and read on the loop through an `agc_poller`; a socket keeps its
 flags (restored after `uv_poll_init`) and is read with `MSG_DONTWAIT`; a
-regular file or a device epoll refuses stays a pool job with one
-`read`. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
+regular file, a device epoll refuses, a write-only stdin, or a pipe or
+terminal whose reopen fails (no `/proc`, or `EACCES` after `su` or
+`sudo -u`) stays a pool job with one blocking `read`, so that read keeps a
+pool thread until data comes (§14.1, exceptions). The poller owns its own
+descriptor (a socket is duplicated) and `agc_io_close` closes it. Either way one read of up to 1 MiB goes into a `malloc`'d buffer,
 and its `done` half appends the bytes to the shared `agc_input` buffer
 (owned by the runtime, served by scheduler 0) and wakes the tasks waiting
 for that read. One read is in flight at a time; a second reader parks in

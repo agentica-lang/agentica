@@ -267,7 +267,7 @@ static file_state *new_state(bool readable, bool writable) {
 static void free_state(file_state *st) {
   if (!st) return;
   if (st->poller)
-    agc_poller_close(st->poller, true);
+    agc_poller_close(st->poller);
   else if (st->fd >= 0)
     close(st->fd);
   free(st->buf);
@@ -281,18 +281,20 @@ static void free_op(op *o) {
   free(o);
 }
 
-/* A descriptor that can wait forever (a pipe, a FIFO, a terminal, a
-   socket) waits on the loop, never in the pool; epoll refuses only the
-   ones that never wait (regular files, /dev/null, /dev/zero). */
-static bool pollable(int fd) {
+/* What can wait forever waits on the loop; epoll refuses (EPERM) only
+   what never waits (docs/vm/14-core-invariants.md, 14.1). */
+static int probe(int fd, bool *polled) {
   struct stat info;
-  if (fstat(fd, &info) != 0 || S_ISREG(info.st_mode) || S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode)) return false;
+  *polled = false;
+  if (fstat(fd, &info) != 0) return errno;
+  if (S_ISREG(info.st_mode) || S_ISBLK(info.st_mode) || S_ISDIR(info.st_mode)) return 0;
   int ep = epoll_create1(EPOLL_CLOEXEC);
-  if (ep < 0) return false;
+  if (ep < 0) return errno;
   struct epoll_event event = {.events = EPOLLIN};
-  bool ok = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &event) == 0;
+  int err = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &event) == 0 ? 0 : errno;
   close(ep);
-  return ok;
+  *polled = err == 0;
+  return err == EPERM ? 0 : err;
 }
 
 static void blocking(int fd) {
@@ -463,16 +465,58 @@ static int open_for(op *o, bool reading, bool append) {
 }
 
 static bool on_loop(op *o, int fd) {
-  if (!pollable(fd)) return false;
+  bool polled;
+  int err = probe(fd, &polled);
+  if (err) {
+    close(fd);
+    fail_op(o, FS_OPEN, err);
+    return true;
+  }
+  if (!polled) return false;
   o->fd = fd;
   o->polled = true;
   return true;
+}
+
+static bool grow_out(op *o, size_t extra) {
+  if (o->out_len + extra <= o->out_cap) return true;
+  size_t cap = o->out_cap ? o->out_cap : 1024;
+  while (cap < o->out_len + extra) cap *= 2;
+  uint8_t *bigger = realloc(o->out, cap);
+  if (!bigger) return false;
+  o->out = bigger;
+  o->out_cap = cap;
+  return true;
+}
+
+static void step_read_text(op *o) {
+  for (;;) {
+    if (o->out_len == o->out_cap && !grow_out(o, CHUNK)) {
+      fail_op(o, FS_READ, ENOMEM);
+      return;
+    }
+    ssize_t n = read(o->fd, o->out + o->out_len, o->out_cap - o->out_len);
+    if (n < 0 && errno == EINTR) continue;
+    if (n < 0) {
+      fail_op(o, FS_READ, errno);
+      return;
+    }
+    o->out_len += (size_t)n;
+    if (n == 0 || o->out_len > LIMIT) return;
+  }
 }
 
 static void work_read_text(op *o) {
   int fd = open_for(o, true, false);
   if (fd < 0 || on_loop(o, fd)) return;
   blocking(fd);
+  if (o->count == 1) {
+    o->fd = fd;
+    step_read_text(o);
+    o->fd = -1;
+    close(fd);
+    return;
+  }
   o->out = malloc(o->count);
   if (!o->out) {
     fail_op(o, FS_READ, ENOMEM);
@@ -499,17 +543,6 @@ static void work_stat(op *o) {
   o->dir = S_ISDIR(info.st_mode);
   o->size = o->dir ? 0 : (int64_t)info.st_size;
   o->mtime = (int64_t)info.st_mtim.tv_sec;
-}
-
-static bool grow_out(op *o, size_t extra) {
-  if (o->out_len + extra <= o->out_cap) return true;
-  size_t cap = o->out_cap ? o->out_cap : 1024;
-  while (cap < o->out_len + extra) cap *= 2;
-  uint8_t *bigger = realloc(o->out, cap);
-  if (!bigger) return false;
-  o->out = bigger;
-  o->out_cap = cap;
-  return true;
 }
 
 static void work_list(op *o) {
@@ -594,7 +627,12 @@ static void work_mkdir(op *o) {
 static void work_open(op *o) {
   int fd = open_for(o, o->kind == OP_OPEN_READ, o->kind == OP_OPEN_APPEND);
   if (fd < 0) return;
-  o->st->polled = pollable(fd);
+  int err = probe(fd, &o->st->polled);
+  if (err) {
+    close(fd);
+    fail_op(o, FS_OPEN, err);
+    return;
+  }
   if (!o->st->polled) blocking(fd);
   o->st->fd = fd;
 }
@@ -726,7 +764,7 @@ static void drop(void *data) {
   op *o = data;
   if (o->owns_st && o->st) release_state(o->st);
   if (o->poller)
-    agc_poller_close(o->poller, true);
+    agc_poller_close(o->poller);
   else if (o->fd >= 0)
     close(o->fd);
   free_op(o);
@@ -745,23 +783,6 @@ static void send_rest(op *o, int fd, const uint8_t *data, size_t len) {
       return;
     }
     o->sent += (size_t)n;
-  }
-}
-
-static void step_read_text(op *o) {
-  for (;;) {
-    if (o->out_len == o->out_cap && !grow_out(o, CHUNK)) {
-      fail_op(o, FS_READ, ENOMEM);
-      return;
-    }
-    ssize_t n = read(o->fd, o->out + o->out_len, o->out_cap - o->out_len);
-    if (n < 0 && errno == EINTR) continue;
-    if (n < 0) {
-      fail_op(o, FS_READ, errno);
-      return;
-    }
-    o->out_len += (size_t)n;
-    if (n == 0 || o->out_len > LIMIT) return;
   }
 }
 
@@ -805,10 +826,10 @@ static bool step(op *o) {
 
 static void ready(void *data, int status) {
   op *o = data;
-  if (status < 0)
+  if (!step(o)) {
+    if (status >= 0) return;
     fail_op(o, writes(o) ? FS_WRITE : FS_READ, EIO);
-  else if (!step(o))
-    return;
+  }
   agc_poller_pause(poller_of(o));
   agc_io_ready(o->job);
 }
@@ -818,9 +839,10 @@ static void ready(void *data, int status) {
 static bool more(void *data, agc_io_job *job) {
   op *o = data;
   if (!o->polled || o->status != FS_OK) return false;
-  o->poller = agc_poller_open(o->vm, o->fd);
+  int err = 0;
+  o->poller = agc_poller_open(o->vm, o->fd, &err);
   if (!o->poller) {
-    fail_op(o, writes(o) ? FS_WRITE : FS_READ, EBADF);
+    fail_op(o, writes(o) ? FS_WRITE : FS_READ, err);
     return false;
   }
   o->job = job;
@@ -967,8 +989,13 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_OPEN_READ:
       case OP_OPEN_WRITE:
       case OP_OPEN_APPEND: {
-        if (o->st->polled) o->st->poller = agc_poller_open(vm, o->st->fd);
-        if (o->st->polled && !o->st->poller) blocking(o->st->fd);
+        int err = 0;
+        if (o->st->polled && !(o->st->poller = agc_poller_open(vm, o->st->fd, &err))) {
+          fail_op(o, FS_OPEN, err);
+          result = common_error(vm, o);
+          o->owns_st = true;
+          break;
+        }
         agc_resource *r = agc_register(vm, o->st, release_state);
         agc_own(vm, r, close_file);
         r->pool_close = true;
@@ -987,6 +1014,11 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   op *o = data;
   agc_poller *p = poller_of(o);
   if (p) agc_poller_pause(p);
+  if (o->kind == OP_CLOSE && o->sent) {
+    memmove(o->st->buf, o->st->buf + o->sent, o->st->end - o->sent);
+    o->st->end -= o->sent;
+    o->sent = 0;
+  }
   if (agc_is(context, AGC_T_HANDLE)) {
     o->owns_st = true;
     agc_resource *r = agc_as_handle(vm, context);

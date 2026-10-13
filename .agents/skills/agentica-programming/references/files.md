@@ -53,7 +53,7 @@ or `/dev/fd/N`) is refused as not a regular file; pipes the VM got at
 start (standard input, output and error, `bash <(...)`) stay readable. FIFOs
 and devices count as files: a FIFO with no writer gives EOF, and opening
 one for writing with no reader is an error. Calls on pipes, FIFOs and
-terminals (stdin too) wait on the VM's event loop, not in the thread pool,
+terminals (stdin too, when `/proc` lets the VM reopen it) wait on the VM's event loop, not in the thread pool,
 so a timeout really ends the wait; `File.read_text` of a pipe reads to EOF.
 Calls on regular files, DNS lookups and TLS certificate loading share one
 thread pool per process: 4 threads by default. Set `UV_THREADPOOL_SIZE`

@@ -583,10 +583,10 @@ void agc_io_ready(agc_io_job *j);
 void agc_io_block_stop(sigset_t *saved);
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 void agc_io_then(agc_io_job *j, bool (*more)(void *data, agc_io_job *job));
-agc_poller *agc_poller_open(agc_vm *vm, int fd);
+agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err);
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
 void agc_poller_pause(agc_poller *p);
-void agc_poller_close(agc_poller *p, bool close_fd);
+void agc_poller_close(agc_poller *p);
 #endif
 bool agc_io_poll(agc_vm *vm, bool wait);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
@@ -663,6 +663,7 @@ double agc_random_float(agc_random *r);
 bool agc_random_int(agc_random *r, int64_t low, int64_t high, int64_t *out);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
+void agc_input_close(agc_vm *vm);
 agc_input_status agc_input_peek(agc_vm *vm, int *byte);
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
 agc_input_status agc_input_all(agc_vm *vm, agc_string **text);

@@ -34,6 +34,15 @@
 (define vm-wait-seconds 10)
 (define python (find-executable-path "python3"))
 (define-runtime-path stop-peer "fixtures/stop-peer.py")
+(define-runtime-path fifo-peer "fixtures/fifo-peer.py")
+(define mkfifo (find-executable-path "mkfifo"))
+
+(define (fifo-ready? what)
+  (cond
+    [(not (vm-built? what)) #f]
+    [(and mkfifo python) #t]
+    [(getenv "CI") (error 'filesystem "mkfifo and python3 are required in CI")]
+    [else (displayln (format "SKIP ~a: mkfifo or python3 is unavailable" what)) #f]))
 
 (define (run-vm-bounded root text #:inherit? [inherit? #f] #:input [input #f] #:one-pool-thread [one? #f]
                         #:keep-stdin [keep-stdin? #f] . arguments)
@@ -120,8 +129,7 @@
            (check-equal? (hash-ref (string->jsexpr (third result)) 'flush_timeout_ms) 200)))))
 
   (test-case "FIFO calls wait on the loop: timed-out reads and parked tasks hold no pool thread at exit"
-    (define mkfifo (find-executable-path "mkfifo"))
-    (when (and mkfifo (vm-built? "the FIFO exit test"))
+    (when (fifo-ready? "the FIFO exit test")
       (with-temp-dir
        (lambda (root)
          (define fifo (path->string (build-path root "fifo")))
@@ -147,8 +155,7 @@
          (check-equal? (file->string out) "flushed")))))
 
   (test-case "FIFOs stream on the loop: read_line waits for a writer task, read_text reads to EOF"
-    (define mkfifo (find-executable-path "mkfifo"))
-    (when (and mkfifo (vm-built? "the FIFO stream test"))
+    (when (fifo-ready? "the FIFO stream test")
       (with-temp-dir
        (lambda (root)
          (define first-fifo (path->string (build-path root "first")))
@@ -158,6 +165,59 @@
            (run-vm-bounded root "struct Pair\n  first: FileHandle\n  second: FileHandle\nend\n\ndef feed(p: Pair) -> Result[Void]\n  Task.sleep(100)\n  try File.write(p.first, \"hello\\n\", 5000)\n  try File.close(p.first, 5000)\n  big = \"line\\n\"\n  for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]\n    big = big + big\n  end\n  try File.write(p.second, big, 5000)\n  return File.close(p.second, 5000)\nend\n\ndef main() -> Void\n  a = System.args()[0]\n  b = System.args()[1]\n  r = File.open(a, \"read\", 1000).unwrap!\n  w = File.open(a, \"append\", 1000).unwrap!\n  holder = File.open(b, \"read\", 1000).unwrap!\n  w2 = File.open(b, \"append\", 1000).unwrap!\n  t = Task.spawn(&feed, Pair(first: w, second: w2))\n  IO.inspect(File.read_line(r, 5000))\n  IO.inspect(File.read_line(r, 5000))\n  text = File.read_text(b, 5000).unwrap!\n  IO.inspect(Task.await(t))\n  IO.inspect(String.length(text))\nend\n" #:one-pool-thread #t first-fifo second-fifo))
          (check-equal? (take result 2)
                        (list 0 "ok(\"hello\")\nerror(\"filesystem: end of file\")\nok()\n81920\n"))))))
+
+  (test-case "a FIFO write waits on the loop for a slow reader, and a reader that leaves gives EPIPE"
+    (when (fifo-ready? "the FIFO peer test")
+      (for ([mode '("slow" "close")])
+        (with-temp-dir
+         (lambda (root)
+           (define fifo (path->string (build-path root "fifo")))
+           (define-values (peer out in err)
+             (subprocess #f #f (current-error-port) python (path->string fifo-peer) fifo mode "65536"))
+           (close-output-port in)
+           (check-equal? (sync/timeout vm-wait-seconds (read-line-evt out)) "ready" mode)
+           (define result
+             (run-vm-bounded
+              root
+              (string-append "def main() -> Void\n  big = \"0123456789\"\n"
+                             "  for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]\n"
+                             "    big = big + big\n  end\n"
+                             "  IO.inspect(File.write_text(System.args()[0], big, 10000))\nend\n")
+              #:one-pool-thread #t fifo))
+           (define got (sync/timeout vm-wait-seconds (read-line-evt out)))
+           (unless (sync/timeout vm-wait-seconds peer) (subprocess-kill peer #t))
+           (close-input-port out)
+           (check-equal? (first result) 0 mode)
+           (if (equal? mode "slow")
+               (begin (check-equal? (second result) "ok()\n") (check-equal? got "327680"))
+               (check-regexp-match #rx"^error\\(\"error writing to stream port.*Broken pipe" (second result))))))))
+
+  (test-case "a crash cancels a task parked on a FIFO read, and frees its descriptor"
+    (when (fifo-ready? "the FIFO crash test")
+      (with-temp-dir
+       (lambda (root)
+         (define fifo (path->string (build-path root "fifo")))
+         (define path (path->string (build-path root "plain.txt")))
+         (check-true (system* mkfifo fifo))
+         (define result
+           (run-vm-bounded
+            root
+            (string-append
+             "def reader(path: String) -> Result[String]\n  return File.read_text(path, 60000)\nend\n\n"
+             "def parent(path: String) -> Int\n  Task.spawn(&reader, path)\n  Task.sleep(50)\n"
+             "  zero = String.length(\"\")\n  return 1 / zero\nend\n\n"
+             "def main() -> Void\n  fifo = System.args()[0]\n"
+             "  holder = File.open(fifo, \"append\", 1000)\n"
+             "  IO.inspect(Dir.list(\"/proc/self/fd\", 1000).unwrap!.length)\n"
+             "  Task.spawn(&parent, fifo)\n  Task.sleep(300)\n"
+             "  IO.inspect(Dir.list(\"/proc/self/fd\", 1000).unwrap!.length)\n"
+             "  IO.inspect(File.write_text(System.args()[1], \"x\", 1000))\nend\n")
+            #:one-pool-thread #t fifo path))
+         (define lines (string-split (second result) "\n"))
+         (check-equal? (first result) 1)
+         (check-equal? (length lines) 3)
+         (check-equal? (first lines) (second lines) "the cancelled read's descriptor is closed")
+         (check-equal? (third lines) "ok()")))))
 
   (test-case "stdin waits on the loop, so file calls run while a task waits for input"
     (when (vm-built? "the stdin test")
