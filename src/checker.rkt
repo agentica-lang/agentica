@@ -906,11 +906,11 @@
                  (format "~a requires a function with one parameter" (builtin-name selected))
                  (node-span (car arguments))))
          (define handed (check-expression (cadr arguments) (cadr callback)))
-         (when (and owning? (not (memq handed handle-types)))
+         (when (and owning? (not (memq handed handle-types)) (not (channel-type? handed)))
            (bail 'CHECK-NOT-A-HANDLE
                  (format "Task.spawn_owning gives a handle to the new task, but the argument is ~a" (type->string handed))
                  (node-span (cadr arguments))
-                 #:help "pass a FileHandle, Socket, Listener, Process or HttpServer; Task.spawn passes any other value"))
+                 #:help "pass a FileHandle, Socket, Listener, Process, HttpServer or Channel; Task.spawn passes any other value"))
          (list 'Task (caddr callback))]
         [(task-await)
          (define target (check-expression (car arguments) (and expected (list 'Task expected))))

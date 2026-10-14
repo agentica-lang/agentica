@@ -421,16 +421,20 @@ agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, cons
   return child;
 }
 
-bool agc_task_owns(agc_vm *vm, agc_value handle) {
-  const agc_resource *r = agc_owned_of(vm, handle);
-  return r && r->owner == vm->task;
+static agc_resource *owned_by_caller(agc_vm *vm, agc_value handle) {
+  agc_resource *r = agc_owned_of(vm, handle);
+  return r && r->owner == vm->task ? r : NULL;
 }
 
+bool agc_task_owns(agc_vm *vm, agc_value handle) { return owned_by_caller(vm, handle) != NULL; }
+
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
-  if (!agc_task_owns(vm, handle))
+  agc_resource *r = agc_is(handle, AGC_T_CHANNEL) ? agc_channel_claim(vm, agc_as_channel(vm, handle))
+                                                  : owned_by_caller(vm, handle);
+  if (!r)
     agc_fail(vm, "RUNTIME-HANDLE-NOT-OWNED", "the calling task does not own this handle, or it is closed", span + 2);
   agc_task *child = agc_task_spawn_seeded(vm, parent, fn, &handle, 1, span);
-  agc_hand_over(agc_owned_of(vm, handle), child);
+  agc_hand_over(r, child);
   return child;
 }
 

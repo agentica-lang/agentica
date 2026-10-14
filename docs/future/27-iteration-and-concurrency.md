@@ -545,13 +545,17 @@ timeout and return a `Result`, and `close` and `closed?` are added.
   producers, or a producer that may crash (§37), each producer returns a
   `Result` and a coordinator awaits them all and then closes the channel: a
   crashed producer gives the coordinator an `error`, so the close still happens
-  (§37.7).
+  (§37.7). With one producer, `Task.spawn_owning(&produce, jobs)` makes it the
+  owner of the channel: the channel is closed when that task ends in any way, a
+  crash or a cancel included, so the receive loop does not wait for a producer
+  that died (§37.5).
 - **`close`** marks the channel closed and returns `Void`; closing again does
   nothing. Waiting senders get the closed error; so do woken senders that hold a
   reserved slot but have not run yet: `close` revokes their reservations, since
   nothing can be added after a close, and their `send` returns
   `error("channel: closed")`. Waiting receivers get the values left and then the
-  closed error. Any holder may close it. The rule the skill teaches: the
+  closed error. Any holder may close it, also a channel that has an owner (the
+  owner's end then closes nothing more). The rule the skill teaches: the
   producer closes, consumers never do, and the producer closes on every path,
   errors included. It puts the sending in its own function and closes after it
   (`result = send_all(jobs)`, then `jobs.close`, then `return result`), so a

@@ -213,8 +213,11 @@
                    ("t = Task.spawn(&identity, 0)\n  t == t" CHECK-TYPE-MISMATCH))])
       (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry)))
     (check-equal? (check-code "struct Task\n  n: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
-  (test-case "Task.spawn_owning takes only a handle type and is checked like Task.spawn"
+  (test-case "Task.spawn_owning takes only a handle type or a channel and is checked like Task.spawn"
     (define prefix (string-append "struct Job\n  socket: Socket\nend\n\n"
+                                  "struct Crate\n  inbox: Channel[Int]\nend\n\n"
+                                  "def feed(inbox: Channel[Int]) -> Result[Int]\n  return ok(1)\nend\n\n"
+                                  "def crate(c: Crate) -> Void\nend\n\n"
                                   "def identity(n: Int) -> Int\n  return n\nend\n\n"
                                   "def serve(socket: Socket) -> Result[String]\n  return TCP.read_line(socket, 10)\nend\n\n"
                                   "def edit(file: FileHandle) -> Void\nend\n\n"
@@ -229,10 +232,14 @@
                                                 "  t: Task[Result[String]] = Task.spawn_owning(&serve, socket)\n"
                                                 "  Task.await(t)\n"
                                                 "  Task.spawn_owning(&edit, File.open(\"x\", \"read\", 10).unwrap!)\n"
-                                                "  Task.spawn_owning(&watch, Process.spawn(\"x\", [], 10).unwrap!)"))))
+                                                "  Task.spawn_owning(&watch, Process.spawn(\"x\", [], 10).unwrap!)\n"
+                                                "  ch: Channel[Int] = Channel.new(4)\n"
+                                                "  fed: Task[Result[Int]] = Task.spawn_owning(&feed, ch)\n"
+                                                "  Task.spawn_owning(&feed, Channel.new(2))"))))
     (for ([entry '(("Task.spawn_owning(&identity, 1)" CHECK-NOT-A-HANDLE)
                    ("Task.spawn_owning(&job, Job(socket: TCP.connect(\"127.0.0.1\", 1, 10).unwrap!))" CHECK-NOT-A-HANDLE)
                    ("Task.spawn_owning(&many, [TCP.connect(\"127.0.0.1\", 1, 10).unwrap!])" CHECK-NOT-A-HANDLE)
+                   ("Task.spawn_owning(&crate, Crate(inbox: Channel.new(2)))" CHECK-NOT-A-HANDLE)
                    ("Task.spawn_owning(&identity, \"x\")" CHECK-TYPE-MISMATCH)
                    ("Task.spawn_owning(7, TCP.connect(\"127.0.0.1\", 1, 10).unwrap!)" CHECK-TYPE-MISMATCH)
                    ("Task.spawn_owning(&serve)" CHECK-ARITY)
