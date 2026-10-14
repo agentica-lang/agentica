@@ -12,7 +12,7 @@ HTTP on the VM uses whole messages and `String` bodies. Streaming waits for chan
   - The start line is checked before any header line: its length (431), then its shape. A request is `METHOD SP+ TARGET SP+ VERSION`, and a response is `VERSION SP+ 3DIGIT`. In a request, `HTTP/1`, `HTTP/2`, `HTTP/1.10` and `HTTP/2.0` are 505, and any other bad shape is 400. A complete bad start line fails at once, even where picohttpparser would wait for more.
   - The target is origin form, or `*` with `OPTIONS`, with bytes 33 to 126 only (400). The method is token characters only (400). `CONNECT` is 501.
   - Responses: `HTTP/1.1` only, status 100 to 599. 101 is rejected. At most 15 interim responses are accepted, and the 16th fails. Responses fail as client error `Result`s.
-- The body decoder (`vm/http_body.c`) is our own incremental state machine, set up with the framing and `max_body_bytes`. It gives 413 over the limit, 431 for an over-long chunk-size or trailer line and for trailers over their limits, and 400 for any other malformed body. Chunk sizes accumulate with saturation. Trailers are checked, then dropped: there is no trailer API.
+- The body decoder (`vm/http_body.c`) is our own incremental state machine, set up with the framing and `max_body_bytes`. It gives 413 over the limit, 431 for an over-long chunk-size or trailer line and for trailers over their limits, and 400 for any other malformed body. Chunk sizes accumulate with saturation. Trailers are checked (token names, value bytes, the line, block and count limits, and no framing names: `content-length`, `transfer-encoding`, `host`, `connection`, `trailer`) and dropped; there is no trailer API. EOF inside a `Content-Length` or chunked body is `http: truncated HTTP body`; EOF ends a close-delimited body normally, except over TLS (10.7.1).
 - Until the streaming items (20e to 20g) there is no chunked encoder. Responses always carry `Content-Length`, and requests are never chunked.
 - Tests target the adapter interface, so a replacement parser must pass the same tests: the C unit test `vm/tests/http_parse_test.c`, and the socket cases of `tests/vm-http-test.rkt`, sent by Python raw-socket peers (`tests/fixtures/http-peer.py`, `tests/fixtures/http-server-peer.py`).
 
@@ -30,7 +30,7 @@ HTTP is split between the C builtin module `HttpWire` and the Agentica module `s
 - **Body limit and memory.** `max_body_bytes` defaults to 1 MiB on both sides and may be raised to 64 MiB. A body is held in C once and in its `String` once, so body memory is at most `max_body_bytes` × `max_connections` × 4 (512 MiB with the server defaults). A program that raises `max_body_bytes` must lower `max_connections`. A body over the limit is an `error` on the client, and a 413 on the server, before the handler runs.
 - **Bodies are text.** A request or response body must be valid UTF-8. The client returns an `error` for a response body that is not, and the server answers 400 without running the handler. Binary bodies wait for `Bytes` (phase 13). `Content-Encoding` stays raw.
 - **The handler returns its answer**, `Fn[HttpRequest, Result[HttpResponse]]`. An `error` becomes a 500 (10.7.3). The returned `Result` is used, so `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).
-- **Response framing** is always `Content-Length`, never chunked, never trailers. `HEAD` gets the head and no body. 204 and 304 get no body and no `Content-Length`, and a non-empty body with them is a 500. The request body is read in full before the handler runs, so keep-alive needs no "was the body consumed?" rule.
+- **Response framing** is always `Content-Length`, never chunked, never trailers. `HEAD` gets the head and no body, with the `Content-Length` of the body it would have sent. 204 and 304 get no body and no `Content-Length`, and a non-empty body with them is a 500. The request body is read in full before the handler runs, so keep-alive needs no "was the body consumed?" rule.
 - **Incoming framing** is complete: chunked request bodies, and chunked or close-delimited response bodies, are decoded in full in C, within the limits.
 - **Requests the client sends** carry `Content-Length` when the body is not empty or the method is `POST`, `PUT` or `PATCH`. The client adds `Host`, and refuses user `Host`, `Content-Length`, `Transfer-Encoding` and `Connection` headers, and CR, LF and control bytes. It writes the body while it reads the response, so an early 413 cannot deadlock the call.
 - **Pool.** `HttpClient` keeps idle keep-alive connections per scheme, host and port, at most `max_connections` per origin. A call waits in FIFO order for a free one, within its timeout. A connection is leased for one call, and goes back to the pool only when the response was complete and neither side asked to close.
@@ -57,7 +57,7 @@ HttpWire.close_client(client: HttpClient) -> Void
 - **Over TLS, a close-delimited body must end with `close_notify`.** tcp.c records whether the TLS layer closed before the TCP FIN. A bare FIN gives `http: truncated HTTP body`. OpenSSL cannot tell the two apart here, since `SSL_OP_IGNORE_UNEXPECTED_EOF` makes a bare FIN look like `close_notify`.
 - One `timeout_ms` covers the call, from the wait for a slot to the last body byte. On timeout the connection is closed and the call returns `network: operation timed out`. `close_client` closes idle connections and fails every call in flight with `http: client is closed`.
 - At the end of the run, the client's goodbye hook sends one non-blocking `close_notify` on each HTTPS connection, idle or in use (§10.2.2).
-- Errors are `http: ` plus the 10.6 text, or the network text of tcp.c.
+- Errors are `http: ` plus the text in `vm/http_body.c` (or `vm/http_client.c`), or the network text of tcp.c.
 
 #### 10.7.2 As built: the server (20c)
 
@@ -88,7 +88,7 @@ HttpWire.local_port(server: HttpServer) -> Int
 
 | Case | Who | Answer |
 |---|---|---|
-| Malformed or hostile head or body: bad start line, bare LF, obs-fold, bad target or method, bad framing | C | 400, `Connection: close`, empty body, then close. The handler never runs |
+| Malformed or hostile head or body: bad start line, bare LF, obs-fold, bad target or method, bad framing, or not exactly one non-empty `Host` header | C | 400, `Connection: close`, empty body, then close. The handler never runs |
 | A line, the head, the header count or the trailers over their limits | C | 431, then close |
 | A body over `max_body_bytes` (a `Content-Length` over it is answered before any body byte is read) | C | 413, then close |
 | A version `HTTP/[0-9.]+` other than `HTTP/1.1` | C | 505, then close |

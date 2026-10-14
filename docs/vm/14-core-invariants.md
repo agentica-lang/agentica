@@ -34,7 +34,7 @@ A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its `can
 
 **Rule.** One exit path. Every step of it is bounded, the file flush included. Target (row 7.2.1d): the file flush has a limit that is always on, 30 seconds by default, set with `--flush-timeout MS` or an environment variable (for example `AGENTICA_FLUSH_TIMEOUT_MS`), with no way to turn it off. The owner decided this on 2026-10-13. At exit, stdout and stderr count as part of the file flush. **When `main` ends, the program ends.** The steps are:
 
-1. kill child processes;
+1. kill child processes (`close_children`, about 2 seconds at most, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
 3. exit.
 
