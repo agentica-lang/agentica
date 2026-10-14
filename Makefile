@@ -85,6 +85,7 @@ clean:
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
 site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
+site site-serve: export HUGO_PARAMS_VERSION = $(AGC_VERSION)
 
 site-sass:
 	@command -v sass >/dev/null || { echo "The site needs Dart Sass: put its sass on PATH or in $(DART_SASS) (pinned version in .github/workflows/pages.yml)" >&2; exit 1; }
