@@ -1,0 +1,87 @@
+# Repository map, file by file
+
+One line per file of `src/`, `vm/`, `tests/`, `stdlib/` and `docs/`. The short tree is in `AGENTS.md`; read this to find which file owns something.
+
+```text
+src/
+  source.rkt      # source, source-position, source-span (span end is exclusive)
+  diagnostic.rkt  # diagnostic struct and format-diagnostic
+  token.rkt       # token struct
+  lexer.rkt       # lex: source -> (listof token) | diagnostic
+  ast.rkt         # syntax tree nodes (including enums and case patterns); every node carries a span
+  parser.rkt      # parse: (listof token) -> program | diagnostic
+  builtins.rkt    # shared signatures, type-rule tags, dispatch keys, effects, descriptions
+  checker.rkt     # check: program -> program | diagnostic
+  modules.rkt     # import linking: std/, pkg/ and relative files, aliases, exports, cycles; runs before check
+  stdlib.rkt      # std/ Agentica sources embedded at compile time
+  builtin-types.rkt # opaque handle types, builtin record layouts (Header, HttpResponse, FileInfo, ...) and builtin enums (Await)
+  version.rkt     # the version string
+  lower.rkt       # lower: checked program + #:types table -> IR | diagnostic (LOWER-); format-ir for --dump-ir
+  bytecode.rkt    # ir->bytecode and write-bytecode (BYTECODE-LIMIT, BYTECODE-INTERNAL): the .agcb format of docs/vm/03-ir-and-bytecode.md 4.6; the C loader is the only reader
+  bdd-driver.rkt  # agentica test: compiles the step program and the embedded std/test/runner, runs the runner VM, infrastructure report
+  vm-launch.rkt   # find-vm, stop-vm, call-noting-break and running-executable, shared by main.rkt and bdd-driver.rkt
+  main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
+vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md and its "Read next" table
+  value.h port.h core.h services.h  # shared types and the agc_ API, one header per layer (references/vm.md, "Which layer"); list_impl.h is the private list layout (list.c and interp.c only)
+  value.c text.c map.c list.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, opaque lists (list API in value.h), loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json) and the stack trace of a runtime error, CLI
+  loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
+  input.c output.c  # stdin reader; stdout and stderr: a 64 KiB buffer and a FIFO of waiting writers per stream, written by the loop (Linux)
+  duplex.c        # the child channel (fd 3 and AGENTICA_CHANNEL=3): Process.parent_read_line/parent_send, the duplex stream Process.spawn_channel uses, and the functions Test.run uses (Linux)
+  process.c       # Process builtins on libuv pipes, behind the VM's --allow-run, and System.env (Linux)
+  tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c and duplex.c
+  tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
+  net.h           # tcp.c's connection object (agc_conn) for other C modules
+  http_parse.h http_pico.c http_body.c  # HTTP head adapter (the only file that includes picohttpparser) and body decoder
+  http_fields.h http_fields.c  # header lists and byte buffers shared by the HTTP client and server
+  http_client.c   # HttpWire client builtins: the pool, called only by stdlib/http.agc (Linux)
+  http_server.c   # HttpWire server builtins: read_request, write_response and the HttpServer task group (Linux)
+  task.c          # scheduler (run queue, turns, park and wake), task cancellation and the Task builtins
+  channel.c       # the Channel builtins: ring buffer, waiter FIFOs, reservations and hand-on when a waiter leaves
+  testing.c equal.c # the Test builtins (unit tests, roadmap 25a); agc_equal, the deep value compare Test.eq uses
+  unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
+  tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
+  fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests
+  third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c with AGENTICA_GC=vendored (the Linux default links the system libgc)
+  third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
+  third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
+  third_party/picohttpparser # picohttpparser submodule pinned to v1.4 (HTTP heads)
+  third_party/openssl      # OpenSSL submodule pinned to openssl-3.5.9; AGENTICA_OPENSSL=vendored builds it static per mode into build/vm/<mode>/openssl (needs Perl); the default links the system OpenSSL 3
+tests/
+  <stage>-test.rkt      # lexer, parser, checker, modules, bdd; filesystem and process run programs on the VM
+  diagnostic-test.rkt   # excerpt and caret format
+  examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
+  bytecode-test.rkt     # step merging, opcode list vs vm/value.h, every builtin in vm-builtins, compile exit codes
+  vm-diff-{1..8}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on dist/agentica-vm in three formats against their <name>.expected goldens (make goldens), with a --max-steps sweep
+  site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
+  stdlib-distribution-test.rkt # the relocated executable still finds std/
+  stdlib-docs-test.rkt  # every stdlib/**/*.agc has a module doc and a doc on every export (22a)
+  bdd-test.rkt, bdd-integration.rkt # agentica test over the CLI (in-process main): step programs, isolation, programs under test
+  unit-test-test.rkt    # agentica test on *_test.agc files (fixtures in fixtures/unit/) and the std/ unit tests in std/
+  std/                  # *_test.agc unit tests of the std/ modules
+  fixtures/             # golden fixtures and independent Node.js and Python peers
+  vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit, the connections a crashed or returned task closes (24b)
+  vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
+  vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full and unread stdout, Ctrl-C through the CLI
+  std-binary-test.rkt   # std/binary on the VM: the fixed output of fixtures/vm/std-binary.agc and the vector count of std-binary-vectors.agc (fixtures/std-binary-vectors.py; references/language-notes.md)
+  vm-bits-test.rkt      # the spans of the Int and Float bit builtin errors (fixtures/vm/int-shift-*.agc, float-from-bits32-*.agc); the vectors fixture is bits-vectors.agc with fixtures/bits-vectors.py (references/language-notes.md)
+  vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
+  vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, a socket and a pty as stdout, the order of stdout and stderr on one target, notices, a gone reader, a crashed parent
+  vm-stack-test.rkt     # the exact stderr of the stack-trace fixtures in the plain, --ai and --json formats (fixtures/vm/stack-trace-*.stack.*; make goldens rewrites them)
+  vm-file-lines-test.rkt # File.each_line: a 10 MB file streamed in buffer-sized reads, the step limit, a FIFO fed in pieces, a stall timeout, closing a read FIFO with read-ahead, a crash while parked (fixtures/lines-peer.py)
+  vm-test-protocol-test.rkt # a Python peer plays the runner of a test file over the child channel (fixtures/test-protocol-peer.py, child_channel.py): list and run records, free stdin and stdout, no channel
+  vm-child-channel-test.rkt # the child channel on its own, both sides, against Python peers (fixtures/child-channel-peer.py): lines, EOF, timeouts, no channel, a marker or a descriptor alone, fd 3 as a regular file, a device (refused) or a FIFO (taken), a UTF-8 character split between reads, a grandchild
+  bdd/                  # feature specs and step handlers run by make test-bdd
+  eval/                 # agent evaluation runner (not part of make test)
+stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
+  queue.agc http.agc binary.agc    # std/queue, std/http, std/binary
+  bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
+  bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md
+  test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-channel record helpers, shared by unit tests and BDD
+examples/               # small programs per feature; examples/README.md lists them
+docs/
+  grammar.md   # index of the language grammar
+  grammar/     # the language definition, one file per section; the source of truth
+  future/      # planned syntax, not implemented (one file per section)
+  roadmap/     # phases and the active checklist (README.md: current order and rules)
+  vm/          # bytecode VM design (phase 7): IR, bytecode, C values, safety rules, PR plan
+```

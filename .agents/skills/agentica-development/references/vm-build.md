@@ -1,0 +1,241 @@
+# VM build, submodules, sanitizers and platforms
+
+Make targets, the third-party submodules, sanitizers, fuzzing and portability.
+
+## Commands
+
+```sh
+git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
+make vm                              # dist/agentica-vm (Linux: the system libgc and OpenSSL 3 from pkg-config, dynamic: Debian libgc-dev libssl-dev pkg-config)
+make vm AGENTICA_GC=vendored         # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
+make vm AGENTICA_OPENSSL=vendored    # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
+make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
+make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
+make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser and libuv for this mode
+make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
+make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
+make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
+make vm CCACHE=                      # without ccache (used when installed and its cache dir is writable)
+make vm SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
+make vm vm-test TRACE=0              # trace points compiled out (still type-checked); --version says "trace off"
+AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica-vm -- prog.agcb   # sched,io,proc,tls,loader,gc
+make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
+FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
+make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
+make vm-latency                      # tests/vm-latency-test.rkt alone (see `vm-tasks.md`, Gotchas)
+make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
+make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
+make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; use Racket CS 9.3, the CI version; CI checks it is committed)
+AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
+racket src/main.rkt compile prog.agc -o prog.agcb && dist/agentica-vm -- prog.agcb
+racket src/main.rkt --dump-ir prog.agc
+racket src/main.rkt prog.agc         # front end + VM in one step (the default); AGENTICA_VM=path picks the binary
+```
+
+- CI runs `vm-sanitizers` (`make vm-lint`, `make vm-layers`, ASan diff and bytecode tests, `make vm-fuzz`,
+  `make vm-gc-stress`) only when a pull request (never a `master` push) touches the VM paths listed
+  in the `changes` job of `.github/workflows/ci.yml`; the list and the other
+  jobs are in `references/ci.md`. A new VM source or test file outside those
+  paths must be added there.
+- `agentica file.agc` runs on the VM (Linux only for now,
+  `docs/vm/08-loader-and-cli.md` §9): `src/main.rkt` lowers the checked
+  program; a `LOWER-UNSUPPORTED` is printed like any diagnostic, exit 1.
+  Every catalog implementation is in `vm-builtins` in `src/lower.rkt`
+  (`tests/bytecode-test.rkt` checks it), so no builtin reaches it today.
+  `agentica test` runs on the VM: `src/bdd-driver.rkt` compiles
+  the step program and `std/test/runner` and starts the runner VM with
+  `--driver-pid` (see `references/bdd.md`).
+  Otherwise it writes `agentica-<hex>.agcb` with `#:exists 'error #:permissions #o600`
+  in the temp directory and runs the VM with the hidden `--driver-pid PID`
+  flag. The VM then deletes its input right after reading it; on Linux it
+  first resets `SIGTERM` to its default, sets `PR_SET_PDEATHSIG` to
+  `SIGTERM` and exits 2 when `getppid()` is not `PID`. On a break the
+  driver (`stop-vm #:interrupted? #t`, after `call-noting-break` in
+  `src/vm-launch.rkt`) first waits up to 2 s, since a terminal's Ctrl-C
+  reached the VM too and an early `SIGTERM` would be its second signal,
+  then sends `SIGTERM` (libc `kill` through the FFI), waits up to 2 s, then
+  `SIGKILL`; on other exits it sends `SIGTERM` at once.
+  The driver deletes the file too (VM never ran, failed early, break), and
+  copies stdin/stdout/stderr through pipes only when they are not file
+  streams. The VM is found (`find-vm` in `src/vm-launch.rkt`) by `AGENTICA_VM`, else `dist/` of the checkout
+  (module source path), else next to a `raco exe` executable (the release
+  archive has it in `bin/`); no `define-runtime-path`, since `raco
+  distribute` would copy the VM. A missing VM exits 2, never a silent
+  fallback. `--max-steps`, `--seed`, `--allow-run`, `--ai` and `--json`
+  pass through; add new options to the pass-through list in `src/main.rkt`
+  as the VM gains them. A new builtin goes into `vm-builtins` with its C
+  implementation.
+  `tests/vm-diff-8-test.rkt` checks the CLI against the goldens (with
+  `TMPDIR` and `AGENTICA_VM` set, checking no `.agcb` is left), that the
+  removed `--vm` and `--legacy-eval` flags are unknown, a missing VM, runs it once in-process to cover
+  the pipe path, and checks `--driver-pid`.
+
+- Each mode compiles `vm/*.c`, `vm/tests/*.c` and the drivers once into
+  `$(VM_BUILD)/obj/` with `-MMD -MP` (dependency files beside the objects),
+  and every binary links from them (`VM_LINK`); a new `vm/*.c` file goes
+  in `VM_SRC` only. `$(VM_BUILD)/obj-flags` recompiles the mode when the
+  compile line or the compiler's `--version` changes; `tls_openssl.o` also
+  follows the OpenSSL stamp. Compiles run through `$(CCACHE)`, the vendored
+  OpenSSL too, but not its key. It is found on `PATH` and used only when
+  its cache dir (`ccache -k cache_dir`, or `$CCACHE_DIR`/`~/.ccache` for a
+  ccache without `-k`) or its nearest existing parent is writable; the
+  check creates nothing. `CCACHE=` turns it off (use it when a ccache
+  setup fails). `CCACHE_BASEDIR` is the checkout, and the `-g` modes add
+  `-fdebug-prefix-map=$(CURDIR)=.` (`DEBUG_MAP`) to the VM, third-party and
+  vendored OpenSSL compiles but not to the stamps or the OpenSSL key, so
+  worktrees share hits and debug info names `.`. From a checkout reached
+  through a symlink, `$(PWD)` (the path gcc and ccache see) is mapped too.
+  Third-party `-g` objects built earlier or restored from the CI cache
+  keep their absolute paths until their key changes. A read-only ccache
+  (`CCACHE_READONLY`, or a cache dir you cannot write) is turned off.
+- `build/vm/<mode>/obj/tests/*_test.o` are `.SECONDARY`, so make keeps them
+  and a second `make vm vm-test` recompiles nothing.
+- `SANITIZE` may come from the environment; `build/vm/flags` relinks when the
+  flags change. Run `make build` (raco make) before many `compile` calls, or
+  each one recompiles `src/`.
+- Golden tests (`docs/vm/README.md` §1, `docs/vm/12-testing-and-pr-plan.md`
+  §12.1): `tests/vm-diff-1-test.rkt` … `vm-diff-8-test.rkt` run each fixture
+  of `tests/fixtures/vm/` on the VM and compare exit code, stdout, program
+  stderr and diagnostic code with its `<name>.expected`, plus a
+  `--max-steps` sweep. Shared code is in `tests/vm-diff-common.rkt`; each
+  shard takes a fixed share of the fixtures so `raco test -j` runs them in
+  parallel. When behaviour changes on purpose, `make goldens` rewrites the
+  expected files from the VM; commit them, and the PR diff shows the change
+  for review.
+- The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
+  file lock in `build/`, since they run in parallel), print `SKIP` locally
+  when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
+  They run each fixture on the VM with `--json` and compare exit code,
+  stdout, stderr without the final JSON diagnostic line, and the diagnostic
+  code parsed from that line (`outcome`), with the fixture's golden
+  (`read-expected`; JSON with `exit`, `code`, and `stdout`/`stderr` as lists
+  of lines). One more VM run each in the plain and `--ai` formats must match
+  exit code, stdout and program stderr, and name the same code
+  (`check-text-format`; task crash blocks, with their stack lines, and the
+  unobserved summary line are taken out of both sides first, and their codes
+  must match; `skip-stack` knows the stack line shapes). Crash
+  lines and crash texts carry the fixture's path, so `unfixture` replaces
+  the `tests/fixtures/` directory with `@fixtures/` in stdout and stderr
+  before any compare. The `--max-steps` sweep: each limit must give the
+  golden outcome, or exit 1 with `RUNTIME-STEP-LIMIT` and stdout and stderr
+  that are prefixes of the golden's; once a limit finishes, larger ones must
+  too (`check-sweep`). Each golden records the fixture's step count T
+  (`"steps"`, the smallest limit that finishes); the VM's own count, found
+  by `total-steps`, may be lower but at most `T + max(10, T / 10)`
+  (`check-steps`, which catches over-charging), and the last sweep limit,
+  `max(2T + 100, T + 2 * 2000)` with the golden's T, must finish. With
+  `AGENTICA_SWEEP=sampled` (the `test` and ASan jobs and `make vm-gc-stress`) each
+  fixture runs only 1, 2, T - 1, T, the last limit and 8 limits drawn one
+  from each eighth of 3 to T - 2 (`sampled-limits`); local `make test`,
+  the release and the weekly `sweep.yml` keep the full sweep. The draw comes from `AGENTICA_SWEEP_SEED`, else the
+  first 8 hex digits of `GITHUB_SHA` or `git rev-parse HEAD`, plus the
+  fixture name, so it rotates with the commit and is fixed within a run.
+  Each shard prints the seed, and a failed limit names it: rerun with that
+  `AGENTICA_SWEEP=sampled AGENTICA_SWEEP_SEED=...`. A new
+  fixture needs its golden: run `make goldens`, read the new `.expected` by
+  hand, and commit it; a changed golden is a reviewed behaviour change.
+  `make goldens` refuses a run that timed out, died by a signal (status
+  129 to 159) or ends in `RUNTIME-INTERNAL`, and names `.expected` files
+  with no `.agc` next to them. The runaway fixtures in `step-limited/`
+  keep their golden at `--max-steps 500`, with no step count. Every program
+  the tests run gets `LC_ALL=C.UTF-8` and `LANG=C.UTF-8` (set when
+  `tests/cli-in-process.rkt` loads), so OS error text is the untranslated
+  C text; plain `C` would make Racket decode command-line arguments as
+  ASCII. The sweep cannot see an ignored limit: add a runaway
+  program to `tests/fixtures/vm/step-limited/` for each new loop or call
+  construct (it prints nothing after the loop). On Linux, sweep and runaway
+  VM runs time out after 60 seconds (`timeout --foreground` in the batch
+  script, `#:timeout` in `run-process`); after the first timeout (124 or
+  137) the batch skips its remaining runs and records them as 124. Fixtures are compiled in-process
+  (front end, `lower`, `ir->bytecode`, `write-bytecode`, as `compile` does).
+  The VM runs of one fixture go through one `/bin/sh` script that writes each
+  run's stdout, stderr and exit status to files (stdin from a file, arguments
+  quoted), since a process start from the Racket parent costs 12-35 ms. A new costly fixture may need an
+  entry in `heavy-fixtures` in `tests/vm-diff-common.rkt`. A fixture whose
+  name starts with `process-` runs with `--allow-run`
+  (`fixture-allow-run`); its children must be on every CI runner (`/bin/sh`,
+  `cat`, `sleep`) and must end or be closed.
+  Fixture stdin comes from a file; pipe stdin is covered by the large-input
+  test and the CLI tests. `compile-file` mirrors the `compile`
+  pipeline of `src/main.rkt` and must follow it when that pipeline changes
+  (shard 8 compares its bytes with the CLI `compile`).
+  The batch script needs an `sh` on PATH (MSYS2 on Windows; untested while
+  the macOS and Windows runs are paused). It starts with `exec 2>/dev/null`,
+  so a VM crash shows up in that run's `.status` (128 + signal) and fails
+  only that comparison. `AGENTICA_VM_BINARY=path` makes it
+  use another binary without running `make` (`make vm-gc-stress` uses it
+  for `build/vm/gcstress/agentica-vm`).
+  `tests/bytecode-test.rkt` needs no VM binary.
+- `-Wall -Wextra -Werror` and the hardening flags apply to `vm/*.c` only;
+  `gc.c` gets only `-O2 -fPIE -DALL_INTERIOR_POINTERS
+  -DNO_EXECUTE_PERMISSION` (`build/vm/gc.o` rebuilds when its stamp
+  `build/vm/gc-flags` changes). `yyjson.c` is built per mode into `$(VM_BUILD)/yyjson.o`
+  with `YY_CFLAGS` (the sanitizers in `SANITIZE=1`, no `-Werror`) and the
+  `YY_DEFS` that turn off everything but the reader; `vm/*.c` see the same
+  `YY_DEFS` and `-I vm/third_party/yyjson/src`, and only `vm/json.c`
+  includes `yyjson.h`. libuv (Linux only, `UV_NAMES` in the Makefile, the
+  Linux list of its `CMakeLists.txt`) builds per mode into
+  `$(VM_BUILD)/uv/*.o` with `-std=gnu11`, its own `UV_DEFS` and the mode's
+  `YY_CFLAGS`, then `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt`. The
+  yyjson, picohttpparser and libuv objects follow only their own stamp,
+  `$(VM_BUILD)/third-party-flags` (the output of `make -s
+  vm-third-party-key`: the `YY_COMPILE`, `PICO_COMPILE` and `UV_COMPILE`
+  lines, `UV_NAMES`, the compiler version, and each submodule's commit and
+  local diff), not `build/vm/flags`, the Makefile or the source mtimes, so
+  `TRACE` does not rebuild them and a CI cache hit stays valid. Compile them
+  only through those variables, so a new flag changes the stamp;
+  `vm/*.c` see `-I vm/third_party/libuv/include`, and only `vm/loop.c`,
+  `vm/stream.c`, `vm/process.c`, `vm/tcp.c` and `vm/http_client.c` include `uv.h`. Bumping libuv: check out the new tag inside
+  `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
+  `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
+- Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
+  Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
+  default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
+  `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
+  only drops `-pie` and RELRO. Every binary
+  target ends in `$(EXE)`; the diff test runs `dist/agentica-vm.exe` on
+  Windows. The `platforms.yml` workflow, run by hand, runs `make vm vm-test`
+  and the diff and bytecode tests on `macos-15` and `windows-2025`, not the
+  whole `make test`; run it before merging platform code. macOS and
+  Windows are paused (`references/ci.md`); Linux code goes under
+  `#ifdef __linux__`.
+
+## Files
+
+| Path | Owns |
+|---|---|
+| `vm/third_party/bdwgc` | Boehm GC submodule, pinned to a release tag |
+| `vm/third_party/libuv` | libuv submodule (MIT), pinned to tag v1.53.0; its Linux sources build into `$(VM_BUILD)/libuv.a` |
+| `vm/third_party/openssl` | OpenSSL submodule (Apache-2.0), shallow, pinned to tag `openssl-3.5.9`; with `AGENTICA_OPENSSL=vendored` (the release) built static on Linux per build mode into `$(VM_BUILD)/openssl/` (`libssl.a`, `libcrypto.a`; `docs/vm/10-dependencies-and-platforms.md` §10.0); the default `AGENTICA_OPENSSL=system` links the system OpenSSL 3 instead |
+| `vm/third_party/yyjson` | yyjson submodule (MIT), pinned to tag 0.13.0; only its reader is built, into `$(VM_BUILD)/yyjson.o` |
+| `vm/third_party/picohttpparser` | picohttpparser submodule (MIT or Perl, dual; the MIT notice is at the top of `picohttpparser.h`), pinned to tag v1.4; `picohttpparser.c` is built like yyjson, into `$(VM_BUILD)/picohttpparser.o`, and only `vm/http_pico.c` includes its header |
+
+## Gotchas
+
+- Checking out a branch without the submodule warns `unable to rmdir
+  vm/third_party/bdwgc`; run `git submodule update --init` after switching
+  back.
+- Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
+  run (`make vm-gc-stress`), not ASan.
+- Portability: keep platform code in `vm/main.c` (`open_input`, `wmain`)
+  and the Makefile platform block. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
+  guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
+  `open`, `read`, `fstat` and `ssize_t` with `-std=c11`, but its `struct
+  stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. The input file
+  is opened with `_wopen` on the original UTF-16 argument (`wide_args`),
+  never through `open` (ANSI code page) or a UTF-8 round trip (a lone
+  surrogate would become U+FFFD and name another file). `-municode` goes only on binaries that link
+  `vm/main.c`; the C tests have a plain `main`.
+- libgc without `NO_EXECUTE_PERMISSION` maps writable and executable pages,
+  and macOS on arm64 aborts with `Cannot allocate executable pages` as soon
+  as the heap grows (the loader test does). Interior pointers on the stack
+  and in registers always count; `ALL_INTERIOR_POINTERS` only adds those
+  stored in GC objects and static data and one-past-the-end pointers (one
+  extra byte per object). Nothing relies on it; it is upstream's default.
+- `-D_POSIX_C_SOURCE` makes mingw-w64 use its own printf
+  (`__USE_MINGW_ANSI_STDIO=1`), not the UCRT's; both print `%.767e`
+  exactly, as does the macOS libc.
+- `.gitattributes` keeps LF on checkout (GitHub's Windows runners set
+  `core.autocrlf`). Git detects files with NUL bytes as binary; a binary
+  fixture without them needs a `binary` line there.
+- MSYS2 in CI has no `grep`; use `sed` or install the package.

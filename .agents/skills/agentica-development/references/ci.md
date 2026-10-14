@@ -226,3 +226,14 @@ versions and the Racket bundle are in SKILL.md, "Releases".
   `.jscpd-baseline.json`, so new duplicated code fails CI.
 - Remove the copy instead of growing the baseline. After removing old
   clones, refresh it with `make dup-baseline` and commit the file.
+
+## What CI runs
+
+Run the stage tests the change touches and a smoke run of the affected examples. CI (`.github/workflows/ci.yml`, Racket CS 9.3) runs the full `make test`, `make test-bdd`, the process and module tests against the compiled executable, and `make smoke` (every example smoke run, listed in `tests/smoke.sh`); it is the source of truth for that list. It also runs `make dup-check` (`references/ci.md`): a new clone that is not in `.jscpd-baseline.json` fails CI, so share a helper instead of copying it. After removing old clones, refresh the baseline with `make dup-baseline` and commit it; a reviewer must reject a PR that grows the baseline instead of removing a copy. Runtime and test code use the standard library only; the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+
+## Releases and CHANGELOG
+
+- `src/version.rkt` is the single source of the version: `make version` prints it and `agentica --version` reports it. Keep it in sync with the Git tag.
+- Every PR with a user-visible change adds a short entry under `## [Unreleased]` in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that breaks programs or CLI use with `**Breaking:**`; add the PR number). Internal-only work (CI, refactors, docs) needs none. A release PR renames `[Unreleased]` to `## [X.Y.Z] - DATE`, leaves an empty `[Unreleased]` above it, bumps `src/version.rkt` and fixes the compare links at the bottom.
+- Every minor or patch bump is tagged, and the tag pushed, right away after its PR merges. The bump commit and the annotated tag message are both `release version <tag>`, for example `git tag -a 0.2.0 -m "release version 0.2.0"`.
+- Tag releases with the bare version (`0.2.0`, no `v` prefix). `.github/workflows/release.yml` validates the tag against `src/version.rkt`, builds `dist/agentica`, packages a `raco distribute` bundle with `LICENSE`, `NOTICE` and, in `licenses/racket/`, Racket's license files (from its share directory) and Chez Scheme's `NOTICE` (checked in at `licenses/racket/ChezScheme-NOTICE`, from Racket v9.3's source; update it when the Racket version changes), checks that the archive has them, and publishes a GitHub Release with empty notes; a maintainer writes a short summary of the release by hand afterwards (key points and breaking changes, no PR list; the details stay in `CHANGELOG.md`). How it builds and checks `agentica-vm` is in `references/ci.md`.
