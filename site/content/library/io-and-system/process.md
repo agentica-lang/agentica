@@ -249,7 +249,7 @@ Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
 
 `channel_read_line` reads one line the program sent, as `Process.read_line` does: at most 1 MiB, with the line ending removed, and `error("process: end of input")` when the channel has ended. `channel_send` sends at most 1048576 bytes, exactly as given, so add your own `"\n"`. `channel_close` closes only the sending side: the program reads the end of its input, and you can still read what it sends. Closing twice is fine, and so is closing after the program has exited.
 
-A timeout in `channel_read_line` or `channel_send` closes the channel, and only the channel: the program keeps running, and later channel calls give `error("process: channel is closed")`. On a program started without a channel, the three give `error("process: the child has no channel")`.
+When the program's standard output or standard error is cut (see `Process.read_available`), a `channel_read_line` that finds no complete line gives `error("process: output exceeds 1048576 bytes")` at once, so a program that prints for ever is noticed without waiting for the timeout. A timeout in `channel_read_line` or `channel_send` closes the channel, and only the channel: the program keeps running, and later channel calls give `error("process: channel is closed")`. On a program started without a channel, the three give `error("process: the child has no channel")`.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -299,7 +299,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 
 The program's side of the channel its parent opened with `Process.spawn_channel`. The rules are those of `channel_read_line` and `channel_send`, and the timeout must be positive. A program that was not given a channel gets `error("process: no parent channel")`. A timeout closes the channel for good.
 
-The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, a pipe or a FIFO. A regular file or a device on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
+The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, or a pipe or FIFO open for both reading and writing. A regular file, a device or a one-way FIFO on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
 
 These two calls are for runner code such as `agentica test`. A test or step that calls them can break the protocol between the runner and its file, and nothing stops it.
 

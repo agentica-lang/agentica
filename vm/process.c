@@ -19,6 +19,7 @@
 #define URING_ENV "UV_USE_IO_URING="
 #define CHANNEL_PREFIX AGC_CHANNEL_ENV "="
 #define DRAIN_LIMIT ((size_t)2097152)
+#define STDIO_SLOTS 4
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE } req_kind;
@@ -506,6 +507,7 @@ static void keep_scratch(proc *p, agc_inbuf *b, bool *cut, size_t n, const char 
   *cut = true;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "truncated pid=%d pipe=%s", (int)p->process.pid, pipe);
   if (p->reader) agc_io_ready(p->reader->job);
+  if (p->channel) agc_duplex_overflow(p->channel, over_text);
 }
 
 /* Once cut, a stream's bytes are dropped; a cut wakes the reader, since
@@ -636,7 +638,7 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
   if (!rc && channel) rc = uv_socketpair(SOCK_STREAM, 0, link, 0, 0);
   if (!rc) {
-    uv_stdio_container_t stdio[AGC_CHANNEL_FD + 1];
+    uv_stdio_container_t stdio[STDIO_SLOTS];
     for (size_t k = 0; k < 3; k++) {
       stdio[k].flags = UV_INHERIT_FD;
       stdio[k].data.fd = fds[2 * k + (k == 0 ? 0 : 1)];
@@ -650,7 +652,7 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
     options.args = argv;
     options.env = env;
     options.cwd = cwd;
-    options.stdio_count = channel ? AGC_CHANNEL_FD + 1 : AGC_CHANNEL_FD;
+    options.stdio_count = channel ? STDIO_SLOTS : STDIO_SLOTS - 1;
     options.stdio = stdio;
     link_child(g, p);
     rc = uv_spawn(g->loop, &p->process, &options);

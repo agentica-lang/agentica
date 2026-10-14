@@ -173,6 +173,21 @@
        (check-equal? (string-length long) (+ 65536 (string-length "... (534468 more characters)")))
        (check-true (string-suffix? long "\\... (534468 more characters)")))))
 
+  (test-case "a handler that prints for ever fails at the output limit, long before the scenario deadline"
+    (with-suite
+     `(("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  BDD.run([BDD.step(\"the handler prints for ever\") do |ctx, args|\n"
+                        "    chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
+                        "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
+                        "    ctx\n  end])\nend\n"))
+       ("endless.feature" . "Feature: Endless\nScenario: endless\nGiven the handler prints for ever\n"))
+     (lambda (directory)
+       (define started (current-inexact-milliseconds))
+       (define report (json-test (in directory "endless.feature") "--steps" (in directory "steps.agc")))
+       (check-true (< (- (current-inexact-milliseconds) started) 15000))
+       (check-equal? (codes report) '("RUNTIME-BDD-OUTPUT-LIMIT")))))
+
   (test-case "a JSON line of a few hundred KB fits the step budget"
     (define items (make-list 30000 "abcdefghij"))
     (with-suite

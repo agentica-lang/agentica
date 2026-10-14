@@ -53,7 +53,15 @@ export def detail_of(record: Json, key: String) -> Report.Detail
 end
 
 export def gone?(message: String) -> Bool
-  return message == "process: end of input" or message == "process: stdin is closed" or message == "process: channel is closed" or message.starts_with?("error writing to stream port")
+  return message == "process: end of input" or message == "process: channel is closed" or message.starts_with?("error writing to stream port")
+end
+
+export def brief(deadline: Int) -> Int
+  remaining = left(deadline)
+  if remaining < 2000
+    return remaining
+  end
+  return 2000
 end
 
 export def left(deadline: Int) -> Int

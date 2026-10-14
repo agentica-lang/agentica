@@ -66,6 +66,11 @@ def pinned(vm, bytecode, kind, directory):
     elif kind == "device":
         target = "/dev/null"
         descriptor = os.open(target, os.O_RDWR)
+    elif kind == "writeonly":
+        target = os.path.join(directory, "half")
+        os.mkfifo(target)
+        reader = os.open(target, os.O_RDONLY | os.O_NONBLOCK)
+        descriptor = os.open(target, os.O_WRONLY)
     else:
         mode = "piped"
         target = os.path.join(directory, "fifo")
@@ -88,7 +93,10 @@ def pinned(vm, bytecode, kind, directory):
         with open(target, "rb") as written:
             extra["content"] = written.read().decode()
     child.stdin.close()
-    return finish(child, None, time.monotonic(), extra)
+    answer = finish(child, None, time.monotonic(), extra)
+    if kind == "writeonly":
+        os.close(reader)
+    return answer
 
 
 def as_child(mode):
@@ -134,7 +142,7 @@ def main():
         return
     vm, bytecode = sys.argv[1], sys.argv[2]
     with tempfile.TemporaryDirectory() as directory:
-        pinned_answers = {kind: pinned(vm, bytecode, kind, directory) for kind in ("file", "device", "fifo")}
+        pinned_answers = {kind: pinned(vm, bytecode, kind, directory) for kind in ("file", "device", "writeonly", "fifo")}
     print(json.dumps({
         "pinned": pinned_answers,
         "serve": serve(vm, bytecode),

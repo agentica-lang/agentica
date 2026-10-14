@@ -28,6 +28,7 @@ struct agc_duplex {
   agc_inbuf in;
   request *reader, *writer;
   size_t refs;
+  const char *overflow;
   int fd, write_status;
   bool attached, reading, closed, write_closed, sent;
 };
@@ -92,6 +93,11 @@ void agc_duplex_shut(agc_duplex *d) {
   agc_inbuf_free(&d->in);
   if (d->reader) agc_io_ready(d->reader->job);
   if (d->writer) agc_io_ready(d->writer->job);
+}
+
+void agc_duplex_overflow(agc_duplex *d, const char *text) {
+  if (!d->overflow) d->overflow = text;
+  if (d->reader) agc_io_ready(d->reader->job);
 }
 
 void agc_duplex_release(agc_duplex *d) {
@@ -194,7 +200,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     agc_charge(vm, q->count);
     result = d->write_status < 0 ? agc_system_error(vm, write_failed, -d->write_status) : ok_void();
   } else {
-    result = take_line(vm, d);
+    result = d->overflow && !agc_inbuf_ready(&d->in, true, 0) ? agc_error_value(d->overflow) : take_line(vm, d);
     agc_charge(vm, agc_value_units(result));
   }
   drop_request(q);
@@ -235,6 +241,7 @@ agc_value agc_duplex_read_line(agc_vm *vm, agc_duplex *d, agc_resource *lock, in
   agc_value result;
   if (!agc_stream_lock(vm, lock, &timeout, &result) || !usable(d, d->reader, &result)) return result;
   if (agc_inbuf_ready(&d->in, true, 0)) return take_line(vm, d);
+  if (d->overflow) return agc_error_value(d->overflow);
   request *q = new_request(d, false, false);
   d->reader = q;
   q->job = agc_io_start(vm, &duplex_io, q, agc_handle_value(lock), timeout);
@@ -268,11 +275,7 @@ agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, 
   if (d->write_closed) return ok_void();
   d->write_closed = true;
   d->refs++;
-  int rc = uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->pipe, shutdown_done);
-  if (rc) {
-    d->refs--;
-    if (rc != UV_ENOTCONN) return agc_system_error(vm, "error closing the channel", -rc);
-  }
+  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->pipe, shutdown_done)) d->refs--;
   return ok_void();
 }
 
@@ -294,6 +297,8 @@ void agc_parent_take(agc_vm *vm) {
   if (!marker || strcmp(marker, AGC_CHANNEL_VALUE) != 0 || fstat(AGC_CHANNEL_FD, &info) != 0 ||
       !(S_ISFIFO(info.st_mode) || S_ISSOCK(info.st_mode)))
     return;
+  int mode = fcntl(AGC_CHANNEL_FD, F_GETFL);
+  if (mode < 0 || (mode & O_ACCMODE) != O_RDWR) return;
   int fd = fcntl(AGC_CHANNEL_FD, F_DUPFD_CLOEXEC, AGC_CHANNEL_FD);
   if (fd < 0) return;
   agc_files_forget(&vm->rt->inherited, AGC_CHANNEL_FD);
@@ -322,6 +327,7 @@ agc_input_status agc_parent_line(agc_vm *vm, agc_string **line) {
     q->job = agc_io_start(vm, &duplex_io, q, agc_void(), -1);
     vm->task->retry = true;
     start_reading(d);
+    if (agc_inbuf_ready(&d->in, true, 0)) agc_io_ready(q->job);
     return AGC_INPUT_WAIT;
   }
   if (agc_inbuf_pending(&d->in) == 0 && d->in.eof) return AGC_INPUT_EOF;

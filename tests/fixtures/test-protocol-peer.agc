@@ -11,6 +11,9 @@ def main() -> Void
     Test.test("a partial line is output") do
       print("partial")
       ok()
+    end,
+    Test.test(List.repeat("n", 1000000).join("")) do
+      ok()
     end
   ])
 end

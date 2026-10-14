@@ -151,7 +151,12 @@
     (check-equal? status 1)
     (check-equal? (hash-ref flood 'failed) 0)
     (check-equal? (file-codes flood) '(("tests" "RUNTIME-BDD-OUTPUT-LIMIT")))
-    (check-true (string-prefix? (hash-ref (car (hash-ref flood 'files)) 'output) "xxx")))
+    (check-true (string-prefix? (hash-ref (car (hash-ref flood 'files)) 'output) "xxx"))
+    (define started (current-inexact-milliseconds))
+    (match-define (list _ endless) (json-test (fixture "endless_test.agc")))
+    (check-true (< (- (current-inexact-milliseconds) started) 15000))
+    (check-equal? (map (lambda (item) (list (hash-ref item 'status) (field item 'code))) (cases endless))
+                  '(("failed" "RUNTIME-BDD-OUTPUT-LIMIT") ("not_executed" #f))))
 
   (test-case "test files and features share one report, and test/ is a default path"
     (match-define (list status report)

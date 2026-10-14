@@ -230,9 +230,9 @@ end
 
 def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> Failure
   Process.channel_close(p, Child.left(deadline))
-  output = Process.output(p, Child.left(deadline))
+  output = Process.output(p, Child.brief(deadline))
   if not output.ok?
-    return timed_out(settings, span)
+    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span), output: "", blame: true)
   end
   stderr = output.unwrap!.stderr
   if stderr.length < 262144

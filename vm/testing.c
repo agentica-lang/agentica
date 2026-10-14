@@ -303,6 +303,12 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     if (!r->line) {
       agc_input_status status = agc_parent_line(vm, &r->line);
       if (status == AGC_INPUT_WAIT) return agc_void();
+      if (status == AGC_INPUT_FAILED) {
+        if (!agc_parent_open(vm)) agc_exit(vm, 1);
+        r->record = fail_line(vm, "RUNTIME-BDD-INFRA", lit("invalid test index"), span, NULL);
+        r->after = AFTER_EXIT;
+        continue;
+      }
       if (status != AGC_INPUT_OK) finish_run(vm);
     }
     next_test(vm, r, tests, span);

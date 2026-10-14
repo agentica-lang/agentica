@@ -77,6 +77,7 @@ typedef struct agc_duplex agc_duplex;
 agc_duplex *agc_duplex_new(agc_vm *vm, int fd);
 void agc_duplex_shut(agc_duplex *d);
 void agc_duplex_release(agc_duplex *d);
+void agc_duplex_overflow(agc_duplex *d, const char *text);
 agc_value agc_duplex_read_line(agc_vm *vm, agc_duplex *d, agc_resource *lock, int64_t timeout);
 agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_value line, int64_t timeout);
 agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, int64_t timeout);

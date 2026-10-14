@@ -78,7 +78,14 @@ def ask(python: String, peer: String, mode: String) -> Void
     done("send", Process.channel_send(p, "x\n", 300))
     show("printed", Process.read_available(p, 300))
   elsif mode == "stalled"
-    done("send", Process.channel_send(p, List.repeat("x", 1048000).join("") + "\n", 300))
+    chunk = List.repeat("x", 1048000).join("") + "\n"
+    sent = Process.channel_send(p, chunk, 300)
+    count = 1
+    while sent.ok? and count < 64
+      sent = Process.channel_send(p, chunk, 300)
+      count = count + 1
+    end
+    done("send", sent)
     done("after", Process.channel_send(p, "x\n", 300))
   elsif mode == "long"
     show("read", Process.channel_read_line(p, 5000))
