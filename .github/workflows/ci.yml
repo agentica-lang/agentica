@@ -277,11 +277,14 @@ jobs:
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
           command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
+          command -v rg >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
       - name: make vm-lint
         run: make vm-lint
       - if: github.event_name == 'workflow_dispatch' || needs.test.outputs.trace == 'true'
         run: make vm-trace-off
       - run: make -j"$(nproc)" vm vm-test vm-fuzz
+      - if: ${{ !cancelled() }}
+        run: make vm-layers
       - if: ${{ !cancelled() }}
         run: make vm-sanitize-build
       - if: ${{ !cancelled() }}
