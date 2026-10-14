@@ -24,6 +24,6 @@
 ### Open decisions
 
 - [ ] No structural unions (`Int | String`): they need flow-sensitive narrowing and duplicate the exhaustiveness work of enums. Sum types come from enums. After Phase 6, decide whether agents need a builtin `Option[T]` (special-cased like `Result[T]`) for nullable values.
-- [x] Front-end implementation language: decided by the owner on 2026-10-13: self-hosting, for one binary and a fast start, as a long-term item after the current order ([`docs/future/35-self-hosting.md` section 35](../future/35-self-hosting.md#35-self-hosted-front-end-and-a-single-binary)). Section 18 keeps the history of the question.
+- [x] Front-end implementation language: decided by the owner on 2026-10-13: self-hosting, for one binary and a fast start, as an item in the roadmap order from row 7.2.7 on ([`docs/future/35-self-hosting.md` section 35](../future/35-self-hosting.md#35-self-hosted-front-end-and-a-single-binary)). Section 18 keeps the history of the question.
 
 The open items in this section are outside the current implementation order.
