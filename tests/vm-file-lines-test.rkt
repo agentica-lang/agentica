@@ -92,6 +92,18 @@ def open_files() -> Int
   return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
 end
 
+def wait_for(before: Int, want: Int) -> Bool
+  tries = 0
+  while tries < 500
+    if open_files() - before == want
+      return true
+    end
+    Task.sleep(10)
+    tries = tries + 1
+  end
+  return false
+end
+
 def main() -> Void
   before = open_files()
   r = File.each_line(System.args()[0], 1024, Result.unwrap!(String.to_int(System.args()[1]))) do |line|
@@ -99,7 +111,7 @@ def main() -> Void
     ok()
   end
   IO.inspect(r)
-  IO.inspect(open_files() - before)
+  IO.inspect(wait_for(before, 0))
 end
 AGC
   )
@@ -117,19 +129,54 @@ def reader(path: String) -> Result[Void]
   end
 end
 
-def parent(path: String) -> Int
-  Task.spawn(&reader, path)
-  Task.sleep(300)
+def wait_for(before: Int, want: Int) -> Bool
+  tries = 0
+  while tries < 500
+    if open_files() - before == want
+      return true
+    end
+    Task.sleep(10)
+    tries = tries + 1
+  end
+  return false
+end
+
+def parent(go: Channel[Int]) -> Int
+  Task.spawn(&reader, System.args()[0])
+  Result.unwrap!(go.recv(5000))
   zero = String.length("")
   return 1 / zero
 end
 
 def main() -> Void
   before = open_files()
-  Task.spawn(&parent, System.args()[0])
-  Task.sleep(150)
+  go: Channel[Int] = Channel.new(1)
+  Task.spawn(&parent, go)
+  IO.inspect(wait_for(before, 1))
+  Result.unwrap!(go.send(1, 1000))
+  IO.inspect(wait_for(before, 0))
+end
+AGC
+  )
+
+(define close-program
+  #<<AGC
+def open_files() -> Int
+  return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
+end
+
+def main() -> Void
+  path = System.args()[0]
+  before = open_files()
+  r = File.each_line(path, 1024, 5000) do |line|
+    IO.inspect(line)
+    return error("stop at #{line}")
+  end
+  IO.inspect(r)
   IO.inspect(open_files() - before)
-  Task.sleep(450)
+  h = Result.unwrap!(File.open(path, "read", 5000))
+  IO.inspect(File.read_line(h, 5000))
+  IO.inspect(File.close(h, 5000))
   IO.inspect(open_files() - before)
 end
 AGC
@@ -200,7 +247,7 @@ AGC
              (lambda ()
                (define result (run-vm (compile-text work "fifo" fifo-program) fifo "5000"))
                (check-equal? (first result) 0)
-               (check-equal? (second result) "\"alpha\"\n\"beta\"\n\"gamma\"\n\"\"\n\"delta\"\nok()\n0\n")
+               (check-equal? (second result) "\"alpha\"\n\"beta\"\n\"gamma\"\n\"\"\n\"delta\"\nok()\ntrue\n")
                (check-equal? (sync/timeout wait-seconds (read-line-evt peer-out)) "closed"))
              (lambda () (stop-peer peer peer-out))))))
 
@@ -211,9 +258,21 @@ AGC
            (dynamic-wind
              void
              (lambda ()
-               (define result (run-vm (compile-text work "fifo" fifo-program) fifo "300"))
+               (define result (run-vm (compile-text work "fifo" fifo-program) fifo "1200"))
                (check-equal? (first result) 0)
-               (check-equal? (second result) "\"first\"\nerror(\"filesystem: operation timed out\")\n0\n"))
+               (check-equal? (second result) "\"first\"\nerror(\"filesystem: operation timed out\")\ntrue\n"))
+             (lambda () (stop-peer peer peer-out))))))
+
+      (test-case "closing a read FIFO that still holds buffered lines is ok, after an early stop and after read_line"
+        (with-work
+         (lambda (work)
+           (define-values (peer peer-out fifo) (start-peer work "burst"))
+           (dynamic-wind
+             void
+             (lambda ()
+               (define result (run-vm (compile-text work "close" close-program) fifo))
+               (check-equal? (first result) 0)
+               (check-equal? (second result) "\"one\"\nerror(\"stop at one\")\n0\nok(\"four\")\nok()\n0\n"))
              (lambda () (stop-peer peer peer-out))))))
 
       (test-case "a crash cancels a task parked in File.each_line on a FIFO and frees its descriptor"
@@ -226,5 +285,5 @@ AGC
                (define result (run-vm (compile-text work "crash" crash-program) fifo
                                       #:env (environment-with "UV_THREADPOOL_SIZE" "1")))
                (check-equal? (first result) 1)
-               (check-equal? (second result) "1\n0\n"))
+               (check-equal? (second result) "true\ntrue\n"))
              (lambda () (stop-peer peer peer-out)))))))))

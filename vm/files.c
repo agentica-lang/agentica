@@ -62,9 +62,10 @@ typedef struct {
   bool found;
 } pipe_search;
 
-typedef enum { LINES_START, LINES_OPENED, LINES_SCAN, LINES_READ, LINES_BLOCK, LINES_CLOSE, LINES_CLOSED } lines_phase;
+typedef enum { LINES_START, LINES_OPENED, LINES_SCAN, LINES_RESUME, LINES_CLOSE, LINES_CLOSED } lines_phase;
 
 typedef struct {
+  agc_stepper stepper;
   lines_phase phase;
   agc_value path, handle, outcome;
   size_t limit;
@@ -76,10 +77,17 @@ typedef struct {
   size_t len, cap;
 } text;
 
+typedef enum { LINE_FOUND, LINE_LONG, LINE_TAIL, LINE_END, LINE_MORE } line_kind;
+
+typedef struct {
+  line_kind kind;
+  size_t len, consume, scanned;
+} line_scan;
+
 static const char not_regular[] = "filesystem: path does not refer to a regular file";
 static const char timed_out[] = "filesystem: operation timed out";
 static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
-static const char bad_timeout[] = "network: timeout must be positive milliseconds";
+static const char bad_timeout[] = "filesystem: timeout must be positive milliseconds";
 static const char complete_who[] = "path->complete-path";
 static const char complete_expected[] = "(or/c path-string? path-for-some-system?)";
 
@@ -674,9 +682,10 @@ static void compact(file_state *st) {
   st->start = 0;
 }
 
-static bool read_more(file_state *st, int *err, bool *eof) {
+static bool read_more(file_state *st, size_t most, int *err, bool *eof) {
+  size_t room = st->cap - st->end < most ? st->cap - st->end : most;
   for (;;) {
-    ssize_t n = read(st->fd, st->buf + st->end, st->cap - st->end);
+    ssize_t n = read(st->fd, st->buf + st->end, room);
     if (n < 0 && errno == EINTR) continue;
     if (n < 0) {
       *err = errno;
@@ -700,7 +709,7 @@ static bool fill(file_state *st, int *err, bool *eof) {
     st->buf = bigger;
     st->cap = cap;
   }
-  return read_more(st, err, eof);
+  return read_more(st, SIZE_MAX, err, eof);
 }
 
 static bool take_line(op *o, size_t len, size_t consume) {
@@ -716,35 +725,40 @@ static bool take_line(op *o, size_t len, size_t consume) {
   return true;
 }
 
+static line_scan scan_line(const file_state *st, size_t from, size_t window, size_t tail, bool eof) {
+  size_t have = pending(st);
+  const uint8_t *base = st->buf ? st->buf + st->start : NULL;
+  if (window > have) window = have;
+  const uint8_t *lf = window > from ? memchr(base + from, '\n', window - from) : NULL;
+  if (lf) {
+    size_t len = (size_t)(lf - base);
+    return (line_scan){LINE_FOUND, len && base[len - 1] == '\r' ? len - 1 : len, len + 1, window};
+  }
+  if (have > tail) return (line_scan){LINE_LONG, 0, 0, window};
+  if (!eof) return (line_scan){LINE_MORE, 0, 0, window};
+  if (have == 0) return (line_scan){LINE_END, 0, 0, window};
+  return (line_scan){LINE_TAIL, have, have, window};
+}
+
 static void work_read_line(op *o) {
   file_state *st = o->st;
   bool eof = false;
   for (;;) {
-    size_t have = pending(st);
-    size_t window = have < LIMIT + 1 ? have : LIMIT + 1;
-    const uint8_t *lf = window ? memchr(st->buf + st->start, '\n', window) : NULL;
-    if (lf) {
-      size_t len = (size_t)(lf - (st->buf + st->start));
-      size_t keep = len && st->buf[st->start + len - 1] == '\r' ? len - 1 : len;
-      take_line(o, keep, len + 1);
-      return;
-    }
-    if (have > LIMIT) {
-      st->start += LIMIT + 1;
-      fail_op(o, FS_LONG_LINE, 0);
-      return;
-    }
-    if (eof) {
-      if (have == 0) {
-        fail_op(o, FS_EOF, 0);
+    line_scan found = scan_line(st, 0, LIMIT + 1, LIMIT, eof);
+    switch (found.kind) {
+      case LINE_FOUND:
+      case LINE_TAIL: take_line(o, found.len, found.consume); return;
+      case LINE_LONG:
+        st->start += LIMIT + 1;
+        fail_op(o, FS_LONG_LINE, 0);
         return;
-      }
-      take_line(o, have, have);
-      return;
-    }
-    if (!fill(st, &o->err, &eof)) {
-      o->status = FS_READ;
-      return;
+      case LINE_END: fail_op(o, FS_EOF, 0); return;
+      case LINE_MORE:
+        if (!fill(st, &o->err, &eof)) {
+          o->status = FS_READ;
+          return;
+        }
+        break;
     }
   }
 }
@@ -760,7 +774,7 @@ static void work_read_block(op *o) {
     st->cap = o->count + 1;
   }
   compact(st);
-  if (!read_more(st, &o->err, &st->eof)) o->status = FS_READ;
+  if (!read_more(st, o->count, &o->err, &st->eof)) o->status = FS_READ;
 }
 
 static void work_write(op *o) {
@@ -850,7 +864,9 @@ static bool step(op *o) {
     case OP_READ_LINE: work_read_line(o); break;
     case OP_READ_BLOCK: work_read_block(o); break;
     case OP_READ_BYTES: step_read_bytes(o); break;
-    case OP_CLOSE: send_rest(o, o->st->fd, o->st->buf, o->st->end); break;
+    case OP_CLOSE:
+      if (o->st->writable) send_rest(o, o->st->fd, o->st->buf, o->st->end);
+      break;
     default: send_rest(o, o->st ? o->st->fd : o->fd, o->in, o->in_len); break;
   }
   if (o->status != FS_OK && (o->err == EAGAIN || o->err == EWOULDBLOCK)) {
@@ -1319,8 +1335,8 @@ static bool lines_take(agc_vm *vm, lines *s, file_state *st, size_t len, size_t 
   return valid;
 }
 
-static agc_step lines_step(agc_vm *vm, void *data, agc_value last) {
-  lines *s = data;
+static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  lines *s = (lines *)self;
   for (;;) {
     switch (s->phase) {
       case LINES_START:
@@ -1338,45 +1354,32 @@ static agc_step lines_step(agc_vm *vm, void *data, agc_value last) {
       case LINES_SCAN: {
         file_state *st = lines_file(vm, s);
         if (!st) return lines_end(error_of("filesystem: file handle is closed"));
-        size_t have = pending(st);
-        size_t window = have < s->limit ? have : s->limit;
-        const uint8_t *lf = NULL;
-        if (window > st->scan) lf = memchr(st->buf + st->start + st->scan, '\n', window - st->scan);
-        agc_value line = agc_void();
-        s->phase = LINES_CLOSE;
-        if (lf) {
-          size_t len = (size_t)(lf - (st->buf + st->start));
-          size_t keep = len && st->buf[st->start + len - 1] == '\r' ? len - 1 : len;
-          if (!lines_take(vm, s, st, keep, len + 1, &line)) break;
-        } else if (have > s->limit) {
-          s->outcome = error_of(line_too_long);
-          break;
-        } else if (st->eof && have == 0) {
-          s->outcome = ok_void();
-          break;
-        } else if (st->eof) {
-          if (!lines_take(vm, s, st, have, have, &line)) break;
-        } else {
-          st->scan = window;
+        line_scan found = scan_line(st, st->scan, s->limit, s->limit, st->eof);
+        if (found.kind == LINE_MORE) {
+          st->scan = found.scanned;
           op *o = new_op(vm, OP_READ_BLOCK);
           o->st = st;
           o->count = s->limit;
-          s->phase = LINES_READ;
+          s->phase = LINES_RESUME;
           last = start(vm, o, s->handle, s->timeout);
           if (vm->task->parking) return lines_wait();
           break;
         }
-        s->phase = LINES_BLOCK;
-        return (agc_step){AGC_STEP_CALL, line};
-      }
-      case LINES_READ:
-        s->phase = LINES_SCAN;
-        if (!agc_as_result(vm, last)->ok) {
-          s->outcome = last;
-          s->phase = LINES_CLOSE;
+        s->phase = LINES_CLOSE;
+        if (found.kind == LINE_LONG) {
+          s->outcome = error_of(line_too_long);
+        } else if (found.kind == LINE_END) {
+          s->outcome = ok_void();
+        } else {
+          agc_value line = agc_void();
+          if (lines_take(vm, s, st, found.len, found.consume, &line)) {
+            s->phase = LINES_RESUME;
+            return (agc_step){AGC_STEP_CALL, line};
+          }
         }
         break;
-      case LINES_BLOCK:
+      }
+      case LINES_RESUME:
         s->phase = LINES_SCAN;
         if (!agc_as_result(vm, last)->ok) {
           s->outcome = last;
@@ -1406,12 +1409,13 @@ static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (timeout <= 0) return error_of(bad_timeout);
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
   lines *s = agc_alloc(sizeof(lines));
+  s->stepper.step = lines_step;
   s->path = args[0];
   s->handle = agc_void();
   s->outcome = ok_void();
   s->limit = (size_t)limit;
   s->timeout = timeout;
-  agc_task_stepper(vm, lines_step, s, args[3]);
+  agc_task_stepper(vm, &s->stepper);
   return agc_void();
 }
 

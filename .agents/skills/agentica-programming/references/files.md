@@ -4,7 +4,9 @@
 are opaque, belong to one evaluation, and close when it ends. The interpreter
 uses the host user's filesystem permissions; there is no filesystem permission
 flag. File operations accept regular files and symlinks to regular files, and
-reject directories and special files.
+also FIFOs, pipes and devices (they wait on the event loop); they reject
+directories, a missing path for a read, and a path that reopens a pipe the VM
+made for itself.
 
 ```text
 File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]

@@ -153,7 +153,7 @@ end
 File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
 ```
 
-Reads a file one line at a time and calls the block with each line, without its line ending. The file is never read whole, so a file much larger than memory works. The block returns a `Result[Void]`: `ok()` goes on to the next line, and an `error(...)` stops the loop and is the result of `each_line`. `try` works inside the block, and `return error(...)` stops early from any depth.
+Reads a file one line at a time and calls the block with each line, without its line ending. The file is never read whole, so a file much larger than memory works. The block returns a `Result[Void]`: `ok()` goes on to the next line, and an `error(...)` stops the loop and is the result of `each_line`. `try` works inside the block, and `return error(...)` stops early from inside an `if` or a loop in the block.
 
 `buffer_bytes` is the longest line the call accepts, counting the line ending, from 1024 to 16777216. A longer line ends the call with `error("filesystem: line exceeds buffer_bytes")`. A value outside the range stops the program with `RUNTIME-INVALID-COUNT` at that argument, before the file is opened. `timeout_ms` limits each read, not the whole call, so a pipe or FIFO that stays silent for that long ends the call with an error, and it must be positive.
 

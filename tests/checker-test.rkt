@@ -98,7 +98,9 @@
     (check-equal? (check-code (main-with "  File.each_line(\"a\", 4096, 10) do |a, b|\n    ok()\n  end")) 'CHECK-ARITY)
     (check-equal? (check-code (main-with "  File.each_line(\"a\", 4096, 10) do |n: Int|\n    ok()\n  end")) 'CHECK-TYPE-MISMATCH)
     (check-equal? (check-code (main-with "  File.each_line(\"a\", 4096, 10)")) 'CHECK-ARITY)
-    (check-equal? (check-code (main-with "  n: Int = File.each_line(\"a\", 4096, 10) do |l|\n    ok()\n  end")) 'CHECK-TYPE-MISMATCH))
+    (check-equal? (check-code (main-with "  n: Int = File.each_line(\"a\", 4096, 10) do |l|\n    ok()\n  end")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  t = Test.test(\"x\") do\n    puts(\"a\")\n  end")) 'CHECK-TYPE-MISMATCH)
+    (check-regexp-match #rx"ok\\(\\.\\.\\.\\)" (diagnostic-help (check-text (main-with "  x: Result[Int] = 5\n  puts(x)")))))
 
   (test-case "JSON builders and schemas enforce their input contracts"
     (check-ok (main-with "  object = JSON.object({})\n  array = JSON.array([])"))

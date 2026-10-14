@@ -14,8 +14,7 @@ struct agc_native {
   int64_t cur, last, dir;
   agc_value list, fn, acc;
   agc_list *out;
-  agc_step_fn step;
-  void *state;
+  agc_stepper *stepper;
 };
 
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
@@ -304,7 +303,7 @@ static void resume_stepper(agc_vm *vm) {
   agc_frame *frame = &t->frames[t->frame_count - 1];
   agc_native *st = frame->native;
   uint32_t base = frame->base;
-  agc_step next = st->step(vm, st->state, t->regs[base]);
+  agc_step next = st->stepper->step(vm, st->stepper, t->regs[base]);
   switch (next.kind) {
     case AGC_STEP_CALL:
       count_step(vm, st->span);
@@ -442,17 +441,14 @@ static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32
   push_native(vm, st, base);
 }
 
-static void start_stepper(agc_vm *vm, uint32_t base, uint32_t span) {
+static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint32_t span) {
   agc_task *t = vm->task;
   agc_native *st = agc_alloc(sizeof(agc_native));
   st->kind = AGC_NATIVE_STEPPER;
   st->span = span;
-  st->step = t->stepper;
-  st->state = t->stepper_state;
-  st->fn = t->stepper_block;
+  st->stepper = t->stepper;
+  st->fn = t->regs[base + b->arity - 1];
   t->stepper = NULL;
-  t->stepper_state = NULL;
-  t->stepper_block = agc_void();
   agc_as_fn(vm, st->fn);
   push_native(vm, st, base);
 }
@@ -737,7 +733,7 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(t->regs[base + k]);
         agc_value result = b->fn(vm, t->regs + base, s);
         if (t->stepper) {
-          start_stepper(vm, base, s);
+          start_stepper(vm, b, base, s);
           if (t->parking) return park_task(t);
           if (vm->yield) return AGC_TURN_YIELD;
           break;

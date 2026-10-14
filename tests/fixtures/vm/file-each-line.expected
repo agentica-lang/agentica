@@ -63,8 +63,8 @@
     "  -> error(\"filesystem: path does not refer to a regular file\")",
     "  -> error(\"path->complete-path: contract violation\\n  expected: (or/c path-string? path-for-some-system?)\\n  given: \\\"\\\"\")",
     "timeout",
-    "  -> error(\"network: timeout must be positive milliseconds\")",
-    "  -> error(\"network: timeout must be positive milliseconds\")",
+    "  -> error(\"filesystem: timeout must be positive milliseconds\")",
+    "  -> error(\"filesystem: timeout must be positive milliseconds\")",
     ""
   ],
   "stderr": []
