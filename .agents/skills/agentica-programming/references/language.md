@@ -88,7 +88,7 @@ end
 - `[]` and `{}` need a known type (annotation, parameter, field, or function result). A non-empty list needs one element type.
 - Struct construction uses every field exactly once, named, in any order: `User(name: "Ana", age: 25)`.
 - Enum variants are qualified by their type. Payload variants take positional arguments (`Option.Some("hi")`); nullary variants take `Option.None` or `Option.None()`. Generic arguments come from payloads and expected types; a nullary generic variant needs expected-type context.
-- Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing is O(n); prefer `for`.
+- Field access `user.name`; index `items[0]` and `stock["apple"]`. Strings cannot be indexed. List indexing takes O(log32 n) time (at most four steps for a million items); `for` visits the items in order.
 - `&name` references a declared top-level function without capturing locals: `f: Fn[Int, Int] = &double`, then `f.call(21)`. A block is also a function value and captures locals. Function values can be stored in containers, fields, parameters, and returns; signatures must match exactly. Bare function names are not values. No standalone lambdas, equality, or JSON encoding; inspect prints `<Fn>`.
 
 Operators, from highest to lowest precedence:

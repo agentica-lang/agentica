@@ -254,12 +254,17 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   http, test) and their counts.
 
 - **`list_impl.h`** (includes `value.h`; private to the core): `struct agc_list`
-  and the `static inline` fast versions of `agc_list_len` and `agc_list_get`
-  (`list_len` and `list_get`). Only `list.c`, which defines the list API, and
-  `interp.c`, whose `LIST_LEN` and `LIST_GET` run once per item of a `for` loop,
-  include it, so those two opcodes make no call per item. Every other file keeps
-  the opaque API, so a site that reads `len` or `items` outside these two files
-  does not compile.
+  (`{ len, root, shift, tail[] }`), the two node types of the 32-way trie and
+  the `static inline` fast versions of `agc_list_len` and `agc_list_get`
+  (`list_len`, `list_get` and `list_at`, which skips the bounds check for a
+  caller that has made it). They read an item of the tail in line, with one
+  compare, and call `agc_list_trie_get` (defined in `list.c`) for an item in
+  the trie, which keeps `agc_run_turn` as small as it was. Only `list.c`, which
+  defines the list API, and `interp.c`, whose `LIST_LEN` and `LIST_GET` run once
+  per item of a `for` loop, include it, so a loop over a list of up to 32 items
+  makes no call per item. `vm/tests/list_test.c` includes it too, to check the
+  shape of the trie. Every other file keeps the opaque API, so a site that reads
+  the layout outside these files does not compile.
 
 `net.h` (the `agc_conn` API of `tcp.c`, used by `http_client.c`) and
 `http_fields.h` include `services.h`; `net.h` also includes `tls.h`. `tls.h`,
@@ -308,7 +313,7 @@ if not. The script fails when:
    and `tls.h`, `http_fields.h` only `services.h` and `http_parse.h`,
    `list_impl.h` only `value.h`, and `tls.h`, `http_parse.h` and `trace.h` none;
 10. `list_impl.h` is included (by any path, in `vm/` and `vm/tests/`) from a
-    file other than `list.c` and `interp.c`.
+    file other than `list.c`, `interp.c` and `tests/list_test.c`.
 
 The link rules (7, 8) are the authority: a declaration that rule 6 misses still
 fails there. Rules 1 to 6, 9 and 10 need no build and give a fast, readable

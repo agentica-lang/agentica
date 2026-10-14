@@ -19,7 +19,8 @@ static uint32_t shift_for(size_t trie_len) {
 }
 
 static agc_list *list_alloc(size_t len, size_t tail) {
-  agc_list *l = agc_alloc(agc_size_add(sizeof(agc_list), agc_size_mul(tail, sizeof(agc_value))));
+  /* tail <= LIST_WIDTH, so the size cannot overflow */
+  agc_list *l = agc_alloc(sizeof(agc_list) + tail * sizeof(agc_value));
   l->len = len;
   return l;
 }
@@ -126,12 +127,18 @@ static agc_list *join_small(const agc_list *a, const agc_list *b) {
   return r;
 }
 
+agc_value agc_list_trie_get(const agc_list *l, size_t i) {
+  const list_branch *node = l->root;
+  for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) node = node->child[(i >> s) & LIST_MASK];
+  return ((const list_leaf *)node->child[(i >> LIST_BITS) & LIST_MASK])->item[i & LIST_MASK];
+}
+
 size_t agc_list_len(const agc_list *l) { return list_len(l); }
 
 agc_value agc_list_get(const agc_list *l, size_t i) { return list_get(l, i); }
 
 void agc_list_builder_sized(agc_list_builder *b, size_t n) {
-  (void)agc_size_mul(n, sizeof(agc_value));
+  if (n > LIST_WIDTH) (void)agc_size_mul(n, sizeof(agc_value));
   size_t items = trie_items(n);
   agc_list *l = list_alloc(n, n - items);
   if (items) {

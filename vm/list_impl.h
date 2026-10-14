@@ -30,13 +30,17 @@ static inline size_t list_len(const agc_list *l) { return l->len; }
 
 static inline size_t list_tail_off(size_t len) { return (len - 1) & ~(size_t)LIST_MASK; }
 
-static inline agc_value list_get(const agc_list *l, size_t i) {
-  if (i >= l->len) abort();
+agc_value agc_list_trie_get(const agc_list *l, size_t i);
+
+static inline agc_value list_at(const agc_list *l, size_t i) {
   size_t off = list_tail_off(l->len);
   if (i >= off) return l->tail[i - off];
-  const list_branch *node = l->root;
-  for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) node = node->child[(i >> s) & LIST_MASK];
-  return ((const list_leaf *)node->child[(i >> LIST_BITS) & LIST_MASK])->item[i & LIST_MASK];
+  return agc_list_trie_get(l, i);
+}
+
+static inline agc_value list_get(const agc_list *l, size_t i) {
+  if (i >= l->len) abort();
+  return list_at(l, i);
 }
 
 #endif

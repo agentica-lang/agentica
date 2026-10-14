@@ -609,7 +609,7 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         x = agc_as_int(vm, R[in.c]);
         size_t len = list_len(l);
         if (x < 0 || (uint64_t)x >= len) index_out_of_range(vm, x, len, s);
-        R[in.a] = list_get(l, (size_t)x);
+        R[in.a] = list_at(l, (size_t)x);
         break;
       }
       case AGC_OP_MAP: {

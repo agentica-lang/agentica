@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Faster lists:** `push`, `set` and indexing on lists are now near constant time; building a list with n pushes is O(n). A loop of 160,000 pushes took about a minute and now takes 0.1 s. Output, diagnostics and `--max-steps` counts do not change.
+
 ## [0.2.0] - 2026-10-14
 
 Every program now runs on a new C bytecode VM, the Racket evaluator is gone, and the language gained a Ruby-style surface, tasks that isolate crashes, channels, a unit test framework, and TCP, TLS and HTTP on the VM.
