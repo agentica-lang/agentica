@@ -37,12 +37,6 @@ size_t agc_utf8_encode(uint32_t cp, char out[4]) {
   return 4;
 }
 
-size_t agc_utf8_count(const uint8_t *s, size_t len) {
-  size_t count = 0;
-  for (size_t i = 0; i < len; i++) count += (s[i] & 0xC0) != 0x80;
-  return count;
-}
-
 static size_t walk(const agc_string *s, size_t index, size_t from_index, size_t offset) {
   const uint8_t *data = (const uint8_t *)s->data;
   for (; from_index < index && offset < s->bytes; from_index++) agc_utf8_next(data, s->bytes, &offset);

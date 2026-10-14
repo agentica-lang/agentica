@@ -283,10 +283,8 @@ static void close_pending(agc_vm *vm, agc_value context) {
 
 static void discard(agc_vm *vm, agc_value result) {
   if (!agc_is(result, AGC_T_RESULT) || !agc_as_result(vm, result)->ok) return;
-  agc_value v = agc_as_result(vm, result)->value;
-  if (agc_is(v, AGC_T_PROCESS)) return;
-  agc_resource *r = agc_owned_of(vm, v);
-  if (!r || !r->native || r->holder) return;
+  agc_resource *r = agc_owned_of(vm, agc_as_result(vm, result)->value);
+  if (!r || !r->native || r->holder || r->keep_detached) return;
   r->release(r->native);
   r->native = NULL;
   agc_unregister(vm, r);
