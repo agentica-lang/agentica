@@ -9,6 +9,14 @@ Agentica is a small statically typed language: a Racket front end compiles it to
 
 Read the active phase in the roadmap before adding code. Implement only what that phase asks for: the roadmap explicitly forbids placeholder modules and empty nodes for later phases.
 
+## Finding code
+
+- When the graphmem (gmem) code tools are listed, use them first: `find_symbol` for a definition by name, `code_outline` for the symbols of a file, `code_imports` for its imports, `code_diff` for the symbols changed between two revisions.
+- They index only top-level definitions. In the Racket front end most helpers are nested `define`s inside `parse`, `check` and `lower`, so an empty `find_symbol` result does not mean the helper is gone; use `rg -n "\(define \(name" src/` instead.
+- Use `rg` for plain text, call sites and references.
+- For structural search in `.agc` files, use ast-grep with the Ruby grammar, since Agentica is Ruby-like. The repo's `sgconfig.yml` maps `*.agc` to that grammar, so run `ast-grep run --lang ruby -p 'File.open($$$)' stdlib/ tests/`. Check each hit by reading it, because Agentica is not exactly Ruby.
+- These tools are optional: if one is not installed, use `rg`.
+
 ## Commands
 
 ```sh
