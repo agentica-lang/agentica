@@ -258,10 +258,8 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   agc_charge(vm, (uint64_t)n * rounds);
   size_t *order = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
   size_t *merged = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
-  agc_value *source = agc_alloc(agc_size_mul(n, sizeof(agc_value)));
-  agc_value *sort_keys = items == keys ? source : agc_alloc(agc_size_mul(n, sizeof(agc_value)));
-  agc_list_to_array(items, source);
-  if (items != keys) agc_list_to_array(keys, sort_keys);
+  agc_value *sort_keys = agc_alloc(agc_size_mul(n, sizeof(agc_value)));
+  agc_list_to_array(keys, sort_keys);
   for (size_t k = 0; k < n; k++) order[k] = k;
   for (size_t width = 1; width < n; width *= 2) {
     for (size_t lo = 0; lo < n; lo += 2 * width) {
@@ -279,7 +277,7 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   }
   agc_list_builder sorted;
   agc_list_builder_sized(&sorted, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, source[order[k]]);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, list_get(items, order[k]));
   return agc_list_value(agc_list_builder_finish(&sorted));
 }
 
