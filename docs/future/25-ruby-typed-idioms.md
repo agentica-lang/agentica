@@ -31,6 +31,7 @@ The test: a form fails when it only renames or negates an existing call, its cal
 | 25.9 | `File.open` with a block | catalog, checker, lowering, VM builtin (`File.eof?`) | none |
 | 25.10 | Heredocs `<<~NAME` | lexer, parser (heredoc flag on the AST string node) | `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE` |
 | 25.11 | `format` (after 8d) | catalog (linker name), checker, prelude, lowering, one prelude-only builtin | `CHECK-FORMAT-LITERAL`, `CHECK-FORMAT-SPEC` |
+| 25.14 | Pipe operator `\|>` | lexer, parser, checker | `PARSE-PIPE-TARGET`, `CHECK-PIPE-METHOD` |
 
 ### 25.1 Default parameter values
 
@@ -464,7 +465,7 @@ Each of these is decided; it gets a `help` that names the Agentica form where on
 - **`eval` and `binding`:** no code from strings at run time; the checker would not see it.
 - **Monkey patching and refinements:** builtin types and modules are fixed; write a function.
 - **Hooks** (`included`, `inherited`, `method_added`): there are no classes or mixins to hook.
-- **Mixins** (`include`, `extend`, `Comparable`) **and the metatables idea of [section 7](07-metatables.md):** user types have no methods; a struct of `Fn` fields and wrapper functions cover the same need (the pattern below).
+- **Mixins** (`include`, `extend`, `Comparable`) **and the metatables idea of [section 7](07-metatables.md):** user types have no methods; a struct of `Fn` fields and wrapper functions cover the same need (the pattern below). For chaining user functions, use `|>` (§25.14).
 - **Duck typing:** a struct of `Fn` fields is the interface, checked by name (15.1).
 - **Symbols:** `String` keys and enums cover them.
 - **`freeze` and `dup`:** every value is already immutable.
@@ -487,3 +488,50 @@ Each of these is decided; it gets a `help` that names the Agentica form where on
 1. The interface is a struct of `Fn` fields ([section 15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call)), for example `Storage` with `get` and `put`.
 2. A wrapper (decorator) function takes a base value and returns a new one with some fields replaced, keeping the others: `def logged(base: Storage) -> Storage` returns `base.with(get: ...)` (25.3), where the new `get` logs and then calls `base.get`.
 3. A facade module passes on names from other modules with re-exports (25.2), like Elixir's `defdelegate`.
+
+### 25.14 Pipe operator `|>`
+
+**What.** `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of the call on the right. Example:
+
+```agentica
+def parse(text: String) -> Result[Int]
+  return text.trim.to_i
+end
+
+def validate(n: Int) -> Result[Int]
+  if n < 0
+    return error("negative")
+  end
+  return ok(n)
+end
+
+def load(path: String) -> Result[Int]
+  return path |> try File.read_text(1000) |> try parse() |> try validate()
+end
+```
+
+**Why.** Builtins already chain with `.`: `s.trim.split(",")`. User functions cannot be called as methods, so code nests: `validate(parse(s.trim))`. `|>` reads left to right, with no change to types or the VM. Ruby tried `|>` in its 2.7 development (Feature #15799) and took it out before the release, because there it only repeated `.`. Here user functions have no method form, so `|>` adds what `.` cannot.
+
+**Rules:**
+
+- The right side is a call with parentheses: `name(args)` or `Alias.name(args)` (a user function, an imported function or a builtin), optionally preceded by `try`: `x |> try f(a)` means `try f(x, a)`. Anything else on the right (a bare name, a field, an index, a method chain such as `f(1).g`, a literal) is `PARSE-PIPE-TARGET` at the right side, a new code. Its help says to wrap the expression in parentheses and use `.` on the result, for example `(x |> f()).unwrap!`.
+- A call with a trailing block works: `xs |> each_pair() do |a, b| ... end` passes `xs` first. Here `each_pair` is a user function whose last parameter is a `Fn` that takes two values.
+- **One way.** A builtin call that has a method form for the left value's type is `CHECK-PIPE-METHOD`, a new code, at the right side. Its help shows the method form: `x |> String.trim()` gives the help `x.trim`. So a builtin with a method form is always written with `.`, and `|>` is for user functions and for builtins without a method form. Mixing is fine: `s.trim |> try parse() |> try validate()`.
+- **Precedence.** `|>` binds lower than `+` and `-`, and higher than the comparisons `<`, `<=`, `>` and `>=`. So `a + 1 |> f()` is `f(a + 1)`, and `x |> f() == y` is `f(x) == y`. It groups from left to right: `x |> f() |> g()` is `g(f(x))`. `try` and unary operators bind tighter: `try x |> f()` is `f(try x)`. To propagate a step's error, put `try` on the right: `s |> try parse() |> try validate()` is `try validate(try parse(s))`.
+- **Evaluation order** is the call's: the left value first, then the other arguments left to right, as in `f(x, a, b)`.
+- **Lines.** No implicit continuation ([docs/grammar/04-lexical.md](../grammar/04-lexical.md), section 4): a chain over several lines goes in parentheses, one step per line:
+
+  ```agentica
+  config = (path
+    |> try File.read_text(1000)
+    |> try parse()
+    |> try validate())
+  ```
+
+- **Diagnostics** of the call (arity, types, unknown name) are the normal ones for `f(x, a, b)`. The inserted argument's span is the left expression's span, so a type error on it points at the left side.
+
+**Left out:** a placeholder for other argument positions (`x |> f(a, _)`); `|>` into a bare function value (`x |> f`); a reverse pipe. Each waits for a real need.
+
+**Where it lives.** Lexer: a new `|>` token (longest match, next to `|` and `||`; block parameters `do |x|` are unaffected). Parser: a binary level between `+ -` and the comparisons; it builds the ordinary call node with the left expression as argument 0 and a `piped` flag (or an equivalent marker), so the checker can apply `CHECK-PIPE-METHOD`; `PARSE-PIPE-TARGET` comes from the parser. Checker: the method-form rule only. No change to lowering, bytecode or the VM.
+
+**Tests** (codes and spans, not message text): in `tests/lexer-test.rkt`, the token, and that `do |x|` and `||` still lex; in `tests/parser-test.rkt`, precedence against `+`, `==`, `try` and unary minus, left associativity, a trailing block, and `PARSE-PIPE-TARGET` for a bare name, a field, an index and `f(1).g`, with spans; in `tests/checker-test.rkt`, `CHECK-PIPE-METHOD` with its span and help for `s |> String.trim()`, no error for a builtin without a method form, a type error on the piped value at the left span, and an arity error; one golden VM fixture in `tests/fixtures/vm/` with a chain of user functions, a `try` step and a multi-line parenthesized chain; and a site example, which `tests/site-examples-test.rkt` checks. **Docs** when it lands: `docs/grammar/04-lexical.md` (the token), `docs/grammar/05-syntax.md` (the precedence table and the rule), `docs/grammar/07-diagnostics.md` (the two codes), the programming skill (`.agents/skills/agentica-programming/SKILL.md`: its precedence table and one short paragraph; `references/diagnostics.md` for the two codes), and a site page (`site/content/tour/functions.md`) with a runnable example.
