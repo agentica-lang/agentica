@@ -462,15 +462,13 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
   }
   fclose(n->file);
   agc_output *s = out->base;
-  if (!s->failed && n->len) {
-    if (mode == AGC_NOTICE_FINAL) {
-      finish_text(s, n->text, n->len);
-    } else {
-      queue_notice(s, n->text, n->len, mode == AGC_NOTICE_KEPT);
-      flush_now(s);
-    }
-  }
+  bool write = !s->failed && n->len;
+  if (write && mode == AGC_NOTICE_FINAL)
+    finish_text(s, n->text, n->len);
+  else if (write)
+    queue_notice(s, n->text, n->len, mode == AGC_NOTICE_KEPT);
   free(n->text);
+  if (write && mode != AGC_NOTICE_FINAL) flush_now(s);
 }
 #else
 bool agc_drain(agc_vm *vm) {

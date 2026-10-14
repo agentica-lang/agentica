@@ -185,11 +185,7 @@ static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mod
 }
 
 static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
-  if (setjmp(vm->fail) == 0) {
-    print_outcome(vm, outcome, AGC_NOTICE_KEPT);
-    return;
-  }
-  print_outcome(vm, outcome, AGC_NOTICE_FINAL);
+  if (setjmp(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
 }
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,

@@ -20,7 +20,7 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
 - What a stack trace needs is already there: each frame has its function index and saved `pc` (the next instruction, so the call is at `pc - 1`), each function has its name and one span index per instruction, and the spans table has file, line and column. Linked names look like `@2::push` for a function from an imported file, and blocks are named `block@file.agc:10:15`.
 - `error` is a reserved name: a module cannot declare `def error` (`CHECK-REDEFINED-NAME`), so a log module cannot have `Log.error`. A wrong imported name (`Log.error` when the module has no `error`) is `CHECK-IMPORT-NAME` with no "did you mean" help.
 - `JSON.encode` of a `Map[String, String]` keeps the map's order and escapes `"`, `\` and control characters; non-ASCII text stays as it is. `JSON.encode` of a `String` gives the quoted, escaped text.
-- The VM reads one environment variable at start-up into its runtime config (`AGENTICA_VM_TEST_NO_TURN_COST`), and `vm/` has no mutable global state (`docs/vm/10-io-multicore.md` §10.2.3). Debugging the scheduler, I/O jobs, the GC, processes or the loader means adding `fprintf` by hand.
+- The VM reads two test-only environment variables at start-up into its runtime config (`AGENTICA_VM_TEST_NO_TURN_COST` and `AGENTICA_VM_TEST_BLOCKING_OUTPUT`), and `vm/` has no mutable global state (`docs/vm/10-io-multicore.md` §10.2.3). Debugging the scheduler, I/O jobs, the GC, processes or the loader means adding `fprintf` by hand.
 
 ### 24.2 `std/log`
 
