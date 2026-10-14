@@ -1,8 +1,6 @@
 # Diagnostics
 
-`CHECK-VOID-TYPE` rejects Void in a data type position; `CHECK-VOID-VALUE` rejects using completion as data. A failed explicit cleanup of a process is `RUNTIME-PROCESS-CLOSE` at the call span. Expected process failures return error Results.
-
-A failure prints to stderr and exits 1 (the run stops at the first error):
+A failure prints to stderr and exits 1; the run stops at the first error:
 
 ```text
 file.agc:2:14 error[CHECK-TYPE-MISMATCH]
@@ -12,11 +10,12 @@ expected Int, found String
   |              ^^^^
 ```
 
-The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (names and types, before running), `RUNTIME-` (while running).
+The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-` (while running). With `--json`, the diagnostic that ends the run is the last stderr line; the program's own stderr comes before it. Expected process failures return error Results. Codes without a row below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (see `language.md`), and `RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call span).
 
 | Code | Meaning |
 |---|---|
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `'` or a backtick says strings use double quotes (a character is a one-character String). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
+| `LEX-INVALID-NUMBER` | a `_` in a number literal that is not between two digits: `1_`, `1__0`, `1_.5`, `1._5`. Write `1_000` or `0.000_5`; the `_` is only visual |
 | `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
 | `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one; a `##` doc block counts as part of the next declaration, so the blank line goes before it |

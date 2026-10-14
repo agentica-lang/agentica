@@ -173,6 +173,37 @@
     (check-equal? (token-value (car result))
                   "quote: \" slash: \\ newline: \n return: \r tab: \t"))
 
+  (test-case "digit separators are dropped from the value"
+    (define (value text) (token-value (car (lex-text text))))
+    (check-equal? (value "1_000") 1000)
+    (check-equal? (value "1_000_000") 1000000)
+    (check-equal? (value "1_000.000_5") 1000.0005)
+    (check-equal? (value "0.5_5") 0.55)
+    (check-equal? (token-lexeme (car (lex-text "1_000"))) "1_000")
+    (check-equal? (kinds (lex-text "1_000 1_000.5")) '(integer float NL EOF)))
+
+  (test-case "misplaced digit separators are LEX-INVALID-NUMBER with the literal span"
+    (for ([entry '(("1_" 0 2) ("1_a" 0 2) ("1__0" 0 4) ("1_.5" 0 4) ("1._5" 0 4)
+                   ("1.5_" 0 4) ("1.5__5" 0 6) ("1_000_" 0 6) ("x = 1_.times" 4 6))])
+      (define problem (lex-text (first entry)))
+      (check-true (diagnostic? problem) (first entry))
+      (check-equal? (diagnostic-code problem) 'LEX-INVALID-NUMBER (first entry))
+      (define span (diagnostic-span problem))
+      (check-equal? (source-position-offset (source-span-start span)) (second entry) (first entry))
+      (check-equal? (source-position-offset (source-span-end span)) (third entry) (first entry))))
+
+  (test-case "digit separators next to dots, signs and names"
+    (check-equal? (kinds (lex-text "1_000.times do |i|\nend"))
+                  (kinds (lex-text "1000.times do |i|\nend")))
+    (check-equal? (kinds (lex-text "1_000..2_000")) '(integer dot-dot integer NL EOF))
+    (check-equal? (kinds (lex-text "1_000...2_000")) '(integer dot-dot-dot integer NL EOF))
+    (check-equal? (kinds (lex-text "x = -1_000")) '(name assign minus integer NL EOF))
+    (check-equal? (token-value (list-ref (lex-text "x = -1_000") 3)) 1000)
+    (check-equal? (map token-lexeme (take (lex-text "_1") 1)) '("_1"))
+    (check-equal? (kinds (lex-text "_1")) '(name NL EOF))
+    (check-equal? (kinds (lex-text "0.._n")) '(integer dot-dot name NL EOF))
+    (check-equal? (map token-lexeme (take (lex-text "0.._n") 3)) '("0" ".." "_n")))
+
   (test-case "empty input receives NL and EOF"
     (check-equal? (kinds (lex-text "")) '(NL EOF)))
 

@@ -1,0 +1,21 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-INVALID-NUMBER",
+  "steps": 100,
+  "stdout": [
+    "1000000",
+    "0.0005",
+    "1000.55",
+    "9223372036854775807",
+    "true",
+    "1000",
+    "33",
+    "thousand",
+    "minus thousand",
+    "other",
+    "error(\"cannot convert \\\"1_000\\\" to Int\")",
+    "error(\"cannot convert \\\"1_0.5\\\" to Float\")",
+    ""
+  ],
+  "stderr": []
+}

@@ -174,17 +174,4 @@ server stops with the run. A server belongs to the task that called
 server is closed and its port is free, so call `listen` in the task that keeps
 the server, such as `main`.
 
-The builtin `HTTP` module of earlier releases is gone: `HTTP.client()`
-becomes `HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)`
-becomes `response.body`, and `read`, `trailers`, `close_body` and
-`request_stream` no longer exist. A server handler that took a `Request`
-and an `HttpWriter` and called `HTTP.respond(writer, status, headers, text,
-timeout_ms)` now takes an `HttpRequest` and returns
-`ok(HttpResponse(status: status, headers: headers, body: text))`;
-`HTTP.begin`, `write`, `write_bytes` and `finish` are gone, and
-`HttpServerOptions` has `request_timeout_ms` instead of
-`header_timeout_ms`. The `Request`, `Response`, `HttpBody` and `HttpWriter`
-types no longer exist; the checker prints these hints as help.
-Binary bodies have no replacement yet: a body that is not UTF-8 is an error.
-`max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers
-the whole response, not only the headers.
+Earlier releases' `HTTP` API is gone, and the checker's help names the replacement for each name. `HTTP.client()` is `HTTP.client(HTTP.client_options())`; `HTTP.text(response.body, t)` is `response.body`; `read`, `trailers`, `close_body`, and `request_stream` no longer exist. A handler takes an `HttpRequest` and returns `ok(HttpResponse(...))` instead of calling `HTTP.respond(writer, ...)`. `HTTP.begin`, `write`, `write_bytes`, and `finish` are gone. `HttpServerOptions.header_timeout_ms` is now `request_timeout_ms`. The `Request`, `Response`, `HttpBody`, and `HttpWriter` types are gone. Binary bodies have no replacement yet: a body that is not UTF-8 is an error. `max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers the whole response, not only the headers.
