@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 1282,
+  "stdout": [
+    "after the helper ended: 200 served",
+    "ok()",
+    "after the close: refused",
+    ""
+  ],
+  "stderr": []
+}

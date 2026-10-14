@@ -34,6 +34,12 @@ def give_closed(socket: Socket) -> Result[Int]
   return ok(3)
 end
 
+def accept_once(listener: Listener) -> Result[String]
+  socket = try TCP.accept(listener, 5000)
+  try TCP.send(socket, "listener handed over\n", 5000)
+  return ok("accepted")
+end
+
 def report(label: String, outcome: Result[Int]) -> Void
   case outcome
     ok(n) -> puts("#{label}: #{n}")
@@ -66,4 +72,12 @@ def main() -> Void
   report("closed", Task.await(Task.spawn_owning(&give_closed, closing)))
   TCP.close(third)
   TCP.close_listener(listener)
+
+  lone = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  acceptor = Task.spawn_owning(&accept_once, lone)
+  caller = Result.unwrap!(TCP.connect("127.0.0.1", TCP.local_port(lone), 5000))
+  IO.inspect(TCP.read_line(caller, 5000))
+  IO.inspect(Task.await(acceptor))
+  IO.inspect(TCP.accept(lone, 100))
+  TCP.close(caller)
 end

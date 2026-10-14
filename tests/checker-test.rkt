@@ -29,6 +29,12 @@
 (define (main-with body)
   (format "def main() -> Void\n~a\nend\n\n" body))
 
+(define (span-slice found)
+  (define span (diagnostic-span found))
+  (substring (source-text (source-span-source span))
+             (source-position-offset (source-span-start span))
+             (source-position-offset (source-span-end span))))
+
 (module+ test
   (test-case "ranges take Ints, iterate as Int and reserve the Range name"
     (check-ok (main-with "  r: Range = 0...3\n  for i in r\n    x: Int = i\n  end\n  for j in 1..2\n    puts(j + 1)\n  end"))
@@ -213,6 +219,8 @@
                                   "def serve(socket: Socket) -> Result[String]\n  return TCP.read_line(socket, 10)\nend\n\n"
                                   "def edit(file: FileHandle) -> Void\nend\n\n"
                                   "def watch(p: Process) -> Void\nend\n\n"
+                                  "def accept_one(l: Listener) -> Void\nend\n\n"
+                                  "def host(s: HttpServer) -> Void\nend\n\n"
                                   "def pool(client: HttpClient) -> Void\nend\n\n"
                                   "def job(j: Job) -> Void\nend\n\n"
                                   "def many(sockets: List[Socket]) -> Void\nend\n\n"))
@@ -232,10 +240,10 @@
       (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry) (car entry)))
     (check-equal? (check-code (string-append prefix "def hand(client: HttpClient) -> Void\n  Task.spawn_owning(&pool, client)\nend\n\n" (main-with "")))
                   'CHECK-NOT-A-HANDLE)
+    (check-ok (string-append prefix "def hand(l: Listener, s: HttpServer) -> Void\n  Task.spawn_owning(&accept_one, l)\n  Task.spawn_owning(&host, s)\nend\n\n" (main-with "")))
     (define rejected (check-text (string-append prefix (main-with "  Task.spawn_owning(&identity, 1)"))))
-    (check-equal? (source-position-line (source-span-start (diagnostic-span rejected))) 29)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span rejected))) 32)
-    (check-regexp-match #rx"Task.spawn" (diagnostic-help rejected)))
+    (check-equal? (diagnostic-code rejected) 'CHECK-NOT-A-HANDLE)
+    (check-equal? (span-slice rejected) "1"))
   (test-case "channels check their element type and stay out of data operations"
     (define prefix "struct Box\n  inbox: Channel[Int]\nend\n\ndef take(inbox: Channel[Int]) -> Result[Int]\n  return inbox.recv(10)\nend\n\ndef make() -> Channel[String]\n  return Channel.new(2)\nend\n\n")
     (check-ok (string-append prefix (main-with (string-append

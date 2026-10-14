@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 13324,
+  "stdout": [
+    "returned and awaited: 0 stale reads",
+    "crashed and awaited: 0 stale reads",
+    "sent and closed by another task: 0 failed closes, 0 stale reads",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
+    ""
+  ]
+}

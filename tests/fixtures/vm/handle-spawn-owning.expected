@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 195,
+  "steps": 242,
   "stdout": [
     "ok()",
     "ok(\"ping\")",
@@ -13,6 +13,9 @@
     "ok(\"still mine\")",
     "twice: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:27:28: the calling task does not own this handle, or it is closed",
     "closed: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning.agc:33:28: the calling task does not own this handle, or it is closed",
+    "ok(\"listener handed over\")",
+    "ok(\"accepted\")",
+    "error(\"network: listener is closed\")",
     ""
   ],
   "stderr": [
