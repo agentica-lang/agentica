@@ -352,14 +352,14 @@ Each PR of phase 13 brings its own tests: 13a for the builtins, 13b for
     gives), f32 subnormal ties (`2^-150`, `3 × 2^-150`), and the largest and
     smallest f32 subnormals.
   - A Float input is written as an Int significand `m` (`|m| < 2^53`) and a
-    power of two `e`, or as `inf`, `-inf`, `nan` or `-0`. The fixture builds
-    `Float.from_int(m)` times `2^e`, with the power of two made by repeated
-    squaring of `2.0` or `0.5`; every step is exact, since every power of two
-    from `2^-1074` to `2^1023` is a Float and the script only writes values that
-    are doubles. It makes infinity from an overflow and NaN from `inf - inf`. So
-    the inputs do not depend on `Float.from_bits`, and a decoded Float is
-    compared with the value built by arithmetic (equal `to_s`, and `x != x` for
-    NaN).
+    power of two `e`, in one field `<m>p<e>` (`3p-150`), or as `inf`, `-inf`,
+    `nan` or `-0`. The fixture builds `Float.from_int(m)` times `2^e`, with the
+    power of two made by repeated squaring of `2.0` or `0.5`; every step is
+    exact, since every power of two from `2^-1074` to `2^1023` is a Float and
+    the script only writes values that are doubles. It makes infinity from an
+    overflow and NaN from `inf - inf`. So the inputs do not depend on
+    `Float.from_bits`, and a decoded Float is compared with the value built by
+    arithmetic (equal `to_s`, and `x != x` for NaN).
   - Each vectors fixture checks every vector in both directions, prints a line
     for each mismatch, and then `N vectors ok`.
 - **Round trips:**

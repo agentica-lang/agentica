@@ -55,8 +55,8 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `CHECK-NOT-A-HANDLE` | `Task.spawn_owning` with an argument that is not a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`, at the argument (see `tasks.md`) |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
-| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576 |
-| `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text, `Float.to_int!` on NaN or infinity |
+| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576; a negative `Int.shift_left`/`shift_right`/`shift_right_unsigned` count |
+| `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text, `Float.to_int!` on NaN or infinity, `Float.from_bits32` outside 0..4294967295 |
 | `RUNTIME-INVALID-RANGE` | `Random.int` with `min > max` |
 | `RUNTIME-INVALID-CHARACTER` | `String.code` without exactly one character, or `String.from_code` outside Unicode scalar values |
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |

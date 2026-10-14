@@ -12,7 +12,7 @@ already run on the VM, so it can move earlier if a real program needs it. It
 follows the library rule (after the order table): the packing is a `std/` module
 in Agentica, and the bit operations are builtins under its exception 5.
 
-- [ ] 13a Builtins on the VM, in one PR (`docs/future/23-binary-data.md` §23.2
+- [x] 13a Builtins on the VM, in one PR (`docs/future/23-binary-data.md` §23.2
   to §23.4): `Int.bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`
   (wraps), `shift_right` (arithmetic), `shift_right_unsigned` (logical), with
   `RUNTIME-INVALID-COUNT` for a negative count; `Float.to_bits`, `from_bits`,
@@ -21,6 +21,21 @@ in Agentica, and the bit operations are builtins under its exception 5.
   `grammar.md`, the programming skill,
   `site/content/library/text-and-data/numbers.md`, and the tests of §23.7
   (vm-diff fixtures, evaluator tests, Python vectors).
+  - **Done.** The eleven catalog rows in `src/builtins.rkt`, the names in
+    `vm-builtins` (`src/lower.rkt`) and the rows in `agc_number_builtins`
+    (`vm/numbers.c`); no opcode and no checker change. C computes on
+    `uint64_t`, so there is no signed overflow and no undefined shift, and
+    punning goes through `memcpy`. Docs: `docs/grammar/06b-builtins.md`, the
+    programming skill (`references/builtins.md`, `references/diagnostics.md`)
+    and `site/content/library/text-and-data/numbers.md`. Tests: the goldens
+    `int-bits`, `float-bits` (with the round trips), `int-shift-negative`,
+    `int-shift-right-negative`, `int-shift-right-unsigned-negative`,
+    `float-from-bits32-negative` and `float-from-bits32-range`;
+    `bits-vectors.agc`, which checks the 1,037 vectors of
+    `tests/fixtures/vm/bits-vectors.stdin` that
+    `tests/fixtures/bits-vectors.py` writes (Python `struct`, run by hand; CI
+    does not run Python for it); `tests/vm-bits-test.rkt` for the spans of the
+    errors. There are no evaluator tests, since the evaluator is gone.
 - [ ] 13b `std/binary` (`stdlib/binary.agc`, registered in `src/stdlib.rkt`),
   its own PR after 13a (`docs/future/23-binary-data.md` §23.5): readers and
   writers for `u8` to `i64`, `f32` and `f64` in both byte orders, `concat`, and
