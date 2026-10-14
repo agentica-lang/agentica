@@ -367,7 +367,7 @@ The parts land under different rules:
 | Part | Files | Rule |
 |---|---|---|
 | Types, reserved names, the construction rule and its code | `src/builtin-types.rkt`, `src/checker.rkt`, `src/lower.rkt` (`builtin-structs`) | A checker change: before row 7.2.7, or in the Agentica front end. Not a table row. |
-| `Time.*` functions (41.3 to 41.7) | `src/builtins.rkt` rows, `src/lower.rkt` (`vm-builtins`), `vm/dates.c` | Rows are allowed after 7.2.7. The name list in `src/lower.rkt` is a second Racket table that the freeze text does not name; the owner should confirm it counts as data, or land these before the freeze as well. |
+| `Time.*` functions (41.3 to 41.7) | `src/builtins.rkt` rows, `src/lower.rkt` (`vm-builtins`), `vm/dates.c` | Rows are allowed after 7.2.7, and so are their names in the `vm-builtins` list of `src/lower.rkt` (the owner confirmed on 2026-10-14 that it counts as data, row 7.2.7). |
 | `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt`, `vm/numbers.c` | As the functions above; independent of the types. |
 
 Most of the functions return the new types, so they cannot land before the
