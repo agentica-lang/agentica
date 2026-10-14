@@ -99,8 +99,7 @@ true
   still stops the whole program.
 - When `main` returns, tasks that are still running are cancelled. Await the
   tasks you need.
-- Tasks do not run on several CPU cores. Output from different tasks may come
-  in any order.
+- Tasks do not run on several CPU cores. Output from different tasks may come in any order.
 - To pass values from one task to another, use a [Channel](/library/channel/).
 
 See [Task](/library/task/) and [Channel](/library/channel/) for the reference.

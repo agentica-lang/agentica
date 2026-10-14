@@ -46,6 +46,8 @@ task returns a `Result`, awaiting it gives
 waiting task stops with `RUNTIME-TASK-CRASHED`. A crash that no await sees
 makes the run exit with code 1 when `main` returns.
 
+An await that would wait for the awaiting task itself, directly or through other tasks, stops with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await`. A task can get such a handle through a [Channel](/library/channel/).
+
 ```agentica
 def parse(text: String) -> Result[Int]
   return ok(100 / text.to_i!)

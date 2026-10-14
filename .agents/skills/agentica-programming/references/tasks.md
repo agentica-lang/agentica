@@ -18,9 +18,9 @@ Random: each task has its own generator, split from its parent at spawn (one par
 
 Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`; the VM cancels a task only when an ancestor crashes. `Task.await` on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`, and otherwise halts with RUNTIME-TASK-CANCELLED at the await. A program reaches it when a task sends its child's handle over a channel and then crashes: the child is cancelled, and an await of it in another task halts. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
-`pending_count` returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await, a channel or I/O.
+`pending_count` returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await, a channel or I/O. A returned or crashed task is not counted, even when nothing awaited it.
 
-`Task.await` halts with RUNTIME-TASK-AWAIT-CYCLE at the await when the awaited task, or a task it awaits in turn, is waiting for the caller. A task that awaits its own handle (received over a channel, or captured by a closure) is the shortest cycle. A returned or crashed task is not counted, even when nothing awaited it.
+`Task.await` halts with RUNTIME-TASK-AWAIT-CYCLE at the await when the awaited task, or a task it awaits in turn, is waiting for the caller. A task that awaits its own handle (received over a channel, or captured by a closure) is the shortest cycle.
 
 ```ruby
 def double(n: Int) -> Int
