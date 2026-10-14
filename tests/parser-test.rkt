@@ -174,6 +174,9 @@
                    ("  ys = run do |x| x end" "run\\(\\)")
                    ("  if x > 0 do\n    puts(\"a\")\n  end" "newline, not do")
                    ("  loop do\n    puts(\"a\")\n  end" "while true")
+                   ("  // note" "start with #")
+                   ("  x = 4 // 2" "no // operator")
+                   ("  /* note */" "not /\\* \\*/")
                    ("  break if x > 3" "no if modifiers")
                    ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
                    ("  n = String.length \"abc\"" "String\\.length\\(")
@@ -214,7 +217,16 @@
     (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (parse-code "enum E\n  A\nend\nimport \"a\" as A\n") 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (parse-code "def f() -> Void\nend\nend\n") 'PARSE-TOP-LEVEL-STATEMENT)
-    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT))
+    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT)
+    (check-regexp-match #rx"closes nothing" (diagnostic-help (parse-text "def f() -> Void\nend\nend\n")))
+    (check-regexp-match #rx"def main" (diagnostic-help (parse-text "puts(1)\n")))
+    (check-regexp-match #rx"export" (diagnostic-help (parse-text "puts(1)\n")))
+    (check-regexp-match #rx"no matching if" (diagnostic-help (parse-text "else\n")))
+    (check-regexp-match #rx"do block" (diagnostic-help (parse-text "end\n")))
+    (for ([body '("  x = / 2" "  x = /abc/")])
+      (define problem (parse-text (format "def main() -> Void\n~a\nend\n" body)))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN body)
+      (check-false (diagnostic-help problem) body)))
 
   (test-case "elif and else if point to elsif"
     (for ([text '("def main() -> Void\n  if true\n    x = 1\n  elif false\n    x = 2\n  end\nend\n"

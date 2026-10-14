@@ -159,7 +159,11 @@
              (bail 'PARSE-TOP-LEVEL-STATEMENT
                    (format "expected a top-level declaration (def, struct, enum, or import), found ~a"
                            (describe (current)))
-                   (current))])))
+                   (current)
+                   #:help (case (token-kind (current))
+                            [(end) "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"]
+                            [(else elsif) "this else has no matching if"]
+                            [else "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"]))])))
       (program declarations (span-from start)))
 
     (define (parse-function-decl)
@@ -814,8 +818,30 @@
          (bail 'PARSE-UNEXPECTED-TOKEN
                (format "expected an expression, found ~a" (describe token))
                token
-               #:help (and (eq? (token-kind token) 'do)
-                           "a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas"))]))
+               #:help (case (token-kind token)
+                        [(do) "a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas"]
+                        [(divide multiply) (comment-help token)]
+                        [else #f]))]))
+
+    (define (adjacent? first second)
+      (= (source-position-offset (source-span-end (token-span first)))
+         (source-position-offset (source-span-start (token-span second)))))
+
+    (define (comment-help token)
+      (define before (and last-consumed (adjacent? last-consumed token) last-consumed))
+      (define after (let ([next (peek-token 1)])
+                      (and (not (eq? next token)) (adjacent? token next) next)))
+      (define (kind-of candidate) (and candidate (token-kind candidate)))
+      (cond
+        [(and (eq? (token-kind token) 'divide) (eq? (kind-of before) 'divide))
+         "comments start with #, not //; there is no // operator, and / on two Ints already truncates toward zero"]
+        [(and (eq? (token-kind token) 'divide) (eq? (kind-of after) 'divide))
+         "comments start with #, not //"]
+        [(and (eq? (token-kind token) 'divide) (eq? (kind-of after) 'multiply))
+         "comments start with #, not /* */"]
+        [(and (eq? (token-kind token) 'multiply) (eq? (kind-of before) 'divide))
+         "comments start with #, not /* */"]
+        [else #f]))
 
     (define (parse-interpolation)
       (define start (advance!))
