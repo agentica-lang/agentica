@@ -1,3 +1,9 @@
+/*
+ * VM tracing (AGENTICA_VM_TRACE): the parser for the categories, the message
+ * and line formatting, and the emitter that writes one line with one write(2).
+ * Core layer. Design: docs/vm/08-loader-and-cli.md §9 and
+ * docs/future/24-logging.md §24.4.
+ */
 #include "core.h"
 
 #include <errno.h>

@@ -1,3 +1,8 @@
+/*
+ * The Random generator: xoshiro256** seeded with splitmix64 (both public
+ * domain), with the Float and Int draws that Random builtins use. Core layer.
+ * Design: docs/vm/05-values-execution-builtins.md §7.4.
+ */
 #include "core.h"
 
 #include <string.h>

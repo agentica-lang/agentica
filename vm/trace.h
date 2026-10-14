@@ -1,3 +1,8 @@
+/*
+ * The VM trace state: the agc_trace struct, the category bits, and the
+ * AGC_TRACE macros that the core uses to emit events. Core header. Design:
+ * docs/vm/08-loader-and-cli.md §9.
+ */
 #ifndef AGC_TRACE_H
 #define AGC_TRACE_H
 

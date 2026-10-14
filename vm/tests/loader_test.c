@@ -1,3 +1,7 @@
+/*
+ * One assert per loader rule: each case is a malformed input that must be
+ * rejected, and the Types section cases come from type_tables.
+ */
 #include "../core.h"
 
 #include <assert.h>

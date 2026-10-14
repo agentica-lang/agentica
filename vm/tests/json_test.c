@@ -1,3 +1,7 @@
+/*
+ * JSON parsing and encoding: the sign of zero, escapes, key order and dedupe,
+ * very deep arrays and objects, and a deep list through JSON.from.
+ */
 #include "../core.h"
 #include "../services.h"
 

@@ -1,3 +1,8 @@
+/*
+ * Typed JSON: JSON.decode into a struct type and JSON.schema. Both run over
+ * one explicit frame stack and the program's type table. Service layer.
+ * Design: docs/vm/02-reference-behavior.md §2.7.
+ */
 #include "services.h"
 
 #include <string.h>

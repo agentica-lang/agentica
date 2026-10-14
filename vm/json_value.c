@@ -1,3 +1,10 @@
+/*
+ * The Json value in C: its nodes, the builders that the parser and the
+ * builtins share, and agc_json_encode, the one writer for JSON.encode and for
+ * the text form of a Json. Core layer, because text and equality use it.
+ * Design: docs/vm/05-values-execution-builtins.md §5.1 and
+ * docs/vm/02-reference-behavior.md §2.6.
+ */
 #include "core.h"
 
 #include <inttypes.h>

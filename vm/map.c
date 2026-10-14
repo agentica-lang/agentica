@@ -1,3 +1,9 @@
+/*
+ * Maps in C: the persistent 32-way HAMT behind Map, hashed with SipHash-1-3
+ * keyed by vm->hash_key, with agc_map_put, get and delete (and their _hash
+ * variants for tests) and agc_map_keys in insertion order. Core layer.
+ * Design: docs/vm/05-values-execution-builtins.md §5.1.
+ */
 #include "core.h"
 
 #include <string.h>

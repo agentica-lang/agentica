@@ -1,3 +1,8 @@
+/*
+ * Standard output and standard error: one writer per stream, with a 64 KiB
+ * ring and a FIFO of waiting writers, so that a print waits its turn instead
+ * of interleaving. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
+ */
 #include "core.h"
 
 #include <errno.h>

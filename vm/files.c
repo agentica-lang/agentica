@@ -1,3 +1,8 @@
+/*
+ * The File, Dir and Path builtins (Linux only): the argument checks, host
+ * paths, and file handles with their read and write buffers. Work runs on the
+ * libuv pool. Service layer. Design: docs/vm/02-reference-behavior.md §2.8.
+ */
 #include "services.h"
 
 #ifdef __linux__

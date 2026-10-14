@@ -1,3 +1,7 @@
+/*
+ * Float text, checked against the values that Racket prints
+ * (docs/vm/02-reference-behavior.md §2.2).
+ */
 #include "../core.h"
 
 #include <assert.h>

@@ -1,3 +1,9 @@
+/*
+ * The port between the core and the services: the runtime structs (vm, task
+ * and runtime), and the calls that a service makes to park or wake a task, run
+ * a job, own or close a handle, spawn a task, or charge and fail. Design:
+ * docs/vm/15-layers.md §15.2 and docs/vm/14-core-invariants.md.
+ */
 #ifndef AGC_PORT_H
 #define AGC_PORT_H
 

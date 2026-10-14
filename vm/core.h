@@ -1,3 +1,8 @@
+/*
+ * What only the core and the driver call: VM setup and the scheduler entry
+ * points, the loader, the diagnostic printers, stdin, output and the loop,
+ * and the builtin table type. Core header. Design: docs/vm/15-layers.md §15.4.
+ */
 #ifndef AGC_CORE_H
 #define AGC_CORE_H
 

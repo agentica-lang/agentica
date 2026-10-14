@@ -1,3 +1,7 @@
+/*
+ * vm/output.c with hand-made tasks and a pipe: the order of small prints,
+ * writers that wait, the ring wrap-around, and agc_drain.
+ */
 #include "../core.h"
 
 #include <assert.h>

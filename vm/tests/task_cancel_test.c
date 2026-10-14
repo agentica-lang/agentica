@@ -1,3 +1,7 @@
+/*
+ * agc_task_cancel on the real scheduler, including a running task that
+ * cancels itself after it took a handle.
+ */
 #include "../core.h"
 
 #include <assert.h>

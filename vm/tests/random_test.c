@@ -1,3 +1,7 @@
+/*
+ * The generator: a seed repeats, seeds differ, the Float and Int bounds hold,
+ * rough uniformity, and low > high.
+ */
 #include "../core.h"
 
 #include <assert.h>

@@ -1,3 +1,9 @@
+/*
+ * The TLS adapter interface: our own types for a config and a session, the
+ * status codes (OK, WANT_READ, WANT_WRITE, CLOSED, ERROR) and the error record.
+ * The OpenSSL code is in tls_openssl.c. Adapter header. Design:
+ * docs/vm/10-io-tls.md §10.3.
+ */
 #ifndef AGC_TLS_H
 #define AGC_TLS_H
 

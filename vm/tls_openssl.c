@@ -1,3 +1,9 @@
+/*
+ * The TLS adapter over OpenSSL, the only file that includes OpenSSL. Each
+ * session uses two memory BIOs, the trust store and the SNI or IP checks are
+ * set up here, and OpenSSL errors become our own codes. Adapter layer, behind
+ * tls.h. Design: docs/vm/10-io-tls.md §10.3.
+ */
 #include "tls.h"
 
 #include <stdio.h>

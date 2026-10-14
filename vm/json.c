@@ -1,3 +1,8 @@
+/*
+ * The JSON builtins (agc_json_builtins) and agc_json_parse, which builds Json
+ * nodes from yyjson's reader. Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.6.
+ */
 #include "services.h"
 
 #include <math.h>
