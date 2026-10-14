@@ -451,11 +451,12 @@ bool agc_task_join(agc_vm *vm, agc_task *target) {
   return true;
 }
 
+/* A timed waiter holds a timer and ends by itself, so it is not an edge of the chain. */
 static bool awaits_caller(agc_vm *vm, const agc_task *target) {
   uint64_t hops = 0;
   const agc_task *t = target;
   while (t && t != vm->task) {
-    t = t->awaiting;
+    t = t->await_deadline ? NULL : t->awaiting;
     hops++;
   }
   agc_charge(vm, hops);
@@ -510,11 +511,7 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
     return await_done(vm, outcome(vm, target, span, result));
   }
   uint64_t now = agc_io_now(vm);
-  if (!t->await_deadline) {
-    if (awaits_caller(vm, target))
-      agc_fail(vm, "RUNTIME-TASK-AWAIT-CYCLE", "this await would wait for a task that is waiting for this task", span);
-    t->await_deadline = now + (uint64_t)timeout;
-  }
+  if (!t->await_deadline) t->await_deadline = now + (uint64_t)timeout;
   if (t->await_deadline <= now) {
     t->await_deadline = 0;
     return await_timed_out(vm);
