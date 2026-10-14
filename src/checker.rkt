@@ -174,7 +174,11 @@
         "Mutex.new" "keep the state in one owner task that receives messages on a Channel, and send it requests"
         "SizedQueue.new" "use Channel.new(capacity): ch: Channel[Int] = Channel.new(8)"
         "Hash.new" "use a map literal with a type: m: Map[String, Int] = {}"
+        "Map.new" "use a map literal with a type: m: Map[String, Int] = {}"
+        "Map.empty" "use a map literal with a type: m: Map[String, Int] = {}"
         "Array.new" "use a list literal with a type: xs: List[Int] = []"
+        "List.new" "use a list literal with a type: xs: List[Int] = []"
+        "List.empty" "use a list literal with a type: xs: List[Int] = []"
         "Request" "a std/http handler takes an HttpRequest: def handle(request: HttpRequest) -> Result[HttpResponse]"
         "HttpWriter" "a std/http handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"))
 
@@ -184,8 +188,49 @@
         "startswith" '("start_with?") "endswith" '("end_with?")
         "to_int" '("to_i" "to_int") "to_float" '("to_f" "to_float")))
 
+(define no-regex-help
+  "there are no regular expressions; use s.contains?(part), s.starts_with?(part), s.ends_with?(part) or s.index_of(part)")
+
+(define split-help
+  "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character")
+
+(define slice-help
+  "use s.slice(start, length) for a part of the text")
+
+(define digit-help
+  "test it with s.to_i (a Result): s.to_i.ok? is true for a whole number, s.to_f.ok? for a decimal")
+
+(define foreign-kind-methods
+  (hash (cons 'String "chars") split-help
+        (cons 'String "each_char") split-help
+        (cons 'String "to_a") split-help
+        (cons 'String "matches?") no-regex-help
+        (cons 'String "match?") no-regex-help
+        (cons 'String "match") no-regex-help
+        (cons 'String "scan") no-regex-help
+        (cons 'String "gsub") "use s.replace(old, new)"
+        (cons 'String "sub") "use s.replace(old, new)"
+        (cons 'String "substring") slice-help
+        (cons 'String "substr") slice-help
+        (cons 'String "char_at") "use s.at(i) to read the character at a zero-based index"
+        (cons 'String "index") "use s.index_of(part), which gives a Result[Int]"
+        (cons 'String "ord") "use s.code for the code point of a one-character string"
+        (cons 'String "chr") "use String.from_code(n) for the character of a code point"
+        (cons 'String "chomp") "use s.strip to remove surrounding whitespace; IO.gets already drops the line ending"
+        (cons 'String "lstrip") "use s.strip, which trims both ends"
+        (cons 'String "rstrip") "use s.strip, which trims both ends"
+        (cons 'String "empty?") "compare the length: s.length == 0"
+        (cons 'String "blank?") "compare the trimmed length: s.strip.length == 0"
+        (cons 'String "concat") "join two strings with +: a + b"
+        (cons 'String "isdigit") digit-help
+        (cons 'String "digit?") digit-help
+        (cons 'String "numeric?") digit-help
+        (cons 'String "is_numeric") digit-help
+        (cons 'String "error?") "error? is not a String method; only a Result has ok? and message (!r.ok? tests for an error)"))
+
 (define (foreign-method-help kind name)
   (cond
+    [(hash-ref foreign-kind-methods (cons kind name) #f) => values]
     [(equal? name "nil?") "values are never nil unless their type is Nil; compare with nil: x == nil"]
     [(and (equal? name "lazy") (memq kind '(List Range)))
      "lists are eager; read a source that is too big for a list in a while loop"]
@@ -237,6 +282,12 @@
      (format "add \"return <value>\" of type ~a at the end" type-name)]
     [(and (pair? body) (if-stmt? (last body)) (not (if-stmt-else-body (last body))))
      (format "the last \"if\" has no \"else\"; add an \"else\" that returns ~a, or return after it" type-name)]
+    [(and (pair? body) (or (while-stmt? (last body)) (for-stmt? (last body))))
+     (format "a loop does not count as a return; add \"return <value>\" of type ~a after it" type-name)]
+    [(and (pair? body) (if-stmt? (last body)))
+     (format "every branch of the last \"if\" must end with return, or return ~a after it" type-name)]
+    [(and (pair? body) (case-stmt? (last body)))
+     (format "every arm of the last \"case\" must end with return, or return ~a after it" type-name)]
     [else #f]))
 
 (define (takes-function? entry)
@@ -672,8 +723,13 @@
                 #:actual (type->string right)
                 #:labels (list (cons (node-span (binary-left expression)) (format "this is ~a" (type->string left)))
                                (cons (node-span (binary-right expression)) (format "this is ~a" (type->string right))))
-                #:help (and (memq 'Int (list left right)) (memq 'Float (list left right))
-                            "make both sides the same type: Float.from_int(...) turns the Int into a Float, Float.to_int!(...) truncates the Float"))))
+                #:help (cond
+                         [(and (memq 'Int (list left right)) (memq 'Float (list left right)))
+                          "make both sides the same type: n.to_f (Float.from_int) turns the Int into a Float, x.to_i! (Float.to_int!) truncates the Float"]
+                         [(and (memq 'String (list left right))
+                               (or (memq 'Int (list left right)) (memq 'Float (list left right))))
+                          "make both sides the same type: s.to_i! or s.to_f! turns the String into a number, n.to_s turns the number into a String"]
+                         [else #f]))))
       (case (binary-op expression)
         [(plus)
          (same!)
@@ -703,7 +759,9 @@
          (unless (and (numeric-type? left) (numeric-type? right))
            (bail 'CHECK-TYPE-MISMATCH
                  (format "comparison expects two numbers, found ~a" (type->string left))
-                 span))
+                 span
+                 #:help (and (eq? left 'String)
+                             "< <= > >= only take Int or Float; compare Strings with == and !=, or order a List[String] with xs.sort")))
          'Bool]
         [(dot-dot dot-dot-dot)
          (unless (and (eq? left 'Int) (eq? right 'Int))
@@ -1235,7 +1293,8 @@
          (unless expected-element
            (bail 'CHECK-EMPTY-LIST-TYPE
                  "an empty list needs an expected type, for example \"List[Int]\""
-                 span))
+                 span
+                 #:help "annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type"))
          expected]
         [else
          (define first-type (check-expression (car elements) expected-element))
@@ -1258,7 +1317,8 @@
          (unless expected
            (bail 'CHECK-EMPTY-MAP-TYPE
                  "an empty map needs an expected type, for example \"Map[String, Int]\""
-                 span))
+                 span
+                 #:help "annotate the variable: m: Map[String, Int] = {}; a parameter, a field or a function result also gives the type"))
          expected]
         [else
          (define first-entry (car entries))
@@ -1453,7 +1513,14 @@
         [else
          (bail 'CHECK-NOT-INDEXABLE
                (format "indexing needs a list or a map, found ~a" (type->string target))
-               (index-access-span expression))]))
+               (index-access-span expression)
+               #:help (cond
+                        [(eq? target 'String)
+                         "strings cannot be indexed: s.at(i) reads one character, s.slice(start, length) a part, s.split(\"\") gives all characters"]
+                        [(result-type? target)
+                         "unwrap the Result first: r.unwrap!, try r inside a function that returns Result, or case r"]
+                        [(struct-type? target) "read a field with .name"]
+                        [else #f]))]))
 
     ;; Statements -----------------------------------------------------------
 

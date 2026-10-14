@@ -159,7 +159,10 @@
              (bail 'PARSE-TOP-LEVEL-STATEMENT
                    (format "expected a top-level declaration (def, struct, enum, or import), found ~a"
                            (describe (current)))
-                   (current))])))
+                   (current)
+                   #:help (if (kind? 'end)
+                              "this end closes nothing: each def, if, while, for and case needs exactly one end"
+                              "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum and import"))])))
       (program declarations (span-from start)))
 
     (define (parse-function-decl)
@@ -814,8 +817,13 @@
          (bail 'PARSE-UNEXPECTED-TOKEN
                (format "expected an expression, found ~a" (describe token))
                token
-               #:help (and (eq? (token-kind token) 'do)
-                           "a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas"))]))
+               #:help (case (token-kind token)
+                        [(do) "a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas"]
+                        [(divide)
+                         (if (and last-consumed (eq? (token-kind last-consumed) 'divide))
+                             "comments start with #, not //; there is no // operator, and / on two Ints already truncates toward zero"
+                             "comments start with #, not // or /* */")]
+                        [else #f]))]))
 
     (define (parse-interpolation)
       (define start (advance!))

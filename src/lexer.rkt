@@ -247,8 +247,10 @@
                                 (format "unexpected character \"~a\"" char)
                                 (format "unexpected character ~s" char))
                             start
-                            #:help (and (char=? char #\;)
-                                        "Agentica has no semicolons; end the statement with a newline"))))
+                            #:help (case char
+                                     [(#\;) "Agentica has no semicolons; end the statement with a newline"]
+                                     [(#\' #\`) "strings use double quotes: \"abc\"; there is no char type, a character is a one-character String such as \"+\""]
+                                     [else #f]))))
             (for ([unused (in-string lexeme)]) (advance!))
             (cond
               [(and (eq? kind 'right-brace) (pair? delimiters) (interpolation-frame? (car delimiters)))

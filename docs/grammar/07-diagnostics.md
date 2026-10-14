@@ -35,10 +35,22 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `match x`, `when 1` in a `case` | `case x`, arms as `1 -> ...` |
 | `if x then` | a newline after the condition |
 | `x = 1;` (`LEX-UNEXPECTED-CHAR`) | no semicolons: end the statement with a newline |
+| `'+'`, `'abc'` (`LEX-UNEXPECTED-CHAR`) | strings use double quotes; a character is a one-character String: `"+"` |
+| `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`) | comments start with `#`; `4 // 2` has no `//` operator, `/` on two Ints truncates |
+| a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`) | statements go inside `def main() -> Void ... end`; an extra `end` closes nothing |
+| `s.chars`, `s.each_char` | `s.split("")`, and `s.at(i)` for one character |
+| `s.matches?(...)`, `s.match?(...)`, `s.scan(...)` | no regular expressions: `contains?`, `starts_with?`, `ends_with?`, `index_of` |
+| `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`, `s.ord`, `s.chr`, `s.empty?`, `s.isdigit` | `s.replace`, `s.slice(start, length)`, `s.at(i)`, `s.code`, `String.from_code(n)`, `s.length == 0`, `s.to_i.ok?` |
+| `s.error?` on a String | only a Result has `ok?` and `message` |
+| `s[0]` on a String (`CHECK-NOT-INDEXABLE`) | `s.at(i)`, `s.slice(start, length)`, or `s.split("")` |
+| `n * 1.5` with an Int `n` (`CHECK-TYPE-MISMATCH`) | `n.to_f * 1.5`; `x.to_i!` truncates a Float; `s.to_i!` / `n.to_s` for String and number |
+| `a < b` on Strings (`CHECK-TYPE-MISMATCH`) | `< <= > >=` take numbers only; compare with `==` and `!=`, order a list with `xs.sort` |
+| `m = {}`, `xs = []` (`CHECK-EMPTY-MAP-TYPE`, `CHECK-EMPTY-LIST-TYPE`) | annotate: `m: Map[String, Int] = {}` |
+| a loop, `if` or `case` as the last statement (`CHECK-MISSING-RETURN`) | a loop is not a return; each branch or arm must return, or return after it |
 | `while x {`, `if x {`, `else {`, `for x in xs {`, `case x {`, `def f() -> T {`, `do \|x\| {` (`PARSE-UNEXPECTED-TOKEN`) | blocks have no braces: `while cond` ... `end` |
 | a `}` with no `{` open (`LEX-UNMATCHED-DELIMITER`), an unclosed `{` (`LEX-UNCLOSED-DELIMITER`) | blocks end with `end`, not `}` |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
-| `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
+| `Hash.new`, `Map.new`, `Array.new`, `List.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
 | `continue` | `next` |
 | `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g` (`PARSE-PIPE-TARGET`) | a call with parentheses on the right; wrap the expression in parentheses and use `.` on the result: `(x \|> f()).unwrap!` |
 | `x \|> String.trim()` (`CHECK-PIPE-METHOD`) | the method form: `x.trim` |

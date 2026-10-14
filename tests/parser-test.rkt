@@ -174,6 +174,8 @@
                    ("  ys = run do |x| x end" "run\\(\\)")
                    ("  if x > 0 do\n    puts(\"a\")\n  end" "newline, not do")
                    ("  loop do\n    puts(\"a\")\n  end" "while true")
+                   ("  // note" "start with #")
+                   ("  x = 4 // 2" "no // operator")
                    ("  break if x > 3" "no if modifiers")
                    ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
                    ("  n = String.length \"abc\"" "String\\.length\\(")
@@ -214,7 +216,9 @@
     (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (parse-code "enum E\n  A\nend\nimport \"a\" as A\n") 'PARSE-MISSING-BLANK-LINE)
     (check-equal? (parse-code "def f() -> Void\nend\nend\n") 'PARSE-TOP-LEVEL-STATEMENT)
-    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT))
+    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT)
+    (check-regexp-match #rx"closes nothing" (diagnostic-help (parse-text "def f() -> Void\nend\nend\n")))
+    (check-regexp-match #rx"def main" (diagnostic-help (parse-text "puts(1)\n"))))
 
   (test-case "elif and else if point to elsif"
     (for ([text '("def main() -> Void\n  if true\n    x = 1\n  elif false\n    x = 2\n  end\nend\n"
