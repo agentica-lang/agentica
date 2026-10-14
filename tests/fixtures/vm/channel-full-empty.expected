@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 98,
+  "steps": 101,
   "stdout": [
     "empty recv: channel: timed out",
     "send a: ok",
@@ -14,6 +14,7 @@
     "c",
     "empty recv: channel: timed out",
     "false",
+    "<Channel>",
     ""
   ],
   "stderr": []

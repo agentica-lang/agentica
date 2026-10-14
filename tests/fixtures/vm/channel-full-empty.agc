@@ -24,4 +24,5 @@ def main() -> Void
     error(e) -> puts("empty recv: #{e}")
   end
   puts(ch.closed?)
+  IO.inspect(ch)
 end

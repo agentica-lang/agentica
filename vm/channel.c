@@ -1,25 +1,20 @@
-/* docs/future/27-iteration-and-concurrency.md 27.2. A value is in one place:
-   the sending call, the ring, or the reservation of a woken receiver. */
 #include "core.h"
 
 #define FIRST_SLOTS 8
 
+typedef struct {
+  agc_value value;
+  uint64_t seq;
+} entry;
+
 struct agc_channel {
-  agc_value *ring;
+  entry *ring;
   size_t slots, head, count, capacity;
   size_t reserved_values, reserved_slots;
+  uint64_t sent;
   bool closed;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
 };
-
-static agc_value woken(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  return agc_void();
-}
-
-static const agc_io_kind wait_io = {NULL, woken, woken, NULL, false, "channel", NULL};
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
@@ -30,7 +25,7 @@ static agc_value timed_out_error(void) { return agc_error_value("channel: timed 
 static void grow(agc_vm *vm, agc_channel *c) {
   size_t slots = agc_size_mul(c->slots, 2);
   if (slots > c->capacity && c->slots < c->capacity) slots = c->capacity;
-  agc_value *ring = agc_alloc(agc_size_mul(slots, sizeof(agc_value)));
+  entry *ring = agc_alloc(agc_size_mul(slots, sizeof(entry)));
   for (size_t k = 0; k < c->count; k++) ring[k] = c->ring[(c->head + k) % c->slots];
   agc_charge(vm, c->count);
   c->ring = ring;
@@ -38,30 +33,34 @@ static void grow(agc_vm *vm, agc_channel *c) {
   c->head = 0;
 }
 
-static void push_back(agc_vm *vm, agc_channel *c, agc_value v) {
+static void push_back(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq) {
   if (c->count == c->slots) grow(vm, c);
-  c->ring[(c->head + c->count++) % c->slots] = v;
+  c->ring[(c->head + c->count++) % c->slots] = (entry){v, seq};
 }
 
-/* A value whose receiver left goes back first in line, also when senders
-   filled the ring meanwhile, so the ring may hold more than the capacity. */
-static void push_front(agc_vm *vm, agc_channel *c, agc_value v) {
+static void give_back(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq) {
   if (c->count == c->slots) grow(vm, c);
   c->head = (c->head + c->slots - 1) % c->slots;
-  c->ring[c->head] = v;
+  c->ring[c->head] = (entry){v, seq};
   c->count++;
+  for (size_t k = 0; k + 1 < c->count; k++) {
+    entry *a = &c->ring[(c->head + k) % c->slots];
+    entry *b = &c->ring[(c->head + k + 1) % c->slots];
+    if (a->seq < b->seq) break;
+    entry swap = *a;
+    *a = *b;
+    *b = swap;
+  }
 }
 
 static agc_value pop_front(agc_channel *c) {
-  agc_value v = c->ring[c->head];
-  c->ring[c->head] = agc_void();
+  agc_value v = c->ring[c->head].value;
+  c->ring[c->head] = (entry){agc_void(), 0};
   c->head = (c->head + 1) % c->slots;
   c->count--;
   return v;
 }
 
-/* A waiter that is not parked any more was woken by its deadline, which
-   reached it before any reservation could. */
 static agc_task *pop_live(agc_task **head, agc_task **tail) {
   while (*head) {
     agc_task *t = *head;
@@ -71,10 +70,11 @@ static agc_task *pop_live(agc_task **head, agc_task **tail) {
   return NULL;
 }
 
-static bool reserve_value(agc_vm *vm, agc_channel *c, agc_value v) {
+static bool reserve_value(agc_vm *vm, agc_channel *c, agc_value v, uint64_t seq) {
   agc_task *t = pop_live(&c->receivers, &c->receivers_tail);
   if (!t) return false;
   t->channel.value = v;
+  t->channel.seq = seq;
   t->channel.reserved = true;
   agc_task_wake(vm, t, "channel");
   return true;
@@ -88,29 +88,35 @@ static bool reserve_slot(agc_vm *vm, agc_channel *c) {
   return true;
 }
 
+static void offer_slot(agc_vm *vm, agc_channel *c) {
+  if (c->count + c->reserved_slots < c->capacity && reserve_slot(vm, c)) c->reserved_slots++;
+}
+
 static bool deliver(agc_vm *vm, agc_channel *c, agc_value v, bool has_slot) {
-  if (reserve_value(vm, c, v)) {
+  uint64_t seq = c->sent;
+  if (reserve_value(vm, c, v, seq)) {
     c->reserved_values++;
-    return true;
+  } else {
+    if (!has_slot && c->count + c->reserved_slots >= c->capacity) return false;
+    push_back(vm, c, v, seq);
   }
-  if (!has_slot && c->count + c->reserved_slots >= c->capacity) return false;
-  push_back(vm, c, v);
+  c->sent++;
   return true;
 }
 
 static agc_value take(agc_vm *vm, agc_channel *c) {
   agc_value v = pop_front(c);
-  if (c->count + c->reserved_slots < c->capacity && reserve_slot(vm, c)) c->reserved_slots++;
+  offer_slot(vm, c);
   return v;
 }
 
-/* Receivers wait for a reserved value of a closed channel to be taken. */
 static void drained(agc_vm *vm, agc_channel *c) {
   if (c->closed && c->count == 0 && c->reserved_values == 0)
     agc_task_wake_all(vm, &c->receivers, &c->receivers_tail, "channel");
 }
 
 static void leave_queue(agc_channel *c, agc_task *t) {
+  if (t->channel.reserved) return;
   if (t->channel.sending)
     agc_task_remove(&c->senders, &c->senders_tail, t);
   else
@@ -125,7 +131,6 @@ static void check_timeout(agc_vm *vm, int64_t timeout, uint32_t span) {
   if (timeout < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", "channel timeout must be nonnegative", span);
 }
 
-/* The deadline is set at the first wait and kept across retries. */
 static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, bool sending) {
   if (timeout == 0) {
     stop_waiting(t);
@@ -144,7 +149,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_io_start(vm, &wait_io, NULL, agc_void(), (int64_t)(t->channel.deadline - now));
+  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->channel.deadline - now));
   agc_task_park(vm, true);
   return agc_void();
 }
@@ -156,7 +161,7 @@ static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_channel *c = agc_alloc(sizeof(agc_channel));
   c->capacity = (size_t)capacity;
   c->slots = c->capacity < FIRST_SLOTS ? c->capacity : FIRST_SLOTS;
-  c->ring = agc_alloc(agc_size_mul(c->slots, sizeof(agc_value)));
+  c->ring = agc_alloc(agc_size_mul(c->slots, sizeof(entry)));
   return agc_channel_value(c);
 }
 
@@ -175,6 +180,7 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
       stop_waiting(t);
       c->reserved_slots--;
       deliver(vm, c, args[1], true);
+      offer_slot(vm, c);
       return ok_void();
     }
   }
@@ -232,9 +238,6 @@ static agc_value builtin_closed(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_bool(c->closed && c->count == 0 && c->reserved_values == 0);
 }
 
-/* A waiter that leaves for any reason (a cancel, a crash) hands its
-   reservation on: a value to the next live receiver or back to the front
-   of the ring, a slot to the next live sender or to nobody. */
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
   const agc_channel_wait w = t->channel;
   agc_channel *c = w.channel;
@@ -243,8 +246,8 @@ void agc_channel_leave(agc_vm *vm, agc_task *t) {
   if (!w.reserved) return;
   if (w.sending) {
     if (!c->closed && !reserve_slot(vm, c)) c->reserved_slots--;
-  } else if (!reserve_value(vm, c, w.value)) {
-    push_front(vm, c, w.value);
+  } else if (!reserve_value(vm, c, w.value, w.seq)) {
+    give_back(vm, c, w.value, w.seq);
     c->reserved_values--;
   }
 }

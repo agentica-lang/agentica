@@ -212,6 +212,24 @@ static void test_value_back_to_buffer(void) {
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
 }
 
+static void test_values_back_in_send_order(bool reverse) {
+  agc_value ch = make_channel(4);
+  agc_task *a = make_task(), *b = make_task();
+  wait_recv(a, ch, 5000);
+  wait_recv(b, ch, 5000);
+  send(main_task, ch, 1, 0);
+  send(main_task, ch, 2, 0);
+  assert(vm.ready == a && a->next == b);
+  agc_task_cancel(&vm, reverse ? b : a);
+  agc_task_cancel(&vm, reverse ? a : b);
+  assert(!vm.ready);
+  assert(sent(send(main_task, ch, 3, 0)));
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(got(recv(main_task, ch, 0), 2));
+  assert(got(recv(main_task, ch, 0), 3));
+  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+}
+
 static void test_value_back_to_full_buffer(void) {
   agc_value ch = make_channel(1);
   agc_task *a = make_task();
@@ -226,13 +244,36 @@ static void test_value_back_to_full_buffer(void) {
   assert(failed(send(main_task, ch, 4, 0), "channel: timed out"));
 }
 
-static void test_cancelled_sender(void) {
+static agc_value free_slot_for_senders(agc_task *a, agc_task *b) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task(), *b = make_task();
   send(main_task, ch, 1, 0);
   wait_send(a, ch, 2, 5000);
   wait_send(b, ch, 3, 5000);
   assert(got(recv(main_task, ch, 0), 1));
+  return ch;
+}
+
+static void test_reserved_sender_to_receiver(void) {
+  agc_task *a = make_task(), *b = make_task(), *r = make_task();
+  agc_value ch = free_slot_for_senders(a, b);
+  assert(next_ready() == a);
+  settle();
+  wait_recv(r, ch, 5000);
+  agc_value args_a[3] = {ch, agc_int(2), agc_int(5000)};
+  assert(sent(now(a, SEND, args_a)));
+  assert(next_ready() == r && next_ready() == b && b->channel.reserved);
+  settle();
+  agc_value args_r[2] = {ch, agc_int(5000)};
+  assert(got(now(r, RECV, args_r), 2));
+  agc_value args_b[3] = {ch, agc_int(3), agc_int(5000)};
+  assert(sent(now(b, SEND, args_b)));
+  assert(got(recv(main_task, ch, 0), 3));
+  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+}
+
+static void test_cancelled_sender(void) {
+  agc_task *a = make_task(), *b = make_task();
+  agc_value ch = free_slot_for_senders(a, b);
   assert(vm.ready == a && a->channel.reserved);
   agc_task_cancel(&vm, a);
   assert(next_ready() == b && b->channel.reserved);
@@ -372,7 +413,10 @@ int main(void) {
   test_sender_order();
   test_cancelled_receiver();
   test_value_back_to_buffer();
+  test_values_back_in_send_order(false);
+  test_values_back_in_send_order(true);
   test_value_back_to_full_buffer();
+  test_reserved_sender_to_receiver();
   test_cancelled_sender();
   test_cancelled_sender_frees_slot();
   test_close_with_reserved_value();
