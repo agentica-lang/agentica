@@ -19,6 +19,7 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: full
+      AGENTICA_GC: vendored
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +43,6 @@ jobs:
           dest: ${{ steps.racket.outputs.dir }}
       - run: |
           python3 --version
-          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
       - run: make vm-diff-build
       - run: make sweep-full

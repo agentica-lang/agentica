@@ -70,7 +70,7 @@ src/main.rkt  agentica file.agc: all of the above through a 0600 temp file, then
 | `vm/tests/trace_test.c` | the trace escaper and line buffer: numbers, empty and special text values, invalid UTF-8 bytes as `\u00XX`, lines cut at 512 bytes on a UTF-8 or escape boundary, the unknown-category warning |
 | `tests/vm-tcp-test.rkt` | the VM against Node peers (`tests/fixtures/tcp-peer.js`): a client reading fragments, EOF, a reset, a 1 MiB + 1 line, a silent peer (timeout) and a refused port; a VM server with two concurrent Node clients; `main` returning while tasks wait on a read, an accept and a full send buffer, with the `io` trace ending in `end code=0 signal=0` and the peer seeing the close (the exit path closes no socket itself; the OS does at `_exit`). Uses `compile-file`, `run-process` and `vm-file` from `tests/vm-diff-common.rkt`, so `AGENTICA_VM_BINARY` picks the sanitizer or GC-stress binary |
 | `tests/vm-trace-test.rkt` | traced runs (`all`, to a file) give the same exit code, stdout and stderr as untraced runs; every line matches the format; unknown category and unopenable file lines; `gc` lines from `map-large` (skipped on a sanitizer build); a VM started with stderr or stdout closed; a connection task of `http-server-close` traced as `parent=group:N` (N the group's owner); skips on a `TRACE=0` VM |
-| `tests/vm-stop-test.rkt` | the one exit path under stop signals, with `tests/fixtures/stop-peer.py` (Python): `SIGTERM`, `SIGINT` and `SIGHUP` kill the children and write the buffered file, and the VM dies by the signal; a second signal before the children are stopped waits for them; a flush into a FIFO the peer filled waits on the first signal and ends on the second; a driven VM whose driver died does not flush; a signal while stdout is full ends the run with no diagnostic; Ctrl-C to the CLI's process group stops a captured child that ignores `INT` and `TERM` and still writes the file |
+| `tests/vm-stop-test.rkt` | the one exit path under stop signals, with `tests/fixtures/stop-peer.py` (Python): `SIGTERM`, `SIGINT` and `SIGHUP` kill the children and write the buffered file, and the VM dies by the signal; a second signal before the children are stopped waits for them; a flush into a FIFO the peer filled waits on the first signal and ends on the second; a driven VM whose driver died does not flush; a signal while stdout is full ends the run with no diagnostic; Ctrl-C to the CLI's process group stops a captured child that ignores `INT` and `TERM` and still writes the file; a stop signal inherited as ignored (`nohup`, a background job) stays ignored. The tests that send `SIGHUP` or `SIGINT` start the VM through the peer's `launch default` mode, so their result does not depend on how the test run was started |
 | `tests/vm-channel-test.rkt` | a socket handed to a worker over a channel: the VM accepts six connections from a Python peer (`tests/fixtures/channel-peer.py`, port 0), sends each socket into a `Channel[Socket]` read by three worker tasks, closes the channel, and the workers' loops end |
 | `tests/vm-stdout-test.rkt` | stdout and stderr on the loop, with `tests/fixtures/stdout-peer.py` (Python, which starts the VM on pipes it reads late, slowly or never, a socket pair, or a pipe it closes): a stuck pipe while a timer task keeps ticking and the run ends once the reader drains; two tasks printing long lines with no interleaving and in order; a print longer than the ring next to short prints; the end of run draining within the flush limit; a reader that never reads (`--flush-timeout`, the warning, also with stderr on the same pipe); the blocking fallback on a socket; a regular file drained by the pool while a child is stopped at the end of the run; a reader that went away (`RUNTIME-INTERNAL`, exit 1); a crashed parent whose waiting child leaves the FIFO with nothing partial written |
 | `vm/tests/http_parse_test.c` | the §10.6 hostile list on the request and response head adapter, framing, and the body decoder (each body fed whole and byte by byte) |
@@ -106,12 +106,13 @@ Where a declaration goes: a type or function that values and services both need 
 
 ```sh
 git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
-make vm                              # dist/agentica-vm (libgc from extra/gc.c, static; the system OpenSSL 3 from pkg-config, dynamic: Debian libssl-dev pkg-config)
+make vm                              # dist/agentica-vm (Linux: the system libgc and OpenSSL 3 from pkg-config, dynamic: Debian libgc-dev libssl-dev pkg-config)
+make vm AGENTICA_GC=vendored         # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
 make vm AGENTICA_OPENSSL=vendored    # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
 make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
-make vm-third-party                  # only libgc, yyjson, picohttpparser and libuv for this mode
-make -s vm-third-party-key           # their build key (compile lines, compiler, submodule commits and local diffs); CI caches by its hash
+make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser and libuv for this mode
+make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
 make vm CCACHE=                      # without ccache (used when installed and its cache dir is writable)
@@ -568,8 +569,22 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   and `_Exit(70)`.
 - The submodule is pinned to a release tag. To bump it: check out the new
   tag inside `vm/third_party/bdwgc`, then `git add vm/third_party/bdwgc` (the
-  index keeps the old commit otherwise), rebuild, and run the sanitizer and
-  diff tests.
+  index keeps the old commit otherwise), rebuild with `AGENTICA_GC=vendored`,
+  and run the sanitizer and diff tests.
+- `AGENTICA_GC` picks the libgc (`docs/vm/11-build-ci-supply-chain.md`):
+  `system` (the Linux default) links the distro's libgc with `pkg-config
+  --cflags --libs bdw-gc`, after the stamp `$(VM_BUILD)/gc-system` (an
+  order-only prerequisite of every VM object and a prerequisite of every
+  binary) has checked pkg-config, the package and `GC_MIN` (8.2.0);
+  `vendored` builds `build/vm/gc.o` from the submodule (non-Linux hosts, the
+  release, and `GC_STRESS=1` always); `SANITIZE=1` has no libgc. The mode is
+  not remembered: pass it to every make command or export it. Debian's libgc
+  is threaded and `gc.o` is not; the VM never defines `GC_THREADS`, so the
+  collector knows only the main thread and starts no marker threads. Keep
+  pool threads off GC memory (they use `malloc` only); a thread that
+  touches the heap needs `GC_THREADS` and `GC_register_my_thread` first.
+  `agc_init` sets `GC_set_all_interior_pointers(1)` before `GC_INIT` so both
+  builds agree.
 
 ## Later phases (read §10, `docs/vm/10-*.md`, before starting them)
 
@@ -637,8 +652,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   (no SNI) for IP literals; no `SSL_VERIFY_NONE` path. Never hand OpenSSL a
   GC pointer, and keep file loading off the scheduler thread (the config
   loads in a libuv pool job). The release (`zig cc`, glibc 2.28) sets
-  `AGENTICA_OPENSSL=vendored`; `readelf -d` must show no `libssl` or
-  `libcrypto`, and `--version` must name the submodule's version. `--version` prints the
+  `AGENTICA_OPENSSL=vendored` and `AGENTICA_GC=vendored`; `readelf -d` must show no `libssl`, `libcrypto` or `libgc`, and `--version` must name the submodule's version. `--version` prints the
   OpenSSL that runs (`OpenSSL_version`), so a system build shows the
   distro's version. `build/vm/flags` records the mode, so switching it
   relinks. Bumping: fetch the new 3.5.x tag in the submodule, commit it,

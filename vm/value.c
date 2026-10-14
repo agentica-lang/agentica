@@ -50,6 +50,7 @@ static void on_gc_abort(const char *message) {
 void agc_init(void) {
 #ifndef AGC_NO_GC
   if (GC_is_init_called()) return;
+  GC_set_all_interior_pointers(1);
   GC_INIT();
   GC_set_oom_fn(on_gc_oom);
   GC_set_abort_func(on_gc_abort);

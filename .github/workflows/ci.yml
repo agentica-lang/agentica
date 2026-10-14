@@ -97,6 +97,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
     timeout-minutes: 45
+    env:
+      AGENTICA_GC: vendored
     steps:
       - uses: actions/checkout@v4
         with:
@@ -199,7 +201,7 @@ jobs:
       - run: make build-tests
       - run: |
           python3 --version
-          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
       - run: make -j"$(nproc)" vm vm-test test-bdd
       - run: mkdir -p build && sed -n '/^vm-unicode:/,/^$/p' Makefile > build/vm-unicode.mk
       - id: unicode
@@ -275,7 +277,7 @@ jobs:
       - run: |
           clang --version
           python3 --version
-          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev pkg-config; }
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
           command -v clang-tidy || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-tidy; }
           command -v rg >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ripgrep; }
       - name: make vm-lint

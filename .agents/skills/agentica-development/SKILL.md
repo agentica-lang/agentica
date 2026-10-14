@@ -68,7 +68,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
   fuzz.c fuzz_main.c tests/  # agc_fuzz_one, the mutation driver, plain-assert C tests
-  third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c
+  third_party/bdwgc        # Boehm GC submodule pinned to v8.2.12, built from extra/gc.c with AGENTICA_GC=vendored (the Linux default links the system libgc)
   third_party/yyjson       # yyjson submodule pinned to 0.13.0, only its reader (JSON.parse)
   third_party/libuv        # libuv submodule pinned to v1.53.0, built by the Makefile on Linux
   third_party/picohttpparser # picohttpparser submodule pinned to v1.4 (HTTP heads)
