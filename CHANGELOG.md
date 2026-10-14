@@ -289,8 +289,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- On the VM, `Process.close` of a program started with `Process.spawn` no longer blocks other tasks while the program ends: libuv's exit callback reaps it, and the closing task waits for the exit (one second at most) while the other tasks run. A close during a task crash or a timed-out read or write only sends the signal. The end of a run waits for the children in the event loop instead of sleeping, still for about two seconds at most. What `Process.close` sends to the child, when, and what it returns do not change.
-
 - `Process.read_line` and `Process.read_bytes`, like `TCP.read_line` and
   `TCP.recv_bytes`, charge a turn cost by the size they return, and
   `Process.send` and `send_bytes` by the size they write, also when the call
