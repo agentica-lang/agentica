@@ -67,13 +67,16 @@ static agc_value builtin_assert(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static const agc_test_case *case_at(agc_vm *vm, const agc_list *tests, size_t k) {
-  return agc_as_test_case(vm, tests->items[k]);
+  return agc_as_test_case(vm, agc_list_get(tests, k));
 }
 
 static void check_names(agc_vm *vm, const agc_list *tests) {
   agc_map *seen = agc_new_map();
-  for (size_t k = 0; k < tests->len; k++) {
-    const agc_test_case *c = case_at(vm, tests, k);
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, tests, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_test_case *c = agc_as_test_case(vm, item);
     agc_value name = agc_string_value(c->name);
     agc_value found;
     if (!c->name->bytes) agc_fail(vm, "RUNTIME-TEST-NAME", "a test name must not be empty", c->span);
@@ -90,9 +93,9 @@ static bool is_text(agc_vm *vm, agc_value v, const char *text) {
 
 static run_mode mode_of(agc_vm *vm) {
   const agc_list *args = agc_as_list(vm, vm->rt->args);
-  if (args->len != 2 || !is_text(vm, args->items[0], "--agentica-test")) return MODE_NONE;
-  if (is_text(vm, args->items[1], "list")) return MODE_LIST;
-  if (is_text(vm, args->items[1], "run")) return MODE_RUN;
+  if (agc_list_len(args) != 2 || !is_text(vm, agc_list_get(args, 0), "--agentica-test")) return MODE_NONE;
+  if (is_text(vm, agc_list_get(args, 1), "list")) return MODE_LIST;
+  if (is_text(vm, agc_list_get(args, 1), "run")) return MODE_RUN;
   return MODE_NONE;
 }
 
@@ -128,13 +131,17 @@ static agc_string *event_line(agc_vm *vm, const char *event) {
 
 static agc_string *list_lines(agc_vm *vm, const agc_list *tests) {
   const agc_program *p = vm->rt->program;
-  agc_string **lines = agc_alloc(agc_size_mul(agc_size_add(tests->len, 1), sizeof(agc_string *)));
+  size_t n = agc_list_len(tests);
+  agc_string **lines = agc_alloc(agc_size_mul(agc_size_add(n, 1), sizeof(agc_string *)));
   size_t bytes = 0, chars = 0;
-  for (size_t k = 0; k <= tests->len; k++) {
-    if (k == tests->len) {
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, tests, 0);
+  for (size_t k = 0; k <= n; k++) {
+    if (!agc_list_cursor_next(&cursor, &item)) {
       lines[k] = event_line(vm, "ready");
     } else {
-      const agc_test_case *c = case_at(vm, tests, k);
+      const agc_test_case *c = agc_as_test_case(vm, item);
       const agc_span *at = &p->spans[c->span];
       agc_json_member *m = members(4);
       m[0] = member("column", json_int(at->start_column));
@@ -148,7 +155,7 @@ static agc_string *list_lines(agc_vm *vm, const agc_list *tests) {
   }
   agc_string *all = agc_new_string(bytes, chars);
   char *at = all->data;
-  for (size_t k = 0; k <= tests->len; k++) {
+  for (size_t k = 0; k <= n; k++) {
     memcpy(at, lines[k]->data, lines[k]->bytes);
     at += lines[k]->bytes;
   }
@@ -242,7 +249,7 @@ static void next_test(agc_vm *vm, agc_test_run *r, const agc_list *tests, uint32
   bool digits = line->bytes > 0 && (line->bytes == 1 || line->data[0] != '0');
   for (size_t k = 0; k < line->bytes; k++) digits = digits && line->data[k] >= '0' && line->data[k] <= '9';
   if (digits && agc_parse_int((const uint8_t *)line->data, line->bytes, &index) == AGC_NUMBER_OK &&
-      (uint64_t)index < tests->len) {
+      (uint64_t)index < agc_list_len(tests)) {
     r->test = case_at(vm, tests, (size_t)index);
     r->line = NULL;
     return;

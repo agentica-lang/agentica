@@ -8,7 +8,7 @@ typedef struct {
   const agc_struct_def *def;
   uint32_t kind, arg;
   size_t next, n;
-  agc_list *list;
+  agc_list_builder list;
   agc_struct *record;
   agc_map *map;
 } decode_frame;
@@ -46,7 +46,7 @@ static agc_value decode_error(const decode_frame *stack, size_t depth, const cha
 static bool next_child(const agc_program *p, const decode_frame *f, agc_value *item, const agc_type **type) {
   uint32_t index = f->arg;
   if (f->kind == AGC_TYPE_LIST) {
-    *item = f->items->items[f->next];
+    *item = agc_list_get(f->items, f->next);
   } else if (f->kind == AGC_TYPE_MAP) {
     *item = f->node->members[f->next].value;
   } else {
@@ -61,15 +61,15 @@ static bool next_child(const agc_program *p, const decode_frame *f, agc_value *i
 
 static void store_child(agc_vm *vm, decode_frame *f, agc_value v) {
   if (f->kind == AGC_TYPE_LIST)
-    f->list->items[f->next] = v;
+    agc_list_builder_push(&f->list, v);
   else if (f->kind == AGC_TYPE_MAP)
     f->map = agc_map_put(vm, f->map, agc_string_value(f->node->members[f->next].key), v);
   else
     f->record->fields[f->next] = v;
 }
 
-static agc_value frame_value(const decode_frame *f) {
-  if (f->kind == AGC_TYPE_LIST) return agc_list_value(f->list);
+static agc_value frame_value(decode_frame *f) {
+  if (f->kind == AGC_TYPE_LIST) return agc_list_value(agc_list_builder_finish(&f->list));
   if (f->kind == AGC_TYPE_MAP) return agc_map_value(f->map);
   return agc_struct_value(f->record);
 }
@@ -81,13 +81,13 @@ static void open_frame(agc_vm *vm, decode_frame *f, const agc_json *node, uint32
   f->next = 0;
   f->items = NULL;
   f->def = NULL;
-  f->list = NULL;
+  f->list = (agc_list_builder){0};
   f->record = NULL;
   f->map = NULL;
   if (kind == AGC_TYPE_LIST) {
     f->items = agc_as_list(vm, node->scalar);
-    f->n = f->items->len;
-    f->list = agc_new_list(f->n);
+    f->n = agc_list_len(f->items);
+    agc_list_builder_sized(&f->list, f->n);
   } else if (kind == AGC_TYPE_MAP) {
     f->n = node->count;
     f->map = agc_new_map();
@@ -128,7 +128,6 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
       stack = agc_json_grow(stack, &capacity, depth, sizeof(decode_frame));
       decode_frame *f = &stack[depth];
       open_frame(vm, f, j, kind, arg);
-      v = frame_value(f);
       if (f->n) {
         depth++;
         const agc_type *t;
@@ -137,6 +136,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t type) {
         arg = t->arg;
         continue;
       }
+      v = frame_value(f);
     }
     for (;;) {
       if (!depth) return agc_result_value(true, v);
@@ -216,14 +216,16 @@ static agc_value type_schema(const agc_program *p, const agc_type *t, const agc_
 
 static agc_value struct_schema(const agc_struct_def *def, const agc_value *schemas, agc_value defs) {
   agc_json_member *properties = agc_alloc(agc_size_mul(def->count, sizeof(agc_json_member)));
-  agc_list *required = agc_new_list(def->count);
+  agc_list_builder required;
+  agc_list_builder_sized(&required, def->count);
   for (uint32_t k = 0; k < def->count; k++) {
     properties[k].key = def->fields[k];
     properties[k].value = schemas[def->field_types[k]];
-    required->items[k] = agc_json_leaf(AGC_JSON_STRING, agc_string_value(def->fields[k]));
+    agc_list_builder_push(&required, agc_json_leaf(AGC_JSON_STRING, agc_string_value(def->fields[k])));
   }
   static const char *const keys[] = {"type", "properties", "required", "$defs"};
-  agc_value values[] = {json_text("object"), agc_json_object(properties, def->count), agc_json_array(required), defs};
+  agc_value names = agc_json_array(agc_list_builder_finish(&required));
+  agc_value values[] = {json_text("object"), agc_json_object(properties, def->count), names, defs};
   return object_of(agc_is(defs, AGC_T_VOID) ? 3 : 4, keys, values);
 }
 

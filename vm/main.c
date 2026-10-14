@@ -291,12 +291,13 @@ static void start_trace(agc_trace *trace) {
 
 static agc_value program_args(int argc, char **argv, int first) {
   size_t n = first < argc ? (size_t)(argc - first) : 0;
-  agc_list *list = agc_new_list(n);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
   for (size_t k = 0; k < n; k++) {
     const char *arg = argv[(size_t)first + k];
-    list->items[k] = agc_string_value(agc_utf8_decode((const uint8_t *)arg, strlen(arg), "?", true));
+    agc_list_builder_push(&b, agc_string_value(agc_utf8_decode((const uint8_t *)arg, strlen(arg), "?", true)));
   }
-  return agc_list_value(list);
+  return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static const char usage[] =

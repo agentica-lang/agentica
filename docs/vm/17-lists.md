@@ -1,6 +1,6 @@
 ## 17. Faster lists: a persistent vector behind `List`
 
-**Status:** design for roadmap item 8d ([`08-data-structures.md`](../roadmap/08-data-structures.md)); nothing is built. It fills in [`docs/future/12-data-structures.md` §12.4](../future/12-data-structures.md#124-faster-lists) for the C VM, which is the only backend since 7i (§12.4 still says "both backends"). Line numbers are from master at 5713a2c. The implementation PRs build from this file. A line that no longer matches means the code moved, not that the design changed.
+**Status:** design for roadmap item 8d ([`08-data-structures.md`](../roadmap/08-data-structures.md)); PR 1 of §17.9 (the API over the flat array) is built, the trie of PR 2 is not. It fills in [`docs/future/12-data-structures.md` §12.4](../future/12-data-structures.md#124-faster-lists) for the C VM, which is the only backend since 7i (§12.4 still says "both backends"). Line numbers are from master at 5713a2c. The implementation PRs build from this file. A line that no longer matches means the code moved, not that the design changed.
 
 ### 17.1 Goal and non-goals
 

@@ -36,10 +36,19 @@ typedef struct {
   char data[];
 } agc_string;
 
+typedef struct agc_list agc_list;
+
 typedef struct {
-  size_t len;
-  agc_value items[];
-} agc_list;
+  agc_list *out;
+  size_t count;
+  void *leaf;
+} agc_list_builder;
+
+typedef struct {
+  const agc_list *list;
+  size_t index, start, end;
+  const agc_value *chunk;
+} agc_list_cursor;
 
 typedef struct agc_hamt agc_hamt;
 
@@ -313,7 +322,6 @@ agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replace
 agc_string *agc_new_string(size_t bytes, size_t chars);
 agc_string *agc_make_string(const char *data, size_t bytes, size_t chars);
 agc_value agc_error_value(const char *message);
-agc_list *agc_new_list(size_t len);
 agc_struct *agc_new_struct(uint32_t type, uint32_t n);
 agc_enum *agc_new_enum(uint32_t variant, uint32_t n);
 agc_fn *agc_new_fn(uint32_t function, uint32_t n);
@@ -327,6 +335,20 @@ bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key
 agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);
 agc_map *agc_map_delete(agc_vm *vm, const agc_map *m, agc_value key);
 agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key);
+
+size_t agc_list_len(const agc_list *l);
+agc_value agc_list_get(const agc_list *l, size_t i);
+void agc_list_builder_sized(agc_list_builder *b, size_t n);
+void agc_list_builder_push(agc_list_builder *b, agc_value v);
+agc_list *agc_list_builder_finish(agc_list_builder *b);
+agc_list *agc_list_from_array(const agc_value *items, size_t n);
+void agc_list_to_array(const agc_list *l, agc_value *out);
+void agc_list_cursor_begin(agc_list_cursor *c, const agc_list *l, size_t at);
+bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out);
+agc_list *agc_list_append(const agc_list *l, agc_value v);
+agc_list *agc_list_set(const agc_list *l, size_t i, agc_value v);
+agc_list *agc_list_slice(const agc_list *l, size_t from, size_t count);
+agc_list *agc_list_concat(const agc_list *a, const agc_list *b);
 
 extern const uint32_t agc_write_raw_ranges[][2];
 extern const size_t agc_write_raw_count;
@@ -359,9 +381,9 @@ extern const size_t agc_case_ignorable_count;
 
 agc_string *agc_json_ascii(const char *text, size_t n);
 void *agc_json_grow(void *stack, size_t *capacity, size_t depth, size_t size);
-agc_json *agc_json_container(bool object, size_t n, agc_list **items);
-void agc_json_store(agc_json *node, agc_list *items, size_t k, agc_value v);
-agc_value agc_json_finish(agc_json *node, size_t n);
+agc_json *agc_json_container(bool object, size_t n, agc_list_builder *items);
+void agc_json_store(agc_json *node, agc_list_builder *items, size_t k, agc_value v);
+agc_value agc_json_finish(agc_json *node, agc_list_builder *items, size_t n);
 void agc_json_put(agc_json_buffer *b, const char *text, size_t n);
 agc_value agc_json_leaf(agc_json_kind kind, agc_value scalar);
 agc_value agc_json_object(agc_json_member *members, size_t n);

@@ -125,11 +125,7 @@ static agc_value builtin_from_float(agc_vm *vm, agc_value *args, uint32_t span) 
 
 static agc_value builtin_list_concat(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  const agc_list *a = agc_as_list(vm, args[0]), *b = agc_as_list(vm, args[1]);
-  agc_list *l = agc_new_list(agc_size_add(a->len, b->len));
-  if (a->len) memcpy(l->items, a->items, a->len * sizeof(agc_value));
-  if (b->len) memcpy(l->items + a->len, b->items, b->len * sizeof(agc_value));
-  return agc_list_value(l);
+  return agc_list_value(agc_list_concat(agc_as_list(vm, args[0]), agc_as_list(vm, args[1])));
 }
 
 static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -137,76 +133,70 @@ static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_map_value(agc_map_put(vm, agc_as_map(vm, args[0]), args[1], args[2]));
 }
 
-static agc_list *list_slice(const agc_list *src, size_t from, size_t len, size_t extra) {
-  agc_list *l = agc_new_list(agc_size_add(len, extra));
-  if (len) memcpy(l->items, src->items + from, len * sizeof(agc_value));
-  return l;
-}
-
 static agc_value builtin_list_size(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_int((int64_t)agc_as_list(vm, args[0])->len);
+  return agc_int((int64_t)agc_list_len(agc_as_list(vm, args[0])));
 }
 
 static agc_value builtin_list_append(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  const agc_list *a = agc_as_list(vm, args[0]);
-  agc_list *l = list_slice(a, 0, a->len, 1);
-  l->items[a->len] = args[1];
-  return agc_list_value(l);
+  return agc_list_value(agc_list_append(agc_as_list(vm, args[0]), args[1]));
 }
 
 static size_t list_index(agc_vm *vm, const agc_list *l, agc_value index, uint32_t span) {
   int64_t i = agc_as_int(vm, index);
-  if (i < 0 || (uint64_t)i >= l->len) agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "list index is out of range", span + 2);
+  if (i < 0 || (uint64_t)i >= agc_list_len(l))
+    agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", "list index is out of range", span + 2);
   return (size_t)i;
 }
 
 static agc_value builtin_list_at(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
-  return a->items[list_index(vm, a, args[1], span)];
+  return agc_list_get(a, list_index(vm, a, args[1], span));
 }
 
 static agc_value builtin_list_set(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
   size_t k = list_index(vm, a, args[1], span);
-  agc_list *l = list_slice(a, 0, a->len, 0);
-  l->items[k] = args[2];
-  return agc_list_value(l);
+  return agc_list_value(agc_list_set(a, k, args[2]));
 }
 
 static agc_value builtin_list_repeat(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 0 || count > AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be between 0 and 1048576", span + 2);
-  agc_list *l = agc_new_list((size_t)count);
-  for (size_t k = 0; k < (size_t)count; k++) l->items[k] = args[0];
-  return agc_list_value(l);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, (size_t)count);
+  for (size_t k = 0; k < (size_t)count; k++) agc_list_builder_push(&b, args[0]);
+  return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static size_t list_count(agc_vm *vm, const agc_list *l, agc_value count, uint32_t span) {
   int64_t n = agc_as_int(vm, count);
   if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be nonnegative", span + 2);
-  return (uint64_t)n < l->len ? (size_t)n : l->len;
+  size_t len = agc_list_len(l);
+  return (uint64_t)n < len ? (size_t)n : len;
 }
 
 static agc_value builtin_list_take(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
-  return agc_list_value(list_slice(a, 0, list_count(vm, a, args[1], span), 0));
+  return agc_list_value(agc_list_slice(a, 0, list_count(vm, a, args[1], span)));
 }
 
 static agc_value builtin_list_drop(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *a = agc_as_list(vm, args[0]);
   size_t k = list_count(vm, a, args[1], span);
-  return agc_list_value(list_slice(a, k, a->len - k, 0));
+  return agc_list_value(agc_list_slice(a, k, agc_list_len(a) - k));
 }
 
 static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *a = agc_as_list(vm, args[0]);
-  agc_list *l = agc_new_list(a->len);
-  for (size_t k = 0; k < a->len; k++) l->items[k] = a->items[a->len - 1 - k];
-  return agc_list_value(l);
+  size_t n = agc_list_len(a);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_list_get(a, n - 1 - k));
+  return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static agc_value builtin_list_sort(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -229,13 +219,15 @@ static agc_value builtin_map_size(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value map_walk(agc_vm *vm, agc_value map, bool values, uint32_t span) {
   const agc_map *m = agc_as_map(vm, map);
   agc_value *keys = agc_map_keys(vm, m, span);
-  agc_list *l = agc_new_list(m->size);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, m->size);
   for (size_t k = 0; k < m->size; k++) {
-    l->items[k] = keys[k];
-    if (values && !agc_map_get(vm, m, keys[k], &l->items[k]))
+    agc_value item = keys[k];
+    if (values && !agc_map_get(vm, m, keys[k], &item))
       agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
+    agc_list_builder_push(&b, item);
   }
-  return agc_list_value(l);
+  return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static agc_value builtin_map_keys(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -336,10 +328,11 @@ static agc_value builtin_range_to_a(agc_vm *vm, agc_value *args, uint32_t span) 
   uint64_t size;
   if (!range_size(vm, args[0], &size) || size > (uint64_t)AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "to_a needs a range of at most 1048576 values", span + 1);
-  agc_list *l = agc_new_list((size_t)size);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, (size_t)size);
   int64_t first = agc_as_range(vm, args[0])->start;
-  for (size_t k = 0; k < (size_t)size; k++) l->items[k] = agc_int(first + (int64_t)k);
-  return agc_list_value(l);
+  for (size_t k = 0; k < (size_t)size; k++) agc_list_builder_push(&b, agc_int(first + (int64_t)k));
+  return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static agc_value builtin_range_include(agc_vm *vm, agc_value *args, uint32_t span) {

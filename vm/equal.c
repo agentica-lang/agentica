@@ -49,6 +49,15 @@ static bool push_items(pair_stack *s, const agc_value *x, const agc_value *y, si
   return true;
 }
 
+static bool push_list(pair_stack *s, const agc_list *x, const agc_list *y) {
+  agc_list_cursor left, right;
+  agc_value a, b;
+  agc_list_cursor_begin(&left, x, 0);
+  agc_list_cursor_begin(&right, y, 0);
+  while (agc_list_cursor_next(&left, &a) && agc_list_cursor_next(&right, &b)) push(s, a, b);
+  return true;
+}
+
 static bool expand(agc_vm *vm, pair_stack *s, agc_value a, agc_value b, uint32_t span) {
   if (a.tag != b.tag) return false;
   agc_charge(vm, 1);
@@ -66,7 +75,7 @@ static bool expand(agc_vm *vm, pair_stack *s, agc_value a, agc_value b, uint32_t
     case AGC_T_JSON: return agc_same_string(vm, agc_json_encode(vm, a, span), agc_json_encode(vm, b, span));
     case AGC_T_LIST: {
       const agc_list *x = agc_as_list(vm, a), *y = agc_as_list(vm, b);
-      return x->len == y->len && push_items(s, x->items, y->items, x->len);
+      return agc_list_len(x) == agc_list_len(y) && push_list(s, x, y);
     }
     case AGC_T_MAP: return push_map(vm, s, agc_as_map(vm, a), agc_as_map(vm, b));
     case AGC_T_STRUCT: {

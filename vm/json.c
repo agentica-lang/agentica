@@ -13,7 +13,7 @@ typedef struct {
   } it;
   size_t next, n;
   agc_json *node;
-  agc_list *items;
+  agc_list_builder items;
 } parse_frame;
 
 const char *agc_json_version(void) { return YYJSON_VERSION_STRING; }
@@ -81,7 +81,7 @@ static bool number_value(const uint8_t *s, size_t len, agc_value *out) {
 }
 
 static yyjson_val *parse_child(parse_frame *f) {
-  if (f->items) return yyjson_arr_iter_next(&f->it.arr);
+  if (f->node->kind == AGC_JSON_ARRAY) return yyjson_arr_iter_next(&f->it.arr);
   yyjson_val *key = yyjson_obj_iter_next(&f->it.obj);
   const char *text = yyjson_get_str(key);
   size_t len = yyjson_get_len(key);
@@ -112,7 +112,7 @@ static bool convert(yyjson_val *val, agc_value *out) {
     if (yyjson_is_arr(val) || yyjson_is_obj(val)) {
       bool object = yyjson_is_obj(val);
       size_t n = yyjson_get_len(val);
-      agc_list *items;
+      agc_list_builder items;
       agc_json *node = agc_json_container(object, n, &items);
       if (!n) {
         v = agc_json_value(node);
@@ -139,12 +139,12 @@ static bool convert(yyjson_val *val, agc_value *out) {
         return true;
       }
       parse_frame *f = &stack[depth - 1];
-      agc_json_store(f->node, f->items, f->next, v);
+      agc_json_store(f->node, &f->items, f->next, v);
       if (++f->next < f->n) {
         val = parse_child(f);
         break;
       }
-      v = agc_json_finish(f->node, f->n);
+      v = agc_json_finish(f->node, &f->items, f->n);
       depth--;
     }
   }
@@ -314,8 +314,8 @@ static agc_value builtin_at(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t index = agc_as_int(vm, args[1]);
   if (j->kind != AGC_JSON_ARRAY) return failure("expected a JSON array");
   const agc_list *items = agc_as_list(vm, j->scalar);
-  if (index < 0 || (uint64_t)index >= items->len) return failure("JSON array index is out of range");
-  return ok(items->items[index]);
+  if (index < 0 || (uint64_t)index >= agc_list_len(items)) return failure("JSON array index is out of range");
+  return ok(agc_list_get(items, (size_t)index));
 }
 
 static agc_value extract(agc_vm *vm, agc_value v, agc_json_kind kind, const char *expected) {

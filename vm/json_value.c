@@ -9,7 +9,7 @@ typedef struct {
   size_t next, n;
   agc_value *keys;
   agc_json *node;
-  agc_list *items;
+  agc_list_builder items;
 } walk_frame;
 
 static agc_json *new_node(agc_json_kind kind, agc_value scalar) {
@@ -52,27 +52,28 @@ static size_t sort_members(agc_json_member *m, size_t n) {
   return count;
 }
 
-agc_json *agc_json_container(bool object, size_t n, agc_list **items) {
+agc_json *agc_json_container(bool object, size_t n, agc_list_builder *items) {
   agc_json *node = new_node(object ? AGC_JSON_OBJECT : AGC_JSON_ARRAY, agc_nil());
-  *items = NULL;
+  *items = (agc_list_builder){0};
   if (object) {
     node->members = n ? agc_alloc(agc_size_mul(n, sizeof(agc_json_member))) : NULL;
   } else {
-    *items = agc_new_list(n);
-    node->scalar = agc_list_value(*items);
+    agc_list_builder_sized(items, n);
+    if (!n) node->scalar = agc_list_value(agc_list_builder_finish(items));
   }
   return node;
 }
 
-void agc_json_store(agc_json *node, agc_list *items, size_t k, agc_value v) {
-  if (items)
-    items->items[k] = v;
+void agc_json_store(agc_json *node, agc_list_builder *items, size_t k, agc_value v) {
+  if (node->kind == AGC_JSON_ARRAY)
+    agc_list_builder_push(items, v);
   else
     node->members[k].value = v;
 }
 
-agc_value agc_json_finish(agc_json *node, size_t n) {
+agc_value agc_json_finish(agc_json *node, agc_list_builder *items, size_t n) {
   if (node->kind == AGC_JSON_OBJECT && n) node->count = sort_members(node->members, n);
+  if (node->kind == AGC_JSON_ARRAY && n) node->scalar = agc_list_value(agc_list_builder_finish(items));
   return agc_json_value(node);
 }
 
@@ -167,7 +168,7 @@ static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
   f->next = 0;
   f->keys = NULL;
   if (agc_is(v, AGC_T_LIST)) {
-    f->n = agc_as_list(vm, v)->len;
+    f->n = agc_list_len(agc_as_list(vm, v));
   } else if (agc_is(v, AGC_T_MAP)) {
     const agc_map *m = agc_as_map(vm, v);
     f->n = m->size;
@@ -175,7 +176,7 @@ static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
   } else if (agc_is(v, AGC_T_STRUCT)) {
     f->n = agc_struct_def_of(vm, agc_as_struct(vm, v))->count;
   } else if (json_kind(vm, v, AGC_JSON_ARRAY)) {
-    f->n = agc_as_list(vm, agc_as_json(vm, v)->scalar)->len;
+    f->n = agc_list_len(agc_as_list(vm, agc_as_json(vm, v)->scalar));
   } else if (json_kind(vm, v, AGC_JSON_OBJECT)) {
     f->n = agc_as_json(vm, v)->count;
   } else {
@@ -193,7 +194,7 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
   agc_value v = f->value, item;
   if (agc_is(v, AGC_T_LIST)) {
     *key = NULL;
-    return agc_as_list(vm, v)->items[k];
+    return agc_list_get(agc_as_list(vm, v), k);
   }
   if (agc_is(v, AGC_T_MAP)) {
     *key = agc_as_string(vm, f->keys[k]);
@@ -208,7 +209,7 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
   const agc_json *j = agc_as_json(vm, v);
   if (j->kind == AGC_JSON_ARRAY) {
     *key = NULL;
-    return agc_as_list(vm, j->scalar)->items[k];
+    return agc_list_get(agc_as_list(vm, j->scalar), k);
   }
   *key = j->members[k].key;
   return j->members[k].value;
@@ -295,14 +296,14 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
     for (;;) {
       if (depth == 0) return v;
       walk_frame *top = &stack[depth - 1];
-      agc_json_store(top->node, top->items, top->next, v);
+      agc_json_store(top->node, &top->items, top->next, v);
       if (++top->next < top->n) {
         agc_string *key;
         item = child(vm, top, &key);
         if (key) top->node->members[top->next].key = key;
         break;
       }
-      v = agc_json_finish(top->node, top->n);
+      v = agc_json_finish(top->node, &top->items, top->n);
       depth--;
     }
   }
@@ -311,7 +312,7 @@ agc_value agc_json_from(agc_vm *vm, agc_value root, uint32_t span) {
 agc_value agc_json_object(agc_json_member *members, size_t n) {
   agc_json *node = new_node(AGC_JSON_OBJECT, agc_nil());
   node->members = members;
-  return agc_json_finish(node, n);
+  return agc_json_finish(node, NULL, n);
 }
 
 agc_value agc_json_array(agc_list *items) { return agc_json_leaf(AGC_JSON_ARRAY, agc_list_value(items)); }
