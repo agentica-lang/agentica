@@ -17,11 +17,11 @@ This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and
 
 ### 30.11 Streaming on channels
 
-At order step 7.4, after `Channel[T]` (§27.2, 17b), three items bring streaming back for the jobs a whole message cannot do. Each is built on channels with their timeouts, backpressure and close rules; chunks are `String` (UTF-8, split only at character boundaries, at most 64 KiB each) until `Bytes` lands (phase 13, order step 7.5), which adds byte streams then.
+At order step 7.4, after `Channel[T]` (§27.2, 17b), three items bring streaming back for the jobs a whole message cannot do. Each is built on channels with their timeouts, backpressure and close rules; chunks are `String` (UTF-8, split only at character boundaries, at most 64 KiB each) until `Bytes` lands (phase 13, order row 7.2.4), which adds byte streams then.
 
 **Channels are enough; lazy `Stream[T]` is not needed.** An HTTP body is pushed by I/O and read by another task, at its own speed: that is a bounded channel (backpressure when full), with timeouts on each wait, `close` for the end, and `closed?` to tell the end from a timeout (§27.2). A lazy stream (§27.4, planned there for the lines of a file) is pulled by one consumer through a chain of functions in one task; it would add nothing here.
 
-**No defaults needed.** Every streaming call has a fixed argument list and takes the options of the client or server it runs on, so default parameter values (15a, order step 7.5, after these items) never force a second change.
+**No defaults needed.** Every streaming call has a fixed argument list and takes the options of the client or server it runs on, so default parameter values (15a, order row 7.5a) never force a second change.
 
 **How errors reach the reader.** A channel can only end, not fail. So a streamed response carries the body channel and a task: `HttpStream(status: Int, headers: List[Header], body: Channel[String], done: Task[Result[Void]])`. The task feeds the channel and closes it on every path (§27.2's rule), and its result says whether the body ended cleanly. The reader runs the canonical receive loop and then `Task.await(stream.done)`. To stop early, the reader closes the channel: the feeder's next `send` returns "channel: closed", it closes the connection (never back to the pool) and ends with an error.
 
