@@ -1,0 +1,11 @@
+GET /double/0
+GET /double/007
+GET /double/-0
+GET /double/abc
+GET /double/
+GET /double/1.5
+GET /double/12x
+GET /double/--3
+GET /double/1/2
+GET /double
+GET /double/4000000000

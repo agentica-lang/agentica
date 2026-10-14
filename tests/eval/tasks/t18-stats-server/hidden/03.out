@@ -1,0 +1,11 @@
+GET /double/0 -> 200 application/json {"double":0,"n":0}
+GET /double/007 -> 200 application/json {"double":14,"n":7}
+GET /double/-0 -> 200 application/json {"double":0,"n":0}
+GET /double/abc -> 400 application/json {"error":"not an integer"}
+GET /double/ -> 400 application/json {"error":"not an integer"}
+GET /double/1.5 -> 400 application/json {"error":"not an integer"}
+GET /double/12x -> 400 application/json {"error":"not an integer"}
+GET /double/--3 -> 400 application/json {"error":"not an integer"}
+GET /double/1/2 -> 400 application/json {"error":"not an integer"}
+GET /double -> 404 application/json {"error":"not found"}
+GET /double/4000000000 -> 200 application/json {"double":8000000000,"n":4000000000}

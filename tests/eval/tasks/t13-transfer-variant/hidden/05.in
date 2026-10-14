@@ -1,0 +1,9 @@
+deposit 1000
+transfer 100 a
+transfer 200 b
+transfer 300 a
+withdraw 50
+fee 25 audit
+fee 25 audit
+transfer 400 z
+transfer 1 z

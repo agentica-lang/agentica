@@ -1,0 +1,17 @@
+POST /stats -> 200 application/json {"count":1,"max":5,"min":5,"sum":5}
+POST /stats -> 200 application/json {"count":3,"max":-7,"min":-7,"sum":-21}
+POST /stats -> 200 application/json {"count":2,"max":9223372036854775806,"min":1,"sum":9223372036854775807}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"values must be a non-empty array of integers"}
+POST /stats -> 400 application/json {"error":"invalid json"}
+POST /stats -> 400 application/json {"error":"invalid json"}
+POST /stats -> 200 application/json {"count":3,"max":3,"min":1,"sum":6}

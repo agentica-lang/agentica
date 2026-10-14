@@ -1,0 +1,7 @@
+cash 50
+bank -20
+cash 5
+bank 100
+# comment
+
+savings 1000000

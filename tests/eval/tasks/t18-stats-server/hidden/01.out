@@ -1,0 +1,7 @@
+GET /health -> 200 application/json {"status":"ok"}
+GET /hello -> 200 application/json {"greeting":"hello, world"}
+GET /hello?name=Ana -> 200 application/json {"greeting":"hello, Ana"}
+POST /stats -> 200 application/json {"count":4,"max":10,"min":-1,"sum":16}
+GET /double/21 -> 200 application/json {"double":42,"n":21}
+GET /double/-4 -> 200 application/json {"double":-8,"n":-4}
+GET /nope -> 404 application/json {"error":"not found"}

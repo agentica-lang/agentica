@@ -1,0 +1,9 @@
+rows: 5
+skipped: 8
+--- files
+orders.csv
+report.json
+--- report.json
+'{"customers":[{"customer":"ana","rows":2,"items":5,"total_cents":860},{"customer":"bob","rows":1,"items":1,"total_cents":400},{"customer":"dee","rows":1,"items":2,"total_cents":760},{"customer":"hal","rows":1,"items":1,"total_cents":0}],"skipped":8}\n'
+input unchanged: yes
+--- exit 0

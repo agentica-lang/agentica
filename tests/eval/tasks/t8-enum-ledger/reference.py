@@ -23,10 +23,10 @@ def main() -> None:
     for line in sys.stdin:
         command = parse_command(line)
         match command:
-            case ("credit", amount):
+            case ("credit", int(amount)):
                 balance += amount
                 print(f"balance: {balance}")
-            case ("debit", amount):
+            case ("debit", int(amount)):
                 if amount > balance:
                     print("error")
                 else:

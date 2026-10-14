@@ -1,0 +1,13 @@
+added tea: 4
+error: unknown item cofee
+tea: 4
+brew: unknown item coffee
+cheapest: tea (4)
+added cocoa: 6
+added coffee: 5
+brew: 13
+cheapest: tea (4)
+cocoa 6
+coffee 5
+tea 4
+unknown: 4

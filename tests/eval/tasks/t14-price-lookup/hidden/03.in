@@ -1,0 +1,13 @@
+price flour 120
+price eggs 30
+price milk 45
+cost cake flour 2 eggs 3
+cost bad flour 1 salt 4 pepper 2
+cost worse salt 1 flour 1
+cost solo milk 3
+cost solo milk
+cost solo milk 0
+cost solo milk two
+cost solo milk 1 sugar 0
+cost solo salt 1 milk x
+cost solo milk 1 milk 1

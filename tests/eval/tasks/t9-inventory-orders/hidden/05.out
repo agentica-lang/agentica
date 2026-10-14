@@ -1,0 +1,10 @@
+no customers
+revenue: 0
+rejected ana tea: unknown item
+added tea: 5 (now 5)
+rejected ana tea: only 5 in stock
+sold bob tea 5 for 10
+rejected bob tea: only 0 in stock
+bob: 10
+tea 0 x 2 low
+revenue: 10

@@ -1,0 +1,14 @@
+add nail 1000 7
+add screw 60 13
+add bolt 4 250
+order ana nail 11
+order ana screw 55
+order bob bolt 4
+order bob bolt 1
+order cy nail 999
+price nail 8
+order cy nail 10
+order ana nail 1
+remove bolt
+report
+customers

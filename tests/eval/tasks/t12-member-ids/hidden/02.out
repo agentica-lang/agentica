@@ -1,0 +1,16 @@
+error: invalid member id 7
+error: invalid member id m-7
+error: invalid member id M-
+error: invalid member id M-1x
+error: invalid member id M-+1
+error: invalid member id M--1
+error: bad command
+error: bad command
+error: invalid book id b-9
+error: invalid book id B-
+error: bad command
+error: bad command
+error: bad command
+error: bad command
+book B-1: The Name of the Wind (1)
+B-1 The Name of the Wind: 1/1

@@ -1,0 +1,13 @@
+tea: 750
+coffee: 400
+milk: 1440
+cocoa: 760
+tea: 250
+orders: 5, failed: 0
+--- requests
+POST /quote [application/json] {"item":"tea","quantity":3}
+POST /quote [application/json] {"item":"coffee","quantity":1}
+POST /quote [application/json] {"item":"milk","quantity":12}
+POST /quote [application/json] {"item":"cocoa","quantity":2}
+POST /quote [application/json] {"item":"tea","quantity":1}
+--- exit 0

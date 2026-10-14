@@ -1,0 +1,8 @@
+order_id,customer,sku,quantity,unit_cents
+1,ana,tea,1.5,250
+2,ana,tea,1,2.5
+3,ana,tea,one,250
+4,ana,tea,1,
+5,ana,tea,,100
+6,ana,tea,2,50
+7,ana,tea,2,0

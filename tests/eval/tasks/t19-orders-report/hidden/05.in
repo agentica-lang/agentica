@@ -1,0 +1,4 @@
+order_id,customer,sku,quantity,unit_cents
+1,ana,tea,2,250
+2,Bob,coffee,1,400
+3,ana,milk,3,120

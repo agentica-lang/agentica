@@ -1,0 +1,17 @@
+
+  add   pen   6   2  
+frobnicate
+add pen
+add pen x 3
+add pen 3 -1
+order ana pen
+order ana pen 0
+order ana pen two
+price pen
+price ink 4
+stock
+remove
+remove pen extra
+
+order ana pen 2
+report

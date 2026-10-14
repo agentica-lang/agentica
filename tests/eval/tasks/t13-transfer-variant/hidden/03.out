@@ -1,0 +1,11 @@
+rejected: transfer 10 to bob (insufficient funds)
+inflow: deposit 10 -> 10
+transfer: transfer 10 to bob -> 0
+rejected: transfer 1 to bob (insufficient funds)
+rejected: transfer 1 to bob (insufficient funds)
+balance: 0
+inflow: 10
+outflow: 0
+fees: 0
+transferred: 10
+rejected: 3

@@ -1,0 +1,10 @@
+add tea 200 3
+add salt 100 7
+order ana tea 9
+order ana tea 10
+order bob salt 11
+order bob salt 49
+order cy tea 50
+order cy salt 50
+customers
+report

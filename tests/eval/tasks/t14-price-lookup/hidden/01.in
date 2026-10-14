@@ -1,0 +1,8 @@
+price flour 120
+price eggs 30
+price flour 130
+quote flour
+cost cake flour 2 eggs 3
+cheapest flour eggs
+report
+zzz
