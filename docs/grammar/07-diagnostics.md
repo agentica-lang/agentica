@@ -37,6 +37,8 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
 | `continue` | `next` |
+| `x \|> f`, `x \|> r.field`, `x \|> xs[0]`, `x \|> f(1).g` (`PARSE-PIPE-TARGET`) | a call with parentheses on the right; wrap the expression in parentheses and use `.` on the result: `(x \|> f()).unwrap!` |
+| `x \|> String.trim()` (`CHECK-PIPE-METHOD`) | the method form: `x.trim` |
 | `break if x`, `next if x` | `if x`, then `break` on its own line, then `end` |
 | `loop do ... end` | `while true ... end`, or a `while` condition |
 | `puts(x) if ok`, `if x do` | `if ok ... end`; an `if` condition ends with a newline |

@@ -15,7 +15,7 @@ Each rule says what is **as built** today and what is **being built** or is a **
 Known exceptions, as built:
 
 - **Fallbacks that still use a pool thread.** stdin stays a pool job with a blocking read when it cannot be made non-blocking: the reopen through `/proc/self/fd/N` fails (no `/proc`, or `EACCES` after `su` or `sudo -u`), a socket's `F_DUPFD` fails, the poller cannot be made, or stdin is write-only. A regular file whose read can block (`/proc/kmsg`, some `/sys` files) goes to the pool, and that read keeps one pool thread until it returns. A regular file that reports size 0 (`/proc`, `/sys`) is read to EOF, at most 1 MiB.
-- **stdout and stderr writes block.** `puts`, `print`, `IO.inspect` and `IO.warn` write through `agc_write` to a blocking `FILE *` (`vm/interp.c`), so a full stdout pipe stalls every task. Decided by the owner on 2026-10-13: they move onto the loop later, on top of the parking mechanism of channels (17b), as roadmap row 7.2.1f. A stop signal interrupts such a write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4). With N > 1 they are locked per stream (§16.8).
+- **stdout and stderr writes block.** `puts`, `print`, `IO.inspect` and `IO.warn` write through `agc_write` to a blocking `FILE *` (`vm/interp.c`), so a full stdout pipe stalls every task. The owner decided on 2026-10-13 to move them onto the loop (row 7.2.1f); the target is in §10.2.2. A stop signal interrupts such a write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4). With N > 1 they are locked per stream (§16.8).
 
 ### 14.2 Timeouts
 

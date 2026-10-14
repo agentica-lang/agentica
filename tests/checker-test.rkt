@@ -971,4 +971,51 @@
                                             "    State.Ready ->\n      puts(\"ready\")\n"
                                             "    State.Ready ->\n      puts(\"again\")\n"
                                             "    State.Done ->\n      puts(\"done\")\n  end"))))
-     'CHECK-UNREACHABLE-CASE-ARM)))
+     'CHECK-UNREACHABLE-CASE-ARM))
+
+  (test-case "pipe calls user functions and builtins without a method form"
+    (define helpers
+      (string-append "def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\n"
+                     "def parse(text: String) -> Result[Int]\n  return text.to_i\nend\n\n"
+                     "def load(path: String) -> Result[Int]\n"
+                     "  text = path |> try File.read_text(1000)\n"
+                     "  return text |> parse()\n"
+                     "end\n\n"))
+    (check-ok (string-append helpers (main-with "  n: Int = 1 |> add(2) |> add(3)\n  puts(n)")))
+    (check-ok (string-append helpers (main-with "  r: Result[Int] = \" 4 \".trim |> parse()\n  puts(r.unwrap!)")))
+    (define mismatch (check-text (string-append helpers (main-with "  n = \"a\" |> add(1)"))))
+    (check-equal? (diagnostic-code mismatch) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span mismatch))) 7)
+    (check-equal? (source-position-column (source-span-end (diagnostic-span mismatch))) 10)
+    (define arity (check-text (string-append helpers (main-with "  n = 1 |> add()\n  puts(n)"))))
+    (check-equal? (diagnostic-code arity) 'CHECK-ARITY)
+    (check-equal? (check-code (string-append helpers (main-with "  n = 1 |> missing()"))) 'CHECK-UNKNOWN-NAME))
+
+  (test-case "pipe into a builtin that has a method form is CHECK-PIPE-METHOD"
+    (define trimmed (check-text (main-with "  s = \" a \"\n  t = s |> String.trim()\n  puts(t)")))
+    (check-equal? (diagnostic-code trimmed) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help trimmed) "s.trim")
+    (check-equal? (source-position-column (source-span-start (diagnostic-span trimmed))) 12)
+    (check-equal? (source-position-column (source-span-end (diagnostic-span trimmed))) 25)
+    (define split (check-text (main-with "  s = \"a,b\"\n  xs = s.trim |> String.split(\",\")\n  puts(xs.size)")))
+    (check-equal? (diagnostic-code split) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help split) "s.trim.split(\",\")")
+    (define wrapped (check-text (main-with "  n = \"a\" + \"b\" |> String.length()")))
+    (check-equal? (diagnostic-code wrapped) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help wrapped) "(\"a\" + \"b\").length")
+    (define helpers
+      (string-append "def f(n: Int) -> Int\n  return n\nend\n\n"
+                     "def g(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n"))
+    (define chained (check-text (string-append helpers (main-with "  z = 1 |> f() |> String.from_int()"))))
+    (check-equal? (diagnostic-code chained) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help chained) "(1 |> f()).to_s")
+    (define tried (check-text (string-append helpers "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n  return ok(z)\nend\n\n" (main-with "  puts(1)"))))
+    (check-equal? (diagnostic-code tried) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help tried) "(1 |> try g()).to_s")
+    (define extra (check-text (string-append helpers (main-with "  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"))))
+    (check-equal? (diagnostic-code extra) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help extra) "xs.map do ... end"))
+
+  (test-case "a block after a piped call does not make it a plain call"
+    (check-equal? (check-code (main-with "  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"))
+                  'CHECK-PIPE-METHOD)))

@@ -1,6 +1,6 @@
 ## 25. Ruby typed idioms
 
-**Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator (order 7.2): 25.1 (defaults, front end only) as the first item of order step 7.5, before `std/log`; 25.2 to 25.5, 25.9 and 25.10 at order step 7.6, after the strict diagnostics of [section 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12.
+**Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator (order 7.2): 25.1 (defaults, front end only) as the first item of order step 7.5, before `std/log`; 25.2 to 25.5, 25.9 and 25.10 at order step 7.6, after the strict diagnostics of [section 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12. 25.14 (the pipe operator) is implemented (roadmap item 15l, order row 7.2.1g).
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms that models already know, with the rule of [section 11](11-ruby-ergonomics.md#11-ruby-style-ergonomics): accept a form when it is real Ruby (or a typed version of it) or when it makes Agentica consistent with itself, and keep static checking and immutable values. Three limits do not move: no OOP (no classes, no inheritance, no user methods on user types), no user generics, and values stay immutable.
 
@@ -340,7 +340,7 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
 - If the open fails, the block does not run and the call returns that error.
 - Otherwise the block runs with the handle, and then the handle is closed with `File.close(handle, timeout_ms)`, whether the block returned `ok` or `error` (an early `return error(...)` and a failed `try` included). If the block returned `ok(v)`, the call returns `ok(v)`, or the close error if the close fails (it flushes writes, so its error matters). If the block returned an error, the call returns that error, and a close error is dropped.
 - A runtime diagnostic inside the block ends the task (the whole run only in `main`, §37); the handle, owned by the task, is closed by the crash, or by the run's end in `main`, as today. A handle that leaves the block (returned inside the Result or captured by a lambda) is closed; using it gives the error `Result` of a closed handle, as today.
-- The block's result must be `Result[T]`. `T` comes from the expected type of the call if there is one, or else from the body. Unlike `map`, `try` works in this block even when `T` is inferred: the outer type is always `Result`, so the checker knows what `try` returns from it. This is a small checker rule for builtins whose block result is `Result[T]`. It is general, and `Task.map` adds it ([section 27.1](27-iteration-and-concurrency.md#271-taskmap), roadmap 17a, order step 7.3), before this item; this item reuses it for `File.open`.
+- The block's result must be `Result[T]`. `T` comes from the expected type of the call if there is one, or else from the body. Unlike `map`, `try` works in this block even when `T` is inferred: the outer type is always `Result`, so the checker knows what `try` returns from it. This is a small checker rule for builtins whose block result is `Result[T]`. It is general: `File.each_line` adds it ([section 27.4](27-iteration-and-concurrency.md#274-streams-fileeach_line-and-streamt), roadmap 17d, order row 7.2.1h), before `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap), roadmap 17a) and this item, which reuse it.
 - The strict rules of [section 26](26-strict-diagnostics.md#26-strict-diagnostics) hold in the block: an unused handle parameter is `CHECK-UNUSED-VARIABLE` (`do |_|`), a statement after `return` is `CHECK-UNREACHABLE-CODE`, and a dropped `Result` inside it (`File.write_text(...)` without `try`) is `CHECK-UNUSED-RESULT`. The lowered `File.close` is not user code, so it is never reported.
 - The same shape fits other handles that need a close: `TCP.connect`, `TLS.connect` and `Process.spawn` (where the close kills and reaps the process). Each is its own small item, added when a program needs it.
 
@@ -449,7 +449,7 @@ Decided against by the one-way test: `while true` already does it. See 25.13.
 
 #### 25.12.7 Lazy enumerators and generators
 
-**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:** streams of unknown length without building lists. **Now in [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):** a lazy `Stream[T]` stays to evaluate later there (§27.4), with the criteria that would plan it (after the prelude of 25.6); generators with `yield` (`Enumerator.new`, fibers) are decided against (§27.5), since a task that sends into a channel (§27.2) is the producer, and `xs.lazy` gets a help.
+**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:** streams of unknown length without building lists. **Now in [section 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):** `File.each_line` reads a big file line by line in bounded memory (§27.4, step 1, order row 7.2.1h), and a lazy `Stream[T]` is planned for after the prelude of 25.6 (§27.4, step 2, order step 8.2); generators with `yield` (`Enumerator.new`, fibers) are decided against (§27.5), since a task that sends into a channel (§27.2) is the producer, and `xs.lazy` gets a help.
 
 #### 25.12.8 Declarative hygienic macros
 
@@ -506,7 +506,7 @@ def validate(n: Int) -> Result[Int]
 end
 
 def load(path: String) -> Result[Int]
-  return path |> try File.read_text(1000) |> try parse() |> try validate()
+  return path |> try File.read_text(1000) |> try parse() |> validate()
 end
 ```
 

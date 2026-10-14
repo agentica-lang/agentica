@@ -29,6 +29,8 @@ Reserved builtin names cannot be declared as functions, types, variables, import
 
 A trailing `?` or `!` belongs to a lowercase name, whatever follows it: `contains? (s, part)` is valid. `!` is not a suffix before `=`, so `a!=b` is `a != b`. By convention `?` marks a predicate that returns `Bool`, and `!` marks the form that halts the run with an error instead of returning a `Result`. Variables, fields and parameters cannot have the suffix.
 
+The pipe operator `|>` is one token (the longest match next to `|` and `||`), so block parameters `do |x|` and `||` are unchanged. It does not continue a line: a chain over several lines goes in parentheses (see section 5).
+
 ### Literals
 
 ```ebnf
