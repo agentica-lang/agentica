@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`Task.await(task, timeout_ms)`** waits for a task for at most `timeout_ms` milliseconds and returns the new builtin enum `Await[T]`: `Await.Done(value)` or `Await.TimedOut`. The checker requires both variants, like a user enum. A timeout does not cancel the task, a task that has ended never times out, and `timeout_ms` of 0 or less is `RUNTIME-INVALID-DURATION` (#217).
+- **`Task.spawn_owning(&f, channel)`** makes the new task the owner of a `Channel`. When that task ends in any way (return, crash, cancel) the channel is closed as by `Channel.close`: a reader gets the values already sent, then the closed error at once, instead of waiting for its timeouts. A channel that is never handed over stays unowned and is closed only by `Channel.close`, which any task may still call. Plain `Task.spawn` gives no ownership, and a channel owned by another task is `RUNTIME-HANDLE-NOT-OWNED` for a caller that tries to hand it over (#219).
+
 ### Changed
 
+- **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter or import alias with that name is `CHECK-REDEFINED-NAME` (#217).
 - **Faster lists:** `push`, `set` and indexing on lists are now near constant time; building a list with n pushes is O(n). A loop of 160,000 pushes took about a minute and now takes 0.1 s. Output, diagnostics and `--max-steps` counts do not change.
 
 ## [0.2.0] - 2026-10-14

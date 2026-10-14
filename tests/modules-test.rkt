@@ -237,6 +237,7 @@
              ("import \"module\" as M\nimport \"module\" as M\n" "" CHECK-REDEFINED-NAME)
              ("import \"module\" as JSON\n" "" CHECK-REDEFINED-NAME)
              ("import \"module\" as Channel\n" "" CHECK-REDEFINED-NAME)
+             ("import \"module\" as Await\n" "" CHECK-REDEFINED-NAME)
              ("import \"module.txt\" as M\n" "" CHECK-IMPORT-PATH)
              ("" "  x = String.nope(\"a\")\n" CHECK-UNKNOWN-NAME)
              ("" "  x = Mpa.put(1)\n" CHECK-UNKNOWN-NAME)

@@ -74,8 +74,8 @@ section says how the scheduler and the loop keep them, as built.
   blocks in `uv_run(UV_RUN_ONCE)` only when its queue is empty. A ready event
   waits at most for the turns queued ahead of it, each about one budget plus the
   last builtin call of that turn. The latency test checks this next to CPU-bound
-  tasks. A parked task waits on I/O, a timer, another live task, or a channel,
-  with a timer.
+  tasks. A parked task waits on I/O, a timer, another live task (with a timer,
+  for `Task.await` with a timeout), or a channel, with a timer.
 - **Quotas.**
   - `--max-steps` is one global budget shared by all tasks (`steps_left`, 6.1),
     and turn costs are never charged to it. With one task, a runaway program
@@ -103,7 +103,36 @@ section says how the scheduler and the loop keep them, as built.
     the target through the `awaiting` fields. If the chain reaches the caller,
     the call fails with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await` span and
     the caller does not park. A task that awaits its own handle is the shortest
-    cycle. The walk is one turn-cost unit for each hop.
+    cycle. The walk is one turn-cost unit for each hop. It stops at a task that
+    waits with a timeout (`await_deadline` is set while it waits), since that
+    task ends by itself.
+  - **Await with a timeout (17c, `docs/future/27-iteration-and-concurrency.md`
+    §27.3).** `Task.await(task, timeout_ms)` is a C builtin that returns the
+    builtin enum `Await[T]` (`Await.Done(value)` or `Await.TimedOut`);
+    `Task.await_result` has the same second arity for a target whose result is a
+    `Result`, as the plain pair does. `timeout_ms` of 0 or less is
+    `RUNTIME-INVALID-DURATION` at that argument, checked first. The call takes
+    the task off the waiter list it may still be in (it was woken by its timer),
+    and a target that has settled (done, and not closing files) gives
+    `Await.Done` with the outcome of the plain await, also when the timer woke
+    the caller at the same time as the target's end. Otherwise the deadline is
+    stored in the task (`await_deadline`, computed at the first call from
+    `agc_io_now`; the timed form runs no cycle check, since it cannot wait
+    forever, so a task that awaits its own handle with a timeout gets
+    `Await.TimedOut`), the task joins the target's waiters as the plain await
+    does, a timer job of the time left is started (`agc_wait_io`, the job kind
+    of the lock and channel waits), and the task parks with retry. The first of
+    two wakes wins: the target's end (`finish_task` wakes the waiters; the retry
+    closes the timer job in `agc_io_finish`) or the timer (the retry leaves the
+    target's waiters, clears `awaiting` and the deadline, and returns
+    `Await.TimedOut`). A wake before the deadline, with the target unsettled,
+    waits again for the time left. A caller that is cancelled while it waits
+    leaves through `unlink_task` as any awaiter does: its timer job is detached
+    and ended, and it leaves the target's waiters through `awaiting`; the case
+    is in `vm/tests/task_cancel_test.c`. After a timeout the target is
+    untouched, and a later crash or cancel of it does not reach the caller. The
+    value is built by `vm/task.c` from the program's `Await` enum, found by name
+    (`agc_builtin_variant`).
   - When `main` returns, ready and parked tasks never run again, and the exit
     path (End of run) does not wait for their jobs. `System.exit`, a failure in
     `main`, `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL` in any task end the run
@@ -184,9 +213,9 @@ section says how the scheduler and the loop keep them, as built.
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, and
   `main` is not done, the VM fails with `RUNTIME-INTERNAL` ("every task is
   waiting and nothing can wake them"). No program reaches it: every channel wait
-  holds a timer, every other wait holds a libuv request or a timer or a live
-  task, and await cycles halt before they park (`Task.await` below). For N>1 see
-  10.2.3.
+  and every timed await holds a timer, every other wait holds a libuv request or
+  a timer or a live task, and plain await cycles halt before they park
+  (`Task.await` below). For N>1 see 10.2.3.
 - **Multi-task runs.** A runaway multi-task run must stop with
   `RUNTIME-STEP-LIMIT` (the black-box rule, §1). The `--max-steps` sweep (§12.1)
   needs each limit to give the full outcome, or the step limit with stdout a
@@ -365,6 +394,13 @@ section says how the scheduler and the loop keep them, as built.
     waits, and the receiver that takes the last reservation wakes the others,
     which then get the closed error. `closed?` is true when the channel is
     closed, the ring is empty and no value is reserved, and stays true.
+  - **An owner.** A channel can have an owner task: `Task.spawn_owning` gives
+    it to the task it spawns (`agc_channel_claim`, which registers an entry
+    with no native object the first time). When the owner ends in any way,
+    `finish_task` runs `agc_close_owned`, which calls the same close, so the
+    waiters wake as above. `close` from any task drops the entry first, so the
+    owner's end then does nothing. A channel never handed over has no entry
+    (§14.5 of `docs/vm/14-core-invariants.md`).
   - **Choices.** Mid-FIFO removal is O(n), as for the lock FIFO. A waiter whose
     timer fired before any wake still takes a value that reached the ring before
     it re-ran, instead of failing at once.

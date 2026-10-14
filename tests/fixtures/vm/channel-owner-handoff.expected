@@ -1,0 +1,33 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 258,
+  "stdout": [
+    "plain spawn: ok 1",
+    "false",
+    "1",
+    "2",
+    "recv: channel: timed out, closed? false",
+    "closed by a non-owner: ok 0",
+    "true",
+    "owner after close: ok 0",
+    "true",
+    "owner hands on: ok 1",
+    "false",
+    "true",
+    "not the owner: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/channel-owner-handoff.agc:24:28: the calling task does not own this handle, or it is closed",
+    "false",
+    "holder: ok 0",
+    "true",
+    "twice: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/channel-owner-handoff.agc:30:28: the calling task does not own this handle, or it is closed",
+    "closed: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/channel-owner-handoff.agc:36:28: the calling task does not own this handle, or it is closed",
+    "0",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/channel-owner-handoff.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":30,\"line\":24},\"start\":{\"column\":28,\"line\":24}},\"task\":true}",
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/channel-owner-handoff.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":30,\"line\":30},\"start\":{\"column\":28,\"line\":30}},\"task\":true}",
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/channel-owner-handoff.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":30,\"line\":36},\"start\":{\"column\":28,\"line\":36}},\"task\":true}",
+    ""
+  ]
+}

@@ -446,3 +446,19 @@ uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fie
   snprintf(message, size, "invalid bytecode: the %s struct is missing", name);
   agc_fail(vm, "RUNTIME-INTERNAL", message, 0);
 }
+
+static bool named(const agc_string *s, const char *text) { return s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0; }
+
+uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity) {
+  const agc_program *p = vm->rt->program;
+  for (uint32_t k = 0; k < p->enum_count; k++) {
+    const agc_enum_def *d = &p->enums[k];
+    if (!named(d->name, enum_name)) continue;
+    for (uint32_t v = d->first; v < d->first + d->count; v++)
+      if (named(p->variants[v].name, variant_name) && p->variants[v].arity == arity) return v;
+  }
+  size_t size = agc_size_add(strlen(enum_name), 48);
+  char *message = agc_alloc_atomic(size);
+  snprintf(message, size, "invalid bytecode: the %s enum is missing", enum_name);
+  agc_fail(vm, "RUNTIME-INTERNAL", message, 0);
+}

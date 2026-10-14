@@ -1,0 +1,20 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 97,
+  "stdout": [
+    "first: timed out",
+    "the caller goes on",
+    "Await.TimedOut",
+    "worker got 21",
+    "second: done 42",
+    "settled: done 42",
+    "Await.Done(42)",
+    "Await.Done(42)",
+    "catch-all: 42",
+    "42",
+    "0",
+    ""
+  ],
+  "stderr": []
+}

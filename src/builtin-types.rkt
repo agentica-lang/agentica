@@ -1,6 +1,6 @@
 #lang racket
 
-(provide opaque-types handle-types builtin-records)
+(provide opaque-types handle-types builtin-records builtin-enum-declarations builtin-enums)
 
 (define opaque-types '(Socket Listener HttpClient HttpServer FileHandle Process TestCase))
 
@@ -17,3 +17,13 @@
                               ("max_connections" . Int) ("max_body_bytes" . Int))
         "FileInfo" '(("kind" . String) ("size_bytes" . Int) ("modified_seconds" . Int))
         "ProcessOutput" '(("stdout" . String) ("stderr" . String) ("truncated" . Bool))))
+
+(define builtin-enum-declarations
+  '(("Await" ("T") ("Done" (TypeVar "T")) ("TimedOut"))))
+
+(define builtin-enums
+  (for/hash ([entry (in-list builtin-enum-declarations)])
+    (values (car entry)
+            (cons (cadr entry)
+                  (for/hash ([variant (in-list (cddr entry))])
+                    (values (car variant) (cdr variant)))))))

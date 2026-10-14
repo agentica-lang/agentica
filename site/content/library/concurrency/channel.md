@@ -97,7 +97,7 @@ Channel.close(channel: Channel[T]) -> Void
 
 Closes the channel. Closing again does nothing. Tasks that wait to send get the closed error. Tasks that wait to receive get the values that are left, and then the closed error. Values sent before the close can still be received.
 
-The task that sends should close the channel, on every path, and the tasks that receive should not. If nobody closes it, a receive loop never ends.
+The task that sends should close the channel, on every path, and the tasks that receive should not. If nobody closes it, a receive loop never ends. A channel that a task owns is also closed when that task ends: see [A producer that owns the channel](#a-producer-that-owns-the-channel). Any task can still call `close` on it.
 
 ```agentica
 def main() -> Void
@@ -180,6 +180,43 @@ end
 15
 true
 ```
+
+## A producer that owns the channel
+
+`Task.spawn_owning(&produce, jobs)` starts the task like `Task.spawn` and makes it the owner of the channel. When that task ends in any way, it returns, crashes or is cancelled, the channel is closed as by `close`. The receiver gets the values that were already sent, then the closed error at once, so it does not wait for a timeout when the producer died.
+
+```agentica
+def produce(jobs: Channel[Int]) -> Result[Void]
+  try jobs.send(1, 1000)
+  try jobs.send(2, 1000)
+  zero = 0
+  try jobs.send(100 / zero, 1000)
+  return ok()
+end
+
+def main() -> Void
+  jobs: Channel[Int] = Channel.new(4)
+  producer = Task.spawn_owning(&produce, jobs)
+  while true
+    case jobs.recv(5000)
+      ok(n) -> puts(n)
+      error(e) ->
+        puts(e)
+        break
+    end
+  end
+  puts(Task.await(producer).ok?)
+end
+```
+
+```output
+1
+2
+channel: closed
+false
+```
+
+A channel that was never handed over has no owner, and only `close` closes it. A task that has the channel from `Task.spawn(&f, jobs)` does not own it. The first `Task.spawn_owning` of a channel can come from any task. After that only the owner can hand the channel on; any other task, or any task once the channel is closed, stops with `RUNTIME-HANDLE-NOT-OWNED` at the channel. A channel has one owner, so for several producers use the pattern of the next section: one coordinator awaits them all and then closes the channel.
 
 ## Several sources
 

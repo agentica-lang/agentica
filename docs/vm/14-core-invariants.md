@@ -175,7 +175,9 @@ either. Both leave children running.
 ### 14.5 Handles
 
 **Rule (phase 24, 24b).** A handle (file, socket, listener, process, `std/http`
-server) belongs to the task that opened it. If that task ends, in any way
+server) belongs to the task that opened it. A `Channel` has no opener: it is
+unowned until `Task.spawn_owning` hands it to a task, which then owns it like
+any other handle. If that task ends, in any way
 (return, crash, cancel), without closing it, the handle is closed. There is one
 close path: `finish_task` (`vm/task.c`) ends every task and closes the handles
 it still owns through `agc_close_owned`. Handing a handle to another task is
@@ -205,6 +207,18 @@ not waited for. A server owns its listener: `HttpWire.server` takes the listener
 off its owner's list, so ending the server's owner closes both and a hand-off
 moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED` when the
 caller does not own the handle or it is closed, before it makes a task.
+
+A channel is the one handle that is made unowned. `Channel.new` makes no
+registry entry. The first `Task.spawn_owning` of the channel (any task may do
+it) registers an entry with no native object, whose close function is the
+channel's own close (`vm/channel.c`), and gives it to the new task. When that
+task ends, `agc_close_owned` runs it: the channel closes as `Channel.close`
+does (parked senders wake with the closed error, readers drain, then get it),
+and the entry is dropped. `Channel.close` from any task drops the entry too, so
+an owner's later end does nothing, and a closed channel cannot be handed over.
+A channel owned by another task is `RUNTIME-HANDLE-NOT-OWNED` for the caller,
+as any owned handle. A channel that was never handed over is closed only by
+`Channel.close`.
 
 ### 14.6 Entry rule for the core
 

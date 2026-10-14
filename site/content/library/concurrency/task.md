@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 1
-description: Start, await, pause and count lightweight tasks, hand a handle to a task, and find their crashes.
+description: Start, await (with or without a timeout), pause and count lightweight tasks, hand a handle to a task, and find their crashes.
 ---
 
 Tasks run functions at the same time in one program. The tour page
@@ -36,9 +36,9 @@ hi Ana
 Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 ```
 
-Starts `function(handle)` like `Task.spawn`, and in the same call gives `handle` to the new task. The calling task must own the handle. From then on the new task owns it, so it is closed when the new task ends, even if that task crashes, and nobody else can close it in between. The caller can still use the handle while the new task runs. A server loop uses it to give each accepted connection to its own task, so a crash while serving one connection closes only that connection. A server handed over this way takes its listener with it, and goes on serving after the task that made it has ended.
+Starts `function(handle)` like `Task.spawn`, and in the same call gives `handle` to the new task. The calling task must own the handle. A [Channel](/library/concurrency/channel/) is accepted too: it has no opener, so the first hand-off of a channel can come from any task, and when the new task ends the channel is closed (see [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel)). From then on the new task owns it, so it is closed when the new task ends, even if that task crashes, and nobody else can close it in between (except a channel, which any task may still close with `Channel.close`). The caller can still use the handle while the new task runs. A server loop uses it to give each accepted connection to its own task, so a crash while serving one connection closes only that connection. A server handed over this way takes its listener with it, and goes on serving after the task that made it has ended.
 
-The argument must be a `FileHandle`, `Socket`, `Listener`, `Process` or `HttpServer`; any other type, such as an `Int`, a struct that holds a socket or an `HttpClient`, is `CHECK-NOT-A-HANDLE` at the argument. If the calling task does not own the handle, if it was already handed over, or if it is closed, the caller stops with `RUNTIME-HANDLE-NOT-OWNED` at the handle and no task is made.
+The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`; any other type, such as an `Int`, a struct that holds a socket or an `HttpClient`, is `CHECK-NOT-A-HANDLE` at the argument. If the calling task does not own the handle, if it was already handed over, or if it is closed, the caller stops with `RUNTIME-HANDLE-NOT-OWNED` at the handle and no task is made.
 
 ```agentica
 def echo(socket: Socket) -> Result[String]
@@ -116,6 +116,98 @@ end
 ```output
 2
 2
+```
+
+## Task.await with a timeout
+
+```text
+Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
+```
+
+Waits for the task for at most `timeout_ms` milliseconds. `Await[R]` is a builtin enum with two variants: `Await.Done(value)` holds the task's result, and `Await.TimedOut` means the time ran out first. `TimedOut` has no payload and is written without parentheses. Match both variants with `case`, or add `_`; the checker rejects a `case` that misses one. `Await` is a reserved name, so a struct, enum or import alias cannot use it. `try` does not apply to an `Await`.
+
+A timeout does not cancel the task and does not stop the caller. The task keeps running, and a later `Task.await(task)` or timed await gives its result. A task that has already ended never times out, however short the timeout. `timeout_ms` must be above 0; `0` or a negative value stops the program with `RUNTIME-INVALID-DURATION` at the argument. Call it once with the total time you can spare instead of polling in a loop.
+
+If the task crashes or is cancelled before the timeout, the outcome is the one of the plain await: for a task that returns a `Result` you get `Await.Done(error(text))`, and for any other result type the caller stops with `RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED` at the call. A crash after the caller got `Await.TimedOut` does not reach the caller. A timed await cannot wait forever, so it takes no part in the await-cycle check: a task that awaits its own handle with a timeout, or two tasks that await each other with timeouts, get `Await.TimedOut`, and a plain `Task.await` of a task that waits with a timeout does not stop with `RUNTIME-TASK-AWAIT-CYCLE`.
+
+In this program the worker waits for a number from a [Channel](/library/concurrency/channel/). The first wait runs out of time, the worker keeps waiting, and the second wait gets its result:
+
+```agentica
+def double(inbox: Channel[Int]) -> Int
+  n = inbox.recv(10000).unwrap!
+  return n * 2
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(1)
+  task = Task.spawn(&double, inbox)
+  case Task.await(task, 20)
+    Await.Done(n) -> puts("done #{n}")
+    Await.TimedOut -> puts("still working")
+  end
+  inbox.send(21, 1000)
+  case Task.await(task, 10000)
+    Await.Done(n) -> puts("done #{n}")
+    Await.TimedOut -> puts("gave up")
+  end
+end
+```
+
+```output
+still working
+done 42
+```
+
+When the task returns a `Result`, `Await.Done` holds that `Result`, so match it in a second `case`. `IO.inspect` shows an `Await` as `Await.Done(ok(25))` or `Await.TimedOut`.
+
+```agentica
+def parse(text: String) -> Result[Int]
+  return ok(100 / text.to_i!)
+end
+
+def main() -> Void
+  task = Task.spawn(&parse, "4")
+  case Task.await(task, 1000)
+    Await.Done(result) ->
+      case result
+        ok(n) -> puts("parsed #{n}")
+        error(e) -> puts(e)
+      end
+    Await.TimedOut -> puts("timed out")
+  end
+  IO.inspect(Task.await(task, 1))
+end
+```
+
+```output
+parsed 25
+Await.Done(ok(25))
+```
+
+For a task that returns `Void` the result is `Await[Void]`, and the payload is matched with `_`, as `Result.Ok(_)` is. A name there is `CHECK-VOID-TYPE`.
+
+```agentica
+def finish(inbox: Channel[Int]) -> Void
+  n = inbox.recv(10000).unwrap!
+  puts("finished #{n}")
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(1)
+  task = Task.spawn(&finish, inbox)
+  IO.inspect(Task.await(task, 20))
+  inbox.send(7, 1000)
+  case Task.await(task, 10000)
+    Await.Done(_) -> puts("done")
+    Await.TimedOut -> puts("timed out")
+  end
+end
+```
+
+```output
+Await.TimedOut
+finished 7
+done
 ```
 
 ## Task.sleep
