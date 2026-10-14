@@ -19,7 +19,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM th
 - `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
 - `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
 - `tests/<stage>-test.rkt` holds the focused tests for each stage.
-- `.agents/skills/agentica-development/` has stage-by-stage notes and the details: the VM build and its third-party libraries, golden tests, CI, release, site, benchmarks, eval and jscpd. Read it before changing a stage, the VM, tests or CI.
+- `.agents/skills/agentica-development/` has stage-by-stage notes and the details: the VM build and its third-party libraries, golden tests, CI, release, site, benchmarks, eval and jscpd. Read it before changing a stage, the VM, tests or CI. `.agents/skills/vm-c-critic/` is the review checklist for a PR that changes the C VM.
 
 ## Conventions
 
