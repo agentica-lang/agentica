@@ -288,48 +288,53 @@ static agc_value builtin_trim(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]), *sep = agc_as_string(vm, args[1]);
-  agc_list *l;
+  agc_list_builder b;
   if (sep->bytes == 0) {
-    l = agc_new_list(s->chars);
+    agc_list_builder_sized(&b, s->chars);
     size_t at = 0;
     for (size_t k = 0; k < s->chars; k++) {
       size_t start = at;
       agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
-      l->items[k] = agc_string_value(agc_make_string(s->data + start, at - start, 1));
+      agc_list_builder_push(&b, agc_string_value(agc_make_string(s->data + start, at - start, 1)));
     }
-    return agc_list_value(l);
+    return agc_list_value(agc_list_builder_finish(&b));
   }
   if (sep->bytes > s->bytes) {
-    l = agc_new_list(1);
-    l->items[0] = args[0];
-    return agc_list_value(l);
+    agc_list_builder_sized(&b, 1);
+    agc_list_builder_push(&b, args[0]);
+    return agc_list_value(agc_list_builder_finish(&b));
   }
   finder f = make_finder(sep);
-  l = agc_new_list(agc_size_add(count_matches(&f, s), 1));
-  size_t start = 0, k = 0;
+  agc_list_builder_sized(&b, agc_size_add(count_matches(&f, s), 1));
+  size_t start = 0;
   for (size_t at = find(&f, s, 0); at != AGC_NOT_FOUND; at = find(&f, s, start)) {
-    l->items[k++] = agc_string_value(piece(s, start, at));
+    agc_list_builder_push(&b, agc_string_value(piece(s, start, at)));
     start = at + sep->bytes;
   }
-  l->items[k] = agc_string_value(piece(s, start, s->bytes));
-  return agc_list_value(l);
+  agc_list_builder_push(&b, agc_string_value(piece(s, start, s->bytes)));
+  return agc_list_value(agc_list_builder_finish(&b));
 }
 
 static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *parts = agc_as_list(vm, args[0]);
   const agc_string *sep = agc_as_string(vm, args[1]);
-  if (parts->len == 0) return agc_string_value(agc_new_string(0, 0));
-  size_t bytes = agc_size_mul(parts->len - 1, sep->bytes), chars = agc_size_mul(parts->len - 1, sep->chars);
-  for (size_t k = 0; k < parts->len; k++) {
-    const agc_string *part = agc_as_string(vm, parts->items[k]);
+  size_t count = agc_list_len(parts);
+  if (count == 0) return agc_string_value(agc_new_string(0, 0));
+  size_t bytes = agc_size_mul(count - 1, sep->bytes), chars = agc_size_mul(count - 1, sep->chars);
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, parts, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_string *part = agc_as_string(vm, item);
     bytes = agc_size_add(bytes, part->bytes);
     chars = agc_size_add(chars, part->chars);
   }
   agc_string *result = agc_new_string(bytes, chars);
   size_t w = 0;
-  for (size_t k = 0; k < parts->len; k++) {
-    const agc_string *part = agc_as_string(vm, parts->items[k]);
+  agc_list_cursor_begin(&cursor, parts, 0);
+  for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) {
+    const agc_string *part = agc_as_string(vm, item);
     if (k > 0 && sep->bytes) {
       memcpy(result->data + w, sep->data, sep->bytes);
       w += sep->bytes;
@@ -466,12 +471,16 @@ static agc_value builtin_from_code(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_from_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *data = agc_as_list(vm, args[0]);
-  for (size_t k = 0; k < data->len; k++) {
-    int64_t b = agc_as_int(vm, data->items[k]);
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, data, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    int64_t b = agc_as_int(vm, item);
     if (b < 0 || b > 255) return failure(ascii("bytes must be integers between 0 and 255"));
   }
-  agc_string *s = agc_new_string(data->len, 0);
-  for (size_t k = 0; k < data->len; k++) s->data[k] = (char)(uint8_t)agc_as_int(vm, data->items[k]);
+  agc_string *s = agc_new_string(agc_list_len(data), 0);
+  agc_list_cursor_begin(&cursor, data, 0);
+  for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) s->data[k] = (char)(uint8_t)agc_as_int(vm, item);
   if (!agc_utf8_chars((const uint8_t *)s->data, s->bytes, &s->chars))
     return failure(ascii("invalid or incomplete UTF-8"));
   return agc_result_value(true, agc_string_value(s));

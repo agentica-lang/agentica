@@ -999,20 +999,23 @@ static agc_value stat_result(agc_vm *vm, const op *o) {
 }
 
 static agc_value list_result(agc_vm *vm, const op *o) {
-  agc_list *names = agc_new_list(o->count);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, o->count);
   size_t at = 0;
   for (size_t k = 0; k < o->count; k++) {
     size_t len = strlen((const char *)o->out + at);
-    names->items[k] = agc_string_value(lossy(o->out + at, len));
+    agc_list_builder_push(&b, agc_string_value(lossy(o->out + at, len)));
     at += len + 1;
   }
+  agc_list *names = agc_list_builder_finish(&b);
   return agc_result_value(true, agc_sort_by_keys(vm, names, names));
 }
 
 static agc_value bytes_result(const op *o) {
-  agc_list *l = agc_new_list(o->out_len);
-  for (size_t k = 0; k < o->out_len; k++) l->items[k] = agc_int(o->out[k]);
-  return agc_result_value(true, agc_list_value(l));
+  agc_list_builder b;
+  agc_list_builder_sized(&b, o->out_len);
+  for (size_t k = 0; k < o->out_len; k++) agc_list_builder_push(&b, agc_int(o->out[k]));
+  return agc_result_value(true, agc_list_value(agc_list_builder_finish(&b)));
 }
 
 static agc_value closed(agc_vm *vm, void *data, agc_value context) {
@@ -1322,7 +1325,7 @@ static agc_value builtin_write_list(agc_vm *vm, agc_value *args, uint32_t span) 
   const agc_list *values = agc_as_list(vm, args[1]);
   const uint8_t *data = agc_byte_list(vm, values, LIMIT);
   if (!data) return error_of("network: bytes must be 0..255 and at most 1048576 per call");
-  return write_bytes(vm, args[0], data, values->len, agc_as_int(vm, args[2]));
+  return write_bytes(vm, args[0], data, agc_list_len(values), agc_as_int(vm, args[2]));
 }
 
 static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1471,14 +1474,18 @@ static bool collapse_leading(const text *t) {
 static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_list *parts = agc_as_list(vm, args[0]);
-  if (parts->len == 0) return error_of("filesystem: Path.join needs at least one part");
-  for (size_t k = 0; k < parts->len; k++) {
-    const agc_string *part = agc_as_string(vm, parts->items[k]);
+  if (agc_list_len(parts) == 0) return error_of("filesystem: Path.join needs at least one part");
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, parts, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_string *part = agc_as_string(vm, item);
     if (!path_string(part))
       return contract_error("build-path", "(or/c path-string? path-for-some-system? 'up 'same)", part);
   }
-  for (size_t k = 1; k < parts->len; k++) {
-    const agc_string *part = agc_as_string(vm, parts->items[k]);
+  agc_list_cursor_begin(&cursor, parts, 1);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_string *part = agc_as_string(vm, item);
     if (part->data[0] == '/') {
       text t = {0};
       puts_text(&t, "build-path: absolute path cannot be added to a path\n  absolute path: ");
@@ -1487,8 +1494,9 @@ static agc_value builtin_join(agc_vm *vm, agc_value *args, uint32_t span) {
     }
   }
   text t = {0};
-  for (size_t k = 0; k < parts->len; k++) {
-    const agc_string *part = agc_as_string(vm, parts->items[k]);
+  agc_list_cursor_begin(&cursor, parts, 0);
+  for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) {
+    const agc_string *part = agc_as_string(vm, item);
     if (k > 0) {
       if (collapse_leading(&t)) {
         memmove(t.data, t.data + 1, t.len - 1);

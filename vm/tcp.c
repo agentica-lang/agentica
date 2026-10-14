@@ -1087,7 +1087,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, bool text) {
   } else {
     const agc_list *values = agc_as_list(vm, args[1]);
     data = agc_byte_list(vm, values, LIMIT);
-    len = values->len;
+    len = agc_list_len(values);
     if (!data) return agc_error_value("network: bytes must be 0..255 and at most 1048576 per call");
   }
   int64_t timeout = agc_as_int(vm, args[2]);

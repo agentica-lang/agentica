@@ -597,10 +597,13 @@ static char *resolve(agc_vm *vm, const agc_string *command) {
 }
 
 static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
-  char **argv = calloc(agc_size_add(list->len, 2), sizeof(char *));
+  char **argv = calloc(agc_size_add(agc_list_len(list), 2), sizeof(char *));
   if (!argv) agc_out_of_memory();
   argv[0] = path;
-  for (size_t k = 0; k < list->len; k++) argv[k + 1] = agc_cstr(agc_as_string(vm, list->items[k]));
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, list, 0);
+  for (size_t k = 1; agc_list_cursor_next(&cursor, &item); k++) argv[k] = agc_cstr(agc_as_string(vm, item));
   return argv;
 }
 
@@ -727,7 +730,10 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   bool valid = command->bytes > 0 && no_nul(command);
-  for (size_t k = 0; k < list->len; k++) valid = valid && no_nul(agc_as_string(vm, list->items[k]));
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, list, 0);
+  while (agc_list_cursor_next(&cursor, &item)) valid = valid && no_nul(agc_as_string(vm, item));
   if (!valid) return agc_error_value("process: command must be nonempty and arguments cannot contain NUL");
   if (dir && (dir->bytes == 0 || !no_nul(dir)))
     return agc_error_value("process: dir must be nonempty and cannot contain NUL");
@@ -764,7 +770,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, rc);
   else
     AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn pid=%d path=%s args=%zu captured=%d channel=%d", (int)p->process.pid,
-              path, list->len, p->captured ? 1 : 0, channel ? 1 : 0);
+              path, agc_list_len(list), p->captured ? 1 : 0, channel ? 1 : 0);
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
   free(env);
@@ -866,7 +872,7 @@ static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   const agc_list *values = agc_as_list(vm, args[1]);
   uint8_t *data = agc_byte_list(vm, values, LIMIT);
   if (!data) return agc_error_value("process: bytes must be 0..255 and at most 1048576 per call");
-  return write_op(vm, args, data, values->len);
+  return write_op(vm, args, data, agc_list_len(values));
 }
 
 static agc_value builtin_close_stdin(agc_vm *vm, agc_value *args, uint32_t span) {

@@ -358,8 +358,11 @@ static agc_value builtin_read_request(agc_vm *vm, agc_value *args, uint32_t span
 }
 
 static bool has_named(agc_vm *vm, const agc_list *headers, const char *wanted) {
-  for (size_t k = 0; k < headers->len; k++) {
-    const agc_string *name = agc_as_string(vm, agc_as_struct(vm, headers->items[k])->fields[0]);
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, headers, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_string *name = agc_as_string(vm, agc_as_struct(vm, item)->fields[0]);
     if (agc_http_named((agc_http_slice){(const uint8_t *)name->data, name->bytes}, wanted)) return true;
   }
   return false;

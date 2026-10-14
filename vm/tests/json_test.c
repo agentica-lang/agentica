@@ -93,12 +93,8 @@ int main(void) {
   round_trip(deep, deep);
   free(deep);
 
-  agc_value list = agc_list_value(agc_new_list(0));
-  for (size_t i = 0; i < depth; i++) {
-    agc_list *outer = agc_new_list(1);
-    outer->items[0] = list;
-    list = agc_list_value(outer);
-  }
+  agc_value list = agc_list_value(agc_list_from_array(NULL, 0));
+  for (size_t i = 0; i < depth; i++) list = agc_list_value(agc_list_from_array(&list, 1));
   agc_string *s = agc_json_encode(&vm, agc_json_from(&vm, list, 0), 0);
   agc_string *direct = agc_json_encode(&vm, list, 0);
   assert(s->bytes == 2 * (depth + 1) && s->bytes == direct->bytes && memcmp(s->data, direct->data, s->bytes) == 0);
