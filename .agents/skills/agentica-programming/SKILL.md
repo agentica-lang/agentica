@@ -108,7 +108,7 @@ Read only the files the task needs:
 | Read | When the program |
 |---|---|
 | [references/language.md](references/language.md) | hits a checker error about an operator, type, Void, pattern, block, method, or Result, or needs a core rule this file does not state |
-| [references/builtins.md](references/builtins.md) | calls a builtin not in the cheat sheet, or needs an exact signature for `String`, `List`, `Map`, `Range`, `Int`, `Float`, `IO`, `System`, `Time`, or `Random` |
+| [references/builtins.md](references/builtins.md) | calls a builtin not in the cheat sheet, or needs an exact signature for `String`, `List`, `Map`, `Range`, `Int`, `Float`, `IO`, `System` (arguments, environment), `Time`, or `Random` |
 | [references/examples.md](references/examples.md) | needs a complete program to start from |
 | [references/modules.md](references/modules.md) | spans several files, or imports `std/` or `pkg/` modules |
 | [references/json.md](references/json.md) | reads or writes JSON |

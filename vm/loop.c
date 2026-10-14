@@ -481,6 +481,19 @@ int agc_fd_reopen(int fd, int access) {
   return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
 }
 
+char *agc_real_path(const char *path, int *err) {
+  uv_fs_t req;
+  int rc = uv_fs_realpath(NULL, &req, path, NULL);
+  char *copy = NULL;
+  if (rc < 0) {
+    *err = -rc;
+  } else if (!(copy = strdup(req.ptr))) {
+    *err = ENOMEM;
+  }
+  uv_fs_req_cleanup(&req);
+  return copy;
+}
+
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();

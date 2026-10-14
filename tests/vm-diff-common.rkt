@@ -514,12 +514,19 @@
 (define (fixture-name program)
   (path->string (file-name-from-path program)))
 
+(define (fixture-environment file)
+  (define env (environment-variables-copy (current-environment-variables)))
+  (for ([entry (in-list (file->value file))])
+    (environment-variables-set! env (string->bytes/utf-8 (car entry)) (string->bytes/utf-8 (cdr entry))))
+  env)
+
 (define (call-with-fixture program thunk)
   (define (sidecar extension read-it default)
     (define file (path-replace-extension program extension))
     (if (file-exists? file) (read-it file) default))
   (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
                  [fixture-args (sidecar #".args" (lambda (file) (map fixture-arg (file->value file))) '())]
+                 [current-environment-variables (sidecar #".env" fixture-environment (current-environment-variables))]
                  [fixture-channel (sidecar #".channel" values #f)]
                  [fixture-allow-run (string-prefix? (fixture-name program) allow-run-prefix)])
     (thunk)))
