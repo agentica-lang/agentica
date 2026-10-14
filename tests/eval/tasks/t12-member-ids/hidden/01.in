@@ -1,0 +1,16 @@
+member M-007 ana
+member M-12 bob
+book B-003 2 Dune
+book B-10 1 Emma Woods
+book B-9 1 Zen
+borrow M-007 B-003
+borrow M-12 B-003
+borrow M-007 B-10
+borrow M-12 B-10
+borrow M-007 B-003
+borrow M-007 B-9
+loans M-007
+loans M-12
+return M-007 B-003
+return M-007 B-003
+status

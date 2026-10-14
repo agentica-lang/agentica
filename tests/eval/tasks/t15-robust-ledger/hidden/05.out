@@ -1,0 +1,6 @@
+line 1: bad account
+line 2: bad amount
+line 3: amount out of range
+line 4: expected 2 fields
+total: 0
+rejected: 4

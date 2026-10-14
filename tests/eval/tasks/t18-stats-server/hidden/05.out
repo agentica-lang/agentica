@@ -1,0 +1,11 @@
+GET /hello?name=Ana -> 200 application/json {"greeting":"hello, Ana"}
+GET /hello?name= -> 200 application/json {"greeting":"hello, world"}
+GET /hello?name -> 200 application/json {"greeting":"hello, world"}
+GET /hello?other=1 -> 200 application/json {"greeting":"hello, world"}
+GET /hello?x=1&name=Bo&name=Cy -> 200 application/json {"greeting":"hello, Bo"}
+GET /hello?name=Zed99&x= -> 200 application/json {"greeting":"hello, Zed99"}
+GET /hello?name=A&name= -> 200 application/json {"greeting":"hello, A"}
+GET /hello? -> 200 application/json {"greeting":"hello, world"}
+GET /health?verbose=1 -> 200 application/json {"status":"ok"}
+GET /double/5?x=1 -> 200 application/json {"double":10,"n":5}
+POST /stats?pretty=1 -> 200 application/json {"count":2,"max":2,"min":1,"sum":3}

@@ -1,0 +1,15 @@
+inflow: deposit 1000 -> 1000
+transfer: transfer 100 to a -> 900
+transfer: transfer 200 to b -> 700
+transfer: transfer 300 to a -> 400
+outflow: withdraw 50 -> 350
+fee: fee 25 (audit) -> 325
+fee: fee 25 (audit) -> 300
+rejected: transfer 400 to z (insufficient funds)
+transfer: transfer 1 to z -> 299
+balance: 299
+inflow: 1000
+outflow: 50
+fees: 50
+transferred: 601
+rejected: 1

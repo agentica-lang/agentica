@@ -1,0 +1,7 @@
+name,dept,salary
+ana, eng, 100
+bob,eng,120
+cy,ops
+eli,ops,abc
+fay,ops,-5
+hal,ops,+30

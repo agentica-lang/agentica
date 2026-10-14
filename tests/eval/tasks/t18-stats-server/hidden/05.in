@@ -1,0 +1,11 @@
+GET /hello?name=Ana
+GET /hello?name=
+GET /hello?name
+GET /hello?other=1
+GET /hello?x=1&name=Bo&name=Cy
+GET /hello?name=Zed99&x=
+GET /hello?name=A&name=
+GET /hello?
+GET /health?verbose=1
+GET /double/5?x=1
+POST /stats?pretty=1 {"values":[1,2]}

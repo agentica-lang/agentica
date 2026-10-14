@@ -1,0 +1,13 @@
+POST /health -> 405 application/json {"error":"method not allowed"} allow=GET
+PUT /health -> 405 application/json {"error":"method not allowed"} allow=GET
+GET /stats -> 405 application/json {"error":"method not allowed"} allow=POST
+DELETE /stats -> 405 application/json {"error":"method not allowed"} allow=POST
+POST /double/3 -> 405 application/json {"error":"method not allowed"} allow=GET
+PUT /double/3 -> 405 application/json {"error":"method not allowed"} allow=GET
+POST /hello?name=Ana -> 405 application/json {"error":"method not allowed"} allow=GET
+DELETE /nope -> 404 application/json {"error":"not found"}
+POST /nope -> 404 application/json {"error":"not found"}
+PUT / -> 404 application/json {"error":"not found"}
+GET / -> 404 application/json {"error":"not found"}
+GET /Health -> 404 application/json {"error":"not found"}
+GET /health/ -> 404 application/json {"error":"not found"}

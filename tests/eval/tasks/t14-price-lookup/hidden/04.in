@@ -1,0 +1,12 @@
+price a 7
+price b 3
+price c 3
+price d 9
+cheapest a b c d
+cheapest d c b a
+cheapest x a y
+cheapest x y
+cheapest x x x
+cheapest a
+cheapest
+cheapest q d q

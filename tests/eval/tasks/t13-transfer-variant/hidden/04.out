@@ -1,0 +1,16 @@
+inflow: deposit 50 -> 50
+invalid: transfer x bob
+invalid: transfer 0 bob
+invalid: transfer -5 bob
+invalid: transfer 5 bob extra
+invalid: transfer
+invalid: Transfer 5 bob
+transfer: transfer 5 to bob -> 45
+transfer: transfer 45 to dave -> 0
+rejected: transfer 1 to dave (insufficient funds)
+balance: 0
+inflow: 50
+outflow: 0
+fees: 0
+transferred: 50
+rejected: 1

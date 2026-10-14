@@ -1,0 +1,11 @@
+line 2: expected 3 fields, got 2
+line 3: expected 3 fields, got 4
+line 4: expected 3 fields, got 2
+line 5: empty name
+line 6: empty department
+line 7: empty name
+line 8: empty name
+line 9: bad salary ""
+line 10: bad salary ""
+y: 1 rows, total 5, average 5, top x
+rejected: 9

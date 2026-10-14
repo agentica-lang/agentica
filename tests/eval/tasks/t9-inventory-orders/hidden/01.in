@@ -1,0 +1,12 @@
+add tea 20 3
+add coffee 4 5
+add tea 5 4
+order ana tea 3
+order bob coffee 9
+order bob milk 1
+order ana coffee 4
+price tea 6
+stock tea
+stock milk
+customers
+report

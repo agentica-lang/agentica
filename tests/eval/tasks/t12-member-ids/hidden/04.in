@@ -1,0 +1,18 @@
+member M-10 ana
+member M-9 bob
+member M-009 cy
+book B-20 1 Twenty
+book B-3 1 Three
+book B-100 1 Hundred
+book B-03 1 Three again
+borrow M-10 B-3
+borrow M-10 B-100
+borrow M-10 B-20
+borrow M-10 B-03
+borrow M-9 B-3
+borrow M-009 B-3
+loans M-10
+loans M-9
+loans M-009
+loans M-09
+status

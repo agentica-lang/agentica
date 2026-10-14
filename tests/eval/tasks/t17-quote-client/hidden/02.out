@@ -1,0 +1,13 @@
+salt: error: unknown item
+error: bad order: tea 0
+error: bad order: tea -1
+error: bad order: tea two
+error: bad order: tea
+error: bad order: tea 1 2
+error: bad order: milk   4
+cocoa: 380
+orders: 2, failed: 1
+--- requests
+POST /quote [application/json] {"item":"salt","quantity":2}
+POST /quote [application/json] {"item":"cocoa","quantity":1}
+--- exit 0

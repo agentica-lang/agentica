@@ -1,0 +1,14 @@
+member M-1: ana
+book B-1: Dune (2)
+ana borrowed Dune
+member M-1: ann
+ann has no loans
+ann borrowed Dune
+B-1 Dune: 1/2
+book B-1: Dune Messiah (1)
+B-1 Dune Messiah: 0/1
+ann returned Dune Messiah
+error: not borrowed
+error: bad command
+error: bad command
+B-1 Dune Messiah: 1/1

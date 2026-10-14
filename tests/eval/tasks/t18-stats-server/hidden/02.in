@@ -1,0 +1,17 @@
+POST /stats {"values":[5]}
+POST /stats {"values":[-7,-7,-7]}
+POST /stats {"values":[9223372036854775806,1]}
+POST /stats {"values":[]}
+POST /stats {"values":[1,2.5]}
+POST /stats {"values":[1.0]}
+POST /stats {"values":[true,false]}
+POST /stats {"values":[null]}
+POST /stats {"values":["1"]}
+POST /stats {"values":"x"}
+POST /stats {"values":{"a":1}}
+POST /stats {"other":1}
+POST /stats []
+POST /stats 42
+POST /stats not json
+POST /stats {"values":[1,2
+POST /stats {"values":[1,2,3],"extra":true}

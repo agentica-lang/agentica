@@ -1,0 +1,4 @@
+line 2: expected 3 fields, got 5
+line 6: bad salary "x"
+eng: 3 rows, total 50, average 16, top bob
+rejected: 2

@@ -1,0 +1,10 @@
+error: unknown member M-1
+member M-1: ana
+book B-1: A B C (1)
+ana has no loans
+ana borrowed A B C
+ana:
+  B-1 A B C
+ana returned A B C
+ana has no loans
+B-1 A B C: 1/1

@@ -1,0 +1,9 @@
+rows: 2
+skipped: 5
+--- files
+orders.csv
+report.json
+--- report.json
+'{"customers":[{"customer":"ana","rows":2,"items":4,"total_cents":100}],"skipped":5}\n'
+input unchanged: yes
+--- exit 0

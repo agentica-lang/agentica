@@ -1,0 +1,17 @@
+x = 5
+y = 4
+4
+error: unexpected token
+error: unexpected end of input
+error: unexpected token
+error: unexpected token
+error: unknown variable z
+error: unknown variable w
+error: unknown variable b
+error: bad character '$'
+error: bad character '&'
+error: bad character '.'
+error: unknown variable caps
+error: bad character 'C'
+error: unknown variable f
+error: unexpected token

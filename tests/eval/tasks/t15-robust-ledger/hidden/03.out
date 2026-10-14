@@ -1,0 +1,12 @@
+line 1: expected 2 fields
+line 2: expected 2 fields
+line 3: expected 2 fields
+line 6: bad account
+line 7: bad account
+line 8: bad account
+line 10: bad account
+cash: 10
+sixteen_chars_ok: 5
+under_score_1: 7
+total: 22
+rejected: 7

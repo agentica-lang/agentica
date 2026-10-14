@@ -1,0 +1,8 @@
+line 3: bad amount
+line 5: bad account
+line 6: expected 2 fields
+line 7: amount out of range
+bank: -20
+cash: 50
+total: 30
+rejected: 4

@@ -1,0 +1,13 @@
+cash 1.5
+cash 12a
+cash -
+cash +
+cash --5
+cash +5
+cash -0
+cash 007
+cash 1000000
+cash 1000001
+cash -1000000
+cash -1000001
+cash 

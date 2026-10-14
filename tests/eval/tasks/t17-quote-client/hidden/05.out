@@ -1,0 +1,13 @@
+coffee: 400
+coffee: 800
+coffee: 1200
+unknown: error: unknown item
+milk: 120000000
+orders: 5, failed: 1
+--- requests
+POST /quote [application/json] {"item":"coffee","quantity":1}
+POST /quote [application/json] {"item":"coffee","quantity":2}
+POST /quote [application/json] {"item":"coffee","quantity":3}
+POST /quote [application/json] {"item":"unknown","quantity":1}
+POST /quote [application/json] {"item":"milk","quantity":1000000}
+--- exit 0

@@ -1,0 +1,25 @@
+member M-10: ana
+member M-9: bob
+member M-009: cy
+book B-20: Twenty (1)
+book B-3: Three (1)
+book B-100: Hundred (1)
+book B-03: Three again (1)
+ana borrowed Three
+ana borrowed Hundred
+ana borrowed Twenty
+ana borrowed Three again
+error: no copies left
+error: no copies left
+ana:
+  B-03 Three again
+  B-100 Hundred
+  B-20 Twenty
+  B-3 Three
+bob has no loans
+cy has no loans
+error: unknown member M-09
+B-03 Three again: 0/1
+B-100 Hundred: 0/1
+B-20 Twenty: 0/1
+B-3 Three: 0/1

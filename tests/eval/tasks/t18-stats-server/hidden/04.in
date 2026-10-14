@@ -1,0 +1,13 @@
+POST /health
+PUT /health
+GET /stats
+DELETE /stats
+POST /double/3
+PUT /double/3
+POST /hello?name=Ana
+DELETE /nope
+POST /nope
+PUT /
+GET /
+GET /Health
+GET /health/
