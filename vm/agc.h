@@ -486,6 +486,7 @@ size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
 size_t agc_utf8_width(uint8_t lead);
 uint32_t agc_utf8_next(const uint8_t *s, size_t len, size_t *at);
 size_t agc_utf8_valid(const uint8_t *s, size_t len);
+size_t agc_utf8_count(const uint8_t *s, size_t len);
 bool agc_utf8_chars(const uint8_t *data, size_t len, size_t *chars);
 agc_string *agc_utf8_decode(const uint8_t *data, size_t len, const char *replacement, bool tail);
 agc_string *agc_new_string(size_t bytes, size_t chars);
@@ -538,7 +539,6 @@ extern const size_t agc_case_ignorable_count;
 typedef enum { AGC_NUMBER_OK, AGC_NUMBER_INVALID, AGC_NUMBER_OVERFLOW } agc_number_status;
 
 size_t agc_utf8_encode(uint32_t cp, char out[4]);
-size_t agc_utf8_count(const uint8_t *s, size_t len);
 size_t agc_utf8_offset(agc_vm *vm, const agc_string *s, size_t index);
 #define AGC_NOT_FOUND SIZE_MAX
 size_t agc_text_find(const agc_string *text, const agc_string *part, size_t from);
