@@ -16,6 +16,7 @@
   (define count (vector-length toks))
   (define pos 0)
   (define last-consumed #f)
+  (define parenthesized-calls (make-weak-hasheq))
 
   (define (current)
     (if (< pos count) (vector-ref toks pos) (vector-ref toks (sub1 count))))
@@ -42,6 +43,11 @@
       [(eq? (token-kind token) 'NL) "a newline"]
       [(memq (token-kind token) '(interp-middle interp-end)) "\"}\""]
       [else (format "~s" lexeme)]))
+
+  (define (parenthesized-call name arguments span)
+    (define node (call name arguments span #f))
+    (hash-set! parenthesized-calls node #t)
+    node)
 
   (define (span-from start-token)
     (define start-span (token-span start-token))
@@ -650,16 +656,13 @@
            (define right (parse-additive))
            (define right-span (span-from right-start))
            (define (target-call? node)
-             (and (call? node) (not (call-piped node))))
+             (and (call? node) (not (call-piped node)) (hash-ref parenthesized-calls node #f)))
            (define (insert-left node)
-             (define piped (call (call-name node) (cons left (call-args node)) (call-span node)))
-             (set-call-piped! piped #t)
-             piped)
-           (define has-parens? (memq (token-kind last-consumed) '(right-paren end)))
+             (call (call-name node) (cons left (call-args node)) (call-span node) #t))
            (loop
             (cond
-              [(and (target-call? right) has-parens?) (insert-left right)]
-              [(and (try-expr? right) (target-call? (try-expr-operand right)) has-parens?)
+              [(target-call? right) (insert-left right)]
+              [(and (try-expr? right) (target-call? (try-expr-operand right)))
                (try-expr (insert-left (try-expr-operand right)) (try-expr-span right))]
               [else
                (return (diagnostic 'PARSE-PIPE-TARGET
@@ -721,7 +724,12 @@
            (loop
             (cond
               [(call? target)
-               (call (call-name target) (append (call-args target) (list block)) (span-from start))]
+               (define rebuilt
+                 (call (call-name target) (append (call-args target) (list block))
+                       (span-from start) (call-piped target)))
+               (when (hash-ref parenthesized-calls target #f)
+                 (hash-set! parenthesized-calls rebuilt #t))
+               rebuilt]
               [(method-call? target)
                (method-call (method-call-target target) (method-call-name target)
                             (append (method-call-args target) (list block)) (span-from start))]
@@ -820,9 +828,9 @@
             (advance!)
             (define arguments (parse-expression-list 'right-paren))
             (expect 'right-paren "\")\"")
-            (call (token-lexeme name) arguments (span-from name)))
+            (parenthesized-call (token-lexeme name) arguments (span-from name)))
           (if (member (token-lexeme name) '("gets" "gets!"))
-              (call (token-lexeme name) '() (token-span name))
+              (call (token-lexeme name) '() (token-span name) #f)
               (name-ref (token-lexeme name) (token-span name)))))
 
     (define (parse-construct)
@@ -857,7 +865,8 @@
                (advance!)
                (define arguments (parse-expression-list 'right-paren))
                (expect 'right-paren "\")\"")
-               (call (if (equal? (token-lexeme member) "Ok") "ok" "error") arguments (span-from name))]
+               (parenthesized-call (if (equal? (token-lexeme member) "Ok") "ok" "error")
+                                   arguments (span-from name))]
               [(kind? 'left-paren)
                (advance!)
                (cond
@@ -876,6 +885,7 @@
               [else (type-expression qualified (span-from name))])]
            [else
             (define member (expect 'name "a function name" #t))
+            (define parenthesized? (kind? 'left-paren))
             (define arguments
               (cond
                 [(kind? 'left-paren)
@@ -889,9 +899,10 @@
                        #:help (format "calls need parentheses, as in ~a.~a(...)"
                                       (token-lexeme name) (token-lexeme member)))]
                 [else '()]))
-            (call (string-append (token-lexeme name) "." (token-lexeme member))
-                  arguments
-                  (span-from name))])]
+            (define qualified-name (string-append (token-lexeme name) "." (token-lexeme member)))
+            (if parenthesized?
+                (parenthesized-call qualified-name arguments (span-from name))
+                (call qualified-name arguments (span-from name) #f))])]
         [else (type-expression (token-lexeme name) (token-span name))]))
 
     (define (parse-expression-list terminator)

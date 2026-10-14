@@ -952,4 +952,20 @@
     (check-equal? (diagnostic-help split) "s.trim.split(\",\")")
     (define wrapped (check-text (main-with "  n = \"a\" + \"b\" |> String.length()")))
     (check-equal? (diagnostic-code wrapped) 'CHECK-PIPE-METHOD)
-    (check-equal? (diagnostic-help wrapped) "(\"a\" + \"b\").length")))
+    (check-equal? (diagnostic-help wrapped) "(\"a\" + \"b\").length")
+    (define helpers
+      (string-append "def f(n: Int) -> Int\n  return n\nend\n\n"
+                     "def g(n: Int) -> Result[Int]\n  return ok(n)\nend\n\n"))
+    (define chained (check-text (string-append helpers (main-with "  z = 1 |> f() |> String.from_int()"))))
+    (check-equal? (diagnostic-code chained) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help chained) "(1 |> f()).to_s")
+    (define tried (check-text (string-append helpers "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n  return ok(z)\nend\n\n" (main-with "  puts(1)"))))
+    (check-equal? (diagnostic-code tried) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help tried) "(1 |> try g()).to_s")
+    (define extra (check-text (string-append helpers (main-with "  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"))))
+    (check-equal? (diagnostic-code extra) 'CHECK-PIPE-METHOD)
+    (check-equal? (diagnostic-help extra) "xs.map do ... end"))
+
+  (test-case "a block after a piped call does not make it a plain call"
+    (check-equal? (check-code (main-with "  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"))
+                  'CHECK-PIPE-METHOD)))

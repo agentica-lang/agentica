@@ -62,6 +62,25 @@
                  #:when (and (eq? (car key) kind) (equal? target name)))
        (cdr key))]))
 
+(define (piped-node? node)
+  (or (and (call? node) (call-piped node))
+      (and (try-expr? node) (piped-node? (try-expr-operand node)))))
+
+(define (extent-start node)
+  (cond
+    [(and (call? node) (call-piped node)) (extent-start (car (call-args node)))]
+    [(try-expr? node)
+     (define own (source-span-start (node-span node)))
+     (define inner (extent-start (try-expr-operand node)))
+     (if (< (source-position-offset inner) (source-position-offset own)) inner own)]
+    [else (source-span-start (node-span node))]))
+
+(define (extent-text node)
+  (define end (node-span node))
+  (substring (source-text (source-span-source end))
+             (source-position-offset (extent-start node))
+             (source-position-offset (source-span-end end))))
+
 (define (span-text span)
   (substring (source-text (source-span-source span))
              (source-position-offset (source-span-start span))
@@ -231,7 +250,6 @@
   (define capture-boundary #f)
   (define loop-depth 0)
   (define range-chain '())
-  (define node-types (or types (make-hasheq)))
 
   (let/ec return
     (define (bail code message span
@@ -546,7 +564,7 @@
            'String]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
-      (hash-set! node-types expression actual)
+      (when types (hash-set! types expression actual))
       (when (and (eq? actual 'Void) (not completion?))
         (bail 'CHECK-VOID-VALUE "a Void call has no value; use it as a statement" (node-span expression)))
       (ensure actual expected (node-span expression)))
@@ -992,26 +1010,29 @@
     (define (check-pipe-method! expression entry)
       (define arguments (call-args expression))
       (define left (car arguments))
-      (define kind (receiver-kind (hash-ref node-types left #f)))
+      (define selected (builtin-ref (builtin-name entry) (length arguments)))
+      (define kind (and selected
+                        (pair? (builtin-parameters selected))
+                        (receiver-kind (cadr (car (builtin-parameters selected))))))
       (define method (and kind (pipe-method-name kind (builtin-name entry))))
       (when method
-        (define left-span (node-span left))
         (define left-text
-          (if (or (name-ref? left) (literal? left) (call? left) (method-call? left)
-                  (field-access? left) (index-access? left))
-              (span-text left-span)
-              (string-append "(" (span-text left-span) ")")))
+          (if (and (or (name-ref? left) (literal? left) (call? left) (method-call? left)
+                       (field-access? left) (index-access? left))
+                   (not (piped-node? left)))
+              (extent-text left)
+              (string-append "(" (extent-text left) ")")))
         (define rest-arguments (cdr arguments))
         (define plain (filter (lambda (argument) (not (block-lit? argument))) rest-arguments))
         (bail 'CHECK-PIPE-METHOD
               (format "\"~a\" has a method form for ~a, so it is not piped"
-                      (builtin-name entry) (type->string (hash-ref node-types left)))
+                      (builtin-name entry) kind)
               (call-span expression)
               #:help (string-append
                       left-text "." method
                       (if (null? plain)
                           ""
-                          (string-append "(" (string-join (map (lambda (argument) (span-text (node-span argument))) plain) ", ") ")"))
+                          (string-append "(" (string-join (map extent-text plain) ", ") ")"))
                       (if (ormap block-lit? rest-arguments) " do ... end" "")))))
 
     (define (check-plain-call expression)
@@ -1239,7 +1260,7 @@
          (record! (inspection receiver span))
          (ensure 'String expected span)]
         [else
-         (define synthetic (call resolved-name (cons receiver arguments) span))
+         (define synthetic (call resolved-name (cons receiver arguments) span #f))
          (record! synthetic)
          (check-call synthetic expected)]))
 

@@ -209,7 +209,7 @@ Operators, from highest to lowest precedence:
 - Comparisons do not chain: write `a < b and b < c`, not `a < b < c`.
 - `&&`, `||`, `!` take `Bool`, and `&&` / `||` short-circuit. `and`, `or`, `not` are the same operators. `!` / `not` bind tightly: write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Arguments and operands are evaluated left to right.
-- `x |> f(a)` means `f(x, a)`: the left value is the first argument of the call on the right, which must be a call with parentheses (`f(a)`, `Alias.f(a)`), optionally after `try` (`x |> try f(a)` is `try f(x, a)`) and with a trailing block. It groups to the left (`x |> f() |> g()` is `g(f(x))`), and `a + 1 |> f()` is `f(a + 1)`. Use it to chain user functions: `s.trim |> try parse() |> validate()`. A bare name, field, index or `f(1).g` on the right is `PARSE-PIPE-TARGET`; a builtin with a method form is `CHECK-PIPE-METHOD` (write `s.trim`, not `s |> String.trim()`). Put a multi-line chain in parentheses, one `|>` step per line.
+- `x |> f(a)` means `f(x, a)`: the right side must be a call with parentheses (`f(a)`, `Alias.f(a)`), optionally after `try`, and groups to the left (`x |> f() |> g()` is `g(f(x))`). A builtin with a method form is written with `.`; see `PARSE-PIPE-TARGET` and `CHECK-PIPE-METHOD` in references/diagnostics.md.
 
 ## Methods on builtin types
 
