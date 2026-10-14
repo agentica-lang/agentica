@@ -88,6 +88,11 @@ in the order from row 7.2.7 on, after their prerequisites (rows 8, 7.2.4 to
 7.2.6 and 8.3; [§35.9](../future/35-self-hosting.md#359-order)). Its steps
 (§35.4) are PRs, not rows of this table.
 
+Designed, not scheduled: dates and times (§41,
+[`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).
+It has no row in this table. Its builtin types are checker changes, so they
+land before row 7.2.7 or after the Agentica front end (§41.13).
+
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
 diagnostics, behavior tests, grammar, and the self-contained programming
