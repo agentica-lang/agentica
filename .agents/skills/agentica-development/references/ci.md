@@ -85,6 +85,22 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   submodule's version, and runs the TLS and HTTP tests on that binary. On
   a miss (a new OpenSSL key, such as a submodule bump) it skips;
   `warm-third-party` runs the same link check on `master`.
+- libgc: pull request jobs build with the system libgc (the default
+  `AGENTICA_GC=system`); the same guard step also installs `libgc-dev` when
+  `pkg-config` cannot find `bdw-gc` 8.2.0 or newer (a no-op on the current
+  runner image, which has libgc-dev 8.2.12). `GC_MIN` is 8.2.0 because that
+  is the series the VM is tested with; Debian 12 and 13 and Ubuntu 24.04 and
+  newer ship 8.2.x, and older systems use `AGENTICA_GC=vendored`. The jobs
+  that run on `push` to `master` (`warm-third-party`), the weekly `sweep.yml`
+  and the release set `AGENTICA_GC: vendored`, so the full sweep tests the GC
+  the release ships and the submodule's `gc.o` stays built for the release and
+  for GC stress, which always uses it. `vendored-check` links
+  with the vendored libgc and OpenSSL and fails on `libgc` in `readelf -d`;
+  the release also checks the unpacked archive. The key of
+  `make -s vm-third-party-key` starts with a `libgc=` line, and the VM flag
+  stamps include the mode. Both modes use the same `build/vm/release/obj`
+  directory; a change of mode changes the stamps, which forces a full
+  recompile and relink. `fuzz.yml` stays on the system default.
 - The `test` and `vm-sanitizers` jobs need Node and Python 3 for the
   network peers.
 
@@ -177,10 +193,12 @@ Two more workflows: `site-examples.yml` and `pages.yml` (see
 ## Release (`release.yml`)
 
 The release workflow builds `agentica-vm` with a pinned `zig cc` against
-glibc 2.28, with `AGENTICA_OPENSSL=vendored` set for the whole job. It
+glibc 2.28, with `AGENTICA_OPENSSL: vendored` and `AGENTICA_GC: vendored`
+set for the whole job. It
 checks that floor with `objdump -T`, checks that OpenSSL is linked
 statically (in the build and in the unpacked archive) and that `--version`
-names the submodule's OpenSSL version. It ships the VM in the archive's
+names the submodule's OpenSSL version. It fails when `readelf -d` shows a
+NEEDED `libgc` (in the build and in the unpacked archive). It ships the VM in the archive's
 `bin/` next to `agentica`, with the VM's third-party licenses in
 `licenses/`. Its test steps are targets: `make vm-diff-test` runs the golden
 tests on the release VM (`AGENTICA_VM_BINARY=dist/agentica-vm`, with the

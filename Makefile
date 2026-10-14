@@ -92,7 +92,7 @@ site: site-sass
 site-serve: site-sass
 	hugo server --source site
 
-# The C VM (docs/vm/11-build-ci-supply-chain.md section 11). libgc is built from the pinned submodule.
+# The C VM (docs/vm/11-build-ci-supply-chain.md section 11). On Linux libgc and OpenSSL are the system ones by default.
 # make vm                 dist/agentica-vm
 # make vm-test            C tests in vm/tests/, run in parallel
 # make vm SANITIZE=1      clang with ASan and UBSan, no libgc
@@ -105,12 +105,15 @@ site-serve: site-sass
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
+# make vm AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
+#                         non-Linux hosts do); pass it to every make command or export it. The Linux default AGENTICA_GC=system links the system
+#                         libgc 8.2 or newer found by pkg-config (Debian: libgc-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
 #                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
-# make vm-third-party     build libgc, yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
+# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1, no libuv off Linux)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 AGC_VERSION := $(shell sed -n 's/^(define version "\(.*\)")$$/\1/p' src/version.rkt)
 GC_DIR := vm/third_party/bdwgc
@@ -141,12 +144,20 @@ VM_PIE :=
 VM_HARDEN_LDFLAGS :=
 endif
 UV_NAMES :=
+AGENTICA_GC_DEFAULT := vendored
 ifeq ($(shell uname -s),Linux)
+AGENTICA_GC_DEFAULT := system
 UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
   unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/linux unix/procfs-exepath unix/random-getrandom unix/random-sysctl-linux unix/proctitle
 VM_LIBS += -ldl -lrt
+endif
+AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
+PKG_CONFIG ?= pkg-config
+GC_MIN := 8.2.0
+ifeq ($(filter $(AGENTICA_GC),system vendored),)
+$(error AGENTICA_GC must be system or vendored, not '$(AGENTICA_GC)')
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
@@ -155,7 +166,7 @@ ifeq ($(SANITIZE),1)
 VM_CC := clang
 VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
 VM_LDFLAGS := -fsanitize=address,undefined $(VM_LIBS)
-VM_GC :=
+GC_MODE := none
 VM_BUILD := build/vm/sanitize
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
@@ -163,18 +174,18 @@ DEBUG_MAP := $(DEBUG_MAPS)
 FUZZ_RUNS ?= 30000
 else ifeq ($(GC_STRESS),1)
 VM_CC := $(CC)
-VM_CFLAGS := $(VM_WARN) -O1 -g -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS $(VM_PIC)
+VM_CFLAGS := $(VM_WARN) -O1 -g -DGC_DEBUG -DAGC_GC_STRESS $(VM_PIC)
 VM_LDFLAGS := $(VM_PIE) $(VM_LIBS)
-VM_GC := build/vm/gc.o
+GC_MODE := vendored
 VM_BUILD := build/vm/gcstress
 YY_CFLAGS := -O1 -g $(VM_PIC)
 OSSL_CFLAGS := -g
 DEBUG_MAP := $(DEBUG_MAPS)
 else
 VM_CC := $(CC)
-VM_CFLAGS := $(VM_WARN) -O2 -I $(GC_DIR)/include -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
+VM_CFLAGS := $(VM_WARN) -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 VM_LDFLAGS := $(VM_HARDEN_LDFLAGS) $(VM_LIBS)
-VM_GC := build/vm/gc.o
+GC_MODE := $(AGENTICA_GC)
 VM_BUILD := build/vm/release
 YY_CFLAGS := -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 OSSL_CFLAGS := -fstack-protector-strong -D_FORTIFY_SOURCE=2
@@ -183,6 +194,19 @@ endif
 ifeq ($(TRACE),0)
 VM_CFLAGS += -DAGC_TRACE_BUILD=0
 endif
+VM_GC :=
+GC_INC :=
+GC_LINK :=
+GC_DEP :=
+ifeq ($(GC_MODE),vendored)
+VM_GC := build/vm/gc.o
+GC_INC := -I $(GC_DIR)/include
+else ifeq ($(GC_MODE),system)
+GC_INC := $(shell $(PKG_CONFIG) --cflags bdw-gc 2>/dev/null)
+GC_LINK := $(shell $(PKG_CONFIG) --libs bdw-gc 2>/dev/null)
+GC_DEP := $(VM_BUILD)/gc-system
+endif
+VM_CFLAGS += $(GC_INC)
 VM_STAMP := build/vm/flags
 VM_TP_STAMP := $(VM_BUILD)/third-party-flags
 GC_STAMP := build/vm/gc-flags
@@ -194,6 +218,7 @@ SUBMODULE_KEY = if [ "$$(git -C $(1) rev-parse --show-toplevel 2>/dev/null)" = '
   git ls-tree HEAD $(1); git -C $(1) rev-parse HEAD; git -C $(1) diff --no-ext-diff --no-color --binary HEAD | cksum; \
   (cd $(1) && git ls-files -z -o --exclude-standard | xargs -0r cksum); \
   else echo 'no git checkout: $(1)'; find $(1) -type f ! -path '*/.git/*' -print0 | LC_ALL=C sort -z | xargs -0r cksum | cksum; fi
+GC_SYSTEM_KEY = { $(PKG_CONFIG) --modversion bdw-gc 2>/dev/null; echo '$(GC_INC) $(GC_LINK)'; }
 GC_KEY = { echo '$(GC_COMPILE)'; $(CC) --version 2>/dev/null | head -n 1; $(call SUBMODULE_KEY,$(GC_DIR)); }
 TP_KEY = { echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
   $(AR) --version 2>/dev/null | head -n 1; \
@@ -222,7 +247,6 @@ OSSL_RECIPE = $(subst ','\'',$(subst $(CURDIR)/,,$(OSSL_CONFIGURE) | $(OSSL_SUBM
 OSSL_KEY = { echo '$(OSSL_RECIPE)'; $(VM_CC) --version 2>/dev/null | head -n 1; cat $(OSSL_DIR)/VERSION.dat; \
   if [ "$$(git -C $(OSSL_DIR) rev-parse --show-toplevel 2>/dev/null)" = '$(CURDIR)/$(OSSL_DIR)' ]; then git -C $(OSSL_DIR) rev-parse HEAD; fi; }
 AGENTICA_OPENSSL ?= system
-PKG_CONFIG ?= pkg-config
 OSSL_MIN := 3.0.0
 VM_OSSL :=
 OSSL_LINK :=
@@ -246,7 +270,7 @@ VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
-	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK)' > $@.$(notdir $(VM_BUILD)); \
+	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK) gc=$(GC_MODE) $(GC_LINK)' > $@.$(notdir $(VM_BUILD)); \
 	if cmp -s $@.$(notdir $(VM_BUILD)) $@; then rm -f $@.$(notdir $(VM_BUILD)); else mv $@.$(notdir $(VM_BUILD)) $@; fi
 
 $(VM_OBJ_STAMP): FORCE
@@ -257,7 +281,7 @@ $(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
 
 $(VM_OBJ)/tls_openssl.o: $(OSSL_DEP)
 
-$(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP)
+$(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP) $(GC_DEP)
 	@mkdir -p $(dir $@)
 	$(CCACHE) $(VM_CC) $(VM_CFLAGS) $(DEBUG_MAP) $(VM_OBJ_FLAGS) -MMD -MP -c $< -o $@
 
@@ -272,10 +296,11 @@ $(GC_STAMP): FORCE
 	@$(GC_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 vm-third-party-key:
+	@echo 'libgc=$(GC_MODE)'
 	@$(TP_KEY)
-	@$(if $(VM_GC),$(GC_KEY))
+	@$(if $(filter system,$(GC_MODE)),$(GC_SYSTEM_KEY),$(if $(VM_GC),$(GC_KEY),:))
 
-vm-third-party: $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
+vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
 
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
@@ -283,6 +308,13 @@ $(GC_DIR)/extra/gc.c:
 build/vm/gc.o: $(GC_STAMP) | $(GC_DIR)/extra/gc.c
 	@mkdir -p build/vm
 	$(CCACHE) $(GC_COMPILE) -c $(GC_DIR)/extra/gc.c -o $@
+
+$(VM_BUILD)/gc-system: FORCE
+	@command -v $(PKG_CONFIG) >/dev/null || { echo "AGENTICA_GC=system needs pkg-config and the Boehm GC development files (Debian: apt install libgc-dev pkg-config), or build with AGENTICA_GC=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --exists bdw-gc || { echo "pkg-config cannot find bdw-gc: install the Boehm GC development files (Debian: apt install libgc-dev), or build with AGENTICA_GC=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --atleast-version=$(GC_MIN) bdw-gc || { echo "the VM needs libgc $(GC_MIN) or newer, pkg-config found $$($(PKG_CONFIG) --modversion bdw-gc); install a newer libgc-dev or build with AGENTICA_GC=vendored" >&2; exit 1; }
+	@mkdir -p $(VM_BUILD)
+	@$(GC_SYSTEM_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 $(YY_DIR)/src/yyjson.c:
 	@echo "missing $(YY_DIR): run git submodule update --init" >&2; exit 1
@@ -343,9 +375,9 @@ $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 	@test -f $@ || { echo "$@ is missing: remove $(OSSL_BUILD) and rebuild" >&2; exit 1; }
 
 VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
-VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(VM_LDFLAGS)
+VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)
 
-dist/agentica-vm$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
+dist/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	@mkdir -p dist
 	$(VM_LINK) $(VM_ENTRY)
 
@@ -354,13 +386,13 @@ vm: dist/agentica-vm$(EXE)
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 .SECONDARY: $(patsubst vm/tests/%.c,$(VM_OBJ)/tests/%.o,$(wildcard vm/tests/*_test.c))
 
-$(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/tests/%_test.o $(VM_LINK_LIBS) $(VM_STAMP)
+$(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/tests/%_test.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
 vm-test: $(VM_TESTS)
 	printf '%s\n' $(VM_TESTS) | xargs -P $(JOBS) -n 1 env
 
-$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
+$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
 FUZZ_CORPUS = racket -e '(require (file "tests/vm-diff-common.rkt") racket/path)' \
@@ -372,7 +404,7 @@ vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	$(FUZZ_CORPUS) tests/fixtures/vm/*.agc
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
-$(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
+$(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK) $(VM_ENTRY)
 
 vm-gc-stress: build
@@ -408,10 +440,10 @@ vm-sanitize-build: build
 vm-sanitize-test: vm-sanitize-build
 	$(RACO) test -j $(SANITIZE_JOBS) $(VM_RKT_TESTS)
 
-# Link the VM against the vendored OpenSSL and check that it is static and the version is the submodule's
+# Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
 vendored-check:
-	$(MAKE) -j$(JOBS) build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored
-	@if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto)'; then echo "the vendored VM links OpenSSL dynamically" >&2; exit 1; fi
+	$(MAKE) -j$(JOBS) build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored
+	@if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then echo "the vendored VM links OpenSSL or libgc dynamically" >&2; exit 1; fi
 	@ossl=$$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $$2; sep = "." }' vm/third_party/openssl/VERSION.dat); \
 	  build/vm/release/agentica-vm --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored VM does not report OpenSSL $$ossl" >&2; exit 1; }
 

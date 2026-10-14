@@ -8,7 +8,7 @@ description: Install Agentica, run your first program, check it and read its err
 
 Agentica programs run on a bytecode VM written in C. The `agentica` command checks a program and compiles it to bytecode with a front end written in [Racket](https://racket-lang.org/), then runs it on the VM.
 
-To build from source you need Racket CS 9.3 or newer, a C11 compiler (gcc or clang) and `make`. On Linux the VM also needs OpenSSL 3 and `pkg-config` (Debian and Ubuntu: `libssl-dev pkg-config`); `make vm AGENTICA_OPENSSL=vendored` builds OpenSSL from its submodule instead, which needs Perl 5 and takes a few minutes; pass it to every make command, or `export AGENTICA_OPENSSL=vendored`. Get the source with the VM's third-party libraries, and build the `agentica` command:
+To build from source you need Racket CS 9.3 or newer, a C11 compiler (gcc or clang) and `make`. On Linux the VM also needs OpenSSL 3, the Boehm GC (libgc 8.2 or newer) and `pkg-config` (Debian and Ubuntu: `libssl-dev libgc-dev pkg-config`); `make vm AGENTICA_GC=vendored` builds the Boehm GC from its submodule instead, which needs nothing else; `make vm AGENTICA_OPENSSL=vendored` builds OpenSSL from its submodule instead, which needs Perl 5 and takes a few minutes; pass either setting to every make command, or export it (`export AGENTICA_GC=vendored`). Get the source with the VM's third-party libraries, and build the `agentica` command:
 
 ```sh
 git clone https://github.com/sonic182/agentica.git
