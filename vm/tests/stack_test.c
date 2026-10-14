@@ -31,8 +31,7 @@ static int marker;
 static uint32_t span_at(uint32_t function, uint32_t pc) { return function * CODE + pc - 1; }
 
 static fixture *build(void) {
-  fixture *f = calloc(1, sizeof *f);
-  assert(f);
+  fixture *f = agc_alloc(sizeof *f);
   static const char *names[FUNCTIONS] = {"main", "@12::push", "block@t.agc:3:4", "walk", "a\nb", "@7::"};
   char text[LINE_CHARS + 1];
   memset(text, 'x', LINE_CHARS);
@@ -160,7 +159,6 @@ static void alone(void) {
              "  = stack, innermost first:\n"
              "    push at t.agc:1:5\n"
              "    task spawned at t.agc:1:2\n");
-  free(f);
 }
 
 static void nested(void) {
@@ -197,7 +195,6 @@ static void nested(void) {
              "\"stack\":[{\"column\":18,\"file\":\"t.agc\",\"function\":\"a\\nb\",\"line\":1,\"tail\":true},"
              "{\"column\":7,\"file\":\"t.agc\",\"function\":\"push\",\"line\":1},"
              "{\"column\":2,\"file\":\"t.agc\",\"function\":\"main\",\"line\":1}],\"task\":true}\n");
-  free(f);
 }
 
 static void repeats(void) {
@@ -232,7 +229,6 @@ static void repeats(void) {
   o = failure(span_at(F_WALK, 3));
   agc_stack_capture(&vm, &o);
   assert(o.stack.shown && o.stack.count == 1 && o.stack.lines[0].repeat == 10000 && o.stack.omitted == 0);
-  free(f);
 }
 
 static void cap(uint32_t depth, uint32_t omitted) {
@@ -265,7 +261,6 @@ static void cap(uint32_t depth, uint32_t omitted) {
   snprintf(want, sizeof want, "],\"stack_omitted\":%u}\n", (unsigned)omitted);
   assert(strstr(text, want));
   free(text);
-  free(f);
 }
 
 static void exact(void) {
@@ -281,7 +276,6 @@ static void exact(void) {
   char *text = render(f, &o, AGC_STYLE_PLAIN, false);
   assert(!strstr(text, "not shown"));
   free(text);
-  free(f);
 }
 
 static void hostile(void) {
@@ -334,7 +328,6 @@ static void hostile(void) {
   for (uint32_t i = 0; i < 3; i++) native(natives, i);
   agc_stack_capture(&vm, &o);
   assert(!o.stack.shown);
-  free(f);
 }
 
 static void names(void) {
@@ -352,7 +345,6 @@ static void names(void) {
   char *text = render(f, &o, AGC_STYLE_PLAIN, false);
   assert(strstr(text, "    a\\nb at t.agc:1:17\n    block at t.agc:1:9\n    push at t.agc:1:5\n    @7:: at t.agc:1:21\n"));
   free(text);
-  free(f);
 }
 
 int main(void) {

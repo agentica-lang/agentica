@@ -78,8 +78,9 @@ measured, not only derived. The model is not in the repository.
 - **Allocation.** The list object, branches and leaves all come from `agc_alloc`
   (`GC_MALLOC`, zeroed, scanned): they hold GC pointers or `agc_value`s, which
   can hold them (§5.3). Never `agc_alloc_atomic` for them. Atomic stays for
-  temporary index arrays (the sort's `order`, `vm/interp.c:256-257`) and, in the
-  later §38 step, for leaves of Int or Float only. A branch is 256 bytes and a
+  temporary arrays (the sort's entries for Int and Float keys,
+  `vm/interp.c:321-340`) and, in the later §38 step, for leaves of Int or Float
+  only. A branch is 256 bytes and a
   leaf 512, so they are small Boehm objects, served from size-class free lists.
   A flat list of 100,000 items is one large object of 1.6 MB. Under `AGC_NO_GC`
   (the ASan build) `agc_alloc` is `calloc` kept until `agc_release_all`
@@ -153,7 +154,7 @@ New algorithms and costs. Every row migrates to the API of §17.4. "Cursor" mean
 | 3 | `LIST_GET`, `xs[i]` (`interp.c:605-610`), `List.at` (`builtins.c:165-168`) | `items[i]` | same bounds check on `agc_list_len` (message, code and span unchanged, `interp.c:485`), then `agc_list_get` | O(log32 n) |
 | 4 | `for x in xs` (`src/lower.rkt:792`, `801`) | `LIST_LEN` once, `LIST_GET` per item | same bytecode, n gets | O(n log32 n): at most 4 loads per item at 1M items. A cursor opcode would save them but is a new opcode and an `.agcb` change |
 | 5 | `List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by` (`interp.c:304-375`, `387-424`; table `builtins.c:408-414`) | `st->index` into the list, output in `st->out` | `agc_native` (`interp.c:7-17`) keeps a cursor over the input and the current item (filter needs it after the call; today it re-reads `items->items[st->index - 1]`, `:332`). `map` and `sort_by` keys use a sized builder of n; `filter` stages and calls `from_array`. The input list stays in `st->list` for `sort_by` | O(n); one cursor step and one turn-cost unit per callback (`:357`), as today |
-| 6 | `agc_sort_by_keys` (`interp.c:250-276`); `List.sort` (`builtins.c:212-216`); `Dir.list` (`files.c:1009`) | merge sort over `order` indexes, `keys->items[order[j]]` | one flat array of `(key, index)` entries made once (an Int or Float key becomes a `uint64_t` that sorts the same way, a String key is its pointer), a check for keys that never decrease (the input is the result) or all fall (one `reverse`), else a bottom-up merge of the entries; the result by a sized builder that reads the items with `list_get` (§17.11) | O(n log n), O(n) when the keys are in order, plus O(n) temporary memory; the charge `n * rounds` (`:253-255`) is unchanged |
+| 6 | `agc_sort_by_keys` (`interp.c:321-340`); `List.sort` (`builtins.c:212-216`); `Dir.list` (`files.c:1009`) | merge sort over `order` indexes, `keys->items[order[j]]` | one flat array of `(key, index)` entries made once (an Int or Float key becomes a `uint64_t` that sorts the same way, a String key is its pointer), a check for keys that never decrease (the input is the result) or all fall (one `reverse`), else a bottom-up merge of the entries; the result by a sized builder that reads the items with `list_get` (§17.11) | O(n log n), O(n) when the keys are in order, plus O(n) temporary memory; the charge `n * rounds` (`:326`) is unchanged |
 | 7 | `agc_value_units` (`value.c:332-340`) | `len` | `agc_list_len` | O(1); every size cost keeps its number (§17.5) |
 | 8 | `List.append`, `push` (`builtins.c:151-157`) | copy n, add 1 | `agc_list_append` | O(1) amortized; O(log32 n) worst |
 | 9 | `List.set` (`builtins.c:170-176`) | copy n | `agc_list_set` | O(log32 n) |
@@ -262,7 +263,7 @@ and "constant work charges nothing" ([§10.2.1](10-io-scheduler.md),
 |---|---|---|---|
 | `size`, `at`, `LIST_LEN`, `LIST_GET` | 0 | same | same |
 | `take`, `drop`, `reverse`, `repeat`, `Range.to_a`, `String.split`, `join`, `from_bytes`, `Map.keys`, `values`, `Dir.list`, `read_bytes`, header lists | `AGC_COST_SIZE`: args + result | same | same, same numbers, still O(n) work |
-| `sort`, `sort_by` | `n * ceil(log2 n)` inside `agc_sort_by_keys` (`:253-255`) | same | same |
+| `sort`, `sort_by` | `n * ceil(log2 n)` inside `agc_sort_by_keys` (`:326`) | same | same |
 | `map`, `filter`, `reduce`, `each`, `any?`, `all?` | 1 per callback | same | same |
 | `append` | `AGC_COST_SIZE`: n + (n + 1) | same | 0 (`AGC_COST_NONE`) |
 | `set` | `AGC_COST_SIZE`: 2n | same | 0 |
@@ -494,10 +495,11 @@ operations after the trie").
   `agc_sort_by_keys` called four checked accessors per comparison and read the
   keys through an index array, and `split("")` allocated one 32-byte String per
   character.
-- **Shared leaves.** `builder_begin` can take the first leaves of a list from a
-  `list_share` (the leaves of another list from leaf `first`) instead of
-  allocating them; only the branches (1.6% of the items) are rebuilt, in one
-  array per level, and the new items go to one array as before. `take(k)`,
+- **Shared leaves.** `builder_begin` can take the first leaves of a list from
+  another list (a source list, the index of its first leaf and how many
+  leaves) instead of allocating them; only the branches (1.6% of the items)
+  are rebuilt, in one array per level, and the new items go to one array as
+  before. `take(k)`,
   `drop(k)` for `k` a multiple of 32, and `concat(a, b)` (a's leaves, then a's
   tail and b copied) use it. A leaf is a slice of the array of the build that
   made it, so a list that shares a leaf keeps that array, and every item in it,

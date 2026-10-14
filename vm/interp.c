@@ -92,7 +92,10 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   rt->args = agc_list_value(agc_list_from_array(NULL, 0));
-  for (size_t c = 0; c < AGC_ASCII_CHARS; c++) rt->chars[c] = agc_string_value(agc_make_string((const char[]){(char)c}, 1, 1));
+  for (size_t c = 0; c < AGC_ASCII_CHARS; c++) {
+    char ch = (char)c;
+    rt->chars[c] = agc_string_value(agc_make_string(&ch, 1, 1));
+  }
   atomic_init(&rt->next_task_id, 1);
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
