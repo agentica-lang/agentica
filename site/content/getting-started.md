@@ -124,8 +124,7 @@ agentica --json bad.agc
 
 ## Look up a builtin
 
-`agentica help NAME` prints the signature and a short description of a builtin
-function. Add `--json` for a JSON object.
+`agentica help NAME` prints the signature and a short description of a builtin function. Add `--json` for a JSON object. `agentica help` with no name lists the commands and the builtin namespaces, and `agentica --help` adds the options and a few core rules.
 
 ```sh
 agentica help String.split

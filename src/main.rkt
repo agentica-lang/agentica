@@ -18,6 +18,22 @@
          "version.rkt"
          "vm-launch.rkt")
 
+(define-syntax-rule (command-line/summary summary-id (line ...) clause ...)
+  (begin
+    (set! summary-id '(line ...))
+    (command-line #:program "agentica" #:usage-help line ... clause ...)))
+
+(define (builtin-namespaces-text)
+  (define names (sort (public-builtin-names) string<?))
+  (define (namespace name) (cond [(regexp-match #rx"^([^.]+)[.]" name) => cadr] [else #f]))
+  (define namespaces (remove-duplicates (filter values (map namespace names))))
+  (define bare (filter (lambda (name) (not (namespace name))) names))
+  (string-append
+   "Builtins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).\n"
+   "  namespaces: " (string-join namespaces " ") "\n"
+   "  bare functions: " (string-join bare " ") "\n"
+   "  std modules written in Agentica (import \"std/http\", \"std/queue\", \"std/bdd\") are not in this catalog."))
+
 (define (temporary-bytecode-path)
   (build-path (find-system-path 'temp-dir)
               (format "agentica-~a.agcb" (bytes->hex-string (crypto-random-bytes 16)))))
@@ -92,6 +108,7 @@
            (parameterize-break #f (stop-vm process #:interrupted? broke?))))))
 
 (module+ main
+  (define summary '())
   (define dump? #f)
   (define dump-ir? #f)
   (define style 'plain)
@@ -101,10 +118,24 @@
   (define flush-timeout #f)
   (define step-files '())
   (define raw-arguments
-    (command-line
-     #:program "agentica"
-     #:usage-help
-     "Programs run on the bytecode VM (agentica-vm, or AGENTICA_VM)."
+    (command-line/summary
+     summary
+     ("Programs run on the bytecode VM (agentica-vm, or AGENTICA_VM)."
+      "Commands:"
+      "  agentica [options] FILE.agc [ARGS...]   run a program; System.args() reads ARGS"
+      "  agentica check FILE.agc                 check only: prints \"check ok\" or the first diagnostic"
+      "  agentica test [PATH...] [--steps FILE] [--only TEXT]"
+      "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);"
+      "                                          --steps FILE is the step program of the .feature files"
+      "  agentica compile FILE.agc -o OUT.agcb   write bytecode"
+      "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split"
+      "  agentica help                           this summary and the builtin namespaces"
+      "Core rules:"
+      "  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\")."
+      "  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v)."
+      "  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):"
+      "    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end."
+      "  - Fallible builtins return Result[T] (ok(v) or error(msg)); `try expr` in a function returning Result passes the error up.")
      #:once-each
      [("--version") "print the version and exit" (displayln version) (exit 0)]
      [("--allow-run") "allow Process.spawn to run child programs" (set! allow-run? #t)]
@@ -175,8 +206,12 @@
     (when (equal? (last raw-arguments) "--json")
       (set! style 'json)
       (set! raw-arguments (drop-right raw-arguments 1)))
+    (when (= (length raw-arguments) 1)
+      (for-each displayln summary)
+      (displayln (builtin-namespaces-text))
+      (exit 0))
     (unless (= (length raw-arguments) 2)
-      (eprintf "usage: agentica help NAME --json\n")
+      (eprintf "usage: agentica help [NAME [--json]]\n")
       (exit 2))
     (define name (cadr raw-arguments))
     (define entry (and (not (std-only-name? name)) (builtin-ref name)))
