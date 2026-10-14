@@ -506,7 +506,7 @@ def validate(n: Int) -> Result[Int]
 end
 
 def load(path: String) -> Result[Int]
-  return path |> try File.read_text(1000) |> try parse() |> try validate()
+  return path |> try File.read_text(1000) |> try parse() |> validate()
 end
 ```
 
