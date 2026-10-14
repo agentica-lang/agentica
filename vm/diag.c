@@ -4,11 +4,24 @@
 #include <string.h>
 
 static const char in_task[] = " in a task";
+static const char block_prefix[] = "block@";
+static const char block_word[] = "block";
 
 typedef struct {
   const char *text;
   size_t start, end, chars;
 } source_line;
+
+typedef struct {
+  const char *text;
+  size_t len;
+} name_view;
+
+typedef struct {
+  const agc_program *program;
+  const agc_task *task;
+  uint32_t error_span;
+} frame_walk;
 
 static source_line line_of(const agc_source *source, uint32_t line) {
   source_line l;
@@ -49,6 +62,182 @@ static void put_json(FILE *err, const char *text, size_t len) {
   fputc('"', err);
 }
 
+static size_t breaks(const char *text, size_t len) {
+  size_t n = 0;
+  for (size_t i = 0; i < len; i++) n += text[i] == '\n' || text[i] == '\r';
+  return n;
+}
+
+static char *put_line(char *put, const char *text, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (text[i] == '\n' || text[i] == '\r') {
+      *put++ = '\\';
+      *put++ = text[i] == '\n' ? 'n' : 'r';
+    } else {
+      *put++ = text[i];
+    }
+  }
+  return put;
+}
+
+static void put_flat(FILE *err, const char *text, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (text[i] == '\n' || text[i] == '\r')
+      fputs(text[i] == '\n' ? "\\n" : "\\r", err);
+    else
+      fputc(text[i], err);
+  }
+}
+
+static name_view display_name(const agc_string *name) {
+  name_view view = {name->data, name->bytes};
+  if (view.len > 1 && view.text[0] == '@') {
+    size_t digits = 1;
+    while (digits < view.len && view.text[digits] >= '0' && view.text[digits] <= '9') digits++;
+    if (digits > 1 && digits + 2 < view.len && view.text[digits] == ':' && view.text[digits + 1] == ':') {
+      view.text += digits + 2;
+      view.len -= digits + 2;
+    }
+  }
+  if (view.len >= sizeof block_prefix - 1 && memcmp(view.text, block_prefix, sizeof block_prefix - 1) == 0) {
+    view.text = block_word;
+    view.len = sizeof block_word - 1;
+  }
+  return view;
+}
+
+static uint32_t call_span(const agc_function *f, uint32_t pc) {
+  if (f->count == 0) return f->span;
+  uint32_t at = pc ? pc - 1 : 0;
+  return f->spans[at < f->count ? at : f->count - 1];
+}
+
+static bool same_place(const agc_program *p, uint32_t a, uint32_t b) {
+  if (a == b) return true;
+  const agc_span *x = &p->spans[a], *y = &p->spans[b];
+  return x->source == y->source && x->start_line == y->start_line && x->start_column == y->start_column;
+}
+
+static bool take_frame(const frame_walk *w, uint32_t *cursor, bool innermost, agc_stack_line *line) {
+  const agc_program *p = w->program;
+  while (*cursor > 0) {
+    const agc_frame *frame = &w->task->frames[--*cursor];
+    if (frame->native || frame->function >= p->function_count) continue;
+    uint32_t span = innermost ? w->error_span : call_span(&p->functions[frame->function], frame->pc);
+    line->function = frame->function;
+    line->span = span < p->span_count ? span : 0;
+    line->repeat = 1;
+    line->tail = frame->tail;
+    return true;
+  }
+  return false;
+}
+
+static bool take_entry(const frame_walk *w, uint32_t *cursor, bool innermost, agc_stack_line *line) {
+  if (!take_frame(w, cursor, innermost, line)) return false;
+  for (;;) {
+    uint32_t mark = *cursor;
+    agc_stack_line more;
+    if (!take_frame(w, cursor, false, &more)) return true;
+    if (more.function != line->function || more.tail != line->tail || !same_place(w->program, more.span, line->span)) {
+      *cursor = mark;
+      return true;
+    }
+    line->repeat++;
+  }
+}
+
+void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome) {
+  agc_stack *stack = &outcome->stack;
+  const agc_task *t = vm->task;
+  stack->shown = false;
+  if (!vm->in_turn || !t || !t->frames || t->frame_count > t->frame_capacity) return;
+  const agc_program *p = vm->rt->program;
+  frame_walk w = {p, t, outcome->span < p->span_count ? outcome->span : 0};
+  agc_stack_line line;
+  uint32_t entries = 0, cursor = t->frame_count;
+  uint64_t frames = 0;
+  while (take_entry(&w, &cursor, entries == 0, &line)) {
+    entries++;
+    frames += line.repeat;
+  }
+  if (entries == 0 || (frames < 2 && t == vm->main)) return;
+  bool cut = entries > AGC_STACK_HEAD + AGC_STACK_TAIL;
+  stack->count = 0;
+  stack->omitted = 0;
+  cursor = t->frame_count;
+  for (uint32_t index = 0; take_entry(&w, &cursor, index == 0, &line); index++) {
+    if (!cut || index < AGC_STACK_HEAD || index >= entries - AGC_STACK_TAIL)
+      stack->lines[stack->count++] = line;
+    else
+      stack->omitted += line.repeat;
+  }
+  stack->head = cut ? AGC_STACK_HEAD : stack->count;
+  stack->spawned = t->spawned && t->spawn_span < p->span_count;
+  stack->spawn_span = t->spawn_span;
+  stack->shown = true;
+}
+
+static void put_place(FILE *err, const agc_program *p, uint32_t index) {
+  const agc_span *span = &p->spans[index];
+  const agc_string *file = p->sources[span->source].name;
+  put_flat(err, file->data, file->bytes);
+  fprintf(err, ":%u:%u", (unsigned)span->start_line, (unsigned)span->start_column);
+}
+
+static void put_stack_text(FILE *err, const agc_program *p, const agc_stack *stack) {
+  for (uint32_t i = 0; i < stack->count; i++) {
+    const agc_stack_line *line = &stack->lines[i];
+    if (i == stack->head && stack->omitted)
+      fprintf(err, "    ... %" PRIu64 " frame%s not shown ...\n", stack->omitted, stack->omitted == 1 ? "" : "s");
+    name_view name = display_name(p->functions[line->function].name);
+    fputs("    ", err);
+    put_flat(err, name.text, name.len);
+    fputs(" at ", err);
+    put_place(err, p, line->span);
+    if (line->repeat > 1) fprintf(err, " (%u times)", (unsigned)line->repeat);
+    if (line->tail) fputs(" (after a tail call)", err);
+    fputc('\n', err);
+  }
+  if (stack->spawned) {
+    fputs("    task spawned at ", err);
+    put_place(err, p, stack->spawn_span);
+    fputc('\n', err);
+  }
+}
+
+static void put_json_place(FILE *err, const agc_program *p, uint32_t index, const agc_string *function) {
+  const agc_span *span = &p->spans[index];
+  const agc_string *file = p->sources[span->source].name;
+  fprintf(err, "{\"column\":%u,\"file\":", (unsigned)span->start_column);
+  put_json(err, file->data, file->bytes);
+  if (function) {
+    name_view name = display_name(function);
+    fputs(",\"function\":", err);
+    put_json(err, name.text, name.len);
+  }
+  fprintf(err, ",\"line\":%u", (unsigned)span->start_line);
+}
+
+static void put_json_stack(FILE *err, const agc_program *p, const agc_stack *stack) {
+  if (stack->spawned) {
+    fputs(",\"spawned_at\":", err);
+    put_json_place(err, p, stack->spawn_span, NULL);
+    fputc('}', err);
+  }
+  fputs(",\"stack\":[", err);
+  for (uint32_t i = 0; i < stack->count; i++) {
+    const agc_stack_line *line = &stack->lines[i];
+    if (i) fputc(',', err);
+    put_json_place(err, p, line->span, p->functions[line->function].name);
+    if (line->repeat > 1) fprintf(err, ",\"repeat\":%u", (unsigned)line->repeat);
+    if (line->tail) fputs(",\"tail\":true", err);
+    fputc('}', err);
+  }
+  fputc(']', err);
+  if (stack->omitted) fprintf(err, ",\"stack_omitted\":%" PRIu64, stack->omitted);
+}
+
 static bool trimmed(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r'; }
 
 static void print_json(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
@@ -60,9 +249,11 @@ static void print_json(FILE *err, const agc_program *p, const agc_outcome *outco
   put_json(err, name->data, name->bytes);
   fputs(",\"message\":", err);
   put_json(err, outcome->message, outcome->message_len);
-  fprintf(err, ",\"range\":{\"end\":{\"column\":%u,\"line\":%u},\"start\":{\"column\":%u,\"line\":%u}}%s}\n",
+  fprintf(err, ",\"range\":{\"end\":{\"column\":%u,\"line\":%u},\"start\":{\"column\":%u,\"line\":%u}}",
           (unsigned)span->end_column, (unsigned)span->end_line, (unsigned)span->start_column,
-          (unsigned)span->start_line, task ? ",\"task\":true" : "");
+          (unsigned)span->start_line);
+  if (outcome->stack.shown) put_json_stack(err, p, &outcome->stack);
+  fputs(task ? ",\"task\":true}\n" : "}\n", err);
 }
 
 static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
@@ -79,6 +270,10 @@ static void print_ai(FILE *err, const agc_program *p, const agc_outcome *outcome
   fprintf(err, ":%u:%u\n  source: ", (unsigned)span->start_line, (unsigned)span->start_column);
   put_text(err, l.text + l.start, l.end - l.start);
   fputc('\n', err);
+  if (outcome->stack.shown) {
+    fputs("  stack:\n", err);
+    put_stack_text(err, p, &outcome->stack);
+  }
 }
 
 static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outcome, bool task) {
@@ -110,6 +305,10 @@ static void print_plain(FILE *err, const agc_program *p, const agc_outcome *outc
   }
   for (size_t i = 0; i < width; i++) fputc('^', err);
   fputc('\n', err);
+  if (outcome->stack.shown) {
+    fputs("  = stack, innermost first:\n", err);
+    put_stack_text(err, p, &outcome->stack);
+  }
 }
 
 void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *outcome, agc_style style, bool task) {
@@ -120,24 +319,6 @@ void agc_print_diagnostic(FILE *err, const agc_program *p, const agc_outcome *ou
   else
     print_plain(err, p, outcome, task);
   fflush(err);
-}
-
-static size_t breaks(const char *text, size_t len) {
-  size_t n = 0;
-  for (size_t i = 0; i < len; i++) n += text[i] == '\n' || text[i] == '\r';
-  return n;
-}
-
-static char *put_line(char *put, const char *text, size_t len) {
-  for (size_t i = 0; i < len; i++) {
-    if (text[i] == '\n' || text[i] == '\r') {
-      *put++ = '\\';
-      *put++ = text[i] == '\n' ? 'n' : 'r';
-    } else {
-      *put++ = text[i];
-    }
-  }
-  return put;
 }
 
 /* One line: line breaks in the path or the message are written as \n, \r. */

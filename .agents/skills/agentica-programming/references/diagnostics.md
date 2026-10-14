@@ -12,6 +12,22 @@ expected Int, found String
 
 The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-` (while running). With `--json`, the diagnostic that ends the run is the last stderr line; the program's own stderr comes before it. Expected process failures return error Results. Codes without a row below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (see `language.md`), and `RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call span).
 
+A runtime error also prints the call stack of the task that failed, innermost first, in the plain, `--ai` and `--json` formats (no flag). It shows when the task has more than one frame or is not `main`; a failure directly in `main` has none:
+
+```text
+nested.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]
+index 5 is outside a list of length 3
+
+2 |   return xs[i] + 1
+  |             ^
+  = stack, innermost first:
+    pick at nested.agc:2:13
+    load at nested.agc:6:10
+    main at nested.agc:11:8
+```
+
+Each line is a function and the place it runs: the error for the first, the call it waits on for the others. A block is `block`; the builtin that runs it (`xs.map`) has no line, so the caller's line is the `xs.map` call. `(after a tail call)` marks a frame whose callers a tail call (`return f(x)`) removed. `walk at tree.agc:9:12 (9998 times)` is one line for a recursion; after merging, only the 15 innermost and the 5 outermost lines show, with `... 312 frames not shown ...` between. A task ends with `task spawned at file:line:column`, the `Task.spawn` call. `--ai` has the same lines under `  stack:`. `--json` adds `stack` (objects with `column`, `file`, `function`, `line`, and `repeat` or `tail` when they apply), `stack_omitted` and, for a task, `spawned_at`. `RUNTIME-STEP-LIMIT` and `RUNTIME-STACK-OVERFLOW` have the stack too, and so does a task's crash line (`"task":true`).
+
 | Code | Meaning |
 |---|---|
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `'` or a backtick says strings use double quotes (a character is a one-character String). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
@@ -62,8 +78,8 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `RUNTIME-END-OF-INPUT` | `IO.gets!` with no input left |
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
-| `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
-| `RUNTIME-STACK-OVERFLOW` | recursion too deep |
+| `RUNTIME-STEP-LIMIT` | execution step budget exhausted; the stack shows where the loop runs |
+| `RUNTIME-STACK-OVERFLOW` | recursion too deep (depth 10000); the stack shows the repeating function once, with its count |
 | `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration, negative `Channel.send`/`Channel.recv` timeout, or a `Task.await(task, timeout_ms)` timeout of 0 or less (see `tasks.md`) |
 | `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel |
 | `RUNTIME-TASK-AWAIT-CYCLE` | `Task.await` of a task that is waiting for the caller, directly or through other awaits, at the await (see `tasks.md`) |

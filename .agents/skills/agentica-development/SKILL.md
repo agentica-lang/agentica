@@ -59,11 +59,11 @@ src/
   main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   value.h port.h core.h services.h  # shared types and the agc_ API, one header per layer (references/vm.md, "Which layer"); list_impl.h is the private list layout (list.c, interp.c and tests/list_test.c only)
-  value.c text.c map.c list.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, opaque lists (list API in value.h), loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json), CLI
+  value.c text.c map.c list.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, opaque lists (list API in value.h), loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json) and the stack trace of a runtime error, CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   input.c output.c  # stdin reader; stdout and stderr: a 64 KiB buffer and a FIFO of waiting writers per stream, written by the loop (Linux)
   duplex.c        # the child channel (fd 3 and AGENTICA_CHANNEL=3): Process.parent_read_line/parent_send, the duplex stream Process.spawn_channel uses, and the functions Test.run uses (Linux)
-  process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
+  process.c       # Process builtins on libuv pipes, behind the VM's --allow-run, and System.env (Linux)
   tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c and duplex.c
   tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
   net.h           # tcp.c's connection object (agc_conn) for other C modules
@@ -98,16 +98,18 @@ tests/
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit, the connections a crashed or returned task closes (24b)
   vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
   vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full and unread stdout, Ctrl-C through the CLI
+  std-binary-test.rkt   # std/binary on the VM: the fixed output of fixtures/vm/std-binary.agc and the vector count of std-binary-vectors.agc (fixtures/std-binary-vectors.py; references/runtime-notes.md)
   vm-bits-test.rkt      # the spans of the Int and Float bit builtin errors (fixtures/vm/int-shift-*.agc, float-from-bits32-*.agc); the vectors fixture is bits-vectors.agc with fixtures/bits-vectors.py (references/runtime-notes.md)
   vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
   vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, a socket and a pty as stdout, the order of stdout and stderr on one target, notices, a gone reader, a crashed parent
+  vm-stack-test.rkt     # the exact stderr of the stack-trace fixtures in the plain, --ai and --json formats (fixtures/vm/stack-trace-*.stack.*; make goldens rewrites them)
   vm-file-lines-test.rkt # File.each_line: a 10 MB file streamed in buffer-sized reads, the step limit, a FIFO fed in pieces, a stall timeout, closing a read FIFO with read-ahead, a crash while parked (fixtures/lines-peer.py)
   vm-test-protocol-test.rkt # a Python peer plays the runner of a test file over the child channel (fixtures/test-protocol-peer.py, child_channel.py): list and run records, free stdin and stdout, no channel
   vm-child-channel-test.rkt # the child channel on its own, both sides, against Python peers (fixtures/child-channel-peer.py): lines, EOF, timeouts, no channel, a marker or a descriptor alone, fd 3 as a regular file, a device (refused) or a FIFO (taken), a UTF-8 character split between reads, a grandchild
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
-  queue.agc http.agc    # std/queue, std/http
+  queue.agc http.agc binary.agc    # std/queue, std/http, std/binary
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/stages.md
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-channel record helpers, shared by unit tests and BDD

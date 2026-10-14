@@ -1,0 +1,33 @@
+@fixtures/vm/stack-trace-big.agc:2:13 error[RUNTIME-DIVISION-BY-ZERO] in a task
+division by zero
+
+2 |   return 10 / n
+  |             ^
+  = stack, innermost first:
+    leaf at @fixtures/vm/stack-trace-big.agc:2:13 (after a tail call)
+    pong at @fixtures/vm/stack-trace-big.agc:15:12
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    ... 186 frames not shown ...
+    pong at @fixtures/vm/stack-trace-big.agc:17:10
+    ping at @fixtures/vm/stack-trace-big.agc:10:10
+    walk at @fixtures/vm/stack-trace-big.agc:22:12
+    walk at @fixtures/vm/stack-trace-big.agc:24:10 (50 times)
+    worker at @fixtures/vm/stack-trace-big.agc:28:10
+    task spawned at @fixtures/vm/stack-trace-big.agc:32:10
+@fixtures/vm/stack-trace-big.agc:33:8 error[RUNTIME-TASK-CRASHED]
+task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/stack-trace-big.agc:2:13: division by zero
+
+33 |   puts(Task.await(task))
+   |        ^^^^^^^^^^^^^^^^

@@ -124,6 +124,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/vm-channel-test.rkt`, `tests/fixtures/channel-peer.py`,
   `tests/vm-stdout-test.rkt`, `tests/fixtures/stdout-peer.py`,
   `tests/vm-file-lines-test.rkt`, `tests/fixtures/lines-peer.py`,
+  `tests/vm-stack-test.rkt`,
   `tests/vm-test-protocol-test.rkt`, `tests/fixtures/test-protocol-peer.*`,
   `tests/vm-child-channel-test.rkt`, `tests/fixtures/child-channel*`,
   `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,

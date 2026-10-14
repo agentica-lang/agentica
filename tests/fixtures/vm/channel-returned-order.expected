@@ -12,8 +12,8 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":8,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"line\":28},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":8,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"line\":29},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-returned-order.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
     ""
   ]
 }

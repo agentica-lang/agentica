@@ -219,6 +219,7 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
     outcome.message = write_error;
     outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
+    outcome.stack.shown = false;
     print_outcome(vm, &outcome, AGC_NOTICE_FINAL);
   }
   int code = 0;

@@ -10,7 +10,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-channel-close.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":18},\"start\":{\"column\":16,\"line\":18}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-channel-close.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":18},\"start\":{\"column\":16,\"line\":18}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/process-channel-close.agc\",\"line\":30},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/process-channel-close.agc\",\"function\":\"holder\",\"line\":18}],\"task\":true}",
     ""
   ]
 }

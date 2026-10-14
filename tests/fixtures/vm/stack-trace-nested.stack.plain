@@ -1,0 +1,9 @@
+@fixtures/vm/stack-trace-nested.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]
+index 5 is outside a list of length 3
+
+2 |   return xs[i] + 1
+  |             ^
+  = stack, innermost first:
+    pick at @fixtures/vm/stack-trace-nested.agc:2:13
+    load at @fixtures/vm/stack-trace-nested.agc:6:10
+    main at @fixtures/vm/stack-trace-nested.agc:11:8

@@ -96,6 +96,14 @@ is not repeated here; read the file.
 - `System.args` on Linux and macOS is UTF-8 with one `?` per invalid byte, as
   glibc `iconv` gives. Non-UTF-8 locales are outside the contract, and so are
   Windows console code pages.
+- `System.env(name)` scans the process environment for the first entry
+  `name=value`. An empty name, a name with `=` or NUL, and an unset name give
+  an error Result; a set empty value gives `ok("")`. The value is decoded per
+  byte like stdin: each byte that does not start a complete valid UTF-8
+  sequence becomes one U+FFFD. The entries the VM keeps for itself are hidden
+  by the same rule that strips them from a child's environment
+  (`AGENTICA_CHANNEL` and, when the VM set it, `UV_USE_IO_URING`). It needs no
+  flag, and `--allow-run` is for starting programs only.
 - `String.code` needs exactly one code point and `String.from_code` a Unicode
   scalar value, else `RUNTIME-INVALID-CHARACTER` at the argument span (the
   receiver for `s.code`). `at` fails with `RUNTIME-INDEX-OUT-OF-RANGE` at the
@@ -130,13 +138,35 @@ is not repeated here; read the file.
 
 ### 2.5 Diagnostics, streams and exit codes
 
-- A runtime diagnostic carries a code, a message and a span. Only the code is
-  contract.
+- A runtime diagnostic carries a code, a message and a span, and the call stack
+  of the failing task when there is one to show (6.1). Only the code is
+  contract; the stack lines have fixed expected text in
+  `tests/vm-stack-test.rkt`.
 - Plain format: the diagnostic as usual. `--ai` prints `check failed: 1 error`,
   a blank line, `[CODE]`, `  message: `, `  at: file:line:column` and
   `  source: ` with the source line trimmed of space, `\t`, `\n`, `\f` and `\r`
   at both ends. `--json` prints one line with keys in this order: `code`,
-  `file`, `message`, `range`.
+  `file`, `message`, `range`, `spawned_at`, `stack`, `stack_omitted`, `task`
+  (the last four only when they apply).
+- Stack lines (`docs/future/24-logging.md` §24.3, as built): plain adds
+  `  = stack, innermost first:` after the caret line, `--ai` adds `  stack:`
+  after `source:`, and each frame is a line of four spaces,
+  `name at file:line:column`, then ` (N times)` for a merged run and
+  ` (after a tail call)`. A cut stack has `    ... N frames not shown ...`
+  (`N` counts frames, a merged run counts its repeats) after the 15th line, and
+  a task ends with `    task spawned at file:line:column`. `--json` has
+  `stack` (objects with `column`, `file`, `function`, `line`, `repeat` and
+  `tail`), `stack_omitted` and `spawned_at`. The names are the declared names
+  without the linker's `@N::` prefix, and every function made from a block is
+  `block`. Names, files and the message are written as raw bytes in plain and
+  `--ai`, except that a line break in a name or a file is written as `\n` or
+  `\r`, so a stack line is always one line.
+- The stack is shown for every `RUNTIME-` diagnostic raised while a task runs
+  (the step limit and the stack overflow too, and the crash line of a task) when
+  that task has more than one frame or is not `main`. It is not shown for
+  `System.exit`, the out-of-memory exit (6.3), the stall check
+  (`RUNTIME-INTERNAL`, raised between turns) or a failed flush at the end of
+  the run.
 - Columns count characters. Source lines split on LF with a trailing CR removed.
   Source names and lines print as raw bytes, control characters included.
 - Order: flush stdout, write the diagnostic to stderr, exit 1. How the two
@@ -226,6 +256,14 @@ Every failure is an error value. The checks run in this order:
   `Path.resolve` completes the path, drops `.`, pops `..` (never above `/`) and
   collapses `/`. The result ends in `/` when the input did, or ended in `.` or
   `..`.
+- `Path.real` is `uv_fs_realpath` (POSIX `realpath`, which allocates its
+  result, so no path length overflows a buffer) in a pool job with no
+  deadline. The path must exist; a link loop, a chain of too many links and a
+  non-directory in the middle are errors. The error is
+  `filesystem: cannot resolve path` with the path and the OS error text. An
+  empty path or one with NUL gives the contract error of `File.stat`. A
+  relative path starts at the VM's working directory. The result is decoded
+  per byte like `Dir.list` names.
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2).

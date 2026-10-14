@@ -54,4 +54,5 @@ Push adds at the back; pop removes the oldest value. Pop and peek on an empty qu
 ## Other standard modules
 
 - `std/http`: the HTTP client and server, written in Agentica. See `network.md`.
+- `std/binary`: reads and writes binary numbers in a `List[Int]` of bytes. See `binary.md`.
 - `std/bdd`: the step API of `agentica test`. See `bdd.md`.

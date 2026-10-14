@@ -19,6 +19,11 @@ struct agc_native {
   agc_stepper *stepper;
 };
 
+static _Noreturn void raise_failure(agc_vm *vm) {
+  agc_stack_capture(vm, &vm->rt->outcome);
+  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+}
+
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
   agc_outcome *o = &vm->rt->outcome;
   o->kind = AGC_FAILED;
@@ -27,7 +32,7 @@ void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) 
   o->message_len = strlen(message);
   o->text = NULL;
   o->span = span;
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  raise_failure(vm);
 }
 
 void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span) {
@@ -38,7 +43,7 @@ void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint
   o->message = message->data;
   o->message_len = message->bytes;
   o->span = span;
-  longjmp(vm->in_turn ? vm->turn : vm->fail, 1);
+  raise_failure(vm);
 }
 
 void agc_exit(agc_vm *vm, int64_t code) {
@@ -201,6 +206,7 @@ static void push_frame(agc_vm *vm, agc_task *t, uint32_t function, uint32_t base
   frame->pc = 0;
   frame->base = base;
   frame->ret = ret;
+  frame->tail = false;
   frame->native = NULL;
   t->depth++;
 }
@@ -384,6 +390,7 @@ static void push_native(agc_vm *vm, agc_native *st, uint32_t base) {
   frame->pc = 0;
   frame->base = base;
   frame->ret = base;
+  frame->tail = false;
   frame->native = st;
   resume_native(vm);
 }
@@ -451,6 +458,7 @@ static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32
   memmove(R, R + window, (size_t)callee->params * sizeof(agc_value));
   frame->function = function;
   frame->pc = 0;
+  frame->tail = true;
 }
 
 static bool return_value(agc_vm *vm, agc_value result) {

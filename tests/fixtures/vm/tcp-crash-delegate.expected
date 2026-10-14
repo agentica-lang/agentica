@@ -8,7 +8,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/tcp-crash-delegate.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":8},\"start\":{\"column\":15,\"line\":8}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/tcp-crash-delegate.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":8},\"start\":{\"column\":15,\"line\":8}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/tcp-crash-delegate.agc\",\"line\":21},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/tcp-crash-delegate.agc\",\"function\":\"handler\",\"line\":8}],\"task\":true}",
     ""
   ]
 }

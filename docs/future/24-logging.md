@@ -33,7 +33,8 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
   another process that shares the VM's stderr can write between the parts (not a
   `Process.spawn` child, whose stderr the VM forwards through a pipe,
   `docs/vm/10-io-processes.md` §10.4).
-- There is no `System.env`: `System.env("HOME")` is `CHECK-UNKNOWN-NAME`.
+- `System.env(name)` reads one environment variable and gives a `Result` (row
+  7.2.6). There is no call that lists all of them.
 - A runtime diagnostic has one span and no call stack, in all three formats. A
   failure inside `pick`, called from `load`, called from `main`, shows only the
   line in `pick`.
@@ -126,7 +127,8 @@ Log.time_text(ms: Int) -> String
   is the level that is off by default and where building the message costs most.
 - **`Log.time_text(ms)`** turns milliseconds since the Unix epoch into the text
   the log uses (`2026-10-12T10:15:02.345Z`). It is exported because programs
-  need it too, and so that tests can check it with fixed inputs.
+  need it too, and so that tests can check it with fixed inputs. With §41
+  it is `Time.format(Time.from_unix_ms(ms).unwrap!)`, a native call.
 
 **How the level and format are set.** Three flags of the run, read through three
 small builtins:
@@ -160,23 +162,23 @@ System.log_time?() -> Bool       # false under --log-time none
   the time text, the formats, escaping) is Agentica code in `stdlib/log.agc`.
 - **Why flags.** Every other setting of a run is a flag (`--seed`,
   `--max-steps`, `--allow-run`), and a flag is visible in the command an agent
-  runs and in `agentica --help`. An environment variable would need a
-  `System.env` builtin first, and it leaks into every child program;
-  `System.env` stays a separate item for when a real program needs it. A logger
-  value that the program builds (`Log.new(level, format)`) and passes around was
-  the third option: it needs no builtin, but it adds a parameter to every
-  function that logs and to every task argument, agents forget to pass it, and
-  the level still has to come from somewhere outside the program. A program that
-  wants its own filter (per part of the program) can still wrap `std/log` in its
-  own functions.
+  runs and in `agentica --help`. An environment variable is not visible in the
+  command, and it leaks into every child program; `System.env` (row 7.2.6) reads
+  one for a program that needs it, but the log configuration stays a flag. A
+  logger value that the program builds (`Log.new(level, format)`) and passes
+  around was the third option: it needs no builtin, but it adds a parameter to
+  every function that logs and to every task argument, agents forget to pass it,
+  and the level still has to come from somewhere outside the program. A program
+  that wants its own filter (per part of the program) can still wrap `std/log`
+  in its own functions.
 
 **Formats.** Both write one line per call to stderr.
 
 - **Text:** `TIME LEVEL MESSAGE key=value ...`, for example
   `2026-10-12T10:15:02.345Z INFO request done path=/items status=200`. The time
   is UTC in ISO 8601 with milliseconds, from `Time.now_ms()`; `Log.time_text`
-  turns the number into a date with integer arithmetic only (days since 1970 to
-  year, month and day), so it is plain `std/` code. The level is in capitals.
+  turns the number into that text with `Time.format` (§41), so the log and the
+  `Time` functions share one formatter. The level is in capitals.
   The message is written as it is, unless it is empty, starts or ends with a
   space, or contains `=`, `"`, `\` or a control character (DEL included): then
   it is written in its JSON form (quoted and escaped). So a message with a
@@ -391,6 +393,28 @@ fixtures that end in a runtime diagnostic are regenerated in the same PR, with a
 reviewed diff. Docs: `grammar.md` §7, `docs/vm/02-reference-behavior.md` §2.5
 and `docs/vm/05-values-execution-builtins.md` §6.1, and the programming skill's
 `references/diagnostics.md`.
+
+**As built (14b).** The walk is `agc_stack_capture` in `vm/diag.c`, called by
+`agc_fail` and `agc_fail_text` while `vm->in_turn` is true (the flag that
+already picks the `longjmp` target, so the scheduler needs no new one). Where
+the text above is silent:
+
+- The stack is not copied frame by frame. The walk merges and cuts while it
+  copies, into a fixed array of 20 lines in `outcome.stack`, so it allocates
+  nothing and a stack of 10,000 frames costs two passes over the frames.
+- Native frames do not count for "more than one frame"; the frames that
+  count are the visible ones, before merging.
+- `... N frames not shown ...` counts frames (a merged run counts its
+  repeats), and reads `... 1 frame not shown ...` for one.
+- Neighbouring frames merge only when they also have the same tail flag.
+- Plain: the `  = stack, innermost first:` line follows the caret line, and the
+  frame lines, the cut line and `task spawned at` all have four spaces, for any
+  width of the line number. `--ai`: the same lines under `  stack:`.
+- Any task that was started by a spawn builtin has `task spawned at`, including
+  the connection tasks of `std/http` (the place is the `HttpWire` call in
+  `std/http.agc`) and the tests of `Test.run`.
+- A line break in a function or file name is written as `\n` or `\r` in the
+  plain and `--ai` lines.
 
 ### 24.4 VM tracing
 

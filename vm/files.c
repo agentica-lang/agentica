@@ -18,15 +18,16 @@
 #define WRITE_BUFFER ((size_t)4096)
 #define MIN_LINE_BUFFER ((int64_t)1024)
 #define MAX_LINE_BUFFER ((int64_t)16777216)
+#define NO_DEADLINE ((int64_t)-1)
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR
+  FS_MKDIR, FS_RESOLVE
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
-  OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE
+  OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL
 } op_kind;
 
 typedef struct {
@@ -670,6 +671,17 @@ static void work_mkdir(op *o) {
   free(chain);
 }
 
+static void work_real(op *o) {
+  int err = 0;
+  char *resolved = agc_real_path(o->path, &err);
+  if (!resolved) {
+    fail_op(o, FS_RESOLVE, err);
+    return;
+  }
+  o->out = (uint8_t *)resolved;
+  o->out_len = strlen(resolved);
+}
+
 static void work_open(op *o) {
   int fd = open_for(o, o->kind == OP_OPEN_READ, o->kind == OP_OPEN_APPEND);
   if (fd < 0) return;
@@ -821,6 +833,7 @@ static void work(void *data) {
     case OP_WRITE_TEXT:
     case OP_APPEND_TEXT: work_write_text(o); break;
     case OP_STAT: work_stat(o); break;
+    case OP_REAL: work_real(o); break;
     case OP_LIST: work_list(o); break;
     case OP_MKDIR: work_mkdir(o); break;
     case OP_OPEN_READ:
@@ -971,6 +984,7 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_EOF: return error_of("filesystem: end of file");
     case FS_LONG_LINE: return error_of("filesystem: line exceeds 1048576 bytes");
     case FS_MKDIR: return os_error(vm, "make-directory: cannot make directory", o->path, o->fail_at, o->err);
+    case FS_RESOLVE: return os_error(vm, "filesystem: cannot resolve path", o->path, path_len, o->err);
     default:
       return agc_system_error(vm, o->status == FS_WRITE ? "error writing to stream port" : "error reading from stream port",
                               o->err);
@@ -1009,6 +1023,10 @@ static agc_value list_result(agc_vm *vm, const op *o) {
   }
   agc_list *names = agc_list_builder_finish(&b);
   return agc_result_value(true, agc_sort_by_keys(vm, names, names));
+}
+
+static agc_value real_result(const op *o) {
+  return agc_result_value(true, agc_string_value(lossy(o->out, o->out_len)));
 }
 
 static agc_value bytes_result(const op *o) {
@@ -1076,6 +1094,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_READ_TEXT:
       case OP_READ_LINE: result = text_result(o); break;
       case OP_LIST: result = list_result(vm, o); break;
+      case OP_REAL: result = real_result(o); break;
       case OP_READ_BYTES: result = bytes_result(o); break;
       case OP_OPEN_READ:
       case OP_OPEN_WRITE:
@@ -1457,6 +1476,15 @@ static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  const agc_string *path = agc_as_string(vm, args[0]);
+  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  op *o = new_op(vm, OP_REAL);
+  o->path = agc_host_path(vm, path);
+  return start(vm, o, agc_void(), NO_DEADLINE);
+}
+
 static agc_value builtin_cwd(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   files_on(vm, span);
@@ -1571,6 +1599,7 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.cwd", 0, builtin_cwd, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Path.join", 1, builtin_join, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Path.resolve", 1, builtin_resolve, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

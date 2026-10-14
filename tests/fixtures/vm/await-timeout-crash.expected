@@ -11,8 +11,8 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":18,\"line\":2},\"start\":{\"column\":17,\"line\":2}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":15,\"line\":6},\"start\":{\"column\":14,\"line\":6}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":18,\"line\":2},\"start\":{\"column\":17,\"line\":2}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"line\":10},\"stack\":[{\"column\":17,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"function\":\"invert\",\"line\":2}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":15,\"line\":6},\"start\":{\"column\":14,\"line\":6}},\"spawned_at\":{\"column\":11,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"line\":23},\"stack\":[{\"column\":14,\"file\":\"@fixtures/vm/await-timeout-crash.agc\",\"function\":\"halve\",\"line\":6}],\"task\":true}",
     ""
   ]
 }

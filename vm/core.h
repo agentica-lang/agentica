@@ -79,6 +79,7 @@ void agc_output_close(agc_vm *vm);
 FILE *agc_notice_begin(agc_output *out, agc_notice *n);
 void agc_notice_end(agc_notice *n, agc_notice_mode mode);
 
+void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);
 agc_string *agc_crash_text(const agc_program *program, const agc_outcome *outcome);

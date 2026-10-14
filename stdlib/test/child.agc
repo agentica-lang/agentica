@@ -151,10 +151,26 @@ def vm_shape?(line: String, task: Bool) -> Bool
     "message": JSON.from(text_of(root, "message")),
     "range": JSON.object({"start": position(start), "end": position(stop)}),
   }
+  for key in ["spawned_at", "stack", "stack_omitted"]
+    found = JSON.get(root, key)
+    if found.ok? and trace_kind?(key, found.unwrap!)
+      fields = fields.put(key, found.unwrap!)
+    end
+  end
   if task
     fields = fields.put("task", JSON.from(true))
   end
   return JSON.encode(JSON.object(fields)) == JSON.encode(root)
+end
+
+def trace_kind?(key: String, value: Json) -> Bool
+  if key == "stack"
+    return JSON.list(value).ok?
+  end
+  if key == "stack_omitted"
+    return JSON.int(value).ok?
+  end
+  return JSON.get(value, "file").ok?
 end
 
 def position(at: Json) -> Json

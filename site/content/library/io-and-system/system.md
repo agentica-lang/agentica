@@ -1,7 +1,7 @@
 ---
 title: System, Time and Random
 weight: 5
-description: Program arguments, exit codes, clocks and random numbers.
+description: Program arguments, environment variables, exit codes, clocks and random numbers.
 ---
 
 ## System.args
@@ -43,6 +43,29 @@ end
 ```output
 before
 ```
+
+## System.env
+
+```text
+System.env(name: String) -> Result[String]
+```
+
+Reads an environment variable of the program. A variable that is not set is an error, and a variable set to the empty string is `ok("")`. A name that is empty or has `=` or a NUL in it is an error too. A value that is not valid UTF-8 is not an error: each byte that is not part of a valid UTF-8 sequence becomes U+FFFD. The home directory is `System.env("HOME")`. No flag is needed, and there is no call that lists all variables.
+
+```agentica
+def main() -> Void
+  editor = System.env("AGENTICA_EXAMPLE_NOT_SET").unwrap_or("vi")
+  puts(editor)
+  puts(System.env("A=B").ok?)
+end
+```
+
+```output
+vi
+false
+```
+
+The VM hides the variables it keeps for itself: `AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it. A program started with `Process.spawn` does not get them either.
 
 ## Time.now_ms
 

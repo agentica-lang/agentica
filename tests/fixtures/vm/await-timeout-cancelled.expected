@@ -12,8 +12,8 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"task\":true}",
-    "{\"code\":\"RUNTIME-TASK-CANCELLED\",\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"message\":\"task was cancelled\",\"range\":{\"end\":{\"column\":32,\"line\":26},\"start\":{\"column\":8,\"line\":26}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"spawned_at\":{\"column\":11,\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"line\":34},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"function\":\"parent\",\"line\":22}],\"task\":true}",
+    "{\"code\":\"RUNTIME-TASK-CANCELLED\",\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"message\":\"task was cancelled\",\"range\":{\"end\":{\"column\":32,\"line\":26},\"start\":{\"column\":8,\"line\":26}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"line\":39},\"stack\":[{\"column\":8,\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"function\":\"watch\",\"line\":26}],\"task\":true}",
     ""
   ]
 }

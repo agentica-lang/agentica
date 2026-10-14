@@ -69,9 +69,27 @@ so zeroed registers are valid values.
   same way. A valid program reaches it only with more than about 1,600 registers
   per frame at full depth.
 - A tail call removes frames, so a deep tail-recursive loop runs without
-  overflow. A diagnostic carries one span and no stack trace, so the removed
-  frames are not visible. Stack traces are planned in
-  `docs/future/24-logging.md` §24.3.
+  overflow. The removed frames are not visible, but `TAIL_CALL` sets the `tail`
+  flag of the frame it reuses, and a frame that `CALL` or a native pushes starts
+  with the flag clear. That one store is all the stack trace costs while a
+  program runs, plus the span of the spawning call that a task keeps
+  (`spawn_span`, set by `agc_task_spawn_in`).
+- The stack trace is built when the program fails (`docs/future/24-logging.md`
+  §24.3). `agc_fail` and `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
+  before the `longjmp`, only while a task runs (`vm->in_turn`). It walks the
+  frames of `vm->task` from the innermost one, skips the native frames, merges
+  neighbouring frames with the same function, place and tail flag, and keeps
+  the 15 innermost and the 5 outermost lines in `outcome.stack`, a fixed array:
+  it allocates nothing, so it cannot fail, and it reads at most the frames of
+  one task (the depth is capped at 10000), twice. The place of the innermost
+  frame is the span of the error; the place of a caller is the span of the
+  instruction at its saved `pc - 1`, read through the function's own span table
+  with `pc` clamped to the code. A function index or span index that is out
+  of range (a hand-built program; the loader checks them) drops the frame or
+  uses span 0, so a hostile `.agcb` cannot make the walk read out of bounds.
+  The outcome is printed later, by `vm/main.c` at the end of the run or by the
+  scheduler for the crash of a task other than `main`, when the failing task may
+  be finished and its frames freed, so the lines are copied at the failure.
 - `steps_left` is an atomic `int64_t`: the limit, or `INT64_MAX` without one.
   All tasks share it. A turn takes it in batches (10.2.1). `STEP` compares
   against a "next stop" counter. Long builtins and opcodes charge their work to
