@@ -58,7 +58,20 @@ Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # nothing when to > fro
 Float.from_int(n: Int) -> Float
 Float.to_int(x: Float) -> Result[Int]                    # truncates; NaN, infinity, overflow are errors
 Float.to_int!(x: Float) -> Int                           # same, but halts (RUNTIME-INVALID-NUMBER)
+Int.bit_and(a: Int, b: Int) -> Int                       # 64-bit two's complement; never fails
+Int.bit_or(a: Int, b: Int) -> Int
+Int.bit_xor(a: Int, b: Int) -> Int
+Int.bit_not(a: Int) -> Int                               # -1 - a
+Int.shift_left(a: Int, count: Int) -> Int                # wraps; 64 or more gives 0
+Int.shift_right(a: Int, count: Int) -> Int               # arithmetic, rounds down; 64 or more gives 0 or -1
+Int.shift_right_unsigned(a: Int, count: Int) -> Int      # logical; 64 or more gives 0
+Float.to_bits(x: Float) -> Int                           # binary64 bits as an Int; every NaN gives 9221120237041090560
+Float.from_bits(bits: Int) -> Float                      # any Int; any NaN pattern gives NaN
+Float.to_bits32(x: Float) -> Int                         # rounds to binary32; 0..4294967295; every NaN gives 2143289344
+Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0..4294967295 halt (RUNTIME-INVALID-NUMBER)
 ```
+
+A negative shift count halts with `RUNTIME-INVALID-COUNT` at the count. The core has no hex literals: write masks in decimal (`255`, `65535`). `x.shift_right(i).bit_and(1) == 1` tests bit `i`; `x.to_bits < 0` tests the sign of a Float (not NaN: use `x != x`).
 
 A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`. Arithmetic never converts Int and Float implicitly.
 
@@ -181,7 +194,7 @@ The rules for `ok`, `error`, `try`, and Void are in `language.md`.
 | `Json` | `JSON` |
 | `Range` | `Range` |
 | `Channel[T]` | `Channel` (`send`, `recv`, `close`, `closed?`) |
-| `Int` | `Int` (`times`, `upto`, `downto`) and aliases |
+| `Int` | `Int` (`times`, `upto`, `downto`, `bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right`, `shift_right_unsigned`) and aliases |
 
 Without parentheses, `receiver.name` on a non-struct value is a method with no arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` reads a field; structs and enums have no methods. `.call(...)` invokes a function value. An unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that type's methods.
 
