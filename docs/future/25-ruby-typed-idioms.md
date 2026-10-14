@@ -495,7 +495,7 @@ Each of these is decided; it gets a `help` that names the Agentica form where on
 
 ```agentica
 def parse(text: String) -> Result[Int]
-  return text.trim.to_i
+  return text.trim.to_int
 end
 
 def validate(n: Int) -> Result[Int]
