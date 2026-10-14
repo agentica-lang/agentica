@@ -119,6 +119,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/fixtures/tls/`, `tests/vm-http-test.rkt`, `tests/fixtures/http-*`,
   `tests/vm-stop-test.rkt`, `tests/fixtures/stop-peer.py`,
   `tests/vm-channel-test.rkt`, `tests/fixtures/channel-peer.py`,
+  `tests/vm-stdout-test.rkt`, `tests/fixtures/stdout-peer.py`,
   `tests/vm-file-lines-test.rkt`, `tests/fixtures/lines-peer.py`,
   `tests/cli-in-process.rkt`, `tests/bytecode-test.rkt`,
   `tests/fixtures/vm/`;

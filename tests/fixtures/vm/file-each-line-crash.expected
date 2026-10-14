@@ -1,16 +1,15 @@
 {
   "exit": 1,
   "code": "RUNTIME-DIVISION-BY-ZERO",
-  "steps": 90,
+  "steps": 70,
   "stdout": [
     "dividing first",
-    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/file-each-line-crash.agc:9:15: division by zero\")",
-    "descriptors 0",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/file-each-line-crash.agc:5:15: division by zero\")",
     "dividing first",
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":9},\"start\":{\"column\":15,\"line\":9}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":5},\"start\":{\"column\":15,\"line\":5}},\"task\":true}",
     ""
   ]
 }

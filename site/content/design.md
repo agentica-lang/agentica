@@ -32,7 +32,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 ## One libuv event loop for I/O
 
-**Decision.** One libuv loop handles sockets, timers, child processes and stdin. Regular files use its thread pool. Stdout and stderr still block, so a full pipe stalls every task. Moving them onto the loop is planned. This is Linux only for now.
+**Decision.** One libuv loop handles sockets, timers, child processes, stdin, stdout and stderr. Regular files use its thread pool. A print copies its text into a buffer of 64 KiB per stream and the loop writes it, so a slow reader stalls only the tasks that print. This is Linux only for now.
 
 **Why.** libevent had no file I/O, no UTF-8 paths on Windows and no spawn with stdio pipes. libuv has all three. The pool runs only bounded work, because a pool thread that waits forever cannot be cancelled or joined.
 

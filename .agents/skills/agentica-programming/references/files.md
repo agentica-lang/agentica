@@ -4,9 +4,9 @@
 are opaque, belong to one evaluation, and close when it ends. The interpreter
 uses the host user's filesystem permissions; there is no filesystem permission
 flag. File operations accept regular files and symlinks to regular files, and
-also FIFOs, pipes and devices (they wait on the event loop); they reject
-directories, a missing path for a read, and a path that reopens a pipe the VM
-made for itself.
+also FIFOs, pipes and devices that can wait (their calls wait on the event
+loop); they reject directories, a missing path for a read, and a path that
+reopens a pipe the VM made for itself.
 
 ```text
 File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
@@ -28,35 +28,37 @@ Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
 ```
 
-Modes are `read`, `write` and `append`: read requires an existing regular
-file; write creates or truncates; append creates or appends. Text is strict
-UTF-8. Whole-text helpers and each stream read/write are limited to 1 MiB;
-`read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF. `read_line`
-removes LF or CRLF, accepts a final unterminated line, and returns an error
-for EOF before any line or invalid UTF-8. Byte values are 0..255. Close
-flushes output and is idempotent. Explicit flush and close return Results.
-`File.close` on a handle that is already closing (its owner task crashed)
-returns `ok()` at once; the run still waits for that close's flush.
+Modes are `read`, `write` and `append`: read requires an existing path that is
+not a directory; write creates or truncates; append creates or appends. Text
+is strict UTF-8. Whole-text helpers and each stream read/write are limited to
+1 MiB; `read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF.
+`read_line` removes LF or CRLF, accepts a final unterminated line, and returns
+an error for EOF before any line or invalid UTF-8. Byte values are 0..255.
+Close flushes output and is idempotent. Explicit flush and close return
+Results. `File.close` on a handle that is already closing (its owner task
+crashed) returns `ok()` at once; the run still waits for that close's flush.
 
 `File.each_line` opens `path`, reads it one line at a time and calls the block
 with each line, never reading the whole file. The block returns
 `Result[Void]`: `ok()` goes on, an `error(...)` stops and becomes the result;
-`try` and `return error(...)` work in it. A line is at most `buffer_bytes` bytes counting its
-terminator (1024..16777216, else `RUNTIME-INVALID-COUNT` at that argument,
-before the file opens); a longer line gives
-`error("filesystem: line exceeds buffer_bytes")`. `timeout_ms` is per read and
-must be positive (else an error Result). LF and CRLF are removed, a final
-unterminated line is passed, invalid UTF-8 ends the call with an error, and
-the file is closed on every return path. FIFOs and pipes wait on the event
-loop for each read.
+`try` and `return error(...)` work in it. A line is at most `buffer_bytes`
+bytes counting its terminator (1024..16777216, else `RUNTIME-INVALID-COUNT` at
+that argument, before the file opens); a longer line gives
+`error("filesystem: line exceeds buffer_bytes")`. `timeout_ms` bounds each
+read, the open and the close, not the whole call, and must be positive (else
+an error Result). LF and CRLF are removed, a final unterminated line is
+passed, invalid UTF-8 ends the call with an error, and the file is closed on
+every return path. Pipes, FIFOs and devices that can wait are read on the
+event loop.
 
 Timeouts are positive milliseconds and include the serialized handle lock
 wait. Timing out active I/O closes that handle (later calls say the handle is
 closed); timing out while waiting for its lock leaves it open. Output is
 buffered (4096 bytes per handle) until it overflows, `File.flush`,
 `File.close` or the end of the run, so a write error may show there. At the
-end of the run the VM closes every open file and waits for the writes, at
-most 30000 ms; `agentica --flush-timeout MS` or the variable
+end of the run the VM closes every open file and waits for the writes, and
+for the buffered output of stdout and stderr (a slow pipe reader gets all of
+it), at most 30000 ms; `agentica --flush-timeout MS` or the variable
 `AGENTICA_FLUSH_TIMEOUT_MS` (0 to 86400000, bad values exit 2, the flag wins,
 no way to turn the limit off) sets the wait. When time runs out the VM ends the run with the same exit code and
 one stderr line, `agentica: file data may not be written: ...`, or
@@ -66,7 +68,10 @@ same end: children stop, files are written, then the VM ends by the
 signal; a second signal ends it at once (after the children are
 stopped). A path that reopens a pipe the VM made itself (`/proc/self/fd/N`
 or `/dev/fd/N`) is refused as not a regular file; pipes the VM got at
-start (standard input, output and error, `bash <(...)`) stay readable. FIFOs
+start (standard input, output and error, `bash <(...)`) stay readable, by
+`/dev/stdout`, `/proc/self/fd/1` and the like; only the number of the
+descriptor the VM itself writes standard output or error through is
+refused. FIFOs
 and devices count as files: a FIFO with no writer gives EOF, and opening
 one for writing with no reader is an error. Calls on pipes, FIFOs and
 terminals (stdin too, when `/proc` lets the VM reopen it) wait on the VM's event loop, not in the thread pool,

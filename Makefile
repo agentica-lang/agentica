@@ -122,7 +122,7 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/files.c vm/stream.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/interp.c vm/task.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/random.c vm/input.c vm/output.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/files.c vm/stream.c vm/process.c vm/tcp.c vm/tls_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_client.c vm/http_server.c vm/interp.c vm/task.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -431,7 +431,7 @@ sweep-full: vm-diff-build
 	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 # The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
-VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt tests/vm-channel-test.rkt tests/vm-file-lines-test.rkt
+VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-stop-test.rkt tests/vm-channel-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build

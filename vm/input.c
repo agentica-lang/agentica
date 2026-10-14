@@ -182,9 +182,7 @@ static void watch_stdin(agc_vm *vm, agc_input *in) {
   if (in->poll_socket) {
     fd = fcntl(in->fd, F_DUPFD_CLOEXEC, 3);
   } else {
-    char path[32];
-    snprintf(path, sizeof path, "/proc/self/fd/%d", in->fd);
-    fd = open(path, O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    fd = agc_fd_reopen(in->fd, O_RDONLY);
   }
   if (fd < 0) return;
   int err = 0;

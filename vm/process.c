@@ -730,7 +730,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
-  p->forward = vm->rt->err;
+  p->forward = vm->rt->err.file;
   p->captured = dir != NULL;
   int rc = start_child(g, p, argv, env, cwd);
   if (rc)

@@ -7,9 +7,10 @@ typedef enum { MODE_NONE, MODE_LIST, MODE_RUN } run_mode;
 
 struct agc_test_run {
   run_mode mode;
-  agc_string *token;
+  agc_string *token, *line;
   agc_task *current;
   const agc_test_case *test;
+  size_t listed;
 };
 
 static const char marker[] = "\x1e" "agentica-bdd ";
@@ -115,38 +116,40 @@ static agc_value position(uint32_t line, uint32_t column) {
   return agc_json_object(m, 2);
 }
 
-static void write_record(agc_vm *vm, agc_json_member *m, size_t n) {
-  m[n++] = member("token", json_text(vm->task->test_run->token));
-  const agc_string *text = agc_json_encode(vm, agc_json_object(m, n), 0);
-  if (vm->rt->out_mid_line) agc_write(vm, vm->rt->out, "\n", 1);
-  agc_write(vm, vm->rt->out, marker, sizeof marker - 1);
-  agc_write(vm, vm->rt->out, text->data, text->bytes);
-  agc_write(vm, vm->rt->out, "\n", 1);
+static bool write_record(agc_vm *vm, agc_json_member *m, size_t n) {
+  agc_string *record = NULL;
+  if (!agc_output_waiting(vm, &vm->rt->out)) {
+    m[n++] = member("token", json_text(vm->task->test_run->token));
+    const agc_string *text = agc_json_encode(vm, agc_json_object(m, n), 0);
+    record = agc_concat(lit(marker), text);
+  }
+  return agc_write_record(vm, &vm->rt->out, record);
 }
 
-static void write_event(agc_vm *vm, const char *event) {
+static bool write_event(agc_vm *vm, const char *event) {
   agc_json_member *m = members(2);
   m[0] = member("event", json_text(lit(event)));
-  write_record(vm, m, 1);
+  if (!write_record(vm, m, 1)) return false;
   agc_flush(vm);
+  return true;
 }
 
-static void write_list(agc_vm *vm, const agc_list *tests) {
+static bool write_list(agc_vm *vm, agc_test_run *r, const agc_list *tests) {
   const agc_program *p = vm->rt->program;
-  for (size_t k = 0; k < tests->len; k++) {
-    const agc_test_case *c = case_at(vm, tests, k);
+  for (; r->listed < tests->len; r->listed++) {
+    const agc_test_case *c = case_at(vm, tests, r->listed);
     const agc_span *at = &p->spans[c->span];
     agc_json_member *m = members(5);
     m[0] = member("column", json_int(at->start_column));
     m[1] = member("event", json_text(lit("test")));
     m[2] = member("line", json_int(at->start_line));
     m[3] = member("name", json_text(c->name));
-    write_record(vm, m, 4);
+    if (!write_record(vm, m, 4)) return false;
   }
-  write_event(vm, "ready");
+  return write_event(vm, "ready");
 }
 
-static void write_fail(agc_vm *vm, const char *code, agc_string *message, uint32_t span, const agc_test_note *n) {
+static bool write_fail(agc_vm *vm, const char *code, agc_string *message, uint32_t span, const agc_test_note *n) {
   const agc_program *p = vm->rt->program;
   const agc_span *at = &p->spans[span];
   agc_json_member *range = members(2);
@@ -161,8 +164,9 @@ static void write_fail(agc_vm *vm, const char *code, agc_string *message, uint32
   m[count++] = member("range", agc_json_object(range, 2));
   if (n && n->expected) m[count++] = member("expected", json_text(n->expected));
   if (n && n->actual) m[count++] = member("actual", json_text(n->actual));
-  write_record(vm, m, count);
+  if (!write_record(vm, m, count)) return false;
   agc_flush(vm);
+  return true;
 }
 
 static uint64_t test_seed(uint64_t seed, const agc_string *name) {
@@ -205,34 +209,41 @@ static void observe_test(agc_vm *vm, const agc_task *test) {
   }
 }
 
-static void report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
+static bool report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
   cancel_leftovers(vm, vm->task, t);
   agc_task *crashed = unobserved_of(vm, t);
+  bool written;
   if (t->crashed) {
-    write_fail(vm, t->crash_code, t->crash_message, t->crash_span, NULL);
+    written = write_fail(vm, t->crash_code, t->crash_message, t->crash_span, NULL);
   } else if (t->note) {
-    write_fail(vm, "RUNTIME-TEST-ASSERTION", t->note->message, t->note->span, t->note);
+    written = write_fail(vm, "RUNTIME-TEST-ASSERTION", t->note->message, t->note->span, t->note);
   } else if (!agc_as_result(vm, t->result)->ok) {
-    write_fail(vm, "RUNTIME-TEST-ERROR", agc_as_string(vm, agc_as_result(vm, t->result)->value), c->span, NULL);
+    written = write_fail(vm, "RUNTIME-TEST-ERROR", agc_as_string(vm, agc_as_result(vm, t->result)->value), c->span,
+                         NULL);
   } else if (t->left_children) {
-    write_fail(vm, "RUNTIME-TEST-PENDING-TASKS", lit("the test returned while its tasks were still running"), c->span,
-               NULL);
+    written = write_fail(vm, "RUNTIME-TEST-PENDING-TASKS", lit("the test returned while its tasks were still running"),
+                         c->span, NULL);
   } else if (crashed) {
-    write_fail(vm, "RUNTIME-TASK-CRASHED", crashed->crash, c->span, NULL);
+    written = write_fail(vm, "RUNTIME-TASK-CRASHED", crashed->crash, c->span, NULL);
   } else {
-    write_event(vm, "pass");
+    written = write_event(vm, "pass");
   }
-  observe_test(vm, t);
+  if (written) observe_test(vm, t);
+  return written;
 }
 
-static const agc_test_case *next_test(agc_vm *vm, const agc_list *tests, const agc_string *line, uint32_t span) {
+static bool next_test(agc_vm *vm, agc_test_run *r, const agc_list *tests, uint32_t span) {
   int64_t index = 0;
+  const agc_string *line = r->line;
   bool digits = line->bytes > 0 && (line->bytes == 1 || line->data[0] != '0');
   for (size_t k = 0; k < line->bytes; k++) digits = digits && line->data[k] >= '0' && line->data[k] <= '9';
   if (digits && agc_parse_int((const uint8_t *)line->data, line->bytes, &index) == AGC_NUMBER_OK &&
-      (uint64_t)index < tests->len)
-    return case_at(vm, tests, (size_t)index);
-  write_fail(vm, "RUNTIME-BDD-INFRA", agc_around("invalid test index ", line, ""), span, NULL);
+      (uint64_t)index < tests->len) {
+    r->test = case_at(vm, tests, (size_t)index);
+    r->line = NULL;
+    return true;
+  }
+  if (!write_fail(vm, "RUNTIME-BDD-INFRA", agc_around("invalid test index ", line, ""), span, NULL)) return false;
   agc_exit(vm, 1);
 }
 
@@ -253,8 +264,8 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     check_names(vm, tests);
     run_mode mode = mode_of(vm);
     if (mode == MODE_NONE) {
-      static const char usage[] = "run this file with agentica test\n";
-      agc_write(vm, vm->rt->err, usage, sizeof usage - 1);
+      agc_string *usage = agc_output_waiting(vm, &vm->rt->err) ? NULL : lit("run this file with agentica test\n");
+      if (!agc_write(vm, &vm->rt->err, usage, false)) return agc_void();
       agc_exit(vm, 2);
     }
     r = agc_alloc(sizeof(agc_test_run));
@@ -268,20 +279,21 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     r->token = status == AGC_INPUT_OK ? line : lit("");
   }
   if (r->mode == MODE_LIST) {
-    write_list(vm, tests);
+    if (!write_list(vm, r, tests)) return agc_void();
     finish_run(vm);
   }
   for (;;) {
     if (r->current) {
       if (agc_task_join(vm, r->current)) return agc_void();
-      report(vm, r->current, r->test);
+      if (!report(vm, r->current, r->test)) return agc_void();
       r->current = NULL;
     }
-    agc_string *line = NULL;
-    agc_input_status status = agc_protocol_line(vm, &line);
-    if (status == AGC_INPUT_WAIT) return agc_void();
-    if (status != AGC_INPUT_OK) finish_run(vm);
-    r->test = next_test(vm, tests, line, span);
+    if (!r->line) {
+      agc_input_status status = agc_protocol_line(vm, &r->line);
+      if (status == AGC_INPUT_WAIT) return agc_void();
+      if (status != AGC_INPUT_OK) finish_run(vm);
+    }
+    if (!next_test(vm, r, tests, span)) return agc_void();
     r->current = start_test(vm, r->test);
   }
 }

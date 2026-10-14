@@ -165,6 +165,18 @@ def open_files() -> Int
   return Result.unwrap!(Dir.list("/proc/self/fd", 10000)).length
 end
 
+def wait_for(before: Int, want: Int) -> Bool
+  tries = 0
+  while tries < 500
+    if open_files() - before == want
+      return true
+    end
+    Task.sleep(10)
+    tries = tries + 1
+  end
+  return false
+end
+
 def main() -> Void
   path = System.args()[0]
   before = open_files()
@@ -173,11 +185,11 @@ def main() -> Void
     return error("stop at #{line}")
   end
   IO.inspect(r)
-  IO.inspect(open_files() - before)
+  IO.inspect(wait_for(before, 0))
   h = Result.unwrap!(File.open(path, "read", 5000))
   IO.inspect(File.read_line(h, 5000))
   IO.inspect(File.close(h, 5000))
-  IO.inspect(open_files() - before)
+  IO.inspect(wait_for(before, 0))
 end
 AGC
   )
@@ -272,7 +284,7 @@ AGC
              (lambda ()
                (define result (run-vm (compile-text work "close" close-program) fifo))
                (check-equal? (first result) 0)
-               (check-equal? (second result) "\"one\"\nerror(\"stop at one\")\n0\nok(\"four\")\nok()\n0\n"))
+               (check-equal? (second result) "\"one\"\nerror(\"stop at one\")\ntrue\nok(\"four\")\nok()\ntrue\n"))
              (lambda () (stop-peer peer peer-out))))))
 
       (test-case "a crash cancels a task parked in File.each_line on a FIFO and frees its descriptor"

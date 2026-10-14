@@ -15,7 +15,7 @@ Notes on the language rules of each library area: what the checker enforces and 
 ## Stdio bytes and flushing
 
 - `IO.read()` remains the all-text-until-EOF API. `IO.read_bytes(count)` returns Result[List[Int]]; wait for count bytes or EOF, return short/empty success at EOF, and do not consume input for zero or invalid counts. The fixed 1 MiB per-call cap prevents eager allocations from arbitrary Int sizes; larger streams use repeated reads. Port read failures are local Results, not exceptions around argument evaluation.
-- `IO.flush` flushes stdout and returns completion. Do not auto-flush other output functions or close ports. All blocking stdio calls remain without timeouts.
+- `IO.flush` flushes stdout and returns completion. On Linux it returns once the data is in the pipe or file (it can wait for a slow reader, §10.2.2); the other output functions do not wait for it, since the loop writes their buffer as the reader takes it, and none closes a port. On other systems stdout and stderr are blocking `FILE` writes, and a write waits for its reader without a timeout.
 
 ## JSON (phase 5f)
 
