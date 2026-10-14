@@ -85,6 +85,17 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   submodule's version, and runs the TLS and HTTP tests on that binary. On
   a miss (a new OpenSSL key, such as a submodule bump) it skips;
   `warm-third-party` runs the same link check on `master`.
+- libgc: pull request jobs build with the system libgc (the default
+  `AGENTICA_GC=system`); the same guard step also installs `libgc-dev` when
+  `pkg-config` cannot find `bdw-gc` 8.2.0 or newer (a no-op on the current
+  runner image). The jobs that run on `push` to `master`
+  (`warm-third-party`, env `AGENTICA_GC: vendored`) and the release use
+  `AGENTICA_GC=vendored`, so the submodule's `gc.o` stays built for the
+  release and for GC stress, which always uses it. `vendored-check` links
+  with the vendored libgc and OpenSSL and fails on `libgc` in `readelf -d`;
+  the release also checks the unpacked archive. The key of
+  `make -s vm-third-party-key` starts with the GC mode, and the VM flag
+  stamps include it, so the two modes never share an object.
 - The `test` and `vm-sanitizers` jobs need Node and Python 3 for the
   network peers.
 
