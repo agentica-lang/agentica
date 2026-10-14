@@ -91,12 +91,8 @@ true
 ## Rules
 
 - `await` can be called more than once; it gives the same value.
-- If a task other than `main` fails with an error, only that task stops. Its
-  error is printed, the tasks it started are cancelled, and the files and
-  sockets it opened are closed. Awaiting it gives an `error` when the task
-  returns a `Result`, and stops the waiting task otherwise. A failure nobody
-  awaited makes the program exit with code 1 at the end. An error in `main`
-  still stops the whole program.
+- If a task other than `main` fails with an error, only that task stops. Its error is printed, the tasks it started are cancelled, and the files and sockets it opened are closed. Awaiting it gives an `error` when the task returns a `Result`, and stops the waiting task otherwise. A failure nobody awaited makes the program exit with code 1 at the end. An error in `main` still stops the whole program.
+- A file, socket, listener or process belongs to the task that opened it, and it is closed when that task ends, however it ends. `Task.spawn_owning` gives one to the task it starts.
 - When `main` returns, tasks that are still running are cancelled. Await the
   tasks you need.
 - Tasks do not run on several CPU cores. Output from different tasks may come in any order.
