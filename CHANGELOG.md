@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The documentation site shows the current version and links to its GitHub release.
 - The bytecode VM runs TCP on Linux: every `TCP` function (`connect`,
   `listen`, `accept`, `local_port`, `close_listener`, `send`, `send_bytes`,
   `recv_bytes`, `read_line`, `close`), so TCP programs no longer fall back to

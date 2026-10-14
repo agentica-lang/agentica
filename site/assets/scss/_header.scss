@@ -32,6 +32,13 @@
   }
 }
 
+.version {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
 .repo {
   margin-left: auto;
 }
