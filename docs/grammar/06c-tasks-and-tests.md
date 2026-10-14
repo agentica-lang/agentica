@@ -91,7 +91,7 @@ An assertion returns `ok()` when it holds and `error(text)` when it does not. `T
 
 A failed assertion is also recorded on the test it runs in, which is its own task or a task spawned inside it. So a dropped `Test.eq` still fails the test, and the first recorded failure is reported. Outside a test, an assertion only returns its Result.
 
-`Test.run` never returns; it ends the run with an exit code. It must run in `main`'s own task: elsewhere it is `RUNTIME-TEST-RUN` at the call. It then checks the names: an empty name, or one used by an earlier test, is `RUNTIME-TEST-NAME` at that `Test.test`. Run directly as `agentica file.agc`, it prints `run this file with agentica test` on stderr and exits 2. Under `agentica test`, stdin belongs to the runner (see [`bdd.md`](../bdd.md#unit-test-files-testrun)).
+`Test.run` never returns; it ends the run with an exit code. It serves the runner once: a second call, in a test or in any task, is `RUNTIME-TEST-RUN` at the call. It then checks the names: an empty name, or one used by an earlier test, is `RUNTIME-TEST-NAME` at that `Test.test`. Run directly as `agentica file.agc`, it prints `run this file with agentica test` on stderr and exits 2. Under `agentica test` it talks to the runner on the child channel (`Process.parent_read_line` and `Process.parent_send`, see [`06d`](06d-io-and-network.md#processes) and [`bdd.md`](../bdd.md#unit-test-files-testrun)); a VM started with the `--agentica-test` arguments but without that channel fails with `RUNTIME-TEST-RUN`. The test's own stdin and stdout are free: the runner shows what a test printed only when it fails.
 
 A test fails with the first of these that applies:
 

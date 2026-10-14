@@ -187,6 +187,8 @@
                       "HttpWire.read_request" "HttpWire.write_response" "HttpWire.server" "HttpWire.accept"
                       "HttpWire.spawn" "HttpWire.close_server" "HttpWire.wait" "HttpWire.local_port"
                       "Process.spawn_captured" "Process.output" "Task.pending_count"
+                      "Process.spawn_channel" "Process.channel_read_line" "Process.channel_send" "Process.channel_close"
+                      "Process.read_available" "Process.parent_read_line" "Process.parent_send"
                       "Task.await_result" "Task.unobserved_crash"
                       "Test.test" "Test.run" "Test.eq" "Test.ok?" "Test.error?" "Test.assert"))
 

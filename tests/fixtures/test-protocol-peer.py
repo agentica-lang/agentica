@@ -1,89 +1,81 @@
 import json
+import socket
 import subprocess
 import sys
-import threading
 
-MARKER = "\x1eagentica-bdd "
-TOKEN = "peer-token-7"
+from child_channel import launch, lines, read_ready
 
 
-def start(vm, bytecode, mode):
-    return subprocess.Popen(
-        [vm, "--json", "--", bytecode, "--agentica-test", mode],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+def start(vm, bytecode, mode, channel=True):
+    argv = [vm, "--json", "--", bytecode, "--agentica-test", mode]
+    if channel:
+        return launch(argv)
+    return subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE), None
 
 
-def record(line):
-    if not line.startswith(MARKER):
-        return None
-    try:
-        found = json.loads(line[len(MARKER):])
-    except ValueError:
-        return None
-    if not isinstance(found, dict) or found.get("token") != TOKEN:
-        return None
-    return found
+def finish(child, channel):
+    if channel is not None:
+        channel.shutdown(socket.SHUT_WR)
+    child.stdin.close()
+    out = child.stdout.read()
+    err = child.stderr.read()
+    return child.wait(timeout=30), out.decode(), err.decode()
 
 
 def listed(vm, bytecode):
-    child = start(vm, bytecode, "list")
-    try:
-        out, _ = child.communicate(TOKEN + "\n", timeout=30)
-    except subprocess.TimeoutExpired:
-        child.kill()
-        child.communicate()
-        raise SystemExit("the list child did not end within 30 seconds")
-    records = [found for found in map(record, out.split("\n")) if found]
+    child, channel = start(vm, bytecode, "list")
+    reader = lines(channel)
+    records = [json.loads(line) for line in reader]
+    code, out, _ = finish(child, channel)
     if not records or records[-1].get("event") != "ready":
-        raise SystemExit("the list child did not answer ready: " + out)
-    return [found["name"] for found in records if found.get("event") == "test"], child.returncode
+        raise SystemExit("the list child did not answer ready: %r" % records)
+    return [found["name"] for found in records if found.get("event") == "test"], code, out
 
 
 def run(vm, bytecode, count):
-    child = start(vm, bytecode, "run")
-    drain = threading.Thread(target=child.stderr.read)
-    drain.start()
+    child, channel = start(vm, bytecode, "run")
+    reader = lines(channel)
+    results = []
     try:
-        results = answers(child, count)
-        child.stdin.close()
-        child.stdout.read()
-        return results, child.wait(timeout=30)
+        child.stdin.write(b"from the peer\n")
+        child.stdin.flush()
+        for index in range(count):
+            channel.sendall(b"%d\n" % index)
+            line = reader.readline()
+            if line == "":
+                raise SystemExit("the run child ended during test %d" % index)
+            found = json.loads(line)
+            results.append([found["event"], found.get("code"), read_ready(child.stdout)])
+        code, out, _ = finish(child, channel)
+        return results, code, out
     finally:
         child.kill()
         child.wait()
-        drain.join()
 
 
-def answers(child, count):
-    child.stdin.write(TOKEN + "\n")
-    results = []
-    for index in range(count):
-        child.stdin.write("%d\n" % index)
-        child.stdin.flush()
-        output = []
-        while True:
-            line = child.stdout.readline()
-            if line == "":
-                raise SystemExit("the run child ended during test %d" % index)
-            line = line.rstrip("\n")
-            found = record(line)
-            if found is None:
-                output.append(line)
-                continue
-            results.append([found["event"], found.get("code"), output])
-            break
-    return results
+def without_channel(vm, bytecode):
+    child, _ = start(vm, bytecode, "list", channel=False)
+    code, out, err = finish(child, None)
+    last = [line for line in err.split("\n") if line][-1]
+    return code, json.loads(last)["code"], out
 
 
 def main():
     vm, bytecode = sys.argv[1], sys.argv[2]
-    names, list_exit = listed(vm, bytecode)
-    results, run_exit = run(vm, bytecode, len(names))
-    print(json.dumps({"names": names, "list_exit": list_exit, "results": results, "run_exit": run_exit}))
+    names, list_exit, list_out = listed(vm, bytecode)
+    results, run_exit, run_out = run(vm, bytecode, len(names))
+    code, diagnostic, silent = without_channel(vm, bytecode)
+    print(json.dumps({
+        "names": names,
+        "list_exit": list_exit,
+        "list_stdout": list_out,
+        "results": results,
+        "run_exit": run_exit,
+        "run_stdout": run_out,
+        "bare_exit": code,
+        "bare_code": diagnostic,
+        "bare_stdout": silent,
+    }))
 
 
 if __name__ == "__main__":

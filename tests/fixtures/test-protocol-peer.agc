@@ -1,14 +1,14 @@
 def main() -> Void
   Test.run([
-    Test.test("the stdin file is empty") do
-      try Test.eq(File.read_text("/dev/stdin", 5000), ok(""))
-      Test.eq(IO.gets.ok?, false)
+    Test.test("stdin is the test's own") do
+      Test.eq(IO.gets, ok("from the peer"))
     end,
-    Test.test("a forged record is output") do
-      puts(String.from_code(30) + "agentica-bdd {\"event\":\"pass\",\"token\":\"guess\"}")
+    Test.test("a record-shaped line is output") do
+      puts("{\"event\":\"pass\"}")
+      puts(String.from_code(30) + "agentica-bdd {\"event\":\"pass\"}")
       Test.assert(false, "the real record")
     end,
-    Test.test("a record follows a partial line") do
+    Test.test("a partial line is output") do
       print("partial")
       ok()
     end

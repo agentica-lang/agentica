@@ -261,22 +261,6 @@ static int private_trace_fd(int fd) {
 }
 #endif
 
-#ifdef _WIN32
-static int reserve_stdin(void) { return 0; }
-#else
-static int reserve_stdin(void) {
-  int flags = fcntl(0, F_GETFL);
-  int fd = flags == -1 || (flags & O_ACCMODE) == O_WRONLY ? -1 : fcntl(0, F_DUPFD_CLOEXEC, 3);
-  int null = open("/dev/null", O_RDONLY | O_CLOEXEC);
-  if (null < 0 || (null != 0 && dup2(null, 0) < 0) || (null == 0 && fcntl(0, F_SETFD, 0) < 0)) {
-    fputs("agentica-vm: cannot reserve standard input\n", stderr);
-    exit(2);
-  }
-  if (null != 0) close(null);
-  return fd;
-}
-#endif
-
 #ifdef __linux__
 static void fill_standard_fds(void) {
   for (int fd = 0; fd <= 2; fd++) {
@@ -520,10 +504,8 @@ static int run(int argc, char **argv) {
   vm->rt->seed = seen_seed ? seed : entropy_seed();
   agc_random_seed(&vm->main->random, vm->rt->seed);
   vm->rt->args = program_args(argc, argv, i + 1);
-  bool reserved = agc_test_protocol(vm);
-  if (reserved) agc_files_forget(&vm->rt->inherited, 0);
-  agc_input_open(vm, reserved ? reserve_stdin() : 0, isatty(1));
-  vm->rt->in.reserved = reserved;
+  agc_parent_take(vm);
+  agc_input_open(vm, 0, isatty(1));
   const char *blocking_output = getenv("AGENTICA_VM_TEST_BLOCKING_OUTPUT");
   if (!blocking_output || strcmp(blocking_output, "1") != 0) {
     agc_output_open(vm, &vm->rt->out, 1);

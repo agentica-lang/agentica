@@ -136,7 +136,12 @@ typedef struct agc_resource agc_resource;
 typedef struct agc_channel agc_channel;
 
 typedef struct {
+  agc_resource *reader, *writer;
+} agc_lines;
+
+typedef struct {
   agc_resource *state, *reader, *writer;
+  agc_lines channel;
 } agc_process;
 
 typedef struct {

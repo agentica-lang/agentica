@@ -3,9 +3,9 @@
   "code": null,
   "steps": 9,
   "stdout": [
-    "\u001eagentica-bdd {\"column\":5,\"event\":\"test\",\"line\":3,\"name\":\"first\",\"token\":\"k3y\"}",
-    "\u001eagentica-bdd {\"column\":5,\"event\":\"test\",\"line\":7,\"name\":\"second \\\"quoted\\\"\",\"token\":\"k3y\"}",
-    "\u001eagentica-bdd {\"event\":\"ready\",\"token\":\"k3y\"}",
+    "channel> {\"column\":5,\"event\":\"test\",\"line\":3,\"name\":\"first\"}",
+    "channel> {\"column\":5,\"event\":\"test\",\"line\":7,\"name\":\"second \\\"quoted\\\"\"}",
+    "channel> {\"event\":\"ready\"}",
     ""
   ],
   "stderr": []

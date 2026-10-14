@@ -1,15 +1,14 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 70,
+  "steps": 41,
   "stdout": [
-    "main reads: IO.gets reached the end of input",
-    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
-    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
-    "partial",
-    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"k3y\"}",
-    "\u001eagentica-bdd {\"event\":\"pass\",\"token\":\"guess\"}",
-    "\u001eagentica-bdd {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":20},\"start\":{\"column\":7,\"line\":20}},\"token\":\"k3y\"}",
+    "main reads: first line",
+    "channel> {\"event\":\"pass\"}",
+    "{\"event\":\"pass\"}",
+    "\u001eagentica-bdd {\"event\":\"pass\"}",
+    "channel> {\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-protocol.agc\",\"message\":\"the real record\",\"range\":{\"end\":{\"column\":44,\"line\":10},\"start\":{\"column\":7,\"line\":10}}}",
+    "partialchannel> {\"event\":\"pass\"}",
     ""
   ],
   "stderr": []

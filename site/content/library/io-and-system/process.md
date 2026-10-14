@@ -226,3 +226,86 @@ oops
 
 false
 ```
+
+## Process.spawn_channel
+
+```text
+Process.spawn_channel(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
+```
+
+Starts a program like `Process.spawn_captured`, and also opens a channel to it: one pipe, apart from its standard input, standard output and standard error, that carries lines of text in both directions. Linux only.
+
+The program finds the channel on file descriptor 3, and its environment holds `AGENTICA_CHANNEL=3`. `Process.spawn` and `Process.spawn_captured` remove that variable from the environment they pass on, so a program only sees a channel that its own parent opened for it.
+
+A program that talks to its parent on a channel keeps its own standard input and output for itself. `agentica test` uses one for the unit test files and BDD scenarios it runs.
+
+## Process.channel_read_line, Process.channel_send and Process.channel_close
+
+```text
+Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
+Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
+Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
+```
+
+`channel_read_line` reads one line the program sent, as `Process.read_line` does: at most 1 MiB, with the line ending removed, and `error("process: end of input")` when the channel has ended. `channel_send` sends at most 1048576 bytes, exactly as given, so add your own `"\n"`. `channel_close` closes only the sending side: the program reads the end of its input, and you can still read what it sends. Closing twice is fine.
+
+A timeout in `channel_read_line` or `channel_send` closes the channel, and only the channel: the program keeps running, and later channel calls give `error("process: channel is closed")`. On a program started without a channel, the three give `error("process: the child has no channel")`.
+
+```agentica {mode="check"}
+def main() -> Void
+  script = "read line <&3; echo \"got $line\" >&3"
+  p = Process.spawn_channel("sh", ["-c", script], ".", 1000).unwrap!
+  sent = Process.channel_send(p, "hello\n", 1000)
+  puts(Process.channel_read_line(p, 1000))
+  Process.close(p)
+end
+```
+
+```text
+ok("got hello")
+```
+
+## Process.read_available
+
+```text
+Process.read_available(p: Process, timeout_ms: Int) -> Result[String]
+```
+
+Gives the standard output of a captured program that has arrived since the last call, and removes it. It never waits for more output; the timeout only bounds the wait for the read lock. What the program wrote to its standard output before it wrote a line on the channel is in the text once you have read that line, so a program that flushes its output before it sends a record has that output tied to the record.
+
+After the output was truncated it gives `error("process: output exceeds 1048576 bytes")`, and on a program from `Process.spawn` it gives `error("process: output is not captured")`.
+
+```agentica {mode="check"}
+def main() -> Void
+  script = "echo working; echo done >&3"
+  p = Process.spawn_channel("sh", ["-c", script], ".", 1000).unwrap!
+  puts(Process.channel_read_line(p, 1000))
+  puts(Process.read_available(p, 1000))
+  Process.close(p)
+end
+```
+
+```text
+ok("done")
+ok("working\n")
+```
+
+## Process.parent_read_line and Process.parent_send
+
+```text
+Process.parent_read_line(timeout_ms: Int) -> Result[String]
+Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
+```
+
+The program's side of the channel its parent opened with `Process.spawn_channel`. The rules are those of `channel_read_line` and `channel_send`, and the timeout must be positive. A program that was not given a channel gets `error("process: no parent channel")`. A timeout closes the channel for good.
+
+The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a pipe or a socket. It then hides the descriptor and removes the variable, so the program's own children do not inherit either.
+
+```agentica {mode="check"}
+def main() -> Void
+  line = Process.parent_read_line(5000)
+  if line.ok?
+    sent = Process.parent_send("echo " + line.unwrap! + "\n", 5000)
+  end
+end
+```

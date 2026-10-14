@@ -187,29 +187,6 @@ end
 AGC
   )
 
-(define cut-print-record-program
-  #<<AGC
-def spill(big: String) -> Void
-  print(big)
-end
-
-def main() -> Void
-  Test.run([
-    Test.test("leaves a long print") do
-      big = "z"
-      for i in 0..17
-        big = big + big
-      end
-      Task.spawn(&spill, big)
-      Task.sleep(100)
-      ok()
-    end
-  ])
-end
-
-AGC
-  )
-
 (define output-then-crash-program
   #<<AGC
 def main() -> Void
@@ -309,7 +286,7 @@ end
 AGC
   )
 
-(define (run-case work name program #:peer [peer-arguments '()] #:vm [vm-arguments '()] #:args [program-arguments '()])
+(define (run-case work name program #:peer [peer-arguments '()] #:vm [vm-arguments '()])
   (define source (build-path work (string-append name ".agc")))
   (define bytecode (build-path work (string-append name ".agcb")))
   (define out-file (build-path work (string-append name ".out")))
@@ -324,8 +301,7 @@ AGC
            (append peer-arguments
                    (list "--" (path->string vm-file))
                    vm-arguments
-                   (list "--" (path->string bytecode))
-                   program-arguments)))
+                   (list "--" (path->string bytecode)))))
   (check-equal? (first result) 0 (format "~a: the peer ends: ~a" name (third result)))
   (define summary (string->jsexpr (second result)))
   (values summary (file->bytes out-file) (file->string err-file)))
@@ -522,16 +498,6 @@ AGC
           (check-true (< (hash-ref summary 'exit) 4) "the run does not wait for the flush limit")
           (check-false (regexp-match? #rx#"flush_timeout_ms" out))
           (check-regexp-match #rx#"RUNTIME-DIVISION-BY-ZERO" out))
-
-        (test-case "a protocol record starts a line after a print that was cut"
-          (define-values (summary out err)
-            (run-case work "cut-record" cut-print-record-program
-                      #:peer '("--delay" "1.0" "--stdin" "tok\n0\n") #:args '("--agentica-test" "run")))
-          (check-equal? (hash-ref summary 'status) 0)
-          (define marker (regexp-match-positions #rx#"\x1eagentica-bdd " out))
-          (check-true (and marker #t) "the record is there")
-          (check-equal? (bytes-ref out (sub1 (caar marker))) 10 "the record starts a line")
-          (check-regexp-match #rx#"RUNTIME-TEST-PENDING-TASKS" out))
 
         (test-case "blocking stdout and stderr on one pipe: the program output comes before the diagnostic"
           (putenv "AGENTICA_VM_TEST_BLOCKING_OUTPUT" "1")

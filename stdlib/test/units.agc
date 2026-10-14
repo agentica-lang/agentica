@@ -4,7 +4,6 @@ import "child" as Child
 export struct Settings
   vm: String
   seed: Int
-  token: String
   only: String
   timeout_ms: Int
 end
@@ -56,23 +55,23 @@ end
 
 def list(settings: Settings, path: String, bytecode: String) -> Listed
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_captured(settings.vm, args(settings, bytecode, 1000000, "list"), ".", 30000)
+  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000, "list"), ".", 30000)
   if not spawned.ok?
     return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "")
   end
   p = spawned.unwrap!
-  Process.send(p, settings.token + "\n", 5000)
   Process.close_stdin(p, 5000)
-  output = Process.output(p, 30000)
+  deadline = Time.monotonic_ms() + 30000
+  read = Child.read_records(p, deadline)
+  output = Process.output(p, Child.left(deadline))
   code = Process.wait(p, 5000)
   Process.close(p)
-  if not output.ok?
+  if read.problem == "network: operation timed out" or not output.ok?
     return broken(Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not list its tests within 30 seconds", where), "")
   end
   found = output.unwrap!
-  lines = found.stdout.split("\n")
-  records = lines.map do |line| Child.record_for(line, settings.token) end.filter do |record| not JSON.null?(record) end
-  printed = lines.filter do |line| line != "" and JSON.null?(Child.record_for(line, settings.token)) end.join("\n")
+  records = read.items
+  printed = found.stdout.split("\n").filter do |line| line != "" end.join("\n")
   shown = Child.tail(joined(printed, Child.stderr_text(found.stderr)), 65536)
   if found.truncated
     return broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's output exceeds 1 MiB while listing its tests", where), shown)
@@ -109,17 +108,12 @@ end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_captured(settings.vm, args(settings, bytecode, 1000000 * (chosen.size + 1), "run"), ".", 30000)
+  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000 * (chosen.size + 1), "run"), ".", 30000)
   if not spawned.ok?
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
   p = spawned.unwrap!
-  sent = Process.send(p, settings.token + "\n", 5000)
-  if not sent.ok?
-    found = failure(settings, p, sent.message, Time.monotonic_ms() + 5000, where)
-    Process.close(p)
-    return Report.file_failure(path, "tests", found.problem, found.output)
-  end
+  Process.close_stdin(p, 5000)
   empty: Map[Int, UnitTest] = {}
   queue = chosen.reduce(empty) do |acc: Map[Int, UnitTest], item: UnitTest| acc.put(acc.size, item) end
   results: Map[Int, Report.ScenarioResult] = {}
@@ -131,7 +125,7 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
     started = Time.monotonic_ms()
     deadline = started + settings.timeout_ms
     done = TestEnd(verdict: Report.Verdict.Pass, output: "", stopped: false, blame: true)
-    line_sent = Process.send(p, "#{item.index}\n", Child.left(deadline))
+    line_sent = Process.channel_send(p, "#{item.index}\n", Child.left(deadline))
     if line_sent.ok?
       done = await_test(settings, p, deadline, item.span)
     else
@@ -156,44 +150,34 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
 end
 
 def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> TestEnd
-  lines: Map[Int, String] = {}
-  count = 0
-  size = 0
-  while true
-    line = Process.read_line(p, Child.left(deadline))
-    if not line.ok?
-      found = failure(settings, p, line.message, deadline, span)
-      shown = found.output
-      if found.blame
-        shown = Child.tail(joined(tail_text(lines, count), found.output), 65536)
-      end
-      return TestEnd(verdict: Report.Verdict.Fail(found.problem), output: shown, stopped: true, blame: found.blame)
-    end
-    text = line.unwrap!
-    record = Child.record_for(text, settings.token)
-    event = Child.event_of(record)
-    if event == "pass"
-      return TestEnd(verdict: Report.Verdict.Pass, output: "", stopped: false, blame: true)
-    elsif event == "fail"
-      return TestEnd(verdict: Report.Verdict.Fail(record_error(record)), output: tail_text(lines, count), stopped: false,
-                     blame: true)
-    elsif event != ""
-      problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file broke the test record protocol", span)
-      return TestEnd(verdict: Report.Verdict.Fail(problem), output: tail_text(lines, count), stopped: true, blame: true)
-    end
-    size += text.length + 1
-    if size > 1048576
-      problem = Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span)
-      return TestEnd(verdict: Report.Verdict.Fail(problem), output: tail_text(lines, count), stopped: true, blame: true)
-    end
-    lines = lines.put(count, text)
-    count += 1
+  line = Process.channel_read_line(p, Child.left(deadline))
+  printed = Process.read_available(p, Child.left(deadline))
+  if not printed.ok?
+    found = failure(settings, p, printed.message, deadline, span)
+    return TestEnd(verdict: Report.Verdict.Fail(found.problem), output: found.output, stopped: true, blame: found.blame)
   end
-  return TestEnd(verdict: Report.Verdict.Pass, output: "", stopped: false, blame: true)
+  shown = Child.printed(printed.unwrap!)
+  if not line.ok?
+    found = failure(settings, p, line.message, deadline, span)
+    output = found.output
+    if found.blame
+      output = Child.tail(joined(shown, found.output), 65536)
+    end
+    return TestEnd(verdict: Report.Verdict.Fail(found.problem), output: output, stopped: true, blame: found.blame)
+  end
+  record = Child.record_of(line.unwrap!)
+  event = Child.event_of(record)
+  if event == "pass"
+    return TestEnd(verdict: Report.Verdict.Pass, output: "", stopped: false, blame: true)
+  elsif event == "fail"
+    return TestEnd(verdict: Report.Verdict.Fail(record_error(record)), output: Child.tail(shown, 65536), stopped: false, blame: true)
+  end
+  problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file broke the test record protocol", span)
+  return TestEnd(verdict: Report.Verdict.Fail(problem), output: Child.tail(shown, 65536), stopped: true, blame: true)
 end
 
 def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
-  Process.close_stdin(p, 5000)
+  Process.channel_close(p, 5000)
   output = Process.output(p, settings.timeout_ms)
   if not output.ok?
     return Ending(verdict: Report.Verdict.Fail(Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not exit after its last test", where)),
@@ -227,7 +211,7 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
   if message == "process: output exceeds 1048576 bytes"
     return overflow(settings, p, deadline, span)
   end
-  if message != "process: end of input" and message != "process: stdin is closed"
+  if message != "process: end of input" and message != "process: stdin is closed" and message != "process: channel is closed"
     return Failure(problem: Report.error_at("RUNTIME-BDD-IO", message, span), output: "", blame: true)
   end
   output = Process.output(p, Child.left(deadline))
@@ -245,14 +229,15 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
 end
 
 def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> Failure
-  Process.close_stdin(p, Child.left(deadline))
+  Process.channel_close(p, Child.left(deadline))
   output = Process.output(p, Child.left(deadline))
   if not output.ok?
     return timed_out(settings, span)
   end
   stderr = output.unwrap!.stderr
   if stderr.length < 262144
-    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span), output: "", blame: true)
+    shown = Child.tail(Child.printed(output.unwrap!.stdout), 65536)
+    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span), output: shown, blame: true)
   end
   where = Report.Span(file: span.file, line: 1, column: 1, end_column: 1)
   return Failure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
@@ -281,19 +266,6 @@ end
 def scenario(item: UnitTest, duration_ms: Int, verdict: Report.Verdict, output: String) -> Report.ScenarioResult
   return Report.ScenarioResult(name: item.name, tags: [], location: item.span, example: Report.Example.NoExample,
                                duration_ms: duration_ms, steps: [], verdict: verdict, output: output)
-end
-
-def tail_text(lines: Map[Int, String], count: Int) -> String
-  first = count
-  kept = 0
-  while first > 0 and kept + lines.get(first - 1, "").length + 1 <= 65536
-    kept += lines.get(first - 1, "").length + 1
-    first -= 1
-  end
-  if first == count and count > 0
-    return Child.tail(lines.get(count - 1, ""), 65535)
-  end
-  return (first...count).to_a.map do |k| lines.get(k, "") end.join("\n")
 end
 
 def joined(output: String, stderr: String) -> String

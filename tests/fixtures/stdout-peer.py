@@ -15,7 +15,6 @@ def main():
     parser.add_argument("--stderr-file", required=True)
     parser.add_argument("--delay", type=float, default=0)
     parser.add_argument("--error-delay", type=float, default=0)
-    parser.add_argument("--stdin")
     parser.add_argument("--chunk", type=int, default=65536)
     parser.add_argument("--pause", type=float, default=0)
     parser.add_argument("--read-after-exit", action="store_true")
@@ -41,12 +40,8 @@ def main():
         error_read, error_write = os.pipe()
 
     start = time.monotonic()
-    stdin = subprocess.DEVNULL if options.stdin is None else subprocess.PIPE
-    vm = subprocess.Popen(command, stdin=stdin, stdout=write_fd, stderr=error_write, close_fds=True)
+    vm = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=write_fd, stderr=error_write, close_fds=True)
     os.close(write_fd)
-    if options.stdin is not None:
-        vm.stdin.write(options.stdin.encode())
-        vm.stdin.close()
     if error_read is not None:
         os.close(error_write)
 

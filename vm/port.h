@@ -97,7 +97,7 @@ typedef enum { AGC_INPUT_OK, AGC_INPUT_EOF, AGC_INPUT_WAIT, AGC_INPUT_FAILED } a
 
 typedef struct {
   int fd, poll_fd;
-  bool flush_out, pending_eof, reading, reserved, poll_tried, poll_socket;
+  bool flush_out, pending_eof, reading, poll_tried, poll_socket;
   agc_poller *poller;
   int got;
   uint8_t *buf;
@@ -124,7 +124,7 @@ typedef struct {
   agc_output *out;
   const agc_string *text;
   size_t done;
-  bool newline, flush, lead;
+  bool newline, flush;
 } agc_output_wait;
 
 struct agc_output {
@@ -138,7 +138,7 @@ struct agc_output {
   uint8_t *notice;
   size_t notice_at, notice_len;
   agc_poller *poller;
-  bool pooled, socket, writing, armed, failed, mid_line;
+  bool pooled, socket, writing, armed, failed;
   agc_task *waiters, *waiters_tail;
 };
 
@@ -214,7 +214,8 @@ struct agc_vm {
   agc_task *ready, *ready_tail;
   agc_registry *registry;
   agc_loop *loop;
-  agc_resource *process_guard;
+  agc_resource *process_guard, *parent;
+  agc_lines parent_locks;
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
   agc_task *crashes, *crashes_tail, *quiet;
   uint64_t tasks_done, gc_seen, crash_count, observed_count;
@@ -269,12 +270,10 @@ _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint3
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline);
-bool agc_write_record(agc_vm *vm, agc_output *out, const agc_string *text);
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
 bool agc_drain(agc_vm *vm);
 void agc_flush(agc_vm *vm);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
-agc_input_status agc_protocol_line(agc_vm *vm, agc_string **line);
 
 #endif

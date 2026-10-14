@@ -63,11 +63,6 @@ export def main() -> Void
     System.exit(2)
   end
   config = decoded.unwrap!
-  token = IO.gets().unwrap_or("")
-  if token == ""
-    IO.warn("the BDD runner needs the run token on its standard input")
-    System.exit(2)
-  end
   # The driver writes one feature file or discovery error per line after the settings.
   read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
   closed = File.close(handle, 5000)
@@ -79,7 +74,7 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
-  files = matched(config, run_all(seeded(config, seed), token, read.map do |entry| entry.unwrap! end))
+  files = matched(config, run_all(seeded(config, seed), read.map do |entry| entry.unwrap! end))
   if config.style == "json"
     puts(Report.json(files, seed))
   else
@@ -91,7 +86,7 @@ export def main() -> Void
   end
 end
 
-def run_all(config: Config, token: String, entries: List[Entry]) -> List[Report.FileResult]
+def run_all(config: Config, entries: List[Entry]) -> List[Report.FileResult]
   if entries.size == 0
     problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
@@ -104,9 +99,9 @@ def run_all(config: Config, token: String, entries: List[Entry]) -> List[Report.
   end
   case listing
     Listing.Broken(problem) ->
-      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, token, [], entry) end
+      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, [], entry) end
       return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, token, patterns, entry) end
+    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, patterns, entry) end
   end
 end
 
@@ -135,13 +130,12 @@ def steps_listing(config: Config) -> Listing
   return list_steps(config, where)
 end
 
-def run_entry(config: Config, token: String, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
+def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
   if entry.problem != ""
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
   if entry.kind == "tests"
-    settings = Units.Settings(vm: config.vm, seed: config.seed, token: token, only: config.only,
-                              timeout_ms: config.test_timeout_ms)
+    settings = Units.Settings(vm: config.vm, seed: config.seed, only: config.only, timeout_ms: config.test_timeout_ms)
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
   return run_file(config, patterns, entry.path)
@@ -155,23 +149,25 @@ def seeded(config: Config, seed: Int) -> Config
                 test_timeout_ms: config.test_timeout_ms)
 end
 
-# The list child writes the patterns of BDD.run in order and exits, so its stdout is read once at the end.
+# The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
 def list_steps(config: Config, where: Report.Span) -> Listing
-  spawned = Process.spawn_captured(config.vm, vm_args(config, 1000000, "list"), ".", 30000)
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list"), ".", 30000)
   if not spawned.ok?
     return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
   p = spawned.unwrap!
   Process.close_stdin(p, 5000)
-  output = Process.output(p, 30000)
+  deadline = Time.monotonic_ms() + 30000
+  read = Child.read_records(p, deadline)
+  output = Process.output(p, Child.left(deadline))
   Process.close(p)
-  if not output.ok?
+  if read.problem == "network: operation timed out" or not output.ok?
     return Listing.Broken(Report.error_at("RUNTIME-BDD-TIMEOUT", "the step program did not list its steps within 30 seconds", where))
   end
   if output.unwrap!.truncated
     return Listing.Broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "step program output exceeds 1 MiB", where))
   end
-  records = output.unwrap!.stdout.split("\n").filter do |line| line.include?(Child.marker()) end.map do |line| Child.record_of(line) end
+  records = read.items
   failures = records.filter do |record| Child.event_of(record) == "fail" end
   if failures.size > 0
     return Listing.Broken(record_error(failures[0], where))
@@ -239,15 +235,16 @@ def run_scenario(config: Config, patterns: List[Match.Pattern], base: String, it
                                duration_ms: Time.monotonic_ms() - started, steps: steps, verdict: run.verdict, output: "")
 end
 
-# One child VM per scenario: the settings line, then one line per step, each answered by records on the child's stdout.
+# One child VM per scenario: the settings line, then one line per step on the child's channel, each answered by records on it.
 def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[Match.Resolved],
               patterns: List[Match.Pattern], started: Int) -> Run
   count = item.steps.size
-  spawned = Process.spawn_captured(config.vm, vm_args(config, 1000000 * (count + 1), "scenario"), ".", 30000)
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario"), ".", 30000)
   if not spawned.ok?
     return Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
   end
   p = spawned.unwrap!
+  Process.close_stdin(p, 5000)
   deadline = started + 30000
   fields: Map[String, Json] = {
     "base": JSON.from(base),
@@ -257,7 +254,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     "seed": JSON.from(config.seed),
   }
   run = Run(failed_at: count, verdict: Report.Verdict.Pass)
-  sent = Process.send(p, JSON.encode(JSON.object(fields)) + "\n", Child.left(deadline))
+  sent = Process.channel_send(p, JSON.encode(JSON.object(fields)) + "\n", Child.left(deadline))
   if not sent.ok?
     run = Run(failed_at: 0, verdict: Report.Verdict.Fail(send_failure(p, sent.message, deadline, item.steps[0].span)))
   end
@@ -265,7 +262,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
   i = 0
   while i < count and run.failed_at == count
     step = item.steps[i]
-    sent = Process.send(p, step_line(i, found[i], patterns, step) + "\n", Child.left(deadline))
+    sent = Process.channel_send(p, step_line(i, found[i], patterns, step) + "\n", Child.left(deadline))
     answer = StepEnd(verdict: Report.Verdict.Pass, asserts: 0)
     if sent.ok?
       answer = await_step(p, i, deadline, step.span, step.kind == "Then")
@@ -280,7 +277,7 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
     end
   end
   if run.failed_at == count
-    Process.close_stdin(p, Child.left(deadline))
+    Process.channel_close(p, Child.left(deadline))
     ending = await_exit(p, deadline, item.span)
     case ending
       Report.Verdict.Fail(_) -> run = Run(failed_at: count, verdict: ending)
@@ -322,44 +319,31 @@ def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], 
   return JSON.encode(JSON.object(fields))
 end
 
-# Reads records until the step ends; text without the marker is handler output, at most 1 MiB per step.
+# Reads channel records until the step ends; what the handler printed is read once per step and may not exceed 1 MiB.
 def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_step: Bool) -> StepEnd
   asserts = 0
-  output = 0
   while true
-    line = Process.read_line(p, Child.left(deadline))
+    line = Process.channel_read_line(p, Child.left(deadline))
     if not line.ok?
       return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, line.message, deadline, span)), asserts: asserts)
     end
-    text = line.unwrap!
-    at = text.index_of(Child.marker())
-    record = JSON.null()
-    if at.ok?
-      record = Child.record_of(text)
-    end
+    record = Child.record_of(line.unwrap!)
     event = Child.event_of(record)
-    if event == ""
-      output += text.length + 1
-    else
-      output += at.unwrap_or(0)
-    end
-    if output > 1048576
-      return StepEnd(verdict: failure("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span), asserts: asserts)
-    end
     if event == "assert"
       asserts += 1
-    elsif event == "fail"
-      return StepEnd(verdict: Report.Verdict.Fail(record_error(record, span)), asserts: asserts)
-    elsif event == "end"
+    elsif event == "fail" or event == "end"
+      printed = Process.read_available(p, Child.left(deadline))
+      if not printed.ok?
+        return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)), asserts: asserts)
+      end
+      if event == "fail"
+        return StepEnd(verdict: Report.Verdict.Fail(record_error(record, span)), asserts: asserts)
+      end
       if JSON.int(JSON.get(record, "index").unwrap_or(JSON.null())).unwrap_or(-1) != index
         return StepEnd(verdict: failure("RUNTIME-BDD-INFRA", "the step program broke the BDD record protocol", span), asserts: asserts)
       end
       if then_step and asserts == 0
         return StepEnd(verdict: failure("RUNTIME-BDD-NO-ASSERTION", "Then must perform a BDD assertion", span), asserts: asserts)
-      end
-      peek = Process.read_bytes(p, 0, 1000)
-      if not peek.ok?
-        return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, peek.message, deadline, span)), asserts: asserts)
       end
       return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
     end
@@ -367,18 +351,22 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
   return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
 end
 
-# After the last step the child exits 0 when its stdin ends; anything else fails the scenario.
+# After the last step the runner closes the channel and the child exits 0 when it reads the end; anything else fails the scenario.
 def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
-  line = Process.read_line(p, Child.left(deadline))
+  line = Process.channel_read_line(p, Child.left(deadline))
   while line.ok?
-    text = line.unwrap!
-    if text.include?(Child.marker()) and Child.event_of(Child.record_of(text)) == "fail"
-      return Report.Verdict.Fail(record_error(Child.record_of(text), span))
+    record = Child.record_of(line.unwrap!)
+    if Child.event_of(record) == "fail"
+      return Report.Verdict.Fail(record_error(record, span))
     end
-    line = Process.read_line(p, Child.left(deadline))
+    line = Process.channel_read_line(p, Child.left(deadline))
   end
   if line.message == "process: end of input"
     code = Process.wait(p, Child.left(deadline))
+    printed = Process.read_available(p, Child.left(deadline))
+    if not printed.ok?
+      return Report.Verdict.Fail(read_failure(p, printed.message, deadline, span))
+    end
     if code.ok? and code.unwrap! == 0
       return Report.Verdict.Pass
     end
@@ -393,7 +381,7 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   if message == "process: output exceeds 1048576 bytes" or message == "process: line exceeds 1048576 bytes"
     return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span)
   end
-  if message != "process: end of input"
+  if message != "process: end of input" and message != "process: channel is closed"
     return Report.error_at("RUNTIME-BDD-IO", message, span)
   end
   output = Process.output(p, Child.left(deadline))

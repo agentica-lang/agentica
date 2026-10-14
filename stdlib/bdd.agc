@@ -42,7 +42,7 @@ export def step(pattern: String, handler: Fn[Context, List[String], Context]) ->
   return Step(pattern: pattern, handler: handler)
 end
 
-# Serves the mode in System.args: "list" writes the patterns, "scenario" runs the steps the runner sends on stdin.
+# Serves the mode in System.args: "list" sends the patterns, "scenario" runs the steps the runner sends on the parent channel.
 export def run(steps: List[Step]) -> Void
   all = predefined().concat(steps)
   args = System.args()
@@ -52,11 +52,10 @@ export def run(steps: List[Step]) -> Void
   end
   if mode == "list"
     check_tasks()
-    records = all.map do |item|
+    all.each do |item|
       fields: Map[String, Json] = {"event": JSON.from("step"), "pattern": JSON.from(item.pattern)}
-      record_text(fields)
+      deliver(record_text(fields))
     end
-    IO.print(records.join(""))
     emit("ready")
     System.exit(0)
   elsif mode == "scenario"
@@ -193,9 +192,9 @@ def predefined() -> List[Step]
   ]
 end
 
-# One step per stdin line until the runner closes stdin; a failure has already ended the run with a fail record.
+# One step per channel line until the runner closes the channel; a failure has already ended the run with a fail record.
 def serve(all: List[Step]) -> Void
-  init = IO.gets
+  init = Process.parent_read_line(86400000)
   if not init.ok?
     System.exit(0)
   end
@@ -206,7 +205,7 @@ def serve(all: List[Step]) -> Void
   empty: List[List[String]] = []
   blank = StepLine(index: 0, definition: 0, pattern: "", captures: [], has_doc: false, doc: "", has_table: false, table: empty)
   ctx = Context(scenario: Scenario(settings: settings.unwrap!, state: {}, step: blank, program: Program.NotStarted))
-  line = IO.gets
+  line = Process.parent_read_line(86400000)
   while line.ok?
     found = JSON.decode(line.unwrap!, StepLine)
     if not found.ok?
@@ -223,9 +222,8 @@ def serve(all: List[Step]) -> Void
     check_crash()
     probe(ctx)
     fields: Map[String, Json] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
-    IO.print(record_text(fields))
-    IO.flush()
-    line = IO.gets
+    deliver(record_text(fields))
+    line = Process.parent_read_line(86400000)
   end
   System.exit(0)
 end
@@ -394,19 +392,25 @@ def halt(code: String, message: String) -> Void
 end
 
 def finish(fields: Map[String, Json]) -> Void
-  IO.print(record_text(fields))
-  IO.flush()
+  deliver(record_text(fields))
   System.exit(1)
 end
 
 def emit(event: String) -> Void
   fields: Map[String, Json] = {"event": JSON.from(event)}
-  IO.print(record_text(fields))
+  deliver(record_text(fields))
+end
+
+def deliver(text: String) -> Void
   IO.flush()
+  sent = Process.parent_send(text, 5000)
+  if not sent.ok?
+    System.exit(1)
+  end
 end
 
 def record_text(fields: Map[String, Json]) -> String
-  return String.from_code(30) + "agentica-bdd " + JSON.encode(JSON.object(fields)) + "\n"
+  return JSON.encode(JSON.object(fields)) + "\n"
 end
 
 def over_text() -> String

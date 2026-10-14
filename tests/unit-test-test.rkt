@@ -125,19 +125,15 @@
     (match-define (list _ plain _) (agentica-test (fixture "lists/config_test.agc")))
     (check-true (string-contains? plain "exited with code 3\n  bad config\n")))
 
-  (test-case "a test cannot take the run token from the run's folder"
-    (match-define (list status report) (json-test (fixture "leak_test.agc")))
-    (check-equal? status 1)
-    (define item (car (cases report)))
-    (check-equal? (field item 'code) "RUNTIME-TEST-ASSERTION")
-    (check-true (string-prefix? (hash-ref item 'output) "read the config\n")))
-
-  (test-case "a record the test prints never passes it, even with the seed's values"
-    (match-define (list status _ _) (run-main-in-process "--seed" "7" "test" (fixture "forged_test.agc")))
-    (check-equal? status 1)
-    (define result (run-main-in-process "--seed" "7" "test" "--json" (fixture "forged_test.agc")))
-    (check-equal? (map (lambda (item) (field item 'code)) (cases (string->jsexpr (cadr result))))
-                  '("RUNTIME-TEST-ASSERTION" "RUNTIME-TEST-ASSERTION")))
+  (test-case "a test owns its stdin and stdout, so records it prints are plain output"
+    (match-define (list free-status free) (json-test (fixture "free_io_test.agc")))
+    (check-equal? free-status 1)
+    (define free-results (cases free))
+    (check-equal? (map (lambda (item) (hash-ref item 'status)) free-results) '("passed" "failed" "passed"))
+    (check-equal? (field (second free-results) 'code) "RUNTIME-TEST-ASSERTION")
+    (check-equal? (hash-ref (second free-results) 'output) "{\"event\":\"pass\"}\nno newline")
+    (check-equal? (file-codes free) '(("tests" #f)))
+    (check-equal? (hash-ref free 'passed) 2))
 
   (test-case "output limits: 1 MiB per test with a 64 Ki tail, and a stderr flood is the file's error"
     (match-define (list _ noisy) (json-test (fixture "noisy_test.agc")))
@@ -146,7 +142,7 @@
     (check-equal? (field (first items) 'code) "RUNTIME-BDD-OUTPUT-LIMIT")
     (define output (hash-ref (first items) 'output))
     (check-true (<= 1 (string-length output) 65536))
-    (check-true (string-prefix? output "17 "))
+    (check-true (regexp-match? #rx"^y+" output))
     (match-define (list _ chatty) (json-test (fixture "chatty_test.agc")))
     (check-equal? (map (lambda (item) (list (hash-ref item 'status) (field item 'code))) (cases chatty))
                   '(("failed" "RUNTIME-BDD-OUTPUT-LIMIT") ("not_executed" #f)))
