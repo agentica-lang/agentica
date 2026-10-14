@@ -62,6 +62,7 @@
     [(result-type? type) (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
     [(and (pair? type) (eq? (car type) 'Task))
      (or (eq? (cadr type) 'Void) (vm-type? (cadr type) user-types))]
+    [(and (pair? type) (eq? (car type) 'Channel)) (vm-type? (cadr type) user-types)]
     [(and (pair? type) (memq (car type) '(Struct Enum)))
      (eq? (hash-ref user-types (cadr type) #f) (car type))]
     [(and (pair? type) (eq? (car type) 'Fn))
@@ -176,6 +177,7 @@
                       "File.close" "File.read_text" "File.write_text" "File.append_text" "File.stat"
                       "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"
                       "Task.spawn" "Task.await" "Task.sleep"
+                      "Channel.new" "Channel.send" "Channel.recv" "Channel.close" "Channel.closed?"
                       "Process.spawn" "Process.send" "Process.send_bytes" "Process.read_line" "Process.read_bytes"
                       "Process.close_stdin" "Process.wait" "Process.close"
                       "TCP.connect" "TCP.listen" "TCP.accept" "TCP.local_port" "TCP.close_listener"

@@ -12,6 +12,8 @@ extern const agc_builtin agc_core_builtins[];
 extern const size_t agc_core_builtin_count;
 extern const agc_builtin agc_task_builtins[];
 extern const size_t agc_task_builtin_count;
+extern const agc_builtin agc_channel_builtins[];
+extern const size_t agc_channel_builtin_count;
 extern const agc_builtin_table agc_builtin_tables[];
 extern const size_t agc_builtin_table_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
@@ -49,6 +51,8 @@ agc_resource *agc_owned_of(agc_vm *vm, agc_value v);
 void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to);
 void agc_close_owned(agc_vm *vm);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
+void agc_channel_leave(agc_vm *vm, agc_task *t);
+uint64_t agc_io_now(agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
 void agc_input_close(agc_vm *vm);

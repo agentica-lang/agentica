@@ -57,6 +57,13 @@ typedef struct {
   agc_native *native;
 } agc_frame;
 
+typedef struct {
+  agc_channel *channel;
+  agc_value value;
+  uint64_t deadline;
+  bool sending, reserved;
+} agc_channel_wait;
+
 typedef enum { AGC_DONE, AGC_FAILED, AGC_EXITED } agc_outcome_kind;
 
 typedef enum { AGC_STYLE_PLAIN, AGC_STYLE_AI, AGC_STYLE_JSON } agc_style;
@@ -154,6 +161,7 @@ struct agc_task {
   agc_task *parent, *children, *prev_sibling, *next_sibling;
   agc_task *awaiting;
   agc_resource *lock_wait;
+  agc_channel_wait channel;
 };
 
 struct agc_vm {

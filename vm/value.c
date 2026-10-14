@@ -321,6 +321,13 @@ agc_value agc_http_server_value(agc_http_server *s) {
   return v;
 }
 
+agc_value agc_channel_value(agc_channel *c) {
+  agc_value v;
+  v.tag = AGC_T_CHANNEL;
+  v.as.p = c;
+  return v;
+}
+
 uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
@@ -491,6 +498,11 @@ agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v) {
 
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_HTTP_SERVER) wrong_tag(vm);
+  return v.as.p;
+}
+
+agc_channel *agc_as_channel(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_CHANNEL) wrong_tag(vm);
   return v.as.p;
 }
 
