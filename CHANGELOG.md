@@ -286,10 +286,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `String.from_code`, `Float.from_int`, `Float.to_int` and `Float.to_int!`.
 - `Time.now_ms`, `Time.monotonic_ms`, `Random.int` and `Random.float`, with
   `--seed N` for repeatable runs, also passed through `agentica test`.
-- Evaluation: the `typed-python` arm of `tests/eval/run.py` (Python with annotations, checked by
-  `mypy --strict`, pinned in `tests/eval/Dockerfile`), twelve harder tasks t9 to t20 (programs to modify,
-  type changes, error handling, integrations against Python peers, a 29 MB log) with `hidden/driver.py`
-  scenarios, and `--check-references`, which grades every reference solution in the Docker sandbox.
 
 ### Changed
 
@@ -405,9 +401,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builtins), by their declared names. Types with the same name from
   different modules print the same; `JSON.schema` keeps unique internal
   `$defs` keys.
-- The evaluation sandbox (`tests/eval/run.py`) ran no Agentica program since the VM became the only
-  backend: the read-only containers had no writable `TMPDIR`, and the image lacked `libgc` and `libssl`
-  that `agentica-vm` links. Containers now set `TMPDIR=/tmp` and the image installs both libraries.
 
 ### Security
 
