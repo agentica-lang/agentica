@@ -67,3 +67,4 @@ error("negative price: -2")
 - [Library](/library/): every builtin module, with one example per function.
 - [Language specification](/reference/): the formal grammar and rules.
 - [The Aurora VM](/vm/): how your program runs, and the libraries underneath.
+- [Design decisions](/design/): the main design decisions and why each was taken.
