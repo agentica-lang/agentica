@@ -84,6 +84,26 @@
              (source-position-offset (extent-start node))
              (source-position-offset (source-span-end end))))
 
+(define (simple-path-text node)
+  (cond
+    [(typed-target? node) (simple-path-text (typed-target-expression node))]
+    [(name-ref? node) (name-ref-name node)]
+    [(field-access? node)
+     (define target (simple-path-text (field-access-target node)))
+     (and target (string-append target "." (field-access-name node)))]
+    [else #f]))
+
+(define (captured-assignment-help name block each-receiver)
+  (define parameters (block-lit-params block))
+  (define element
+    (if (= (length parameters) 1) (block-param-name (car parameters)) "x"))
+  (define path (and each-receiver (simple-path-text each-receiver)))
+  (if (and path (<= (string-length path) 40))
+      (format "blocks capture values; use a for loop, which can assign \"~a\": for ~a in ~a ... end"
+              name element path)
+      (format "blocks capture values; use a for loop, which can assign \"~a\": for ~a in xs ... end, or build it with xs.reduce(~a) do |acc, ~a| ... end"
+              name element name element)))
+
 (define (span-text span)
   (substring (source-text (source-span-source span))
              (source-position-offset (source-span-start span))
@@ -259,6 +279,8 @@
   (define current-result 'Void)
   (define current-signature #f)
   (define capture-boundary #f)
+  (define capture-block #f)
+  (define capture-each-receiver #f)
   (define loop-depth 0)
   (define range-chain '())
 
@@ -915,7 +937,8 @@
                 [(memq rule '(list-filter list-any list-all))
                  (check-block-body callback-expression (list element) 'Bool)]
                 [(eq? rule 'list-each)
-                 (check-block-body callback-expression (list element) 'Void)]
+                 (check-block-body callback-expression (list element) 'Void
+                                   #:each-receiver (car arguments))]
                 [else (check-block-body callback-expression (list element) #f)])]
              [else (check-expression callback-expression #f)]))
          (define arity (if reduce? 2 1))
@@ -1312,7 +1335,7 @@
         [expected (check-block-body block (drop-right (cdr expected) 1) (last expected))]
         [else (check-block-body block #f #f)]))
 
-    (define (check-block-body block known-parameters known-result)
+    (define (check-block-body block known-parameters known-result #:each-receiver [each-receiver #f])
       (define parameters (block-lit-params block))
       (when (and known-parameters (not (= (length known-parameters) (length parameters))))
         (bail 'CHECK-ARITY
@@ -1337,10 +1360,14 @@
                    #:help (format "annotate it, as in do |~a: Int| ... end" (block-param-name parameter)))])))
       (define saved-result current-result)
       (define saved-boundary capture-boundary)
+      (define saved-block capture-block)
+      (define saved-each-receiver capture-each-receiver)
       (define saved-loop-depth loop-depth)
       (set! loop-depth 0)
       (set! current-result (or known-result 'infer))
       (set! capture-boundary (length scopes))
+      (set! capture-block block)
+      (set! capture-each-receiver each-receiver)
       (push-scope!)
       (for ([parameter (in-list parameters)] [type (in-list parameter-types)])
         (introduce! (block-param-name parameter) type (block-param-span parameter)))
@@ -1371,6 +1398,8 @@
           [else 'Void]))
       (set! current-result saved-result)
       (set! capture-boundary saved-boundary)
+      (set! capture-block saved-block)
+      (set! capture-each-receiver saved-each-receiver)
       (set! loop-depth saved-loop-depth)
       (when (and (not (eq? result 'Void))
                  (not last-type)
@@ -1580,7 +1609,7 @@
            (bail 'CHECK-CAPTURED-ASSIGNMENT
                  (format "a block cannot assign to \"~a\", which belongs to the enclosing code" name)
                  (binding-span statement)
-                 #:help "blocks capture values; build the result with map or reduce, or use a for loop"))
+                 #:help (captured-assignment-help name capture-block capture-each-receiver)))
          (when annotation
            (bail 'CHECK-ANNOTATION-ON-EXISTING
                  (format "an annotation is only allowed when \"~a\" is introduced" name)

@@ -716,6 +716,17 @@
     (define captured (check-text (main-with "  total = 0\n  [1].each do |x|\n    total += x\n  end")))
     (check-equal? (diagnostic-code captured) 'CHECK-CAPTURED-ASSIGNMENT)
     (check-equal? (source-position-line (source-span-start (diagnostic-span captured))) 4)
+    (check-regexp-match #rx"for x in xs \\.\\.\\. end" (diagnostic-help captured))
+    (define captured-each
+      (check-text (main-with "  words = [\"a\"]\n  counts: Map[String, Int] = {}\n  words.each do |w|\n    counts = Map.put(counts, w, 1)\n  end")))
+    (check-equal? (diagnostic-code captured-each) 'CHECK-CAPTURED-ASSIGNMENT)
+    (check-regexp-match #rx"for w in words \\.\\.\\. end" (diagnostic-help captured-each))
+    (check-regexp-match #rx"assign \"counts\"" (diagnostic-help captured-each))
+    (define captured-map
+      (check-text (main-with "  total = 0\n  ys = [1].map do |x|\n    total = total + x\n    x\n  end")))
+    (check-equal? (diagnostic-code captured-map) 'CHECK-CAPTURED-ASSIGNMENT)
+    (check-regexp-match #rx"for x in xs \\.\\.\\. end, or build it with xs\\.reduce\\(total\\) do \\|acc, x\\|"
+                        (diagnostic-help captured-map))
     (check-ok (main-with "  [1].each do |x|\n    local = x\n    local = local + 1\n  end"))
     (check-equal? (check-code (string-append "def f(a: Int, b: Int) -> Int\n  return a\nend\n\n"
                                              (main-with "  x = f(1) do |v| v end")))
