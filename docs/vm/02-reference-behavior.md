@@ -22,7 +22,7 @@ The rules the VM follows. The goldens (§1, §12.1) pin the exit code, stdout, p
 - `-9223372036854775808` is legal: the literal 2^63 under unary minus is accepted (3.3).
 - `Float.to_int` truncates and fails on NaN, infinity or a value outside Int.
 - `String.to_int` accepts `^[+-]?[0-9]+$` (ASCII digits only) and fails with an error value past 64 bits. `String.to_float` accepts `^[+-]?[0-9]+(\.[0-9]+)?$`. Text without a dot is an integer that is rounded, so `-0` gives `0.0` and `-0.0` gives `-0.0`; a huge integer text gives infinity, not an error. Conversion uses `strtod` in the "C" locale.
-- Float text (`vm/value.c`, checked by `vm/tests/float_text_test.c`): take the shortest round-trip digits `d1...dn` and decimal exponent `e`. Use exponent form when `e < -4`, or when `e >= 0` and both `pos > 16` and `pos > sci`. Here `pos` is the positional length (`n + 1` with a fraction, else `e + 3` for `ddd.0`) and `sci` is `n + (n > 1 ? 1 : 0) + 2 + digits(e)`. Exponents print as `e+14` and `e-5`; one digit has no point (`1e+21`). Otherwise print positionally with at least one fractional digit (`100.0`, `0.0001`). Specials: `+nan.0` (any NaN), `+inf.0`, `-inf.0`, `-0.0`, `0.0`.
+- Float text (`vm/value.c`, checked by `vm/tests/float_text_test.c`): take the shortest round-trip digits `d1...dn` and decimal exponent `e`. Use exponent form when `e < -4`, or when `e >= 0` and both `pos > 16` and `pos > sci`. Here `pos` is the positional length (`n + 1` with a fraction, else `e + 3` for `ddd.0`) and `sci` is `n + (n > 1 ? 1 : 0) + 2 + digits(e)`. Exponents print as `e+14` and `e-5`; one digit has no point (`1e+21`). Otherwise print positionally with at least one fractional digit (`100.0`, `0.0001`). Specials: `+nan.0` (any NaN), `+inf.0`, `-inf.0`, `-0.0`, `0.0`. Exact ties round up in magnitude, and at a power of two the neighbour above can win, so the shortest string is not always the nearest one.
 
 ### 2.3 Strings and text
 
@@ -49,7 +49,7 @@ The rules the VM follows. The goldens (§1, §12.1) pin the exit code, stdout, p
 ### 2.5 Diagnostics, streams and exit codes
 
 - A runtime diagnostic carries a code, a message and a span. Only the code is contract.
-- Plain format: the diagnostic as usual. `--ai` prints `check failed: 1 error`, a blank line, `[CODE]`, `  message: `, `  at: file:line:column` and `  source: ` with the first source line trimmed of ASCII spaces. `--json` prints one line with keys in this order: `code`, `file`, `message`, `range`.
+- Plain format: the diagnostic as usual. `--ai` prints `check failed: 1 error`, a blank line, `[CODE]`, `  message: `, `  at: file:line:column` and `  source: ` with the source line trimmed of space, `\t`, `\n`, `\f` and `\r` at both ends. `--json` prints one line with keys in this order: `code`, `file`, `message`, `range`.
 - Columns count characters. Source lines split on LF with a trailing CR removed. Source names and lines print as raw bytes, control characters included.
 - Order: flush stdout, write the diagnostic to stderr, exit 1. How the two streams interleave at buffer boundaries is not contract.
 - Before each blocking stdin read, stdout is flushed when it is a terminal, so prompts show up.
@@ -87,7 +87,7 @@ Every failure is an error value. The checks run in this order:
 - Kinds follow `stat` (symlinks followed): a directory is `directory`, anything else `file`. Reads need a regular file. Writes refuse a directory and create a missing file.
 - `File.read_text` refuses a file above 1 MiB by its size and decodes strictly. `File.read_line` strips LF or CRLF and fails after 1 MiB without a LF. `File.read_bytes` reads until `max_bytes` or EOF.
 - `File.stat` of a missing path gives an error without a kind. A directory's size is 0. `modified_seconds` is the modification time in seconds.
-- `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by code point. `Dir.mkdir` creates missing parents with mode 0777; an existing directory is not an error.
+- `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by code point. `Dir.mkdir` creates missing parents with mode 0777; an existing directory or file is not an error.
 - `Path.join` checks every part, then refuses an absolute later part. `Path.resolve` completes the path, drops `.`, pops `..` (never above `/`) and collapses `/`. The result ends in `/` when the input did, or ended in `.` or `..`.
 - After a timeout on an active handle operation the handle is closed: later operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2). `File.read_text` of a pipe reads to end of file.

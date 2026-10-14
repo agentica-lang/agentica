@@ -33,7 +33,7 @@ The checker records the type of every expression in a table (`#:types`, an `eq?`
 | Arithmetic, ordering | Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (NaN stays false). |
 | `if` / `elsif` / `else` | Conditional jumps over each branch. |
 | `while` | Head label, condition (starts with its `step`), `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the head, `break` to the exit. |
-| `for x in a..b`, `a...b` | No `Range` value. The counter `i` starts at `a`, `last` is `b`. The test `le-i` (`lt-i` for `...`) runs before the body. The loop top is a `step` with the `for` span, one per iteration. After the body (the target of `next`) the loop compares `i` with `last` and only then adds 1, so a range ending at the largest Int never overflows. |
+| `for x in a..b`, `a...b` | No `Range` value. The counter `i` starts at `a`, `last` is `b`. The test `le-i` (`lt-i` for `...`) runs before the body. For `...`, `last` is `b - 1` (`sub-i`, after the nonempty test; b is above a, so no overflow). The loop top is a `step` with the `for` span, one per iteration. After the body (the target of `next`) the loop compares `i` with `last` and only then adds 1, so a range ending at the largest Int never overflows. |
 | `for x in r` (a `Range` value) | `range-bounds` once into the counter, `last` and non-empty flag, then the same loop. Assigning `r` in the body does not change the loop. |
 | `a..b`, `a...b` as a value | `step`, then `range dst w kind` (kind 0 for `..`, 1 for `...`). |
 | `for x in xs` | The iterable goes into a hidden slot (a `move`, even for a local, since the body may assign it). Hidden index, length and one. The body starts with the `step` of its first statement, then `list-get`. The backward jump lands on a `STEP`. `next` jumps to the increment, `break` past the test. An empty body charges nothing. |
@@ -71,7 +71,7 @@ The lowerer and the emitter never raise. Their codes have their own prefixes, so
 
 | Code | Raised by | Meaning |
 |---|---|---|
-| `LOWER-UNSUPPORTED` | `src/lower.rkt` | A form the lowerer does not handle yet. The span is the first such node. |
+| `LOWER-UNSUPPORTED` | `src/lower.rkt` | A form or a type the lowerer does not handle yet (`vm-type?` in `src/lower.rkt`). The span is the first such node. |
 | `LOWER-INTERNAL` | `src/lower.rkt` | A Racket exception inside the lowerer (a bug), at the program span. |
 | `BYTECODE-LIMIT` | `src/bytecode.rkt` | A function needs more than 65535 registers, or the program has more than 65535 structs or variants (4.4). |
 | `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception in `ir->bytecode` or `write-bytecode` (a bug), at the program span. |

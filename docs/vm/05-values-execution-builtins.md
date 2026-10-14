@@ -24,7 +24,7 @@ A value is a 16-byte tagged union passed by value (`vm/agc.h`). Tag 0 is Void, s
 - `value.c` is the only code that reads a union member. Everything else uses checked accessors that take the VM. A wrong tag is `RUNTIME-INTERNAL` at the program span.
 - `CALL_BUILTIN` checks each argument's tag against the builtin's parameter tags. Builtins check list and map elements when they touch them.
 - `FIELD` and `PAYLOAD` check the index against the value's own `n`, not only against the tables.
-- Builtins that read builtin records (`Header`, `HttpResponse`, `HttpClientOptions`, `FileInfo`, `ProcessOutput`) check the struct type id. The loader accepts those names only with the exact field names and count of the C layout.
+- A builtin that reads a builtin record (`Header`, `HttpRequest`, `HttpResponse`, `FileInfo`, `ProcessOutput`) finds its struct by exact name and fields (`agc_builtin_struct`, `vm/builtins.c`). If the struct is missing, it fails with `RUNTIME-INTERNAL`. The loader does not check these records.
 - Every String constructor validates UTF-8 (no overlongs, no surrogates, at most U+10FFFF) or decodes with U+FFFD: argv, `Dir.list`, stdin, process and socket text, JSON `\u` escapes.
 - Size arithmetic goes through checked helpers (`agc_size_add`, `agc_size_mul`). An overflow is an out-of-memory failure (6.3).
 
@@ -69,7 +69,7 @@ typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
 
 ### 7.2 Scope
 
-The C builtins are in `vm/*.c`, with one table per module. The catalog and the implementation keys are in `src/builtins.rkt`. BDD has no C builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only `Process.spawn_captured`, `Process.output` and `Task.pending_count`. The event loop, files and processes are Linux only for now (the `__linux__` guards in `vm/loop.c`, `vm/files.c` and `vm/process.c`).
+The C builtins are in `vm/*.c`, with one table per module. The catalog and the implementation keys are in `src/builtins.rkt`. BDD has no C builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only `Process.spawn_captured`, `Process.output` and `Task.pending_count`. The event loop, files, processes, TCP, TLS and HTTP (client and server) are Linux only for now (the `__linux__` guards in `vm/loop.c`, `vm/files.c`, `vm/process.c`, `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c` and `vm/http_server.c`).
 
 ### 7.3 Builtin safety and streams
 
