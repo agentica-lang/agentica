@@ -1,6 +1,6 @@
 ---
 title: System, Time and Random
-weight: 7
+weight: 5
 description: Program arguments, exit codes, clocks and random numbers.
 ---
 

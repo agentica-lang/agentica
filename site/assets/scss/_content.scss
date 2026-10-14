@@ -95,6 +95,21 @@ blockquote {
   span::before {
     content: "· ";
   }
+
+  ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.25rem;
+    list-style: none;
+  }
+
+  ul li {
+    padding: 0.2rem 0;
+    border-bottom: 0;
+  }
+
+  ul a {
+    font-weight: 400;
+  }
 }
 
 @media (max-width: $narrow) {

@@ -85,7 +85,7 @@ plum
 ```
 
 To count, walk through a range: `a..b` includes `b`, `a...b` leaves it out.
-`n.times` runs a block `n` times. See [Range](/library/range/) for more.
+`n.times` runs a block `n` times. See [Range](/library/data-structures/range/) for more.
 
 ```agentica
 def main() -> Void

@@ -30,15 +30,21 @@ rule that a site page shows.
 ## Content
 
 - The user docs live in `site/content`: Getting started, the Language tour
-  in `tour/`, one Library page per builtin module in `library/`, and
-  `vm.md`, a top-level page on the Aurora VM and its libraries.
+  in `tour/`, the Library in `library/`, and `vm.md`, a top-level page on the
+  Aurora VM and its libraries.
+- The Library is grouped by topic: `library/TOPIC/_index.md` (a short intro
+  that says which form fits which job) and one page per builtin module in
+  `library/TOPIC/NAME.md`, plus the `algorithms.md` page of runnable recipes.
+  A new module page goes into a topic folder, so its URL is
+  `/library/TOPIC/NAME/`; the topics and pages are ordered by `weight`, and
+  the sidebar, the list pages, `llms.txt` and `search.json` follow the tree.
 - Order and titles come from front matter (`title`, `weight`).
 - `docs/grammar/*.md` is the language specification (`/reference/`): the
   content adapter `content/_content.gotmpl` reads the files through an assets
   mount (`hugo.toml`) and joins them, in file-name order, into one page. A new
   file in `docs/grammar/` appears there by itself; the adapter fails the build
   when fewer than 10 files are found, so change that number with the files.
-- The adapter rewrites two kinds of joined link: a sibling grammar link `](NN-name.md#anchor)` becomes `](#anchor)`, and `](../../site/content/library/NAME.md)` becomes `](/library/NAME/)`; other relative links stay as written.
+- The adapter rewrites two kinds of joined link: a sibling grammar link `](NN-name.md#anchor)` becomes `](#anchor)`, and `](../../site/content/library/TOPIC/NAME.md)` becomes `](/library/TOPIC/NAME/)`; other relative links stay as written.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
 - When the language or a builtin changes, update the matching site page too.

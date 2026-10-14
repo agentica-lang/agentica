@@ -1,6 +1,6 @@
 ---
 title: BDD
-weight: 13
+weight: 2
 description: Test programs with Gherkin feature files and the agentica test command.
 ---
 
@@ -49,7 +49,7 @@ when the tests could not run. `--ai` and `--json` change the report format.
 `--seed N` makes `Random` repeat in steps and programs. A program under test
 can start other programs only with `agentica test --allow-run`.
 
-`agentica test` also runs `*_test.agc` unit test files ([Test](/library/test/)) in the same report. With no paths it searches `specs/` and `test/`. `--only TEXT` keeps the scenarios and tests whose name contains `TEXT`. Without `--seed`, the runner draws one seed and every step program and program under test shares it; the report shows it when the run fails.
+`agentica test` also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`. `--only TEXT` keeps the scenarios and tests whose name contains `TEXT`. Without `--seed`, the runner draws one seed and every step program and program under test shares it; the report shows it when the run fails.
 `agentica test` refuses a shared temporary directory without the sticky bit
 (exit `2`); set `TMPDIR` to a private folder.
 

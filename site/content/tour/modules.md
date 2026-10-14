@@ -115,7 +115,7 @@ first
 1
 ```
 
-See [Queue](/library/queue/) for every function.
+See [Queue](/library/data-structures/queue/) for every function.
 
 ## Other libraries
 

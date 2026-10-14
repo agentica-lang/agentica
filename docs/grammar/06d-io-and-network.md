@@ -1,6 +1,6 @@
 ### TCP, TLS and HTTP
 
-Networking uses the normal expression syntax and lightweight tasks. The network names in §4 are reserved, and handles are opaque: they belong to their run and close when it ends. No CLI flag is needed. Signatures and details are in [`library/network.md`](../../site/content/library/network.md); the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and [`docs/vm/10-io-tls.md`](../vm/10-io-tls.md).
+Networking uses the normal expression syntax and lightweight tasks. The network names in §4 are reserved, and handles are opaque: they belong to their run and close when it ends. No CLI flag is needed. Signatures and details are in [`library/io-and-system/network.md`](../../site/content/library/io-and-system/network.md); the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and [`docs/vm/10-io-tls.md`](../vm/10-io-tls.md).
 
 - Ports are 1 to 65535 to connect and 0 to 65535 to listen; port 0 asks for an assigned port, which `TCP.local_port` returns. A host with NUL is an error.
 - TLS checks certificates and host names, with TLS 1.2 or later; verification cannot be turned off. An empty CA file means system trust; a nonempty one replaces it, and a missing or empty file fails the connect. A peer that closes without TLS's close message ends the stream like EOF, so the protocol must detect a cut message.
@@ -24,7 +24,7 @@ URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`, 
 
 ### Files and paths
 
-`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle is opaque, belongs to one evaluation, and closes when it ends. The host user's permissions apply; there is no filesystem permission flag. File operations accept regular files and symlinks to them, and reject directories and special files. Signatures are in [`library/files.md`](../../site/content/library/files.md).
+`File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle is opaque, belongs to one evaluation, and closes when it ends. The host user's permissions apply; there is no filesystem permission flag. File operations accept regular files and symlinks to them, and reject directories and special files. Signatures are in [`library/io-and-system/files.md`](../../site/content/library/io-and-system/files.md).
 
 - `File.open` modes: `read` (an existing regular file), `write` (creates or truncates) and `append` (creates or appends).
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives `ok([])` at EOF. `read_line` strips LF or CRLF and accepts a final unterminated line; it is an error at EOF or on invalid UTF-8.
@@ -33,7 +33,7 @@ URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`, 
 
 ### Processes
 
-`Process` is an opaque handle, with no constructor, fields, equality or JSON encoding; `IO.inspect` prints `<Process>`. Signatures are in [`library/process.md`](../../site/content/library/process.md).
+`Process` is an opaque handle, with no constructor, fields, equality or JSON encoding; `IO.inspect` prints `<Process>`. Signatures are in [`library/io-and-system/process.md`](../../site/content/library/io-and-system/process.md).
 
 - Starting a program needs `agentica --allow-run file.agc`. The flag defaults to off and precedes the source file; later arguments reach `System.args`. The `test` command accepts it before or after the command. Checking and `help` need no flag. The permission reaches tasks. BDD step handlers can always start programs.
 - A command without `/` is looked up in each `PATH` entry, in order. An empty entry is skipped, so `./name` runs a program in the working directory; a relative entry such as `.` resolves against it. A command with `/` is a path, relative to the working directory unless absolute. A name that is not found, or names a directory, is `executable is unavailable`. Arguments go straight to the program, with no shell. On Windows only `.exe` and `.com` run. A file that is found but cannot run is an error Result from `spawn`.

@@ -1,6 +1,6 @@
 ### Lightweight tasks
 
-`Task` is reserved. Tasks are cooperative and share one VM scheduler, so they give I/O concurrency without CPU parallelism. A task yields when it waits for I/O, a timer, a channel or another task, and at the end of each turn. Signatures are in [`library/task.md`](../../site/content/library/task.md).
+`Task` is reserved. Tasks are cooperative and share one VM scheduler, so they give I/O concurrency without CPU parallelism. A task yields when it waits for I/O, a timer, a channel or another task, and at the end of each turn. Signatures are in [`library/concurrency/task.md`](../../site/content/library/concurrency/task.md).
 
 `Task.spawn` starts a function at once with one argument; use a struct for several values. A block works when it is passed through an `Fn` variable or parameter. Each task has its own scopes, call depth and return handling. `Task.await` returns the cached result and may be repeated; `false`, `nil` and `error` are normal results. Tasks have no constructor, equality, fields, indexing or JSON encoding.
 
@@ -66,7 +66,7 @@ Channel.close(channel: Channel[T]) -> Void
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
-All but `new` are also methods: `jobs.send(v, 1000)`, `jobs.recv(1000)`, `jobs.close`, `jobs.closed?`. Signatures are in [`library/channel.md`](../../site/content/library/channel.md).
+All but `new` are also methods: `jobs.send(v, 1000)`, `jobs.recv(1000)`, `jobs.close`, `jobs.closed?`. Signatures are in [`library/concurrency/channel.md`](../../site/content/library/concurrency/channel.md).
 
 - **Type.** `T` is any type a variable can have, so `Channel[Void]` is `CHECK-VOID-TYPE`. A task handle, a socket, a file or another channel is allowed. A user `struct`, `enum` or import alias named `Channel` is `CHECK-REDEFINED-NAME`.
 - **`Channel.new`** needs an expected type, from an annotation, a parameter, a field or a return type: `jobs: Channel[String] = Channel.new(16)`. Without one it is `CHECK-EXPECTED-TYPE` at the call, with a help that shows the annotated form. The capacity is 1 to 1,048,576, else `RUNTIME-INVALID-COUNT` at the argument. A channel is always bounded.
@@ -83,7 +83,7 @@ There is no `select`, no `for x in channel`, and no unbounded or unbuffered chan
 
 ### Unit tests (`Test`)
 
-`Test` and `TestCase` are reserved. `Test` is a builtin module that needs no import. A test file is a program whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks. Signatures are in [`library/test.md`](../../site/content/library/test.md).
+`Test` and `TestCase` are reserved. `Test` is a builtin module that needs no import. A test file is a program whose `main` calls `Test.run` with a list of `Test.test(name) do ... end` blocks. Signatures are in [`library/testing/test.md`](../../site/content/library/testing/test.md).
 
 `Test.test` builds an opaque `TestCase` with the name, block and span of the call; `IO.inspect` shows `<TestCase>`. The block returns `Result[Void]`, so `try` works inside it and its last assertion can be its result.
 

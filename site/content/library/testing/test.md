@@ -1,6 +1,6 @@
 ---
 title: Test
-weight: 16
+weight: 1
 description: Unit tests in the style of ExUnit, with assertions that return a Result.
 ---
 

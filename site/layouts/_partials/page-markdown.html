@@ -25,7 +25,7 @@
 {{- $body = strings.TrimSpace $body -}}
 {{- if .IsSection -}}
   {{- $items := slice -}}
-  {{- range .Pages.ByWeight -}}
+  {{- range partial "section-pages.html" . -}}
     {{- $items = $items | append (partial "llms-item.html" .) -}}
   {{- end -}}
   {{- $body = printf "%s\n\n## Pages in this section\n\n%s" $body (delimit $items "\n") -}}

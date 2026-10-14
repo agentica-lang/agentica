@@ -1,6 +1,6 @@
 ---
 title: Task
-weight: 9
+weight: 1
 description: Start, await, pause and count lightweight tasks, and find their crashes.
 ---
 
@@ -46,7 +46,7 @@ task returns a `Result`, awaiting it gives
 waiting task stops with `RUNTIME-TASK-CRASHED`. A crash that no await sees
 makes the run exit with code 1 when `main` returns.
 
-An await that would wait for the awaiting task itself, directly or through other tasks, stops with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await`. A task can get such a handle through a [Channel](/library/channel/).
+An await that would wait for the awaiting task itself, directly or through other tasks, stops with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await`. A task can get such a handle through a [Channel](/library/concurrency/channel/).
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -139,7 +139,7 @@ Task.pending_count() -> Int
 Gives how many tasks of this run have not ended yet, not counting `main`. A
 task that waits to run, sleeps or waits for another task counts; so does the
 task that asks, unless it is `main`. A task that has returned or crashed no
-longer counts, even when nothing awaited it. `std/bdd` uses it to fail a [BDD](/library/bdd/) step that leaves tasks
+longer counts, even when nothing awaited it. `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step that leaves tasks
 running.
 
 ```agentica
@@ -177,7 +177,7 @@ Task.unobserved_crash() -> Result[String]
 
 Gives `ok(text)` with the first crash of this run that no `Task.await` has
 seen, or an error when there is none. Asking does not count as seeing it.
-`std/bdd` uses it to fail a [BDD](/library/bdd/) step whose task crashed.
+`std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step whose task crashed.
 
 ```agentica
 def boom(n: Int) -> Int

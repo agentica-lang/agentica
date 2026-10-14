@@ -126,7 +126,7 @@ a-b--c
 ```
 
 Every method is also a function in the `String` module: `s.upcase` is the same
-as `String.upcase(s)`. See the [String library page](/library/string/) for the
+as `String.upcase(s)`. See the [String library page](/library/text-and-data/string/) for the
 full list.
 
 ## Comparing strings

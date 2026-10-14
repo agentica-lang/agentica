@@ -155,4 +155,4 @@ def main() -> Void
 end
 ```
 
-See [Int and Float](/library/numbers/) for all conversion functions.
+See [Int and Float](/library/text-and-data/numbers/) for all conversion functions.

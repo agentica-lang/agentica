@@ -1,6 +1,6 @@
 ---
 title: Queue (std)
-weight: 14
+weight: 3
 description: The std/queue module, a first-in, first-out queue of strings.
 ---
 

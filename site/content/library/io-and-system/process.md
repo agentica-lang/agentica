@@ -1,6 +1,6 @@
 ---
 title: Process
-weight: 11
+weight: 3
 description: Start other programs, talk to them through their input and output, and wait for them.
 ---
 
@@ -10,7 +10,7 @@ A program can start other programs only when it runs with `--allow-run`:
 agentica --allow-run tool.agc
 ```
 
-[BDD](/library/bdd/) steps can always start programs: `agentica test` runs
+[BDD](/library/testing/bdd/) steps can always start programs: `agentica test` runs
 each scenario with `--allow-run`, and `agentica test --allow-run` only lets the
 programs under test start programs too.
 
@@ -179,7 +179,7 @@ When more than 1 MiB of standard output is waiting, or standard error passes
 `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0,
 timeout)` gives that error at once, so you can check for it without waiting.
 
-Closing a captured program asks it to stop first (`SIGTERM`) and kills it one second later if it still runs, so a program that is itself an Agentica program can stop its own children. `agentica test` runs each [BDD](/library/bdd/) scenario, and each program under test, as a captured program.
+Closing a captured program asks it to stop first (`SIGTERM`) and kills it one second later if it still runs, so a program that is itself an Agentica program can stop its own children. `agentica test` runs each [BDD](/library/testing/bdd/) scenario, and each program under test, as a captured program.
 
 ```agentica {mode="check"}
 def main() -> Void

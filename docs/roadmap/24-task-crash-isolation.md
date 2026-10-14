@@ -23,7 +23,7 @@ Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-
   - **Docs:**
     - `docs/grammar.md` (Lightweight tasks; the new code);
     - the programming skill (`references/tasks.md`, `references/diagnostics.md`, `references/bdd.md`);
-    - `site/content/library/task.md`;
+    - `site/content/library/concurrency/task.md`;
     - `docs/vm/10-io-scheduler.md` §10.2.1 ("As built", "Cancellation");
     - the development skill (`references/vm.md`).
   - No CHANGELOG: the project adds none in the private alpha.

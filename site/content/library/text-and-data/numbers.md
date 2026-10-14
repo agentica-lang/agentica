@@ -1,6 +1,6 @@
 ---
 title: Int and Float
-weight: 4
+weight: 2
 description: Convert between Int, Float and String.
 ---
 
@@ -13,9 +13,9 @@ Arithmetic never mixes `Int` and `Float`. Use these functions to convert.
 | `x.to_s` on a `Float` | `String.from_float(x)` |
 | `x.to_i`, `x.to_i!` on a `Float` | `Float.to_int(x)`, `Float.to_int!(x)` |
 
-To read numbers from text, see [to_int and to_float](/library/string/#to_int-and-to_float).
+To read numbers from text, see [to_int and to_float](/library/text-and-data/string/#to_int-and-to_float).
 For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see
-[Range](/library/range/#times-upto-and-downto).
+[Range](/library/data-structures/range/#times-upto-and-downto).
 
 ## Float.from_int
 

@@ -1,6 +1,6 @@
 ---
 title: Channel
-weight: 17
+weight: 2
 description: Send values from one task to another through a bounded queue.
 ---
 
