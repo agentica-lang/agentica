@@ -93,6 +93,8 @@ typedef struct {
   size_t count, cap;
 } agc_file_ids;
 
+#define AGC_FLUSH_TIMEOUT_MS 30000
+
 typedef struct {
   const agc_program *program;
   FILE *out, *err;
