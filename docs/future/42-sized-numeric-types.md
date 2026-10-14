@@ -633,6 +633,13 @@ Not planned:
 - **A `Byte` alias** (§42.4) and a separate `Bytes` type (§42.10).
 - **An unsigned `Int`.** `Int` stays signed, and `UInt64` covers the range above
   it.
+- **A target-dependent `Int` width.** The owner confirmed that `Int` and
+  `Float` stay 64-bit by default. The VM stores them as C `int64_t` and
+  `double`, which C provides on 32-bit CPUs too, so a program gives the same
+  results on every target. A build option for a 32-bit `Int` would make the
+  same program overflow on one target and not on another, and `.agcb` files
+  would not move between them. The owner noted that a 32-bit option for old
+  architectures could be revisited if one is ever a target; none is planned.
 
 ### 42.17 Questions for the owner
 
