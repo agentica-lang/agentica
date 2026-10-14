@@ -98,6 +98,7 @@ tests/
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit, the connections a crashed or returned task closes (24b)
   vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
   vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full and unread stdout, Ctrl-C through the CLI
+  std-binary-test.rkt   # std/binary on the VM: the fixed output of fixtures/vm/std-binary.agc and the vector count of std-binary-vectors.agc (fixtures/std-binary-vectors.py; references/runtime-notes.md)
   vm-bits-test.rkt      # the spans of the Int and Float bit builtin errors (fixtures/vm/int-shift-*.agc, float-from-bits32-*.agc); the vectors fixture is bits-vectors.agc with fixtures/bits-vectors.py (references/runtime-notes.md)
   vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
   vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, a socket and a pty as stdout, the order of stdout and stderr on one target, notices, a gone reader, a crashed parent
@@ -108,7 +109,7 @@ tests/
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
-  queue.agc http.agc    # std/queue, std/http
+  queue.agc http.agc binary.agc    # std/queue, std/http, std/binary
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/stages.md
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-channel record helpers, shared by unit tests and BDD

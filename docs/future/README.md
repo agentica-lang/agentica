@@ -91,7 +91,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 20 | Crypto module | [`20-crypto.md`](20-crypto.md) | Planned after 7i (roadmap order step 7.5) |
 | 21 | VM layers | [`21-vm-layers.md`](21-vm-layers.md) | Planned (roadmap 7l) |
 | 22 | JIT | [`22-jit.md`](22-jit.md) | Required (roadmap 7m) |
-| 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Planned (roadmap phase 13) |
+| 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Done (roadmap phase 13) |
 | 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14) |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 | 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
@@ -108,6 +108,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 38 | Value representation | [`38-value-representation.md`](38-value-representation.md) | Note, no change planned; revisit with 8d and the benchmarks (roadmap order rows 9 and 14) |
 | 39 | Semantic CLI for agents | [`39-semantic-cli.md`](39-semantic-cli.md) | Planned (roadmap phase 26, order step 7.2b) |
 | 40 | Native code and FFI | [`40-native-code.md`](40-native-code.md) | Idea, not in the roadmap order: the JIT (roadmap 9.1) first; FFI and AOT wait for a need or a measurement |
+| 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; not scheduled |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
 twin ([roadmap

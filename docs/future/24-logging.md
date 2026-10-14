@@ -127,7 +127,8 @@ Log.time_text(ms: Int) -> String
   is the level that is off by default and where building the message costs most.
 - **`Log.time_text(ms)`** turns milliseconds since the Unix epoch into the text
   the log uses (`2026-10-12T10:15:02.345Z`). It is exported because programs
-  need it too, and so that tests can check it with fixed inputs.
+  need it too, and so that tests can check it with fixed inputs. With §41
+  it is `Time.format(Time.from_unix_ms(ms).unwrap!)`, a native call.
 
 **How the level and format are set.** Three flags of the run, read through three
 small builtins:
@@ -176,8 +177,8 @@ System.log_time?() -> Bool       # false under --log-time none
 - **Text:** `TIME LEVEL MESSAGE key=value ...`, for example
   `2026-10-12T10:15:02.345Z INFO request done path=/items status=200`. The time
   is UTC in ISO 8601 with milliseconds, from `Time.now_ms()`; `Log.time_text`
-  turns the number into a date with integer arithmetic only (days since 1970 to
-  year, month and day), so it is plain `std/` code. The level is in capitals.
+  turns the number into that text with `Time.format` (§41), so the log and the
+  `Time` functions share one formatter. The level is in capitals.
   The message is written as it is, unless it is empty, starts or ends with a
   space, or contains `=`, `"`, `\` or a control character (DEL included): then
   it is written in its JSON form (quoted and escaped). So a message with a
