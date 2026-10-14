@@ -2,9 +2,11 @@
 
 (require rackunit
          racket/runtime-path
-         (only-in "vm-diff-common.rkt" vm-file vm-built? compile-file run-process run-timeout))
+         (only-in "vm-diff-common.rkt" vm-file vm-built? compile-file run-process run-timeout fixture-selected? check-fixture-filter))
 
 (define-runtime-path fixtures "fixtures")
+
+(check-fixture-filter)
 
 (define cases
   '(("vm/stack-trace-nested" ())
@@ -42,7 +44,9 @@
   (dynamic-wind
     void
     (lambda ()
-      (for* ([entry (in-list cases)] [style (in-list styles)])
+      (for* ([entry (in-list cases)]
+             #:when (fixture-selected? (path->string (file-name-from-path (first entry))))
+             [style (in-list styles)])
         (match-define (list name extra) entry)
         (match-define (list style-name options) style)
         (proc name style-name (stderr-of name extra options work))))

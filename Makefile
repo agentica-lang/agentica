@@ -5,7 +5,7 @@ unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 
-.PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -63,9 +63,15 @@ test-ci: build vm dist/agentica
 test-distribution: build vm
 	$(RACO) test tests/stdlib-distribution-test.rkt
 
+# make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 goldens: build vm
-	racket tests/vm-diff-common.rkt
-	racket tests/vm-stack-test.rkt
+	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-diff-common.rkt
+	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-stack-test.rkt
+
+# make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
+vm-golden-check: build vm
+	AGENTICA_FIXTURES="$(FIXTURES)" racket tests/vm-diff-common.rkt check
+	AGENTICA_FIXTURES="$(FIXTURES)" $(RACO) test tests/vm-stack-test.rkt
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
 
