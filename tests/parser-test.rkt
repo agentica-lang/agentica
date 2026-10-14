@@ -181,6 +181,7 @@
                    ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
                    ("  n = String.length \"abc\"" "String\\.length\\(")
                    ("  case r\n    ok() -> puts(\"a\")\n  end" "ok\\(_\\)")
+                   ("  case r\n    Await.Done() -> puts(\"a\")\n  end" "Await\\.Done\\(_\\)")
                    ("  while x {\n    puts(\"a\")\n  }" "\"while cond\" \\.\\.\\. \"end\"")
                    ("  if x {\n    puts(\"a\")\n  }" "\"if cond\" \\.\\.\\. \"end\"")
                    ("  for x in xs {\n    puts(\"a\")\n  }" "\"for x in xs\" \\.\\.\\. \"end\""))])

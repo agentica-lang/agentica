@@ -462,11 +462,7 @@ static bool awaits_caller(agc_vm *vm, const agc_task *target) {
   return t != NULL;
 }
 
-static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool result) {
-  agc_task *target = agc_as_task(vm, task);
-  if (target->state != AGC_TASK_DONE && awaits_caller(vm, target))
-    agc_fail(vm, "RUNTIME-TASK-AWAIT-CYCLE", "this await would wait for a task that is waiting for this task", span);
-  if (agc_task_join(vm, target)) return agc_void();
+static agc_value outcome(agc_vm *vm, agc_task *target, uint32_t span, bool result) {
   if (target->crashed) {
     agc_task_observe(vm, target);
     if (result) return agc_result_value(false, agc_string_value(target->crash));
@@ -479,12 +475,71 @@ static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool resu
   return target->result;
 }
 
+static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool result) {
+  agc_task *target = agc_as_task(vm, task);
+  if (target->state != AGC_TASK_DONE && awaits_caller(vm, target))
+    agc_fail(vm, "RUNTIME-TASK-AWAIT-CYCLE", "this await would wait for a task that is waiting for this task", span);
+  if (agc_task_join(vm, target)) return agc_void();
+  return outcome(vm, target, span, result);
+}
+
+static agc_value await_done(agc_vm *vm, agc_value value) {
+  agc_enum *e = agc_new_enum(agc_builtin_variant(vm, "Await", "Done", 1), 1);
+  e->payload[0] = value;
+  return agc_enum_value(e);
+}
+
+static agc_value await_timed_out(agc_vm *vm) {
+  return agc_enum_value(vm->rt->program->variants[agc_builtin_variant(vm, "Await", "TimedOut", 0)].shared);
+}
+
+static void leave_target(agc_task *t) {
+  if (!t->awaiting) return;
+  agc_task_remove(&t->awaiting->waiters, &t->awaiting->waiters_tail, t);
+  t->awaiting = NULL;
+}
+
+static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool result) {
+  agc_task *target = agc_as_task(vm, args[0]);
+  int64_t timeout = agc_as_int(vm, args[1]);
+  if (timeout <= 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", "await timeout must be positive milliseconds", span + 2);
+  agc_task *t = vm->task;
+  leave_target(t);
+  if (target->state == AGC_TASK_DONE && !target->closing) {
+    t->await_deadline = 0;
+    return await_done(vm, outcome(vm, target, span, result));
+  }
+  uint64_t now = agc_io_now(vm);
+  if (!t->await_deadline) {
+    if (awaits_caller(vm, target))
+      agc_fail(vm, "RUNTIME-TASK-AWAIT-CYCLE", "this await would wait for a task that is waiting for this task", span);
+    t->await_deadline = now + (uint64_t)timeout;
+  }
+  if (t->await_deadline <= now) {
+    t->await_deadline = 0;
+    return await_timed_out(vm);
+  }
+  t->awaiting = target;
+  agc_task_enqueue(&target->waiters, &target->waiters_tail, t);
+  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(t->await_deadline - now));
+  agc_task_park(vm, true);
+  return agc_void();
+}
+
 static agc_value builtin_await(agc_vm *vm, agc_value *args, uint32_t span) {
   return await_task(vm, args[0], span, false);
 }
 
 static agc_value builtin_await_result(agc_vm *vm, agc_value *args, uint32_t span) {
   return await_task(vm, args[0], span, true);
+}
+
+static agc_value builtin_await_timeout(agc_vm *vm, agc_value *args, uint32_t span) {
+  return await_timeout(vm, args, span, false);
+}
+
+static agc_value builtin_await_timeout_result(agc_vm *vm, agc_value *args, uint32_t span) {
+  return await_timeout(vm, args, span, true);
 }
 
 static agc_value slept(agc_vm *vm, void *data, agc_value context) {
@@ -524,9 +579,11 @@ static agc_value builtin_unobserved_crash(agc_vm *vm, agc_value *args, uint32_t 
 const agc_builtin agc_task_builtins[] = {
   {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Task.await", 2, builtin_await_timeout, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.sleep", 1, builtin_sleep, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.pending_count", 0, builtin_pending_count, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.await_result", 1, builtin_await_result, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE},
 };

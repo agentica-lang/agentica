@@ -52,6 +52,31 @@
   (define wanted (append named (append-map (lambda (name) (hash-ref builtin-struct-needs name '())) named)))
   (filter (lambda (entry) (member (ir-struct-name entry) wanted)) builtin-structs))
 
+(define builtin-enum-tables
+  (for/list ([entry (in-list builtin-enum-declarations)])
+    (ir-enum (car entry)
+             (for/list ([variant (in-list (cddr entry))])
+               (cons (car variant) (length (cdr variant)))))))
+
+(define (mentions-enum? type name)
+  (cond
+    [(and (pair? type) (eq? (car type) 'Enum) (equal? (cadr type) name)) #t]
+    [(pair? type) (for/or ([part (in-list type)]) (mentions-enum? part name))]
+    [else #f]))
+
+(define (used-builtin-enums types declarations)
+  (define written '())
+  (walk-ast declarations
+            (lambda (node)
+              (when (type-ref? node) (set! written (cons (type-ref-name node) written)))
+              (when (enum-constructor? node) (set! written (cons (enum-constructor-enum-name node) written)))
+              (when (variant-pattern? node) (set! written (cons (variant-pattern-enum-name node) written)))
+              #f))
+  (for/list ([entry (in-list builtin-enum-tables)]
+             #:when (or (member (ir-enum-name entry) written)
+                        (for/or ([type (in-hash-values types)]) (mentions-enum? type (ir-enum-name entry)))))
+    entry))
+
 (define max-list-chunk 255)
 (define max-map-chunk 255)
 
@@ -228,7 +253,8 @@
         (for/list ([declaration (in-list (program-declarations program))]
                    #:when (function-decl? declaration))
           declaration))
-      (define-values (declared-structs enums) (user-tables (program-declarations program)))
+      (define-values (declared-structs declared-enums) (user-tables (program-declarations program)))
+      (define enums (append declared-enums (used-builtin-enums types (program-declarations program))))
       (define structs (append declared-structs (used-builtin-structs types (program-declarations program))))
       (define user-types (make-hash))
       (define struct-info (make-hash))
@@ -670,7 +696,8 @@
       (cond
         [(not (equal? implementation "Task.await")) implementation]
         [(not (type-of expression)) (error 'lower "Task.await has no checked type")]
-        [(result-type? (type-of expression)) "Task.await_result"]
+        [(result-type? (if (= (length arguments) 2) (caddr (type-of expression)) (type-of expression)))
+         "Task.await_result"]
         [else implementation]))
     (define builtin? (and key (member key vm-builtins) #t))
     (when (and entry (not builtin?))

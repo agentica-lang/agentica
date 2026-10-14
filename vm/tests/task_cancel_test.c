@@ -16,12 +16,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 17
+#define MAX_FNS 18
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -31,6 +31,8 @@ typedef struct {
   agc_source source;
   uint32_t line_start[1], line_chars[1];
   agc_value constants[64];
+  agc_enum_def enum_defs[1];
+  agc_variant_def variant_defs[2];
   const agc_builtin *builtins[B_COUNT];
   agc_program program;
 } prog;
@@ -495,6 +497,12 @@ static void build_tasks(prog *p) {
 
   call_reg(p, F_FINISH, B_CLOSE_DONE, 0, 1);
   finish_fn(p, F_FINISH);
+
+  emit(p, F_TIMED, AGC_OP_MOVE, SCRATCH, 0, 1);
+  emit(p, F_TIMED, AGC_OP_CONST, SCRATCH + 1, constant(p, 30000), 1);
+  emit(p, F_TIMED, AGC_OP_CALL_BUILTIN, SCRATCH, B_AWAIT_TIMED, 1);
+  call_int(p, F_TIMED, B_MARK, 993);
+  finish_fn(p, F_TIMED);
 }
 
 static void new_prog(prog *p) {
@@ -505,6 +513,7 @@ static void new_prog(prog *p) {
   p->builtins[B_CH_NEW] = agc_find_builtin((const uint8_t *)"Channel.new", 11, 1);
   p->builtins[B_CH_SEND] = agc_find_builtin((const uint8_t *)"Channel.send", 12, 3);
   p->builtins[B_CH_RECV] = agc_find_builtin((const uint8_t *)"Channel.recv", 12, 2);
+  p->builtins[B_AWAIT_TIMED] = agc_find_builtin((const uint8_t *)"Task.await", 10, 2);
   for (size_t k = 0; k < sizeof test_builtins / sizeof test_builtins[0]; k++) p->builtins[B_MARK + k] = &test_builtins[k];
   for (uint32_t f = 0; f < MAX_FNS; f++) {
     p->fns[f].params = f == F_MAIN ? 0 : 1;
@@ -528,6 +537,14 @@ static void new_prog(prog *p) {
   p->program.builtin_count = B_COUNT;
   p->program.functions = p->fns;
   p->program.function_count = MAX_FNS;
+  p->enum_defs[0] = (agc_enum_def){agc_make_string("Await", 5, 5), 0, 2};
+  p->variant_defs[0] = (agc_variant_def){agc_make_string("Done", 4, 4), 0, 1, NULL};
+  p->variant_defs[1] = (agc_variant_def){agc_make_string("TimedOut", 8, 8), 0, 0, agc_new_enum(1, 0)};
+  p->program.enums = p->enum_defs;
+  p->program.enum_count = 1;
+  p->program.variants = p->variant_defs;
+  p->program.variant_count = 2;
+  p->program.max_arity = 1;
   p->program.entry = F_MAIN;
   build_tasks(p);
 }
@@ -862,6 +879,63 @@ static void test_channel_waiters(void) {
   run_done(&p, check_channel);
 }
 
+static void await_timed(prog *p, uint32_t task, uint32_t into, int64_t ms) {
+  emit(p, F_MAIN, AGC_OP_MOVE, SCRATCH, task, 1);
+  emit(p, F_MAIN, AGC_OP_CONST, SCRATCH + 1, constant(p, ms), 1);
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, SCRATCH, B_AWAIT_TIMED, 1);
+  emit(p, F_MAIN, AGC_OP_MOVE, into, SCRATCH, 1);
+}
+
+static void check_timed_cancel(agc_vm *vm, int64_t n) {
+  agc_task *sleeper = reg_task(vm, 0), *waiter = reg_task(vm, 2);
+  if (n == 1) {
+    assert(sleeper->waiters == waiter && waiter->awaiting == sleeper && waiter->state == AGC_TASK_PARKED);
+    assert(waiter->parked && waiter->await_deadline);
+  } else {
+    assert(!sleeper->waiters && !sleeper->waiters_tail && cancelled(waiter) && !waiter->awaiting && !waiter->parked);
+    assert(sleeper->state == AGC_TASK_PARKED && mark_count == 1 && marks[0] == 5);
+  }
+}
+
+static void test_timed_await_cancel(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_SLEEPER, 5);
+  spawn_with(&p, F_MAIN, 2, F_TIMED, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  run_done(&p, check_timed_cancel);
+}
+
+static void check_timed_end(agc_vm *vm, int64_t n) {
+  agc_task *sleeper = reg_task(vm, 0), *quick = reg_task(vm, 2);
+  const agc_enum *outcome = agc_as_enum(vm, vm->main->regs[n == 1 ? 4 : 6]);
+  assert(!vm->main->awaiting && !vm->main->await_deadline && !vm->main->parked);
+  if (n == 1) {
+    assert(outcome->variant == 1 && outcome->n == 0);
+    assert(!sleeper->waiters && !sleeper->waiters_tail && sleeper->state == AGC_TASK_PARKED);
+  } else {
+    assert(outcome->variant == 0 && outcome->n == 1 && agc_as_int(vm, outcome->payload[0]) == 6);
+    assert(quick->state == AGC_TASK_DONE && !quick->waiters && mark_count == 2 && marks[1] == 6);
+  }
+}
+
+static void test_timed_await_ends(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_SLEEPER, 5);
+  spawn(&p, F_MAIN, 2, F_MARK, 6);
+  await_timed(&p, 0, 4, 20);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  await_timed(&p, 2, 6, 30000);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  run_done(&p, check_timed_end);
+}
+
 static void check_output(agc_vm *vm, int64_t n) {
   agc_output *o = &vm->rt->out;
   agc_task *first = reg_task(vm, 0), *second = reg_task(vm, 2);
@@ -1028,6 +1102,8 @@ int main(void) {
   test_children_move();
   test_timer_fired_then_cancel();
   test_channel_waiters();
+  test_timed_await_cancel();
+  test_timed_await_ends();
   signal(SIGPIPE, SIG_IGN);
   test_output_waiter();
   test_pool();

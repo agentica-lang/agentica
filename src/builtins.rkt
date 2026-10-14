@@ -202,6 +202,12 @@
     (when (equal? (builtin-name entry) "ok")
       (set-builtin-alternatives! entry
         (list (builtin "ok" '() '(Result Void) 'ok-void "ok" '() "Construct successful completion."))))
+    (when (equal? (builtin-name entry) "Task.await")
+      (set-builtin-alternatives!
+       entry
+       (list (builtin "Task.await" '((task (Task R)) (timeout_ms Int))
+                      '(Await R) 'task-await-timeout "Task.await" '(concurrency)
+                      "Wait for a task for at most timeout_ms; Await.Done(value) with its cached result, or Await.TimedOut, and the task keeps running; timeout_ms must be positive."))))
     (when (equal? (builtin-name entry) "Map.get")
       (set-builtin-alternatives!
        entry

@@ -76,7 +76,7 @@ end
 
 Common Ruby forms that work: `s.length`, `s.strip`, `s.split(" ")`, `s.upcase`, `s.include?("x")`, `s.to_i` (a Result), `s.to_i!`, `n.to_s`, `n.to_f`, `xs.size`, `xs.push(v)`, `xs.sort`, `xs.join(",")` (a `List[String]`), `m.keys`, `m.put(k, v)`, `m.get(k)` (a Result), `(1..3).to_a`, `n.times do |i| ... end`. The full list is in `references/builtins.md`.
 
-Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`, `Map[K, V]` (K is `Int` or `String`), `Result[T]`, `Range`, `Json`, `Fn[A, ..., R]`, `Task[R]`, `Channel[T]`, `Process`, and your own `struct` and `enum` names. Type names start with an uppercase letter; variables, functions, and fields start with a lowercase letter or `_`. Details: `references/language.md`.
+Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`, `Map[K, V]` (K is `Int` or `String`), `Result[T]`, `Range`, `Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Process`, and your own `struct` and `enum` names. Type names start with an uppercase letter; variables, functions, and fields start with a lowercase letter or `_`. Details: `references/language.md`.
 
 ## Rules agents break
 
@@ -93,6 +93,7 @@ Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]
 - `case` on Int, Float, String, Bool, or Nil needs a final `_` arm. On an enum, list every variant or add `_`.
 - `for` takes a List or a Range. `0...n` excludes n; `1..n` includes it. There is no `range(n)`.
 - Result: `ok(v)` and `error(msg)` need an expected Result type: `r: Result[Int] = error("bad")` (a bare `r = error("bad")` is `CHECK-RESULT-TYPE`). `try` needs a Result operand (`try text.to_i`, not `try text.to_i!`) and a Result-returning function. `"x".to_i` is a Result, not `0`.
+- A timed `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(value)` or `Await.TimedOut`), not `R`; `timeout_ms` must be above 0, and the timeout does not cancel the task.
 - `Void` is only a function result or a completion. `v = puts("x")` is `CHECK-VOID-VALUE`.
 - Functions, tasks, and handles have no `to_s`, so they cannot be printed or interpolated. `nil.to_s` is `"nil"`. Write `(-5).to_s`, since `-5.to_s` is an error.
 - Use `IO.flush()` after each stdio protocol message, and send logs with `IO.warn()` (stderr).
@@ -113,7 +114,7 @@ Read only the files the task needs:
 | [references/json.md](references/json.md) | reads or writes JSON |
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths |
 | [references/processes.md](references/processes.md) | starts other programs and talks to them (`Process`) |
-| [references/tasks.md](references/tasks.md) | runs work concurrently, passes values between tasks, or uses `Channel` |
+| [references/tasks.md](references/tasks.md) | runs work concurrently, waits for a task with a timeout, passes values between tasks, or uses `Channel` |
 | [references/network.md](references/network.md) | uses TCP, TLS, or the HTTP client or server |
 | [references/bdd.md](references/bdd.md) | writes `.feature` specifications or a BDD step program (`agentica test`) |
 | [references/testing.md](references/testing.md) | writes unit tests (`Test.test`, `Test.eq`, `Test.run`) |

@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 100,
+  "stdout": [
+    "self: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/await-timeout-cycle.agc:3:8: this await would wait for a task that is waiting for this task",
+    "a: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/await-timeout-cycle.agc:11:10: this await would wait for a task that is waiting for this task",
+    "b: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/await-timeout-cycle.agc:11:10: this await would wait for a task that is waiting for this task",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-TASK-AWAIT-CYCLE\",\"file\":\"@fixtures/vm/await-timeout-cycle.agc\",\"message\":\"this await would wait for a task that is waiting for this task\",\"range\":{\"end\":{\"column\":32,\"line\":3},\"start\":{\"column\":8,\"line\":3}},\"task\":true}",
+    "{\"code\":\"RUNTIME-TASK-AWAIT-CYCLE\",\"file\":\"@fixtures/vm/await-timeout-cycle.agc\",\"message\":\"this await would wait for a task that is waiting for this task\",\"range\":{\"end\":{\"column\":28,\"line\":11},\"start\":{\"column\":10,\"line\":11}},\"task\":true}",
+    ""
+  ]
+}

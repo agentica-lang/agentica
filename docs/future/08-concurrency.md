@@ -19,7 +19,7 @@ A loop can alternate between requests and polling with sync/timeout on child out
 
 - Whether a concrete application needs `Process.poll_line` stays open.
 - Whether measured CPU workloads justify parallel thread pools or places; default no. On the VM, CPU parallelism is the multicore schedulers (`docs/vm/10-io-multicore.md` §10.2.3, gated at roadmap order step 11), and `Task.map` (§27.1) is the form that would use it.
-- A timeout on `Task.await` is planned in [section 27.3](27-iteration-and-concurrency.md#273-taskawait-with-a-timeout): `Task.await(task, timeout_ms) -> Result[T]`, prelude code over channels, which does not cancel the task.
+- A timeout on `Task.await` is built ([section 27.3](27-iteration-and-concurrency.md#273-taskawait-with-a-timeout)): `Task.await(task, timeout_ms) -> Await[T]`, a C builtin that returns `Await.Done(value)` or `Await.TimedOut` and does not cancel the task.
 - A public `Task.cancel` stays open: §27 cancels only the timed-out items of `Task.map`, and a cancel call would be a second way to stop work. Returning from the entrypoint still cancels pending work.
 - Handles opened by a cancelled task stay open until the end of the run (§27.1). For long-running programs, such as servers, whether the VM should close them when the task is cancelled is open. Until then the skill teaches: open handles inside a `Task.map` item and close them with the block forms (`File.open` with a block, §25.9, once 15i lands; until then, `File.close` on every path), do not share handles across items, and give a shared handle to one owner task.
 
