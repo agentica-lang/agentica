@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 137,
+  "stdout": [
+    "capacity 0: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
+    "capacity 1: ok 1",
+    "capacity 1048576: ok 1048576",
+    "capacity 1048577: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
+    "capacity -5: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/channel-invalid-arguments.agc:2:34: channel capacity must be between 1 and 1048576",
+    "send -1: task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/channel-invalid-arguments.agc:8:14: channel timeout must be nonnegative",
+    "recv -1: task crashed: RUNTIME-INVALID-DURATION at @fixtures/vm/channel-invalid-arguments.agc:14:11: channel timeout must be nonnegative",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel capacity must be between 1 and 1048576\",\"range\":{\"end\":{\"column\":42,\"line\":2},\"start\":{\"column\":34,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel timeout must be nonnegative\",\"range\":{\"end\":{\"column\":16,\"line\":8},\"start\":{\"column\":14,\"line\":8}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/channel-invalid-arguments.agc\",\"message\":\"channel timeout must be nonnegative\",\"range\":{\"end\":{\"column\":13,\"line\":14},\"start\":{\"column\":11,\"line\":14}},\"task\":true}",
+    ""
+  ]
+}

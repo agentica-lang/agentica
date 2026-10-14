@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 134,
+  "stdout": [
+    "self: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/task-await-cycle.agc:3:10: this await would wait for a task that is waiting for this task",
+    "a: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/task-await-cycle.agc:3:10: this await would wait for a task that is waiting for this task",
+    "b: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/task-await-cycle.agc:3:10: this await would wait for a task that is waiting for this task",
+    "closure: task crashed: RUNTIME-TASK-AWAIT-CYCLE at @fixtures/vm/task-await-cycle.agc:9:5: this await would wait for a task that is waiting for this task",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-TASK-AWAIT-CYCLE\",\"file\":\"@fixtures/vm/task-await-cycle.agc\",\"message\":\"this await would wait for a task that is waiting for this task\",\"range\":{\"end\":{\"column\":28,\"line\":3},\"start\":{\"column\":10,\"line\":3}},\"task\":true}",
+    "{\"code\":\"RUNTIME-TASK-AWAIT-CYCLE\",\"file\":\"@fixtures/vm/task-await-cycle.agc\",\"message\":\"this await would wait for a task that is waiting for this task\",\"range\":{\"end\":{\"column\":28,\"line\":3},\"start\":{\"column\":10,\"line\":3}},\"task\":true}",
+    "{\"code\":\"RUNTIME-TASK-AWAIT-CYCLE\",\"file\":\"@fixtures/vm/task-await-cycle.agc\",\"message\":\"this await would wait for a task that is waiting for this task\",\"range\":{\"end\":{\"column\":23,\"line\":9},\"start\":{\"column\":5,\"line\":9}},\"task\":true}",
+    ""
+  ]
+}

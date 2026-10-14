@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 378,
+  "stdout": [
+    "channel: closed",
+    "{\"a\": 60, \"c\": 100}",
+    "[\"b has nothing\"]",
+    ""
+  ],
+  "stderr": []
+}

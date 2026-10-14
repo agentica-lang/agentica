@@ -19,6 +19,7 @@ The grammar determines what can be written. The rules below determine which prog
 | `Range` | Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it |
 | `Fn[A, ..., R]` | Function value; the last type is its return, the others are its parameters |
 | `Task[R]` | Opaque lightweight task with one result type |
+| `Channel[T]` | Opaque bounded queue of `T` values that tasks send into and receive from |
 | `Enum[T, ...]` | User-declared nominal sum type |
 | Declared struct | Nominal type with typed, immutable fields |
 

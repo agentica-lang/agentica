@@ -15,12 +15,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 12
+#define MAX_FNS 13
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_DROP, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_DROP, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_DROP };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_DROP, F_RECV };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -418,6 +418,12 @@ static void build_tasks(prog *p) {
   call_reg(p, F_DROP, B_DROP, 0, 1);
   call_int(p, F_DROP, B_MARK, 995);
   finish_fn(p, F_DROP);
+
+  emit(p, F_RECV, AGC_OP_MOVE, 1, 0, 1);
+  emit(p, F_RECV, AGC_OP_CONST, 2, constant(p, 30000), 1);
+  emit(p, F_RECV, AGC_OP_CALL_BUILTIN, 1, B_CH_RECV, 1);
+  call_int(p, F_RECV, B_MARK, 1);
+  emit(p, F_RECV, AGC_OP_RETURN, 1, 0, 1);
 }
 
 static void new_prog(prog *p) {
@@ -425,6 +431,9 @@ static void new_prog(prog *p) {
   p->builtins[B_SPAWN] = agc_find_builtin((const uint8_t *)"Task.spawn", 10, 2);
   p->builtins[B_AWAIT] = agc_find_builtin((const uint8_t *)"Task.await", 10, 1);
   p->builtins[B_SLEEP] = agc_find_builtin((const uint8_t *)"Task.sleep", 10, 1);
+  p->builtins[B_CH_NEW] = agc_find_builtin((const uint8_t *)"Channel.new", 11, 1);
+  p->builtins[B_CH_SEND] = agc_find_builtin((const uint8_t *)"Channel.send", 12, 3);
+  p->builtins[B_CH_RECV] = agc_find_builtin((const uint8_t *)"Channel.recv", 12, 2);
   for (size_t k = 0; k < sizeof test_builtins / sizeof test_builtins[0]; k++) p->builtins[B_MARK + k] = &test_builtins[k];
   for (uint32_t f = 0; f < MAX_FNS; f++) {
     p->fns[f].params = f == F_MAIN ? 0 : 1;
@@ -696,6 +705,41 @@ static void test_children_move(void) {
   assert(mark_count == 1 && marks[0] == 8);
 }
 
+static void check_channel(agc_vm *vm, int64_t n) {
+  agc_task *a = reg_task(vm, 2), *b = reg_task(vm, 4);
+  if (n == 1) {
+    assert(a->state == AGC_TASK_PARKED && a->parked && a->channel.channel && !a->channel.reserved);
+    assert(b->state == AGC_TASK_PARKED && b->parked && b->channel.channel == a->channel.channel);
+  } else if (n == 2) {
+    assert(cancelled(a) && !a->parked && !a->channel.channel);
+    assert(b->state == AGC_TASK_READY && b->channel.reserved && mark_count == 0);
+  } else {
+    const agc_result *r = agc_as_result(vm, b->result);
+    assert(b->state == AGC_TASK_DONE && !b->cancelled && r->ok && agc_as_int(vm, r->value) == 9);
+    assert(mark_count == 1 && marks[0] == 1);
+  }
+}
+
+static void test_channel_waiters(void) {
+  prog p;
+  new_prog(&p);
+  call_int(&p, F_MAIN, B_CH_NEW, 2);
+  emit(&p, F_MAIN, AGC_OP_MOVE, 0, SCRATCH, 1);
+  spawn_with(&p, F_MAIN, 2, F_RECV, 0);
+  spawn_with(&p, F_MAIN, 4, F_RECV, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  emit(&p, F_MAIN, AGC_OP_MOVE, 6, 0, 1);
+  emit(&p, F_MAIN, AGC_OP_CONST, 7, constant(&p, 9), 1);
+  emit(&p, F_MAIN, AGC_OP_CONST, 8, constant(&p, 0), 1);
+  emit(&p, F_MAIN, AGC_OP_CALL_BUILTIN, 6, B_CH_SEND, 1);
+  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 3);
+  run_done(&p, check_channel);
+}
+
 static void check_pool(agc_vm *vm, int64_t n) {
   (void)n;
   accept_all();
@@ -808,6 +852,7 @@ int main(void) {
   test_self_drop();
   test_children_move();
   test_timer_fired_then_cancel();
+  test_channel_waiters();
   test_pool();
   assert(pipe(gate) == 0);
   test_cancel_pool_phase();

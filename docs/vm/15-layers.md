@@ -14,7 +14,7 @@ Line numbers in this section are from the tree after the moves of §15.7 item 1 
 
 | Layer | Files | May use |
 |---|---|---|
-| **Core** | `value.c`, `map.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `loop.c`, `input.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
+| **Core** | `value.c`, `map.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `channel.c`, `loop.c`, `input.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
 | **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `stream.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
 | **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
 | **Driver** (not a layer: it wires them) | `main.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
@@ -24,6 +24,7 @@ Line numbers in this section are from the tree after the moves of §15.7 item 1 
 Notes on the choices:
 
 - **`unicode_data.c` is core, not an adapter.** It is generated data, not a wrapper of a library, and `text.c` (core) prints strings with its `agc_write_*` ranges. Its case tables (used by `strings.c`) are data too; all its tables are declared in `value.h`.
+- **`channel.c` is core.** A channel's waiters are a list the scheduler owns, like stdin's, and `agc_task_cancel` takes a task out of it through `agc_channel_leave` (`task.c`), so the code cannot sit in a service the core may not name. Its builtin table is declared in `core.h`, as `agc_task_builtins` is.
 - **`input.c` and `builtins.c` are core.** stdin's waiters are a list the scheduler owns (§14.1), and `agc_task_cancel` takes a task out of it (`task.c:129`). `builtins.c` holds the `IO`, `System`, `List`, `Map`, `Result` and `Range` builtins over core values, and `agc_find_builtin`, which the loader calls.
 - **`stream.c` is a service.** It is the kit the stream services share (`agc_inbuf_*`, `agc_stream_lock`, `agc_stream_write`); only `process.c`, `tcp.c` and `http_client.c` use it.
 - **`http_body.c` is an adapter, with `http_pico.c`.** `http_parse.h` is a plain protocol header with no VM values; `http_pico.c` calls `http_body.c`'s syntax helpers (`agc_http_token`, `agc_http_framing`, ...), so the two are one unit. `http_body.c` uses `agc_size_mul` and `agc_out_of_memory` (`http_body.c:142-146`), so an out-of-memory body still ends with exit 70 (§6.3).

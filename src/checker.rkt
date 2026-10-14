@@ -10,7 +10,7 @@
 (define int-max (sub1 (expt 2 63)))
 
 (define reserved-type-names
-  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "Time" "Random" "Range" "Test")
+  (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "Channel" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "Time" "Random" "Range" "Test")
           (map symbol->string opaque-types) (hash-keys builtin-records)))
 
 (define (result-type? type)
@@ -24,6 +24,9 @@
 
 (define (list-type? type)
   (and (pair? type) (eq? (car type) 'List)))
+
+(define (channel-type? type)
+  (and (pair? type) (eq? (car type) 'Channel)))
 
 (define (map-type? type)
   (and (pair? type) (eq? (car type) 'Map)))
@@ -39,7 +42,7 @@
 
 (define method-modules
   (hasheq 'String "String" 'List "List" 'Map "Map" 'Float "Float" 'Result "Result" 'Json "JSON"
-          'Int "Int" 'Range "Range"))
+          'Int "Int" 'Range "Range" 'Channel "Channel"))
 
 (define method-aliases
   (hash '(String . "size") "String.length"
@@ -90,7 +93,7 @@
   (if (pair? type) (car type) type))
 
 (define (receiver-kind type)
-  (and (memq (type-head type) '(String List Map Float Result Json Int Range))
+  (and (memq (type-head type) '(String List Map Float Result Json Int Range Channel))
        (type-head type)))
 
 (define (catalog-method kind name)
@@ -146,6 +149,10 @@
         "break" "break is a statement on its own line inside while or for"
         "continue" "write next, on its own line, to skip to the next iteration"
         "next" "next is a statement on its own line inside while or for"
+        "Enumerator.new" "write the producer as a task that sends into a channel: ch: Channel[Int] = Channel.new(8), Task.spawn(&produce, ch), then ch.recv(timeout_ms)"
+        "Fiber.new" "write the producer as a task that sends into a channel: ch: Channel[Int] = Channel.new(8), Task.spawn(&produce, ch), then ch.recv(timeout_ms)"
+        "Mutex.new" "keep the state in one owner task that receives messages on a Channel, and send it requests"
+        "SizedQueue.new" "use Channel.new(capacity): ch: Channel[Int] = Channel.new(8)"
         "Hash.new" "use a map literal with a type: m: Map[String, Int] = {}"
         "Array.new" "use a list literal with a type: xs: List[Int] = []"
         "Request" "a std/http handler takes an HttpRequest: def handle(request: HttpRequest) -> Result[HttpResponse]"
@@ -160,6 +167,8 @@
 (define (foreign-method-help kind name)
   (cond
     [(equal? name "nil?") "values are never nil unless their type is Nil; compare with nil: x == nil"]
+    [(and (equal? name "lazy") (memq kind '(List Range)))
+     "lists are eager; read a source that is too big for a list in a while loop"]
     [else
      (define target
        (for/first ([candidate (in-list (hash-ref foreign-methods name '()))]
@@ -316,6 +325,8 @@
          (list 'Result (resolve-type (car arguments) #t))]
         [(and (string=? name "Task") (= (length arguments) 1))
          (list 'Task (resolve-type (car arguments) #t))]
+        [(and (string=? name "Channel") (= (length arguments) 1))
+         (list 'Channel (resolve-type (car arguments)))]
         [(and (string=? name "Fn") (pair? arguments))
          (cons 'Fn (append (map resolve-type (drop-right arguments 1))
                           (list (resolve-type (last arguments) #t))))]
@@ -345,7 +356,7 @@
                #:help (or (hash-ref foreign-names name #f)
                           (did-you-mean name
                                     (append (hash-keys structs) (hash-keys enums))
-                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task" "Range")
+                                    #:shared (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "Json" "Fn" "Task" "Channel" "Range")
                                                      (map symbol->string opaque-types)))))]))
 
     ;; Scopes ---------------------------------------------------------------
@@ -782,6 +793,10 @@
         (define type (check-expression (car arguments) context))
         (unless (list-type? type) (mismatch! '(List T) type (node-span (car arguments))))
         type)
+      (define (channel-argument)
+        (define type (check-expression (car arguments) #f))
+        (unless (channel-type? type) (mismatch! '(Channel T) type (node-span (car arguments))))
+        type)
       (define (empty-list? argument)
         (and (list-lit? argument) (null? (list-lit-elements argument))))
       (define (map-context value-type)
@@ -804,6 +819,25 @@
          (unless (and (pair? target) (eq? (car target) 'Task))
            (bail 'CHECK-TYPE-MISMATCH "Task.await requires a task" (node-span (car arguments))))
          (cadr target)]
+        [(channel-new)
+         (check-expression (car arguments) 'Int)
+         (unless expected
+           (bail 'CHECK-EXPECTED-TYPE "a channel needs an expected type" span
+                 #:help "annotate the variable, for example ch: Channel[Int] = Channel.new(8)"))
+         (unless (channel-type? expected) (mismatch! expected '(Channel T) span))
+         expected]
+        [(channel-send)
+         (define target (channel-argument))
+         (check-expression (cadr arguments) (cadr target))
+         (check-expression (caddr arguments) 'Int)
+         '(Result Void)]
+        [(channel-recv)
+         (define target (channel-argument))
+         (check-expression (cadr arguments) 'Int)
+         (list 'Result (cadr target))]
+        [(channel-target)
+         (channel-argument)
+         (builtin-result selected)]
         [(map-has)
          (define target (map-argument))
          (check-expression (cadr arguments) (cadr target))
@@ -1043,6 +1077,8 @@
               (format "unknown function \"~a\"" (display-name name))
               (call-span expression)
               #:help (or (hash-ref foreign-names name #f)
+                         (and (string-prefix? name "Agent.")
+                              "return values from tasks and combine them with reduce, or keep the state in one task that receives on a Channel")
                          (and (string-prefix? name "BDD.") "import \"std/bdd\" as BDD")
                          (and (string-prefix? name "HTTP.") "import \"std/http\" as HTTP")
                          (did-you-mean name (hash-keys functions) #:shared (public-builtin-names)))))

@@ -57,6 +57,13 @@ typedef struct {
   agc_native *native;
 } agc_frame;
 
+typedef struct {
+  agc_channel *channel;
+  agc_value value;
+  uint64_t deadline, seq;
+  bool sending, reserved;
+} agc_channel_wait;
+
 typedef enum { AGC_DONE, AGC_FAILED, AGC_EXITED } agc_outcome_kind;
 
 typedef enum { AGC_STYLE_PLAIN, AGC_STYLE_AI, AGC_STYLE_JSON } agc_style;
@@ -154,6 +161,7 @@ struct agc_task {
   agc_task *parent, *children, *prev_sibling, *next_sibling;
   agc_task *awaiting;
   agc_resource *lock_wait;
+  agc_channel_wait channel;
 };
 
 struct agc_vm {
@@ -195,6 +203,7 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 void agc_io_ready(agc_io_job *j);
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data);
+extern const agc_io_kind agc_wait_io;
 #ifdef __linux__
 void agc_io_block_stop(sigset_t *saved);
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
