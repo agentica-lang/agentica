@@ -98,6 +98,7 @@ tests/
   vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full and unread stdout, Ctrl-C through the CLI
   vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
   vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, a socket and a pty as stdout, the order of stdout and stderr on one target, notices, a gone reader, a crashed parent
+  vm-file-lines-test.rkt # File.each_line: a 10 MB file streamed in buffer-sized reads, the step limit, a FIFO fed in pieces, a stall timeout, closing a read FIFO with read-ahead, a crash while parked (fixtures/lines-peer.py)
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")

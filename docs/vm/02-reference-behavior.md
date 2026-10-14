@@ -84,10 +84,11 @@ Every failure is an error value. The checks run in this order:
 - The mode, then the handle state: a closed handle, or a handle that is not readable or writable, fails. `File.close` of a closed handle does no I/O.
 - A path must be a nonempty String without NUL. A relative path is completed with the current directory, read once at startup, and runs of `/` collapse.
 - Output is buffered, 4096 bytes per handle. A write whose bytes fit with what is pending (pending + n <= 4096) only goes into the buffer. Otherwise pending and new bytes are written together. `File.flush` and `File.close` write the buffer, and the end of the run writes handles left open. A write error shows at the call that writes the buffer. A handle closed by a timeout drops its buffer.
-- Kinds follow `stat` (symlinks followed): a directory is `directory`, anything else `file`. Reads need a regular file. Writes refuse a directory and create a missing file.
+- Kinds follow `stat` (symlinks followed): a directory is `directory`, anything else `file`. Reads need an existing path that is not a directory; a FIFO, pipe or device that can wait is read on the loop (10.2.2). Writes refuse a directory and create a missing file.
 - `File.read_text` refuses a file above 1 MiB by its size and decodes strictly. `File.read_line` strips LF or CRLF and fails after 1 MiB without a LF. `File.read_bytes` reads until `max_bytes` or EOF.
 - `File.stat` of a missing path gives an error without a kind. A directory's size is 0. `modified_seconds` is the modification time in seconds.
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by code point. `Dir.mkdir` creates missing parents with mode 0777; an existing directory or file is not an error.
 - `Path.join` checks every part, then refuses an absolute later part. `Path.resolve` completes the path, drops `.`, pops `..` (never above `/`) and collapses `/`. The result ends in `/` when the input did, or ended in `.` or `..`.
 - After a timeout on an active handle operation the handle is closed: later operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2). `File.read_text` of a pipe reads to end of file.
+- `File.each_line` accepts a line of at most `buffer_bytes` bytes counting its terminator, and a last line without a terminator of exactly `buffer_bytes` bytes. It checks the buffer range first (`RUNTIME-INVALID-COUNT` at the argument), then the timeout, then the path.

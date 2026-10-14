@@ -166,6 +166,7 @@ One way for each job:
 | Keep a running total, or build a value in a loop | `reduce`, or a `for` or `while` loop that reassigns a local variable |
 | Long-lived workers, producer and consumer, a flow of unknown length, results in the order they end | tasks and a `Channel` |
 | State that several tasks update | one owner task that receives messages on a channel |
+| Each line of a big file, in bounded memory | `File.each_line` |
 | An endless sequence, or a source too big for a list | a `while` loop |
 
 A channel wait holds a timer, so tasks that wait for each other through channels get timeout errors, not a hang. A file or socket sent over a channel stays owned by the task that opened it: it closes when that task crashes or the run ends, so the worker that uses it should close it.

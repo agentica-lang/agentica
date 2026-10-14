@@ -75,6 +75,33 @@
       (check-equal? (check-code (format "struct ~a\n  a: Int\nend\n\ndef main() -> Void\nend\n\n" name))
                     'CHECK-REDEFINED-NAME)))
 
+  (test-case "File.each_line takes a block that returns Result[Void], and try works in it"
+    (define (each body)
+      (main-with (string-append "  r = File.each_line(\"a.txt\", 4096, 1000) do |line|\n" body "\n  end\n  puts(r)")))
+    (define (problem body)
+      (define found (check-text (each body)))
+      (list (diagnostic-code found)
+            (source-position-line (source-span-start (diagnostic-span found)))
+            (source-position-column (source-span-start (diagnostic-span found)))))
+    (check-ok (each "    puts(line)\n    ok()"))
+    (check-ok (each "    n = try String.to_int(line)\n    puts(n)\n    ok()"))
+    (check-ok (each "    if line == \"\"\n      return error(\"empty\")\n    end\n    try File.write_text(\"b.txt\", line, 1000)\n    ok()"))
+    (check-ok (string-append "def show(line: String) -> Result[Void]\n  puts(line)\n  return ok()\nend\n\n"
+                             (main-with "  r: Result[Void] = File.each_line(\"a\", 1024, 10, &show)\n  puts(r)")))
+    (check-equal? (problem "    puts(line)") '(CHECK-TYPE-MISMATCH 3 5))
+    (check-regexp-match #rx"ok\\(\\)" (diagnostic-help (check-text (each "    puts(line)"))))
+    (check-equal? (problem "    line") '(CHECK-TYPE-MISMATCH 3 5))
+    (check-equal? (problem "    ok(1)") '(CHECK-TYPE-MISMATCH 3 8))
+    (check-equal? (check-code (main-with "  [1].each do |x|\n    n = try String.to_int(\"1\")\n    puts(n)\n  end")) 'CHECK-TRY-CONTEXT)
+    (check-equal? (check-code (main-with "  x = try File.each_line(\"a\", 1024, 10) do |l|\n    ok()\n  end")) 'CHECK-TRY-CONTEXT)
+    (check-equal? (check-code (main-with "  File.each_line(\"a\", \"4096\", 10) do |l|\n    ok()\n  end")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  File.each_line(\"a\", 4096, 10) do |a, b|\n    ok()\n  end")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  File.each_line(\"a\", 4096, 10) do |n: Int|\n    ok()\n  end")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  File.each_line(\"a\", 4096, 10)")) 'CHECK-ARITY)
+    (check-equal? (check-code (main-with "  n: Int = File.each_line(\"a\", 4096, 10) do |l|\n    ok()\n  end")) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (check-code (main-with "  t = Test.test(\"x\") do\n    puts(\"a\")\n  end")) 'CHECK-TYPE-MISMATCH)
+    (check-regexp-match #rx"ok\\(\\.\\.\\.\\)" (diagnostic-help (check-text (main-with "  x: Result[Int] = 5\n  puts(x)")))))
+
   (test-case "JSON builders and schemas enforce their input contracts"
     (check-ok (main-with "  object = JSON.object({})\n  array = JSON.array([])"))
     (for ([body '("  x = JSON.object({\"a\": 1})" "  x = JSON.array([false])"

@@ -4,7 +4,9 @@
 are opaque, belong to one evaluation, and close when it ends. The interpreter
 uses the host user's filesystem permissions; there is no filesystem permission
 flag. File operations accept regular files and symlinks to regular files, and
-reject directories and special files.
+also FIFOs, pipes and devices that can wait (their calls wait on the event
+loop); they reject directories, a missing path for a read, and a path that
+reopens a pipe the VM made for itself.
 
 ```text
 File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]
@@ -14,6 +16,7 @@ File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
 File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void]
 File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
+File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
@@ -25,15 +28,28 @@ Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
 ```
 
-Modes are `read`, `write` and `append`: read requires an existing regular
-file; write creates or truncates; append creates or appends. Text is strict
-UTF-8. Whole-text helpers and each stream read/write are limited to 1 MiB;
-`read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF. `read_line`
-removes LF or CRLF, accepts a final unterminated line, and returns an error
-for EOF before any line or invalid UTF-8. Byte values are 0..255. Close
-flushes output and is idempotent. Explicit flush and close return Results.
-`File.close` on a handle that is already closing (its owner task crashed)
-returns `ok()` at once; the run still waits for that close's flush.
+Modes are `read`, `write` and `append`: read requires an existing path that is
+not a directory; write creates or truncates; append creates or appends. Text
+is strict UTF-8. Whole-text helpers and each stream read/write are limited to
+1 MiB; `read_bytes` takes 1..1048576 bytes and returns `ok([])` at EOF.
+`read_line` removes LF or CRLF, accepts a final unterminated line, and returns
+an error for EOF before any line or invalid UTF-8. Byte values are 0..255.
+Close flushes output and is idempotent. Explicit flush and close return
+Results. `File.close` on a handle that is already closing (its owner task
+crashed) returns `ok()` at once; the run still waits for that close's flush.
+
+`File.each_line` opens `path`, reads it one line at a time and calls the block
+with each line, never reading the whole file. The block returns
+`Result[Void]`: `ok()` goes on, an `error(...)` stops and becomes the result;
+`try` and `return error(...)` work in it. A line is at most `buffer_bytes`
+bytes counting its terminator (1024..16777216, else `RUNTIME-INVALID-COUNT` at
+that argument, before the file opens); a longer line gives
+`error("filesystem: line exceeds buffer_bytes")`. `timeout_ms` bounds each
+read, the open and the close, not the whole call, and must be positive (else
+an error Result). LF and CRLF are removed, a final unterminated line is
+passed, invalid UTF-8 ends the call with an error, and the file is closed on
+every return path. Pipes, FIFOs and devices that can wait are read on the
+event loop.
 
 Timeouts are positive milliseconds and include the serialized handle lock
 wait. Timing out active I/O closes that handle (later calls say the handle is

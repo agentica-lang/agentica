@@ -60,6 +60,7 @@
                     ("File.write_bytes" ((handle FileHandle) (bytes (List Int)) (timeout_ms Int)) (Result Void) #f "File.write_bytes" (filesystem) "Write bytes 0..255, at most 1 MiB per call.")
                     ("File.flush" ((handle FileHandle) (timeout_ms Int)) (Result Void) #f "File.flush" (filesystem) "Flush pending file output.")
                     ("File.close" ((handle FileHandle) (timeout_ms Int)) (Result Void) #f "File.close" (filesystem) "Flush and close a file handle idempotently.")
+                    ("File.each_line" ((path String) (buffer_bytes Int) (timeout_ms Int) (f (Fn String (Result Void)))) (Result Void) #f "File.each_line" (filesystem) "Call the block once for each line of a file, in order, reading blocks of buffer_bytes (1024 to 16777216, also the longest line); the block returns Result[Void] and an error stops the call; VM only.")
                     ("File.read_text" ((path String) (timeout_ms Int)) (Result String) #f "File.read_text" (filesystem) "Read and strictly decode at most 1 MiB of UTF-8 text.")
                     ("File.write_text" ((path String) (text String) (timeout_ms Int)) (Result Void) #f "File.write_text" (filesystem) "Overwrite a file with at most 1 MiB of UTF-8 text.")
                     ("File.append_text" ((path String) (text String) (timeout_ms Int)) (Result Void) #f "File.append_text" (filesystem) "Append at most 1 MiB of UTF-8 text.")

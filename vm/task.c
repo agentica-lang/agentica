@@ -67,6 +67,8 @@ void agc_task_park(agc_vm *vm, bool retry) {
   vm->task->retry = retry;
 }
 
+void agc_task_stepper(agc_vm *vm, agc_stepper *stepper) { vm->task->stepper = stepper; }
+
 static void adopt(agc_task *parent, agc_task *child) {
   child->parent = parent;
   child->prev_sibling = NULL;

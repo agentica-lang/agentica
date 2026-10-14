@@ -174,7 +174,7 @@
                       "JSON.get" "JSON.at" "JSON.string" "JSON.int" "JSON.float" "JSON.bool" "JSON.list"
                       "JSON.decode" "JSON.schema"
                       "File.open" "File.read_bytes" "File.read_line" "File.write" "File.write_bytes" "File.flush"
-                      "File.close" "File.read_text" "File.write_text" "File.append_text" "File.stat"
+                      "File.close" "File.each_line" "File.read_text" "File.write_text" "File.append_text" "File.stat"
                       "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"
                       "Task.spawn" "Task.await" "Task.sleep"
                       "Channel.new" "Channel.send" "Channel.recv" "Channel.close" "Channel.closed?"

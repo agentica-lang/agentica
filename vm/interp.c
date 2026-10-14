@@ -13,6 +13,7 @@ struct agc_native {
   int64_t cur, last, dir;
   agc_value list, fn, acc;
   agc_list *out;
+  agc_stepper *stepper;
 };
 
 void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span) {
@@ -279,11 +280,36 @@ static bool counting(agc_native_kind kind) {
          kind == AGC_NATIVE_DOWNTO;
 }
 
+static void resume_stepper(agc_vm *vm) {
+  agc_task *t = vm->task;
+  agc_frame *frame = &t->frames[t->frame_count - 1];
+  agc_native *st = frame->native;
+  uint32_t base = frame->base;
+  agc_step next = st->stepper->step(vm, st->stepper, t->regs[base]);
+  switch (next.kind) {
+    case AGC_STEP_CALL:
+      count_step(vm, st->span);
+      call_value(vm, t, st->fn, base + 1, &next.value, 1, base, st->span);
+      t->turn_cost++;
+      apply_cost(vm);
+      return;
+    case AGC_STEP_WAIT:
+      if (!t->parking) agc_fail(vm, "RUNTIME-INTERNAL", "a step waited without a pending job", st->span);
+      t->park_reg = base;
+      return;
+    case AGC_STEP_END: finish_native(vm, next.value); return;
+  }
+}
+
 static void resume_native(agc_vm *vm) {
   agc_task *t = vm->task;
   agc_frame *frame = &t->frames[t->frame_count - 1];
   agc_native *st = frame->native;
   uint32_t base = frame->base;
+  if (st->kind == AGC_NATIVE_STEPPER) {
+    resume_stepper(vm);
+    return;
+  }
   if (counting(st->kind)) {
     if (!st->more) {
       finish_native(vm, agc_void());
@@ -348,6 +374,16 @@ static void resume_native(agc_vm *vm) {
   finish_native(vm, result);
 }
 
+static void push_native(agc_vm *vm, agc_native *st, uint32_t base) {
+  agc_frame *frame = new_frame(vm->task);
+  frame->function = 0;
+  frame->pc = 0;
+  frame->base = base;
+  frame->ret = base;
+  frame->native = st;
+  resume_native(vm);
+}
+
 static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32_t span) {
   agc_native *st = agc_alloc(sizeof(agc_native));
   const agc_value *args = vm->task->regs + base;
@@ -384,13 +420,19 @@ static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32
     agc_as_fn(vm, st->fn);
     if (kind == AGC_NATIVE_MAP || kind == AGC_NATIVE_FILTER || kind == AGC_NATIVE_SORT_BY) st->out = agc_new_list(len);
   }
-  agc_frame *frame = new_frame(vm->task);
-  frame->function = 0;
-  frame->pc = 0;
-  frame->base = base;
-  frame->ret = base;
-  frame->native = st;
-  resume_native(vm);
+  push_native(vm, st, base);
+}
+
+static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint32_t span) {
+  agc_task *t = vm->task;
+  agc_native *st = agc_alloc(sizeof(agc_native));
+  st->kind = AGC_NATIVE_STEPPER;
+  st->span = span;
+  st->stepper = t->stepper;
+  st->fn = t->regs[base + b->arity - 1];
+  t->stepper = NULL;
+  agc_as_fn(vm, st->fn);
+  push_native(vm, st, base);
 }
 
 static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32_t span) {
@@ -459,10 +501,21 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
   agc_fail(vm, "RUNTIME-KEY-NOT-FOUND", message, span);
 }
 
+static agc_turn_result park_task(agc_task *t) {
+  t->parking = false;
+  t->state = AGC_TASK_PARKED;
+  return AGC_TURN_PARKED;
+}
+
 agc_turn_result agc_run_turn(agc_vm *vm) {
   const agc_program *p = vm->rt->program;
   agc_task *t = vm->task;
   if (t->frame_count == 0) return AGC_TURN_DONE;
+  if (t->frames[t->frame_count - 1].native) {
+    resume_native(vm);
+    if (t->parking) return park_task(t);
+    if (vm->yield) return AGC_TURN_YIELD;
+  }
   for (;;) {
     agc_frame *frame = &t->frames[t->frame_count - 1];
     const agc_function *fn = &p->functions[frame->function];
@@ -661,6 +714,12 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         if (b->cost == AGC_COST_SIZE)
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(t->regs[base + k]);
         agc_value result = b->fn(vm, t->regs + base, s);
+        if (t->stepper) {
+          start_stepper(vm, b, base, s);
+          if (t->parking) return park_task(t);
+          if (vm->yield) return AGC_TURN_YIELD;
+          break;
+        }
         if (t->parking) {
           t->parking = false;
           if (t->retry) frame->pc = pc;
@@ -676,6 +735,7 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
       }
       case AGC_OP_RETURN:
         if (!return_value(vm, R[in.a])) return AGC_TURN_DONE;
+        if (t->parking) return park_task(t);
         if (vm->yield) return AGC_TURN_YIELD;
         break;
       case AGC_OP_TRY: {
@@ -686,6 +746,7 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
           if (t->frame_count == 1 && t == vm->main)
             agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", s);
           if (!return_value(vm, R[in.b])) return AGC_TURN_DONE;
+          if (t->parking) return park_task(t);
           if (vm->yield) return AGC_TURN_YIELD;
         }
         break;

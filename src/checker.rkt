@@ -191,6 +191,8 @@
     [(and (eq? expected 'Int) (eq? actual 'String)) "convert it with String.to_int!(...)"]
     [(and (eq? expected 'Float) (eq? actual 'String)) "convert it with String.to_float!(...)"]
     [(and (eq? expected 'Float) (eq? actual 'Int)) "convert it with Float.from_int(...)"]
+    [(and (result-type? expected) (not (result-type? actual)))
+     (format "give a Result with ok(~a) or error(\"message\")" (if (eq? (cadr expected) 'Void) "" "..."))]
     [(and (eq? expected 'Int) (eq? actual 'Float)) "convert it with Float.to_int!(...), which truncates"]
     [else #f]))
 
@@ -1358,7 +1360,8 @@
                  (check-unused-value! value (check-expression value #f #:completion? #t))
                  #f]
                 [(eq? current-result 'infer) (check-expression value #f #:completion? #t)]
-                [else (check-expression value current-result)])]
+                [else (check-expression value current-result
+                                        #:completion? (result-type? current-result))])]
              [else (check-statement final) #f])]))
       (pop-scope!)
       (define result
