@@ -202,6 +202,16 @@ end
 AGC
   )
 
+(define warn-last-program
+  #<<AGC
+def main() -> Void
+  puts("done")
+  IO.warn("last words")
+end
+
+AGC
+  )
+
 (define flush-program
   #<<AGC
 def main() -> Void
@@ -276,7 +286,8 @@ AGC
   (display-to-file program source #:exists 'replace)
   (compile-file source bytecode)
   (define out (open-output-file out-file #:exists 'truncate))
-  (define err-out (and stderr-file? (open-output-file err-file #:exists 'truncate)))
+  (define err-target (if (string? stderr-file?) (string->path stderr-file?) err-file))
+  (define err-out (and stderr-file? (open-output-file err-target #:exists 'truncate)))
   (define start (current-inexact-milliseconds))
   (define-values (process in-port ignored err)
     (subprocess out #f err-out vm-file "--allow-run" "--flush-timeout" "20000" "--" (path->string bytecode)))
@@ -294,7 +305,10 @@ AGC
   (values (if finished (subprocess-status process) 'timeout)
           (- (current-inexact-milliseconds) start)
           (file->string out-file)
-          (if stderr-file? (file->string err-file) (unbox piped-errors))))
+          (cond
+            [(string? stderr-file?) ""]
+            [stderr-file? (file->string err-file)]
+            [else (unbox piped-errors)])))
 
 (module+ test
   (when (and (python-ready?) (vm-built? "VM stdout tests"))
@@ -408,6 +422,11 @@ AGC
           (check-equal? (length crash) 1)
           (check-equal? (hash-ref (string->jsexpr (car crash)) 'task) #t)
           (check-equal? (length (filter (lambda (line) (regexp-match? #rx"^warn [0-9]+ w+$" line)) lines)) 200))
+
+        (test-case "a stderr that cannot be written makes the exit code 1"
+          (define-values (status elapsed out err) (run-to-file work "full-stderr" warn-last-program #:stderr-file "/dev/full"))
+          (check-equal? status 1)
+          (check-equal? out "done\n"))
 
         (test-case "a long error text reaches a stderr file whole"
           (define-values (status elapsed out err) (run-to-file work "big-error" big-unwrap-program #:stderr-file #t))
