@@ -10,7 +10,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** The front end (lexer, parser, checker and lowering to bytecode) is written in Racket. A C11 VM runs every program, and there is no other backend. Moving the front end into Agentica is planned.
 
-**Why.** The front end stays in Racket while the language still changes, since two front ends would double that work. Agents write, run and repair in a loop, so start-up matters more than peak speed, and C is small and ships as one binary.
+**Why.** The front end stays in Racket while the language still changes, since two front ends would double that work. Agents write, run and repair in a loop, so start-up matters more than peak speed, and users need no compiler toolchain. A small C VM can ship as one binary.
 
 ## Immutable values, with state in handles
 
@@ -22,7 +22,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** The VM frees program values with the Boehm GC (bdw-gc). Linux builds use the system copy by default. The release links its own static copy.
 
-**Why.** The collector removes manual memory management, so values can be shared without reference counting. The cost is that the runtime is written in C, so memory safety depends on discipline and tooling. The static copy means the release needs only glibc.
+**Why.** The collector frees memory without manual frees or reference counts, so immutable values can be shared freely. It scans memory conservatively, so the VM never tags its pointers. The static copy means the release needs only glibc.
 
 ## Green tasks on one scheduler
 
