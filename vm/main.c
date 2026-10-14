@@ -10,7 +10,8 @@
 #ifdef _WIN32
 #define _CRT_RAND_S
 #endif
-#include "agc.h"
+#include "core.h"
+#include "services.h"
 #include "tls.h"
 
 #include <errno.h>

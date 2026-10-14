@@ -18,6 +18,7 @@ make test TESTS="tests/lexer-test.rkt"    # one stage while iterating
 racket src/main.rkt examples/hello.agc    # CLI smoke test; exits 0 on success
 racket src/main.rkt check examples/blocks.agc
 make vm vm-test                           # the C VM and its loader tests (references/vm.md)
+make vm-layers                            # the layer check: each header alone, include and link rules (references/vm.md)
 make goldens                              # rewrite the VM golden files (references/vm.md)
 make vm-latency                           # task latency test, run alone (references/vm.md)
 make smoke                                # the example smoke runs of CI (tests/smoke.sh; references/ci.md)
@@ -49,7 +50,7 @@ src/
   vm-launch.rkt   # find-vm, stop-vm, call-noting-break and running-executable, shared by main.rkt and bdd-driver.rkt
   main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
-  agc.h           # shared types and agc_ API: values, instructions, program, VM
+  value.h port.h core.h services.h  # shared types and the agc_ API, one header per layer (references/vm.md, "Which layer")
   value.c text.c map.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json), CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
@@ -74,7 +75,7 @@ tests/
   <stage>-test.rkt      # lexer, parser, checker, modules, bdd; filesystem and process run programs on the VM
   diagnostic-test.rkt   # excerpt and caret format
   examples-test.rkt     # examples/*.agc, rejected fragments, CLI exit codes
-  bytecode-test.rkt     # step merging, opcode list vs vm/agc.h, every builtin in vm-builtins, compile exit codes
+  bytecode-test.rkt     # step merging, opcode list vs vm/value.h, every builtin in vm-builtins, compile exit codes
   vm-diff-{1..8}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on dist/agentica-vm in three formats against their <name>.expected goldens (make goldens), with a --max-steps sweep
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
@@ -113,7 +114,7 @@ docs/
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
 | language rule or example | `docs/grammar/`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
 | test | `tests/<stage>-test.rkt` |
-| VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/agc.h` (same order), `vm/loader.c`, `vm/interp.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
+| VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
 | VM builtin | `src/lower.rkt` (accept the call, emit `call-builtin` with the catalog implementation key and arity), `vm/builtins.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
 
 ## Stage contract

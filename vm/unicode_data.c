@@ -1,4 +1,4 @@
-#include "agc.h"
+#include "core.h"
 
 const uint32_t agc_write_raw_ranges[][2] = {
   {0x20, 0x21},

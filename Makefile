@@ -5,7 +5,7 @@ unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 
-.PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-diff-build vm-diff-test sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests test test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -104,6 +104,7 @@ site-serve: site-sass
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
+# make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
 #                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
@@ -452,3 +453,8 @@ vm-lint-sanitize:
 
 vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
+
+vm-layers: vm
+	for h in vm/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
+	sh vm/tools/check-layers.sh $(VM_OBJ)
+	sh vm/tools/check-layers-test.sh $(VM_OBJ) $(VM_CC) $(VM_CFLAGS)

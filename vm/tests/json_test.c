@@ -1,4 +1,5 @@
-#include "../agc.h"
+#include "../core.h"
+#include "../services.h"
 
 #include <assert.h>
 #include <math.h>

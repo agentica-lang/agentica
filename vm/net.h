@@ -1,7 +1,7 @@
 #ifndef AGC_NET_H
 #define AGC_NET_H
 
-#include "agc.h"
+#include "services.h"
 #include "tls.h"
 
 typedef struct agc_conn agc_conn;

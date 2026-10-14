@@ -1,7 +1,7 @@
 #ifndef AGC_HTTP_FIELDS_H
 #define AGC_HTTP_FIELDS_H
 
-#include "agc.h"
+#include "services.h"
 #include "http_parse.h"
 
 typedef struct {

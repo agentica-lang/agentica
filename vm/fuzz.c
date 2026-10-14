@@ -1,4 +1,5 @@
-#include "agc.h"
+#include "core.h"
+#include "services.h"
 
 #ifdef _WIN32
 #define NULL_DEVICE "NUL"

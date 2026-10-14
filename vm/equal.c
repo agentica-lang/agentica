@@ -1,7 +1,7 @@
 /* Deep value equality (docs/future/25-ruby-typed-idioms.md §25.4), pulled
    forward for Test.eq (docs/future/36-unit-tests.md §36.3). A Json at any
    depth compares as its canonical text. One explicit stack, no recursion. */
-#include "agc.h"
+#include "core.h"
 
 #include <string.h>
 

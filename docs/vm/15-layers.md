@@ -1,6 +1,6 @@
 ## 15. VM layers
 
-**Status:** planned by the owner on 2026-10-13, row 7.2.1b of the [roadmap](../roadmap/README.md) (checklist in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). No behavior change: the goldens do not move. The first PR (the moves, §15.7 item 1) is done; the headers and the check (item 2) are next. It follows the architecture note [§16](16-architecture.md) (row 7.2.1c), which names the threads and queues behind the port.
+**Status:** planned by the owner on 2026-10-13, row 7.2.1b of the [roadmap](../roadmap/README.md) (checklist in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). No behavior change: the goldens do not move. Both PRs are done: the moves (§15.7 item 1) and the headers and the check (item 2). It follows the architecture note [§16](16-architecture.md) (row 7.2.1c), which names the threads and queues behind the port.
 
 The C VM gets a light layering: three layers (core, services, adapters) with one-way dependencies, plus a driver on top that wires them; one small port between the services and the core; one header per layer; and a CI check that keeps the direction. It is not DDD and not a plugin system: calls stay direct, and function pointers stay where they already are (callbacks), not as tables around every module.
 
@@ -8,7 +8,7 @@ Words. §14 calls everything under the scheduler "the VM core" (`task.c`, `loop.
 
 This is the first part of 7l ([§21](../future/21-vm-layers.md#21-vm-layers)): it replaces §21's first item (the `core`/`rt`/`lib` header split) with the split below. Opcode helpers, builtin metadata flags and the callback-builtin protocol stay in 7l at step 8.1. §14.6 asks of the layers: "Does each layer replace code, or only add a boundary?" Answer: mostly a boundary, checked by CI. It adds no runtime concept and replaces two pieces of code: `testing.c`'s hand-made wait becomes the port's `agc_task_join` (V5), and `loop.c`'s process tag check becomes a resource field that `process.c` sets (V3).
 
-Line numbers in this section are from the tree after the moves of §15.7 item 1 (master at d99f273 plus PR 1), except what V1 to V5 of §15.6 say about the code before it moved. HTTP 20c and the blocked-read fix are in and changed `input.c`, `files.c` and the HTTP files; each implementation PR maps the calls again on the tree it starts from (§15.7).
+Line numbers in this section are from the tree after the moves of §15.7 item 1 (master at d99f273 plus PR 1), except what V1 to V5 of §15.6 say about the code before it moved; the header split moved no line of a `.c` file except the `#include` lines of `main.c`, `builtin_tables.c`, `fuzz.c` and `fuzz_main.c`.
 
 ### 15.1 Layers
 
@@ -33,7 +33,7 @@ Notes on the choices:
 
 ### 15.2 The port
 
-The port is what a service needs from the core to do I/O and to wait, as §14 allows it. It existed before PR 1, except `agc_task_join` (V5) and the resource field of V3, which PR 1 added; this plan names it and puts it in its own header (`port.h`).
+The port is what a service needs from the core to do I/O and to wait, as §14 allows it. It existed before PR 1, except `agc_task_join` (V5) and the resource field of V3, which PR 1 added; it has its own header, `port.h`.
 
 | Job | Functions |
 |---|---|
@@ -67,84 +67,39 @@ The function pointers that exist are callbacks (job kinds, close and release fun
 
 ### 15.4 Headers
 
-`vm/agc.h` (717 lines after PR 1, included by every `.c` file) is split into four headers in one chain:
+`vm/agc.h` (717 lines) is split into four headers in one chain, and is gone: a `.c` file includes the header of its layer, so nothing needs an umbrella.
 
 ```text
 value.h  <-  port.h  <-  core.h
                      <-  services.h  <-  net.h
 ```
 
-`port.h` includes `value.h`; `core.h` and `services.h` each include `port.h` and nothing else of ours, so a service never gets `core.h` indirectly. Every type a header's own declarations name is defined, or forward-declared, in that header or one below it. PR 2 compiles each header on its own (`cc -fsyntax-only` with the VM's flags, one per header, part of `make vm-layers`), so a missing type fails at once. What goes where, by name (line ranges of `agc.h` would be stale by then):
+`port.h` includes `value.h`; `core.h` and `services.h` each include `port.h` and nothing else of ours, so a service never gets `core.h` indirectly. Every type a header's own declarations name is defined, or forward-declared, in that header or one below it. `make vm-layers` compiles each `vm/*.h` on its own (`cc -fsyntax-only` with the VM's flags, one per header, as `-include h /dev/null`: as the main file, the unused `static inline` in `trace.h` fails under `-Werror` with clang), so a missing type fails at once. A core `.c` file includes `core.h`; a service `services.h`, or `net.h` or `http_fields.h`, which include it; an adapter its own header (`http_body.c` also `value.h`); the driver `core.h` and `services.h`. A test in `vm/tests/` includes what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
 
-- **`value.h`** (includes `trace.h`): the limits; `agc_tag`; `agc_value` and the value structs (string, list, map, struct, enum, result, fn, range); the Json value types (`agc_json_kind`, `agc_json_member`, `agc_json`, `agc_json_buffer`); opcodes, `agc_instr`, `agc_span`, `agc_source`; forward typedefs of `agc_vm`, `agc_task` and `agc_resource`; the handle value structs `agc_process`, `agc_socket`, `agc_listener` and `agc_http_client` (anonymous typedefs, so they cannot be forward-declared; they hold only `agc_resource *` and an `int64_t`, and live here next to their constructors); `agc_test_case`; `agc_builtin_fn`, `agc_native_kind`, `agc_cost_rule` and `agc_builtin` (`agc_program` names `agc_builtin`); the program tables (`agc_function`, `agc_type`, the struct, enum and variant defs, `agc_program`); `agc_random` and its functions; `agc_gc_info`; memory (`agc_init` to `agc_gc_stats`); value constructors and `agc_as_*`; the UTF-8, string, map, text and equality functions; `agc_sort_by_keys`; every Unicode table; the Json value API (`agc_json_ascii`, `agc_json_grow`, `agc_json_put`, `agc_json_leaf`, `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_encode`, `agc_json_from`, and the node helpers `agc_json_container`, `agc_json_store` and `agc_json_finish`); `agc_error_value` and `agc_utf8_count` (V4, V15).
-- **`port.h`**: `agc_release_fn`, `agc_close_fn`, `agc_resource_kind` and the body of `struct agc_resource`; forward typedefs of `agc_test_note` (the struct gets a tag, `struct agc_test_note`, so the forward typedef matches), `agc_test_run`, `agc_registry`, `agc_loop`, `agc_io_job` and `agc_native`; `agc_frame`; `agc_io_kind`; `agc_outcome_kind`, `agc_style`, `agc_outcome`; `agc_input_status` and `agc_input`; `agc_runtime`, `agc_task_state`, `agc_turn_result`, `agc_lock_status`, `struct agc_task`, `struct agc_vm`; `agc_file_id` and `agc_file_ids` (`rt->inherited`); and the port functions of §15.2, with `agc_io_block_stop` under `__linux__` (so `port.h` includes `<signal.h>` there).
-- **`core.h`**: what only the core and the driver call: `agc_vm_init`; tasks and turns (`agc_new_task`, `agc_task_call`, `agc_task_enter`, `agc_task_remove`, `agc_turn_begin`, `agc_turn_charge`, `agc_turn_finish`, `agc_run_turn`, `agc_vm_run`); the loop's own life (`agc_uv_version`, `agc_io_init`, `agc_io_poll`, `agc_io_finish`, `agc_io_detach`, `agc_io_close`); the exit path and stop signals (`agc_io_watch_stop`, `agc_io_stop_signal`, `agc_io_children_stopped`, `agc_io_goodbye`, `agc_io_flush_files`, `agc_stop`); ownership internals (`agc_owned_of`, `agc_give_owned`, `agc_close_owned`, `agc_handle_leave`); the loader (`agc_load`, `agc_load_traced`); `agc_find_builtin`, the builtin table list (`agc_builtin_table`, and `agc_builtin_tables` with `agc_builtin_table_count`, defined in `builtin_tables.c`), `agc_core_builtins` with its count (defined in `builtins.c`) and `agc_task_builtins` with its count (defined in `task.c`); stdin (`agc_input_open`, `agc_input_peek`, `agc_input_line`, `agc_input_all`, `agc_input_bytes`); diagnostics (`agc_print_diagnostic`, `agc_crash_text`, `agc_print_unobserved`, `agc_print_flush_timeout`, `agc_print_flush_failed`); `agc_fuzz_one`.
+- **`value.h`** (includes `trace.h`): the limits; `agc_tag`; `agc_value` and the value structs (string, list, map, struct, enum, result, fn, range); the Json value types (`agc_json_kind`, `agc_json_member`, `agc_json`, `agc_json_buffer`); opcodes, `agc_instr`, `agc_span`, `agc_source`; forward typedefs of `agc_vm`, `agc_task` and `agc_resource`; the handle value structs `agc_process`, `agc_socket`, `agc_listener`, `agc_http_client` and `agc_http_server` (anonymous typedefs, so they cannot be forward-declared; they hold `agc_resource *`, a port, a listener value and a task group pointer, and live here next to their constructors); `agc_test_case`; `agc_builtin_fn`, `agc_native_kind`, `agc_cost_rule` and `agc_builtin` (`agc_program` names `agc_builtin`); the program tables (`agc_function`, `agc_type`, the struct, enum and variant defs, `agc_program`); `agc_random` and its functions; `agc_gc_info`; memory (`agc_init` to `agc_gc_stats`); value constructors and `agc_as_*`; the UTF-8, string, map, text and equality functions; `agc_sort_by_keys`; every Unicode table; the Json value API (`agc_json_ascii`, `agc_json_grow`, `agc_json_put`, `agc_json_leaf`, `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_encode`, `agc_json_from`, and the node helpers `agc_json_container`, `agc_json_store` and `agc_json_finish`, which `json_value.c` defines); `agc_error_value` and `agc_utf8_count` (V4, V15).
+- **`port.h`**: `agc_release_fn`, `agc_close_fn`, `agc_end_fn`, `agc_resource_kind` and the body of `struct agc_resource`; forward typedefs of `agc_test_note` (the struct gets a tag, `struct agc_test_note`, so the forward typedef matches), `agc_test_run`, `agc_registry`, `agc_loop`, `agc_io_job`, `agc_more_fn`, `agc_poller` and `agc_native`; `agc_frame`; `agc_io_kind`; `agc_outcome_kind`, `agc_style`, `agc_outcome`; `agc_input_status` and `agc_input`; `agc_runtime`, `agc_task_state`, `agc_turn_result`, `agc_lock_status`, `struct agc_task`, `struct agc_vm`; `agc_file_id` and `agc_file_ids` (`rt->inherited`); and the port functions of §15.2, with `agc_io_block_stop`, `agc_io_start_then` and the poller functions under `__linux__` (so `port.h` includes `<signal.h>` and `<locale.h>` there).
+- **`core.h`**: what only the core and the driver call: `agc_builtin_table`; `agc_vm_init`; tasks and turns (`agc_new_task`, `agc_task_call`, `agc_task_enter`, `agc_task_remove`, `agc_turn_begin`, `agc_turn_charge`, `agc_turn_finish`, `agc_run_turn`, `agc_vm_run`); the loop's own life (`agc_uv_version`, `agc_io_init`, `agc_io_poll`, `agc_io_finish`, `agc_io_detach`, `agc_io_close`); the exit path and stop signals (`agc_io_watch_stop`, `agc_io_stop_signal`, `agc_io_children_stopped`, `agc_io_goodbye`, `agc_io_flush_files`, `agc_stop`); ownership internals (`agc_owned_of`, `agc_give_owned`, `agc_close_owned`, `agc_handle_leave`); the loader (`agc_load`, `agc_load_traced`); `agc_find_builtin`, the builtin table list (`agc_builtin_tables` with `agc_builtin_table_count`, defined in `builtin_tables.c`), `agc_core_builtins` with its count (defined in `builtins.c`) and `agc_task_builtins` with its count (defined in `task.c`); stdin (`agc_input_open`, `agc_input_close`, `agc_input_peek`, `agc_input_line`, `agc_input_all`, `agc_input_bytes`); diagnostics (`agc_print_diagnostic`, `agc_crash_text`, `agc_print_unobserved`, `agc_print_flush_timeout`, `agc_print_flush_failed`); `agc_fuzz_one`.
 - **`services.h`**: the body of `struct agc_test_note`; `agc_inbuf`; the `strings.c` helpers others use (`agc_utf8_encode`, `agc_utf8_offset`, `agc_text_find`, `agc_change_case`, `agc_parse_int`, `agc_parse_float`, `agc_around`) with `agc_number_status` and `AGC_NOT_FOUND`; the JSON parser and typed JSON (`agc_json_status`, `agc_json_version`, `agc_json_parse`, `agc_json_status_message`, `agc_json_to_float`, `agc_json_decode`, `agc_json_schema`); `files.c`'s exports (`agc_files_init`, `agc_files_close`, `agc_host_path`, `agc_utf8_error`, `agc_system_error`, `agc_each_fd`, `agc_files_inherited`, `agc_files_forget`); `agc_processes_stop` (`process.c`, called by the driver's exit path); the stream kit (`agc_new_lock`, `agc_stream_lock`, `agc_stream_bad_timeout`, `agc_stream_timed_out`, `agc_inbuf_*`, `agc_stream_write`, with forward `struct uv_stream_s` and `struct uv_write_s`); `agc_test_protocol`; the builtin tables of the services (strings, numbers, json, files, process, tcp, http, test) and their counts.
 
-`net.h` (the `agc_conn` API of `tcp.c`, used by `http_client.c`) includes `services.h` and `tls.h`. `tls.h`, `http_parse.h` and `trace.h` keep their content.
-
-Places that name `vm/agc.h` and change with the split: `tests/bytecode-test.rkt:15` (reads `agc_opcode`, now in `value.h`), `vm/tools/gen-unicode.rkt:186` (the include line of `unicode_data.c`), `vm/net.h:4`, every `vm/tests/*.c`, the development skill (`SKILL.md:52`, `77`, `116`; `references/vm.md:28`, `344`, `485`, `489`; `references/ci.md:187`, which says jscpd covers `vm/agc.h`; `.jscpd.json` scans all of `vm/`, so it needs no change), and the `docs/vm/` files that cite it.
+`net.h` (the `agc_conn` API of `tcp.c`, used by `http_client.c`) and `http_fields.h` include `services.h`; `net.h` also includes `tls.h`. `tls.h`, `http_parse.h` and `trace.h` keep their content. What named `vm/agc.h` now names the header that holds the item: `tests/bytecode-test.rkt` reads `agc_opcode` from `value.h`, `vm/tools/gen-unicode.rkt` writes `#include "core.h"` into `unicode_data.c`, and the development skill lists the layers.
 
 ### 15.5 The layer check
 
-`vm/tools/check-layers.sh <object dir>`, run by `make vm-layers` (a new target, added to `.PHONY` and to the target list at the top of the `Makefile`; it depends on `vm`). CI runs it in the `test` job of `ci.yml` after `make vm vm-test`, since its link rule needs the objects; that job checks that `rg` is installed and installs ripgrep if not. It fails when:
+`make vm-layers` (a target in `.PHONY` and in the list at the top of the `Makefile`; it depends on `vm`) does three things: it compiles each header on its own (§15.4), runs `vm/tools/check-layers.sh <object dir>`, and runs the negative self-test, `vm/tools/check-layers-test.sh`. CI runs it in the `vm-sanitizers` job of `ci.yml` after `make -j vm vm-test vm-fuzz`, on the objects of the sanitizer build (the job runs when a pull request touches `vm/` or the `Makefile`); that job checks that `rg` is installed and installs ripgrep if not. The script fails when:
 
-1. a `vm/*.c` file is in no layer list, or a listed file does not exist;
-2. a core file includes `services.h`, `net.h`, `tls.h` or `http_parse.h`;
+1. a `vm/*.c` or `vm/*.h` file is in no list, or a listed file does not exist;
+2. a core file includes `services.h`, `net.h`, `tls.h`, `http_parse.h` or `http_fields.h`;
 3. a service or adapter file includes `core.h`;
-4. an adapter file includes `port.h`, `services.h` or `net.h` (it may include `value.h`; rule 8 keeps it to the memory functions);
+4. an adapter file includes `port.h`, `services.h`, `net.h` or `http_fields.h` (it may include `value.h`; rule 8 keeps it to the memory functions);
 5. a third-party header is included outside its place: `<gc.h>` only in `value.c`; `<openssl/...>` only in `tls_openssl.c`; `<picohttpparser.h>` only in `http_pico.c`; `"yyjson.h"` only in `json.c`; `<uv.h>` only in `loop.c` and the stream services (`stream.c`, `process.c`, `tcp.c`, `http_client.c`). `input.c` and `files.c` put stdin, FIFOs and character devices on loop handles through `agc_poller_*` (§15.2) and include no libuv header;
 6. a `.c` file declares an `agc_` name at file scope instead of taking it from a header: a function prototype, or an `extern` or array declaration of an `agc_` variable (`extern char **environ` in `process.c` is not an `agc_` name);
-7. **the link rule**: after the build, a core object's undefined symbols (`nm -u`) include a symbol that a service object defines (`nm -g --defined-only`);
-8. an adapter object's undefined `agc_` symbols are other than the memory functions of §15.1 and symbols of another adapter object (`http_pico.o` uses `http_body.o`).
+7. **the link rule**: after the build, a core object's undefined symbols (`nm -u`) include a symbol that a service or adapter object defines (`nm -g --defined-only`). The driver is left out: `builtins.o` reads `agc_builtin_tables` from `builtin_tables.o` by design (§15.6 V2);
+8. an adapter object's undefined `agc_` symbols are other than the memory functions of §15.1 and symbols of another adapter object (`http_pico.o` uses `http_body.o`);
+9. the header chain: `value.h` includes only `trace.h` of ours, `port.h` only `value.h`, `core.h` and `services.h` only `port.h`, `net.h` only `services.h` and `tls.h`, `http_fields.h` only `services.h` and `http_parse.h`, and `tls.h`, `http_parse.h` and `trace.h` none.
 
-The link rules (7, 8) are the authority: a declaration that rule 6 misses still fails there. Rules 1 to 6 need no build and give a fast, readable error. An `rg` exit status of 2 (a bad pattern, a missing file) is a failure, not "no match".
+The link rules (7, 8) are the authority: a declaration that rule 6 misses still fails there. Rules 1 to 6 and 9 need no build and give a fast, readable error. An `rg` exit status of 2 (a bad pattern, a missing file) is a failure, not "no match", and so is a missing object. The link rules read ELF symbols: on macOS `nm` prints a leading `_` and has no `--defined-only`, so the script stops with a message off Linux instead of passing.
 
-```sh
-#!/bin/sh
-set -eu
-obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
-cd "$(dirname "$0")/.."
-core="value.c map.c equal.c text.c unicode_data.c json_value.c interp.c task.c loop.c input.c random.c loader.c builtins.c diag.c trace.c"
-services="strings.c numbers.c json.c json_typed.c files.c stream.c process.c tcp.c http_fields.c http_client.c http_server.c testing.c"
-adapters="tls_openssl.c http_pico.c http_body.c"
-driver="main.c builtin_tables.c fuzz.c fuzz_main.c"
-memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
-fail=0
-bad() { echo "vm layers: $*" >&2; fail=1; }
-found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
-for f in *.c; do
-  case " $core $services $adapters $driver " in *" $f "*) ;; *) bad "$f is in no layer" ;; esac
-done
-for f in $core $services $adapters $driver; do [ -f "$f" ] || bad "$f is listed but missing"; done
-if found -n '#include "(services|net|tls|http_parse)\.h"' $core; then bad "a core file includes a service or adapter header"; fi
-if found -n '#include "core\.h"' $services $adapters; then bad "a service or adapter includes core.h"; fi
-if found -n '#include "(port|services|net)\.h"' $adapters; then bad "an adapter includes the port or a service header"; fi
-only() { if found -n --max-depth 1 "$1" --glob '*.c' --glob '*.h' $(for f in $2; do printf -- "--glob !%s " "$f"; done) .; then bad "$1 outside $2"; fi; }
-only '#include <gc\.h>' "value.c"
-only '#include <openssl/' "tls_openssl.c"
-only '#include <picohttpparser\.h>' "http_pico.c"
-only '#include "yyjson\.h"' "json.c"
-only '#include <uv\.h>' "loop.c stream.c process.c tcp.c http_client.c"
-if found -n --max-depth 1 --pcre2 '^[A-Za-z_][\w \*]*\bagc_\w+\([^{]*\)\s*;\s*$' --glob '*.c' .; then bad "an agc_ prototype in a .c file"; fi
-if found -n --max-depth 1 '^\s*extern\b.*\bagc_|^[A-Za-z_][\w \*]*\bagc_\w+\s*\[[^\]]*\]\s*;' --glob '*.c' .; then bad "an agc_ variable declared in a .c file"; fi
-tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-defined() { for f in $1; do nm -g --defined-only "$obj/${f%.c}.o"; done | awk '{print $NF}' | sort -u; }
-used() { nm -u "$obj/${1%.c}.o" | awk '{print $NF}' | sort -u; }
-defined "$services" > "$tmp/services"
-for f in $core; do
-  used "$f" | comm -12 - "$tmp/services" > "$tmp/hit"
-  if [ -s "$tmp/hit" ]; then bad "core $f uses service symbols: $(tr '\n' ' ' < "$tmp/hit")"; fi
-done
-{ printf '%s\n' $memory; defined "$adapters"; } | sort -u > "$tmp/adapter-ok"
-for f in $adapters; do
-  used "$f" | { rg '^agc_' || true; } | comm -23 - "$tmp/adapter-ok" > "$tmp/hit"
-  if [ -s "$tmp/hit" ]; then bad "adapter $f uses: $(tr '\n' ' ' < "$tmp/hit")"; fi
-done
-exit "$fail"
-```
-
-This is a sketch for Linux (ELF `nm`); its PR runs it, with one negative self-test: in a scratch copy of `vm/`, a planted violation (a core file calling a service function through a local prototype) must make it exit 1. The two declaration patterns of rule 6 match nothing in `vm/*.c` after PR 1.
+The self-test works on a temporary copy of `vm/*.c`, `vm/*.h` and the objects. The unchanged copy must pass. Then it plants one violation at a time, and each must fail with its own message: a text one for rules 1, 2, 3, 4, 5, 6 and 9 (including `core.h` in `net.h`), and two link ones. The link ones are a core file that calls `agc_utf8_encode` through a typedef'd declaration (`plant_fn agc_utf8_encode;`), which rule 6 misses, so only rule 7 sees it, and an adapter that calls `agc_error_value` (rule 8). They rebuild the planted object with the VM's compiler flags before the script runs, so the script never reads a stale object. CI checks the sanitizer objects; run `make vm-layers` on the release objects locally too, to cover code that a configuration turns off. The patterns of rule 6 match nothing in `vm/*.c`.
 
 ### 15.6 Violations found
 
@@ -153,16 +108,16 @@ Mapped at 7a40b78 by listing, for each `vm/*.c` file, the `agc_` functions it ca
 | # | Where | What | Fix |
 |---|---|---|---|
 | V1 | `text.c:149`, `281`, `286`; `equal.c:66` | `to_s`, `inspect` and `==` of a `Json` value call `agc_json_encode` in `json.c` (a service) | **Move (done).** The Json value is a core type (`AGC_T_JSON`), so its code is in a new core file, `json_value.c`: the writer (`agc_json_put`, the string and scalar writers, `agc_json_encode`), `agc_json_from` and its frame walker, `agc_json_leaf`, `agc_json_object`, `agc_json_array`, `agc_json_find`, `agc_json_ascii`, `agc_json_grow`, and the node code shared with the parser: `agc_json_container`, `agc_json_store` and `agc_json_finish` (which sorts the members by key bytes and drops repeated keys), the former statics `container`, `store` and `finish`. The parser's `leaf` is `agc_json_leaf`. `json.c` keeps the yyjson parser (`convert`, `agc_json_parse`), `agc_json_status_message`, `agc_json_to_float` and the `JSON.*` builtins; `agc_json_decode` and `agc_json_schema` stay in `json_typed.c` |
-| V2 | `builtins.c:433-444` | the builtin table list names every service's table (`agc_file_builtins`, `agc_tcp_builtins`, `agc_test_builtins`, ...) | **Move (done)** of the list, in the same order (`agc_find_builtin` returns the first match), to a new driver file, `builtin_tables.c`: `agc_builtin_tables` and `agc_builtin_table_count`. `agc_find_builtin` stays in `builtins.c` (`builtins.c:428`) and reads the list through `agc.h` (`core.h` after PR 2). `builtins.c` exports its own table as `agc_core_builtins` with `agc_core_builtin_count`, like the other libraries. The list is the one place that wires the services in, like `main.c` |
+| V2 | `builtins.c:433-444` | the builtin table list names every service's table (`agc_file_builtins`, `agc_tcp_builtins`, `agc_test_builtins`, ...) | **Move (done)** of the list, in the same order (`agc_find_builtin` returns the first match), to a new driver file, `builtin_tables.c`: `agc_builtin_tables` and `agc_builtin_table_count`. `agc_find_builtin` stays in `builtins.c` (`builtins.c:428`) and reads the list through `core.h`. `builtins.c` exports its own table as `agc_core_builtins` with `agc_core_builtin_count`, like the other libraries. The list is the one place that wires the services in, like `main.c` |
 | V3 | `loop.c:284-290` | `discard` (a detached job's result) skipped `AGC_T_PROCESS` by name: a process rule in the loop | **Port data (done).** The tag check became a new `agc_resource` field, `keep_detached`, that `process.c` sets when it registers the process (`process.c:781`); `discard` reads the field, not the tag (`loop.c:287`) |
 | V4 | `task.c:461`, `505` | `await_task` and `builtin_unobserved_crash` build their error with `agc_error_value`, which was defined in `stream.c` (a service) | **Move (done)** of `agc_error_value` (four lines) to `value.c`, next to `agc_make_string` |
 | V5 | `testing.c:276` | `Test.run` had a `wait_for` that set `vm->task->awaiting`, put the task on `target->waiters` and parked: the waiting half of `await_task`, without its crashed and cancelled branches | **Port function (done)** `bool agc_task_join(agc_vm *vm, agc_task *target)` in `task.c:443`: if the target is done, clear `awaiting` and return false; else set `awaiting`, enqueue the task on the target's waiters, park (with retry) and return true. `wait_for` is gone: `Test.run` calls `agc_task_join`, and `await_task` (`task.c:452`) calls it and, after false, handles the result (crashed, cancelled, value) as before |
 | V6 | `testing.c:186-206` | `cancel_leftovers`, `unobserved_of` and `observe_test` walk `caller->children` and `vm->crashes` and read `t->test` | **Accepted for now.** Reads only, and every change goes through `agc_task_cancel` and `agc_task_observe`. 24b's one hand-off form may give a task group to replace them; if it does, they move behind the port then |
 | V7 | `loop.c:96-102` (`agc_owned_of`) | the core reads the `state` field of `agc_socket`, `agc_listener` and `agc_process` | **Accepted**: those handle values are declared in `value.h`, since ownership (§14.5) must find a value's resource. 24b replaces its caller in `builtin_spawn` (`task.c:439`) |
-| V8 | `value.c:268-322`, `457-496`; `text.c:105-112`; `agc.h:32` | the tag enum, constructors, `agc_as_*` and the printed names (`<Socket>`, `<Process>`, ...) of service values live in the core | **Accepted**: the tag set is one closed enum that the loader, `text.c` and `equal.c` need; no service code is called |
-| V9 | `agc.h:403-405`, `task.c:409`; `agc.h:419`; `agc.h:358` | service state in core structs: `agc_task`'s `test`, `note` and `test_run` (a spawned task inherits `test`), `agc_vm.process_guard`, and the `allow_run`, `drop_uring_env` and `no_files` settings | **Accepted**: opaque pointers and settings, no calls. The driver sets the settings |
+| V8 | `value.c:268-322`, `457-496`; `text.c:105-112`; `value.h` (`agc_tag`) | the tag enum, constructors, `agc_as_*` and the printed names (`<Socket>`, `<Process>`, ...) of service values live in the core | **Accepted**: the tag set is one closed enum that the loader, `text.c` and `equal.c` need; no service code is called |
+| V9 | `port.h` (`struct agc_task`, `struct agc_vm`, `agc_runtime`), `task.c:409` | service state in core structs: `agc_task`'s `test`, `note` and `test_run` (a spawned task inherits `test`), `agc_vm.process_guard`, and the `allow_run`, `drop_uring_env` and `no_files` settings | **Accepted**: opaque pointers and settings, no calls. The driver sets the settings |
 | V10 | `interp.c:68`, `input.c:270`, `input.c:377` | 25b's `out_mid_line`, the reserved stdin and `agc_protocol_line` (core code that exists for `testing.c`) | **Removed by 25c** (row 7.2.1a), which comes after this row and moves the child protocol to fd 3 |
-| V11 | `main.c:188`, `384-391`, `481`, `487` | the driver calls `agc_files_init`, `agc_files_close`, `agc_test_protocol`, `agc_tls_version` and `agc_json_version` | **Accepted**: `main.c` is the driver |
+| V11 | `main.c:189`, `385-392`, `482`, `488` | the driver calls `agc_files_init`, `agc_files_close`, `agc_test_protocol`, `agc_tls_version` and `agc_json_version` | **Accepted**: `main.c` is the driver |
 | V12 | `http_body.c:142-146` | an adapter calls `agc_size_mul` and `agc_out_of_memory` | **Accepted**: memory only, so out of memory keeps its exit code (§6.3); rule 8 of §15.5 keeps it to memory |
 | V13 | `loop.c:101` (`agc_owned_of`), 20c | the core reads the `state` field of `agc_http_server` too, so a server passed to `Task.spawn` moves with the spawn move | **Accepted with V7**, for the same reason, and 24b removes the caller. If 24b keeps a lookup, the fix is a resource found through a field the service sets at `agc_register`, not a tag list in the core |
 | V14 | `task.c:264` (`quiet_slot`), 20c | the crash list reads `hidden` and `t->test` to keep one entry per test for HTTP connection tasks | **Accepted with V6**: a flag the service sets, read by the core; no service call |
@@ -175,7 +130,7 @@ Not violations: `loader.c:460` calls `agc_find_builtin` (core); the core's other
 Two PRs, both VM-only and mechanical, both with no change to the goldens. HTTP 20c and the blocked-read fix, which changed `input.c`, `files.c` and the HTTP services, are done, so the moves no longer conflict with them. The PRs come before 25c and 24b, so that 25c's new `Process` builtins and 24b's ownership change are written on the port. Each PR first maps the calls again on the tree it starts from (as in §15.6) and updates §15 where the tree has moved.
 
 1. **Moves (done).** V1 (`json_value.c`), V2 (`builtin_tables.c`), V3 (the resource field), V4 (`agc_error_value`), V5 (`agc_task_join`) and V15 (`agc_utf8_count`, found by the `nm` check of this PR). Both new files join `VM_SRC` in the `Makefile`. `agc.h` stays one header in this PR. It runs `make dup-check`: the jscpd baseline (`.jscpd-baseline.json`) holds fingerprints, so a moved clone can show up as new; remove the copy rather than grow the baseline.
-2. **Headers and the check.** Split `agc.h` into `value.h`, `port.h`, `core.h` and `services.h` (§15.4), with each `.c` file including its layer's header and each header compiled on its own; update the places that name `agc.h` (§15.4); add `vm/tools/check-layers.sh`, `make vm-layers`, its negative self-test and the CI step (§15.5); tick row 7.2.1b and add the layers to the development skill (`references/vm.md`: the file table and a "which layer" note; `references/ci.md`: the new check).
+2. **Headers and the check (done).** Split `agc.h` into `value.h`, `port.h`, `core.h` and `services.h` (§15.4), with each `.c` file including its layer's header and each header compiled on its own; update the places that name `agc.h` (§15.4); add `vm/tools/check-layers.sh`, `make vm-layers`, its negative self-test and the CI step (§15.5); tick row 7.2.1b and add the layers to the development skill (`references/vm.md`: the file table and a "which layer" note; `references/ci.md`: the new check).
 
 Order (the owner, 2026-10-13): after the architecture note (§16, row 7.2.1c), and before the asynchronous process close and the flush limit (row 7.2.1d), channels (17b, row 7.2.1e), stdout and stderr on the loop (row 7.2.1f), and 25c and 24b (row 7.2.1a).
 
