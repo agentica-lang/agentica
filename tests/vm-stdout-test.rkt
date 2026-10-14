@@ -142,6 +142,85 @@ end
 AGC
   )
 
+(define big-unwrap-program
+  #<<AGC
+def parse(text: String) -> Result[Int]
+  return error(text)
+end
+
+def main() -> Void
+  big = "e"
+  for i in 0..16
+    big = big + big
+  end
+  value = Result.unwrap!(parse(big))
+  puts(value)
+end
+
+AGC
+  )
+
+(define crash-while-stuck-program
+  #<<AGC
+def crasher(delay: Int) -> Void
+  Task.sleep(delay)
+  x = 1 / 0
+  puts(x)
+end
+
+def main() -> Void
+  Task.spawn(&crasher, 200)
+  filler = "w"
+  for i in 0..9
+    filler = filler + filler
+  end
+  n = 0
+  while n < 200
+    IO.warn("warn #{n} #{filler}")
+    n += 1
+  end
+end
+
+AGC
+  )
+
+(define alternate-program
+  #<<AGC
+def main() -> Void
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  n = 0
+  while n < 150
+    puts("o#{n} #{filler}")
+    IO.warn("e#{n} #{filler}")
+    n += 1
+  end
+end
+
+AGC
+  )
+
+(define flush-program
+  #<<AGC
+def main() -> Void
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  n = 0
+  while n < 100
+    puts("row #{n} #{filler}")
+    n += 1
+  end
+  IO.flush()
+  IO.warn("flushed")
+end
+
+AGC
+  )
+
 (define (run-case work name program #:peer [peer-arguments '()] #:vm [vm-arguments '()])
   (define source (build-path work (string-append name ".agc")))
   (define bytecode (build-path work (string-append name ".agcb")))
@@ -189,27 +268,33 @@ end
 AGC
   )
 
-(define (run-to-file work name program)
+(define (run-to-file work name program #:stderr-file [stderr-file? #f])
   (define source (build-path work (string-append name ".agc")))
   (define bytecode (build-path work (string-append name ".agcb")))
   (define out-file (build-path work (string-append name ".out")))
+  (define err-file (build-path work (string-append name ".err")))
   (display-to-file program source #:exists 'replace)
   (compile-file source bytecode)
   (define out (open-output-file out-file #:exists 'truncate))
+  (define err-out (and stderr-file? (open-output-file err-file #:exists 'truncate)))
   (define start (current-inexact-milliseconds))
   (define-values (process in-port ignored err)
-    (subprocess out #f #f vm-file "--allow-run" "--flush-timeout" "20000" "--" (path->string bytecode)))
+    (subprocess out #f err-out vm-file "--allow-run" "--flush-timeout" "20000" "--" (path->string bytecode)))
   (close-output-port ignored)
-  (define errors (port->string err))
+  (define piped-errors (box ""))
+  (define reader (and err (thread (lambda () (set-box! piped-errors (port->string err))))))
   (define finished (sync/timeout peer-limit process))
   (unless finished (subprocess-kill process #t))
   (subprocess-wait process)
   (close-output-port out)
-  (close-input-port err)
+  (when err-out (close-output-port err-out))
+  (when reader
+    (sync/timeout 10 reader)
+    (close-input-port err))
   (values (if finished (subprocess-status process) 'timeout)
           (- (current-inexact-milliseconds) start)
           (file->string out-file)
-          errors))
+          (if stderr-file? (file->string err-file) (unbox piped-errors))))
 
 (module+ test
   (when (and (python-ready?) (vm-built? "VM stdout tests"))
@@ -273,14 +358,63 @@ AGC
           (check-equal? (hash-ref summary 'status) 0)
           (check-true (<= 0.4 (hash-ref summary 'exit) 20) "the run waits for the flush limit")
           (check-true (< 0 (bytes-length out) (row-total 100)))
-          (check-equal? err ""))
+          (check-false (regexp-match? #rx#"flush_timeout_ms" out) "the warning is dropped, not mixed into the data"))
 
-        (test-case "a stdout that cannot be reopened keeps the blocking write"
+        (test-case "a socket as stdout is written on the loop"
           (define-values (summary out err)
             (run-case work "socket" (ticker-program 800) #:peer '("--socket" "--delay" "1.0")))
           (check-equal? (hash-ref summary 'status) 0)
-          (check-equal? (hash-ref summary 'ticks_before_read) 0 "a blocking write stops the whole VM")
+          (check-true (>= (hash-ref summary 'ticks_before_read) 5) "the ticker ran while stdout was stuck")
           (check-rows (output-lines out) 800))
+
+        (test-case "stdout and stderr on one pipe keep the order of the calls under a slow reader"
+          (define-values (summary out err)
+            (run-case work "alternate" alternate-program #:peer '("--delay" "0.5" "--merge" "--chunk" "16384" "--pause" "0.001")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (define lines (output-lines out))
+          (check-equal? (length lines) 300)
+          (for ([line (in-list lines)] [k (in-naturals)])
+            (define expected (format "~a~a ~a" (if (even? k) "o" "e") (quotient k 2) filler))
+            (unless (string=? line expected)
+              (fail (format "line ~a is not in the order of the calls" k)))))
+
+        (test-case "stdout and stderr on one terminal keep the order of the calls under a slow reader"
+          (define-values (summary out err)
+            (run-case work "terminal" alternate-program #:peer '("--delay" "0.5" "--pty" "--chunk" "1024" "--pause" "0.0005")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (define lines (output-lines (regexp-replace* #rx#"\r" out #"")))
+          (check-equal? (length lines) 300)
+          (for ([line (in-list lines)] [k (in-naturals)])
+            (define expected (format "~a~a ~a" (if (even? k) "o" "e") (quotient k 2) filler))
+            (unless (string=? line expected)
+              (fail (format "line ~a is not in the order of the calls" k)))))
+
+        (test-case "IO.flush returns once a slow reader has taken the data"
+          (define-values (summary out err)
+            (run-case work "flush" flush-program #:peer '("--delay" "1.0")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-rows (output-lines out) 100)
+          (check-equal? err "flushed\n")
+          (check-true (>= (hash-ref summary 'first_error_at) (hash-ref summary 'read_start)) "flush waited for the reader"))
+
+        (test-case "a crash notice waits for a stderr that is full and then arrives whole"
+          (define-values (summary out err)
+            (run-case work "crash-notice" crash-while-stuck-program
+                      #:peer '("--error-delay" "1.0") #:vm '("--json")))
+          (check-equal? (hash-ref summary 'status) 1)
+          (check-true (>= (hash-ref summary 'first_error_at) 0.9) "stderr was stuck while the task crashed")
+          (define lines (string-split err "\n"))
+          (define crash (filter (lambda (line) (regexp-match? #rx"^{\"code\":\"RUNTIME-DIVISION-BY-ZERO\"" line)) lines))
+          (check-equal? (length crash) 1)
+          (check-equal? (hash-ref (string->jsexpr (car crash)) 'task) #t)
+          (check-equal? (length (filter (lambda (line) (regexp-match? #rx"^warn [0-9]+ w+$" line)) lines)) 200))
+
+        (test-case "a long error text reaches a stderr file whole"
+          (define-values (status elapsed out err) (run-to-file work "big-error" big-unwrap-program #:stderr-file #t))
+          (check-equal? status 1)
+          (check-equal? out "")
+          (check-regexp-match #rx"RUNTIME-UNWRAP-ERROR" err)
+          (check-true (> (string-length err) 131072) "the whole text is written"))
 
         (test-case "a regular file written by the pool is drained while a child is stopped at the end of the run"
           (define-values (status elapsed out err) (run-to-file work "live-child" live-child-program))

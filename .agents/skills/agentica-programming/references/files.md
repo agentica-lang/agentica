@@ -40,8 +40,9 @@ wait. Timing out active I/O closes that handle (later calls say the handle is
 closed); timing out while waiting for its lock leaves it open. Output is
 buffered (4096 bytes per handle) until it overflows, `File.flush`,
 `File.close` or the end of the run, so a write error may show there. At the
-end of the run the VM closes every open file and waits for the writes, at
-most 30000 ms; `agentica --flush-timeout MS` or the variable
+end of the run the VM closes every open file and waits for the writes, and
+for the buffered output of stdout and stderr (a slow pipe reader gets all of
+it), at most 30000 ms; `agentica --flush-timeout MS` or the variable
 `AGENTICA_FLUSH_TIMEOUT_MS` (0 to 86400000, bad values exit 2, the flag wins,
 no way to turn the limit off) sets the wait. When time runs out the VM ends the run with the same exit code and
 one stderr line, `agentica: file data may not be written: ...`, or
@@ -51,7 +52,9 @@ same end: children stop, files are written, then the VM ends by the
 signal; a second signal ends it at once (after the children are
 stopped). A path that reopens a pipe the VM made itself (`/proc/self/fd/N`
 or `/dev/fd/N`) is refused as not a regular file; pipes the VM got at
-start (standard input, output and error, `bash <(...)`) stay readable. FIFOs
+start (standard input, `bash <(...)`) stay readable. Standard output and
+error are the VM's own once the loop writes them, so a path to a pipe
+there (`/dev/stdout`, `/proc/self/fd/1`) is refused the same way. FIFOs
 and devices count as files: a FIFO with no writer gives EOF, and opening
 one for writing with no reader is an error. Calls on pipes, FIFOs and
 terminals (stdin too, when `/proc` lets the VM reopen it) wait on the VM's event loop, not in the thread pool,

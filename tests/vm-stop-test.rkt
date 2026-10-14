@@ -204,6 +204,24 @@
                        (+ 128 sigterm))
          (check-equal? errors "")))))
 
+  (test-case "a stop signal with standard output stuck does not wait for the flush limit"
+    (when (ready? "the stuck stdout test")
+      (with-temp-dir
+       (lambda (root)
+         (define bytecode
+           (compile-program root (string-append "def main() -> Void\n  line = \"y\"\n  for i in 0..9\n"
+                                                "    line = line + line\n  end\n  n = 0\n  while n < 100\n"
+                                                "    puts(line)\n    n += 1\n  end\n"
+                                                "  IO.warn(\"ready\")\n  Task.sleep(30000)\nend\n")))
+         (define-values (vm out in err) (subprocess #f #f #f vm-file "--" bytecode))
+         (close-output-port in)
+         (check-equal? (sync/timeout wait-seconds (read-line-evt err)) "ready")
+         (sleep 0.3)
+         (define start (current-inexact-milliseconds))
+         (unix-kill (subprocess-pid vm) sigterm)
+         (check-equal? (finish vm (lambda () (close-input-port out) (close-input-port err))) (+ 128 sigterm))
+         (check-true (< (- (current-inexact-milliseconds) start) 5000) "the run does not wait for the reader")))))
+
   (test-case "Ctrl-C through the CLI stops a child that ignores the signals and writes the file"
     (when (ready? "the CLI interrupt test")
       (with-temp-dir

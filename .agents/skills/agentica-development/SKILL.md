@@ -87,9 +87,9 @@ tests/
   fixtures/             # golden fixtures and independent Node.js and Python peers
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
-  vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full stdout, Ctrl-C through the CLI
+  vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full and unread stdout, Ctrl-C through the CLI
   vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
-  vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, the blocking fallback, a gone reader, a crashed parent
+  vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, a socket and a pty as stdout, the order of stdout and stderr on one target, notices, a gone reader, a crashed parent
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")

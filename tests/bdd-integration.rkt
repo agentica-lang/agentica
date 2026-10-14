@@ -114,7 +114,7 @@
        (check-true (hash-ref drawn 'ok))
        (check-true (exact-nonnegative-integer? (hash-ref drawn 'seed))))))
 
-  (test-case "programs under test: no flush, wrong output, the output limits, literal input and the working directory"
+  (test-case "programs under test: output without a flush, wrong output, the output limits, literal input and the working directory"
     (with-suite
      `(("buffered.agc" . "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n")
        ("output.agc" . "def main() -> Void\n  puts(\"actual\")\n  IO.warn(\"warning\")\n  System.exit(3)\nend\n")
@@ -132,7 +132,7 @@
      (lambda (directory)
        (display-to-file
         (string-append
-         "Scenario: no flush\nGiven the Agentica program \"buffered.agc\"\n"
+         "Scenario: output without a flush\nGiven the Agentica program \"buffered.agc\"\n"
          "When I send the line \"hello\"\nThen I receive the line \"hello\" within 1000 milliseconds\n"
          "Scenario: wrong stdout\nGiven the Agentica program \"output.agc\"\n"
          "Then the program exits with code 3 within 5000 milliseconds\nAnd stdout is:\n" (doc "incorrect")
@@ -156,7 +156,7 @@
         (build-path directory "lifecycle.feature") #:exists 'append)
        (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
        (check-equal? (codes report)
-                     '("RUNTIME-BDD-TIMEOUT" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
+                     '(#f "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
                        "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
                        "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"))
        (define (details item)

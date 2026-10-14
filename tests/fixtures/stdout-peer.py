@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import pty
 import socket
 import subprocess
 import sys
@@ -13,11 +14,13 @@ def main():
     parser.add_argument("--stdout-file", required=True)
     parser.add_argument("--stderr-file", required=True)
     parser.add_argument("--delay", type=float, default=0)
+    parser.add_argument("--error-delay", type=float, default=0)
     parser.add_argument("--chunk", type=int, default=65536)
     parser.add_argument("--pause", type=float, default=0)
     parser.add_argument("--read-after-exit", action="store_true")
     parser.add_argument("--merge", action="store_true")
     parser.add_argument("--socket", action="store_true")
+    parser.add_argument("--pty", action="store_true")
     parser.add_argument("--close-after", type=int, default=0)
     parser.add_argument("--limit", type=float, default=60)
     parser.add_argument("command", nargs=argparse.REMAINDER)
@@ -27,9 +30,11 @@ def main():
     if options.socket:
         reader, writer = socket.socketpair()
         read_fd, write_fd = reader.detach(), writer.detach()
+    elif options.pty:
+        read_fd, write_fd = pty.openpty()
     else:
         read_fd, write_fd = os.pipe()
-    if options.merge:
+    if options.merge or options.pty:
         error_read, error_write = None, write_fd
     else:
         error_read, error_write = os.pipe()
@@ -40,7 +45,7 @@ def main():
     if error_read is not None:
         os.close(error_write)
 
-    state = {"exit": None, "read_start": None, "status": None, "ticks": 0}
+    state = {"exit": None, "read_start": None, "status": None, "ticks": 0, "first_error": None}
     error_data = bytearray()
 
     def watch_exit():
@@ -53,10 +58,13 @@ def main():
         state["exit"] = time.monotonic() - start
 
     def read_errors():
+        time.sleep(options.error_delay)
         while True:
             data = os.read(error_read, 65536)
             if not data:
                 break
+            if state["first_error"] is None:
+                state["first_error"] = time.monotonic() - start
             if state["read_start"] is None:
                 state["ticks"] += data.count(b"tick")
             error_data.extend(data)
@@ -74,7 +82,10 @@ def main():
         time.sleep(options.delay)
     state["read_start"] = time.monotonic() - start
     while True:
-        data = os.read(read_fd, options.chunk)
+        try:
+            data = os.read(read_fd, options.chunk)
+        except OSError:
+            break
         if not data:
             break
         out_data.extend(data)
@@ -97,8 +108,7 @@ def main():
                 "exit": state["exit"],
                 "read_start": state["read_start"],
                 "ticks_before_read": state["ticks"],
-                "stdout_bytes": len(out_data),
-                "stderr_bytes": len(error_data),
+                "first_error_at": state["first_error"],
             }
         ),
         flush=True,
