@@ -142,12 +142,11 @@ different operation from run to run, so read a row to within a few ms:
 | `concat` of two halves | 2 | 24 | 5 |
 | 20,000 pushes | 2,087 | 7 | 7 |
 
-`take` and `drop` still copy their items (a leaf at a time, with `memcpy`):
-`drop(n / 2)` takes about 10 ms against 8 on master, and `take` shares nothing
-either. Indexing and `for` stay about 1.3 and 1.06 times master, the price of
-the two to four loads per item. `list-bulk` (`repeat`, `to_a`, `reverse`,
-`take`, `drop`, `concat`, `join`, `split` and `sort`, size 4) takes 0.867 s on
-master and 0.807 s here.
+At this head `take` and `drop` still copied their items (a leaf at a time, with
+`memcpy`); the next section shares leaves. Indexing and `for` stay about 1.3 and
+1.06 times master, the price of the two to four loads per item. `list-bulk`
+(`repeat`, `to_a`, `reverse`, `take`, `drop`, `concat`, `join`, `split` and
+`sort`, size 4) takes 0.867 s on master and 0.807 s here.
 
 Peak RSS of a process that builds one list of 1,000,000 items and prints its
 size (the start-up cost of the VM is 5.6 MB), median of 3:
@@ -164,6 +163,67 @@ one build are slices of one array, so the cost over master is the branches, 1.6%
 (about 264 KB for a million items). A list grown by pushes holds its leaves
 separately and the path copies are garbage until the next collection, which is
 why the push loop peaks higher.
+
+### Bulk operations after the trie
+
+The list performance PR (`docs/vm/17-lists.md` §17.11) against the flat array
+(0f44c74, before the trie), the trie as merged (ba2bea8) and CPython 3.13.5, on
+one host, 2026-10-14. The program is `lb.agc` and its twin `lb.py`: one pass
+over 1,000,000 items, each operation timed once with `Time.monotonic_ms`
+(median of 7 runs, the three VMs alternating; Python 5 runs). Milliseconds:
+
+| Operation | Python | Flat | Trie | This PR |
+|---|---:|---:|---:|---:|
+| `sort` of the reversed range | 16 | 180 | 191 | 17 |
+| `String.split(big, "")` | 7 | 42 | 85 | 9 |
+| `join("")` | 10 | 20 | 20 | 16 |
+| `reverse` | 8 | 9 | 23 | 23 |
+| `take(n / 2)` and `drop(n / 2)` | 9 | 4 | 8 | under 1 |
+| `concat` of the two halves | 7 | 32 | 8 | 26 |
+| `map` (`y + 1`) | 69 | 101 | 102 | 103 |
+| `filter` (`y % 2 == 0`) | 83 | 156 | 170 | 167 |
+| `(0...n).to_a` | 44 | 14 | 11 | 12 |
+| `for x in xs` sum | 126 | 131 | 138 | 134 |
+| 20,000 pushes | 4 | 2,207 | 7 | 10 |
+
+Read the `reverse` and `concat` rows with the next table. A collection costs
+15 to 25 ms here (it scans the 60 to 100 MB of live 16-byte values), the run is
+deterministic, and the collections of this program (6 on the trie and on this
+PR) fall inside whichever operation allocates when the threshold is crossed. On
+the trie and on this PR that is `reverse` and `concat`; on the flat array it
+was another operation (36 collections, the quadratic push loop among
+them). The sum of the rows is the fair figure: 728 ms (flat), 780 (trie) and
+531 (this PR), 20,000 pushes left out.
+
+To take the placement out, each operation ran 20 times in a loop next to the
+same live data, and the time of a loop without the operation was subtracted
+(median of 3 runs, milliseconds per operation, collections included):
+
+| Operation | Flat | Trie | This PR |
+|---|---:|---:|---:|
+| `sort`, reversed range | 170 | 174 | 21 |
+| `sort`, scattered ints (Python: 173) | 308 | 319 | 100 |
+| `String.split(big, "")` | 52 | 65 | 15 |
+| `join("")` | 20.5 | 21.6 | 17.6 |
+| `reverse` | 12.5 | 11.7 | 11.6 |
+| `take` and `drop` of n / 2 | 9.9 | 12.2 | 1.0 |
+| `take`, `drop` and `concat` | 16.0 | 20.3 | 7.1 |
+| `map` | 100 | 99 | 102 |
+| `filter` | 149 | 159 | 162 |
+
+`reverse`, `join`, `map` and `filter` are about where they were: a million-item
+operation is an allocation of 16 MB plus its share of the collector (8 of the
+11.6 ms of `reverse`; the same reverse into a block that needs no collection
+takes 3 ms), and `map` and `filter` are 70 to 100 ns of callback per item.
+`filter` moved by 2% between builds that differ only in unrelated code, which
+is the noise of the link layout. `sort` of a list in order (or strictly
+descending) is O(n); a scattered list is 3 times faster, mainly because the keys
+are read once and compared as `uint64_t`.
+
+`list-bulk` (size 2, median of 3 runs, two alternating rounds) takes 0.44 s on
+the trie and 0.22 s here (CPython: 0.455 s); `lists`, `list-build` and `maps`
+are 0.079 / 0.076, 0.105 / 0.104 and 0.29 / 0.28 s (trie / this PR), inside the
+noise. Peak RSS of `list-bulk` is 66 to 83 MB on the trie and 65 to 73 MB here.
 
 ## Conclusions
 

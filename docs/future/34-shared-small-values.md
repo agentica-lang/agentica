@@ -1,6 +1,11 @@
 ## 34. Shared small values in the VM
 
 **Status:** a candidate (roadmap 7g), kept only if a measurement shows it helps.
+Partly built by the list performance PR
+([§17.11](../vm/17-lists.md)): `agc_runtime` has the 128 one-character ASCII
+Strings (`chars`, made in `agc_vm_init`) and `String.split` uses them, which
+took `split(big, "")` of a million characters from 85 ms to 9 ms. The other
+paths and the empty list, map and string are still open.
 An implementation proposal with no language change, in the spirit of CPython's
 small-int cache: the VM makes some values once and returns the same object every
 time a program computes them.

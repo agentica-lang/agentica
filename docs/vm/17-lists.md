@@ -28,8 +28,9 @@ loop of n pushes takes 0.41 s for n = 10,000, 6.0 s for 40,000 and 88 s for
 
 **Non-goals.**
 - No transients and no in-place `push` on an unshared list (§17.6).
-- No relaxed (RRB) nodes. `take`, `drop`, `reverse`, `sort`, `Map.keys` and a
-  `concat` with a large right side stay O(n).
+- No relaxed (RRB) nodes. `reverse`, `sort`, `Map.keys`, a `drop` that does not
+  start at a multiple of 32 and a `concat` with a large right side stay O(n);
+  `take`, an aligned `drop` and `concat` share leaves (§17.11).
 - No unboxed leaves in this design. `List[Int]` and `List[Float]` leaves are the
   first step of
   [§38.6](../future/38-value-representation.md#386-direction-use-the-static-types);
@@ -77,8 +78,9 @@ measured, not only derived. The model is not in the repository.
 - **Allocation.** The list object, branches and leaves all come from `agc_alloc`
   (`GC_MALLOC`, zeroed, scanned): they hold GC pointers or `agc_value`s, which
   can hold them (§5.3). Never `agc_alloc_atomic` for them. Atomic stays for
-  temporary index arrays (the sort's `order`, `vm/interp.c:256-257`) and, in the
-  later §38 step, for leaves of Int or Float only. A branch is 256 bytes and a
+  temporary arrays (the sort's entries for Int and Float keys,
+  `vm/interp.c:321-340`) and, in the later §38 step, for leaves of Int or Float
+  only. A branch is 256 bytes and a
   leaf 512, so they are small Boehm objects, served from size-class free lists.
   A flat list of 100,000 items is one large object of 1.6 MB. Under `AGC_NO_GC`
   (the ASan build) `agc_alloc` is `calloc` kept until `agc_release_all`
@@ -128,7 +130,10 @@ measured, not only derived. The model is not in the repository.
   program error. A later `set` copies the leaf it changes, so the array lives as
   long as any list still shares one of its leaves. Bulk copies (`slice`,
   `concat`, `from_array`) fill the builder a leaf at a time with `memcpy`, not
-  one `push` per item.
+  one `push` per item. The builder holds a write pointer and the end of the
+  run it fills (`next`, `stop`; the run is the new array, then the tail), so
+  `push` is a compare and a store, inline in `value.h`, and so is the cursor
+  read. `finish` aborts unless both runs are full.
 - **Unknown count.** `filter`, and the planned `Task.map`
   ([§27.1](../future/27-iteration-and-concurrency.md#271-taskmap), results
   arrive out of order), fill a flat staging array of the input length and call
@@ -149,13 +154,13 @@ New algorithms and costs. Every row migrates to the API of §17.4. "Cursor" mean
 | 3 | `LIST_GET`, `xs[i]` (`interp.c:605-610`), `List.at` (`builtins.c:165-168`) | `items[i]` | same bounds check on `agc_list_len` (message, code and span unchanged, `interp.c:485`), then `agc_list_get` | O(log32 n) |
 | 4 | `for x in xs` (`src/lower.rkt:792`, `801`) | `LIST_LEN` once, `LIST_GET` per item | same bytecode, n gets | O(n log32 n): at most 4 loads per item at 1M items. A cursor opcode would save them but is a new opcode and an `.agcb` change |
 | 5 | `List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by` (`interp.c:304-375`, `387-424`; table `builtins.c:408-414`) | `st->index` into the list, output in `st->out` | `agc_native` (`interp.c:7-17`) keeps a cursor over the input and the current item (filter needs it after the call; today it re-reads `items->items[st->index - 1]`, `:332`). `map` and `sort_by` keys use a sized builder of n; `filter` stages and calls `from_array`. The input list stays in `st->list` for `sort_by` | O(n); one cursor step and one turn-cost unit per callback (`:357`), as today |
-| 6 | `agc_sort_by_keys` (`interp.c:250-276`); `List.sort` (`builtins.c:212-216`); `Dir.list` (`files.c:1009`) | merge sort over `order` indexes, `keys->items[order[j]]` | copy the keys to one flat array (`agc_list_to_array`; for `sort` the keys are the items), same merge on indexes, result by a sized builder that reads the items with `list_get` (no second copy of the items) | O(n log n) plus O(n) temporary memory; the charge `n * rounds` (`:253-255`) is unchanged |
+| 6 | `agc_sort_by_keys` (`interp.c:321-340`); `List.sort` (`builtins.c:212-216`); `Dir.list` (`files.c:1009`) | merge sort over `order` indexes, `keys->items[order[j]]` | one flat array of `(key, index)` entries made once (an Int or Float key becomes a `uint64_t` that sorts the same way, a String key is its pointer), a check for keys that never decrease (the input is the result) or all fall (one `reverse`), else a bottom-up merge of the entries; the result by a sized builder that reads the items with `list_get` (§17.11) | O(n log n), O(n) when the keys are in order, plus O(n) temporary memory; the charge `n * rounds` (`:326`) is unchanged |
 | 7 | `agc_value_units` (`value.c:332-340`) | `len` | `agc_list_len` | O(1); every size cost keeps its number (§17.5) |
 | 8 | `List.append`, `push` (`builtins.c:151-157`) | copy n, add 1 | `agc_list_append` | O(1) amortized; O(log32 n) worst |
 | 9 | `List.set` (`builtins.c:170-176`) | copy n | `agc_list_set` | O(log32 n) |
-| 10 | `List.concat` (`builtins.c:126-133`) | copy a and b | b empty gives a; a empty gives b; `b.len <= 32` appends b's items to a (shares a's trie); else a sized builder filled with `memcpy` from a then b | O(b.len) for a small b, else O(a + b) |
-| 11 | `List.take`, `List.drop` (`builtins.c:193-202`, `list_slice` `:140-144`) | `memcpy` | `agc_list_slice(l, from, count)`: a sized builder filled leaf by leaf with `memcpy`, starting at `from`. `take(k >= len)` and `drop(0)` return the input; `take(k)` with `k > tail_off` may share `root` and `shift` and copy only the tail | O(count); stays O(n): without relaxed nodes a shifted tail cannot share leaves |
-| 12 | `List.reverse` (`builtins.c:204-210`) | reversed copy | `agc_list_reverse`: a sized builder fed from the leaves, last to first | O(n) |
+| 10 | `List.concat` (`builtins.c:126-133`) | copy a and b | b empty gives a; a empty gives b; `b.len <= 32` appends b's items to a (shares a's trie); else a builder whose first leaves are a's own, filled with `memcpy` from a's tail then b (§17.11) | O(b.len + a.len / 32) |
+| 11 | `List.take`, `List.drop` (`builtins.c:193-202`, `list_slice` `:140-144`) | `memcpy` | `agc_list_slice(l, from, count)`: `take(k >= len)` and `drop(0)` return the input; `take(k)` with `k > tail_off` shares `root` and `shift` and copies only the tail; from a multiple of 32, with `count` at least half of `len`, the result's leaves are the source's leaves and only the branches and the tail are new (§17.11); else a sized builder filled leaf by leaf with `memcpy`, starting at `from` | O(count / 32) when it shares, else O(count): without relaxed nodes a shifted tail cannot share leaves |
+| 12 | `List.reverse` (`builtins.c:204-210`) | reversed copy | `agc_list_reverse`: a sized builder written directly from the leaves, last to first | O(n) |
 | 13 | `List.repeat` (`builtins.c:178-185`), `Range.to_a` (`:335-343`), `Map.keys` and `values` (`map_walk`, `:229-239`; the `agc_map_get(.., &l->items[k])` at `:235` writes to a local, then pushes) | fill a new list | `Range.to_a`, `Map.keys` and `values`: sized builder. `List.repeat` (`agc_list_repeat`): one leaf filled with the value, shared by every slot of the trie, and one full and one last branch per level | O(n); `repeat` is O(log32 n) in time and memory |
 | 14 | `System.args` (`main.c:292-300`, empty list `interp.c:73`), `IO.read_bytes` (`input.c:340-353`), stream bytes (`stream.c:129-136`), `File.read_bytes` (`files.c:1012-1016`), `Dir.list` (`files.c:1001-1010`), HTTP header lists for client and server (`http_fields.c:114-127`), `String.split` (`strings.c:288-316`) | fill a new list | sized builder with the known count | O(n) |
 | 15 | `String.join` (`strings.c:318-339`), `Path.join` (`files.c:1471-1495`, three passes), `String.from_bytes` (`strings.c:466-478`), `agc_byte_list` (`value.c:519-528`, used by `files.c:1323`, `process.c:867`, `tcp.c:1089`), process arguments (`process.c:599-605`, `728-731`), header scans (`http_fields.c:37-41`, `150-156`, `http_server.c:360-366`; the client passes its list at `http_client.c:717`) | index loop | one cursor per pass | O(n) |
@@ -258,7 +263,7 @@ and "constant work charges nothing" ([§10.2.1](10-io-scheduler.md),
 |---|---|---|---|
 | `size`, `at`, `LIST_LEN`, `LIST_GET` | 0 | same | same |
 | `take`, `drop`, `reverse`, `repeat`, `Range.to_a`, `String.split`, `join`, `from_bytes`, `Map.keys`, `values`, `Dir.list`, `read_bytes`, header lists | `AGC_COST_SIZE`: args + result | same | same, same numbers, still O(n) work |
-| `sort`, `sort_by` | `n * ceil(log2 n)` inside `agc_sort_by_keys` (`:253-255`) | same | same |
+| `sort`, `sort_by` | `n * ceil(log2 n)` inside `agc_sort_by_keys` (`:326`) | same | same |
 | `map`, `filter`, `reduce`, `each`, `any?`, `all?` | 1 per callback | same | same |
 | `append` | `AGC_COST_SIZE`: n + (n + 1) | same | 0 (`AGC_COST_NONE`) |
 | `set` | `AGC_COST_SIZE`: 2n | same | 0 |
@@ -472,4 +477,58 @@ Decided on 2026-10-14, when this design was merged:
    (`docs/roadmap/08-data-structures.md`, 8d; `docs/roadmap/07-vm.md:255-262`;
    `docs/vm-benchmarks.md:69-72`). `maze-bfs` stays a no-regression check.
 3. **`take`, `drop` and a large `concat` stay O(n)** (no RRB). `Queue[T]` (8c)
-   is the answer for FIFO use.
+   is the answer for FIFO use. The list performance PR (§17.11) keeps this for
+   a `drop` that does not start at a multiple of 32 and for the right side of a
+   `concat`, and makes `take`, an aligned `drop` and the left side of a
+   `concat` share leaves.
+
+### 17.11 Bulk operations after the trie
+
+A follow-up to the trie (PR 2), found by timing each operation on a million
+items against the flat array and CPython 3.13 (`docs/vm-benchmarks.md`, "Bulk
+operations after the trie").
+
+- **What cost the time.** The trie itself was cheap: a reverse into a fresh
+  array takes 3 ms. The rest of an operation on a million items was the
+  collector (a collection scans every live array of 16-byte values, about 8 ms
+  per 16 MB allocated here) and, for `sort` and `split`, work per item:
+  `agc_sort_by_keys` called four checked accessors per comparison and read the
+  keys through an index array, and `split("")` allocated one 32-byte String per
+  character.
+- **Shared leaves.** `builder_begin` can take the first leaves of a list from
+  another list (a source list, the index of its first leaf and how many
+  leaves) instead of allocating them; only the branches (1.6% of the items)
+  are rebuilt, in one array per level, and the new items go to one array as
+  before. `take(k)`,
+  `drop(k)` for `k` a multiple of 32, and `concat(a, b)` (a's leaves, then a's
+  tail and b copied) use it. A leaf is a slice of the array of the build that
+  made it, so a list that shares a leaf keeps that array, and every item in it,
+  alive. To bound that, `slice` shares only when `count` is at least half of
+  `len`; a smaller slice, or one that starts inside a leaf, copies. `concat`
+  keeps all of a, so it loses nothing. A chain of halving slices can still hold
+  the first array.
+- **Sort.** The keys are read once (`agc_as_int`, `agc_as_float` or
+  `agc_as_string`, which also checks every key's type) into an array of
+  `(key, index)` entries, 16 bytes each, atomic for Int and Float keys. An Int
+  becomes `i ^ 2^63` and a Float its IEEE bits turned into a total order (`-0.0`
+  as `0.0`, every NaN as the largest key), so one unsigned compare orders both
+  as `key_less` did; a String entry holds the pointer and compares with
+  `memcmp`. One scan finds keys that never decrease (the sort returns the input)
+  or that strictly decrease (one `reverse`: equal keys are never reversed, so
+  the sort stays stable). Otherwise a bottom-up merge of the entries, then a
+  sized builder reads the items with `list_get`. The charge `n * ceil(log2 n)`
+  is unchanged.
+- **Split.** `agc_runtime` holds the 128 one-character ASCII Strings, made in
+  `agc_vm_init`; `split` returns them for a one-byte ASCII piece. Strings have
+  no identity ([§34.3](../future/34-shared-small-values.md#343-why-it-is-safe)),
+  so a program cannot tell. A million-character `split("")` allocates no
+  String.
+- **Cursor and builder.** `agc_list_builder_push` and `agc_list_cursor_next`
+  are inline in `value.h` (`agc_list_builder_advance` and
+  `agc_list_cursor_fill` take the slow path), so `map`, `join`, `Range.to_a` and
+  the JSON builders do not call into `list.c` per item.
+- **Tried and left out.** A chunked staging area for `filter` (leaves filled
+  one at a time, then linked into the trie) saved 4% on a filter that keeps
+  half and cost 3% on one that keeps everything, so `filter` still stages in a
+  flat array. `map` and `filter` spend 70 to 100 ns per item in the callback
+  (frame, registers, turn cost); the list is about 10% of it.

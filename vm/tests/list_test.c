@@ -1,3 +1,7 @@
+/*
+ * The list API at the lengths around the 32-way boundaries: trie shape, builder,
+ * append, set, slice, concat, reverse and repeat, cursors, and persistence.
+ */
 #include "../core.h"
 #include "../list_impl.h"
 
@@ -299,6 +303,50 @@ static void expect_sharing(void) {
   expect_shape(topped, 1057);
 }
 
+static void expect_shared_leaves(void) {
+  agc_list *big = built(200);
+  const agc_list *dropped = agc_list_slice(big, 64, 136);
+  expect_part(dropped, 64, 136);
+  for (size_t k = 0; k < 4; k++) assert(dropped->root->child[k] == big->root->child[k + 2]);
+  const agc_list *taken = agc_list_slice(big, 0, 128);
+  expect_part(taken, 0, 128);
+  for (size_t k = 0; k < 3; k++) assert(taken->root->child[k] == big->root->child[k]);
+  const agc_list *few = agc_list_slice(big, 0, 40);
+  expect_part(few, 0, 40);
+  assert(few->root->child[0] != big->root->child[0]);
+  const agc_list *odd = agc_list_slice(big, 33, 160);
+  expect_part(odd, 33, 160);
+  assert(odd->root->child[0] != big->root->child[1]);
+  agc_list *head = built(100);
+  const agc_list *both = agc_list_concat(head, others(100));
+  assert(both->root->child[0] == head->root->child[0] && both->root->child[2] == head->root->child[2]);
+  expect_joined(both, 100, 100, false);
+  const size_t sizes[] = {1500, 4000};
+  for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
+    expect_joined(agc_list_concat(built(sizes[s]), others(sizes[s])), sizes[s], sizes[s], false);
+    expect_joined(agc_list_concat(others(sizes[s]), built(sizes[s])), sizes[s], sizes[s], true);
+  }
+}
+
+static agc_list *replaced_first(size_t n) { return agc_list_set(built(n), 0, other(0)); }
+
+static void expect_interior_pointers(void) {
+  enum { JUNK = 16384, ROUNDS = 100000, AFTER = 2000 };
+  agc_gc_info info;
+  if (!agc_gc_stats(&info)) return;
+  const size_t n = 20000;
+  agc_list *kept = replaced_first(n);
+  uint64_t stop = info.collections + 3;
+  for (size_t round = 0; round < ROUNDS && info.collections < stop; round++) {
+    memset(agc_alloc(JUNK), 0xAB, JUNK);
+    agc_gc_stats(&info);
+  }
+  assert(info.collections >= stop);
+  for (size_t round = 0; round < AFTER; round++) memset(agc_alloc(JUNK), 0xAB, JUNK);
+  assert(is_other(agc_list_get(kept, 0), 0));
+  for (size_t k = 1; k < n; k++) assert(is_item(agc_list_get(kept, k), k));
+}
+
 static void expect_versions(void) {
   agc_list **versions = agc_alloc(agc_size_mul(KEPT + 1, sizeof(agc_list *)));
   agc_list *l = agc_list_from_array(NULL, 0);
@@ -344,6 +392,8 @@ int main(void) {
   expect_debug();
   expect_versions();
   expect_sharing();
+  expect_shared_leaves();
+  expect_interior_pointers();
   const size_t chains[] = {33, 65, 1057, 1100};
   for (size_t s = 0; s < sizeof chains / sizeof chains[0]; s++)
     if (chains[s] <= MAX_LENGTH) expect_set_chain(chains[s]);

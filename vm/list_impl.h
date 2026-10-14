@@ -1,3 +1,8 @@
+/*
+ * The private layout of a list: struct agc_list, the trie node types and the
+ * inline length and read used by the hot loops. Only list.c, interp.c and
+ * tests/list_test.c include it. Core header. Design: docs/vm/17-lists.md.
+ */
 #ifndef AGC_LIST_IMPL_H
 #define AGC_LIST_IMPL_H
 
