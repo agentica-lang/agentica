@@ -1045,16 +1045,16 @@ static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
   agc_unregister(vm, r);
   if (!o->st->poller) {
     agc_io_detached(vm, &close_io, o, agc_handle_value(r), AGC_JOB_FLUSH);
+    if (ender) {
+      r->ender = ender;
+      ender->closing++;
+    }
   } else if (step(o)) {
     drop(o);
-    return;
   } else {
     o->job = agc_io_detached(vm, &poll_close_io, o, agc_handle_value(r), AGC_JOB_FLUSH);
     agc_poller_wait(o->st->poller, true, ready, o);
   }
-  if (!ender) return;
-  r->ender = ender;
-  ender->closing++;
 }
 
 static agc_value done(agc_vm *vm, void *data, agc_value context) {

@@ -16,12 +16,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 15
+#define MAX_FNS 17
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -281,6 +281,19 @@ static agc_value test_keep(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static agc_value test_closing(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  vm->task->closing += 2;
+  return agc_void();
+}
+
+static agc_value test_close_done(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_task_close_done(vm, agc_as_task(vm, args[0]));
+  return agc_void();
+}
+
 static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
 static agc_value test_http(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -372,6 +385,8 @@ static const agc_builtin test_builtins[] = {
   {"Test.print", 1, test_print, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.drain", 1, test_drain, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.keep", 1, test_keep, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.closing", 1, test_closing, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -474,6 +489,12 @@ static void build_tasks(prog *p) {
   call_int(p, F_KEEP, B_SLEEP, 60000);
   call_int(p, F_KEEP, B_MARK, 994);
   finish_fn(p, F_KEEP);
+
+  call_reg(p, F_CLOSER, B_CLOSING, 0, 1);
+  finish_fn(p, F_CLOSER);
+
+  call_reg(p, F_FINISH, B_CLOSE_DONE, 0, 1);
+  finish_fn(p, F_FINISH);
 }
 
 static void new_prog(prog *p) {
@@ -739,6 +760,38 @@ static void check_keep(agc_vm *vm, int64_t n) {
   }
 }
 
+static void check_closing(agc_vm *vm, int64_t n) {
+  agc_task *closer = reg_task(vm, 0);
+  agc_task *awaiter = reg_task(vm, 2);
+  assert(closer->state == AGC_TASK_DONE && mark_count == 0);
+  if (n == 1) {
+    assert(closer->closing == 2 && closer->waiters == awaiter && awaiter->state == AGC_TASK_PARKED);
+  } else if (n == 2) {
+    assert(closer->closing == 2 && !closer->waiters && cancelled(awaiter));
+  } else if (n == 3) {
+    assert(closer->closing == 1 && !closer->waiters && cancelled(awaiter));
+  } else {
+    assert(closer->closing == 0 && !closer->waiters);
+  }
+}
+
+static void test_closing_task(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_CLOSER, 1);
+  spawn_with(&p, F_MAIN, 2, F_AWAITER, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_reg(&p, F_MAIN, B_CLOSE_DONE, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 3);
+  spawn_with(&p, F_MAIN, 4, F_FINISH, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 88);
+  call_int(&p, F_MAIN, B_CHECK, 4);
+  run_done(&p, check_closing);
+}
+
 static void test_cancel_closes_owned(void) {
   prog p;
   new_prog(&p);
@@ -971,6 +1024,7 @@ int main(void) {
   test_self_cancel();
   test_self_own();
   test_cancel_closes_owned();
+  test_closing_task();
   test_children_move();
   test_timer_fired_then_cancel();
   test_channel_waiters();
