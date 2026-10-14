@@ -168,6 +168,23 @@ The `binary` arm on the head of PR #33.
 - Both models wrote the same Ruby and Python forms, so the habits are not one model's quirk. GLM also wrote `puts` with a non-String value and `to_s` on `Bool`. Ruby allows both, and the checker rejected both in those rounds.
 - One t6 run failed a hidden case with a logic error.
 
+### Round 9: regression on the VM (2026-10-14)
+
+The `binary` arm on master `e24fac9` (the C VM runs every program; the evaluator is gone), t1 to t8, 3 reps per task, with the models of rounds 6 and 8. It asks whether the VM-only language regressed for agents (roadmap row 7.2.2). Tokens are input plus output, without cached tokens, as in the rounds above. Both models together cost $0.58.
+
+| Model | Tasks | Passed | Tokens/run | Seconds/run | Failing/run | Before (round 6 or 8) |
+|---|---|---|---|---|---|---|
+| DeepSeek V4.1 flash | t1 to t5 (15 runs) | 14/15 | 21,184 | 98 | 2.7 | 14/15, 31,691, 99, 3.1 |
+| DeepSeek V4.1 flash | t6 to t8 (9 runs) | 9/9 | 62,955 | 309 | 7.8 | 9/9, 78,694, 253, 7.9 |
+| GLM 5.3 flash | t1 to t5 (15 runs) | 14/15 | 8,456 | 39 | 4.1 | 15/15, 11,821, 33, 4.8 |
+| GLM 5.3 flash | t6 to t8 (9 runs) | 7/9 | 25,777 | 135 | 18.2 | 8/9, 79,286, 189, 22.8 |
+
+- No regression. Accuracy is the same within one run, and tokens fell for both models. With 3 reps, the token means move a lot between rounds, so treat the size of the drop as a direction.
+- The three GLM failures are logic errors, checked by grading the solutions again by hand: a t6 run that does not reject an invalid catalog, a t6 run that filters the wrong items, and a t4 run that fails one of six cases.
+- The DeepSeek failure is a t1 run that hit the 10-minute limit. It searched the binary for builtin descriptions instead of writing code, like the round 6 run.
+- t4 (word count) cost DeepSeek about 60,000 tokens per run, three times the other easy tasks. The most repeated error was `CHECK-CAPTURED-ASSIGNMENT`, about 17 times per run: the agents assign a counter inside an `each` block, Ruby style. PR #195 made its help name the rewrite (`for w in words ... end`).
+- The `binary` arm is not docs-free. Its workspace holds the `raco distribute` bundle, which includes the Racket source of the front end (`lib/plt/agentica/.../main.rkt`), and the agents read it and grep the binary for builtin descriptions. This was true in the earlier rounds too, so the comparison holds.
+
 ### JSON tasks: smoke run (2026-10-03)
 
 One rep per cell, DeepSeek V4.1 flash, 4 runs at a time, 600 s limit. The reference solutions passed all 28 hidden-case runs in Docker.
