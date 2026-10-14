@@ -413,7 +413,7 @@ functions up by name.
    `Task.await`) calls `agc_task_park(vm, true)` (retry): `CALL_BUILTIN`
    keeps the arguments and re-runs the call on wake. Every table entry
    has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md`
-   §10.2.1, "As built"): a builtin whose work grows with its input takes
+   §10.2.1, "Builtins"): a builtin whose work grows with its input takes
    `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
    `steps_left` for that. State goes in `vm->rt` (shared runtime),
    `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files`
