@@ -1,6 +1,6 @@
 ## 27. Iteration and concurrent collections
 
-**Status:** 27.1 (`Task.map`) is planned (roadmap phase 17) at order step 7.3, after 7i deletes the evaluator (order 7.2) and after doc comments and digit separators (order step 7.2a) and the semantic CLI (§39, order step 7.2b); 27.2 (channels) is planned earlier, at order step 7.2.1e (the owner, 2026-10-13); both on the C VM only. They come before strict diagnostics ([section 26](26-strict-diagnostics.md#26-strict-diagnostics), order step 7.6), so their examples, fixtures and site pages are written in today's forms, and each phase 16 PR counts and migrates them. 27.1 adds the checker rule for `try` in a block whose result is `Result[T]`, which `File.open` with a block (§25.9) reuses. 27.3 (`Task.await` with a timeout) is planned too, at order step 8.2: it is prelude code over channels, so it comes after 27.2 and after the compiler prelude (§25.6). 27.4 (lazy streams) is to evaluate later, with the criteria that would plan it. 27.5 records what was decided against (generators, fibers, Agent-style shared state, public locks), so it is not proposed again. This section finalizes the channel proposal of [section 8](08-concurrency.md#8-concurrency-and-parallelism) and answers [section 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
+**Status:** 27.1 (`Task.map`) is planned (roadmap phase 17) at order step 7.3, after 7i deletes the evaluator (order 7.2) and after doc comments and digit separators (order step 7.2a) and the semantic CLI (§39, order step 7.2b); 27.2 (channels) is planned earlier, at order step 7.2.1e (the owner, 2026-10-13); both on the C VM only. They come before strict diagnostics ([section 26](26-strict-diagnostics.md#26-strict-diagnostics), order step 7.6), so their examples, fixtures and site pages are written in today's forms, and each phase 16 PR counts and migrates them. 17d (`File.each_line`, order row 7.2.1h) adds the checker rule for `try` in a block whose result is `Result[T]`, which 27.1 and `File.open` with a block (§25.9) reuse. 27.3 (`Task.await` with a timeout) is planned too, at order step 8.2: it is prelude code over channels, so it comes after 27.2 and after the compiler prelude (§25.6). 27.4 (`File.each_line` and `Stream[T]`) is planned in two steps, decided by the owner on 2026-10-14: step 1 is item 17d at order row 7.2.1h, step 2 is item 17e at order step 8.2. 27.5 records what was decided against (generators, fibers, Agent-style shared state, public locks), so it is not proposed again. This section finalizes the channel proposal of [section 8](08-concurrency.md#8-concurrency-and-parallelism) and answers [section 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
 **What is asked for:** something like Elixir's `Stream` and `Task.async_stream`, Ruby's iterators, generators and accumulators, and faster programs through concurrency.
 
@@ -19,8 +19,8 @@
 | Run the same I/O for each item of a list, at most N at a time, each with a timeout | `Task.map` (27.1) |
 | Long-lived workers, producer and consumer, a flow of unknown length, results in the order they end | tasks and a `Channel` (27.2) |
 | Wait for a task's result, for at most N ms | `Task.await(task, timeout_ms)` (27.3); the task keeps running after a timeout |
-| Read a big file line by line | `File.open` with a block (§25.9, once 15i lands) and a `while` loop over `File.read_line` |
-| An endless sequence | a `while` loop |
+| Read a big file line by line | `File.each_line` (27.4, step 1); until it lands, `File.open` with a block (§25.9) and a `while` loop over `File.read_line` |
+| An endless sequence, or the lines of a file that a step filters, takes or folds | a `while` loop; `Stream[T]` (27.4, step 2) once 17e lands |
 | State that several tasks update | one owner task that receives messages on a channel (27.5); a shared table (§13) when a program needs it |
 
 | § | Item | Decision | Where it lives | Roadmap |
@@ -28,7 +28,7 @@
 | 27.1 | `Task.map` | planned | C builtin in the VM scheduler | 17a |
 | 27.2 | `Channel[T]` | planned | C builtins, a builtin opaque generic | 17b |
 | 27.3 | `Task.await(task, timeout_ms)` | planned | prelude code over `Channel` | 17c |
-| 27.4 | Lazy `Stream[T]` | to evaluate later | none yet | none |
+| 27.4 | `File.each_line` (step 1) and `Stream[T]` (step 2) | planned, in two steps (owner, 2026-10-14) | step 1 a C builtin; step 2 prelude code | 17d, 17e |
 | 27.5 | Generators, fibers, Agent-style state, public locks and threads | decided against | help hints only, added by 17a and 17b | none |
 
 ### 27.1 `Task.map`
@@ -56,7 +56,7 @@ Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> Li
 **Decisions:**
 
 - **Parameter order.** The list, then `limit`, then `timeout_ms`, then the function, which is the trailing block: `Task.map(urls, 8, 5000) do |url| ... end`. It follows Elixir (`async_stream(enumerable, fun, max_concurrency: ..., timeout: ...)`) without keyword arguments (decided against, §25.13), and the library's habit of putting `timeout_ms` last (`File.open(path, mode, timeout_ms)`, and its block form `File.open(path, mode, timeout_ms) do |f|`, §25.9). Both numbers are required, with no defaults: a good limit and timeout depend on the work, and the agent must choose them.
-- **The block returns `Result[R]`.** The work `Task.map` is for (HTTP, files, processes) already returns `Result`, so `Fn[A, R]` would give `List[Result[Result[T]]]`. With one level, the block's own `error(...)` and a timeout are both one `error` in the list. A block that cannot fail returns `ok(x)`. A block that returns `error("task: timed out")` itself looks the same as a timeout; this is accepted, since both mean the item gave no value. `try` works in the block by a small checker rule for builtins whose block result is `Result[T]`, which this item adds: `R` comes from the expected type of the call if there is one, or else from the body, and `try` works even when `R` is inferred, since the outer type is always `Result`. The rule is general: `File.open` with a block (§25.9, roadmap 15i) reuses it. A block whose result is not a `Result` is `CHECK-TYPE-MISMATCH` at its last expression, with a help that shows `ok(...)`.
+- **The block returns `Result[R]`.** The work `Task.map` is for (HTTP, files, processes) already returns `Result`, so `Fn[A, R]` would give `List[Result[Result[T]]]`. With one level, the block's own `error(...)` and a timeout are both one `error` in the list. A block that cannot fail returns `ok(x)`. A block that returns `error("task: timed out")` itself looks the same as a timeout; this is accepted, since both mean the item gave no value. `try` works in the block by a small checker rule for builtins whose block result is `Result[T]`, which `File.each_line` adds first (27.4, row 7.2.1h, since it lands before this item): `R` comes from the expected type of the call if there is one, or else from the body, and `try` works even when `R` is inferred, since the outer type is always `Result`. The rule is general: `File.open` with a block (§25.9, roadmap 15i) reuses it. A block whose result is not a `Result` is `CHECK-TYPE-MISMATCH` at its last expression, with a help that shows `ok(...)`.
 - **Not a method.** It is always `Task.map(...)`. Methods come from the receiver's module, so `xs.map` stays `List.map`, the sequential one; `Task` owns concurrency.
 - **Order.** Items start in input order. At most `limit` run at once; when one ends, the next item starts (a sliding window, as in Elixir, not batches). The result list is in input order, whatever order the items end in. There is no unordered mode (Elixir's `ordered: false`): a program that wants results as they end uses a channel (27.2).
 - **Timeout per item**, as in Elixir. `timeout_ms` counts from the moment that item's task starts until it ends: its waits for I/O, its turns on the CPU, and the time it waits in the run queue while other tasks run. An item that runs out of time is cancelled (below) and its slot gets `error("task: timed out")`. There is no total timeout: a call takes at most about ⌈n / limit⌉ × `timeout_ms`, plus the time other tasks hold the CPU. A total deadline would be a second number for the same need; a program that needs a shorter bound uses a smaller per-item timeout.
@@ -287,31 +287,66 @@ end
 
 **Tests:** golden fixtures, with no timeout races: a target that has ended (awaited plainly first), then awaited with a timeout (`ok(v)`, with no helper spawned); two timed awaits on the same ended task; a `Task[Void]` (`ok()`); `timeout_ms` 0 and -1 (`RUNTIME-INVALID-DURATION` at the argument span, through `__fail_arg`); a target that never ends (it waits on a channel nobody sends to, with a long timeout) awaited with a 20 ms timeout (always `error("task: timed out")`), after which `main` returns while the helper still waits, and the run ends at once; the step count of a call on an ended task. In `tests/vm-task-map-test.rkt`, since they depend on timing: a target that ends within the timeout (`ok(v)`); a target that does not, then a plain `Task.await` on it that returns its result; a target that has already ended, awaited with a 1 ms timeout while other tasks keep the CPU busy (`ok(v)`, never a timeout); a timed await on a target that is cancelled while the caller waits (`RUNTIME-TASK-CANCELLED` at the user's call); a timed await that timed out, then the target is cancelled (the run goes on); a step limit hit inside the helper (a `--max-steps` small enough to stop the run while the helper runs), reported at the user's `Task.await(task, timeout_ms)` call, not at `<prelude>/task.agc`. Checker tests: the arity overload (`CHECK-ARITY` with 3 arguments; `agentica help Task.await` lists both arities), the `Void` body, and `__task_settled?` and `__task_wait` in user code (`CHECK-UNKNOWN-NAME`); a loader test that rejects them outside prelude functions. **Docs:** `grammar.md` ("Lightweight tasks"), the programming skill (`references/tasks.md`: a timeout does not stop the task; one call, not a polling loop), `site/content/library/task.md`, the development skill's notes (the prelude's task body, the split arity, the two prelude-only builtins, the spawn span and the helper mark), `docs/vm/03-ir-and-bytecode.md` §4.5 (the list of guarded prelude-only builtins).
 
-### 27.4 Lazy streams (to evaluate later)
+### 27.4 Streams: `File.each_line` and `Stream[T]`
 
-**Decision:** not planned now. A `Stream[T]` stays here, to evaluate later, with the criteria below.
+**Decision:** planned in two steps, decided by the owner on 2026-10-14. Step 1 is `File.each_line`, a C builtin that reads a big file line by line in bounded memory and adds no type (roadmap 17d, order row 7.2.1h). Step 2 is `Stream[T]`, a lazy recipe over sources such as lines, written in the prelude (roadmap 17e, order step 8.2).
 
-**Why not now.** The one-way test, applied hard:
+The owner judged that streaming without loading everything is needed: Python iterators and Ruby `yield` cover it, and Agentica's loop and channel forms are too much ceremony to compose. This replaces the earlier criteria for planning streams (a real program first, then a narrower fix). The rules that stay are at the end of this section.
 
-- A lazy pipeline over a source that fits in a `List` is a second way to write the `List` methods. So a stream could only exist where a list cannot: an endless sequence, or data too big for memory (a big file, or the lines of a socket or a process).
-- Those cases already have a form: a `while` loop over `File.read_line` inside `File.open` with a block (§25.9) keeps one line in memory at a time; an endless sequence is a `while` loop; `for` over a range is already lazy; and a producer task with a channel (27.2) streams values into concurrent work, with backpressure. A stream would be a second way to write each of those loops.
-- Ranges have no endless form (`(1..)`), and adding one would serve only streams.
-- Lazy steps are generic code over closures, so they would be prelude code (§25.6), which waits for faster lists (8d, order step 8.2).
+**Step 1: `File.each_line` (roadmap 17d, order row 7.2.1h).** A C builtin, VM-only, with a block for each line:
 
-**Criteria to plan it** (all of them):
+```text
+File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line: String| ... end -> Result[Void]
+```
 
-1. A real program (the applications of order step 13, MCP, or an evaluation round) shows that agents get the loop forms wrong, or write much longer code, for reading, changing and stopping early over a source that does not fit in memory. Measured, not assumed.
-2. A narrower fix does not cover it. First evaluate one block builtin per source, such as `File.each_line(path, timeout_ms) do |line| ... end`: one call in place of `open`, a loop, `eof?`, `read_line` and `close`, so it passes the one-way test as a composition of several calls, and it adds no type.
-3. The prelude (order step 8.2, after 8d) has landed.
-4. Each step passes the one-way test against `List`: no `list.stream`, no `Range.stream`, and no step that only re-spells a `List` method over a source that a list can hold.
+```agentica
+def print_lines(path: String) -> Result[Void]
+  return File.each_line(path, 65536, 1000) do |line|
+    puts(line)
+    ok()
+  end
+end
+```
 
-**Shape if it is planned** (a sketch for its spec, not a decision):
+- **Reads.** It opens the file, reads it in blocks of at most `buffer_bytes` bytes, and calls the block once for each line, in order. One read fills the buffer; every complete line in it goes to the block, one by one, before the next read. A partial line at the end of the buffer moves to the front, and the next read fills the rest. So memory stays at about `buffer_bytes`, whatever the file size, and one read serves many lines, so there are far fewer reads than one `File.read_line` per line.
+- **Lines.** A line, with its LF or CRLF, is at most `buffer_bytes` bytes. A longer line ends the call with `error("file: line too long")`, and the buffer never grows. LF or CRLF is removed, as in `File.read_line`. A last line without a newline is still passed. Lines are strict UTF-8, as in `File.read_text`; invalid text ends the call with an error.
+- **Limits.** `buffer_bytes` is 1,024 to 16,777,216 (16 MiB); otherwise `RUNTIME-INVALID-COUNT` at the argument, checked before the file is opened. `timeout_ms` bounds each read, not the whole call: a 10 GB file may take as long as it needs while each block arrives in time. A `timeout_ms` of 0 or less is not a diagnostic: the call returns `error("network: timeout must be positive milliseconds")`, which every file call returns today (`vm/files.c`, `bad_timeout`).
+- **Block.** The block returns `Result[Void]`. `ok()` goes on; `error(e)` stops at once, and the call returns that error. `try` works in the block, by the checker rule for a builtin whose block result is `Result[T]` (§25.9). This item adds that rule, since it lands before `Task.map` (§27.1), which reuses it, as `File.open` with a block (§25.9, 15i) does.
+- **Result.** The call returns `ok()` at the end of the file, or the first error: open, read, timeout, a line too long, invalid UTF-8, or the block's error.
+- **Close.** The file is closed whenever the call returns, for any reason, with the guarantee of `File.open` with a block (§25.9). A runtime diagnostic ends the run, which closes it as today.
+- **Reads on the loop.** Reads follow §14.1, as other file reads do: a regular file is read by a pool job; a pipe, FIFO or character device is read non-blocking on the loop, as `File` reads of a FIFO already are (`docs/vm/10-io-scheduler.md` §10.2.2). The call is a resumable builtin (`docs/vm/03-ir-and-bytecode.md` §4.3, as `List.each` is): it parks on each read and calls the block between lines, so a block can wait on other tasks.
+- **Effects:** `filesystem`, like the other file calls.
+- **One way.** It replaces a composition of `File.open`, a loop, `eof?`, `read_line` and `close`, so it is the one form for that job. It adds no type.
+- **Left out:** the same form for process and TCP lines (`Process.each_line`, `TCP.each_line`). Their handles already keep a read buffer in the VM, and each waits for its own item when a real program needs it.
+- **Tests** (VM only, in the PR that builds it): golden fixtures for a small file, a last line without a newline, CRLF, an empty file, a block that stops early with `error`, a block that uses `try`, and the capacity error at the argument span. A Racket test reads a 10 MB file of short lines with `buffer_bytes` 4096, checking the line count and that the number of reads is about the file size over the buffer size (through the trace, if the development skill shows how). Also: a line longer than the buffer, invalid UTF-8, a FIFO fed by a Python stdlib peer (hermetic: a FIFO in a temporary directory), and the file closed after an early stop and after a timeout.
+- **Docs:** `docs/grammar` (the builtins and the files section), the programming skill (`references/files.md` and the one-way table of this section), `site/content/library/files.md` with a runnable example, and `docs/vm/03-ir-and-bytecode.md` §4.3 and `docs/vm/10-io-scheduler.md` §10.2.1 and §10.2.2, where the resumable builtins and the file reads are described.
+
+**Step 2: `Stream[T]` (roadmap 17e, order step 8.2, after the prelude of 15f).** The shape below is its base. Its checker and VM rules are added to this section before its code lands, as 27.1 and 27.2 were.
 
 - `Stream[T]` is a builtin opaque generic and an immutable recipe, not a cursor: building one does no work and opens nothing. Only a terminal step runs it, and two terminals on the same stream run its source twice. Elixir's streams are recipes too.
-- Sources, only where a list cannot be: lines of a file by path, and an endless `Stream.iterate(seed, f)`. `Stream.unfold` waits for tuples (§12.5). Socket and process lines are an open question: a handle cannot be reopened, so a second run would go on where the first one stopped.
+- Sources, only where a list cannot be: `Stream.lines(path, buffer_bytes, timeout_ms)`, the lines of a file by path, read with the block buffer of step 1; and an endless `Stream.iterate(seed, f)`. `Stream.unfold` waits for tuples (§12.5). Socket and process lines are an open question: a handle cannot be reopened, so a second run would go on where the first one stopped.
 - Lazy steps: `map`, `filter`, `take(n)`, `take_while`. Terminals: `to_list(max)` (an error when the stream has more than `max` items, so an endless stream cannot fill memory), `each`, `reduce`. Terminals return a `Result`, and a read error of the source ends the terminal with that error.
 - Resources: a file source opens its file when a terminal starts and closes it when the terminal returns, whether it reached the end, `take` or `take_while` had enough, a step returned an error, or a `try` failed in a block. That is the guarantee of `File.open` with a block (§25.9), with the terminal call as the block. A stream that is dropped without a terminal opened nothing, so nothing leaks. A runtime diagnostic ends the run, which closes the file as today.
 - Costs: each element pulled costs one step plus its callbacks, like `Range.each`, and a terminal can be switched out between elements (a resumable native frame, §10.2.1).
+- **Form.** Stream steps are methods on `Stream[T]`, since methods come from the receiver's module (§25.6). So the one form of a step is `s.filter(f)`, and `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`, with the help `s.filter(...)` (§25.14). `|>` only brings the path into the source, since a String has no method form for `Stream.lines`:
+
+```agentica
+def is_valid(line: String) -> Bool
+  return line.length > 0
+end
+
+def add_length(total: Int, line: String) -> Int
+  return total + line.length
+end
+
+def total_length(path: String) -> Result[Int]
+  return (path |> Stream.lines(65536, 1000)).filter(&is_valid).take(1000).reduce(0, &add_length)
+end
+```
+
+- **One form per job.** Each line of a file, in order, is `File.each_line`. A stream is for steps before a terminal (`filter`, `take`, `take_while`, `map`, `reduce`, `to_list`). A stream with no step before its terminal (`Stream.lines(path, ...).each`) is the same job as `File.each_line`; whether the checker rejects it, with a help that shows `File.each_line`, is decided in step 2's spec, as the principle of §25 asks.
+- **Rules that stay.** Step 2 waits for the prelude (15f) and for faster lists (8d), since its steps are generic code over closures (§25.6). Each step passes the one-way test against `List`: no `list.stream`, no `Range.stream`, and no step that only re-spells a `List` method over a source that a list can hold.
+- **Generators stay decided against** (§27.5): a task that sends into a channel is the producer, and a stream is a recipe of fixed steps, not a producer with `yield`.
 
 ### 27.5 Decided against
 
@@ -322,6 +357,7 @@ Each of these is decided; it gets a help that names the Agentica form.
   - External iteration hides changing state inside a value (`e.next` changes `e`), and values are immutable.
   - Fibers are what tasks already are: green VM stacks that the scheduler switches.
   - `yield` is already decided against (§25.13: the block is a named `Fn` parameter, called with `.call`).
+  - A lazy `Stream[T]` (27.4) is not a generator either: it is a recipe of fixed steps over a source, with no `yield`.
   - Help: `Enumerator.new(...)` and `Fiber.new(...)` (today `CHECK-UNKNOWN-NAME`) show a producer task that sends into a `Channel` (`Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)`). `xs.lazy` on a `List` or a `Range` (today `CHECK-UNKNOWN-METHOD`) shows that lists are eager, and that a source too big for a list is read in a `while` loop. Added by 17b.
 - **Elixir `Agent` and other shared mutable accumulators:** `Agent.start_link`, `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a counter that blocks change.
   - Shared mutable state, which the language does not have: values are immutable, and the only planned exception is the shared table of §13, on demand, with atomic calls.
