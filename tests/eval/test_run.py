@@ -195,10 +195,12 @@ class MetricsTests(unittest.TestCase):
 
     def test_only_running_the_checker_is_a_check_run(self) -> None:
         for command in ("mypy --strict solution.py", "python3 -m mypy solution.py", "cd /workspace && mypy solution.py",
-                        "mypy solution.py | tail -3", "agentica check solution.agc", "./bin/agentica check x.agc"):
+                        "mypy solution.py | tail -3", "agentica check solution.agc", "./bin/agentica check x.agc",
+                        "timeout 60 mypy --strict solution.py", "time mypy solution.py", "env MYPYPATH=. mypy solution.py"):
             with self.subTest(command=command):
                 self.assertTrue(run.is_check_command(command))
-        for command in ("pip install mypy", "cat solution.py", "grep mypy notes.txt", "python3 solution.py"):
+        for command in ("pip install mypy", "cat solution.py", "grep mypy notes.txt", "python3 solution.py",
+                        "python3 -c 'print(1); mypy x'"):
             with self.subTest(command=command):
                 self.assertFalse(run.is_check_command(command))
         metrics = run.pi_metrics("\n".join(bash_events("1", "pip install mypy", "Successfully installed mypy")))
@@ -206,10 +208,12 @@ class MetricsTests(unittest.TestCase):
 
     def test_network_commands_ignore_loopback_curl_and_urllib(self) -> None:
         for command in ("curl https://example.com/x", "wget x", "git clone x", "pip install requests", "npm install x",
-                        "apt-get install x", "python3 -c 'import urllib.request'", "curl localhost:1 && pip install x"):
+                        "apt-get install x", "python3 -c 'import urllib.request'", "curl localhost:1 && pip install x",
+                        "curl https://x.com && curl localhost:1"):
             with self.subTest(command=command):
                 self.assertTrue(run.is_net_command(command))
         for command in ("curl -s http://localhost:8080/stats", "curl 127.0.0.1:9", "cat adapter.py", "python3 solution.py",
+                        "curl localhost:1 && curl 127.0.0.1:2",
                         "python3 -c 'import urllib.request as u; u.urlopen(\"http://127.0.0.1:80\")'"):
             with self.subTest(command=command):
                 self.assertFalse(run.is_net_command(command))
@@ -295,9 +299,9 @@ class CaseCommandTests(unittest.TestCase):
 class TypedSourceTests(unittest.TestCase):
     def test_silencing_comments_and_escapes_are_counted(self) -> None:
         source = ("from typing import Any, cast\n# mypy: ignore-errors\nx = foo()  # type: ignore[attr-defined]\n"
-                  "y = bar()  #type:ignore\nz: Any = cast(int, x)\nAnything = 1\n")
+                  "y = bar()  #type:ignore\nz: Any = cast(int, x)\nAnything = 1\n@no_type_check\nif TYPE_CHECKING:\n    pass\n")
 
-        self.assertEqual(run.type_escapes(source), {"type_ignores": 3, "type_escapes": 3})
+        self.assertEqual(run.type_escapes(source), {"type_ignores": 3, "type_escapes": 5})
         self.assertEqual(run.type_escapes("import sys\nprint(sys.argv)\n"), {"type_ignores": 0, "type_escapes": 0})
 
     def test_a_checker_timeout_is_its_own_failure(self) -> None:
@@ -359,6 +363,16 @@ class ImageDecisionTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             run.validate_docker(run.DEFAULT_IMAGE, typed=False, agentica=False)
         probe.assert_not_called()
+
+
+class ImageBuildTests(unittest.TestCase):
+    def test_a_failed_build_exits_with_a_message_instead_of_a_traceback(self) -> None:
+        with patch.object(run, "require_docker"), patch.object(run, "image_exists", return_value=False), \
+                patch.object(run.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "docker build")):
+            with self.assertRaises(SystemExit) as raised:
+                run.validate_docker(run.DEFAULT_IMAGE)
+
+        self.assertIn("Docker daemon", str(raised.exception))
 
 
 class MainTests(unittest.TestCase):

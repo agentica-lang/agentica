@@ -27,10 +27,11 @@ CHECK_TIMEOUT = 90
 NET_STRONG = re.compile(r"\bwget\b|\bgit\s+clone\b|github\.com|\bpip3?\s+install\b|\bnpm\b|\bapt(?:-get)?\b")
 NET_WEAK = re.compile(r"\bcurl\b|\burllib\b")
 LOOPBACK = re.compile(r"\blocalhost\b|127\.0\.0\.1")
-CHECK_COMMAND = re.compile(r"^\s*(?:\w+=\S*\s+)*(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check)\b")
-MYPY_COMMAND = re.compile(r"^\s*(?:\w+=\S*\s+)*(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
+COMMAND_PREFIX = r"^\s*(?:(?:env|time|timeout\s+(?:-\S+\s+)*\d\S*|\w+=\S*)\s+)*"
+CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check)\b")
+MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
 TYPE_SILENCE = re.compile(r"#\s*mypy:|#\s*type:\s*ignore")
-TYPE_ESCAPE = re.compile(r"\bAny\b|\bcast\(")
+TYPE_ESCAPE = re.compile(r"\bAny\b|\bcast\(|\bno_type_check\b|\bTYPE_CHECKING\b")
 MISSING_COMMAND = (126, 127)
 AGENT_NETWORK = True
 CASE_TIMEOUT = 10
@@ -190,7 +191,10 @@ def remove_container(name: str) -> None:
 
 
 def build_image(image: str) -> None:
-    subprocess.run(["docker", "build", "--tag", image, "--file", str(EVAL / "Dockerfile"), str(EVAL)], check=True)
+    try:
+        subprocess.run(["docker", "build", "--tag", image, "--file", str(EVAL / "Dockerfile"), str(EVAL)], check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SystemExit(f"Building the Docker image {image} failed ({exc}); check that the Docker daemon is running") from exc
 
 
 def require_docker() -> None:
@@ -399,7 +403,36 @@ def run_agent(
 
 
 def command_parts(command: str) -> list[str]:
-    return re.split(r"&&|\|\||[;|\n]", command)
+    parts: list[str] = []
+    current: list[str] = []
+    quote = ""
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if quote:
+            if char == "\\" and quote == '"' and index + 1 < len(command):
+                current.append(command[index:index + 2])
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+            current.append(char)
+        elif char in "'\"":
+            quote = char
+            current.append(char)
+        elif command.startswith(("&&", "||"), index):
+            parts.append("".join(current))
+            current = []
+            index += 2
+            continue
+        elif char in ";|\n":
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    parts.append("".join(current))
+    return parts
 
 
 def is_check_command(command: str) -> bool:
@@ -411,7 +444,8 @@ def runs_mypy(command: str) -> bool:
 
 
 def is_net_command(command: str) -> bool:
-    return bool(NET_STRONG.search(command)) or (bool(NET_WEAK.search(command)) and not LOOPBACK.search(command))
+    return any(NET_STRONG.search(part) or (NET_WEAK.search(part) and not LOOPBACK.search(part))
+               for part in command_parts(command))
 
 
 def command_failed(command: str, text: str) -> bool:
