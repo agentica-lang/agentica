@@ -87,6 +87,7 @@ static void leave_parent(agc_task *t) {
 }
 
 static void finish_task(agc_vm *vm, agc_task *t) {
+  agc_close_owned(vm, t);
   t->state = AGC_TASK_DONE;
   t->regs = NULL;
   t->reg_capacity = 0;
@@ -228,40 +229,6 @@ static uint64_t pending_tasks(const agc_vm *vm) {
   return made > vm->tasks_done + 1 ? made - vm->tasks_done - 1 : 0;
 }
 
-static void mark_subtree(agc_task *root) {
-  agc_task *t = root;
-  for (;;) {
-    t->drop_handles = true;
-    if (t->children) {
-      t = t->children;
-      continue;
-    }
-    while (t != root && !t->next_sibling) t = t->parent;
-    if (t == root) return;
-    t = t->next_sibling;
-  }
-}
-
-/* The one way a subtree is dropped, for a crash (its root has already
-   ended, so only its children are cancelled) and for close_server. */
-static void drop_tree(agc_vm *vm, agc_task *root, bool with_root) {
-  mark_subtree(root);
-  if (with_root) {
-    agc_task_cancel(vm, root);
-  } else {
-    for (agc_task *child = root->children, *next; child; child = next) {
-      next = child->next_sibling;
-      agc_task_cancel(vm, child);
-    }
-  }
-  agc_close_owned(vm);
-}
-
-void agc_task_drop(agc_vm *vm, agc_task *root) {
-  if (root == vm->main || root->state == AGC_TASK_DONE || root->cancelled) return;
-  drop_tree(vm, root, true);
-}
-
 /* No await can observe a hidden task (an HTTP connection task), so of its
    unobserved crashes only the first per test is kept; the others are
    counted on it, which bounds the list in a long-running server. */
@@ -297,7 +264,10 @@ static void crash(agc_vm *vm, agc_task *t) {
   agc_notice_end(&notice, AGC_NOTICE_QUEUED);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
-  drop_tree(vm, t, false);
+  for (agc_task *child = t->children, *next; child; child = next) {
+    next = child->next_sibling;
+    agc_task_cancel(vm, child);
+  }
   finish_task(vm, t);
 }
 
@@ -393,7 +363,6 @@ agc_outcome agc_vm_run(agc_vm *vm) {
           AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel pending=%" PRIu64, pending_tasks(vm));
           break;
         }
-        agc_give_owned(vm, t, t->parent);
         finish_task(vm, t);
       } else if (r == AGC_TURN_YIELD) {
         enqueue(vm, t);
@@ -440,13 +409,26 @@ agc_task *agc_task_group(agc_vm *vm) {
   return g;
 }
 
+agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
+  agc_resource *r = agc_owned_of(vm, handle);
+  if (!r || r->owner != vm->task || r->closing)
+    agc_fail(vm, "RUNTIME-HANDLE-NOT-OWNED", "the calling task does not own this handle, or it is closed", span + 2);
+  uint64_t seed = agc_random_next(&vm->task->random);
+  agc_task *child = agc_task_spawn_in(vm, parent, fn, &handle, 1, span);
+  agc_random_seed(&child->random, seed);
+  agc_hand_over(r, child);
+  return child;
+}
+
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   uint64_t seed = agc_random_next(&vm->task->random);
   agc_task *child = agc_task_spawn(vm, args[0], &args[1], 1, span);
   agc_random_seed(&child->random, seed);
-  agc_resource *moved = agc_owned_of(vm, args[1]);
-  if (moved && moved->owner == vm->task) moved->owner = child;
   return agc_task_value(child);
+}
+
+static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span) {
+  return agc_task_value(agc_task_spawn_owning(vm, vm->task, args[0], args[1], span));
 }
 
 bool agc_task_join(agc_vm *vm, agc_task *target) {
@@ -535,6 +517,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.pending_count", 0, builtin_pending_count, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.await_result", 1, builtin_await_result, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

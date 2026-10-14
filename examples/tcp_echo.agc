@@ -13,7 +13,7 @@ def main() -> Void
   while true
     connection = TCP.accept(listener, 30000)
     if Result.ok?(connection)
-      Task.spawn(&echo, Result.unwrap!(connection))
+      Task.spawn_owning(&echo, Result.unwrap!(connection))
     end
   end
 end

@@ -138,8 +138,8 @@ def main() -> Void
   listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem"))
   puts(TCP.local_port(listener))
   IO.flush()
-  a = Task.spawn(&serve, Result.unwrap!(TCP.accept(listener, 10000)))
-  b = Task.spawn(&serve, Result.unwrap!(TCP.accept(listener, 10000)))
+  a = Task.spawn_owning(&serve, Result.unwrap!(TCP.accept(listener, 10000)))
+  b = Task.spawn_owning(&serve, Result.unwrap!(TCP.accept(listener, 10000)))
   Task.await(a)
   Task.await(b)
   puts("served")
@@ -249,18 +249,18 @@ AGC
 
 (define limits-program
   #<<AGC
-def connect(port: Int) -> Socket
-  return Result.unwrap!(TLS.connect("localhost", port, "#{System.args()[0]}/ca.pem", 5000))
+def wait(port: Int) -> Void
+  waiting = Result.unwrap!(TLS.connect("localhost", port, "#{System.args()[0]}/ca.pem", 5000))
+  IO.inspect(TCP.read_line(waiting, 30))
+  IO.inspect(TCP.recv_bytes(waiting, 1, 1000))
 end
 
 def main() -> Void
   dir = System.args()[0]
   listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem"))
-  task = Task.spawn(&connect, TCP.local_port(listener))
+  task = Task.spawn(&wait, TCP.local_port(listener))
   quiet = Result.unwrap!(TCP.accept(listener, 5000))
-  waiting = Task.await(task)
-  IO.inspect(TCP.read_line(waiting, 30))
-  IO.inspect(TCP.recv_bytes(waiting, 1, 1000))
+  Task.await(task)
   raw = Result.unwrap!(TCP.connect("127.0.0.1", TCP.local_port(listener), 5000))
   IO.inspect(TCP.accept(listener, 30))
   TCP.close(raw)
@@ -274,7 +274,7 @@ AGC
 (define exit-program
   #<<AGC
 struct Flood
-  socket: Socket
+  port: Int
   chunk: String
 end
 
@@ -282,8 +282,8 @@ def connect(port: Int) -> Socket
   return Result.unwrap!(TLS.connect("localhost", port, "#{System.args()[0]}/ca.pem", 5000))
 end
 
-def hold(socket: Socket) -> Result[String]
-  return TCP.read_line(socket, 5000)
+def hold(port: Int) -> Result[String]
+  return TCP.read_line(connect(port), 5000)
 end
 
 def wait_accept(listener: Listener) -> Bool
@@ -291,7 +291,7 @@ def wait_accept(listener: Listener) -> Bool
 end
 
 def flood(job: Flood) -> Result[Void]
-  return TCP.send(job.socket, job.chunk, 5000)
+  return TCP.send(connect(job.port), job.chunk, 5000)
 end
 
 def started(n: Int) -> Int
@@ -302,16 +302,12 @@ def main() -> Void
   dir = System.args()[0]
   listener = Result.unwrap!(TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem"))
   port = TCP.local_port(listener)
-  first = Task.spawn(&connect, port)
+  Task.spawn(&hold, port)
   silent = Result.unwrap!(TCP.accept(listener, 5000))
-  quiet = Task.await(first)
-  second = Task.spawn(&connect, port)
+  Task.spawn(&flood, Flood(port: port, chunk: String.join(List.repeat(String.join(List.repeat("abcdefgh", 128), ""), 8192), "")))
   sink = Result.unwrap!(TCP.accept(listener, 5000))
-  source = Task.await(second)
   raw = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
-  Task.spawn(&hold, quiet)
   Task.spawn(&wait_accept, listener)
-  Task.spawn(&flood, Flood(socket: source, chunk: String.join(List.repeat(String.join(List.repeat("abcdefgh", 128), ""), 8192), "")))
   Task.await(Task.spawn(&started, 0))
   IO.inspect(silent)
   IO.inspect(sink)

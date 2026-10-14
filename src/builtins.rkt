@@ -45,6 +45,7 @@
                     ("Process.parent_read_line" ((timeout_ms Int)) (Result String) #f "Process.parent_read_line" (subprocess) "Read one line from the parent channel; an error when the program has no channel.")
                     ("Process.parent_send" ((text String) (timeout_ms Int)) (Result Void) #f "Process.parent_send" (subprocess) "Send at most 1 MiB of UTF-8 text to the parent on the channel; an error when the program has no channel.")
                     ("Task.spawn" ((function (Fn A R)) (argument A)) (Task R) task-spawn "Task.spawn" (concurrency) "Start a named function with one argument in a lightweight task.")
+                    ("Task.spawn_owning" ((function (Fn A R)) (handle A)) (Task R) task-spawn-owning "Task.spawn_owning" (concurrency) "Like Task.spawn, and gives the handle argument, which the calling task must own, to the new task; VM only.")
                     ("Task.await" ((task (Task R))) R task-await "Task.await" (concurrency) "Wait for a task and return its cached result; a crashed task gives error(text) when R is a Result, else RUNTIME-TASK-CRASHED.")
                     ("Task.sleep" ((milliseconds Int)) Void #f "Task.sleep" (concurrency) "Suspend this task for nonnegative milliseconds; zero yields execution.")
                     ("Task.pending_count" () Int #f "Task.pending_count" (concurrency) "Count the tasks of this run that have not ended, not counting main; VM only.")

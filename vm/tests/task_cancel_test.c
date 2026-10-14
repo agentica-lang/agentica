@@ -268,7 +268,7 @@ static agc_value test_drop(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   agc_own(vm, handle, close_handle);
-  agc_task_drop(vm, vm->task);
+  agc_task_cancel(vm, vm->task);
   self_returned = true;
   return agc_void();
 }

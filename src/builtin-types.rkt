@@ -1,8 +1,10 @@
 #lang racket
 
-(provide opaque-types builtin-records)
+(provide opaque-types handle-types builtin-records)
 
 (define opaque-types '(Socket Listener HttpClient HttpServer FileHandle Process TestCase))
+
+(define handle-types '(Socket Listener HttpServer FileHandle Process))
 
 (define builtin-records
   (hash "Header" '(("name" . String) ("value" . String))

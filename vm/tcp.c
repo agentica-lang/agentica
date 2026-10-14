@@ -201,7 +201,7 @@ static void disown(agc_vm *vm, agc_resource *r, const char *why) {
   settle(n);
 }
 
-static void close_net(agc_vm *vm, agc_resource *r) { disown(vm, r, "crash"); }
+static void close_net(agc_vm *vm, agc_resource *r) { disown(vm, r, "owner"); }
 
 static agc_resource *own(agc_vm *vm, net *n) {
   agc_resource *r = agc_register(vm, n, release_net);

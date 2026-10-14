@@ -60,11 +60,6 @@ struct waiter {
   waiter *next;
 };
 
-typedef struct {
-  agc_http_server *server;
-  agc_resource *socket;
-} conn_link;
-
 static const char socket_closed[] = "network: socket is closed";
 static const char server_closed[] = "http: server is closed";
 static const char go_on[] = "HTTP/1.1 100 Continue\r\n\r\n";
@@ -581,7 +576,7 @@ static void shut_server(agc_vm *vm, agc_http_server *hs) {
     release_server(s);
   }
   agc_net_close(vm, agc_as_listener(vm, hs->listener)->state, "close");
-  agc_task_drop(vm, hs->group);
+  agc_task_cancel(vm, hs->group);
 }
 
 static void close_owned(agc_vm *vm, agc_resource *r) { shut_server(vm, agc_as_http_server(vm, r->context)); }
@@ -643,10 +638,10 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static void connection_ended(agc_vm *vm, agc_task *t) {
-  const conn_link *k = t->end_data;
+  (void)vm;
+  const agc_http_server *hs = t->end_data;
   t->end_data = NULL;
-  agc_net_close(vm, k->socket, "done");
-  server *s = k->server->state->native;
+  server *s = hs->state->native;
   if (!s) return;
   if (s->open) s->open--;
   poke(s);
@@ -662,13 +657,9 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
     if (s && s->open) s->open--;
     return agc_void();
   }
-  agc_task *child = spawn_in_group(vm, hs, args[2], &args[1], span);
+  agc_task *child = agc_task_spawn_owning(vm, hs->group, args[2], args[1], span);
   child->hidden = true;
-  if (sk->state->owner == vm->task) sk->state->owner = child;
-  conn_link *k = agc_alloc(sizeof(conn_link));
-  k->server = hs;
-  k->socket = sk->state;
-  child->end_data = k;
+  child->end_data = hs;
   child->end = connection_ended;
   return agc_void();
 }

@@ -93,7 +93,9 @@ static agc_value finish_wait(agc_task *t) {
   vm.ready = vm.ready_tail = NULL;
   vm.task = t;
   t->state = AGC_TASK_RUNNING;
+  vm.in_turn = true;
   agc_value result = agc_io_finish(&vm, t);
+  vm.in_turn = false;
   assert(!t->retry);
   return result;
 }
@@ -176,12 +178,11 @@ static void test_cancelled_reader(void) {
   park(t);
   vm.task = make_task();
   agc_task_cancel(&vm, t);
-  assert(t->state == AGC_TASK_DONE && !t->parked);
-  assert(descriptors() == base + 2 && opened(path) == 2);
+  assert(t->state == AGC_TASK_DONE && !t->parked && !t->owned);
+  assert(descriptors() == base + 1 && opened(path) == 1);
   close(holder);
-  assert(opened(path) == 1);
-  assert(agc_io_close(&vm));
   assert(opened(path) == 0);
+  assert(agc_io_close(&vm));
   free(path);
 }
 

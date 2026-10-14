@@ -27,6 +27,7 @@ struct agc_resource {
   agc_task *next_owner;
   agc_task *waiters, *waiters_tail;
   agc_task *owner;
+  agc_resource *owned_prev, *owned_next;
   agc_close_fn close;
   bool closing, pool_close, keep_detached;
 };
@@ -187,7 +188,7 @@ struct agc_task {
   int64_t turn_cost;
   uint64_t lock_deadline, input_seen;
   agc_task_state state;
-  bool cancelled, crashed, observed, drop_handles, left_children, group, hidden;
+  bool cancelled, crashed, observed, left_children, group, hidden;
   agc_value result;
   agc_string *crash, *crash_message;
   const char *crash_code;
@@ -203,7 +204,7 @@ struct agc_task {
   agc_task *waiters, *waiters_tail;
   agc_task *parent, *children, *prev_sibling, *next_sibling;
   agc_task *awaiting;
-  agc_resource *lock_wait;
+  agc_resource *lock_wait, *owned;
   agc_channel_wait channel;
   agc_output_wait output;
 };
@@ -237,8 +238,8 @@ void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char 
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
                             uint32_t span);
+agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span);
 agc_task *agc_task_group(agc_vm *vm);
-void agc_task_drop(agc_vm *vm, agc_task *root);
 void agc_task_observe(agc_vm *vm, agc_task *t);
 bool agc_report_unobserved(agc_vm *vm);
 bool agc_task_join(agc_vm *vm, agc_task *target);

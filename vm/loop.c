@@ -89,9 +89,30 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   return r;
 }
 
+static void owned_add(agc_task *t, agc_resource *r) {
+  r->owner = t;
+  r->owned_prev = NULL;
+  r->owned_next = t->owned;
+  if (t->owned) t->owned->owned_prev = r;
+  t->owned = r;
+}
+
+static void owned_remove(agc_resource *r) {
+  agc_task *t = r->owner;
+  if (!t) return;
+  if (r->owned_prev)
+    r->owned_prev->owned_next = r->owned_next;
+  else
+    t->owned = r->owned_next;
+  if (r->owned_next) r->owned_next->owned_prev = r->owned_prev;
+  r->owner = NULL;
+  r->owned_prev = r->owned_next = NULL;
+}
+
 void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close) {
-  r->owner = vm->in_turn ? vm->task : NULL;
+  owned_remove(r);
   r->close = close;
+  if (vm->in_turn) owned_add(vm->task, r);
 }
 
 agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
@@ -103,20 +124,15 @@ agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
   return NULL;
 }
 
-void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to) {
-  for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;)
-    if (vm->registry->items[k]->owner == from) vm->registry->items[k]->owner = to;
+void agc_hand_over(agc_resource *r, agc_task *to) {
+  owned_remove(r);
+  owned_add(to, r);
 }
 
-/* A close can close other handles (a server drops its group) and
-   agc_unregister moves the last entry down into the freed slot, so entries
-   only move down: walking down meets every one still owned. */
-void agc_close_owned(agc_vm *vm) {
-  for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;) {
-    if (k >= vm->registry->count) continue;
-    agc_resource *r = vm->registry->items[k];
-    if (!r->owner || !r->owner->drop_handles) continue;
-    r->owner = NULL;
+void agc_close_owned(agc_vm *vm, agc_task *t) {
+  while (t->owned) {
+    agc_resource *r = t->owned;
+    owned_remove(r);
     r->close(vm, r);
   }
 }
@@ -141,6 +157,7 @@ void agc_handle_leave(agc_vm *vm, agc_task *t) {
 }
 
 void agc_unregister(agc_vm *vm, agc_resource *r) {
+  owned_remove(r);
   agc_registry *reg = vm->registry;
   if (!reg || r->slot >= reg->count || reg->items[r->slot] != r) return;
   agc_resource *last = reg->items[--reg->count];
