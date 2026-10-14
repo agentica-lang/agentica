@@ -195,7 +195,7 @@
   "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character")
 
 (define slice-help
-  "use s.slice(start, length) for a part of the text")
+  "use s.slice(start, length) for a part of the text; length is end - start")
 
 (define digit-help
   "test it with s.to_i (a Result): s.to_i.ok? is true for a whole number, s.to_f.ok? for a decimal")
@@ -215,13 +215,14 @@
         (cons 'String "char_at") "use s.at(i) to read the character at a zero-based index"
         (cons 'String "index") "use s.index_of(part), which gives a Result[Int]"
         (cons 'String "ord") "use s.code for the code point of a one-character string"
-        (cons 'String "chr") "use String.from_code(n) for the character of a code point"
+        (cons 'Int "chr") "use String.from_code(n) for the character of a code point"
+        (cons 'String "chr") "use s.at(0) for the first character"
         (cons 'String "chomp") "use s.strip to remove surrounding whitespace; IO.gets already drops the line ending"
         (cons 'String "lstrip") "use s.strip, which trims both ends"
         (cons 'String "rstrip") "use s.strip, which trims both ends"
         (cons 'String "empty?") "compare the length: s.length == 0"
         (cons 'String "blank?") "compare the trimmed length: s.strip.length == 0"
-        (cons 'String "concat") "join two strings with +: a + b"
+        (cons 'String "concat") "strings are immutable; join two strings with + and assign the result: a = a + b"
         (cons 'String "isdigit") digit-help
         (cons 'String "digit?") digit-help
         (cons 'String "numeric?") digit-help
@@ -231,6 +232,11 @@
 (define (foreign-method-help kind name)
   (cond
     [(hash-ref foreign-kind-methods (cons kind name) #f) => values]
+    [(and (eq? kind 'Result)
+          (or (resolve-method 'String name) (hash-ref foreign-kind-methods (cons 'String name) #f)))
+     (define string-help (foreign-method-help 'String name))
+     (string-append "this is a Result; unwrap it first with r.unwrap! (use gets! to read a line without a Result)"
+                    (if string-help (string-append ", then: " string-help) ""))]
     [(equal? name "nil?") "values are never nil unless their type is Nil; compare with nil: x == nil"]
     [(and (equal? name "lazy") (memq kind '(List Range)))
      "lists are eager; read a source that is too big for a list in a while loop"]
@@ -713,7 +719,7 @@
                    (set! range-chain saved))]
           [else (check-expression (binary-right expression) #f)]))
       (define span (binary-op-span expression))
-      (define (same!)
+      (define (same! [with-to-s? #f])
         (unless (equal? left right)
           (bail 'CHECK-TYPE-MISMATCH
                 (format "operator expects two values of the same type, found ~a and ~a"
@@ -728,11 +734,13 @@
                           "make both sides the same type: n.to_f (Float.from_int) turns the Int into a Float, x.to_i! (Float.to_int!) truncates the Float"]
                          [(and (memq 'String (list left right))
                                (or (memq 'Int (list left right)) (memq 'Float (list left right))))
-                          "make both sides the same type: s.to_i! or s.to_f! turns the String into a number, n.to_s turns the number into a String"]
+                          (if with-to-s?
+                              "make both sides Strings with n.to_s or interpolation \"#{n}\"; or make both numbers with s.to_i! or s.to_f!, which halt on text that is not a number"
+                              "make both sides numbers: s.to_i! or s.to_f! turns the String into a number, and halts on text that is not a number")]
                          [else #f]))))
       (case (binary-op expression)
         [(plus)
-         (same!)
+         (same! #t)
          (cond
            [(and (numeric-type? left) (numeric-type? right)) left]
            [(and (eq? left 'String) (eq? right 'String)) 'String]
@@ -771,7 +779,7 @@
                  span))
          'Range]
         [(equal not-equal)
-         (same!)
+         (same! #t)
          (unless (or (primitive-type? left) (eq? left 'Range))
            (bail 'CHECK-TYPE-MISMATCH
                  (format "equality is only defined for primitive values and ranges, found ~a"

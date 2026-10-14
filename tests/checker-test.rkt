@@ -830,11 +830,22 @@
                    ("  xs = []" CHECK-EMPTY-LIST-TYPE "xs: List\\[")
                    ("  x: String = IO.gets" CHECK-TYPE-MISMATCH "\\(gets!\\)")
                    ("  r: Result[Int] = Result.Some(5)" CHECK-UNKNOWN-TYPE "Result\\.Ok\\(value\\)")
-                   ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts"))])
+                   ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts")
+                   ("  x = 65.chr" CHECK-UNKNOWN-METHOD "String\\.from_code")
+                   ("  s = IO.gets\n  y = s.chomp" CHECK-UNKNOWN-METHOD "r\\.unwrap!")
+                   ("  s = \"a\"\n  x = s.upcas" CHECK-UNKNOWN-METHOD "did you mean \"upcase\"")
+                   ("  x = List.new" CHECK-UNKNOWN-NAME "xs: List\\[")
+                   ("  x = Map.empty" CHECK-UNKNOWN-NAME "m: Map\\[")
+                   ("  r = IO.gets\n  x = r[0]" CHECK-NOT-INDEXABLE "unwrap the Result")
+                   ("  s = \"a\" + \"b\"\n  x = s + 1" CHECK-TYPE-MISMATCH "n\\.to_s"))])
       (define problem (check-text (main-with (car entry))))
       (check-equal? (diagnostic-code problem) (cadr entry) (car entry))
       (check-regexp-match (pregexp (caddr entry)) (diagnostic-help problem) (car entry)))
     (check-false (regexp-match? #rx"downcase" (or (diagnostic-help (check-text (main-with "  x = [1].lower"))) "")))
+    (check-regexp-match #rx"every branch"
+                        (diagnostic-help
+                         (check-text (string-append "def f(x: Int) -> Int\n  if x > 0\n    return 1\n  else\n    puts(\"a\")\n  end\nend\n\n"
+                                                    (main-with "")))))
     (check-false (diagnostic-help (check-text (string-append "def len(n: Int) -> Int\n  return n\nend\n\n"
                                                              (main-with "  f = len")))))
     (define unknown (check-text (main-with "  x = 1\n  y = len(x)")))

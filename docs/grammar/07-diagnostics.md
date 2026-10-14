@@ -35,12 +35,13 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `match x`, `when 1` in a `case` | `case x`, arms as `1 -> ...` |
 | `if x then` | a newline after the condition |
 | `x = 1;` (`LEX-UNEXPECTED-CHAR`) | no semicolons: end the statement with a newline |
-| `'+'`, `'abc'` (`LEX-UNEXPECTED-CHAR`) | strings use double quotes; a character is a one-character String: `"+"` |
+| `'+'`, `'abc'`, `` `abc` `` (`LEX-UNEXPECTED-CHAR`) | strings use double quotes; a character is a one-character String: `"+"` |
 | `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`) | comments start with `#`; `4 // 2` has no `//` operator, `/` on two Ints truncates |
-| a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`) | statements go inside `def main() -> Void ... end`; an extra `end` closes nothing |
+| a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`) | statements go inside `def main() -> Void ... end`; an extra `end` closes nothing; a stray `else` or `elsif` has no matching `if` |
 | `s.chars`, `s.each_char` | `s.split("")`, and `s.at(i)` for one character |
 | `s.matches?(...)`, `s.match?(...)`, `s.scan(...)` | no regular expressions: `contains?`, `starts_with?`, `ends_with?`, `index_of` |
-| `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`, `s.ord`, `s.chr`, `s.empty?`, `s.isdigit` | `s.replace`, `s.slice(start, length)`, `s.at(i)`, `s.code`, `String.from_code(n)`, `s.length == 0`, `s.to_i.ok?` |
+| `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`, `s.ord`, `n.chr`, `s.empty?`, `s.isdigit` | `s.replace`, `s.slice(start, length)` (length is end - start), `s.at(i)`, `s.code`, `String.from_code(n)`, `s.length == 0`, `s.to_i.ok?` |
+| `s.chomp`, `s.chars` or another String method on a `Result` (for example from `IO.gets`) | unwrap first with `r.unwrap!`, or read with `IO.gets!` |
 | `s.error?` on a String | only a Result has `ok?` and `message` |
 | `s[0]` on a String (`CHECK-NOT-INDEXABLE`) | `s.at(i)`, `s.slice(start, length)`, or `s.split("")` |
 | `n * 1.5` with an Int `n` (`CHECK-TYPE-MISMATCH`) | `n.to_f * 1.5`; `x.to_i!` truncates a Float; `s.to_i!` / `n.to_s` for String and number |
