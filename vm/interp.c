@@ -1,4 +1,5 @@
 #include "core.h"
+#include "list_impl.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -604,13 +605,13 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_LIST: R[in.a] = agc_list_value(agc_list_from_array(&R[in.b], in.c)); break;
-      case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)agc_list_len(agc_as_list(vm, R[in.b]))); break;
+      case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)list_len(agc_as_list(vm, R[in.b]))); break;
       case AGC_OP_LIST_GET: {
         const agc_list *l = agc_as_list(vm, R[in.b]);
         x = agc_as_int(vm, R[in.c]);
-        size_t len = agc_list_len(l);
+        size_t len = list_len(l);
         if (x < 0 || (uint64_t)x >= len) index_out_of_range(vm, x, len, s);
-        R[in.a] = agc_list_get(l, (size_t)x);
+        R[in.a] = list_get(l, (size_t)x);
         break;
       }
       case AGC_OP_MAP: {

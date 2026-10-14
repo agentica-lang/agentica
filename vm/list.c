@@ -1,12 +1,8 @@
 #include "core.h"
+#include "list_impl.h"
 
 #include <stdlib.h>
 #include <string.h>
-
-struct agc_list {
-  size_t len;
-  agc_value items[];
-};
 
 static agc_list *list_new(size_t n) {
   agc_list *l = agc_alloc(agc_size_add(sizeof(agc_list), agc_size_mul(n, sizeof(agc_value))));
@@ -14,12 +10,9 @@ static agc_list *list_new(size_t n) {
   return l;
 }
 
-size_t agc_list_len(const agc_list *l) { return l->len; }
+size_t agc_list_len(const agc_list *l) { return list_len(l); }
 
-agc_value agc_list_get(const agc_list *l, size_t i) {
-  if (i >= l->len) abort();
-  return l->items[i];
-}
+agc_value agc_list_get(const agc_list *l, size_t i) { return list_get(l, i); }
 
 void agc_list_builder_sized(agc_list_builder *b, size_t n) {
   b->out = list_new(n);

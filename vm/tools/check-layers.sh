@@ -11,7 +11,7 @@ core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c t
 services="strings.c numbers.c json.c json_typed.c files.c stream.c duplex.c process.c tcp.c http_fields.c http_client.c http_server.c testing.c"
 adapters="tls_openssl.c http_pico.c http_body.c"
 driver="main.c builtin_tables.c fuzz.c fuzz_main.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
 inc='^\s*#\s*include\s*["<](\./)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
@@ -34,6 +34,7 @@ done
 for f in $core $services $adapters $driver $headers; do [ -f "$f" ] || bad "$f is listed but missing"; done
 
 chain value.h trace.h
+chain list_impl.h value.h
 chain port.h value.h
 chain core.h port.h
 chain services.h port.h
@@ -46,6 +47,7 @@ if found -n "$inc(services|net|tls|http_parse|http_fields)\.h" $core; then bad "
 if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter includes core.h"; fi
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi
 only 'gc\.h' "value.c"
+if found -n --max-depth 2 '^\s*#\s*include\s*"([^"]*/)?list_impl\.h"' --glob '*.c' --glob '*.h' --glob '!list.c' --glob '!interp.c' .; then bad "only list.c and interp.c may include list_impl.h"; fi
 only 'openssl/' "tls_openssl.c"
 only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"
