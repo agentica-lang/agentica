@@ -45,8 +45,9 @@ line ranges will not match the diff.
    example "vm list trie builder", or "vm task cancel timer". Treat weak
    results as nothing known.
 2. **Load the rules.** Read `AGENTS.md`. From
-   `.agents/skills/agentica-development/references/vm.md`, read the sections
-   "Trust model", "C style", "Failure and exit" and "Boehm GC". Read the
+   `.agents/skills/agentica-development/references/`, read `vm.md` ("Trust
+   model") and `vm-c.md` (C style, failure and exit, Boehm GC), plus the
+   `vm-*.md` file its "Read next" table names for the touched area. Read the
    sections of `docs/vm/14-core-invariants.md` (§14.1–§14.6) and
    `docs/vm/15-layers.md` that the PR touches, plus its own design doc.
 3. **Map the change** with `code_diff`, then cross-check with
@@ -187,7 +188,7 @@ then report it.
   build it there, and remove the worktree afterwards.
 - Run one C test with `make build/vm/release/<name>-test`, then the binary.
   Run one golden through the harness's single-fixture path (see the
-  development skill's `references/vm.md`).
+  development skill's `references/vm-build.md`).
 - Build ASan (`make vm SANITIZE=1`, or the one sanitize test binary) only to
   reproduce a concrete suspected memory bug. Build gc-stress
   (`GC_STRESS=1`) only for a concrete GC suspicion.

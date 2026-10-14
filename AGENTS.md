@@ -1,41 +1,94 @@
 # Agentica
 
-Interpreter for the Agentica language: a Racket front end and a C bytecode VM that runs every program. The language is defined in `docs/grammar/` (index: `docs/grammar.md`); planned syntax lives in `docs/future/`; the phased plan and the checklist of what is done live in `docs/roadmap/`; the bytecode VM design (phase 7) is `docs/vm/`. Each of these three folders has a `README.md` with an index, and its files keep the old section and phase numbers, so `§10.4` or phase 13 still finds its place.
+Interpreter for the Agentica language: a Racket front end compiles `.agc` to
+bytecode, and a C VM runs every program.
+
+## Map
+
+```text
+src/                Racket front end, one module per stage
+  lexer.rkt → parser.rkt (ast.rkt) → modules.rkt (imports) → checker.rkt → lower.rkt → bytecode.rkt
+  builtins.rkt      every builtin described once (signatures, effects, docs)
+  stdlib.rkt        embeds stdlib/ as std/
+  source.rkt token.rkt diagnostic.rkt   shared data: spans, tokens, diagnostics
+  main.rkt          thin CLI: printing and exit codes live only here
+  bdd-driver.rkt    `agentica test`
+vm/                 C11 VM (dist/agentica-vm): values, interpreter, loader, GC, tasks, I/O, HTTP, JSON
+  tests/            C tests (make vm-test)
+  third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
+stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
+tests/              rackunit: <stage>-test.rkt, vm-*-test.rkt; fixtures/ (goldens, Node/Python peers)
+examples/           small programs per feature (README.md lists them)
+docs/
+  grammar/          the language definition (index: docs/grammar.md)
+  future/           planned syntax, one file per section (§N)
+  roadmap/          phases and the done checklist (README.md: current order)
+  vm/               VM design: bytecode, loader, layers (§15), core invariants (§14)
+site/content/       Hugo documentation site
+benchmarks/         make bench programs and Python twins
+.agents/skills/     agentica-development (working on this repo), agentica-programming
+                    (writing .agc), vm-c-critic (C VM PR review)
+```
+
+Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
+`README.md` index; files keep their section and phase numbers (`§10.4`,
+phase 13).
 
 ## Commands
 
-- `make test`: build the VM, then run all tests in parallel (`raco test -j $(nproc) tests/`; `JOBS=8` sets the workers).
-- `make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"`: a subset. One stage: `raco test tests/<stage>-test.rkt`.
-- `make smoke`: the example smoke runs of CI, in parallel (`tests/smoke.sh`; builds the VM and `dist/agentica` first if needed).
-- `racket src/main.rkt examples/hello.agc`: run a program on the VM (after `make vm`). `racket src/main.rkt check file.agc`: check only.
-- `make vm`: build `dist/agentica-vm` (run `git submodule update --init` first). `make vm-test`: the C tests.
-- `make goldens`: rewrite the VM golden files after an intended change; commit them.
-- `make site`: build the documentation site; run it before merging a site change.
-- The steps of `ci.yml`, of `sweep.yml` and the test steps of `release.yml` call make targets, so those checks run locally with the same command. `site-examples.yml`, `platforms.yml`, `fuzz.yml` and the packaging steps of `release.yml` are still inline.
+- `make vm`: build `dist/agentica-vm` (`git submodule update --init` first).
+  `make vm-test`: the C tests.
+- `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
+  everything (`JOBS=8` sets the workers).
+- `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
+- `make smoke`, `make goldens` (rewrite VM goldens; commit them), `make site`
+  (before merging a site change).
+- CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are make
+  targets, so they run locally the same way.
 
-## Layout
+## Where to read
 
-- `src/` is flat, one module per stage: `lexer.rkt` → `parser.rkt` (with `ast.rkt`) → `modules.rkt` (import linking) → `checker.rkt` → `lower.rkt` → `bytecode.rkt`, run by the C VM in `vm/`, which holds the runtime (tasks, files, processes, network, HTTP, JSON). Builtins are described once in `builtins.rkt`; `std/` modules written in Agentica live in `stdlib/`. `agentica test` is `bdd-driver.rkt` plus `std/bdd` in `stdlib/`.
-- `source.rkt`, `token.rkt`, `diagnostic.rkt` hold shared data (positions/spans, tokens, diagnostics).
-- `main.rkt` is a thin CLI driver. Printing and exit codes belong there only.
-- `tests/<stage>-test.rkt` holds the focused tests for each stage.
-- `.agents/skills/agentica-development/` has stage-by-stage notes and the details: the VM build and its third-party libraries, golden tests, CI, release, site, benchmarks, eval and jscpd. Read it before changing a stage, the VM, tests or CI. `.agents/skills/vm-c-critic/` is the review checklist for a PR that changes the C VM.
+| Task | Read |
+|---|---|
+| any change to src/, vm/, tests/, CI | `.agents/skills/agentica-development/SKILL.md`, then only the references it names |
+| a C VM PR review | `.agents/skills/vm-c-critic/` |
+| language rules | `docs/grammar/` |
+| what is planned or done | `docs/roadmap/README.md` |
 
-## Conventions
+## Rules
 
-- Each stage takes the previous stage's output and returns data or exactly one `diagnostic`. It stops at the first error, never prints, and never lets a Racket exception escape.
-- Diagnostic codes are stable and prefixed by stage: `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`; the VM compiler stages use `LOWER-` and `BYTECODE-`. Every diagnostic carries a source span.
-- Keep to the core grammar (sections 4–6). User enums (generic only through enum declarations) and `case` pattern matching are core; there are no other user generics. File modules with explicit imports/exports are core; the builtin generics `List[T]`, `Map[K, V]`, and `Result[T]` and their builtin modules are core. `try` is builtin error propagation. Planned syntax stays in `docs/future/` until its phase lands. No placeholder files or nodes for later phases.
-- Use Racket's built-in test support (`rackunit`) as the test framework. Independent integration counterparts may use Node.js, Python, or curl; use standard libraries and add no third-party libraries or test frameworks.
-- Network and process tests must stay hermetic: localhost, dynamically assigned ports (port 0), no external services, and cleanup of processes and resources. TCP/HTTP interoperability tests must use an independent protocol implementation as the counterpart, rather than relying only on the Agentica client and server testing each other. Put fixtures in `tests/fixtures/`. These tests are required in CI: install their chosen tools and fail if they are missing. Local runs may explicitly report a skip when a required tool is unavailable. Racket-only tests may complement this coverage; they are not required as the base layer.
-- Tests assert the diagnostic code (and the span when it matters), not message text.
-- New features are VM-only. They are tested with golden outputs and independent Node/Python peers.
-- When a phase item is finished, tick it in the roadmap and update the development skill.
-- When the language or a builtin changes, update the matching site page too.
-- A PR with a user-visible change adds an entry under `## [Unreleased]` in `CHANGELOG.md`; mark a breaking change with `**Breaking:**`.
-- Do not hard-wrap prose in `site/content/`: one line per paragraph or list item. Code blocks keep their line breaks.
-- Wrap prose at 80 characters in `docs/` files the site does not render (not `docs/grammar/`); site pages and the grammar keep one line per paragraph.
-- When the language changes, update `docs/grammar/` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md` (cheat sheet and rules) and `references/language.md` (full rules), and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, testing, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 2,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.
+- Stages: each takes the previous stage's output and returns data or exactly
+  one `diagnostic`; it stops at the first error, never prints, and never lets
+  a Racket exception escape.
+- Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
+  `RUNTIME-`, `LOWER-`, `BYTECODE-`), and carry a source span. Tests assert
+  the code (and the span when it matters), never message text.
+- Core grammar only (sections 4–6): user enums (the only user generics),
+  `case`, file modules with explicit imports/exports, builtin `List[T]`,
+  `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`
+  until its phase lands. No placeholder files or nodes for later phases.
+- New features are VM-only, tested with golden outputs and independent
+  Node/Python peers.
+- Tests: `rackunit`. Peers may use Node.js, Python or curl with standard
+  libraries only; no third-party libraries or test frameworks.
+- Network and process tests are hermetic: localhost, port 0, no external
+  services, everything cleaned up. TCP/HTTP interop uses an independent
+  protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
+  CI installs the tools and fails if one is missing; local runs may report a
+  skip. Racket-only tests may add coverage but are not the base layer.
+- When a phase item is done, tick it in the roadmap and update the
+  development skill.
+- When the language or a builtin changes, update `docs/grammar/`, the site
+  page and the programming skill together: core rules in
+  `.agents/skills/agentica-programming/SKILL.md` (keep it near 2,000 tokens)
+  and `references/language.md`; library detail in its `references/<area>.md`
+  plus its row in the "When to read a reference" table. The skill is
+  self-contained and does not read the grammar.
+- A user-visible change adds an entry under `## [Unreleased]` in
+  `CHANGELOG.md`; mark a breaking change `**Breaking:**`.
+- Prose wrapping: `site/content/` and `docs/grammar/` keep one line per
+  paragraph or list item (code blocks keep their line breaks); other `docs/`
+  files wrap at 80 characters.
 
 ## Working style
 
