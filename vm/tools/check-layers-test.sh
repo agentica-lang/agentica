@@ -42,6 +42,9 @@ printf '#include "../list_impl.h"\n' > "$tmp/vm/tests/list_test.c"
 check >/dev/null || { printf 'check-layers.sh rejects list_impl.h in tests/list_test.c\n' >&2; check >&2; exit 1; }
 printf '#include "../list_impl.h"\n' > "$tmp/vm/tests/map_test.c"
 fails "list_impl.h in tests/map_test.c" 'only list\.c, interp\.c and tests/list_test\.c may include list_impl\.h'
+rm "$tmp/vm/tests/map_test.c"
+printf '#include "../list_impl.h"\n' > "$tmp/vm/tests/interp.c"
+fails "list_impl.h in tests/interp.c" 'only list\.c, interp\.c and tests/list_test\.c may include list_impl\.h'
 plant text.c 'size_t agc_utf8_encode(uint32_t cp, char out[4]);'
 fails "a prototype in a .c file" 'an agc_ prototype'
 plant services.h '#include "core.h"'

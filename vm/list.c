@@ -1,3 +1,9 @@
+/*
+ * Lists in C: a persistent vector, a 32-way trie of leaves of 32 items plus an
+ * inline tail. It owns the layout (list_impl.h is private to it and interp.c):
+ * the sized builder and cursor, get, append, set, slice and concat that share
+ * leaves, reverse and repeat. Core layer. Design: docs/vm/17-lists.md.
+ */
 #include "core.h"
 #include "list_impl.h"
 
