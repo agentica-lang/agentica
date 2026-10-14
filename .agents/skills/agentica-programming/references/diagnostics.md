@@ -14,26 +14,26 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 
 | Code | Meaning |
 |---|---|
-| `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
-| `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end` |
+| `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `'` or a backtick says strings use double quotes (a character is a one-character String). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
+| `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
 | `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one |
-| `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function |
+| `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function (put it in `def main() -> Void`), or an extra `end` (a stray `else` or `elsif` has no matching `if`) |
 | `PARSE-CHAINED-COMPARISON` | `a < b < c` |
 | `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |
 | `PARSE-PIPE-TARGET` | the right side of `\|>` is not a call written with parentheses (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`); wrap the pipe in parentheses and use `.` on the result. The call may follow `try` and take a trailing block. `a + 1 \|> f()` is `f(a + 1)`; put a multi-line chain in parentheses, one `\|>` per line |
-| `CHECK-TYPE-MISMATCH` | a value, operand, condition, argument, or return has the wrong type; also printing or interpolating a value without `to_s` (a function, task or handle) |
-| `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist |
+| `CHECK-TYPE-MISMATCH` | a value, operand, condition, argument, or return has the wrong type; also printing or interpolating a value without `to_s` (a function, task or handle). Int with Float: `n.to_f`, `x.to_i!`; String with a number: `s.to_i!`, `n.to_s`; `<` on Strings: only numbers are ordered |
+| `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist (`continue` says `next`; `Map.new` says `m: Map[String, Int] = {}`) |
 | `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING` | duplicate declaration, shadowing, annotation on an existing name |
 | `CHECK-ARITY` | wrong number of arguments |
 | `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD` | struct construction fields |
-| `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type |
+| `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type: annotate it, `m: Map[String, Int] = {}` |
 | `CHECK-RESULT-TYPE` | an error constructor without an expected Result type |
 | `CHECK-EXPECTED-TYPE` | `Channel.new(n)` with no expected type; annotate it: `ch: Channel[Int] = Channel.new(8)` (see `tasks.md`) |
 | `CHECK-TRY-CONTEXT` | try in a function not returning Result |
-| `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function |
+| `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function; the help names the missing `else`, loop or `case` arm |
 | `CHECK-MAIN` | missing or wrong `main` |
-| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map, `for` over something that is not a list or a range |
+| `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST` | index on a non-list/map (a String uses `s.at(i)` or `s.slice(start, length)`), `for` over something that is not a list or a range |
 | `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE` | unknown enum variant, named arguments to a variant, generic enum type not known from payloads or context |
 | `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, `CHECK-UNREACHABLE-CASE-ARM` | a pattern that does not fit the value, a `case` missing variants or `_`, an arm already covered |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
@@ -44,7 +44,7 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `CHECK-PIPE-METHOD` | `x \|> String.trim()`: a builtin that has a method form for the left value is written with `.` (`x.trim`); the help shows the method form, with a piped left side in parentheses |
-| `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct |
+| `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct. Common foreign names get the real one: `s.chars` says `s.split("")`, `s.matches?` says `contains?`, `to_string` says `to_s` |
 | `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
 | `CHECK-BLOCK-TYPE` | a block parameter has no type from the call; annotate it (`do |x: Int|`) |
 | `CHECK-BLOCK-TARGET` | a block is passed to a function whose last parameter is not a `Fn` |

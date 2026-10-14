@@ -3,8 +3,8 @@
 **Status:** planned (roadmap phase 14). Three parts, each its own small PR, all on the VM only (the evaluator is gone by then, or the part changes only VM code):
 
 - 14a, **VM tracing** (24.4): a developer tool inside `agentica-vm`, not a language feature. It comes right after 7h processes and before TCP and TLS, to make the rest of 7h faster to debug.
-- 14b, **stack traces on runtime errors** (24.3): after 7i.
-- 14c, **`std/log`** with the `--log-*` flags (24.2): after 7i and after default parameter values (15a, [section 25.1](25-ruby-typed-idioms.md#251-default-parameter-values)), which land first in the same order step.
+- 14b, **stack traces on runtime errors** (24.3): after 7i, as roadmap row 7.2.5, before the freeze of the Racket front end (row 7.2.7).
+- 14c, **`std/log`** with the `--log-*` flags (24.2): after 7i and after default parameter values (15a, [section 25.1](25-ruby-typed-idioms.md#251-default-parameter-values)), which are roadmap row 7.5a, deferred until after the bootstrap (row 7.2.7).
 
 No grammar change. 14c adds three `System` builtins and a `std/` module; 14b changes only what the VM prints for a runtime diagnostic.
 

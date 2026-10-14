@@ -818,13 +818,34 @@
                    ("  s: String = IO.gets()" CHECK-TYPE-MISMATCH "\\(gets!\\)")
                    ("  x = elif(true)" CHECK-UNKNOWN-NAME "elsif")
                    ("  h = Hash.new" CHECK-UNKNOWN-NAME "Map\\[")
+                   ("  h = Map.new" CHECK-UNKNOWN-NAME "m: Map\\[String, Int\\] = \\{\\}")
+                   ("  s = \"abc\"\n  x = s.chars" CHECK-UNKNOWN-METHOD "split")
+                   ("  s = \"abc\"\n  x = s.matches?(\"a\")" CHECK-UNKNOWN-METHOD "contains\\?")
+                   ("  s = \"abc\"\n  x = s.error?" CHECK-UNKNOWN-METHOD "ok\\?")
+                   ("  n = 2\n  x = n * 1.5" CHECK-TYPE-MISMATCH "n\\.to_f")
+                   ("  s = \"1\"\n  x = s + 1" CHECK-TYPE-MISMATCH "to_i!")
+                   ("  x = \"a\" < \"b\"" CHECK-TYPE-MISMATCH "== and !=")
+                   ("  s = \"abc\"\n  x = s[0]" CHECK-NOT-INDEXABLE "s\\.at")
+                   ("  m = {}" CHECK-EMPTY-MAP-TYPE "m: Map\\[")
+                   ("  xs = []" CHECK-EMPTY-LIST-TYPE "xs: List\\[")
                    ("  x: String = IO.gets" CHECK-TYPE-MISMATCH "\\(gets!\\)")
                    ("  r: Result[Int] = Result.Some(5)" CHECK-UNKNOWN-TYPE "Result\\.Ok\\(value\\)")
-                   ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts"))])
+                   ("  nexts = 1\n  x = next" CHECK-UNKNOWN-NAME "nexts")
+                   ("  x = 65.chr" CHECK-UNKNOWN-METHOD "String\\.from_code")
+                   ("  s = IO.gets\n  y = s.chomp" CHECK-UNKNOWN-METHOD "r\\.unwrap!")
+                   ("  s = \"a\"\n  x = s.upcas" CHECK-UNKNOWN-METHOD "did you mean \"upcase\"")
+                   ("  x = List.new" CHECK-UNKNOWN-NAME "xs: List\\[")
+                   ("  x = Map.empty" CHECK-UNKNOWN-NAME "m: Map\\[")
+                   ("  r = IO.gets\n  x = r[0]" CHECK-NOT-INDEXABLE "unwrap the Result")
+                   ("  s = \"a\" + \"b\"\n  x = s + 1" CHECK-TYPE-MISMATCH "n\\.to_s"))])
       (define problem (check-text (main-with (car entry))))
       (check-equal? (diagnostic-code problem) (cadr entry) (car entry))
       (check-regexp-match (pregexp (caddr entry)) (diagnostic-help problem) (car entry)))
     (check-false (regexp-match? #rx"downcase" (or (diagnostic-help (check-text (main-with "  x = [1].lower"))) "")))
+    (check-regexp-match #rx"every branch"
+                        (diagnostic-help
+                         (check-text (string-append "def f(x: Int) -> Int\n  if x > 0\n    return 1\n  else\n    puts(\"a\")\n  end\nend\n\n"
+                                                    (main-with "")))))
     (check-false (diagnostic-help (check-text (string-append "def len(n: Int) -> Int\n  return n\nend\n\n"
                                                              (main-with "  f = len")))))
     (define unknown (check-text (main-with "  x = 1\n  y = len(x)")))
@@ -897,6 +918,10 @@
                         (help-of "def f(n: Int) -> Int\n  if n > 0\n    return 1\n  end\nend\n\ndef main() -> Void\nend\n\n"))
     (check-regexp-match #rx"return <value>"
                         (help-of "def f(n: Int) -> Int\n  x = n\nend\n\ndef main() -> Void\nend\n\n"))
+    (check-regexp-match #rx"loop does not count"
+                        (help-of "def f(n: Int) -> Int\n  while n > 0\n    return 1\n  end\nend\n\ndef main() -> Void\nend\n\n"))
+    (check-regexp-match #rx"every arm"
+                        (help-of "def f(n: Int) -> Int\n  case n\n    1 -> return 1\n    _ -> puts(\"a\")\n  end\nend\n\ndef main() -> Void\nend\n\n"))
     (check-regexp-match #rx"x = value"
                         (help-of (main-with "  x = 1\n  for x in [1]\n    puts(\"a\")\n  end")))
     (check-regexp-match #rx"copy the value"
