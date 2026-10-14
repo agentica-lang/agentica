@@ -219,7 +219,7 @@
             (define two-char
               (and (peek 1)
                    (member (string (current) (peek 1))
-                           '("->" "==" "!=" "<=" ">=" "&&" "||" "+=" "-=" "*=" "/=" "%=" ".."))
+                           '("->" "==" "!=" "<=" ">=" "&&" "||" "+=" "-=" "*=" "/=" "%=" ".." "|>"))
                    (string (current) (peek 1))))
             (define lexeme (or three-char two-char (string char)))
             (define kind
@@ -235,7 +235,7 @@
                      "," 'comma ":" 'colon "." 'dot ".." 'dot-dot "..." 'dot-dot-dot
                      "=" 'assign "+" 'plus "-" 'minus
                      "*" 'multiply "/" 'divide "%" 'modulo
-                     "<" 'less ">" 'greater "&" 'ampersand "|" 'pipe)
+                     "<" 'less ">" 'greater "&" 'ampersand "|" 'pipe "|>" 'pipe-forward)
                lexeme
                #f))
             (unless kind

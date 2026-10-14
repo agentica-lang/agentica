@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 298,
+  "stdout": [
+    "9",
+    "true",
+    "ok(7)",
+    "error(\"negative\")",
+    "false",
+    "ok(12)",
+    "error(\"negative\")",
+    "42",
+    "[3, 4, 5]",
+    "[4, 8, 12]",
+    "3",
+    "20 items",
+    ""
+  ],
+  "stderr": []
+}

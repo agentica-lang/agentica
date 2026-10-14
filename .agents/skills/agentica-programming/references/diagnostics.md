@@ -23,6 +23,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function |
 | `PARSE-CHAINED-COMPARISON` | `a < b < c` |
 | `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |
+| `PARSE-PIPE-TARGET` | the right side of `\|>` is not a call written with parentheses (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`); wrap the pipe in parentheses and use `.` on the result. The call may follow `try` and take a trailing block. `a + 1 \|> f()` is `f(a + 1)`; put a multi-line chain in parentheses, one `\|>` per line |
 | `CHECK-TYPE-MISMATCH` | a value, operand, condition, argument, or return has the wrong type; also printing or interpolating a value without `to_s` (a function, task or handle) |
 | `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist |
 | `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING` | duplicate declaration, shadowing, annotation on an existing name |
@@ -43,6 +44,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-NOT-ENCODABLE` | JSON.encode on a type with unsupported nested values or Int-keyed maps |
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
+| `CHECK-PIPE-METHOD` | `x \|> String.trim()`: a builtin that has a method form for the left value is written with `.` (`x.trim`); the help shows the method form, with a piped left side in parentheses |
 | `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct |
 | `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
 | `CHECK-BLOCK-TYPE` | a block parameter has no type from the call; annotate it (`do |x: Int|`) |

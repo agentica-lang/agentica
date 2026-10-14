@@ -139,4 +139,15 @@
     (check-equal? (diagnostic-code (lex-text "}"))
                   'LEX-UNMATCHED-DELIMITER)
     (check-equal? (diagnostic-code (lex-text "{"))
-                  'LEX-UNCLOSED-DELIMITER)))
+                  'LEX-UNCLOSED-DELIMITER))
+
+  (test-case "the pipe token is the longest match next to | and ||"
+    (check-equal? (kinds (lex-text "a |> f()"))
+                  '(name pipe-forward name left-paren right-paren NL EOF))
+    (check-equal? (map token-lexeme (take (lex-text "a|>b") 3)) '("a" "|>" "b"))
+    (check-equal? (kinds (lex-text "a || b | c"))
+                  '(name or name pipe name NL EOF))
+    (check-equal? (kinds (lex-text "xs.each do |x|\nend"))
+                  '(name dot name do pipe name pipe NL end NL EOF))
+    (check-equal? (kinds (lex-text "a ||> b"))
+                  '(name or greater name NL EOF))))

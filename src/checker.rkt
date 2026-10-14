@@ -53,6 +53,39 @@
         '(Float . "to_s") "String.from_float"
         '(Float . "to_i") "Float.to_int" '(Float . "to_i!") "Float.to_int!"))
 
+(define (pipe-method-name kind name)
+  (define suffix (cond [(regexp-match #rx"^[^.]*[.](.*)$" name) => cadr] [else #f]))
+  (cond
+    [(and suffix (equal? (resolve-method kind suffix) name)) suffix]
+    [else
+     (for/first ([(key target) (in-hash method-aliases)]
+                 #:when (and (eq? (car key) kind) (equal? target name)))
+       (cdr key))]))
+
+(define (piped-node? node)
+  (or (and (call? node) (call-piped node))
+      (and (try-expr? node) (piped-node? (try-expr-operand node)))))
+
+(define (extent-start node)
+  (cond
+    [(and (call? node) (call-piped node)) (extent-start (car (call-args node)))]
+    [(try-expr? node)
+     (define own (source-span-start (node-span node)))
+     (define inner (extent-start (try-expr-operand node)))
+     (if (< (source-position-offset inner) (source-position-offset own)) inner own)]
+    [else (source-span-start (node-span node))]))
+
+(define (extent-text node)
+  (define end (node-span node))
+  (substring (source-text (source-span-source end))
+             (source-position-offset (extent-start node))
+             (source-position-offset (source-span-end end))))
+
+(define (span-text span)
+  (substring (source-text (source-span-source span))
+             (source-position-offset (source-span-start span))
+             (source-position-offset (source-span-end span))))
+
 (define (type-head type)
   (if (pair? type) (car type) type))
 
@@ -967,9 +1000,40 @@
 
     (define (check-call expression expected)
       (define entry (builtin-ref (call-name expression)))
-      (if entry
-          (check-builtin-call expression expected entry)
-          (check-plain-call expression)))
+      (cond
+        [entry
+         (define result (check-builtin-call expression expected entry))
+         (when (call-piped expression) (check-pipe-method! expression entry))
+         result]
+        [else (check-plain-call expression)]))
+
+    (define (check-pipe-method! expression entry)
+      (define arguments (call-args expression))
+      (define left (car arguments))
+      (define selected (builtin-ref (builtin-name entry) (length arguments)))
+      (define kind (and selected
+                        (pair? (builtin-parameters selected))
+                        (receiver-kind (cadr (car (builtin-parameters selected))))))
+      (define method (and kind (pipe-method-name kind (builtin-name entry))))
+      (when method
+        (define left-text
+          (if (and (or (name-ref? left) (literal? left) (call? left) (method-call? left)
+                       (field-access? left) (index-access? left))
+                   (not (piped-node? left)))
+              (extent-text left)
+              (string-append "(" (extent-text left) ")")))
+        (define rest-arguments (cdr arguments))
+        (define plain (filter (lambda (argument) (not (block-lit? argument))) rest-arguments))
+        (bail 'CHECK-PIPE-METHOD
+              (format "\"~a\" has a method form for ~a, so it is not piped"
+                      (builtin-name entry) kind)
+              (call-span expression)
+              #:help (string-append
+                      left-text "." method
+                      (if (null? plain)
+                          ""
+                          (string-append "(" (string-join (map extent-text plain) ", ") ")"))
+                      (if (ormap block-lit? rest-arguments) " do ... end" "")))))
 
     (define (check-plain-call expression)
       (define name (call-name expression))
@@ -1196,7 +1260,7 @@
          (record! (inspection receiver span))
          (ensure 'String expected span)]
         [else
-         (define synthetic (call resolved-name (cons receiver arguments) span))
+         (define synthetic (call resolved-name (cons receiver arguments) span #f))
          (record! synthetic)
          (check-call synthetic expected)]))
 

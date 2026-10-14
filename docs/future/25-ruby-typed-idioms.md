@@ -1,6 +1,6 @@
 ## 25. Ruby typed idioms
 
-**Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator (order 7.2): 25.1 (defaults, front end only) as the first item of order step 7.5, before `std/log`; 25.2 to 25.5, 25.9 and 25.10 at order step 7.6, after the strict diagnostics of [section 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12.
+**Status:** Part A is planned (roadmap phase 15), after 7i deletes the evaluator (order 7.2): 25.1 (defaults, front end only) as the first item of order step 7.5, before `std/log`; 25.2 to 25.5, 25.9 and 25.10 at order step 7.6, after the strict diagnostics of [section 26](26-strict-diagnostics.md#26-strict-diagnostics); and the prelude part, 25.6 and 25.11, at order step 8.2, after faster lists (8d). 25.7 and 25.8 were moved to Part C. Part B (25.12) lists ideas to evaluate later. Part C (25.13) lists ideas that were decided against, so they are not proposed again. Decided by the user on 2026-10-12. 25.14 (the pipe operator) is implemented (roadmap item 15l, order row 7.2.1g).
 
 Agentica is "Ruby with types" for LLM agents. This section takes more Ruby forms that models already know, with the rule of [section 11](11-ruby-ergonomics.md#11-ruby-style-ergonomics): accept a form when it is real Ruby (or a typed version of it) or when it makes Agentica consistent with itself, and keep static checking and immutable values. Three limits do not move: no OOP (no classes, no inheritance, no user methods on user types), no user generics, and values stay immutable.
 
@@ -506,7 +506,7 @@ def validate(n: Int) -> Result[Int]
 end
 
 def load(path: String) -> Result[Int]
-  return path |> try File.read_text(1000) |> try parse() |> try validate()
+  return path |> try File.read_text(1000) |> try parse() |> validate()
 end
 ```
 

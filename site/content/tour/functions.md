@@ -166,6 +166,59 @@ can live in lists, maps and struct fields.
 [Blocks](/tour/blocks/) are the short way to write a function value at the
 place where you use it.
 
+## Chain calls with |>
+
+`x |> f(a)` means `f(x, a)`: the value on the left becomes the first argument of the call on the right. Use it to chain your own functions from left to right instead of nesting them.
+
+```agentica
+def parse(text: String) -> Result[Int]
+  return text.to_i
+end
+
+def validate(n: Int) -> Result[Int]
+  if n < 0
+    return error("negative")
+  end
+  return ok(n)
+end
+
+def add(a: Int, b: Int) -> Int
+  return a + b
+end
+
+def load(text: String) -> Result[Int]
+  return text.trim |> try parse() |> validate()
+end
+
+def main() -> Void
+  puts(1 |> add(2) |> add(3))
+  puts(load(" 7 ").inspect)
+  puts(load("-3").inspect)
+  total = (10
+    |> add(1)
+    |> add(100))
+  puts(total)
+end
+```
+
+```output
+6
+ok(7)
+error("negative")
+111
+```
+
+The right side must be a call with parentheses. It can start with `try`: `x |> try f()` means `try f(x)`. `|>` binds looser than `+` and `-` and tighter than comparisons, so `a + 1 |> f()` is `f(a + 1)`. A chain over several lines goes in parentheses, as in `total` above.
+
+A builtin that has a method form is written with `.`, not `|>`: `s.trim`, not `s |> String.trim()`. The checker reports `CHECK-PIPE-METHOD` and shows the method form.
+
+```agentica {expect="CHECK-PIPE-METHOD"}
+def main() -> Void
+  s = " hi "
+  puts(s |> String.trim())
+end
+```
+
 ## No overloading or defaults
 
 A name has one definition. There are no default arguments, no keyword
