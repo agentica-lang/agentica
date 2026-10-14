@@ -10,6 +10,8 @@ listeners, clients and servers are handles: `IO.inspect` prints only their type 
 the program ends. Most examples here open real connections, so they are
 checked but not run.
 
+A socket, listener or server belongs to the task that opened it, and it is closed when that task ends, however it ends, so open one in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a task it starts.
+
 A timeout covers the whole call, including the wait for another task using
 the same socket. When a read or write times out, the socket is closed, and
 later calls on it fail at once with `network: socket is closed`.
@@ -128,7 +130,7 @@ TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 ```
 
-Close a socket or a listener. Closing twice is fine.
+Close a socket or a listener. Closing twice is fine. A socket or a listener belongs to the task that opened it and is closed when that task ends, so close it yourself only when it must close earlier. Give a connection to another task with [`Task.spawn_owning`](/library/concurrency/task/#taskspawn_owning), and that task closes it when it ends.
 
 ## TLS
 
@@ -303,7 +305,7 @@ HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 ```
 
-`close_server` stops accepting, closes every connection and cancels the running handlers and every task they started. Calling it again does nothing. `wait` returns `ok()` once the server is closed, so a program that only serves waits on it. When `main` returns, the server stops with the program.
+`close_server` stops accepting, closes every connection and cancels the running handlers and every task they started. Calling it again does nothing. `wait` returns `ok()` once the server is closed, so a program that only serves waits on it. When `main` returns, the server stops with the program. A server belongs to the task that called `HTTP.listen`: when that task ends, the server is closed and its port is free, so call `listen` in the task that keeps the server, such as `main`. Each connection belongs to the task that serves it, so a crash in a handler closes only its connection.
 
 ```agentica {mode="check"}
 import "std/http" as HTTP

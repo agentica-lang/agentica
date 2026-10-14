@@ -711,7 +711,8 @@ static proc *unregister_child(agc_vm *vm, agc_resource *r) {
   return p;
 }
 
-static void close_child(agc_vm *vm, agc_resource *r) {
+static void close_child(agc_vm *vm, agc_resource *r, agc_task *ender) {
+  (void)ender;
   proc *p = unregister_child(vm, r);
   if (!p) return;
   shut(p);

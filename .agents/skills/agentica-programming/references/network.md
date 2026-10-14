@@ -4,8 +4,11 @@ Networking uses the existing expression syntax and lightweight tasks.
 `TCP`, `TLS`, `Socket`, `Listener`, `HttpClient`, `Header`, `HttpResponse`
 and `HttpClientOptions` are reserved. Handles are opaque: no constructor,
 equality, fields or JSON encoding; inspect prints their type in angle
-brackets. Handles belong to their run and close when it ends. Network access
-needs no CLI permission flag.
+brackets. A handle belongs to the task that opened it and closes when that
+task ends, or when the run ends (see `tasks.md`). A server loop gives each
+accepted connection to its own task with `Task.spawn_owning(&serve, socket)`,
+so a crash in that task closes only that connection; plain `Task.spawn` leaves
+the socket with the loop task. Network access needs no CLI permission flag.
 
 ```text
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
@@ -166,7 +169,10 @@ Bad requests never reach the handler: the server answers 400, 413, 417,
 431, 501 or 505 itself and closes. `close_server` closes the listener and
 every connection and cancels the handlers and the tasks they spawned;
 `wait` returns `ok()` once the server is closed. When `main` returns, the
-server stops with the run.
+server stops with the run. A server belongs to the task that called
+`HTTP.listen`: when that task ends (it returns, crashes or is cancelled), the
+server is closed and its port is free, so call `listen` in the task that keeps
+the server, such as `main`.
 
 The builtin `HTTP` module of earlier releases is gone: `HTTP.client()`
 becomes `HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)`

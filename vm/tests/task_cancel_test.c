@@ -16,12 +16,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 14
+#define MAX_FNS 17
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_DROP, B_PRINT, B_DRAIN, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_DROP, F_RECV, F_PRINT };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -258,18 +258,39 @@ static agc_value test_self(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
-static void close_handle(agc_vm *vm, agc_resource *r) {
+static void close_handle(agc_vm *vm, agc_resource *r, agc_task *ender) {
   (void)vm;
   (void)r;
+  (void)ender;
   owned_closed++;
 }
 
-static agc_value test_drop(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value test_own(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
   agc_own(vm, handle, close_handle);
-  agc_task_drop(vm, vm->task);
+  agc_task_cancel(vm, vm->task);
   self_returned = true;
+  return agc_void();
+}
+
+static agc_value test_keep(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  agc_own(vm, handle, close_handle);
+  return agc_void();
+}
+
+static agc_value test_closing(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  vm->task->closing += 2;
+  return agc_void();
+}
+
+static agc_value test_close_done(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_task_close_done(vm, agc_as_task(vm, args[0]));
   return agc_void();
 }
 
@@ -360,9 +381,12 @@ static const agc_builtin test_builtins[] = {
   {"Test.pool", 1, test_pool_job, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.gate", 1, test_gate, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.settled", 1, test_settled, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"Test.drop_self", 1, test_drop, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.own_self", 1, test_own, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.print", 1, test_print, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.drain", 1, test_drain, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.keep", 1, test_keep, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.closing", 1, test_closing, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -447,10 +471,10 @@ static void build_tasks(prog *p) {
   mark_arg(p, F_POOL);
   finish_fn(p, F_POOL);
 
-  mark_arg(p, F_DROP);
-  call_reg(p, F_DROP, B_DROP, 0, 1);
-  call_int(p, F_DROP, B_MARK, 995);
-  finish_fn(p, F_DROP);
+  mark_arg(p, F_OWN);
+  call_reg(p, F_OWN, B_OWN, 0, 1);
+  call_int(p, F_OWN, B_MARK, 995);
+  finish_fn(p, F_OWN);
 
   emit(p, F_RECV, AGC_OP_MOVE, 1, 0, 1);
   emit(p, F_RECV, AGC_OP_CONST, 2, constant(p, 30000), 1);
@@ -460,6 +484,17 @@ static void build_tasks(prog *p) {
 
   call_reg(p, F_PRINT, B_PRINT, 0, 1);
   finish_fn(p, F_PRINT);
+
+  call_reg(p, F_KEEP, B_KEEP, 0, 1);
+  call_int(p, F_KEEP, B_SLEEP, 60000);
+  call_int(p, F_KEEP, B_MARK, 994);
+  finish_fn(p, F_KEEP);
+
+  call_reg(p, F_CLOSER, B_CLOSING, 0, 1);
+  finish_fn(p, F_CLOSER);
+
+  call_reg(p, F_FINISH, B_CLOSE_DONE, 0, 1);
+  finish_fn(p, F_FINISH);
 }
 
 static void new_prog(prog *p) {
@@ -714,7 +749,57 @@ static void run_self(uint32_t fn, int closed) {
 
 static void test_self_cancel(void) { run_self(F_SELF, 0); }
 
-static void test_self_drop(void) { run_self(F_DROP, 1); }
+static void test_self_own(void) { run_self(F_OWN, 1); }
+
+static void check_keep(agc_vm *vm, int64_t n) {
+  agc_task *keeper = reg_task(vm, 0);
+  if (n == 1) {
+    assert(owned_closed == 0 && handle->owner == keeper && keeper->state == AGC_TASK_PARKED);
+  } else {
+    assert(owned_closed == 1 && !handle->owner && !keeper->owned && cancelled(keeper) && mark_count == 0);
+  }
+}
+
+static void check_closing(agc_vm *vm, int64_t n) {
+  agc_task *closer = reg_task(vm, 0);
+  agc_task *awaiter = reg_task(vm, 2);
+  assert(closer->state == AGC_TASK_DONE && mark_count == 0);
+  if (n == 1) {
+    assert(closer->closing == 2 && closer->waiters == awaiter && awaiter->state == AGC_TASK_PARKED);
+  } else if (n == 2) {
+    assert(closer->closing == 2 && !closer->waiters && cancelled(awaiter));
+  } else if (n == 3) {
+    assert(closer->closing == 1 && !closer->waiters && cancelled(awaiter));
+  } else {
+    assert(closer->closing == 0 && !closer->waiters);
+  }
+}
+
+static void test_closing_task(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_CLOSER, 1);
+  spawn_with(&p, F_MAIN, 2, F_AWAITER, 0);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_reg(&p, F_MAIN, B_CLOSE_DONE, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 3);
+  spawn_with(&p, F_MAIN, 4, F_FINISH, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 88);
+  call_int(&p, F_MAIN, B_CHECK, 4);
+  run_done(&p, check_closing);
+}
+
+static void test_cancel_closes_owned(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_KEEP, 1);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  check_cancel_check(&p, 0);
+  run_done(&p, check_keep);
+}
 
 static void check_children(agc_vm *vm, int64_t n) {
   agc_task *item = reg_task(vm, 0);
@@ -937,7 +1022,9 @@ int main(void) {
   test_parked_await();
   test_ready_then_await();
   test_self_cancel();
-  test_self_drop();
+  test_self_own();
+  test_cancel_closes_owned();
+  test_closing_task();
   test_children_move();
   test_timer_fired_then_cancel();
   test_channel_waiters();

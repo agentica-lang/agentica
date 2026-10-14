@@ -27,7 +27,7 @@ def main() -> Void
   puts(Task.await(r))
   puts(Task.await(s))
   q = Process.spawn_channel("sh", ["-c", "exec sleep 60"], ".", 5000).unwrap!
-  t = Task.spawn(&holder, q)
+  t = Task.spawn_owning(&holder, q)
   puts(Task.await(t).ok?)
   Process.close(q)
   puts(Task.pending_count())

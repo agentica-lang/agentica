@@ -89,10 +89,33 @@ agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release) {
   return r;
 }
 
-void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close) {
-  r->owner = vm->in_turn ? vm->task : NULL;
-  r->close = close;
+static void owned_add(agc_task *t, agc_resource *r) {
+  r->owner = t;
+  r->owned_prev = NULL;
+  r->owned_next = t->owned;
+  if (t->owned) t->owned->owned_prev = r;
+  t->owned = r;
 }
+
+static void owned_remove(agc_resource *r) {
+  agc_task *t = r->owner;
+  if (!t) return;
+  if (r->owned_prev)
+    r->owned_prev->owned_next = r->owned_next;
+  else
+    t->owned = r->owned_next;
+  if (r->owned_next) r->owned_next->owned_prev = r->owned_prev;
+  r->owner = NULL;
+  r->owned_prev = r->owned_next = NULL;
+}
+
+void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close) {
+  owned_remove(r);
+  r->close = close;
+  if (vm->in_turn) owned_add(vm->task, r);
+}
+
+void agc_disown(agc_resource *r) { owned_remove(r); }
 
 agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_HANDLE)) return agc_as_handle(vm, v);
@@ -103,21 +126,16 @@ agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
   return NULL;
 }
 
-void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to) {
-  for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;)
-    if (vm->registry->items[k]->owner == from) vm->registry->items[k]->owner = to;
+void agc_hand_over(agc_resource *r, agc_task *to) {
+  owned_remove(r);
+  owned_add(to, r);
 }
 
-/* A close can close other handles (a server drops its group) and
-   agc_unregister moves the last entry down into the freed slot, so entries
-   only move down: walking down meets every one still owned. */
-void agc_close_owned(agc_vm *vm) {
-  for (size_t k = vm->registry ? vm->registry->count : 0; k-- > 0;) {
-    if (k >= vm->registry->count) continue;
-    agc_resource *r = vm->registry->items[k];
-    if (!r->owner || !r->owner->drop_handles) continue;
-    r->owner = NULL;
-    r->close(vm, r);
+void agc_close_owned(agc_vm *vm, agc_task *t) {
+  while (t->owned) {
+    agc_resource *r = t->owned;
+    owned_remove(r);
+    r->close(vm, r, t);
   }
 }
 
@@ -141,6 +159,7 @@ void agc_handle_leave(agc_vm *vm, agc_task *t) {
 }
 
 void agc_unregister(agc_vm *vm, agc_resource *r) {
+  owned_remove(r);
   agc_registry *reg = vm->registry;
   if (!reg || r->slot >= reg->count || reg->items[r->slot] != r) return;
   agc_resource *last = reg->items[--reg->count];
@@ -279,7 +298,7 @@ static agc_value take_context(agc_vm *vm, agc_resource *r) {
 static void close_pending(agc_vm *vm, agc_value context) {
   if (!agc_is(context, AGC_T_HANDLE)) return;
   agc_resource *handle = agc_as_handle(vm, context);
-  if (handle->closing && handle->native && !handle->holder) handle->close(vm, handle);
+  if (handle->closing && handle->native && !handle->holder) handle->close(vm, handle, NULL);
 }
 
 static void discard(agc_vm *vm, agc_value result) {
@@ -547,8 +566,8 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL, (flags & AGC_JOB_QUIET) != 0);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
+  agc_resource *r = start_job(vm, kind, data, context, -1, NULL, NULL, (flags & AGC_JOB_QUIET) != 0);
   job *j = r->native;
   j->detached = true;
   j->flush = (flags & AGC_JOB_FLUSH) != 0;
@@ -591,7 +610,7 @@ uint64_t agc_io_now(agc_vm *vm) {
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_task *t = vm->task;
-  if (handle->closing) {
+  if (handle->closing && !handle->holder) {
     agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
     if (handle->next_owner == t) handle->next_owner = NULL;
     t->lock_wait = NULL;
@@ -703,7 +722,7 @@ static void close_files(agc_vm *vm) {
     agc_resource *r = vm->registry->items[k];
     if (!r->pool_close || !r->native || held(r)) continue;
     r->holder = NULL;
-    r->close(vm, r);
+    r->close(vm, r, NULL);
   }
 }
 
@@ -788,9 +807,10 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   (void)timeout_ms;
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
   (void)kind;
   (void)data;
+  (void)context;
   (void)flags;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }

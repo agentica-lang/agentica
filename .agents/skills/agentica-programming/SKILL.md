@@ -28,7 +28,7 @@ Read only the files the task needs:
 | [references/json.md](references/json.md) | reads or writes JSON |
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths |
 | [references/processes.md](references/processes.md) | starts other programs and talks to them on a channel of their own (`Process`) |
-| [references/tasks.md](references/tasks.md) | runs work concurrently or passes values between tasks (`Task`, `Channel`) |
+| [references/tasks.md](references/tasks.md) | runs work concurrently, passes values between tasks, or hands a connection or file to a task (`Task`, `Channel`) |
 | [references/network.md](references/network.md) | uses TCP, TLS, or the HTTP client or server (`import "std/http" as HTTP`) |
 | [references/bdd.md](references/bdd.md) | writes `.feature` specifications or a BDD step program (`import "std/bdd" as BDD`, run by `agentica test`) |
 | [references/testing.md](references/testing.md) | writes unit tests (`Test.test`, `Test.eq`, `Test.run`) |

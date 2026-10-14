@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 1
-description: Start, await, pause and count lightweight tasks, and find their crashes.
+description: Start, await, pause and count lightweight tasks, hand a handle to a task, and find their crashes.
 ---
 
 Tasks run functions at the same time in one program. The tour page
@@ -13,7 +13,7 @@ Tasks run functions at the same time in one program. The tour page
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and gives a handle to it. A file, socket, listener or process belongs to the task that opened it. When the argument itself is such a handle, it moves to the new task, so a crash of the new task closes it. A handle inside a struct or a list stays with its owner. When a task returns normally, the handles it still owns go back to its parent task. If that task has ended, they go to the nearest ancestor that still runs.
+Starts `function(argument)` in a new task and returns the `Task` handle of the new task. A file, socket, listener, process or server belongs to the task that opened it, and it is closed when that task ends, whether the task returns, crashes or is cancelled. `Task.await` of an ended task returns after the regular files it owned are written and closed; it does not wait for a flush to a FIFO or a pipe. `Task.spawn` moves nothing: when the argument is such a handle, or holds one in a struct or a list, the caller still owns it. The new task can use it, and it is closed when the caller ends. Because nothing goes to the parent, a handle that a helper task opens and returns through `Task.await` is closed when the helper ends, so open a long-lived handle in the task that keeps it. To give a handle to the new task, use `Task.spawn_owning`.
 
 ```agentica
 def greet(name: String) -> String
@@ -30,6 +30,45 @@ end
 hi Ana
 ```
 
+## Task.spawn_owning
+
+```text
+Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
+```
+
+Starts `function(handle)` like `Task.spawn`, and in the same call gives `handle` to the new task. The calling task must own the handle. From then on the new task owns it, so it is closed when the new task ends, even if that task crashes, and nobody else can close it in between. The caller can still use the handle while the new task runs. A server loop uses it to give each accepted connection to its own task, so a crash while serving one connection closes only that connection. A server handed over this way takes its listener with it, and goes on serving after the task that made it has ended.
+
+The argument must be a `FileHandle`, `Socket`, `Listener`, `Process` or `HttpServer`; any other type, such as an `Int`, a struct that holds a socket or an `HttpClient`, is `CHECK-NOT-A-HANDLE` at the argument. If the calling task does not own the handle, if it was already handed over, or if it is closed, the caller stops with `RUNTIME-HANDLE-NOT-OWNED` at the handle and no task is made.
+
+```agentica
+def echo(socket: Socket) -> Result[String]
+  line = try TCP.read_line(socket, 2000)
+  try TCP.send(socket, "echo: #{line}\n", 2000)
+  return ok(line)
+end
+
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  client = TCP.connect("127.0.0.1", TCP.local_port(listener), 2000).unwrap!
+  connection = TCP.accept(listener, 2000).unwrap!
+  worker = Task.spawn_owning(&echo, connection)
+  sent = TCP.send(client, "hello\n", 2000)
+  puts(TCP.read_line(client, 2000))
+  puts(Task.await(worker))
+  puts(TCP.read_line(client, 2000))
+  TCP.close(client)
+  TCP.close_listener(listener)
+end
+```
+
+```output
+ok("echo: hello")
+ok("hello")
+error("network: end of input")
+```
+
+The last line shows the rule: `echo` returned without closing the connection, and its end closed it, so the client reads the end of the input.
+
 ## Task.await
 
 ```text
@@ -38,13 +77,7 @@ Task.await(task: Task[R]) -> R
 
 Waits for the task and gives its result. Waiting again gives the same value.
 
-A runtime error in a task other than `main` is a crash: it ends only that
-task. The error is printed on stderr, the task's own tasks are cancelled, and
-the files, sockets, listeners and processes it opened are closed. When the
-task returns a `Result`, awaiting it gives
-`error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. Otherwise the
-waiting task stops with `RUNTIME-TASK-CRASHED`. A crash that no await sees
-makes the run exit with code 1 when `main` returns.
+A runtime error in a task other than `main` is a crash: it ends only that task. The error is printed on stderr, the task's own tasks are cancelled, and the handles it owns are closed, as for any task that ends. When the task returns a `Result`, awaiting it gives `error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. Otherwise the waiting task stops with `RUNTIME-TASK-CRASHED`. A crash that no await sees makes the run exit with code 1 when `main` returns.
 
 An await that would wait for the awaiting task itself, directly or through other tasks, stops with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await`. A task can get such a handle through a [Channel](/library/concurrency/channel/).
 

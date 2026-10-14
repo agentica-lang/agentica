@@ -29,6 +29,28 @@
     (lambda () (proc (path->string directory)))
     (lambda () (delete-directory/files directory))))
 
+(define (call-with-stuck-fifo proc)
+  (with-temp-dir
+   (lambda (root)
+     (define fifo (path->string (build-path root "fifo")))
+     (check-true (system* mkfifo fifo))
+     (define reader (open-input-file fifo))
+     (define filler #f)
+     (define watchdog (thread (lambda () (sleep 20) (close-input-port reader))))
+     (dynamic-wind
+       void
+       (lambda ()
+         (set! filler (open-output-file fifo #:exists 'append))
+         (let fill ()
+           (define written (write-bytes-avail* (make-bytes 4096 97) filler))
+           (when (and written (positive? written)) (fill)))
+         (close-output-port filler)
+         (proc root fifo))
+       (lambda ()
+         (kill-thread watchdog)
+         (when filler (with-handlers ([exn:fail? void]) (close-output-port filler)))
+         (close-input-port reader))))))
+
 (define (literal text) (format "~s" text))
 
 (define vm-wait-seconds 10)
@@ -110,48 +132,48 @@
     (check-equal? (first (run-main-in-process #:environment (with-variable #"0") hello)) 0))
 
   (test-case "the file flush limit comes from the flag, then the variable, and ends a stuck flush"
-    (define mkfifo (find-executable-path "mkfifo"))
     (if (not mkfifo)
         (displayln "skip: mkfifo is not available")
-        (with-temp-dir
-         (lambda (root)
-           (define fifo (path->string (build-path root "fifo")))
+        (call-with-stuck-fifo
+         (lambda (root fifo)
            (define source (path->string (build-path root "stuck.agc")))
            (define (with-variable value)
              (define env (environment-variables-copy (current-environment-variables)))
              (environment-variables-set! env #"AGENTICA_FLUSH_TIMEOUT_MS" value)
              env)
-           (check-true (system* mkfifo fifo))
            (display-to-file
             (string-append
              "def main() -> Void\n  f = File.open(System.args()[0], \"write\", 1000).unwrap!\n"
              "  File.write(f, \"x\", 1000).unwrap!\n  IO.print(\"main done\\n\")\nend\n")
             source)
-           (define reader (open-input-file fifo))
-           (define filler #f)
-           (define watchdog (thread (lambda () (sleep 20) (close-input-port reader))))
            (define start (current-inexact-milliseconds))
-           (define-values (by-flag by-variable flag-wins)
-             (dynamic-wind
-               void
-               (lambda ()
-                 (set! filler (open-output-file fifo #:exists 'append))
-                 (let fill ()
-                   (define written (write-bytes-avail* (make-bytes 4096 97) filler))
-                   (when (and written (positive? written)) (fill)))
-                 (close-output-port filler)
-                 (values (run-main-in-process "--json" "--flush-timeout" "200" source fifo)
-                         (run-main-in-process #:environment (with-variable #"300") "--json" source fifo)
-                         (run-main-in-process #:environment (with-variable #"60000") "--json" "--flush-timeout" "250" source fifo)))
-               (lambda ()
-                 (kill-thread watchdog)
-                 (when filler (with-handlers ([exn:fail? void]) (close-output-port filler)))
-                 (close-input-port reader))))
+           (define by-flag (run-main-in-process "--json" "--flush-timeout" "200" source fifo))
+           (define by-variable (run-main-in-process #:environment (with-variable #"300") "--json" source fifo))
+           (define flag-wins
+             (run-main-in-process #:environment (with-variable #"60000") "--json" "--flush-timeout" "250" source fifo))
            (check-true (< (- (current-inexact-milliseconds) start) 20000))
            (for ([result (list by-flag by-variable flag-wins)]
                  [expected '(200 300 250)])
              (check-equal? (take result 2) '(0 "main done\n"))
              (check-equal? (hash-ref (string->jsexpr (third result)) 'flush_timeout_ms) expected))))))
+
+  (test-case "an await does not wait for a flush that a FIFO reader holds up"
+    (if (not mkfifo)
+        (displayln "skip: mkfifo is not available")
+        (call-with-stuck-fifo
+         (lambda (root fifo)
+           (define source (path->string (build-path root "awaited.agc")))
+           (display-to-file
+            (string-append
+             "def write_one(path: String) -> Result[Void]\n  f = File.open(path, \"write\", 1000).unwrap!\n"
+             "  return File.write(f, \"x\", 1000)\nend\n\n"
+             "def main() -> Void\n  IO.inspect(Task.await(Task.spawn(&write_one, System.args()[0])))\n"
+             "  IO.print(\"awaited\\n\")\nend\n")
+            source)
+           (define start (current-inexact-milliseconds))
+           (define result (run-main-in-process "--flush-timeout" "200" source fifo))
+           (check-true (< (- (current-inexact-milliseconds) start) 10000))
+           (check-equal? (take result 2) '(0 "ok()\nawaited\n"))))))
 
   (test-case "FIFO calls wait on the loop: timed-out reads and parked tasks hold no pool thread at exit"
     (when (fifo-ready? "the FIFO exit test")

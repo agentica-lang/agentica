@@ -831,12 +831,19 @@
         (unless (result-type? type) (mismatch! '(Result T) type (node-span (car arguments))))
         type)
       (case (builtin-rule selected)
-        [(task-spawn)
+        [(task-spawn task-spawn-owning)
+         (define owning? (eq? (builtin-rule selected) 'task-spawn-owning))
          (define callback (check-expression (car arguments) #f))
          (unless (and (list? callback) (= (length callback) 3) (eq? (car callback) 'Fn))
-           (bail 'CHECK-TYPE-MISMATCH "Task.spawn requires a function with one parameter"
+           (bail 'CHECK-TYPE-MISMATCH
+                 (format "~a requires a function with one parameter" (builtin-name selected))
                  (node-span (car arguments))))
-         (check-expression (cadr arguments) (cadr callback))
+         (define handed (check-expression (cadr arguments) (cadr callback)))
+         (when (and owning? (not (memq handed handle-types)))
+           (bail 'CHECK-NOT-A-HANDLE
+                 (format "Task.spawn_owning gives a handle to the new task, but the argument is ~a" (type->string handed))
+                 (node-span (cadr arguments))
+                 #:help "pass a FileHandle, Socket, Listener, Process or HttpServer; Task.spawn passes any other value"))
          (list 'Task (caddr callback))]
         [(task-await)
          (define target (check-expression (car arguments) (and expected (list 'Task expected))))

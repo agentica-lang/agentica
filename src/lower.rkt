@@ -176,7 +176,7 @@
                       "File.open" "File.read_bytes" "File.read_line" "File.write" "File.write_bytes" "File.flush"
                       "File.close" "File.each_line" "File.read_text" "File.write_text" "File.append_text" "File.stat"
                       "Dir.list" "Dir.mkdir" "Path.cwd" "Path.join" "Path.resolve"
-                      "Task.spawn" "Task.await" "Task.sleep"
+                      "Task.spawn" "Task.spawn_owning" "Task.await" "Task.sleep"
                       "Channel.new" "Channel.send" "Channel.recv" "Channel.close" "Channel.closed?"
                       "Process.spawn" "Process.send" "Process.send_bytes" "Process.read_line" "Process.read_bytes"
                       "Process.close_stdin" "Process.wait" "Process.close"

@@ -28,7 +28,7 @@ def main() -> Void
   pending = Task.spawn(&fetch, base + "/hang?#{TCP.local_port(side)}")
   signal = TCP.accept(side, 5000).unwrap!
   puts(TCP.read_line(signal, 5000).unwrap!)
-  IO.inspect(Task.await(Task.spawn(&explode, server)))
+  IO.inspect(Task.await(Task.spawn_owning(&explode, server)))
   IO.inspect(TCP.read_line(signal, 5000))
   case Task.await(pending)
     ok(response) -> puts("response: #{response.status}")

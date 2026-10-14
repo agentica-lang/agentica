@@ -18,7 +18,7 @@ end
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   c = Task.spawn(&client, TCP.local_port(listener))
-  h = Task.spawn(&handler, Result.unwrap!(TCP.accept(listener, 1000)))
+  h = Task.spawn_owning(&handler, Result.unwrap!(TCP.accept(listener, 1000)))
   IO.inspect(Task.await(c))
   IO.inspect(Task.await(h))
 end

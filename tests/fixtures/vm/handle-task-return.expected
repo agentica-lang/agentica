@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 156,
+  "stdout": [
+    "ok(\"hello\")",
+    "error(\"network: end of input\")",
+    "error(\"network: socket is closed\")",
+    "error(\"network: end of input\")",
+    "error(\"filesystem: file handle is closed\")",
+    "error(\"network: listener is closed\")",
+    "ok()",
+    "ok()",
+    "ok()",
+    "\"from the helper\\nand main\\n\"",
+    ""
+  ],
+  "stderr": []
+}

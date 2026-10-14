@@ -177,7 +177,7 @@ static void kick(agc_output *s) {
     q->part[1] = s->buf;
     q->length[1] = s->len - first;
     s->writing = true;
-    agc_io_detached(s->vm, &drain_io, q, 0);
+    agc_io_detached(s->vm, &drain_io, q, agc_void(), 0);
     return;
   }
   if (s->armed) return;
@@ -186,7 +186,7 @@ static void kick(agc_output *s) {
   q->to_err = s == &s->vm->rt->err;
   q->poller = s->poller;
   s->armed = true;
-  q->job = agc_io_detached(s->vm, &poll_io, q, AGC_JOB_QUIET);
+  q->job = agc_io_detached(s->vm, &poll_io, q, agc_void(), AGC_JOB_QUIET);
   agc_poller_wait(s->poller, true, polled, q);
 }
 

@@ -19,6 +19,8 @@ waits takes a timeout in milliseconds. Programs that are still running are
 stopped when your program ends. The examples here start real programs, so they
 are checked but not run.
 
+A program that you start belongs to the task that started it, and it is stopped when that task ends, however it ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a task it starts.
+
 ## Process.spawn
 
 ```text

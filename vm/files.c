@@ -1016,8 +1016,13 @@ static agc_value bytes_result(const op *o) {
 }
 
 static agc_value closed(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)context;
+  op *o = data;
+  agc_resource *r = agc_as_handle(vm, context);
+  r->context = o->status == FS_OK ? agc_void() : common_error(vm, o);
+  agc_task_wake_all(vm, &r->waiters, &r->waiters_tail, "close");
+  agc_task *ender = r->ender;
+  r->ender = NULL;
+  if (ender) agc_task_close_done(vm, ender);
   drop(data);
   return agc_void();
 }
@@ -1026,9 +1031,9 @@ static const agc_io_kind close_io = {work, closed, closed, drop, false, "file", 
 
 static const agc_io_kind poll_close_io = {NULL, closed, closed, drop, true, "file", stop};
 
-/* The close of a crashed task's file, or of a file still open when the run
+/* The close of an ended task's file, or of a file still open when the run
    ends: pending while a job holds it. */
-static void close_file(agc_vm *vm, agc_resource *r) {
+static void close_file(agc_vm *vm, agc_resource *r, agc_task *ender) {
   r->closing = true;
   r->next_owner = NULL;
   agc_task_wake_all(vm, &r->waiters, &r->waiters_tail, "close");
@@ -1039,11 +1044,15 @@ static void close_file(agc_vm *vm, agc_resource *r) {
   r->native = NULL;
   agc_unregister(vm, r);
   if (!o->st->poller) {
-    agc_io_detached(vm, &close_io, o, AGC_JOB_FLUSH);
+    agc_io_detached(vm, &close_io, o, agc_handle_value(r), AGC_JOB_FLUSH);
+    if (ender) {
+      r->ender = ender;
+      ender->closing++;
+    }
   } else if (step(o)) {
     drop(o);
   } else {
-    o->job = agc_io_detached(vm, &poll_close_io, o, AGC_JOB_FLUSH);
+    o->job = agc_io_detached(vm, &poll_close_io, o, agc_handle_value(r), AGC_JOB_FLUSH);
     agc_poller_wait(o->st->poller, true, ready, o);
   }
 }
@@ -1333,7 +1342,8 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t timeout = agc_as_int(vm, args[1]);
   agc_value failure;
   if (blocked(vm, args[0], &timeout, &failure)) return failure;
-  if (!r->native || r->closing) return ok_void();
+  if (r->closing) return agc_is(r->context, AGC_T_RESULT) ? r->context : ok_void();
+  if (!r->native) return ok_void();
   return close_handle(vm, r, args[0], timeout);
 }
 

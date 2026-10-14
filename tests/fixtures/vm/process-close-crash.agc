@@ -12,8 +12,8 @@ def main() -> Void
   plain_pid = Process.read_line(plain, 5000).unwrap!
   captured = Process.spawn_captured("sh", ["-c", "echo $$; exec cat"], ".", 5000).unwrap!
   captured_pid = Process.read_line(captured, 5000).unwrap!
-  a = Task.spawn(&crash, plain)
-  b = Task.spawn(&crash, captured)
+  a = Task.spawn_owning(&crash, plain)
+  b = Task.spawn_owning(&crash, captured)
   puts(Task.await(a).ok?)
   puts(Task.await(b).ok?)
   IO.inspect(Process.read_line(watch(plain_pid), 5000))

@@ -57,8 +57,8 @@ void agc_io_flush_files(agc_vm *vm);
 _Noreturn void agc_stop(agc_vm *vm, int sig);
 
 agc_resource *agc_owned_of(agc_vm *vm, agc_value v);
-void agc_give_owned(agc_vm *vm, const agc_task *from, agc_task *to);
-void agc_close_owned(agc_vm *vm);
+void agc_hand_over(agc_resource *r, agc_task *to);
+void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
 uint64_t agc_io_now(agc_vm *vm);
