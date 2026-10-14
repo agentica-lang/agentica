@@ -1,74 +1,44 @@
 # File modules and imports
 
-Each file is a module. Use `import "models" as Models` at the top level.
-An import path names a module without its extension: `"models"` loads
-`models.agc`, and `"../lib/util"` loads `../lib/util.agc`. Never write the
-extension: `import "models.agc"` gives `CHECK-IMPORT-PATH` (the help shows the
-path without it), and so do an empty path, a path that ends in `/`, and a last
-part with a dot (`"models.rb"`). So a module file name has no dot apart from
-`.agc`: `json.tools.agc` cannot be imported; rename it, for example to
-`json_tools.agc`. Relative paths resolve from the importing
-file, not the working directory. Canonical paths identify files; each file is linked once. Cycles give
-`CHECK-IMPORT-CYCLE`; missing or unreadable imports give `CHECK-IMPORT-IO`, and
-invalid paths give `CHECK-IMPORT-PATH`. Each is located at the import.
+Each file is a module. `import "models" as Models` loads `models.agc`; `"../lib/util"` loads `../lib/util.agc`. Paths never include the extension (`import "models.agc"` is `CHECK-IMPORT-PATH`, and so are an empty path, a path ending in `/`, or a last part with a dot such as `"models.rb"`). So a module file name has no dot except `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
 
-`export struct User ... end`, `export enum Option[T] ... end`, and
-`export def greet(...) ... end` expose declarations; everything else is
-private. Use `Models.User` in annotations and JSON type arguments,
-`Models.User(name: "Ana")` for construction, `Models.greet(user)` for calls,
-and `&Models.greet` for callbacks. Imported enums use `Models.Option[T]`,
-`Models.Option.Some(value)`, and `Models.Option.Some(item)` in patterns.
-Local names remain unqualified inside their file. Import aliases are uppercase
-and cannot collide with declarations, other aliases, or builtin names.
-Imports cannot be re-exported. Exported signatures may mention private types,
-but importers cannot name or construct those private types.
+- Relative paths resolve from the importing file, not the working directory.
+- Canonical paths identify files, and each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or unreadable import is `CHECK-IMPORT-IO`; an invalid path is `CHECK-IMPORT-PATH`. Each is reported at the import.
 
-Only the root file supplies the executable `main() -> Void`. Imported main
-functions do not run automatically. Linking preserves source spans and distinct
-module identities; imported calls/tasks share the program's execution budget
-and resource ownership. CLI check/run/dump and `agentica test` use the same loader.
-There are no wildcard imports, package registry, module state, nested module
-blocks, or receiver attachment. `as` is contextual in imports, not reserved.
+## Exports and names
+
+`export struct`, `export enum`, and `export def` expose declarations; everything else is private.
+
+- Use `Models.User` in annotations and JSON type arguments, `Models.User(name: "Ana")` to construct, `Models.greet(user)` to call, and `&Models.greet` for a callback.
+- Imported enums: `Models.Option[T]` as a type, `Models.Option.Some(value)` to build, and `Models.Option.Some(item)` in a pattern.
+- Local names stay unqualified inside their own file.
+- Alias names are uppercase and cannot collide with declarations, other aliases, or builtin names. Imports cannot be re-exported.
+- An exported signature may mention private types, but importers cannot name or build them.
+
+## Running
+
+Only the root file's `def main() -> Void` runs; imported `main` functions never run. Linking keeps source spans and distinct module identities. Imported calls and tasks share the program's execution budget and resource ownership. `agentica check`, `agentica FILE`, `agentica --dump`, and `agentica test` use the same loader.
+
+There are no wildcard imports, package registry, module state, nested module blocks, or receiver attachment. `as` is contextual in imports, not reserved.
 
 ## Standard library and external libraries
 
-Two prefixes select library resolution:
+Two prefixes select where a module comes from:
 
-- `import "std/queue" as Queue` loads the standard library embedded at
-  build time. No stdlib installation, environment variable, or repository
-  checkout is needed at runtime. Local files and external roots cannot shadow it.
-- `import "pkg/acme/tools" as Tools` searches for `acme/tools.agc` in:
-  1. `agc_libs/` beside the root program (not beside each dependency or in cwd).
-  2. Absolute roots in `AGENTICA_PATH`, in listed order.
-  3. `$XDG_DATA_HOME/agentica/lib/`, defaulting to
-     `~/.local/share/agentica/lib/`.
+- `import "std/queue" as Queue` loads the standard library embedded at build time. No installation, environment variable, or checkout is needed at run time. Local files and external roots cannot shadow it.
+- `import "pkg/acme/tools" as Tools` searches for `acme/tools.agc` in, in order:
+  1. `agc_libs/` beside the root program (not beside each dependency, and not the working directory);
+  2. absolute roots in `AGENTICA_PATH`, in the listed order;
+  3. `$XDG_DATA_HOME/agentica/lib/`, defaulting to `~/.local/share/agentica/lib/`;
   4. `/usr/local/share/agentica/lib/`, then `/usr/share/agentica/lib/`.
 
-On Windows, `AGENTICA_PATH` uses `;` instead of `:`, the user root is
-`%LOCALAPPDATA%/agentica/lib/` (fallback `~/AppData/Local/agentica/lib/`),
-and there are no default system roots. On other platforms the paths above apply.
-An unset or relative user-data environment variable uses the fallback directory.
-Empty `AGENTICA_PATH` entries are ignored; relative entries give
-`CHECK-IMPORT-PATH` when resolving a `pkg/` import. First existing file wins;
-a read or syntax error in that file does not fall back to another root.
+On Windows, `AGENTICA_PATH` is separated by `;`, the user root is `%LOCALAPPDATA%/agentica/lib/` (fallback `~/AppData/Local/agentica/lib/`), and there are no default system roots. An unset or relative user-data variable uses the fallback directory. Empty `AGENTICA_PATH` entries are ignored; a relative entry gives `CHECK-IMPORT-PATH` when resolving a `pkg/` import. The first existing file wins, and a read or syntax error in it does not fall back to another root.
 
-Library paths use forward slashes and reject empty, `.`, `..`, backslash,
-and colon components. External targets must remain inside their selected root
-after symlink resolution. These restrictions apply to namespaced imports, not
-to ordinary relative dependencies: imports are not a filesystem sandbox.
-Missing modules give `CHECK-IMPORT-IO` at the import. Other imports retain
-their existing file-relative behavior; there is no implicit search fallback.
-Embedded-module diagnostics name their source, for example `std/queue.agc`.
-Embedded dependencies may use relative paths within their stdlib directory.
-External modules may use ordinary relative imports for their dependencies.
+Library paths use forward slashes and reject empty, `.`, `..`, backslash, and colon components. An external target must stay inside its root after symlink resolution. These rules apply to namespaced imports only; ordinary relative imports are not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO` at the import. Embedded-module diagnostics name their source, such as `std/queue.agc`. Embedded modules may use relative paths within their stdlib directory; external modules may use ordinary relative imports for their dependencies.
 
-## String queue
+## String queue (`std/queue`)
 
-`std/queue` (the file `std/queue.agc`) is a non-native library written in Agentica. Its exported
-immutable records are `QueueState(items: List[String])` and
-`Popped(value: String, remaining: QueueState)`.
-
-With the alias `Queue`:
+`std/queue` is a library written in Agentica. Its exported records are `QueueState(items: List[String])` and `Popped(value: String, remaining: QueueState)`. With the alias `Queue`:
 
 ```text
 Queue.new() -> Queue.QueueState
@@ -79,25 +49,9 @@ Queue.size(q: Queue.QueueState) -> Int
 Queue.empty?(q: Queue.QueueState) -> Bool
 ```
 
-Push adds at the back; pop removes the oldest value. Empty pop/peek return an
-error Result. Inputs remain unchanged; assign the returned queue (or
-`Popped.remaining`) to continue. Empty strings and duplicates are valid.
-QueueState is a normal exported struct, not an opaque handle. There are no
-user generics or blocking cross-task queue operations.
-The implementation uses Lists: push, pop, peek, size and empty? are O(n)
-with the current host list operations; new is O(1). No constant-time FIFO
-performance is promised.
+Push adds at the back; pop removes the oldest value. Pop and peek on an empty queue return an error Result. Inputs are never changed: assign the returned queue (or `Popped.remaining`). Empty strings and duplicates are valid. `QueueState` is a normal exported struct, not an opaque handle. There are no user generics and no blocking cross-task queue operations. The implementation uses Lists, so push, pop, peek, size, and empty? are O(n) and new is O(1); no constant-time FIFO is promised.
 
-## HTTP client and server (`std/http`)
+## Other standard modules
 
-`std/http` is the HTTP client and server, written in Agentica:
-`import "std/http" as HTTP`. The client has `HTTP.client_options()`,
-`HTTP.client(options)`, `HTTP.get`, `HTTP.post`, `HTTP.request`,
-`HTTP.header_values` and `HTTP.close_client`; calls return
-`Result[HttpResponse]` with the whole body as a `String`. The server has
-`HTTP.server_options()`, `HTTP.listen`, `HTTP.listen_tls`,
-`HTTP.local_port`, `HTTP.wait` and `HTTP.close_server`; a handler takes an
-`HttpRequest` and returns `Result[HttpResponse]`. Details are in
-`network.md`.
-
-`import "std/bdd" as BDD` is the step API of `agentica test`; see `bdd.md`.
+- `std/http`: the HTTP client and server, written in Agentica. See `network.md`.
+- `std/bdd`: the step API of `agentica test`. See `bdd.md`.

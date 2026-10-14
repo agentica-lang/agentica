@@ -128,7 +128,7 @@ docs/
 | builtin | `src/builtins.rkt` metadata; checker generic rule; the VM implementation (`vm-builtins` in `src/lower.rkt`, `vm/`, see `references/vm.md`) with a golden fixture; exercise a real checked call |
 | diagnostic code | raise it where the problem is detected; prefix by stage (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`; the VM toolchain adds `LOWER-` and `BYTECODE-`) |
 | pipeline stage | new `src/<stage>.rkt`, wired into `src/main.rkt`, tested by `tests/<stage>-test.rkt` |
-| language rule or example | `docs/grammar/`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
+| language rule or example | `docs/grammar/`; phase scope in `docs/roadmap/`; also update the programming skill (`.agents/skills/agentica-programming/`): core language in its `SKILL.md` and `references/language.md`, library areas in `references/<area>.md`; evaluators read it instead of the grammar |
 | test | `tests/<stage>-test.rkt` |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
 | VM builtin | `src/lower.rkt` (accept the call, emit `call-builtin` with the catalog implementation key and arity), `vm/builtins.c`, a fixture in `tests/fixtures/vm/`; see `references/vm.md` |
