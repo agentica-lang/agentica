@@ -383,6 +383,11 @@ agc_string *agc_make_string(const char *data, size_t bytes, size_t chars) {
   return s;
 }
 
+agc_value agc_error_value(const char *message) {
+  size_t n = strlen(message);
+  return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
+}
+
 bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
 
 static _Noreturn void wrong_tag(agc_vm *vm) {
@@ -549,6 +554,12 @@ size_t agc_utf8_valid(const uint8_t *s, size_t len) {
   if ((n == 2 && cp < 0x800) || (n == 3 && cp < 0x10000) || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
     return 0;
   return n + 1;
+}
+
+size_t agc_utf8_count(const uint8_t *s, size_t len) {
+  size_t count = 0;
+  for (size_t i = 0; i < len; i++) count += (s[i] & 0xC0) != 0x80;
+  return count;
 }
 
 bool agc_utf8_chars(const uint8_t *s, size_t len, size_t *chars) {

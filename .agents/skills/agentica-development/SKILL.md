@@ -50,7 +50,7 @@ src/
   main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   agc.h           # shared types and agc_ API: values, instructions, program, VM
-  value.c text.c map.c loader.c interp.c builtins.c numbers.c random.c json.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, builtin table, Float/Time/Random, xoshiro256** generator, Json and the JSON builtins, diagnostics (plain, --ai, --json), CLI
+  value.c text.c map.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json), CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
   tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c

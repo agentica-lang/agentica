@@ -225,15 +225,6 @@ static void report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
   observe_test(vm, t);
 }
 
-static bool wait_for(agc_vm *vm, agc_task *target) {
-  vm->task->awaiting = NULL;
-  if (target->state == AGC_TASK_DONE) return false;
-  vm->task->awaiting = target;
-  agc_task_enqueue(&target->waiters, &target->waiters_tail, vm->task);
-  agc_task_park(vm, true);
-  return true;
-}
-
 static const agc_test_case *next_test(agc_vm *vm, const agc_list *tests, const agc_string *line, uint32_t span) {
   int64_t index = 0;
   bool digits = line->bytes > 0 && (line->bytes == 1 || line->data[0] != '0');
@@ -282,7 +273,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
   }
   for (;;) {
     if (r->current) {
-      if (wait_for(vm, r->current)) return agc_void();
+      if (agc_task_join(vm, r->current)) return agc_void();
       report(vm, r->current, r->test);
       r->current = NULL;
     }
