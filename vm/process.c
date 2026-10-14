@@ -1039,7 +1039,6 @@ static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_process_builtins[] = {
-  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send_bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -1055,6 +1054,7 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];
