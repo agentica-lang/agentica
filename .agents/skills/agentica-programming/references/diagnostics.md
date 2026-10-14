@@ -30,6 +30,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD` | struct construction fields |
 | `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type |
 | `CHECK-RESULT-TYPE` | an error constructor without an expected Result type |
+| `CHECK-EXPECTED-TYPE` | `Channel.new(n)` with no expected type; annotate it: `ch: Channel[Int] = Channel.new(8)` (see `tasks.md`) |
 | `CHECK-TRY-CONTEXT` | try in a function not returning Result |
 | `CHECK-MISSING-RETURN` | a path without `return` in a non-`Void` function |
 | `CHECK-MAIN` | missing or wrong `main` |
@@ -51,7 +52,7 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `CHECK-CAPTURED-ASSIGNMENT` | a block assigns to an outer variable; use `reduce` or a `for` loop |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
-| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count |
+| `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576 |
 | `RUNTIME-INVALID-NUMBER` | `String.to_int!` / `String.to_float!` on bad text, `Float.to_int!` on NaN or infinity |
 | `RUNTIME-INVALID-RANGE` | `Random.int` with `min > max` |
 | `RUNTIME-INVALID-CHARACTER` | `String.code` without exactly one character, or `String.from_code` outside Unicode scalar values |
@@ -60,8 +61,9 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
-| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration (see `tasks.md`) |
-| `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); no program can reach it yet (17a and 20c will) |
+| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration or negative `Channel.send`/`Channel.recv` timeout (see `tasks.md`) |
+| `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel |
+| `RUNTIME-TASK-AWAIT-CYCLE` | `Task.await` of a task that is waiting for the caller, directly or through other awaits, at the await (see `tasks.md`) |
 | `RUNTIME-TASK-CRASHED` | `Task.await` on a crashed task when `R` is not a `Result`, at the await; the message is the crash text (see `tasks.md`); a BDD step or a test whose task crashed unawaited |
 | `RUNTIME-TEST-ASSERTION` | a failed `Test.eq`, `Test.ok?`, `Test.error?` or `Test.assert` in a test, at the assertion (see `testing.md`) |
 | `RUNTIME-TEST-ERROR` | a test block returned `error(message)`, at the `Test.test` call |

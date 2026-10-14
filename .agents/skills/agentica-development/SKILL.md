@@ -62,6 +62,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   http_client.c   # HttpWire client builtins: the pool, called only by stdlib/http.agc (Linux)
   http_server.c   # HttpWire server builtins: read_request, write_response and the HttpServer task group (Linux)
   task.c          # scheduler (run queue, turns, park and wake), task cancellation and the Task builtins
+  channel.c       # the Channel builtins: ring buffer, waiter FIFOs, reservations and hand-on when a waiter leaves
   testing.c equal.c # the Test builtins (unit tests, roadmap 25a); agc_equal, the deep value compare Test.eq uses
   unicode_data.c  # committed output of tools/gen-unicode.rkt (write-escape ranges)
   tools/gen-unicode.rkt  # Racket generator of unicode_data.c (make vm-unicode)
@@ -86,6 +87,7 @@ tests/
   vm-tcp-test.rkt       # the VM's TCP builtins against Node peers (fixtures/tcp-peer.js): errors, timeouts, concurrent clients, cleanup at exit
   vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
   vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full stdout, Ctrl-C through the CLI
+  vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")

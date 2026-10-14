@@ -19,7 +19,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 5 | Remaining `List` operations | [`05-list-operations.md`](05-list-operations.md) | Mostly landed; other gaps listed |
 | 6 | Native runtime | [`06-native-runtime.md`](06-native-runtime.md) | Replaced by the bytecode VM ([`docs/vm/`](../vm/README.md)) |
 | 7 | Possible metatables: Ruby-style modules | [`07-metatables.md`](07-metatables.md) | Not planned: see §25 |
-| 8 | Concurrency and parallelism | [`08-concurrency.md`](08-concurrency.md) | Tasks landed; channels planned in §27; CPU parallelism proposed |
+| 8 | Concurrency and parallelism | [`08-concurrency.md`](08-concurrency.md) | Tasks landed; channels built (§27.2); open questions only; CPU parallelism proposed |
 | 9 | Files and paths | [`done.md`](done.md#9-files-and-paths-implemented) | Implemented |
 | 10 | Void and processes | [`done.md`](done.md#10-void-and-processes-implemented) | Implemented |
 | 11 | Ruby-style ergonomics | [`11-ruby-ergonomics.md`](11-ruby-ergonomics.md) | Implemented; its rule for new forms still applies; a few items open |
@@ -38,7 +38,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14) |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 | 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
-| 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | `Task.map`, channels and `Task.await` with a timeout planned (roadmap phase 17); lazy streams to evaluate later; generators and shared state decided against |
+| 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels built (roadmap 17b); `Task.map` and `Task.await` with a timeout planned (roadmap phase 17); lazy streams to evaluate later; generators and shared state decided against |
 | 28 | VM metrics | [`28-vm-metrics.md`](28-vm-metrics.md) | Planned (roadmap phase 18) |
 | 29 | TLS contexts | [`29-tls-context.md`](29-tls-context.md) | Planned (roadmap phase 19, order step 7.4) |
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies planned; the rest of phase 20 is built: [`docs/vm/10-io-http.md`](../vm/10-io-http.md) |

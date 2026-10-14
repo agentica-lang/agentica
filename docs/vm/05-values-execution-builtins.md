@@ -17,7 +17,7 @@ A value is a 16-byte tagged union passed by value (`vm/value.h`). Tag 0 is Void,
 | Range | `{ start, end, exclusive }`, immutable. Text `1..5` or `1...5`. `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW`. `Range.to_a` above 1048576 values fails with `RUNTIME-INVALID-COUNT`. `first` and `last` of an empty range are an error value. |
 | Function value | `{ function, n, captured[] }`. `&name` has `n = 0`. Text `<Fn>`. |
 | Json | `{ kind, scalar, count, members }`: null, bool, int64, big integer (kept as its decimal text until extracted), double, string, array (a List of Json), or object. Object members are sorted by key bytes, and the last of equal keys wins. `JSON.get` is a binary search. Text form is the JSON text. |
-| Handles | One tag and GC record per kind: Task, Socket, Listener, HTTP values, FileHandle and Process. |
+| Handles | One tag and GC record per kind: Task, Channel, Socket, Listener, HTTP values, FileHandle and Process. |
 
 ### 5.2 Safety rules for values
 
@@ -69,7 +69,7 @@ typedef agc_value (*agc_builtin_fn)(agc_vm *vm, agc_value *args, uint32_t span);
 
 ### 7.2 Scope
 
-The C builtins are in `vm/*.c`, with one table per module. The catalog and the implementation keys are in `src/builtins.rkt`. BDD has no C builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only `Process.spawn_captured`, `Process.output` and `Task.pending_count`. The event loop, files, processes, TCP, TLS and HTTP (client and server) are Linux only for now (the `__linux__` guards in `vm/loop.c`, `vm/files.c`, `vm/process.c`, `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c` and `vm/http_server.c`).
+The C builtins are in `vm/*.c`, with one table per module. The catalog and the implementation keys are in `src/builtins.rkt`. BDD has no C builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only `Process.spawn_captured`, `Process.output`, `Task.pending_count` and the `Channel` builtins (`vm/channel.c`). A channel call that must wait needs the event loop, so off Linux it fails like the other loop builtins. The event loop, files, processes, TCP, TLS and HTTP (client and server) are Linux only for now (the `__linux__` guards in `vm/loop.c`, `vm/files.c`, `vm/process.c`, `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c` and `vm/http_server.c`).
 
 ### 7.3 Builtin safety and streams
 
