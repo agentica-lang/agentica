@@ -110,7 +110,7 @@ typedef struct { uint16_t op, a, b, c; } agc_instr;   /* bx = b | (uint32_t)c <<
 | Result | `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b` | `TRY`: if `R[b]` is an error, return it, else `R[a]` = its value. |
 | Range | `RANGE a b c`, `RANGE_BOUNDS a b` | `RANGE` from Int `R[b]` to `R[b+1]`, `c` 0 for `..`, 1 for `...`. `RANGE_BOUNDS`: first value into `R[a]`, last included value into `R[a+1]`, non-empty flag into `R[a+2]`. |
 
-There are 49 opcodes. Everything else, including `ok`, `error`, `puts` and every module function, is a builtin. Opcode numbers are positions in one list shared by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/agc.h`. New opcodes are appended at the end. An appended opcode does not bump the format version, and an older VM rejects it as unknown.
+There are 49 opcodes. Everything else, including `ok`, `error`, `puts` and every module function, is a builtin. Opcode numbers are positions in one list shared by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h`. New opcodes are appended at the end. An appended opcode does not bump the format version, and an older VM rejects it as unknown.
 
 Details that code and tests rely on:
 

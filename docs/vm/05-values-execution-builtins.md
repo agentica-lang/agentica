@@ -2,7 +2,7 @@
 
 ### 5.1 Representation
 
-A value is a 16-byte tagged union passed by value (`vm/agc.h`). Tag 0 is Void, so zeroed registers are valid values.
+A value is a 16-byte tagged union passed by value (`vm/value.h`). Tag 0 is Void, so zeroed registers are valid values.
 
 | Type | Representation |
 |---|---|

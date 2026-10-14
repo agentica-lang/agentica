@@ -52,5 +52,5 @@ The lowerer rejects a form it does not handle yet with `LOWER-UNSUPPORTED` at th
 | 11 | Build, CI and supply chain | [`11-build-ci-supply-chain.md`](11-build-ci-supply-chain.md) |
 | 12, 13 | Testing; the PR plan (done) and what is pending; open questions | [`12-testing-and-pr-plan.md`](12-testing-and-pr-plan.md) |
 | 14 | VM core invariants: one way to wait, time out, cancel, end and own a handle; the entry rule for the core | [`14-core-invariants.md`](14-core-invariants.md) |
-| 15 | VM layers: core, services and adapters plus the driver, the port between them, one header per layer and the CI check (planned, roadmap row 7.2.1b) | [`15-layers.md`](15-layers.md) |
+| 15 | VM layers: core, services and adapters plus the driver, the port between them, one header per layer and the CI check (done, roadmap row 7.2.1b) | [`15-layers.md`](15-layers.md) |
 | 16 | VM architecture: the threads (schedulers and one I/O thread), the queues, who owns jobs and handles, the life cycle of a task, and what differs from N = 1 as built (roadmap row 7.2.1c) | [`16-architecture.md`](16-architecture.md) |
