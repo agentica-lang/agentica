@@ -149,7 +149,7 @@ Split text; an empty separator gives characters.
 | `compile FILE -o OUT` | writes the program as VM bytecode; `agentica-vm -- OUT` runs it |
 | `--version` | prints the version |
 
-`agentica test` runs unit test files (`*_test.agc`, see [Test](/library/test/)) and `.feature` specifications (see [BDD](/library/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.
+`agentica test` runs unit test files (`*_test.agc`, see [Test](/library/testing/test/)) and `.feature` specifications (see [BDD](/library/testing/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.
 
 ```sh
 agentica test

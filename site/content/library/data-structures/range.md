@@ -1,6 +1,6 @@
 ---
 title: Range
-weight: 15
+weight: 4
 description: Ranges of Int values, and the Int loop methods times, upto and downto.
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: List
-weight: 2
+weight: 1
 description: Functions for List[T]. Each one is also a method on lists.
 ---
 

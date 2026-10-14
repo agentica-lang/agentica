@@ -1,6 +1,6 @@
 ---
 title: Map
-weight: 3
+weight: 2
 description: Functions for Map[K, V]. Each one is also a method on maps.
 ---
 

@@ -6,10 +6,10 @@ What is built is specified here, not in this file:
 
 | What | Where |
 |---|---|
-| The API, options, limits, answers and the migration from the builtin `HTTP` module | [`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md), "HTTP client and server (`std/http`)"; the migration table in [`site/content/library/network.md`](../../site/content/library/network.md); the hints for removed names in [`07-diagnostics.md`](../grammar/07-diagnostics.md) |
+| The API, options, limits, answers and the migration from the builtin `HTTP` module | [`docs/grammar/06d-io-and-network.md`](../grammar/06d-io-and-network.md), "HTTP client and server (`std/http`)"; the migration table in [`site/content/library/io-and-system/network.md`](../../site/content/library/io-and-system/network.md); the hints for removed names in [`07-diagnostics.md`](../grammar/07-diagnostics.md) |
 | Parsing rules, the design decisions, the client, the server, errors and status codes, the tests | [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7 |
 | Task cancellation for `close_server` | [`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1 and §10.2.2 |
-| Programs and the site | the programming skill's `references/network.md` and `site/content/library/network.md` |
+| Programs and the site | the programming skill's `references/network.md` and `site/content/library/io-and-system/network.md` |
 
 This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and what comes later (30.12). Sections 30.1 to 30.10 moved to the places above.
 

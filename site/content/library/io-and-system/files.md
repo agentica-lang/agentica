@@ -1,6 +1,6 @@
 ---
 title: File, Dir and Path
-weight: 10
+weight: 2
 description: Read and write files, list and create directories, and build paths.
 ---
 

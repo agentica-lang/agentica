@@ -1,6 +1,6 @@
 ---
 title: IO
-weight: 6
+weight: 1
 description: Print to standard output and error, and read standard input.
 ---
 
