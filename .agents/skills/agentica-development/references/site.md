@@ -34,7 +34,7 @@ rule that a site page shows.
   Aurora VM and its libraries.
 - The Library is grouped by topic: `library/TOPIC/_index.md` (a short intro
   that says which form fits which job) and one page per builtin module in
-  `library/TOPIC/NAME.md`, plus the `algorithms` topic of runnable recipes.
+  `library/TOPIC/NAME.md`, plus the `algorithms.md` page of runnable recipes.
   A new module page goes into a topic folder, so its URL is
   `/library/TOPIC/NAME/`; the topics and pages are ordered by `weight`, and
   the sidebar, the list pages, `llms.txt` and `search.json` follow the tree.

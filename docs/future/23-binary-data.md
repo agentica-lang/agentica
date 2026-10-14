@@ -62,7 +62,7 @@ No new opcode and no bytecode format change: the VM imports builtins by name (`d
 - `src/builtins.rkt`: eleven catalog rows, next to `Int.times` and `Float.from_int`. The checker reads signatures from the catalog, and methods come from the type of the first parameter (`src/checker.rkt` already maps `Int` and `Float` receivers to their modules), so the checker needs no other change. `agentica help Int.shift_left` reads the same rows.
 - `src/lower.rkt`: the names in `vm-builtins`.
 - `vm/numbers.c`: rows in `agc_number_builtins`, with `AGC_NATIVE_NONE` and `AGC_COST_NONE`.
-- Docs in the same PR: the builtin list and the `Int` row of the methods table in `grammar.md`; the programming skill's `references/builtins.md`, and `references/diagnostics.md` for the new uses of `RUNTIME-INVALID-COUNT` and `RUNTIME-INVALID-NUMBER`; `site/content/library/io-and-system/numbers.md`.
+- Docs in the same PR: the builtin list and the `Int` row of the methods table in `grammar.md`; the programming skill's `references/builtins.md`, and `references/diagnostics.md` for the new uses of `RUNTIME-INVALID-COUNT` and `RUNTIME-INVALID-NUMBER`; `site/content/library/text-and-data/numbers.md`.
 
 ### 23.5 `std/binary`
 

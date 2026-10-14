@@ -9,6 +9,5 @@ description: Standard input and output, files, other programs, the network, and 
 - [Process](/library/io-and-system/process/): start other programs, talk to them and wait for them.
 - [TCP, TLS and HTTP](/library/io-and-system/network/): sockets, an HTTP client and an HTTP server.
 - [System, Time and Random](/library/io-and-system/system/): program arguments, exit codes, clocks and random numbers.
-- [Int and Float](/library/io-and-system/numbers/): convert between `Int`, `Float` and `String`.
 
 Files, processes and the network return a `Result` and take timeouts in milliseconds.

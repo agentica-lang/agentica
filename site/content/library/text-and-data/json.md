@@ -1,6 +1,6 @@
 ---
 title: JSON
-weight: 2
+weight: 3
 description: Encode values as JSON, decode JSON into structs, and read dynamic JSON.
 ---
 

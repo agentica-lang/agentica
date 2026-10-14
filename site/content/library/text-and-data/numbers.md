@@ -1,6 +1,6 @@
 ---
 title: Int and Float
-weight: 6
+weight: 2
 description: Convert between Int, Float and String.
 ---
 
