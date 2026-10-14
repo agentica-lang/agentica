@@ -26,6 +26,7 @@ NAMES = [
     "strings",
     "lists",
     "list-build",
+    "list-bulk",
     "maps",
     "calls",
     "case",

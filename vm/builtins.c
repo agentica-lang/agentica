@@ -168,10 +168,7 @@ static agc_value builtin_list_repeat(agc_vm *vm, agc_value *args, uint32_t span)
   int64_t count = agc_as_int(vm, args[1]);
   if (count < 0 || count > AGC_MAX_LIST_COUNT)
     agc_fail(vm, "RUNTIME-INVALID-COUNT", "count must be between 0 and 1048576", span + 2);
-  agc_list_builder b;
-  agc_list_builder_sized(&b, (size_t)count);
-  for (size_t k = 0; k < (size_t)count; k++) agc_list_builder_push(&b, args[0]);
-  return agc_list_value(agc_list_builder_finish(&b));
+  return agc_list_value(agc_list_repeat(args[0], (size_t)count));
 }
 
 static size_t list_count(agc_vm *vm, const agc_list *l, agc_value count, uint32_t span) {
@@ -194,12 +191,7 @@ static agc_value builtin_list_drop(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static agc_value builtin_list_reverse(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  const agc_list *a = agc_as_list(vm, args[0]);
-  size_t n = agc_list_len(a);
-  agc_list_builder b;
-  agc_list_builder_sized(&b, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_list_get(a, n - 1 - k));
-  return agc_list_value(agc_list_builder_finish(&b));
+  return agc_list_value(agc_list_reverse(agc_as_list(vm, args[0])));
 }
 
 static agc_value builtin_list_sort(agc_vm *vm, agc_value *args, uint32_t span) {

@@ -42,7 +42,7 @@ typedef struct agc_list agc_list;
 typedef struct {
   agc_list *out;
   size_t count;
-  void *leaf;
+  void *leaves;
 } agc_list_builder;
 
 typedef struct {
@@ -350,6 +350,8 @@ agc_list *agc_list_append(const agc_list *l, agc_value v);
 agc_list *agc_list_set(const agc_list *l, size_t i, agc_value v);
 agc_list *agc_list_slice(const agc_list *l, size_t from, size_t count);
 agc_list *agc_list_concat(const agc_list *a, const agc_list *b);
+agc_list *agc_list_reverse(const agc_list *l);
+agc_list *agc_list_repeat(agc_value v, size_t n);
 
 extern const uint32_t agc_write_raw_ranges[][2];
 extern const size_t agc_write_raw_count;

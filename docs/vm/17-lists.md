@@ -30,10 +30,13 @@ loop of n pushes takes 0.41 s for n = 10,000, 6.0 s for 40,000 and 88 s for
 - No transients and no in-place `push` on an unshared list (§17.6).
 - No relaxed (RRB) nodes. `take`, `drop`, `reverse`, `sort`, `Map.keys` and a
   `concat` with a large right side stay O(n).
-- No unboxed leaves. `List[Int]` and `List[Float]` leaves are the first step of
-  [§38.6](../future/38-value-representation.md#386-direction-use-the-static-types),
-  a later step, only if the benchmarks ask. Because every site goes through the
-  API of §17.4, that step changes `vm/list.c` only.
+- No unboxed leaves in this design. `List[Int]` and `List[Float]` leaves are the
+  first step of
+  [§38.6](../future/38-value-representation.md#386-direction-use-the-static-types);
+  the owner scheduled them as step 3 of 8d on 2026-10-14
+  ([`08-data-structures.md`](../roadmap/08-data-structures.md)). Because every
+  site goes through the API of §17.4, that step changes `vm/list.c` and the
+  places that create a list, which get the element type from the front end.
 - No shared empty list ([§34](../future/34-shared-small-values.md) is separate).
 - No cursor opcode for `for` (§17.3, row 4).
 
@@ -105,14 +108,23 @@ measured, not only derived. The model is not in the repository.
   [§34.3](../future/34-shared-small-values.md#343-why-it-is-safe)). A literal, a
   builtin result, a parsed or decoded list: all are built by a sized builder.
   `agc_list_builder_sized(&b, n)` allocates the final list object, with the
-  final tail, and for n > 32 the root branch with the final canonical shift.
-  `push` writes item `count`: items below `tail_off(n)` go into a leaf that the
-  builder holds; when a leaf is full it is attached to its slot, creating
-  missing branches on the way down. The last `tail_len(n)` items go straight
-  into the list's `tail`. `finish` returns the list, and aborts (`abort()`, as
-  `vm/value.c:641` does) if fewer or more than n items were pushed. Every node a
-  builder writes was created by that builder after it began, so writing in place
-  is safe. Pushing the wrong number is a C bug, not a program error.
+  final tail, and for n > 32 the whole trie at once: the branches of each level
+  as one array per level, then one array of the `tail_off(n)` items that the
+  leaves point into (it is allocated last, so nothing is allocated after it).
+  Each leaf is a 32-item slice of that array, so a build of n items makes at
+  most about 15 allocations, as the flat array did, and a push is a store.
+  (An earlier version allocated and attached one leaf per 32 items; it took six
+  times as long as the flat array to build a million items, mostly in the
+  collections its allocations triggered.) `push` writes item `count`: items
+  below `tail_off(n)` go into that array, and the last `tail_len(n)` items go
+  straight into the list's `tail`. `finish` returns the list, and aborts
+  (`abort()`, as `vm/value.c:641` does) if fewer or more than n items were
+  pushed. Every node a builder writes was created by that builder after it
+  began, so writing in place is safe. Pushing the wrong number is a C bug, not a
+  program error. A later `set` copies the leaf it changes, so the array lives as
+  long as any list still shares one of its leaves. Bulk copies (`slice`,
+  `concat`, `from_array`) fill the builder a leaf at a time with `memcpy`, not
+  one `push` per item.
 - **Unknown count.** `filter`, and the planned `Task.map`
   ([§27.1](../future/27-iteration-and-concurrency.md#271-taskmap), results
   arrive out of order), fill a flat staging array of the input length and call
@@ -137,10 +149,10 @@ New algorithms and costs. Every row migrates to the API of §17.4. "Cursor" mean
 | 7 | `agc_value_units` (`value.c:332-340`) | `len` | `agc_list_len` | O(1); every size cost keeps its number (§17.5) |
 | 8 | `List.append`, `push` (`builtins.c:151-157`) | copy n, add 1 | `agc_list_append` | O(1) amortized; O(log32 n) worst |
 | 9 | `List.set` (`builtins.c:170-176`) | copy n | `agc_list_set` | O(log32 n) |
-| 10 | `List.concat` (`builtins.c:126-133`) | copy a and b | b empty gives a; a empty gives b; `b.len <= 32` appends b's items to a (shares a's trie); else a sized builder over a then b | O(b.len) for a small b, else O(a + b) |
-| 11 | `List.take`, `List.drop` (`builtins.c:193-202`, `list_slice` `:140-144`) | `memcpy` | `agc_list_slice(l, from, count)`: a sized builder over a cursor that starts at `from`. `take(k >= len)` and `drop(0)` return the input; `take(k)` with `k > tail_off` may share `root` and `shift` and copy only the tail | O(count); stays O(n): without relaxed nodes a shifted tail cannot share leaves |
-| 12 | `List.reverse` (`builtins.c:204-210`) | reversed copy | sized builder, `agc_list_get(l, n - 1 - k)` | O(n log32 n) |
-| 13 | `List.repeat` (`builtins.c:178-185`), `Range.to_a` (`:335-343`), `Map.keys` and `values` (`map_walk`, `:229-239`; the `agc_map_get(.., &l->items[k])` at `:235` writes to a local, then pushes) | fill a new list | sized builder | O(n) |
+| 10 | `List.concat` (`builtins.c:126-133`) | copy a and b | b empty gives a; a empty gives b; `b.len <= 32` appends b's items to a (shares a's trie); else a sized builder filled with `memcpy` from a then b | O(b.len) for a small b, else O(a + b) |
+| 11 | `List.take`, `List.drop` (`builtins.c:193-202`, `list_slice` `:140-144`) | `memcpy` | `agc_list_slice(l, from, count)`: a sized builder filled leaf by leaf with `memcpy`, starting at `from`. `take(k >= len)` and `drop(0)` return the input; `take(k)` with `k > tail_off` may share `root` and `shift` and copy only the tail | O(count); stays O(n): without relaxed nodes a shifted tail cannot share leaves |
+| 12 | `List.reverse` (`builtins.c:204-210`) | reversed copy | `agc_list_reverse`: a sized builder fed from the leaves, last to first | O(n) |
+| 13 | `List.repeat` (`builtins.c:178-185`), `Range.to_a` (`:335-343`), `Map.keys` and `values` (`map_walk`, `:229-239`; the `agc_map_get(.., &l->items[k])` at `:235` writes to a local, then pushes) | fill a new list | `Range.to_a`, `Map.keys` and `values`: sized builder. `List.repeat` (`agc_list_repeat`): one leaf filled with the value, shared by every slot of the trie, and one full and one last branch per level | O(n); `repeat` is O(log32 n) in time and memory |
 | 14 | `System.args` (`main.c:292-300`, empty list `interp.c:73`), `IO.read_bytes` (`input.c:340-353`), stream bytes (`stream.c:129-136`), `File.read_bytes` (`files.c:1012-1016`), `Dir.list` (`files.c:1001-1010`), HTTP header lists for client and server (`http_fields.c:114-127`), `String.split` (`strings.c:288-316`) | fill a new list | sized builder with the known count | O(n) |
 | 15 | `String.join` (`strings.c:318-339`), `Path.join` (`files.c:1471-1495`, three passes), `String.from_bytes` (`strings.c:466-478`), `agc_byte_list` (`value.c:519-528`, used by `files.c:1323`, `process.c:867`, `tcp.c:1089`), process arguments (`process.c:599-605`, `728-731`), header scans (`http_fields.c:37-41`, `150-156`, `http_server.c:360-366`; the client passes its list at `http_client.c:717`) | index loop | one cursor per pass | O(n) |
 | 16 | `Test.run` and its helpers (`testing.c:69-71`, `92-95`, `129-134`, `245-246`) | index into the list | `agc_list_get` for the test index and the two arguments, a cursor for scans | O(log32 n) per access |
@@ -169,7 +181,7 @@ table of §15.1 and in the file table of the development skill
 
 ```c
 typedef struct agc_list agc_list;
-typedef struct { agc_list *out; size_t count; void *leaf; } agc_list_builder;
+typedef struct { agc_list *out; size_t count; void *leaves; } agc_list_builder;
 typedef struct { const agc_list *list; size_t index, start, end; const agc_value *chunk; } agc_list_cursor;
 
 size_t agc_list_len(const agc_list *l);
@@ -185,6 +197,8 @@ agc_list *agc_list_append(const agc_list *l, agc_value v);
 agc_list *agc_list_set(const agc_list *l, size_t i, agc_value v);
 agc_list *agc_list_slice(const agc_list *l, size_t from, size_t count);
 agc_list *agc_list_concat(const agc_list *a, const agc_list *b);
+agc_list *agc_list_reverse(const agc_list *l);
+agc_list *agc_list_repeat(agc_value v, size_t n);
 ```
 
 - `agc_list_get` and `agc_list_set` need `i < len`. The caller checks and fails
@@ -334,7 +348,13 @@ Rules: `AGENTS.md` (`rackunit` for Racket; C tests are plain-assert files in
     Keep all versions of a 5,000-item append-built list and check them at the
     end (like `half` in `vm/tests/map_test.c`).
   - `slice` (take and drop) at 0, 1, 31, 32, 33, n - 1 and n; `concat` with
-    `b.len` 0, 1, 32, 33 and an empty a; `agc_debug` of a 100-item list.
+    `b.len` 0, 1, 32, 33 and an empty a; `reverse`; `agc_debug` of a 100-item
+    list.
+  - `agc_list_repeat`: the shape and every item, then `set` at 0, 31, 32,
+    `tail_off - 1`, `tail_off` and n - 1, `append`, `reverse` and `slice`: the
+    repeated list is unchanged and the other items still read the value (the
+    leaf and the branches are shared, so a `set` that wrote in place would show
+    here).
 - **Goldens.** Every `tests/fixtures/vm/*.expected` stays byte-identical,
   `steps` included. PR 1 adds one fixture, `tests/fixtures/vm/list-vector.agc`,
   run against the flat VM and checked by hand: lists of 31, 32, 33, 1,056 and
@@ -369,6 +389,14 @@ Rules: `AGENTS.md` (`rackunit` for Racket; C tests are plain-assert files in
   Gates:
   - 160,000 pushes in a loop run in under 1 s (88 s today), and the time of 2n
     pushes is under 2.5 times the time of n (it is about 4 today).
+  - Bulk builds (`List.repeat`, `Range.to_a`, `reverse`, `take`, `drop`, a big
+    `concat`, `join`, `String.split` and `sort` over 60,000 to 500,000 items,
+    `benchmarks/programs/list-bulk.agc`) take no more than 1.3 times the flat
+    array's time. A builder allocates its trie
+    in a few big blocks, not one node per push: a first version that attached a
+    new leaf per 32 pushes took six times as long for a million items, and a
+    GC-stress test that builds a 1 MB string through `List.repeat` ran out of
+    its time window.
   - No other benchmark is slower than 2% in either PR
     ([§34.4](../future/34-shared-small-values.md#344-measurement-first) uses the
     same figure). If a `for` or `at` heavy program is, the first fix is an

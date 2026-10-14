@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter or import alias with that name is `CHECK-REDEFINED-NAME` (#217).
-- **Faster lists:** `push`, `set` and indexing on lists are now near constant time; building a list with n pushes is O(n). A loop of 160,000 pushes took about a minute and now takes 0.1 s. Output, diagnostics and `--max-steps` counts do not change (#221).
+- **Faster lists:** `push` and `set` on lists are now near constant time, and building a list with n pushes is O(n); a loop of 160,000 pushes took about a minute and now takes 0.1 s. Indexing costs at most 4 loads up to a million items instead of one. `List.repeat` shares one block of items, so a million items cost almost nothing. Output, diagnostics and `--max-steps` counts do not change. `push`, `set` and a `concat` with 32 items or fewer no longer cost turn units, so a task that loops on them yields later, and the order of output between tasks that run at the same time may shift (#221).
 
 ## [0.2.0] - 2026-10-14
 

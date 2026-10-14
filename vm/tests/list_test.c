@@ -213,6 +213,43 @@ static void expect_concats(const agc_list *l, size_t n) {
   expect_run(l, 0, n);
 }
 
+static void expect_reversed(const agc_list *l, size_t n) {
+  agc_list *r = agc_list_reverse(l);
+  expect_shape(r, n);
+  for (size_t k = 0; k < n; k++) assert(is_item(agc_list_get(r, k), n - 1 - k));
+  expect_run(l, 0, n);
+}
+
+static void expect_same(const agc_list *l, size_t n, size_t at, bool changed) {
+  assert(agc_list_len(l) == n);
+  for (size_t k = 0; k < n; k++) {
+    if (changed && k == at)
+      assert(is_item(agc_list_get(l, k), at));
+    else
+      assert(is_other(agc_list_get(l, k), 7));
+  }
+}
+
+static void expect_repeated(size_t n) {
+  agc_list *r = agc_list_repeat(other(7), n);
+  expect_shape(r, n);
+  expect_same(r, n, 0, false);
+  size_t trie = n ? list_tail_off(n) : 0;
+  size_t at[] = {0, 31, 32, trie ? trie - 1 : 0, trie, n ? n - 1 : 0};
+  for (size_t s = 0; s < sizeof at / sizeof at[0]; s++) {
+    if (at[s] >= n) continue;
+    agc_list *changed = agc_list_set(r, at[s], item(at[s]));
+    expect_shape(changed, n);
+    expect_same(changed, n, at[s], true);
+    expect_same(r, n, 0, false);
+  }
+  agc_list *grown = agc_list_append(r, item(0));
+  assert(agc_list_len(grown) == n + 1 && is_item(agc_list_get(grown, n), 0));
+  expect_same(r, n, 0, false);
+  expect_shape(agc_list_reverse(r), n);
+  expect_same(agc_list_slice(r, n / 2, n - n / 2), n - n / 2, 0, false);
+}
+
 static void expect_debug(void) {
   char want[1024];
   size_t at = 0;
@@ -284,6 +321,8 @@ int main(void) {
     if (n > MAX_LENGTH) continue;
     agc_list *l = built(n);
     expect_list(l, n);
+    expect_reversed(l, n);
+    expect_repeated(n);
     if (n <= LARGE) {
       agc_list *grown = appended(n);
       expect_list(grown, n);
