@@ -9,8 +9,8 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":26,\"line\":6},\"start\":{\"column\":25,\"line\":6}},\"task\":true}",
-    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":27,\"line\":13},\"start\":{\"column\":25,\"line\":13}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":26,\"line\":6},\"start\":{\"column\":25,\"line\":6}},\"spawned_at\":{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"line\":22},\"stack\":[{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"function\":\"zero\",\"line\":6}],\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-DURATION\",\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"message\":\"await timeout must be positive milliseconds\",\"range\":{\"end\":{\"column\":27,\"line\":13},\"start\":{\"column\":25,\"line\":13}},\"spawned_at\":{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"line\":23},\"stack\":[{\"column\":25,\"file\":\"@fixtures/vm/await-timeout-invalid.agc\",\"function\":\"negative\",\"line\":13}],\"task\":true}",
     ""
   ]
 }

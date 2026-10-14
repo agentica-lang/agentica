@@ -14,6 +14,24 @@ When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
 `agentica --ai` and `agentica --json` print the same diagnostic as compact text, or as one JSON object. In `--json` mode, when a diagnostic ends the run, it is the last line of stderr, except that a warning about the flush of files or output (§6) can follow it when the end-of-run flush fails or runs out of time. Task crash lines (with `"task": true`), the unobserved-crash summary (`{"unobserved_crashes": N, "first": "..."}`) and the flush warning of §6 are not the run's diagnostic.
 
+A runtime diagnostic of a running task also shows the call stack of the task that failed, innermost frame first, in all three formats. There is no flag. The stack is shown when the failing task has more than one frame or is not `main`; a failure directly in `main` looks as it does without a stack.
+
+```text
+nested.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]
+index 5 is outside a list of length 3
+
+2 |   return xs[i] + 1
+  |             ^
+  = stack, innermost first:
+    pick at nested.agc:2:13
+    load at nested.agc:6:10
+    main at nested.agc:11:8
+```
+
+A frame line is the function's declared name and the place it was running. For the innermost frame that is the place of the error, and for each caller it is the call it waits on. A block shows as `block`, a function from an imported file shows its name (the file is in the place), and the builtins that run a block (`xs.map`) are skipped, since the frame below already points at the call. A frame that a tail call replaced is gone: the frame left ends with `(after a tail call)`, so a reader knows that callers are missing there. Neighbouring frames with the same function and place are one line with a count, as in `walk at tree.agc:9:12 (9998 times)`, so a runaway recursion that ends in `RUNTIME-STACK-OVERFLOW` takes a few lines. After that merge at most 20 lines show: the 15 innermost, a line `... 312 frames not shown ...`, and the 5 outermost. A task's stack ends with the task's function, and a last line `task spawned at file:line:column` gives the place of the `Task.spawn` call that started it.
+
+`--ai` puts the same lines under `  stack:` after the `source:` line. `--json` adds a `stack` array of objects with the keys `column`, `file`, `function` and `line` (and `repeat` for a merged line, `tail: true` after a tail call), innermost first; `stack_omitted` with the number of frames not shown; and, for a task, `spawned_at` with `column`, `file` and `line`. The keys stay sorted, so `spawned_at`, `stack` and `stack_omitted` come after `range` and before `task`. Every `RUNTIME-` diagnostic that is raised while a task runs has the stack, `RUNTIME-STEP-LIMIT` and `RUNTIME-STACK-OVERFLOW` included, and so does a task crash line. `System.exit`, the out-of-memory exit, and failures outside any task (the stall check `every task is waiting and nothing can wake them`, a failed flush of output) have none.
+
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). The VM compiler stages use `LOWER-` and `BYTECODE-`. Each stage stops at the first error. The diagnostics that an agent most needs to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 
 Names and forms from other languages get a `help` that names the Agentica form. A method hint is given only when the suggested method exists for the receiver's type:
@@ -73,4 +91,4 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `SizedQueue.new(n)` | `Channel.new(n)` with an annotated variable |
 | `Channel.new(n)` with no expected type (`CHECK-EXPECTED-TYPE`) | annotate it: `ch: Channel[Int] = Channel.new(8)` |
 
-Diagnostics refer to Agentica and never expose host exceptions or tracebacks.
+Diagnostics refer to Agentica and never expose host exceptions or tracebacks: the frames of a stack are Agentica functions.

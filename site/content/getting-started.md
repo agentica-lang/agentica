@@ -124,6 +124,22 @@ agentica --json bad.agc
 {"actual":"String","code":"CHECK-TYPE-MISMATCH","expected":"Int","file":"bad.agc","function":"main() -> Void","help":"convert it with String.to_int!(...)","message":"expected Int, found String","range":{"end":{"column":16,"line":3},"start":{"column":11,"line":3}}}
 ```
 
+A runtime error also prints the call stack of the task that failed, innermost call first, in all three formats. It shows when the task has more than one frame or is not `main`; a failure directly in `main` has no stack.
+
+```text
+nested.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]
+index 5 is outside a list of length 3
+
+2 |   return xs[i] + 1
+  |             ^
+  = stack, innermost first:
+    pick at nested.agc:2:13
+    load at nested.agc:6:10
+    main at nested.agc:11:8
+```
+
+Each line is a function and the place where it was running: the error for the first line, and the call it waits on for the others. A block shows as `block`. A frame that a tail call replaced is gone, and the frame left ends with `(after a tail call)`. A recursion that repeats the same call is one line with a count, such as `walk at tree.agc:9:12 (9998 times)`. After that, at most 20 lines show: the 15 innermost, a line `... 312 frames not shown ...`, and the 5 outermost. The stack of a task ends with `task spawned at file:line:column`, the place of its `Task.spawn` call. With `--ai` the same lines come under `stack:`, and with `--json` they are the `stack` array of the object, plus `stack_omitted` and, for a task, `spawned_at`.
+
 ## Look up a builtin
 
 `agentica help NAME` prints the signature and a short description of a builtin function. Add `--json` for a JSON object. `agentica help` with no name lists the commands and the builtin namespaces, and `agentica --help` adds the options and a few core rules.

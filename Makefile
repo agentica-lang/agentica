@@ -65,6 +65,7 @@ test-distribution: build vm
 
 goldens: build vm
 	racket tests/vm-diff-common.rkt
+	racket tests/vm-stack-test.rkt
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
 
@@ -435,7 +436,7 @@ sweep-full: vm-diff-build
 	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(RACO) test -j $(JOBS) $(VM_DIFF_TESTS)
 
 # The Racket tests that run against the built VM (the ASan job runs them on the sanitizer VM)
-VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-child-channel-test.rkt tests/vm-stop-test.rkt tests/vm-channel-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt
+VM_RKT_TESTS = $(VM_DIFF_TESTS) tests/bytecode-test.rkt tests/vm-trace-test.rkt tests/vm-tcp-test.rkt tests/vm-tls-test.rkt tests/vm-http-test.rkt tests/vm-test-protocol-test.rkt tests/vm-child-channel-test.rkt tests/vm-stop-test.rkt tests/vm-channel-test.rkt tests/vm-stdout-test.rkt tests/vm-file-lines-test.rkt tests/vm-stack-test.rkt
 SANITIZE_JOBS ?= 4
 
 vm-sanitize-build: build

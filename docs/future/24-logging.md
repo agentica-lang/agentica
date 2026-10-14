@@ -394,6 +394,28 @@ reviewed diff. Docs: `grammar.md` §7, `docs/vm/02-reference-behavior.md` §2.5
 and `docs/vm/05-values-execution-builtins.md` §6.1, and the programming skill's
 `references/diagnostics.md`.
 
+**As built (14b).** The walk is `agc_stack_capture` in `vm/diag.c`, called by
+`agc_fail` and `agc_fail_text` while `vm->in_turn` is true (the flag that
+already picks the `longjmp` target, so the scheduler needs no new one). Where
+the text above is silent:
+
+- The stack is not copied frame by frame. The walk merges and cuts while it
+  copies, into a fixed array of 20 lines in `outcome.stack`, so it allocates
+  nothing and a stack of 10,000 frames costs two passes over the frames.
+- Native frames do not count for "more than one frame"; the frames that
+  count are the visible ones, before merging.
+- `... N frames not shown ...` counts frames (a merged run counts its
+  repeats), and reads `... 1 frame not shown ...` for one.
+- Neighbouring frames merge only when they also have the same tail flag.
+- Plain: the `  = stack, innermost first:` line follows the caret line, and the
+  frame lines, the cut line and `task spawned at` all have four spaces, for any
+  width of the line number. `--ai`: the same lines under `  stack:`.
+- Any task that was started by a spawn builtin has `task spawned at`, including
+  the connection tasks of `std/http` (the place is the `HttpWire` call in
+  `std/http.agc`) and the tests of `Test.run`.
+- A line break in a function or file name is written as `\n` or `\r` in the
+  plain and `--ai` lines.
+
 ### 24.4 VM tracing
 
 A developer tool for `agentica-vm`, for debugging the scheduler, I/O jobs,

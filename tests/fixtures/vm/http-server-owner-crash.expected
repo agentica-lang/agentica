@@ -12,7 +12,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/http-server-owner-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":20},\"start\":{\"column\":16,\"line\":20}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/http-server-owner-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":20},\"start\":{\"column\":16,\"line\":20}},\"spawned_at\":{\"column\":25,\"file\":\"@fixtures/vm/http-server-owner-crash.agc\",\"line\":31},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/http-server-owner-crash.agc\",\"function\":\"explode\",\"line\":20}],\"task\":true}",
     ""
   ]
 }

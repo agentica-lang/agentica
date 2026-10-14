@@ -583,18 +583,31 @@
        (values kept codes (cons (list (hash-ref parsed 'unobserved_crashes) (hash-ref parsed 'first)) summaries))]
       [else (values (cons line kept) codes summaries)])))
 
+(define stack-line-patterns
+  (list #px"^    \\S+ at .+:[0-9]+:[0-9]+(?: \\([0-9]+ times\\))?(?: \\(after a tail call\\))?$"
+        #px"^    \\.\\.\\. [0-9]+ frames? not shown \\.\\.\\.$"
+        #px"^    task spawned at .+:[0-9]+:[0-9]+$"))
+
+(define (skip-stack lines header)
+  (if (and (pair? lines) (equal? (car lines) header))
+      (let skip ([rest (cdr lines)])
+        (if (and (pair? rest) (ormap (lambda (pattern) (regexp-match? pattern (car rest))) stack-line-patterns))
+            (skip (cdr rest))
+            rest))
+      lines))
+
 (define (text-crash-free text)
   (define plain-header #px"^.*:[0-9]+:[0-9]+ error\\[([A-Z]+-[A-Z0-9-]+)\\] in a task$")
   (define ai-header #px"^\\[([A-Z]+-[A-Z0-9-]+)\\] in a task$")
   (define summary #px"^([0-9]+) task crash(?:es were| was) not observed; first: (.*)$")
   (define (after-caret lines)
     (define rest (memf (lambda (line) (regexp-match? #px"^ +\\| [ \t]*\\^+$" line)) lines))
-    (if rest (cdr rest) '()))
+    (if rest (skip-stack (cdr rest) "  = stack, innermost first:") '()))
   (let loop ([lines (regexp-split #rx"\n" text)] [kept '()] [codes '()] [summaries '()])
     (cond
       [(null? lines) (values (string-join (reverse kept) "\n") (reverse codes) (reverse summaries))]
       [(and (>= (length lines) 4) (regexp-match ai-header (first lines)))
-       => (lambda (found) (loop (drop lines 4) kept (cons (cadr found) codes) summaries))]
+       => (lambda (found) (loop (skip-stack (drop lines 4) "  stack:") kept (cons (cadr found) codes) summaries))]
       [(regexp-match plain-header (car lines))
        => (lambda (found) (loop (after-caret (cdr lines)) kept (cons (cadr found) codes) summaries))]
       [(regexp-match summary (car lines))

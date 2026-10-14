@@ -523,6 +523,7 @@ static void new_prog(prog *p) {
   p->builtins[B_AWAIT_TIMED] = agc_find_builtin((const uint8_t *)"Task.await", 10, 2);
   for (size_t k = 0; k < sizeof test_builtins / sizeof test_builtins[0]; k++) p->builtins[B_MARK + k] = &test_builtins[k];
   for (uint32_t f = 0; f < MAX_FNS; f++) {
+    p->fns[f].name = agc_make_string("f", 1, 1);
     p->fns[f].params = f == F_MAIN ? 0 : 1;
     p->fns[f].registers = 32;
     p->fns[f].code = p->code[f];

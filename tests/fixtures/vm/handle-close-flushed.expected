@@ -9,10 +9,10 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"spawned_at\":{\"column\":26,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"line\":45},\"stack\":[{\"column\":19,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"function\":\"write_and_crash\",\"line\":17}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"spawned_at\":{\"column\":26,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"line\":45},\"stack\":[{\"column\":19,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"function\":\"write_and_crash\",\"line\":17}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"spawned_at\":{\"column\":26,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"line\":45},\"stack\":[{\"column\":19,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"function\":\"write_and_crash\",\"line\":17}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":20,\"line\":17},\"start\":{\"column\":19,\"line\":17}},\"spawned_at\":{\"column\":26,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"line\":45},\"stack\":[{\"column\":19,\"file\":\"@fixtures/vm/handle-close-flushed.agc\",\"function\":\"write_and_crash\",\"line\":17}],\"task\":true}",
     ""
   ]
 }

@@ -1,0 +1,11 @@
+check failed: 1 error
+
+[RUNTIME-DIVISION-BY-ZERO]
+  message: division by zero
+  at: @fixtures/vm/lib/trace.agc:2:12
+  source: return a / b
+  stack:
+    safe_div at @fixtures/vm/lib/trace.agc:2:12
+    block at @fixtures/vm/lib/trace.agc:7:5
+    each_div at @fixtures/vm/lib/trace.agc:6:10
+    main at @fixtures/vm/stack-trace-import.agc:4:8
