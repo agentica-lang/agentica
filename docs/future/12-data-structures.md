@@ -144,12 +144,13 @@ puts(seen.size)            # 3
 ### 12.4 Faster lists
 
 Not a new type: `List` keeps its API and meaning, and only its representation
-changes. Today `List.append` copies the list (O(n)), and indexing is O(n) in the
-evaluator. A persistent vector (a 32-way trie with a tail buffer, as in Clojure
-and Scala) makes `append`, `set` and indexing O(log32 n), near constant, and
-keeps old versions unchanged. Both backends change in the same PR; output, step
-counts and diagnostics stay the same. Measure with `benchmarks/` before and
-after.
+changes. Before this step `List.append` copied the whole list, so building a
+list with n pushes was O(n²). A persistent vector (a 32-way trie with a tail
+buffer, as in Clojure and Scala) makes `append`, `set` and indexing O(log32 n),
+near constant, and keeps old versions unchanged. The C VM is the only backend
+since 7i, so only `vm/list.c` changed; output, step counts and diagnostics stay
+the same. The design is [`docs/vm/17-lists.md`](../vm/17-lists.md), and
+`benchmarks/programs/list-build.agc` measures it.
 
 ### 12.5 Later
 

@@ -22,7 +22,7 @@ src/
   vm-launch.rkt   # find-vm, stop-vm, call-noting-break and running-executable, shared by main.rkt and bdd-driver.rkt
   main.rkt        # thin CLI driver: lex, parse, link, check, lower, then run bytecode from a temp file on dist/agentica-vm (`check` only, --dump the tree, --dump-ir, `compile -o`; `test` parses its options and calls bdd-driver.rkt); exit 1 on a diagnostic, 2 on usage, a missing file or a missing VM
 vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md and its "Read next" table
-  value.h port.h core.h services.h  # shared types and the agc_ API, one header per layer (references/vm.md, "Which layer"); list_impl.h is the private list layout (list.c and interp.c only)
+  value.h port.h core.h services.h  # shared types and the agc_ API, one header per layer (references/vm.md, "Which layer"); list_impl.h is the private list layout (list.c, interp.c and tests/list_test.c only)
   value.c text.c map.c list.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, opaque lists (list API in value.h), loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json) and the stack trace of a runtime error, CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   input.c output.c  # stdin reader; stdout and stderr: a 64 KiB buffer and a FIFO of waiting writers per stream, written by the loop (Linux)

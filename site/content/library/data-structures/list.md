@@ -30,7 +30,7 @@ end
 List.at(list: List[T], index: Int) -> T
 ```
 
-The same as `list[index]`. A bad index stops the program.
+The same as `list[index]`. A bad index stops the program. It takes O(log32 n) time, at most four steps for a million items.
 
 ```agentica
 def main() -> Void
@@ -48,7 +48,7 @@ b
 List.append(list: List[T], value: T) -> List[T]
 ```
 
-Adds a value at the end. `push` is the method alias.
+Adds a value at the end. `push` is the method alias. It takes near constant time, so a loop of n pushes costs O(n) in total, and the old list stays as it was.
 
 ```agentica
 def main() -> Void
@@ -69,7 +69,7 @@ end
 List.set(list: List[T], index: Int, value: T) -> List[T]
 ```
 
-Replaces one element. A bad index stops the program.
+Replaces one element. A bad index stops the program. It takes O(log32 n) time and shares everything but the path to the element with the old list.
 
 ```agentica
 def main() -> Void
@@ -86,6 +86,8 @@ end
 ```text
 List.concat(a: List[T], b: List[T]) -> List[T]
 ```
+
+Joining a list of 32 items or fewer takes time in the size of the right list. A longer right list copies both lists.
 
 ```agentica
 def main() -> Void
@@ -137,7 +139,7 @@ List.drop(list: List[T], count: Int) -> List[T]
 ```
 
 `take` keeps the first `count` elements; `drop` removes them. A count larger
-than the list is fine.
+than the list is fine. Both copy the elements they keep, so they cost O(n).
 
 ```agentica
 def main() -> Void

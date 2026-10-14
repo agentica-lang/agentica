@@ -47,7 +47,7 @@ if found -n "$inc(services|net|tls|http_parse|http_fields)\.h" $core; then bad "
 if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter includes core.h"; fi
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi
 only 'gc\.h' "value.c"
-if found -n --max-depth 2 '^\s*#\s*include\s*"([^"]*/)?list_impl\.h"' --glob '*.c' --glob '*.h' --glob '!list.c' --glob '!interp.c' .; then bad "only list.c and interp.c may include list_impl.h"; fi
+if found -n --max-depth 2 '^\s*#\s*include\s*"([^"]*/)?list_impl\.h"' --glob '*.c' --glob '*.h' --glob '!list.c' --glob '!interp.c' --glob '!tests/list_test.c' .; then bad "only list.c, interp.c and tests/list_test.c may include list_impl.h"; fi
 only 'openssl/' "tls_openssl.c"
 only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"

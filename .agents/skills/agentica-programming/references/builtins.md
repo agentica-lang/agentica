@@ -111,14 +111,14 @@ String.to_float!(s: String) -> Float
 
 ```text
 List.size(list: List[T]) -> Int
-List.append(list: List[T], value: T) -> List[T]          # O(n)
-List.set(list: List[T], index: Int, value: T) -> List[T] # index 0..length-1; else RUNTIME-INDEX-OUT-OF-RANGE
+List.append(list: List[T], value: T) -> List[T]          # near constant time; n appends build a list in O(n)
+List.set(list: List[T], index: Int, value: T) -> List[T] # index 0..length-1; else RUNTIME-INDEX-OUT-OF-RANGE; O(log32 n)
 List.repeat(value: T, count: Int) -> List[T]             # count 0..1048576; else RUNTIME-INVALID-COUNT
 List.reverse(list: List[T]) -> List[T]
-List.concat(a: List[T], b: List[T]) -> List[T]           # O(length of a)
+List.concat(a: List[T], b: List[T]) -> List[T]           # O(length of b) when b has at most 32 items, else O(length of a + b)
 List.take(list: List[T], count: Int) -> List[T]          # counts above length are fine; negative halts (RUNTIME-INVALID-COUNT)
 List.drop(list: List[T], count: Int) -> List[T]          # same count rules as take
-List.at(list: List[T], index: Int) -> T                  # zero-based; out of range halts (RUNTIME-INDEX-OUT-OF-RANGE); O(n)
+List.at(list: List[T], index: Int) -> T                  # zero-based; out of range halts (RUNTIME-INDEX-OUT-OF-RANGE); O(log32 n)
 List.map(list: List[A], f: Fn[A, B]) -> List[B]          # f returns data, not Void
 List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B   # folds left: f(acc, item); empty gives initial

@@ -49,7 +49,7 @@ Queue.size(q: Queue.QueueState) -> Int
 Queue.empty?(q: Queue.QueueState) -> Bool
 ```
 
-Push adds at the back; pop removes the oldest value. Pop and peek on an empty queue return an error Result. Inputs are never changed: assign the returned queue (or `Popped.remaining`). Empty strings and duplicates are valid. `QueueState` is a normal exported struct, not an opaque handle. There are no user generics and no blocking cross-task queue operations. The implementation uses Lists, so push, pop, peek, size, and empty? are O(n) and new is O(1); no constant-time FIFO is promised.
+Push adds at the back; pop removes the oldest value. Pop and peek on an empty queue return an error Result. Inputs are never changed: assign the returned queue (or `Popped.remaining`). Empty strings and duplicates are valid. `QueueState` is a normal exported struct, not an opaque handle. There are no user generics and no blocking cross-task queue operations. The implementation uses Lists: push, peek, size, empty? and new take near constant time, but pop is O(n) because it drops the first item of the list; no constant-time FIFO is promised.
 
 ## Other standard modules
 

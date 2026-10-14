@@ -77,7 +77,7 @@ end
 
 A struct constructor gives every field exactly once, by name, in any order. There are no default or extra fields.
 
-A list index runs from zero to length minus one; a negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing costs O(n) here, so use `for` for traversal. `for` iterates a `List` in order, or a `Range`. The core has no slices and no string indexing.
+A list index runs from zero to length minus one; a negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE`. Indexing takes O(log32 n) time, at most four steps for a million items; `for` visits the items in order. `for` iterates a `List` in order, or a `Range`. The core has no slices and no string indexing.
 
 ### Ranges
 

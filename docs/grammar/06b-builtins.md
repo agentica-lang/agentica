@@ -17,10 +17,10 @@ Callbacks (`List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) ta
 Collection operations preserve their inputs. Costs exclude callback work.
 
 - `List.map` and `List.filter` are O(n). `List.reduce` folds left, calling `f(accumulator, item)`; an empty list gives the initial value.
-- `List.append` and `List.reverse` are O(n), so repeated appends can cost O(n²). `List.concat` joins lists of one element type.
-- `List.set` and `List.at` are zero-based. A negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
+- `List.append` (`push`) takes near constant time, so building a list with n appends is O(n). `List.concat` joins lists of one element type: O(b) when the right list has at most 32 items, otherwise O(a + b). `List.reverse` is O(n).
+- `List.set` and `List.at` are zero-based and take O(log32 n) time (at most four steps for a million items). A negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
 - `List.repeat` takes a count from 0 to 1048576; zero gives an empty list of the element type. Other counts are `RUNTIME-INVALID-COUNT`.
-- `List.take` and `List.drop` need a nonnegative count (`RUNTIME-INVALID-COUNT`). A larger count gives the whole list or an empty list.
+- `List.take` and `List.drop` need a nonnegative count (`RUNTIME-INVALID-COUNT`). A larger count gives the whole list or an empty list. They are O(n) in the size of the result.
 - `List.sort` and `List.sort_by` sort ascending. Elements, or the keys from `sort_by` (computed once per element, left to right), must be `Int`, `Float` or `String`; otherwise `CHECK-TYPE-MISMATCH`. The sort is stable. Strings compare by code point, so `"B"` is before `"a"`. NaN goes last. O(n log n), plus key calls.
 - `Map.get` with two arguments gives `ok(value)` or `error(message)`. With three, the default is always evaluated; `false` and `nil` are present values.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put back later goes to the end. It is O(n). `Map.values` follows the `Map.keys` order.
