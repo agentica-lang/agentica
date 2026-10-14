@@ -244,6 +244,45 @@ static void test_value_back_to_full_buffer(void) {
   assert(failed(send(main_task, ch, 4, 0), "channel: timed out"));
 }
 
+static void test_values_back_into_wrapped_ring(void) {
+  agc_value ch = make_channel(20);
+  agc_task *receivers[4];
+  for (int64_t k = 0; k < 5; k++) assert(sent(send(main_task, ch, k, 0)));
+  for (int64_t k = 0; k < 5; k++) assert(got(recv(main_task, ch, 0), k));
+  for (int k = 0; k < 4; k++) {
+    receivers[k] = make_task();
+    wait_recv(receivers[k], ch, 5000);
+  }
+  for (int64_t v = 1; v <= 12; v++) assert(sent(send(main_task, ch, v, 0)));
+  assert(vm.ready == receivers[0] && receivers[0]->channel.reserved);
+  for (int k = 0; k < 4; k++) agc_task_cancel(&vm, receivers[k]);
+  assert(!vm.ready);
+  for (int64_t v = 1; v <= 12; v++) assert(got(recv(main_task, ch, 0), v));
+  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+}
+
+static void test_sender_waits_while_over_capacity(void) {
+  agc_value ch = make_channel(2);
+  agc_task *receiver = make_task(), *sender = make_task();
+  wait_recv(receiver, ch, 5000);
+  for (int64_t v = 1; v <= 3; v++) assert(sent(send(main_task, ch, v, 0)));
+  wait_send(sender, ch, 4, 5000);
+  agc_task_cancel(&vm, receiver);
+  assert(!vm.ready);
+  assert(failed(send(main_task, ch, 9, 0), "channel: timed out"));
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(!vm.ready);
+  assert(got(recv(main_task, ch, 0), 2));
+  assert(vm.ready == sender && sender->channel.reserved);
+  assert(next_ready() == sender);
+  settle();
+  agc_value args[3] = {ch, agc_int(4), agc_int(5000)};
+  assert(sent(now(sender, SEND, args)));
+  assert(got(recv(main_task, ch, 0), 3));
+  assert(got(recv(main_task, ch, 0), 4));
+  assert(failed(recv(main_task, ch, 0), "channel: timed out"));
+}
+
 static agc_value free_slot_for_senders(agc_task *a, agc_task *b) {
   agc_value ch = make_channel(1);
   send(main_task, ch, 1, 0);
@@ -416,6 +455,8 @@ int main(void) {
   test_values_back_in_send_order(false);
   test_values_back_in_send_order(true);
   test_value_back_to_full_buffer();
+  test_values_back_into_wrapped_ring();
+  test_sender_waits_while_over_capacity();
   test_reserved_sender_to_receiver();
   test_cancelled_sender();
   test_cancelled_sender_frees_slot();
