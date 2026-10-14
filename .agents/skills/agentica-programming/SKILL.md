@@ -329,7 +329,7 @@ end
 
 ## Diagnostics
 
-Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break if x`, `loop do`, `puts(x) if ok`) are rejected with a `help` line that names the Agentica form.
+Forms from other languages (`let x = 5`, `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `break if x`, `loop do`, `puts(x) if ok`, `;`, `while x {` ... `}`) are rejected with a `help` line that names the Agentica form.
 
 ## More documentation
 

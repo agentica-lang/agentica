@@ -34,6 +34,9 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `let x = 5`, `var x = 5`, `const x = 5` | `x = 5` or `x: Int = 5` |
 | `match x`, `when 1` in a `case` | `case x`, arms as `1 -> ...` |
 | `if x then` | a newline after the condition |
+| `x = 1;` (`LEX-UNEXPECTED-CHAR`) | no semicolons: end the statement with a newline |
+| `while x {`, `if x {`, `else {`, `for x in xs {`, `case x {`, `def f() -> T {`, `do \|x\| {` (`PARSE-UNEXPECTED-TOKEN`) | blocks have no braces: `while cond` ... `end` |
+| a `}` with no `{` open (`LEX-UNMATCHED-DELIMITER`), an unclosed `{` (`LEX-UNCLOSED-DELIMITER`) | blocks end with `end`, not `}` |
 | `fn(x: Int) ...`, `lambda do ... end`, a `do` block with no call | a block after a call (`xs.map do \|x\| ... end`) or `&name` |
 | `Hash.new`, `Array.new` | a typed literal: `m: Map[String, Int] = {}`, `xs: List[Int] = []` |
 | `continue` | `next` |

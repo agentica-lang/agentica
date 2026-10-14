@@ -177,13 +177,34 @@
                    ("  break if x > 3" "no if modifiers")
                    ("  puts(\"a\") if x" "if cond \\.\\.\\. end")
                    ("  n = String.length \"abc\"" "String\\.length\\(")
-                   ("  case r\n    ok() -> puts(\"a\")\n  end" "ok\\(_\\)"))])
+                   ("  case r\n    ok() -> puts(\"a\")\n  end" "ok\\(_\\)")
+                   ("  while x {\n    puts(\"a\")\n  }" "\"while cond\" \\.\\.\\. \"end\"")
+                   ("  if x {\n    puts(\"a\")\n  }" "\"if cond\" \\.\\.\\. \"end\"")
+                   ("  for x in xs {\n    puts(\"a\")\n  }" "\"for x in xs\" \\.\\.\\. \"end\""))])
       (define problem (parse-text (format "def main() -> Void\n~a\nend\n" (car entry))))
       (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN (car entry))
       (check-equal? (source-position-line (source-span-start (diagnostic-span problem)))
                     (if (regexp-match? #rx"^  case" (car entry)) 3 2)
                     (car entry))
       (check-regexp-match (pregexp (cadr entry)) (diagnostic-help problem) (car entry))))
+
+  (test-case "braces after a block head point to end"
+    (for ([entry '(("def main() -> Void {\n  puts(1)\n}\n" 1 20 "def name")
+                   ("def main() {\n  puts(1)\n}\n" 1 12 "def name")
+                   ("def main() -> Void\n  if x\n    puts(1)\n  else {\n    puts(2)\n  }\nend\n" 4 8 "\"else\"")
+                   ("def main() -> Void\n  case x {\n    1 -> puts(1)\n  }\nend\n" 2 10 "\"case value\"")
+                   ("def main() -> Void\n  xs.each do |x| {\n    puts(x)\n  }\nend\n" 4 3 "\"do \\|x\\|\""))])
+      (define problem (parse-text (car entry)))
+      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN (car entry))
+      (define start (source-span-start (diagnostic-span problem)))
+      (check-equal? (list (source-position-line start) (source-position-column start))
+                    (list (cadr entry) (caddr entry))
+                    (car entry))
+      (check-regexp-match (pregexp (cadddr entry)) (diagnostic-help problem) (car entry))
+      (check-regexp-match #rx"end" (diagnostic-help problem) (car entry))))
+
+  (test-case "map literals still parse where a block head does not"
+    (check-true (program? (parse-ok "def main() -> Void\n  m: Map[String, Int] = {}\n  n = {\"a\": 1}\n  ys = xs.map do |x| {\"k\": x} end\nend\n\n"))))
 
   (test-case "declarations need a blank line after their end"
     (define problem (parse-text "struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n"))

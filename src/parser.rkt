@@ -78,6 +78,18 @@
 
     (define allow-blocks #t)
     (define block-depth 0)
+    (define block-brace #f)
+
+    (define (brace-help form)
+      (format "blocks have no braces: write \"~a\" ... \"end\"" form))
+
+    (define (expect-head-end description form)
+      (if (kind? 'left-brace)
+          (bail 'PARSE-UNEXPECTED-TOKEN
+                (format "expected ~a, found ~a" description (describe (current)))
+                (current)
+                #:help (brace-help form))
+          (expect 'NL description)))
 
     (define (statement-end?)
       (or (kind? 'NL) (and (> block-depth 0) (kind? 'end))))
@@ -156,9 +168,14 @@
       (expect 'left-paren "\"(\"")
       (define params (parse-parameters))
       (expect 'right-paren "\")\"")
+      (when (kind? 'left-brace)
+        (bail 'PARSE-UNEXPECTED-TOKEN
+              (format "expected \"->\", found ~a" (describe (current)))
+              (current)
+              #:help (brace-help "def name() -> Type")))
       (expect 'arrow "\"->\"")
       (define result (parse-type))
-      (expect 'NL "a newline after the function signature")
+      (expect-head-end "a newline after the function signature" "def name() -> Type")
       (define body (parse-block))
       (expect-end)
       (expect-statement-end "a newline after end")
@@ -415,7 +432,7 @@
       (define start (expect 'case "case"))
       (define value (with-blocks #f parse-expression))
       (when (kind? 'do) (advance!))
-      (expect 'NL "a newline after the case value")
+      (expect-head-end "a newline after the case value" "case value")
       (define arms
         (let loop ([acc '()])
           (skip-newlines!)
@@ -545,7 +562,7 @@
               (when (kind? 'if)
                 (bail 'PARSE-UNEXPECTED-TOKEN "expected a newline after else, found \"if\"" (current)
                       #:help "write elsif instead of else if"))
-              (expect 'NL "a newline after else")
+              (expect-head-end "a newline after else" "else")
               (parse-block))
             #f))
       (expect-end)
@@ -561,7 +578,8 @@
       (when (kind? 'do)
         (bail 'PARSE-UNEXPECTED-TOKEN "expected a newline after the condition, found do" (current)
               #:help "an if condition ends with a newline, not do"))
-      (expect 'NL "a newline after the condition")
+      (expect-head-end "a newline after the condition"
+                       (format "~a cond" (token-lexeme start)))
       (define body (parse-block))
       (if-branch condition body (span-from start)))
 
@@ -569,7 +587,7 @@
       (define start (expect 'while "while"))
       (define condition (with-blocks #f parse-expression))
       (when (kind? 'do) (advance!))
-      (expect 'NL "a newline after the condition")
+      (expect-head-end "a newline after the condition" "while cond")
       (define body (parse-block))
       (expect-end)
       (expect-statement-end "a newline after end")
@@ -581,7 +599,7 @@
       (expect 'in "\"in\"")
       (define iterable (with-blocks #f parse-expression))
       (when (kind? 'do) (advance!))
-      (expect 'NL "a newline after the loop header")
+      (expect-head-end "a newline after the loop header" "for x in xs")
       (define body (parse-block))
       (expect-end)
       (expect-statement-end "a newline after end")
@@ -758,6 +776,9 @@
                 (expect 'pipe "\"|\" after the block parameters")
                 (reverse (cons parameter acc))]))]
           [else '()]))
+      (set! block-brace
+            (and (kind? 'left-brace)
+                 (cons (current) (if (null? params) "do" (format "do |~a|" (string-join (map block-param-name params) ", "))))))
       (define body (with-blocks #t (lambda () (parse-block 1))))
       (expect-end)
       (block-lit params body (span-from start)))
@@ -943,18 +964,25 @@
       (expect 'right-bracket "\"]\"")
       (list-lit elements (span-from start)))
 
-    (define (parse-map-entry)
+    (define (parse-map-entry [block-form #f])
       (define start (current))
       (define key (parse-expression))
+      (when (and (not (kind? 'colon)) block-form)
+        (bail 'PARSE-UNEXPECTED-TOKEN
+              (format "expected \":\", found ~a" (describe (current)))
+              (current)
+              #:help (format "if \"{\" opens the block: blocks have no braces, write \"~a\" ... \"end\""
+                             block-form)))
       (expect 'colon "\":\"")
       (map-entry key (parse-expression) (span-from start)))
 
     (define (parse-map-literal)
       (define start (expect 'left-brace "\"{\""))
+      (define block-form (and block-brace (eq? (car block-brace) start) (cdr block-brace)))
       (define entries
         (if (kind? 'right-brace)
             '()
-            (let loop ([acc (list (parse-map-entry))])
+            (let loop ([acc (list (parse-map-entry block-form))])
               (cond
                 [(kind? 'comma)
                  (advance!)
