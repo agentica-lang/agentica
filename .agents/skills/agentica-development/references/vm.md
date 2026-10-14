@@ -426,7 +426,7 @@ functions up by name.
    `Task.await`) calls `agc_task_park(vm, true)` (retry): `CALL_BUILTIN`
    keeps the arguments and re-runs the call on wake. Every table entry
    has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md`
-   §10.2.1, "As built"): a builtin whose work grows with its input takes
+   §10.2.1, "Builtins"): a builtin whose work grows with its input takes
    `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
    `steps_left` for that. State goes in `vm->rt` (shared runtime),
    `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files`
@@ -853,9 +853,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   and calls inside larger expressions do not count) and emits no `return`
   after it. `TAIL_CALL` grows the registers to the frame base plus the
   callee's count first, then `memmove`s the argument window to `R[0..]`
-  (windows overlap). It does not touch the depth, so on the VM deep tail
-  recursion runs while the evaluator gives `RUNTIME-STACK-OVERFLOW`
-  (documented in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
+  (windows overlap). It does not touch the depth, so a deep tail recursion
+  runs (the depth rule is in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
   non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
   deep tail-recursion case lives in `tests/vm-diff-common.rkt`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
