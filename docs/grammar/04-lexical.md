@@ -36,8 +36,8 @@ The pipe operator `|>` is one token (the longest match next to `|` and `||`), so
 ```ebnf
 NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
 TYPE_NAME  = UPPER, { LETTER | DIGIT | "_" } ;
-INTEGER    = DIGIT, { DIGIT } ;
-FLOAT      = DIGIT, { DIGIT }, ".", DIGIT, { DIGIT } ;
+INTEGER    = DIGIT, { [ "_" ], DIGIT } ;
+FLOAT      = DIGIT, { [ "_" ], DIGIT }, ".", DIGIT, { [ "_" ], DIGIT } ;
 STRING     = '"', { STRING_CHAR | ESCAPE | INTERPOLATION }, '"' ;
 ESCAPE     = "\\", ( '"' | "\\" | "#" | "n" | "r" | "t" ) ;
 INTERPOLATION = "#{", expression, "}" ;
@@ -45,6 +45,8 @@ INTERPOLATION = "#{", expression, "}" ;
 
 `LETTER` is `A`–`Z` or `a`–`z`; `DIGIT` is `0`–`9`; `LOWER_OR_UNDERSCORE` is `a`–`z` or `_`; `UPPER` is `A`–`Z`. `STRING_CHAR` is any Unicode character except double quotes, backslash, newlines, and a `#` followed by `{`. `NL` and `EOF` are lexer tokens.
 
-The minus sign is an operator, not part of a literal. The core has no exponents, other number bases, numeric separators or multiline strings.
+The minus sign is an operator, not part of a literal. The core has no exponents, other number bases or multiline strings.
+
+A `_` may separate digits in `INTEGER` and in both parts of `FLOAT`: `1_000`, `1_000.000_5`. It is only visual: `1_000` is the same `Int` as `1000`, and the lexer drops the `_`s before it reads the value. `_` is allowed only between two digits. A trailing `_` (`1_`, `1_000_`, `1_a`), a double `__` (`1__0`) and a `_` next to the dot (`1_.5`, `1._5`) are `LEX-INVALID-NUMBER`, with the literal as written as the span: the run of digits and `_`, plus a `.` followed by a digit or a `_` and the run after it. A `.` followed by a `_` belongs to the number, so `1._5` is an error; a `.` followed by a letter or by another `.` ends the number (`1_000.times`, `1_000..2_000`). `_1` is still a NAME. The text form of a number has no separators: `puts(1_000)` prints `1000`, and `String.to_int` and JSON still reject `_`.
 
 `"text #{expression} text"` interpolates; the result is a `String`. Each value is inserted as its `to_s` (see "Methods on builtin types"). The expression must end on the same line and cannot contain comments; strings, maps and nested interpolation may appear inside it. A Void call is `CHECK-VOID-VALUE`. A function, task or resource handle has no `to_s` and is `CHECK-TYPE-MISMATCH`. `\#` writes a literal `#`, so `"\#{x}"` is the text `#{x}`. `case` patterns and `import` paths take plain string literals only.

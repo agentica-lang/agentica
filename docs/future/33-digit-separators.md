@@ -1,6 +1,6 @@
 ## 33. Digit separators
 
-**Status:** planned (roadmap [phase 23](../roadmap/23-digit-separators.md)). Decided on 2026-10-12: number literals may use `_` between digits, as in Ruby and Elixir: `3_000`, `1_000_000`. It is front end only. It comes after 7i, right after doc comments (§33.5).
+**Status:** done (roadmap [phase 23](../roadmap/23-digit-separators.md)). Decided on 2026-10-12: number literals may use `_` between digits, as in Ruby and Elixir: `3_000`, `1_000_000`. It is front end only. It comes after 7i, right after doc comments (§33.5).
 
 ### 33.1 Today
 
