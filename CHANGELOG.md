@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter, function or import alias with that name is `CHECK-REDEFINED-NAME` (#217).
+- **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter or import alias with that name is `CHECK-REDEFINED-NAME` (#217).
 
 ## [0.2.0] - 2026-10-14
 

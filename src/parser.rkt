@@ -455,9 +455,11 @@
            (set! variant-name (token-lexeme (expect 'type-name "a variant name"))))
          (define bindings
            (if (kind? 'left-paren)
-               (parse-pattern-bindings (if (member enum-name '("Result" "Await"))
-                                           (format "write ~a.~a(_) to match without binding the value" enum-name variant-name)
-                                           (format "a variant without payload has no parentheses: ~a.~a" enum-name variant-name)))
+               (parse-pattern-bindings
+                (if (or (equal? enum-name "Result")
+                        (and (equal? enum-name "Await") (equal? variant-name "Done")))
+                    (format "write ~a.~a(_) to match without binding the value" enum-name variant-name)
+                    (format "a variant without payload has no parentheses: ~a.~a" enum-name variant-name)))
                '()))
          (variant-pattern enum-name variant-name bindings (span-from start))]
         [else (bail 'PARSE-UNEXPECTED-TOKEN "expected a pattern" start)]))

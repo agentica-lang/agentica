@@ -484,14 +484,24 @@ static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool resu
   return outcome(vm, target, span, result);
 }
 
+static agc_runtime *await_variants(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  if (!rt->await_found) {
+    rt->await_done = agc_builtin_variant(vm, "Await", "Done", 1);
+    rt->await_timed_out = agc_builtin_variant(vm, "Await", "TimedOut", 0);
+    rt->await_found = true;
+  }
+  return rt;
+}
+
 static agc_value await_done(agc_vm *vm, agc_value value) {
-  agc_enum *e = agc_new_enum(agc_builtin_variant(vm, "Await", "Done", 1), 1);
+  agc_enum *e = agc_new_enum(await_variants(vm)->await_done, 1);
   e->payload[0] = value;
   return agc_enum_value(e);
 }
 
 static agc_value await_timed_out(agc_vm *vm) {
-  return agc_enum_value(vm->rt->program->variants[agc_builtin_variant(vm, "Await", "TimedOut", 0)].shared);
+  return agc_enum_value(vm->rt->program->variants[await_variants(vm)->await_timed_out].shared);
 }
 
 static void leave_target(agc_task *t) {

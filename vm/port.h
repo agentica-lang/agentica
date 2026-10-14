@@ -158,6 +158,8 @@ typedef struct {
   locale_t messages_locale;
 #endif
   uint64_t hash_key[2], seed;
+  uint32_t await_done, await_timed_out;
+  bool await_found;
   _Atomic int64_t steps_left;
   _Atomic uint64_t next_task_id;
   agc_trace trace;
