@@ -10,7 +10,7 @@ Phase 6a (first evaluation, before 5e) and 6b (second evaluation, after `Result`
 
 ### Phase 6c: Agentica against typed Python
 
-Round 1 (`docs/eval.md`) found that Agentica used about 4x the tokens of Python, on tasks too easy to separate the arms by accuracy, against an untyped Python arm. It is not yet shown that agents do better in Agentica than in Python. Repeat the comparison with the current language, harder tasks and a typed Python arm. A pilot comes first, at order step 7.2.2 (decided by the owner on 2026-10-13); the full round is order step 10: after the server measurement (7j), before the decisions of step 11.
+Round 1 (`docs/eval.md`) found that Agentica used about 4x the tokens of Python, on tasks too easy to separate the arms by accuracy, against an untyped Python arm. It is not yet shown that agents do better in Agentica than in Python. Repeat the comparison with the current language, harder tasks and a typed Python arm. A pilot comes first, at order step 7.2.2 (decided by the owner on 2026-10-13); the full round is order step 10: after the server measurement (7j) and the JIT (9.1), and order step 11 (multicore) does not wait for it.
 
 - [ ] Pilot (order step 7.2.2). It needs the next two items first: the typed Python arm (today `tests/eval/run.py` has only an untyped `python` arm) and the pilot's tasks: about 20 in all, the 8 of today (t1–t8) with typed Python reference solutions, plus about 12 of the harder kinds below. Then:
   - a regression round of the `binary` arm on the VM, with the models and tasks of rounds 6 (DeepSeek) and 8 (GLM 5.3 flash), t1–t8, 3 reps per task, compared with those rounds;
@@ -22,5 +22,5 @@ Round 1 (`docs/eval.md`) found that Agentica used about 4x the tokens of Python,
 - [ ] In the full round, measure the semantic CLI of phase 26 as `docs/future/39-semantic-cli.md` §39.12 says: count its calls, and run one Agentica arm without it on the tasks that cross a program.
 - [ ] Record the results in a new section of `docs/eval.md`, with the skill commit, the checker version and the model.
 
-**Done when:** the results show, per task kind, whether agents pass more hidden tests or spend fewer tokens and repairs in Agentica than in typed Python, and the findings are listed as follow-up work (language, diagnostics or skill) before order step 11 decides.
+**Done when:** the results show, per task kind, whether agents pass more hidden tests or spend fewer tokens and repairs in Agentica than in typed Python, and the findings are listed as follow-up work (language, diagnostics or skill). Order step 11 (multicore) does not wait for them.
 
