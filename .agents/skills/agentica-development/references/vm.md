@@ -590,7 +590,7 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   `uv_run`, and libuv callbacks only set flags (tasks will also queue the
   task). N=1 today; the design target (`docs/vm/16-architecture.md` §16, rules per
   thread in `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the server
-  measurement and the evaluation round) is N scheduler threads that pull from
+  measurement, decided right after it) is N scheduler threads that pull from
   one global run queue and one I/O thread, the main thread, with the only libuv
   loop, built on split structures (read-only runtime; global run queue; the
   loop and its inbox on the I/O thread, and the registry there or shared
