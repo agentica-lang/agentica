@@ -6,7 +6,7 @@
 embedded in the VM binary. The release then ships one file: `agentica-vm`,
 renamed to `agentica`. Racket is needed only to make the first bootstrap file.
 On 2026-10-14 the owner put the port in the order: it starts at row 7.2.7 (the
-freeze of the Racket front end), after rows 8, 7.2.4 to 7.2.6 and 8.3
+freeze of the Racket front end), after rows 8 and 7.2.4 to 7.2.6
 ([§35.9](#359-order)). It settles the question that
 [§18](18-front-end-language.md) left open.
 
@@ -321,7 +321,6 @@ The port is in the order of `docs/roadmap/README.md`, decided by the owner on
 2026-10-14. It starts with step 8 of that order (row 7.2.7): that row freezes
 the Racket front end and begins step 1 of 35.4. Its prerequisites are the rows
 before it: faster lists (8d, row 8), binary data (phase 13, row 7.2.4), stack
-traces (14b, row 7.2.5), the environment and real-path builtins (row 7.2.6) and
-the VM start-up cost (row 8.3). Order step 11 no longer decides the front end,
-and the options of §18 are closed. The steps of 35.4 are PRs, not rows of the
-roadmap.
+traces (14b, row 7.2.5), and the environment and real-path builtins (row
+7.2.6). Order step 11 no longer decides the front end, and the options of §18
+are closed. The steps of 35.4 are PRs, not rows of the roadmap.

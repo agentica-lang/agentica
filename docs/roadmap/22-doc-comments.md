@@ -52,6 +52,8 @@ own tests and docs.
     - `site/content` (the tour's first page that shows comments);
     - the development skill (`references/stages.md`).
 - [ ] **22b: `agentica doc` and `help` for `std/` (§32.5, §32.6).**
+  - **Deferred until after the bootstrap**, decided by the owner on
+    2026-10-15 (row 22b of the [roadmap](README.md)).
   - **CLI:** `agentica doc PATH [--json]` for a file or a `std/` module, and
     `agentica help std/MODULE[.NAME] [--json]`. `src/main.rkt` only parses and
     prints; the work is in a new `src/docs.rkt`.

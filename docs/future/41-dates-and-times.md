@@ -2,10 +2,10 @@
 
 **Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
 section, and the roadmap order table does not place it. Its types are checker
-changes, so they land before row 7.2.7 or after the Agentica front end (41.13).
-It is VM-only and adds no grammar syntax: new builtin types and new functions of
-the existing `Time` module. Every name here is a proposal for the owner to
-review.
+changes, so they come after the Agentica front end (41.13), as the owner decided
+on 2026-10-15. It is VM-only and adds no grammar syntax: new builtin types and
+new functions of the existing `Time` module. Every name here is a proposal for
+the owner to review.
 
 Programs compute with dates and times: a due date, the timestamp of a log line
 (§24), an expiry, a time from a JSON API. Today a program has `Time.now_ms()`
@@ -366,15 +366,16 @@ The parts land under different rules:
 
 | Part | Files | Rule |
 |---|---|---|
-| Types, reserved names, the construction rule and its code | `src/builtin-types.rkt`, `src/checker.rkt`, `src/lower.rkt` (`builtin-structs`) | A checker change: before row 7.2.7, or in the Agentica front end. Not a table row. |
-| `Time.*` functions (41.3 to 41.7) | `src/builtins.rkt` rows, `src/lower.rkt` (`vm-builtins`), `vm/dates.c` | Rows are allowed after 7.2.7, and so are their names in the `vm-builtins` list of `src/lower.rkt` (the owner confirmed on 2026-10-14 that it counts as data, row 7.2.7). |
-| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt`, `vm/numbers.c` | As the functions above; independent of the types. |
+| Types, reserved names, the construction rule and its code | `src/builtin-types.rkt`, `src/checker.rkt`, `src/lower.rkt` (`builtin-structs`) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
+| `Time.*` functions (41.3 to 41.7) | `src/builtins.rkt` rows, `src/lower.rkt` (`vm-builtins`), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their rows and their `vm-builtins` names wait for it. |
+| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt`, `vm/numbers.c` | Independent of the types, so it may land at any time. After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
 
 Most of the functions return the new types, so they cannot land before the
-types. The whole of §41 therefore needs its types before row 7.2.7, or it waits
-for the Agentica front end (§35), where the same rules are written in Agentica.
-The order table is not changed by this section. If the owner schedules the types
-before the freeze, that is a new row, which the owner adds.
+types. The owner decided on 2026-10-15 that the types come after the Agentica
+front end (§35), where the same rules are written in Agentica, so the `Time.*`
+functions wait for it too. `Time.monotonic_ns` is the only part that may land
+earlier. The order table is not changed by this section; the roadmap's
+"Designed, not scheduled" paragraph says where the types wait.
 
 ### 41.14 Files and docs of the implementation PR
 

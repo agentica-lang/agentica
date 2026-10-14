@@ -79,7 +79,7 @@ Each line is a function and the place it runs: the error for the first, the call
 | `RUNTIME-UNWRAP-ERROR` | Result.unwrap! on an error |
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted; the stack shows where the loop runs |
-| `RUNTIME-STACK-OVERFLOW` | recursion too deep (depth 10000); the stack shows the repeating function once, with its count |
+| `RUNTIME-STACK-OVERFLOW` | recursion too deep (depth 10000); the stack shows the repeating function once, with its count; only `return f(...)` tail calls are free, so rewrite with an accumulator or a loop |
 | `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration, negative `Channel.send`/`Channel.recv` timeout, or a `Task.await(task, timeout_ms)` timeout of 0 or less (see `tasks.md`) |
 | `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel |
 | `RUNTIME-TASK-AWAIT-CYCLE` | `Task.await` of a task that is waiting for the caller, directly or through other awaits, at the await (see `tasks.md`) |
