@@ -34,6 +34,7 @@ make test TESTS="tests/lexer-test.rkt"    # only the tests the change touches
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make goldens                              # rewrite VM goldens after an intended change; review the diff
+make vm-golden-check FIXTURES="a b"       # CI golden check of only those fixtures; make goldens FIXTURES="a b" rewrites only them
 make dup-check                            # jscpd: a new copy fails CI; share a helper instead
 make site                                 # before merging a site change
 ```

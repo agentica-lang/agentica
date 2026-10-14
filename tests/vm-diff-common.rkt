@@ -5,6 +5,7 @@
          json
          racket/os
          racket/runtime-path
+         rackunit/log
          "cli-in-process.rkt"
          "../src/bytecode.rkt"
          "../src/checker.rkt"
@@ -22,7 +23,8 @@
          compile-file
          run-process
          run-timeout
-         fixture-arg)
+         fixture-arg
+         fixture-selected?)
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
@@ -322,6 +324,30 @@
                    #:when (path-has-extension? file #".agc"))
           file)
         path<?))
+
+(define fixture-filter
+  (let ([text (getenv "AGENTICA_FIXTURES")])
+    (and text
+         (let ([names (string-split text #px"[\\s,]+")])
+           (and (pair? names) names)))))
+
+(define (fixture-selected? name)
+  (or (not fixture-filter) (and (member name fixture-filter) #t)))
+
+(define (program-name program)
+  (path->string (path-replace-extension (file-name-from-path program) #"")))
+
+(define (select-programs programs)
+  (for/list ([program (in-list programs)] #:when (fixture-selected? (program-name program)))
+    program))
+
+(define (check-fixture-filter)
+  (when fixture-filter
+    (define known (map program-name (append (fixture-programs) (runaway-programs))))
+    (define unknown (filter (lambda (name) (not (member name known))) fixture-filter))
+    (when (pair? unknown)
+      (eprintf "vm-diff: no fixture named ~a in tests/fixtures/vm (names go without .agc)\n" (string-join unknown ", "))
+      (exit 2))))
 
 (define (runaway-programs)
   (sort (for/list ([file (in-list (directory-list (build-path fixtures "step-limited") #:build? #t))]
@@ -643,6 +669,21 @@
           (run-extras work assignment)))
       (lambda () (delete-directory/files work)))))
 
+(define (check-runaway work program)
+  (define name (fixture-name program))
+  (define bytecode (fixture-bytecode work program))
+  (define expected (read-expected program))
+  (for ([limit (in-list (append '(1 2 3 4 5 50) (list runaway-limit)))])
+    (define message (format "~a --max-steps ~a" name limit))
+    (define on-vm (run-vm bytecode limit #:timeout run-timeout))
+    (check-equal? (first on-vm) 1 message)
+    (check-true (step-limited? on-vm) message)
+    (check-false (string-contains? (second on-vm) "done") message)
+    (check-true (string-prefix? (second expected) (second on-vm)) message)
+    (check-true (string-prefix? (third expected) (third (outcome on-vm))) message)
+    (when (= limit runaway-limit)
+      (check-equal? (outcome on-vm) expected message))))
+
 (define (run-extras work assignment)
   (test-case "the shard tables name real fixtures and shards"
     (define names (map (lambda (entry) (path->string (file-name-from-path (car entry)))) assignment))
@@ -679,19 +720,7 @@
         (check-equal? (outcome (run-vm bytecode #f)) (read-expected program) name))))
   (test-case "runaway loops stop at --max-steps with a prefix of their expected output"
     (for ([program (in-list (runaway-programs))])
-      (define name (fixture-name program))
-      (define bytecode (fixture-bytecode work program))
-      (define expected (read-expected program))
-      (for ([limit (in-list (append '(1 2 3 4 5 50) (list runaway-limit)))])
-        (define message (format "~a --max-steps ~a" name limit))
-        (define on-vm (run-vm bytecode limit #:timeout run-timeout))
-        (check-equal? (first on-vm) 1 message)
-        (check-true (step-limited? on-vm) message)
-        (check-false (string-contains? (second on-vm) "done") message)
-        (check-true (string-prefix? (second expected) (second on-vm)) message)
-        (check-true (string-prefix? (third expected) (third (outcome on-vm))) message)
-        (when (= limit runaway-limit)
-          (check-equal? (outcome on-vm) expected message)))))
+      (check-runaway work program)))
   (test-case "the VM CLI checks options and stops parsing at the file"
     (define bytecode (build-path work "calls.agcb"))
     (check-equal? (first (run-vm bytecode #f "--max-steps" "1")) 0)
@@ -1192,7 +1221,30 @@
     (define limits (list 1 (sub1 total) total (last-limit expected-steps)))
     (check-sweep (for/list ([limit (in-list limits)]) (run-vm bytecode limit #:timeout run-timeout)) limits full "CRLF program")))
 
+(define (check-selected)
+  (check-fixture-filter)
+  (unless fixture-filter
+    (eprintf "vm-diff: check needs AGENTICA_FIXTURES (make vm-golden-check FIXTURES=\"name ...\")\n")
+    (exit 2))
+  (unless (vm-built?) (exit 1))
+  (define work (make-temporary-directory "agentica-vm~a"))
+  (dynamic-wind
+    void
+    (lambda ()
+      (parameterize ([tmp-root work])
+        (for ([program (in-list (select-programs (fixture-programs)))])
+          (run-fixture work program))
+        (for ([program (in-list (select-programs (runaway-programs)))])
+          (test-case (format "~a stops at --max-steps with a prefix of its expected output" (fixture-name program))
+            (check-runaway work program)))))
+    (lambda () (delete-directory/files work)))
+  (define results (test-log #:display? #f #:exit? #f))
+  (printf "vm-diff check: ~a of ~a checks failed\n" (car results) (cdr results))
+  (unless (zero? (car results))
+    (exit 1)))
+
 (define (write-goldens)
+  (check-fixture-filter)
   (unless (vm-built?) (exit 1))
   (define work (make-temporary-directory "agentica-goldens~a"))
   (define (save program result [steps #f])
@@ -1212,13 +1264,15 @@
     void
     (lambda ()
       (parameterize ([tmp-root work])
-        (for ([program (in-list (fixture-programs))])
+        (for ([program (in-list (select-programs (fixture-programs)))])
           (define bytecode (fixture-bytecode work program))
           (call-with-fixture program
                              (lambda () (save program (run-fixture-vm bytecode #f) (total-steps bytecode)))))
-        (for ([program (in-list (runaway-programs))])
+        (for ([program (in-list (select-programs (runaway-programs)))])
           (save program (run-vm (fixture-bytecode work program) runaway-limit #:timeout run-timeout)))))
     (lambda () (delete-directory/files work))))
 
 (module+ main
-  (write-goldens))
+  (if (equal? (current-command-line-arguments) #("check"))
+      (check-selected)
+      (write-goldens)))

@@ -24,6 +24,8 @@ FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the 
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
 make vm-latency                      # tests/vm-latency-test.rkt alone (see `vm-tasks.md`, Gotchas)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
+make goldens FIXTURES="name ..."     # only those fixtures (names without .agc, step-limited/ ones too); an unknown name exits 2
+make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures
 make vm-lint CLANG_TIDY=path        # clang-tidy 19+ over vm/*.c and vm/tests/*.c (release, sanitizer, GC stress); any warning fails
 make vm-unicode                      # regenerate vm/unicode_data.c with vm/tools/gen-unicode.rkt (~55 s; use Racket CS 9.3, the CI version; CI checks it is committed)
 AGENTICA_REQUIRE_VM=1 raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
@@ -102,6 +104,33 @@ racket src/main.rkt prog.agc         # front end + VM in one step (the default);
   parallel. When behaviour changes on purpose, `make goldens` rewrites the
   expected files from the VM; commit them, and the PR diff shows the change
   for review.
+- One fixture: `make vm-golden-check FIXTURES="list-sort-runs std-binary"`
+  runs the shard code (`run-fixture`; `check-runaway` for `step-limited/`
+  names) on just those fixtures, then `tests/vm-stack-test.rkt` on the ones
+  it covers, and exits non-zero with the shard failure text on a mismatch.
+  `make goldens FIXTURES="list-sort-runs"` rewrites only their `.expected`
+  and `.stack.*` files. Both pass the list (space or comma separated,
+  names without `.agc`) in `AGENTICA_FIXTURES`; a name that matches no
+  fixture exits 2, and `vm-golden-check` without `FIXTURES` exits 2. The
+  same names work by hand: `AGENTICA_FIXTURES=name racket
+  tests/vm-diff-common.rkt check`. Sidecars next to `<name>.agc`, read by
+  `call-with-fixture`:
+  - `.stdin`: bytes fed to the program's stdin.
+  - `.args`: a Racket list of strings passed as program arguments; `"@tmp"`
+    becomes a fresh temporary directory and `"@fixtures/x"` the path
+    `tests/fixtures/x`.
+  - `.env`: a Racket list of `("NAME" . "value")` pairs added to the
+    environment.
+  - `.channel`: the lines `tests/fixtures/channel-run.py` feeds the program's
+    child channel one at a time (needs `python3`).
+  - `process-` name prefix: runs with `--allow-run`.
+  - `heavy-fixtures` (in `vm-diff-common.rkt`): fixtures pinned to a shard;
+    the others rotate over shards 1 to 7 and shard 8 runs the extras.
+  - `step-limited/<name>.agc`: runaway loops, golden taken at
+    `--max-steps 500`, checked at 1 to 5, 50 and 500.
+  - `<name>.stack.plain`, `.stack.ai`, `.stack.json`: expected stderr of the
+    stack-trace fixtures in the three formats, kept by
+    `tests/vm-stack-test.rkt`.
 - The `tests/vm-diff-*-test.rkt` shards run `make -s vm` first (under a
   file lock in `build/`, since they run in parallel), print `SKIP` locally
   when the VM cannot be built, and fail in CI (`AGENTICA_REQUIRE_VM=1`).
