@@ -16,6 +16,6 @@ Specified in [`docs/future/33-digit-separators.md` section 33](../future/33-digi
     - the programming skill: one line in the lexical part of `SKILL.md`, and `LEX-INVALID-NUMBER` in the lexer-code table of `references/diagnostics.md` (around line 19);
     - `site/content/tour/numbers.md`: a short section with a complete runnable example and its `output` block;
     - the development skill: `references/stages.md`, the lexer notes and `LEX-INVALID-NUMBER` in its lexer-code table (around line 53).
-  - No CHANGELOG: the project adds none in the private alpha.
+  - CHANGELOG: an entry under `[Unreleased]` for any user-visible change.
 
 **Done when:** `1_000` and `1_000.000_5` lex to `1000` and `1000.0005`, the invalid forms give `LEX-INVALID-NUMBER` at their span, and the golden fixture and the site example pass.
