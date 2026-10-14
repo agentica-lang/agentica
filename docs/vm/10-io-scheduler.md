@@ -424,9 +424,9 @@ section says how the scheduler and the loop keep them, as built.
   callback on the loop thread completes it, which puts the job on the ready
   list. A second call does nothing.
 - **Fuzzing.** `agc_fuzz_one` sets `vm->no_files`: a file builtin (also
-  `Path.cwd` and `Path.resolve`) ends the run with `RUNTIME-INTERNAL`, and
-  `Process.spawn` returns its error. Every loop and resource is released before
-  the mutant ends.
+  `Path.cwd`, `Path.resolve` and `Path.real`) ends the run with
+  `RUNTIME-INTERNAL`, and `Process.spawn` returns its error. Every loop and
+  resource is released before the mutant ends.
 - **Stdin.** Stdin follows the same rule as files. A pipe, FIFO or terminal is
   reopened through `/proc/self/fd/N` (N is 0) with `O_NONBLOCK`, so the
   inherited open file description, which a shell's terminal shares, keeps its

@@ -127,7 +127,8 @@ none of them (the VM has `_WIN32` paths): the channel is Linux only.
   (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3`. So a parent
   that spawns without the pipe never passes an inherited marker on, and a
   grandchild sees neither the marker nor descriptor 3 unless its own parent
-  opened a channel for it.
+  opened a channel for it. `System.env` hides the same entries from the
+  program (`own_env` in `vm/process.c` decides for both).
 - **Child start.** `agc_parent_take` runs in `main.c` before the program does.
   If `AGENTICA_CHANNEL` is `3` and `fstat(3)` says socket or FIFO and
   `fcntl(F_GETFL)` says it is open for both reading and writing (an anonymous

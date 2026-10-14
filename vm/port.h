@@ -265,6 +265,7 @@ void agc_io_block_stop(sigset_t *saved);
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more);
 int agc_fd_reopen(int fd, int access);
+char *agc_real_path(const char *path, int *err);
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err);
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
 void agc_poller_pause(agc_poller *p);

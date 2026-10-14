@@ -63,7 +63,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
   input.c output.c  # stdin reader; stdout and stderr: a 64 KiB buffer and a FIFO of waiting writers per stream, written by the loop (Linux)
   duplex.c        # the child channel (fd 3 and AGENTICA_CHANNEL=3): Process.parent_read_line/parent_send, the duplex stream Process.spawn_channel uses, and the functions Test.run uses (Linux)
-  process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
+  process.c       # Process builtins on libuv pipes, behind the VM's --allow-run, and System.env (Linux)
   tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c and duplex.c
   tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
   net.h           # tcp.c's connection object (agc_conn) for other C modules

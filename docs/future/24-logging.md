@@ -33,7 +33,8 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
   another process that shares the VM's stderr can write between the parts (not a
   `Process.spawn` child, whose stderr the VM forwards through a pipe,
   `docs/vm/10-io-processes.md` §10.4).
-- There is no `System.env`: `System.env("HOME")` is `CHECK-UNKNOWN-NAME`.
+- `System.env(name)` reads one environment variable and gives a `Result` (row
+  7.2.6). There is no call that lists all of them.
 - A runtime diagnostic has one span and no call stack, in all three formats. A
   failure inside `pick`, called from `load`, called from `main`, shows only the
   line in `pick`.
@@ -160,15 +161,15 @@ System.log_time?() -> Bool       # false under --log-time none
   the time text, the formats, escaping) is Agentica code in `stdlib/log.agc`.
 - **Why flags.** Every other setting of a run is a flag (`--seed`,
   `--max-steps`, `--allow-run`), and a flag is visible in the command an agent
-  runs and in `agentica --help`. An environment variable would need a
-  `System.env` builtin first, and it leaks into every child program;
-  `System.env` stays a separate item for when a real program needs it. A logger
-  value that the program builds (`Log.new(level, format)`) and passes around was
-  the third option: it needs no builtin, but it adds a parameter to every
-  function that logs and to every task argument, agents forget to pass it, and
-  the level still has to come from somewhere outside the program. A program that
-  wants its own filter (per part of the program) can still wrap `std/log` in its
-  own functions.
+  runs and in `agentica --help`. An environment variable is not visible in the
+  command, and it leaks into every child program; `System.env` (row 7.2.6) reads
+  one for a program that needs it, but the log configuration stays a flag. A
+  logger value that the program builds (`Log.new(level, format)`) and passes
+  around was the third option: it needs no builtin, but it adds a parameter to
+  every function that logs and to every task argument, agents forget to pass it,
+  and the level still has to come from somewhere outside the program. A program
+  that wants its own filter (per part of the program) can still wrap `std/log`
+  in its own functions.
 
 **Formats.** Both write one line per call to stderr.
 

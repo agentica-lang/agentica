@@ -89,6 +89,14 @@ is not repeated here; read the file.
 - `System.args` on Linux and macOS is UTF-8 with one `?` per invalid byte, as
   glibc `iconv` gives. Non-UTF-8 locales are outside the contract, and so are
   Windows console code pages.
+- `System.env(name)` scans the process environment for the first entry
+  `name=value`. An empty name, a name with `=` or NUL, and an unset name give
+  an error Result; a set empty value gives `ok("")`. The value is decoded per
+  byte like stdin: each byte that does not start a complete valid UTF-8
+  sequence becomes one U+FFFD. The entries the VM keeps for itself are hidden
+  by the same rule that strips them from a child's environment
+  (`AGENTICA_CHANNEL` and, when the VM set it, `UV_USE_IO_URING`). It needs no
+  flag, and `--allow-run` is for starting programs only.
 - `String.code` needs exactly one code point and `String.from_code` a Unicode
   scalar value, else `RUNTIME-INVALID-CHARACTER` at the argument span (the
   receiver for `s.code`). `at` fails with `RUNTIME-INDEX-OUT-OF-RANGE` at the
@@ -219,6 +227,14 @@ Every failure is an error value. The checks run in this order:
   `Path.resolve` completes the path, drops `.`, pops `..` (never above `/`) and
   collapses `/`. The result ends in `/` when the input did, or ended in `.` or
   `..`.
+- `Path.real` is `uv_fs_realpath` (POSIX `realpath`, which allocates its
+  result, so no path length overflows a buffer) in a pool job with no
+  deadline. The path must exist; a link loop, a chain of too many links and a
+  non-directory in the middle are errors. The error is
+  `filesystem: cannot resolve path` with the path and the OS error text. An
+  empty path or one with NUL gives the contract error of `File.stat`. A
+  relative path starts at the VM's working directory. The result is decoded
+  per byte like `Dir.list` names.
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2).
