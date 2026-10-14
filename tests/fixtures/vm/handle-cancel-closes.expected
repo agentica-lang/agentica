@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 60,
+  "stdout": [
+    "error(\"network: end of input\")",
+    "parent: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/handle-cancel-closes.agc:9:15: division by zero",
+    "0",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/handle-cancel-closes.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":9},\"start\":{\"column\":15,\"line\":9}},\"task\":true}",
+    ""
+  ]
+}

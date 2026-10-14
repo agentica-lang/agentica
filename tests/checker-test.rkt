@@ -207,6 +207,35 @@
                    ("t = Task.spawn(&identity, 0)\n  t == t" CHECK-TYPE-MISMATCH))])
       (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry)))
     (check-equal? (check-code "struct Task\n  n: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
+  (test-case "Task.spawn_owning takes only a handle type and is checked like Task.spawn"
+    (define prefix (string-append "struct Job\n  socket: Socket\nend\n\n"
+                                  "def identity(n: Int) -> Int\n  return n\nend\n\n"
+                                  "def serve(socket: Socket) -> Result[String]\n  return TCP.read_line(socket, 10)\nend\n\n"
+                                  "def edit(file: FileHandle) -> Void\nend\n\n"
+                                  "def watch(p: Process) -> Void\nend\n\n"
+                                  "def pool(client: HttpClient) -> Void\nend\n\n"
+                                  "def job(j: Job) -> Void\nend\n\n"
+                                  "def many(sockets: List[Socket]) -> Void\nend\n\n"))
+    (check-ok (string-append prefix (main-with (string-append
+                                                "  socket = TCP.connect(\"127.0.0.1\", 1, 10).unwrap!\n"
+                                                "  t: Task[Result[String]] = Task.spawn_owning(&serve, socket)\n"
+                                                "  Task.await(t)\n"
+                                                "  Task.spawn_owning(&edit, File.open(\"x\", \"read\", 10).unwrap!)\n"
+                                                "  Task.spawn_owning(&watch, Process.spawn(\"x\", [], 10).unwrap!)"))))
+    (for ([entry '(("Task.spawn_owning(&identity, 1)" CHECK-NOT-A-HANDLE)
+                   ("Task.spawn_owning(&job, Job(socket: TCP.connect(\"127.0.0.1\", 1, 10).unwrap!))" CHECK-NOT-A-HANDLE)
+                   ("Task.spawn_owning(&many, [TCP.connect(\"127.0.0.1\", 1, 10).unwrap!])" CHECK-NOT-A-HANDLE)
+                   ("Task.spawn_owning(&identity, \"x\")" CHECK-TYPE-MISMATCH)
+                   ("Task.spawn_owning(7, TCP.connect(\"127.0.0.1\", 1, 10).unwrap!)" CHECK-TYPE-MISMATCH)
+                   ("Task.spawn_owning(&serve)" CHECK-ARITY)
+                   ("t: Task[String] = Task.spawn_owning(&serve, TCP.connect(\"127.0.0.1\", 1, 10).unwrap!)" CHECK-TYPE-MISMATCH))])
+      (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry) (car entry)))
+    (check-equal? (check-code (string-append prefix "def hand(client: HttpClient) -> Void\n  Task.spawn_owning(&pool, client)\nend\n\n" (main-with "")))
+                  'CHECK-NOT-A-HANDLE)
+    (define rejected (check-text (string-append prefix (main-with "  Task.spawn_owning(&identity, 1)"))))
+    (check-equal? (source-position-line (source-span-start (diagnostic-span rejected))) 29)
+    (check-equal? (source-position-column (source-span-start (diagnostic-span rejected))) 32)
+    (check-regexp-match #rx"Task.spawn" (diagnostic-help rejected)))
   (test-case "channels check their element type and stay out of data operations"
     (define prefix "struct Box\n  inbox: Channel[Int]\nend\n\ndef take(inbox: Channel[Int]) -> Result[Int]\n  return inbox.recv(10)\nend\n\ndef make() -> Channel[String]\n  return Channel.new(2)\nend\n\n")
     (check-ok (string-append prefix (main-with (string-append

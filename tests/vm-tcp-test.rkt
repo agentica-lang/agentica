@@ -144,6 +144,29 @@ end
 AGC
   )
 
+(define (owners-program ports)
+  (format
+   #<<AGC
+def boom(socket: Socket) -> Result[Int]
+  zero = 0
+  return ok(1 / zero)
+end
+
+def dial(port: Int) -> Void
+  Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
+end
+
+def main() -> Void
+  crashed = Task.spawn_owning(&boom, Result.unwrap!(TCP.connect("127.0.0.1", ~a, 5000)))
+  puts(Task.await(crashed).ok?)
+  Task.await(Task.spawn(&dial, ~a))
+  puts("ready")
+  IO.flush()
+  IO.gets()
+end
+AGC
+   (hash-ref ports 'watch) (hash-ref ports 'watch)))
+
 (define localhost-program
   #<<AGC
 def main() -> Void
@@ -293,6 +316,23 @@ AGC
             (lambda ()
               (when peer (apply stop peer peer-ports))
               (stop process out err))))
+
+        (test-case "a task closes the connections it owns when it crashes or returns, and the Node peer sees both close"
+          (with-peer
+           (lambda (ports events)
+             (define bytecode (compile-text work "owners" (owners-program ports)))
+             (define-values (process out in err) (start-vm bytecode))
+             (dynamic-wind
+               void
+               (lambda ()
+                 (check-equal? (next-line out) "false")
+                 (check-equal? (next-line out) "ready")
+                 (check-equal? (next-line events) "closed watch")
+                 (check-equal? (next-line events) "closed watch")
+                 (close-output-port in)
+                 (check-true (finished? process) "the VM program finishes")
+                 (check-equal? (subprocess-status process) 0 (port->string err)))
+               (lambda () (stop process out err))))))
 
         (test-case "a VM listener on localhost takes IPv4 and IPv6 clients"
           (define ipv6? (localhost-has-ipv6?))
