@@ -1,3 +1,9 @@
+/*
+ * Standard input, the only stdin reader: gets, read, read_bytes and eof?
+ * share one buffer. On Linux a pipe, FIFO, terminal or socket is read on the
+ * loop, and any other stdin by a pool job. Core layer. Design:
+ * docs/vm/10-io-scheduler.md §10.2.2.
+ */
 #include "core.h"
 
 #include <errno.h>

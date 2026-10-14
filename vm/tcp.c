@@ -1,3 +1,8 @@
+/*
+ * The TCP and TLS builtins (Linux only): sockets and listeners over libuv,
+ * with the TLS handshake and close_notify through tls.h. Service layer.
+ * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1.
+ */
 #include "net.h"
 
 #ifdef __linux__

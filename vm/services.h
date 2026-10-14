@@ -1,3 +1,8 @@
+/*
+ * The exports of the services: the builtin tables that builtin_tables.c lists,
+ * the entry points that the core and the driver call, and the types that the
+ * services share. Services header. Design: docs/vm/15-layers.md §15.4.
+ */
 #ifndef AGC_SERVICES_H
 #define AGC_SERVICES_H
 

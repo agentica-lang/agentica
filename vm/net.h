@@ -1,3 +1,9 @@
+/*
+ * The connection object (agc_conn) that tcp.c and the HTTP client and server
+ * share: opening with DNS, connect and TLS, watch callbacks, sends, reads and
+ * release. Service header: it includes services.h and tls.h. Design:
+ * docs/vm/10-io-http.md §10.7.1.
+ */
 #ifndef AGC_NET_H
 #define AGC_NET_H
 

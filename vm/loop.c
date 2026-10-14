@@ -1,3 +1,9 @@
+/*
+ * The event loop and the resource registry: the libuv loop that the scheduler
+ * runs, jobs on the thread pool with their timeouts, GC resources that own
+ * malloc'd memory, and the close and stop paths. Core layer. Design:
+ * docs/vm/10-io-scheduler.md §10.2.2 and docs/vm/14-core-invariants.md.
+ */
 #include "core.h"
 
 #include <inttypes.h>

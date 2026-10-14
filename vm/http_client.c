@@ -1,3 +1,9 @@
+/*
+ * HttpWire.client, exchange and close_client (Linux only): a client with its
+ * idle connections per origin and a FIFO of waiting exchanges, and the
+ * response that is built in the done half. Service layer. Design:
+ * docs/vm/10-io-http.md §10.7.1.
+ */
 #include "http_fields.h"
 #include "net.h"
 

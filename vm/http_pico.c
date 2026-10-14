@@ -1,3 +1,9 @@
+/*
+ * The HTTP head adapter: our own pre-scan and start-line checks, then
+ * picohttpparser, then the token, value, Host and status checks. The only file
+ * that includes picohttpparser.h. Adapter layer, behind http_parse.h. Design:
+ * docs/vm/10-io-http.md §10.6 and §10.6.1.
+ */
 #include "http_parse.h"
 
 #include <picohttpparser.h>

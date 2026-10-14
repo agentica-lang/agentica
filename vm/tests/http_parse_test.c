@@ -1,3 +1,7 @@
+/*
+ * The HTTP head adapter on a hostile list of requests and responses, the
+ * framing rules, and the body decoder fed whole and byte by byte.
+ */
 #include "../value.h"
 #include "../http_parse.h"
 

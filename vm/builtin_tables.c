@@ -1,3 +1,8 @@
+/*
+ * The list of every builtin library's table, in lookup order (the first match
+ * wins). A new library adds its table here and an extern in services.h.
+ * Driver layer. Design: docs/vm/15-layers.md §15.6 (V2).
+ */
 #include "core.h"
 #include "services.h"
 

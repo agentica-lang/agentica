@@ -1,3 +1,8 @@
+/*
+ * The loader: full validation of an untrusted .agcb file before any of its
+ * code runs, section by section (constants, struct and enum tables, Types,
+ * code). Core layer. Design: docs/vm/08-loader-and-cli.md §8.
+ */
 #include "core.h"
 
 #include <inttypes.h>

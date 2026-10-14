@@ -1,3 +1,7 @@
+/*
+ * Process.spawn called as a C function, then agc_io_close, in an order that
+ * releases the process guard before its process.
+ */
 #include "../core.h"
 #include "../services.h"
 

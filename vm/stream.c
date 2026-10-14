@@ -1,3 +1,8 @@
+/*
+ * What processes and TCP share: agc_inbuf, the input buffer with line reads
+ * (1 MiB limit), and the stream write and lock helpers. Service layer.
+ * Design: docs/vm/10-io-tls.md §10.3.1.
+ */
 #include "services.h"
 
 #include <stdlib.h>

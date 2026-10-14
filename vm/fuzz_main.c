@@ -1,3 +1,8 @@
+/*
+ * The plain fuzz driver (make vm-fuzz): it applies 1 to 4 mutations to a
+ * fixture and passes each mutant to agc_fuzz_one. Driver layer. Design:
+ * docs/vm/11-build-ci-supply-chain.md (Fuzzing).
+ */
 #include "core.h"
 #include "services.h"
 

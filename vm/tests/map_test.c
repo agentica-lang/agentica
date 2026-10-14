@@ -1,3 +1,7 @@
+/*
+ * The HAMT: 20,000 keys, order, replacement, persistence, full hash
+ * collisions, delete down to an empty map, and deep nesting.
+ */
 #include "../core.h"
 
 #include <assert.h>
