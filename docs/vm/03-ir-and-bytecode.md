@@ -1,10 +1,14 @@
 ## 3. IR
 
-The lowerer (`src/lower.rkt`) turns the checked program into IR. Each stage returns data or one diagnostic.
+The lowerer (`src/lower.rkt`) turns the checked program into IR. Each stage
+returns data or one diagnostic.
 
 ### 3.1 Types from the checker
 
-The checker records the type of every expression in a table (`#:types`, an `eq?` hash). The lowerer needs it for field indexes (which depend on the struct type), for `LIST_GET` or `MAP_GET`, for typed arithmetic and for unary minus. Each typed op still checks its tags at run time (4.2).
+The checker records the type of every expression in a table (`#:types`, an `eq?`
+hash). The lowerer needs it for field indexes (which depend on the struct type),
+for `LIST_GET` or `MAP_GET`, for typed arithmetic and for unary minus. Each
+typed op still checks its tags at run time (4.2).
 
 ### 3.2 Structures
 
@@ -18,9 +22,14 @@ The checker records the type of every expression in a table (`#:types`, an `eq?`
 ```
 
 - `body` is a flat list of `ir-instr` and `ir-label`. `--dump-ir` prints it.
-- Slots are the VM registers, numbered per function: parameters `0..p-1`, captures `p..p+c-1`, then locals and temporaries. Temporaries follow a stack discipline, so a call's arguments are the highest live slots (4.3).
-- `types` holds a struct's field types when every field is decodable, else `#f`. Only `JSON.decode` and `JSON.schema` read it.
-- Each instruction has a list of spans: the span its diagnostic uses (operator for arithmetic, index expression for indexing, call span for calls). A merged `step` and `call-builtin` have several (4.1).
+- Slots are the VM registers, numbered per function: parameters `0..p-1`,
+  captures `p..p+c-1`, then locals and temporaries. Temporaries follow a stack
+  discipline, so a call's arguments are the highest live slots (4.3).
+- `types` holds a struct's field types when every field is decodable, else `#f`.
+  Only `JSON.decode` and `JSON.schema` read it.
+- Each instruction has a list of spans: the span its diagnostic uses (operator
+  for arithmetic, index expression for indexing, call span for calls). A merged
+  `step` and `call-builtin` have several (4.1).
 
 ### 3.3 Lowering rules
 
@@ -54,20 +63,34 @@ The checker records the type of every expression in a table (`#:types`, an `eq?`
 | `return` | The value, or a Void constant. Inside a block it leaves the block. A direct call to a user function (local or imported) ends in `tail-call` instead of `call`, wherever the `return` is: in branches, `case` arms and loop bodies. Builtin calls, calls inside a larger expression (`return 1 + f(n)`) and `return try f(...)` are not tail calls. |
 | Assignment to an existing local | Value into a temporary, then `move`. Lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
 
-The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table only when the program names them or a checked type mentions them. Then they lower like user structs (`used-builtin-structs` in `src/lower.rkt`).
+The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
+`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table
+only when the program names them or a checked type mentions them. Then they
+lower like user structs (`used-builtin-structs` in `src/lower.rkt`).
 
 ### 3.4 Closure conversion
 
-- A block becomes an IR function named `block@file:line:col` (the source file name without its directory). Block functions follow the declared functions, in the order the lowerer meets them. Its parameters are the block parameters.
-- Its captures are the names used by a `name-ref` anywhere in its body (nested blocks included) that are visible where the block is created, in first-appearance order. This is enough because a block can only read captured variables (`CHECK-CAPTURED-ASSIGNMENT`) and no name may shadow a visible one (`CHECK-SHADOWED-NAME`).
-- At creation the captured values go into consecutive slots and `closure` copies them into the function value. This is a snapshot: a later assignment to the outer local does not reach the block.
+- A block becomes an IR function named `block@file:line:col` (the source file
+  name without its directory). Block functions follow the declared functions, in
+  the order the lowerer meets them. Its parameters are the block parameters.
+- Its captures are the names used by a `name-ref` anywhere in its body (nested
+  blocks included) that are visible where the block is created, in
+  first-appearance order. This is enough because a block can only read captured
+  variables (`CHECK-CAPTURED-ASSIGNMENT`) and no name may shadow a visible one
+  (`CHECK-SHADOWED-NAME`).
+- At creation the captured values go into consecutive slots and `closure` copies
+  them into the function value. This is a snapshot: a later assignment to the
+  outer local does not reach the block.
 - At a call, the VM copies the captures into the callee's capture slots.
-- A block returns the value of its final expression statement, or Void. `try` inside a block returns from the block.
-- `break` and `next` never cross a function or block (`CHECK-LOOP-CONTROL`), so they are plain jumps.
+- A block returns the value of its final expression statement, or Void. `try`
+  inside a block returns from the block.
+- `break` and `next` never cross a function or block (`CHECK-LOOP-CONTROL`), so
+  they are plain jumps.
 
 ### 3.5 Lowering diagnostics
 
-The lowerer and the emitter never raise. Their codes have their own prefixes, so they cannot clash with the language codes.
+The lowerer and the emitter never raise. Their codes have their own prefixes, so
+they cannot clash with the language codes.
 
 | Code | Raised by | Meaning |
 |---|---|---|
@@ -76,25 +99,36 @@ The lowerer and the emitter never raise. Their codes have their own prefixes, so
 | `BYTECODE-LIMIT` | `src/bytecode.rkt` | A function needs more than 65535 registers, or the program has more than 65535 structs or variants (4.4). |
 | `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception in `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
 
-A builtin call lowers only when its implementation key is in `vm-builtins` (`src/lower.rkt`). A builtin outside that list is `LOWER-UNSUPPORTED` at the call span. Today the list covers every catalog key.
+A builtin call lowers only when its implementation key is in `vm-builtins`
+(`src/lower.rkt`). A builtin outside that list is `LOWER-UNSUPPORTED` at the
+call span. Today the list covers every catalog key.
 
-`agentica compile` and `--dump-ir` print them like other diagnostics and exit 1. A list literal nested `d` levels deep needs about `d` registers, so nesting beyond about 65,000 levels in one literal is `BYTECODE-LIMIT`. Lowering stays linear in the depth.
+`agentica compile` and `--dump-ir` print them like other diagnostics and exit 1.
+A list literal nested `d` levels deep needs about `d` registers, so nesting
+beyond about 65,000 levels in one literal is `BYTECODE-LIMIT`. Lowering stays
+linear in the depth.
 
 ## 4. Bytecode
 
 ### 4.1 Machine model
 
-A register machine. Each function declares its register count. Locals and temporaries are registers, so the IR's slots become registers one for one. Each instruction is 8 bytes:
+A register machine. Each function declares its register count. Locals and
+temporaries are registers, so the IR's slots become registers one for one. Each
+instruction is 8 bytes:
 
 ```c
 typedef struct { uint16_t op, a, b, c; } agc_instr;   /* bx = b | (uint32_t)c << 16 */
 ```
 
-`bx` is a 32-bit index. A parallel `uint32_t` array gives each instruction one span index `s`. An instruction that needs several spans (`STEP n`, `CALL_BUILTIN`) uses the entries `s, s+1, ...` after it.
+`bx` is a 32-bit index. A parallel `uint32_t` array gives each instruction one
+span index `s`. An instruction that needs several spans (`STEP n`,
+`CALL_BUILTIN`) uses the entries `s, s+1, ...` after it.
 
 ### 4.2 Instruction set
 
-`R[x]` is a register, `K[x]` a constant. Each instruction reads values through checked accessors (5.2). A wrong tag is `RUNTIME-INTERNAL`, never undefined behavior.
+`R[x]` is a register, `K[x]` a constant. Each instruction reads values through
+checked accessors (5.2). A wrong tag is `RUNTIME-INTERNAL`, never undefined
+behavior.
 
 | Group | Opcodes | Meaning |
 |---|---|---|
@@ -110,39 +144,99 @@ typedef struct { uint16_t op, a, b, c; } agc_instr;   /* bx = b | (uint32_t)c <<
 | Result | `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b` | `TRY`: if `R[b]` is an error, return it, else `R[a]` = its value. |
 | Range | `RANGE a b c`, `RANGE_BOUNDS a b` | `RANGE` from Int `R[b]` to `R[b+1]`, `c` 0 for `..`, 1 for `...`. `RANGE_BOUNDS`: first value into `R[a]`, last included value into `R[a+1]`, non-empty flag into `R[a+2]`. |
 
-There are 49 opcodes. Everything else, including `ok`, `error`, `puts` and every module function, is a builtin. Opcode numbers are positions in one list shared by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h`. New opcodes are appended at the end. An appended opcode does not bump the format version, and an older VM rejects it as unknown.
+There are 49 opcodes. Everything else, including `ok`, `error`, `puts` and every
+module function, is a builtin. Opcode numbers are positions in one list shared
+by `opcodes` in `src/bytecode.rkt` and `agc_opcode` in `vm/value.h`. New opcodes
+are appended at the end. An appended opcode does not bump the format version,
+and an older VM rejects it as unknown.
 
 Details that code and tests rely on:
 
-- `EQ` and `NE` accept pairs of Int, Float, Bool, Nil, String or Range (ranges by start, end and kind). Other pairs are `RUNTIME-INTERNAL`. The checker allows `==` only on those types, so lists, maps, structs, enums and Results never reach `EQ` or `SAME`.
-- `SAME` is false when the tags differ. Float compares by `eqv?`, so `-0.0` does not match `0.0` and NaN matches NaN.
-- `LIST` copies its window into a new immutable list. `LIST_GET` checks `0 <= i < len` on the int64 before using it.
-- `MAP` puts its `c <= 255` pairs in order with the rule of `Map.put`: a repeated key keeps its first position and takes the last value. A key that is not Int or String (only in a hand-made file) is `RUNTIME-INTERNAL`.
-- `STRUCT` and `ENUM` take their sizes from the tables. A nullary `ENUM` returns the variant's shared value. `IS_VARIANT` compares the global variant id, which is unique per enum declaration.
-- `FIELD` and `PAYLOAD` read item `c` of the value's own `n`. Past it is `RUNTIME-INTERNAL`.
-- An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in functions that return Result).
-- `CALL_VALUE` checks that `R[a]` is a function value whose function takes exactly `b` parameters and has as many captures as the value holds.
+- `EQ` and `NE` accept pairs of Int, Float, Bool, Nil, String or Range (ranges
+  by start, end and kind). Other pairs are `RUNTIME-INTERNAL`. The checker
+  allows `==` only on those types, so lists, maps, structs, enums and Results
+  never reach `EQ` or `SAME`.
+- `SAME` is false when the tags differ. Float compares by `eqv?`, so `-0.0` does
+  not match `0.0` and NaN matches NaN.
+- `LIST` copies its window into a new immutable list. `LIST_GET` checks
+  `0 <= i < len` on the int64 before using it.
+- `MAP` puts its `c <= 255` pairs in order with the rule of `Map.put`: a
+  repeated key keeps its first position and takes the last value. A key that is
+  not Int or String (only in a hand-made file) is `RUNTIME-INTERNAL`.
+- `STRUCT` and `ENUM` take their sizes from the tables. A nullary `ENUM` returns
+  the variant's shared value. `IS_VARIANT` compares the global variant id, which
+  is unique per enum declaration.
+- `FIELD` and `PAYLOAD` read item `c` of the value's own `n`. Past it is
+  `RUNTIME-INTERNAL`.
+- An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of
+  the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in
+  functions that return Result).
+- `CALL_VALUE` checks that `R[a]` is a function value whose function takes
+  exactly `b` parameters and has as many captures as the value holds.
 
 ### 4.3 Calls, call windows and resumable builtins
 
-- `CALL a bx` starts the callee's frame at the caller's `R[a]`, so the arguments are already its parameters. The result lands in `R[a]`. `CALL_VALUE` does the same one register higher and checks the parameter count at run time; a closure's captures follow the parameters. The lowerer keeps call windows at the top of the live registers. A corrupt file that breaks this mixes up values but stays memory safe.
-- `TAIL_CALL a bx` replaces the current frame. It grows the registers if the callee needs more, moves the arguments down to the frame's base and jumps to the callee. The callee's `RETURN` writes the result register of the `CALL` that made the frame. `CALL`, `RETURN` and `TAIL_CALL` charge no steps. The lowering puts the same `step`s before a tail call as before a call, so step counts do not change.
-- `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` are resumable builtins. `CALL_BUILTIN` pushes a native frame whose state lives in a GC object that bytecode cannot reach. The interpreter pushes each callback as a normal frame and resumes the native frame when the callback returns. No builtin calls the interpreter from C, so a task can block inside a callback. Iteration is bounded by the list length. `sort_by` collects all keys first, then sorts.
-- `File.each_line` is a resumable builtin that also parks between callbacks (a stepper). `CALL_BUILTIN` runs the builtin function, which checks its arguments and installs a step function on the task; then the interpreter pushes a native frame. Each time that frame runs, the step function says what comes next: call the block with a String, park the task while a read or the final close runs, or end with the Result. What a callback or a woken job produced is given back to the step function, so no C code calls the interpreter and the task can block inside the callback, like the `List` builtins. A native frame on top of the call stack is resumed at the start of the task's next turn. Each block call costs one step, charged as for the other native frames, and the turn cost of the bytes read.
-- `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native frames. Before each callback they charge one step at the call span, the same check as `STEP`. They stop by comparing with the last value before adding, so counting up to the largest Int never overflows, and memory stays O(1).
+- `CALL a bx` starts the callee's frame at the caller's `R[a]`, so the arguments
+  are already its parameters. The result lands in `R[a]`. `CALL_VALUE` does the
+  same one register higher and checks the parameter count at run time; a
+  closure's captures follow the parameters. The lowerer keeps call windows at
+  the top of the live registers. A corrupt file that breaks this mixes up values
+  but stays memory safe.
+- `TAIL_CALL a bx` replaces the current frame. It grows the registers if the
+  callee needs more, moves the arguments down to the frame's base and jumps to
+  the callee. The callee's `RETURN` writes the result register of the `CALL`
+  that made the frame. `CALL`, `RETURN` and `TAIL_CALL` charge no steps. The
+  lowering puts the same `step`s before a tail call as before a call, so step
+  counts do not change.
+- `List.map`, `filter`, `reduce`, `each`, `any?`, `all?` and `sort_by` are
+  resumable builtins. `CALL_BUILTIN` pushes a native frame whose state lives in
+  a GC object that bytecode cannot reach. The interpreter pushes each callback
+  as a normal frame and resumes the native frame when the callback returns. No
+  builtin calls the interpreter from C, so a task can block inside a callback.
+  Iteration is bounded by the list length. `sort_by` collects all keys first,
+  then sorts.
+- `File.each_line` is a resumable builtin that also parks between callbacks (a
+  stepper). `CALL_BUILTIN` runs the builtin function, which checks its arguments
+  and installs a step function on the task; then the interpreter pushes a native
+  frame. Each time that frame runs, the step function says what comes next: call
+  the block with a String, park the task while a read or the final close runs,
+  or end with the Result. What a callback or a woken job produced is given back
+  to the step function, so no C code calls the interpreter and the task can
+  block inside the callback, like the `List` builtins. A native frame on top of
+  the call stack is resumed at the start of the task's next turn. Each block
+  call costs one step, charged as for the other native frames, and the turn cost
+  of the bytes read.
+- `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
+  frames. Before each callback they charge one step at the call span, the same
+  check as `STEP`. They stop by comparing with the last value before adding, so
+  counting up to the largest Int never overflows, and memory stays O(1).
 - Native frames do not count toward call depth (6.1).
 
 ### 4.4 Steps
 
-The emitter merges adjacent `step`s with no label between them into one `STEP n`, and splits runs above 65535 because the count is 16 bits. Struct and variant ids are 16-bit operands too, so more than 65535 of either is `BYTECODE-LIMIT`. Any change to charge points is allowed if every loop and recursion still charges at least one step per round, so a runaway program still stops with `RUNTIME-STEP-LIMIT`. The optimization items are in `docs/roadmap/07-vm.md`.
+The emitter merges adjacent `step`s with no label between them into one
+`STEP n`, and splits runs above 65535 because the count is 16 bits. Struct and
+variant ids are 16-bit operands too, so more than 65535 of either is
+`BYTECODE-LIMIT`. Any change to charge points is allowed if every loop and
+recursion still charges at least one step per round, so a runaway program still
+stops with `RUNTIME-STEP-LIMIT`. The optimization items are in
+`docs/roadmap/07-vm.md`.
 
 ### 4.5 Builtin imports
 
-The file lists the builtins it uses as `(key, arity)`. The key is the implementation key in `src/builtins.rkt`, not the written name: `puts` and `IO.puts` both import `"puts"`. Overloads such as `Map.get` and `ok` are separate entries by arity. The loader resolves each pair against the C table and rejects unknown pairs. There are no internal helper builtins: `List.concat`, which the lowerer emits for long list literals, is the catalog builtin of that name.
+The file lists the builtins it uses as `(key, arity)`. The key is the
+implementation key in `src/builtins.rkt`, not the written name: `puts` and
+`IO.puts` both import `"puts"`. Overloads such as `Map.get` and `ok` are
+separate entries by arity. The loader resolves each pair against the C table and
+rejects unknown pairs. There are no internal helper builtins: `List.concat`,
+which the lowerer emits for long list literals, is the catalog builtin of that
+name.
 
 ### 4.6 File format
 
-All integers are little-endian. `str` is a `u32` byte length plus UTF-8 bytes. Sections come in this fixed order. Each starts with a `u32` count, except the header and the entry.
+All integers are little-endian. `str` is a `u32` byte length plus UTF-8 bytes.
+Sections come in this fixed order. Each starts with a `u32` count, except the
+header and the entry.
 
 | Section | Entry |
 |---|---|
@@ -157,7 +251,16 @@ All integers are little-endian. `str` is a `u32` byte length plus UTF-8 bytes. S
 | Functions | `str` name, `u32` params, captures, registers, span, instruction count, the instructions, then one `u32` span index per instruction |
 | Entry | `u32` index of `main` |
 
-- The Sources section embeds the full source texts, so the VM prints diagnostics without reading files. A linked program has one entry per file a span points into: the entry file first, then the others in the order the lowerer meets them. Each keeps the name the front end gave it (`std/` modules by their `std/...` key), so a diagnostic in imported code names that file.
-- Only struct entries can make cycles in the Types section, and they go through the decodable struct records. `src/bytecode.rkt` interns each distinct type once, children first. A program without a JSON type argument writes two zero counts.
-- The VM accepts only its own format version and Agentica version (8). Any change to the layout or to an opcode's meaning bumps the format version.
-- The C loader is the only reader of this format. There is no Racket reader, and no compatibility shims: the Racket side and the VM ship together.
+- The Sources section embeds the full source texts, so the VM prints diagnostics
+  without reading files. A linked program has one entry per file a span points
+  into: the entry file first, then the others in the order the lowerer meets
+  them. Each keeps the name the front end gave it (`std/` modules by their
+  `std/...` key), so a diagnostic in imported code names that file.
+- Only struct entries can make cycles in the Types section, and they go through
+  the decodable struct records. `src/bytecode.rkt` interns each distinct type
+  once, children first. A program without a JSON type argument writes two zero
+  counts.
+- The VM accepts only its own format version and Agentica version (8). Any
+  change to the layout or to an opcode's meaning bumps the format version.
+- The C loader is the only reader of this format. There is no Racket reader, and
+  no compatibility shims: the Racket side and the VM ship together.
