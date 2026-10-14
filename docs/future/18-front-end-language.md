@@ -18,7 +18,7 @@
 
 **Near-term path, without a rewrite:** release one Linux file built with `raco exe --orig-exe`, with the VM embedded, on an older glibc baseline. `compile` plus `agentica-vm` already avoid Racket at run time. What is missing is that `--vm` compiles to a new temporary file on each run (`src/main.rkt`); it should reuse a cached `.agcb` keyed by the source and the compiler version. Agentica itself is `Apache-2.0 WITH LLVM-exception`. The file embeds Racket and the VM, so its archive ships Agentica's `LICENSE` and `NOTICE` next to the file, with a `licenses/` directory for the third-party licenses (Racket's and Chez Scheme's `NOTICE` among them); an `agentica --licenses` command that prints them is an option for later.
 
-**When to look again:** a single file does not need a rewrite. The remaining reasons to change the front-end language are startup time and binary size. Look again once the grammar is stable, and only if those measurements still hurt. The roadmap takes this decision in its order step 11, with the source → result start-up (the 7g runners and the server measurement, 7j) and the typed-Python evaluation round (6c); like the multicore schedulers, a rewrite starts only if those numbers call for it.
+**When to look again:** a single file does not need a rewrite. The remaining reasons to change the front-end language are startup time and binary size. Look again once the grammar is stable, and only if those measurements still hurt. The front end itself is decided: self-hosting, long-term, after the current order ([§35](35-self-hosting.md)). Order step 11 decides only the multicore schedulers.
 
 **Options then:**
 

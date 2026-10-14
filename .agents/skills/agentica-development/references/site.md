@@ -30,8 +30,9 @@ rule that a site page shows.
 ## Content
 
 - The user docs live in `site/content`: Getting started, the Language tour
-  in `tour/`, the Library in `library/`, and `vm.md`, a top-level page on the
-  Aurora VM and its libraries.
+  in `tour/`, the Library in `library/`, `vm.md`, a top-level page on the
+  Aurora VM and its libraries, and `design.md`, a short summary of the main
+  design decisions and why each was taken.
 - The Library is grouped by topic: `library/TOPIC/_index.md` (a short intro
   that says which form fits which job) and one page per builtin module in
   `library/TOPIC/NAME.md`, plus the `algorithms.md` page of runnable recipes.
