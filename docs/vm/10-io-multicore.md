@@ -172,8 +172,8 @@ needs it.
     single-threaded), the fuzz harness statics in `vm/fuzz.c` and
     `vm/fuzz_main.c`, and `wide_args` in `vm/main.c` (Windows, set once before
     any scheduler starts);
-  - the block-scope `extern char **environ` in `vm/process.c`, read but never
-    written;
+  - the block-scope `extern char **environ` in `host_env` of `vm/process.c`,
+    read but never written (the child's environment and `System.env` read it);
   - the stop state `stop` in `vm/loop.c` (lock-free atomics, a pid and the wake
     handle), since a signal handler gets no context (10.2.2, Stop signals).
     Already moved out of globals: the `ready` flag of `agc_init` (Boehm's

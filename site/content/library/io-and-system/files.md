@@ -11,7 +11,7 @@ permissions of the user who runs them.
 Calls on regular files run on a pool of threads, 4 by default, which DNS lookups and loading TLS certificates share. When a program keeps many file calls going at once in several tasks, later calls wait for a free thread. To raise the size, set the `UV_THREADPOOL_SIZE` environment variable (at most 1024) when you start the program, for example `UV_THREADPOOL_SIZE=16 agentica app.agc`; setting it later has no effect. Calls on pipes, FIFOs and terminals do not use the pool: they wait on the program's event loop, so their timeout always ends the wait, and `File.read_text` of a pipe reads until the writer closes it.
 
 The examples on this page touch the disk, so they are checked but not run
-here.
+here, except the one of `Path.real`.
 
 ## File.write_text
 
@@ -258,4 +258,24 @@ def main() -> Void
   puts(Path.cwd())
   puts(Path.resolve("notes.txt"))
 end
+```
+
+## Path.real
+
+```text
+Path.real(path: String) -> Result[String]
+```
+
+Gives the absolute path with every symbolic link resolved, `.` and `..` removed and repeated separators collapsed, as POSIX `realpath` does. Unlike `resolve`, it reads the disk, so the path must exist: a missing path, a loop of links and a name that is not a directory are errors. A relative path starts at the current directory. In the result, each byte that is not part of a valid UTF-8 sequence becomes U+FFFD. The call has no timeout argument; it runs in the file thread pool and does not stop other tasks.
+
+```agentica
+def main() -> Void
+  puts(Path.real("/"))
+  puts(Path.real("/does/not/exist").ok?)
+end
+```
+
+```output
+ok("/")
+false
 ```

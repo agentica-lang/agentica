@@ -607,17 +607,25 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
   return argv;
 }
 
-static char **child_env(bool drop_uring, char *marker) {
+static char **host_env(void) {
   extern char **environ; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+  return environ;
+}
+
+static bool own_env(bool drop_uring, const char *entry) {
+  bool uring = drop_uring && strncmp(entry, URING_ENV, sizeof URING_ENV - 1) == 0;
+  return uring || strncmp(entry, CHANNEL_PREFIX, sizeof CHANNEL_PREFIX - 1) == 0;
+}
+
+static char **child_env(bool drop_uring, char *marker) {
+  char **host = host_env();
   size_t n = 0;
-  while (environ[n]) n++;
+  while (host[n]) n++;
   char **env = calloc(agc_size_add(n, 2), sizeof(char *));
   if (!env) agc_out_of_memory();
   size_t kept = 0;
-  for (size_t k = 0; k < n; k++) {
-    bool uring = drop_uring && strncmp(environ[k], URING_ENV, sizeof URING_ENV - 1) == 0;
-    if (!uring && strncmp(environ[k], CHANNEL_PREFIX, sizeof CHANNEL_PREFIX - 1) != 0) env[kept++] = environ[k];
-  }
+  for (size_t k = 0; k < n; k++)
+    if (!own_env(drop_uring, host[k])) env[kept++] = host[k];
   if (marker) env[kept] = marker;
   return env;
 }
@@ -1015,6 +1023,21 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_result_value(true, agc_string_value(text));
 }
 
+static agc_value builtin_env(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_string *name = agc_as_string(vm, args[0]);
+  if (name->bytes == 0 || !no_nul(name) || memchr(name->data, '=', name->bytes))
+    return agc_error_value("system: environment variable name must be nonempty and cannot contain = or NUL");
+  for (char **entry = host_env(); *entry; entry++) {
+    if (strncmp(*entry, name->data, name->bytes) != 0 || (*entry)[name->bytes] != '=') continue;
+    if (own_env(vm->rt->drop_uring_env, *entry)) break;
+    const char *value = *entry + name->bytes + 1;
+    agc_string *text = agc_utf8_decode((const uint8_t *)value, strlen(value), "\xEF\xBF\xBD", false);
+    return agc_result_value(true, agc_string_value(text));
+  }
+  return agc_error_value("system: environment variable is not set");
+}
+
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -1031,6 +1054,7 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"System.env", 1, builtin_env, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

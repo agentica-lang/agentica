@@ -99,6 +99,48 @@
   (check-true (and finished #t) (format "the VM ends within ~a s" vm-wait-seconds))
   (list (subprocess-status process) output))
 
+(define-runtime-path os-peer "fixtures/os-peer.py")
+
+(define os-program
+  (string-append
+   "def line(r: Result[String]) -> String\n"
+   "  if r.ok?\n    return \"ok:\" + Result.unwrap!(r)\n  end\n  return \"error\"\nend\n\n"
+   "def main() -> Void\n  args = System.args()\n  for item in args.drop(1)\n"
+   "    if args[0] == \"real\"\n      puts(line(Path.real(item)))\n    else\n      puts(line(System.env(item)))\n    end\n"
+   "  end\nend\n"))
+
+(define (os-lines mode items #:directory [directory (current-directory)]
+                  #:environment [environment (current-environment-variables)])
+  (define file (make-temporary-file "agentica-os~a.agc"))
+  (define result
+    (dynamic-wind
+      void
+      (lambda ()
+        (display-to-file os-program file #:exists 'truncate)
+        (parameterize ([current-directory directory])
+          (apply run-main-in-process #:environment environment (path->string file) mode items)))
+      (lambda () (delete-file file))))
+  (check-equal? (first result) 0)
+  (string-split (second result) "\n"))
+
+(define (os-peer-lines mode items #:directory [directory (current-directory)]
+                       #:environment [environment (current-environment-variables)])
+  (define output
+    (parameterize ([current-directory directory] [current-environment-variables environment])
+      (with-output-to-bytes
+        (lambda ()
+          (check-true (apply system* python "-I" (path->string os-peer) mode items))))))
+  (string-split (bytes->string/utf-8 output) "\n"))
+
+(define (brief lines)
+  (for/list ([line (in-list lines)]) (if (> (string-length line) 200) (string-length line) line)))
+
+(define (os-environment pairs)
+  (define env (environment-variables-copy (current-environment-variables)))
+  (for ([pair (in-list pairs)])
+    (environment-variables-set! env (car pair) (cdr pair)))
+  env)
+
 (module+ test
   (test-case "the run waits for the close of a crashed task's file, so its buffered write reaches the disk"
     (with-temp-dir
@@ -482,6 +524,73 @@
        (check-equal? result (void))
        (check-true (string-contains? output "ok(\"\")"))
        (check-true (string-contains? output "ok(\"linked\")")))))
+
+  (test-case "Path.real gives what Python's os.path.realpath gives through link chains, loops and long paths"
+    (when (python-ready? "Path.real peer")
+      (with-temp-dir
+       (lambda (directory)
+         (define root (string->path directory))
+         (define (in . parts) (apply build-path root parts))
+         (make-directory* (in "real" "dir"))
+         (display-to-file "data" (in "real" "dir" "file.txt"))
+         (for ([link (in-list '(("../real/dir/file.txt" "real" "rel") ("../.." "real" "dir" "up") ("real/dir" "link2")
+                                ("link2" "link1") ("loop2" "loop1") ("loop1" "loop2") ("nowhere" "dangling")
+                                ("." "self") ("/" "slash") ("link1/file.txt" "file-link")))])
+           (make-file-or-directory-link (car link) (apply in (cdr link))))
+         (make-file-or-directory-link (path->string (in "real" "dir")) (in "abs"))
+         (define (repeat part) (string-append* (for/list ([_ (in-range 1500)]) part)))
+         (define items
+           (append '("." "./" ".." "../" "real" "real/" "real/dir/file.txt" "real/dir/../dir/./file.txt" "real/rel"
+                     "real/dir/up" "real/dir/up/real" "link1" "link1/" "link1/file.txt" "link1/.." "link2/../rel"
+                     "abs" "abs/file.txt" "abs/../rel" "file-link" "loop1" "loop1/x" "dangling" "dangling/x" "self"
+                     "self/self/self/real" "slash" "slash/" "slash/." "missing" "real/missing" "real/dir/file.txt/x")
+                   (list (string-append directory "/link1/file.txt") (string-append directory "/link1/../rel")
+                         (string-append "real" (repeat "/dir/.."))
+                         (string-append "real/dir" (repeat "/../dir")))))
+         (define seen (os-lines "real" items #:directory root))
+         (check-equal? seen (os-peer-lines "real" items #:directory root))
+         (define table (for/hash ([item (in-list items)] [line (in-list seen)]) (values item line)))
+         (define real-root (substring (hash-ref table ".") 3))
+         (define (ok-at suffix) (string-append "ok:" real-root suffix))
+         (check-equal? (hash-ref table "link1") (ok-at "/real/dir"))
+         (check-equal? (hash-ref table "link1/file.txt") (ok-at "/real/dir/file.txt"))
+         (check-equal? (hash-ref table "link1/..") (ok-at "/real"))
+         (check-equal? (hash-ref table "abs/../rel") (ok-at "/real/dir/file.txt"))
+         (check-equal? (hash-ref table "real/dir/up") (ok-at ""))
+         (check-equal? (hash-ref table "slash") "ok:/")
+         (check-equal? (hash-ref table "loop1") "error")
+         (check-equal? (hash-ref table "dangling") "error")
+         (check-equal? (hash-ref table "real/dir/file.txt/x") "error")
+         (check-equal? (list-ref seen (- (length items) 2)) (ok-at "/real"))
+         (check-equal? (last seen) (ok-at "/real/dir"))))))
+
+  (test-case "System.env gives what Python's os.environ gives, decoding bytes that are not UTF-8 with U+FFFD"
+    (when (python-ready? "System.env peer")
+      (define environment
+        (os-environment
+         (list (cons #"AGC_PEER_SET" #"plain") (cons #"AGC_PEER_EMPTY" #"") (cons #"AGC_PEER_EQ" #"x=y=")
+               (cons #"AGC_PEER_SPACE" #"  padded  ") (cons #"AGC_PEER_UNI" (string->bytes/utf-8 "héllo ✓ 日本"))
+               (cons #"AGC_PEER_BAD" #"a\377b") (cons #"AGC_PEER_BAD2" #"\303(") (cons #"AGC_PEER_BAD3" #"x\342\202")
+               (cons #"AGC_PEER_LONG" (make-bytes 100000 118)))))
+      (define items
+        '("AGC_PEER_SET" "AGC_PEER_EMPTY" "AGC_PEER_EQ" "AGC_PEER_SPACE" "AGC_PEER_UNI" "AGC_PEER_BAD" "AGC_PEER_BAD2"
+          "AGC_PEER_BAD3" "AGC_PEER_LONG" "AGC_PEER_UNSET" "agc_peer_set" "AGC_PEER" "AGC_PEER_SET_" "" "="
+          "AGC_PEER_SET=plain"))
+      (define seen (os-lines "env" items #:environment environment))
+      (check-equal? (brief seen) (brief (os-peer-lines "env" items #:environment environment)))
+      (check-equal? (take seen 3) '("ok:plain" "ok:" "ok:x=y="))
+      (check-equal? (list-ref seen 5) "ok:a�b")
+      (check-equal? (list-tail seen 9)
+                    '("error" "error" "error" "error" "error" "error" "error"))))
+
+  (test-case "System.env does not show the variables the VM keeps for itself"
+    (define (seen environment) (first (os-lines "env" '("UV_USE_IO_URING") #:environment environment)))
+    (define without (environment-variables-copy (current-environment-variables)))
+    (environment-variables-set! without #"UV_USE_IO_URING" #f)
+    (check-equal? (seen without) "error")
+    (check-equal? (seen (os-environment (list (cons #"UV_USE_IO_URING" #"1")))) "ok:1")
+    (define marker (os-environment (list (cons #"AGENTICA_CHANNEL" #"3"))))
+    (check-equal? (first (os-lines "env" '("AGENTICA_CHANNEL") #:environment marker)) "error"))
 
   (test-case "the end of a run flushes and closes an unclosed file handle"
     (with-temp-dir

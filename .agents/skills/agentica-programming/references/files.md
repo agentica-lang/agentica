@@ -20,6 +20,7 @@ Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
 Path.cwd() -> Result[String]
 Path.join(parts: List[String]) -> Result[String]
 Path.resolve(path: String) -> Result[String]
+Path.real(path: String) -> Result[String]
 ```
 
 ## Opening and reading
@@ -30,7 +31,7 @@ Path.resolve(path: String) -> Result[String]
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF before any line, or invalid UTF-8, is an error.
 - `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes: Int, modified_seconds: Int)`; directory sizes are zero.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates parents and succeeds if the directory exists.
-- `Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path without resolving symlinks.
+- `Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path without resolving symlinks. `Path.real` resolves every symlink like POSIX `realpath`: the path must exist (else an error), a relative path starts at the current directory, and it has no timeout argument.
 - `File.read_text` of a pipe reads to EOF. A FIFO with no writer gives EOF; opening one for writing with no reader is an error.
 
 ## Streaming lines
