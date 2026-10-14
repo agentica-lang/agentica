@@ -6,7 +6,7 @@
 - The empty list `[]` and the empty map `{}`.
 - The empty `Set` once `Set[T]` lands (8b, §12.2). Sets do not exist yet; the set PR adds its entry to the table.
 
-Ints are not part of this. An `agc_value` (`vm/agc.h:36-39`) holds `Int`, `Float`, `Bool` and `nil` inline in 16 bytes and never allocates them, so a small-int cache would save nothing.
+Ints are not part of this. An `agc_value` (`vm/value.h:29-32`) holds `Int`, `Float`, `Bool` and `nil` inline in 16 bytes and never allocates them, so a small-int cache would save nothing.
 
 ### 34.1 Today
 

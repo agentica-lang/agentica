@@ -10,7 +10,7 @@ Checked at `099daa3`:
 
 - Any runtime diagnostic in any task ends the whole run. `agc_fail` (`vm/interp.c:18-27`) stores the outcome in the runtime and `longjmp`s to the one `setjmp` of the run, in `agc_vm_run` (`vm/task.c:134-170`). `System.exit` (`agc_exit`, `vm/interp.c:40-44`) takes the same path. `docs/vm/10-io-scheduler.md` §10.2.1 ("As built", "Cancellation") records it.
 - `Task.await(task: Task[R]) -> R` returns the task's result; there is no error path (`builtin_await`, `vm/task.c:183-190`).
-- A task records no parent and no children (`struct agc_task`, `vm/agc.h:333-350`). Handles belong to the scheduler's resource registry, not to a task; they all close at the end of the run (§10.2).
+- A task records no parent and no children (`struct agc_task`, `vm/port.h`). Handles belong to the scheduler's resource registry, not to a task; they all close at the end of the run (§10.2).
 - HTTP 20b ([roadmap](../roadmap/20-hybrid-http.md), [`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1) plans the parent and children links and `agc_task_cancel`, with no public API.
 
 ### 37.2 Why this is safe in Agentica

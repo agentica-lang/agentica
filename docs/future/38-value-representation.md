@@ -8,7 +8,7 @@ The owner asked whether `agc_value` could be smaller than 16 bytes. This note re
 
 Checked at `8be2ffa`:
 
-- `agc_value` (`vm/agc.h:36-39`, `docs/vm/05-values-execution-builtins.md` §5) is a `uint32_t tag` plus an 8-byte union of `bool`, `int64_t`, `double` and `void *`. That is 12 bytes of data and 4 of padding, so 16 bytes, passed by value. The VM has 20 tags (`vm/agc.h:32-34`).
+- `agc_value` (`vm/value.h:29-32`, `docs/vm/05-values-execution-builtins.md` §5) is a `uint32_t tag` plus an 8-byte union of `bool`, `int64_t`, `double` and `void *`. That is 12 bytes of data and 4 of padding, so 16 bytes, passed by value. The VM has 20 tags (`vm/value.h:25-27`).
 - Under the SysV x86-64 ABI a 16-byte struct of two eightbytes travels in two registers, in and out of a call.
 - `Int` and `Float` never allocate. `Int` is a signed 64-bit integer, and overflow is a runtime error (`docs/grammar.md`).
 - Memory is managed by the Boehm GC, which is conservative: it treats any word that looks like a pointer into the heap as one. Pointers are never tagged (`docs/vm/05-values-execution-builtins.md` §5.3).

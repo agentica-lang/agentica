@@ -30,6 +30,10 @@ comment), then a step that calls it. Targets that are not obvious:
   tests on that binary.
 - `vm-lint` includes the clang-tidy 19 version check; `vm-trace-off` builds
   with `TRACE=0` and checks `--version`.
+- `vm-layers` (Linux only; needs `rg` and `nm`) builds the VM, compiles each
+  `vm/*.h` on its own, runs `vm/tools/check-layers.sh` on the objects of the
+  mode (`docs/vm/15-layers.md` §15.5) and its self-test. A new `vm/*.c` file
+  goes in one list of the script.
 - `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
   Racket tests that run against the VM in the sanitizer job. They and
   `vm-diff-test` do not depend on `vm` on purpose: they test the VM that an
@@ -60,7 +64,8 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   may run beside it.
 - `dup-check` as a job runs only on `master` pushes (it saves the npm cache).
 - `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
-  `make vm-lint`, one `make -j vm vm-test vm-fuzz`, the ASan golden,
+  `make vm-lint`, one `make -j vm vm-test vm-fuzz`, `make vm-layers` (on the
+  sanitizer objects; the job installs ripgrep if `rg` is missing), the ASan golden,
   bytecode, trace, TCP and TLS tests, and the GC stress build. The TCP tests need
   Node; the TLS tests need Node and Python 3. Both PR jobs set
   `AGENTICA_SWEEP=sampled`, so their golden and GC-stress runs sample the
@@ -184,7 +189,7 @@ versions and the Racket bundle are in SKILL.md, "Releases".
 
 ## Copy-paste check (jscpd)
 
-- `make dup-check` runs jscpd over `src/*.rkt`, `vm/*.c`, `vm/agc.h` and
+- `make dup-check` runs jscpd over `src/*.rkt`, `vm/*.c`, `vm/*.h` and
   `vm/tests/*.c` with `.jscpd.json`.
 - jscpd is pinned with its whole dependency tree by
   `tools/jscpd/package-lock.json` and installed by `npm ci --ignore-scripts`
