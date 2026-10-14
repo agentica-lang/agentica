@@ -13,6 +13,7 @@ struct agc_channel {
   size_t reserved_values, reserved_slots;
   uint64_t sent;
   bool closed;
+  agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
 };
 
@@ -221,14 +222,26 @@ static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
   return wait(vm, c, t, timeout, false);
 }
 
-static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  agc_channel *c = agc_as_channel(vm, args[0]);
-  if (c->closed) return agc_void();
+static void shut(agc_vm *vm, agc_channel *c) {
+  if (c->closed) return;
   c->closed = true;
+  if (c->state) {
+    agc_unregister(vm, c->state);
+    c->state = NULL;
+  }
   c->reserved_slots = 0;
   agc_task_wake_all(vm, &c->senders, &c->senders_tail, "channel");
   drained(vm, c);
+}
+
+static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
+  (void)ender;
+  shut(vm, agc_as_channel(vm, r->context));
+}
+
+static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  shut(vm, agc_as_channel(vm, args[0]));
   return agc_void();
 }
 
@@ -236,6 +249,16 @@ static agc_value builtin_closed(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_channel *c = agc_as_channel(vm, args[0]);
   return agc_bool(c->closed && c->count == 0 && c->reserved_values == 0);
+}
+
+agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
+  if (c->closed) return NULL;
+  if (!c->state) {
+    c->state = agc_register(vm, NULL, NULL);
+    c->state->close = close_owned;
+    c->state->context = agc_channel_value(c);
+  }
+  return !c->state->owner || c->state->owner == vm->task ? c->state : NULL;
 }
 
 void agc_channel_leave(agc_vm *vm, agc_task *t) {

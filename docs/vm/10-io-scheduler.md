@@ -394,6 +394,13 @@ section says how the scheduler and the loop keep them, as built.
     waits, and the receiver that takes the last reservation wakes the others,
     which then get the closed error. `closed?` is true when the channel is
     closed, the ring is empty and no value is reserved, and stays true.
+  - **An owner.** A channel can have an owner task: `Task.spawn_owning` gives
+    it to the task it spawns (`agc_channel_claim`, which registers an entry
+    with no native object the first time). When the owner ends in any way,
+    `finish_task` runs `agc_close_owned`, which calls the same close, so the
+    waiters wake as above. `close` from any task drops the entry first, so the
+    owner's end then does nothing. A channel never handed over has no entry
+    (§14.5 of `docs/vm/14-core-invariants.md`).
   - **Choices.** Mid-FIFO removal is O(n), as for the lock FIFO. A waiter whose
     timer fired before any wake still takes a value that reached the ring before
     it re-ran, instead of failing at once.

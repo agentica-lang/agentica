@@ -61,6 +61,7 @@ void agc_hand_over(agc_resource *r, agc_task *to);
 void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
+agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
 uint64_t agc_io_now(agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);

@@ -285,3 +285,34 @@ dropped (see "Done").
       connections close); `tests/vm-tcp-test.rkt` and `tests/vm-tls-test.rkt`
       servers use `Task.spawn_owning`, and the TLS limits and exit programs keep
       their handles in the task that uses them.
+
+- [x] **24c: a channel can have an owner
+  ([§37.5](../future/37-task-crash-isolation.md#375-handles-of-a-task-that-ends),
+  [§14.5](../vm/14-core-invariants.md#145-handles)).** Decided by the owner on
+  2026-10-14. `Task.spawn_owning(&f, ch)` makes the spawned task the owner of a
+  `Channel`. When that task ends in any way (return, crash, cancel),
+  `finish_task` closes the channel through the same `agc_close_owned` path as
+  the other handles: parked senders wake with the closed error, and readers
+  drain the values already sent, then get the closed error at once. A consumer
+  no longer waits for a timeout when its producer died; HTTP streaming (20e to
+  20g) and worker pools need it. A channel never handed over stays unowned and
+  is closed only by `Channel.close`, which any task may still call on an owned
+  channel. Plain `Task.spawn` moves nothing. Erlang monitors and links are not
+  added, and several producers on one channel keep the coordinator pattern
+  (§37.7).
+  - **Done.**
+    - The checker accepts `Channel[T]` as the handle argument of
+      `Task.spawn_owning` (`src/checker.rkt`); any other non-handle type is
+      still `CHECK-NOT-A-HANDLE`.
+    - `vm/channel.c` has the shared close (`shut`) for `Channel.close` and for
+      the owner's end, and `agc_channel_claim`, which registers the entry (no
+      native object) the first time a channel is handed over;
+      `agc_task_spawn_owning` in `vm/task.c` takes the resource of a channel
+      from it. A channel owned by another task, or a closed one, is
+      `RUNTIME-HANDLE-NOT-OWNED`; the first hand-off of an unowned channel is
+      open to any task.
+    - Tests: the goldens `channel-owner-ends` (return, crash, cancel, a parked
+      reader, a parked sender) and `channel-owner-handoff` (plain `Task.spawn`
+      does not close, a close from a non-owner, hand-on by the owner, and the
+      `RUNTIME-HANDLE-NOT-OWNED` cases); a checker case for `Channel` accepted
+      and a non-handle still `CHECK-NOT-A-HANDLE`.

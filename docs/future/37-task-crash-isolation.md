@@ -2,8 +2,9 @@
 
 **Status:** done in roadmap [phase 24](../roadmap/24-task-crash-isolation.md)
 (order in §37.9), including 24b, the one handle-ownership rule of §37.5. The
-fuzzer mode of §37.8 was dropped by the owner. Channels are not closed by their
-owner's end; only `Channel.close` closes them (§37.5).
+fuzzer mode of §37.8 was dropped by the owner. A channel is closed by
+`Channel.close`, or by the end of the task it was handed to with
+`Task.spawn_owning` (§37.5).
 
 In the style of Erlang: a runtime error in a task other than `main` ends only
 that task. Its awaiters get an error `Result`, its descendants are cancelled,
@@ -165,7 +166,8 @@ first. Handing a handle to another task is always explicit, through one form,
   value like any other argument, and the caller still owns it, whether the
   handle is the argument itself or nested in a struct, list or closure capture.
   So `main` can pass a socket to a helper task, await the helper, and go on
-  using the socket. Channels never move.
+  using the socket. A channel is the same: only `Task.spawn_owning` gives it to
+  a task.
 - **The one hand-off:
   `Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]`.**
   - It is `Task.spawn` that also gives `handle` to the new task, in the same
@@ -177,8 +179,9 @@ first. Handing a handle to another task is always explicit, through one form,
     `echo`) gives each connection task its own socket: a crash in `echo` closes
     that socket, and the client sees the connection close instead of waiting.
   - **Checker.** `A` must be one of the handle types `FileHandle`, `Socket`,
-    `Listener`, `Process` or `HttpServer`; any other type is
-    `CHECK-NOT-A-HANDLE` at the argument, with a help that names `Task.spawn`.
+    `Listener`, `Process` or `HttpServer`, or a `Channel[T]` (§37.5); any other
+    type is `CHECK-NOT-A-HANDLE` at the argument, with a help that names
+    `Task.spawn`.
     `HttpClient` is exempt from ownership, so it is not one, and neither is a
     struct, list or closure that holds a handle: the hand-off gives one handle,
     and a nested handle stays with the caller. The rest of the call is checked
@@ -249,11 +252,34 @@ first. Handing a handle to another task is always explicit, through one form,
   detaches its job. But it may end while it is the `next_owner` of a lock, in a
   builtin's retry. Then ownership passes to the head waiter, which is woken, as
   at a release (§10.2.2), with 20b's code.
-- **Channels (§27.2)** are not closed by their owner's end. Only `Channel.close`
-  closes a channel, and a task that ends, crashes or is cancelled leaves its
-  channels open. A crashed producer therefore leaves the channel open: the
-  coordinator awaits the producers and then closes the channel, which also
-  covers a crash (§37.7).
+- **Channels (§27.2)** have an owner only when one is handed over. A channel
+  made with `Channel.new` is unowned, and a task that ends, crashes or is
+  cancelled leaves it open; only `Channel.close` closes it. `Task.spawn_owning`
+  accepts a `Channel[T]` as its handle argument and makes the new task the
+  channel's owner. When that task ends in any way, `finish_task` closes the
+  channel with the same code as `Channel.close` (`vm/channel.c`): senders
+  parked on it wake with the closed error, and readers first receive the values
+  already sent, then get the closed error at once. A consumer therefore does not
+  wait for a timeout when its producer has crashed.
+  - **Who may hand it over.** The first hand-off of an unowned channel is open
+    to any task, since nobody owns it yet. A channel that a task owns follows
+    the rule of the other handles: only its owner can hand it over, and any
+    other task, or any task after the channel is closed, fails with
+    `RUNTIME-HANDLE-NOT-OWNED` at the argument. The owner may hand it on, so
+    the new task takes the ownership and the close with it.
+  - **`Channel.close` stays open to every task.** Any task can close an owned
+    channel and it is no error for a non-owner. The channel is then closed
+    whatever happens to its owner, and the owner's end later does nothing.
+    Closing twice does nothing, as before.
+  - **One owner.** Ownership is single, as for the other handles. A channel
+    with several producers keeps the coordinator pattern (§37.7): the
+    coordinator closes it after it has awaited them all. The owner is for the
+    case of one producer, and for a worker that stands for the whole stream (an
+    HTTP streaming body, a worker pool that ends with its feeder).
+  - A channel is not a resource of the loop. The channel gets a registry entry
+    with no native object (the entry only holds the owner link and a close
+    function) when it is first handed over, so a channel that is never handed
+    over costs nothing.
 - **What 24b changed from 24a.** The spawn move (a handle passed directly to
   `Task.spawn` moved to the new task) and the give-back at return (a task that
   returned handed its handles to its parent) are gone, and so is the separate
@@ -292,8 +318,9 @@ subtree leaves nothing open, and so does a `Task.map` timeout or a
   its items. §27.1's rule that awaiting a cancelled task halts with
   `RUNTIME-TASK-CANCELLED` now holds only for the non-`Result` entry (§37.4).
   Phase 24 lands before 17a, so 17a builds on it.
-- **Channels (§27.2).** A crash leaves the channels the crashed task used open
-  (§37.5). The pattern for a channel with producers: each producer returns a
+- **Channels (§27.2).** A crash leaves the channels the crashed task used open,
+  except the one it owns, which a `Task.spawn_owning` handed to it (§37.5). The
+  pattern for a channel with several producers: each producer returns a
   `Result`, and the coordinator awaits them all and then closes the channel. A
   crashed producer gives the coordinator an `error`, so the close still happens.
   A diagnostic in `main` still ends the whole run.

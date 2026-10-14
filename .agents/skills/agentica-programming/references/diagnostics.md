@@ -52,7 +52,7 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `CHECK-BLOCK-TARGET` | a block is passed to a function whose last parameter is not a `Fn` |
 | `CHECK-LOOP-CONTROL` | `break` or `next` outside a `while`/`for` body, or inside a block |
 | `CHECK-CAPTURED-ASSIGNMENT` | a block assigns to an outer variable; use a `for` loop or `reduce`. For `xs.each do |w|` on a name or field the help shows the loop, `for w in xs ... end`, which can assign the variable |
-| `CHECK-NOT-A-HANDLE` | `Task.spawn_owning` with an argument that is not a `FileHandle`, `Socket`, `Listener`, `Process` or `HttpServer`, at the argument (see `tasks.md`) |
+| `CHECK-NOT-A-HANDLE` | `Task.spawn_owning` with an argument that is not a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`, at the argument (see `tasks.md`) |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576 |
@@ -67,7 +67,7 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration, negative `Channel.send`/`Channel.recv` timeout, or a `Task.await(task, timeout_ms)` timeout of 0 or less (see `tasks.md`) |
 | `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel |
 | `RUNTIME-TASK-AWAIT-CYCLE` | `Task.await` of a task that is waiting for the caller, directly or through other awaits, at the await (see `tasks.md`) |
-| `RUNTIME-HANDLE-NOT-OWNED` | `Task.spawn_owning` of a handle the calling task does not own, one already handed over, or a closed one, at the handle argument (see `tasks.md`) |
+| `RUNTIME-HANDLE-NOT-OWNED` | `Task.spawn_owning` of a handle the calling task does not own, one already handed over, or a closed one (a closed channel too), at the handle argument (see `tasks.md`) |
 | `RUNTIME-TASK-CRASHED` | `Task.await` on a crashed task when `R` is not a `Result`, at the await; the message is the crash text (see `tasks.md`); a BDD step or a test whose task crashed unawaited |
 | `RUNTIME-TEST-ASSERTION` | a failed `Test.eq`, `Test.ok?`, `Test.error?` or `Test.assert` in a test, at the assertion (see `testing.md`) |
 | `RUNTIME-TEST-ERROR` | a test block returned `error(message)`, at the `Test.test` call |
