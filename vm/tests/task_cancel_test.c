@@ -426,6 +426,13 @@ static void spawn_with(prog *p, uint32_t f, uint32_t reg, uint32_t fn, uint32_t 
   emit(p, f, AGC_OP_CALL_BUILTIN, reg, B_SPAWN, 1);
 }
 
+static void cancel_after_run(prog *p, uint32_t reg) {
+  call_int(p, F_MAIN, B_SLEEP, 0);
+  call_int(p, F_MAIN, B_CHECK, 1);
+  call_reg(p, F_MAIN, B_CANCEL, reg, 1);
+  call_int(p, F_MAIN, B_CHECK, 2);
+}
+
 static void mark_arg(prog *p, uint32_t f) { call_reg(p, f, B_MARK, 0, 1); }
 
 static void finish_fn(prog *p, uint32_t f) { emit(p, f, AGC_OP_RETURN, 0, 0, 1); }
@@ -797,10 +804,7 @@ static void test_closing_task(void) {
   new_prog(&p);
   spawn(&p, F_MAIN, 0, F_CLOSER, 1);
   spawn_with(&p, F_MAIN, 2, F_AWAITER, 0);
-  call_int(&p, F_MAIN, B_SLEEP, 0);
-  call_int(&p, F_MAIN, B_CHECK, 1);
-  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
-  call_int(&p, F_MAIN, B_CHECK, 2);
+  cancel_after_run(&p, 2);
   call_reg(&p, F_MAIN, B_CLOSE_DONE, 0, 1);
   call_int(&p, F_MAIN, B_CHECK, 3);
   spawn_with(&p, F_MAIN, 4, F_FINISH, 0);
@@ -902,10 +906,7 @@ static void test_timed_await_cancel(void) {
   new_prog(&p);
   spawn(&p, F_MAIN, 0, F_SLEEPER, 5);
   spawn_with(&p, F_MAIN, 2, F_TIMED, 0);
-  call_int(&p, F_MAIN, B_SLEEP, 0);
-  call_int(&p, F_MAIN, B_CHECK, 1);
-  call_reg(&p, F_MAIN, B_CANCEL, 2, 1);
-  call_int(&p, F_MAIN, B_CHECK, 2);
+  cancel_after_run(&p, 2);
   call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
   run_done(&p, check_timed_cancel);
 }
@@ -974,10 +975,7 @@ static void test_output_waiter(void) {
   for (int k = 0; k < 4; k++) call_int(&p, F_MAIN, B_PRINT, 0);
   spawn(&p, F_MAIN, 0, F_PRINT, 1);
   spawn(&p, F_MAIN, 2, F_PRINT, 2);
-  call_int(&p, F_MAIN, B_SLEEP, 0);
-  call_int(&p, F_MAIN, B_CHECK, 1);
-  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
-  call_int(&p, F_MAIN, B_CHECK, 2);
+  cancel_after_run(&p, 0);
   call_int(&p, F_MAIN, B_DRAIN, 0);
   call_reg(&p, F_MAIN, B_AWAIT, 2, 1);
   call_int(&p, F_MAIN, B_CHECK, 3);
