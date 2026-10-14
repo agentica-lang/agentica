@@ -81,7 +81,7 @@ end
 
 ## Expressions
 
-- Literals: `42`, `3.14`, `"text"` (escapes `\" \\ \# \n \r \t`), `true`, `false`, `nil`. A minus sign is an operator, not part of the literal.
+- Literals: `42`, `3.14`, `1_000` (a `_` between digits is only visual; a trailing, double or dot-side `_` is `LEX-INVALID-NUMBER`), `"text"` (escapes `\" \\ \# \n \r \t`), `true`, `false`, `nil`. A minus sign is an operator, not part of the literal.
 - Interpolation: `"total: #{n + 1}"` is a `String`. Strings go in as is, `Json` as its JSON text, other data values in their `IO.inspect` form. Keep the expression on one line; `\#{` is literal text. `case` patterns and `import` paths take plain strings only.
 - Lists `[1, 2, 3]`; maps `{"a": 1, "b": 2}`. A repeated key keeps the last value at its first position, and `Map.put` on an existing key also keeps that position.
 - `[]` and `{}` need a known type (annotation, parameter, field, or function result). A non-empty list needs one element type.

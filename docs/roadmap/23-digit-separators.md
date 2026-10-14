@@ -2,7 +2,7 @@
 
 Specified in [`docs/future/33-digit-separators.md` section 33](../future/33-digit-separators.md#33-digit-separators). Phase 23 is front end only: the lexer and the docs. The token value does not change, so the AST, the checker, lowering and the VM stay as they are. It comes after 7i (§33.5), right after phase 22 (22a, 22b), at order step 7.2a. It has one PR.
 
-- [ ] **23a: `_` between digits in number literals (§33.2, §33.3).**
+- [x] **23a: `_` between digits in number literals (§33.2, §33.3).**
   - **Lexer** (`src/lexer.rkt`): read digits and `_` in both parts of a number, drop the `_`s for the value, and report `LEX-INVALID-NUMBER` at the literal's span for a trailing `_`, a `__` or a `_` next to the dot. A `.` followed by `_` counts as part of the number, so `1._5` is an error; a `.` followed by a letter or a `.` does not.
   - **Tests:**
     - `tests/lexer-test.rkt`:

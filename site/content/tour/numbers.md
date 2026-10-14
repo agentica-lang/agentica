@@ -24,6 +24,28 @@ end
 3.75
 ```
 
+## Long numbers
+
+A `_` between digits makes a long number easier to read. It is only visual: `1_000` is the same `Int` as `1000`, and it prints without the `_`.
+
+```agentica
+def main() -> Void
+  budget = 1_000_000
+  rate = 0.000_5
+  puts(budget)
+  puts(rate)
+  puts(1_000 == 1000)
+end
+```
+
+```output
+1000000
+0.0005
+true
+```
+
+The `_` must sit between two digits. `1_`, `1__0`, `1_.5` and `1._5` are `LEX-INVALID-NUMBER`. `String.to_int` and `to_f` still reject a `_` in text, because they read outside data.
+
 ## Division
 
 `/` on two `Int` values cuts off the decimals, toward zero. `%` is the

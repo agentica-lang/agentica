@@ -21,6 +21,9 @@
 (define (ascii-digit? char)
   (char<=? #\0 char #\9))
 
+(define (digit-or-separator? char)
+  (or (ascii-digit? char) (char=? char #\_)))
+
 (define (lex input)
   (define text (source-text input))
   (define source-length (string-length text))
@@ -196,16 +199,23 @@
             (scan)]
            [(ascii-digit? char)
             (define start (position))
-            (scan-while! ascii-digit?)
+            (scan-while! digit-or-separator?)
             (define float?
               (and (equal? (peek 0) #\.)
                    (peek 1)
-                   (ascii-digit? (peek 1))))
+                   (digit-or-separator? (peek 1))))
             (when float?
               (advance!)
-              (scan-while! ascii-digit?))
+              (scan-while! digit-or-separator?))
             (define lexeme (substring text (source-position-offset start) index))
-            (emit! (if float? 'float 'integer) start (string->number lexeme))
+            (when (regexp-match? #rx"__|_$|_[.]|[.]_" lexeme)
+              (return (fail 'LEX-INVALID-NUMBER
+                            "a \"_\" in a number must sit between two digits"
+                            start
+                            #:help "write digit groups like 1_000 or 0.000_5; remove the extra \"_\"")))
+            (emit! (if float? 'float 'integer)
+                   start
+                   (string->number (string-replace lexeme "_" "")))
             (scan)]
            [(char=? char #\")
             (define start (position))
