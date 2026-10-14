@@ -77,8 +77,10 @@ or_expr          = and_expr, { ( "or" | "||" ), and_expr } ;
 and_expr         = equality_expr, { ( "and" | "&&" ), equality_expr } ;
 equality_expr    = comparison_expr,
                    [ ( "==" | "!=" ), comparison_expr ] ;
-comparison_expr  = additive_expr,
-                   [ ( "<" | "<=" | ">" | ">=" ), additive_expr ] ;
+comparison_expr  = pipe_expr,
+                   [ ( "<" | "<=" | ">" | ">=" ), pipe_expr ] ;
+pipe_expr        = additive_expr, { "|>", pipe_target } ;
+pipe_target      = [ "try" ], call_with_parentheses ;
 additive_expr    = multiplicative_expr,
                    { ( "+" | "-" ), multiplicative_expr } ;
 multiplicative_expr = unary_expr,
@@ -115,6 +117,8 @@ literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 
 Calls are to named functions, or to function values through `.call(...)`; there are no user methods. Parentheses are required for every call. They may be dropped only for builtin methods, and for module functions without arguments, builtin or reached through an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So `f = Util.helper` calls `helper`; write `&Util.helper` for the function value. `&name` references a declared top-level function without captures. A bare `Enum.Variant` of an enum in the same file is that nullary variant, and `M.Enum.Variant` through an import alias is one too.
 
+`x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of the call on the right. The right side is a call with parentheses, `name(args)` or `Alias.name(args)` (a user function, an imported function or a builtin), optionally preceded by `try`: `x |> try f(a)` is `try f(x, a)`. A trailing block works: `xs |> each_pair() do |a, b| ... end`. Anything else on the right (a bare name, a field, an index, a method chain such as `f(1).g`, a literal) is `PARSE-PIPE-TARGET` at the right side; wrap the expression in parentheses and use `.` on the result, as in `(x |> f()).unwrap!`. A builtin that has a method form for the type of the left value is `CHECK-PIPE-METHOD` at the right side, with the method form as help: `x |> String.trim()` gives `x.trim`. So `|>` is for user functions and for builtins without a method form, and the two styles mix: `s.trim |> try parse() |> try validate()`. `|>` binds lower than `+` and `-` and higher than the comparisons, and groups from left to right: `a + 1 |> f()` is `f(a + 1)`, `x |> f() == y` is `f(x) == y`, and `x |> f() |> g()` is `g(f(x))`. `try` and unary operators bind tighter: `try x |> f()` is `f(try x)`. The call keeps its normal order of evaluation (the left value first, then the other arguments) and its normal diagnostics: the piped argument's span is the left expression's span. A chain over several lines goes in parentheses, one step per line.
+
 `a..b` and `a...b` have the lowest precedence and do not chain: `1..2..3` is `PARSE-UNEXPECTED-TOKEN` at the second operator, and `0...n + 1` is `0...(n + 1)`. A method on a range needs parentheses: `(1..5).to_a`. `1..5` lexes as two integers. A line that ends in `..` or `...` does not continue on the next line.
 
-`and` and `or` short-circuit. Operators group from left to right, except that comparisons and equality do not chain: `a < b < c` is invalid. From high to low, the precedence is: named call, field, index and grouping; unary `-`, `not`, `!` and `try`; `*`, `/`, `%`; `+`, `-`; comparisons; equality; `and`; `or`; ranges. `not` binds tighter than comparisons, so to negate one, write `not (age >= 18)`.
+`and` and `or` short-circuit. Operators group from left to right, except that comparisons and equality do not chain: `a < b < c` is invalid. From high to low, the precedence is: named call, field, index and grouping; unary `-`, `not`, `!` and `try`; `*`, `/`, `%`; `+`, `-`; `|>`; comparisons; equality; `and`; `or`; ranges. `not` binds tighter than comparisons, so to negate one, write `not (age >= 18)`.

@@ -79,7 +79,7 @@
 
 (struct literal (value span) #:transparent)
 (struct name-ref (name span) #:transparent)
-(struct call (name args span) #:transparent)
+(struct call (name args span [piped #:auto #:mutable]) #:auto-value #f #:transparent)
 (struct enum-constructor (enum-name variant-name args span) #:transparent)
 (struct function-ref (name span) #:transparent)
 (struct invoke (target args span) #:transparent)

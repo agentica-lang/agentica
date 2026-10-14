@@ -195,11 +195,12 @@ Operators, from highest to lowest precedence:
 | 2 | unary `-`, `not` / `!`, `try` |
 | 3 | `*` `/` `%` |
 | 4 | `+` `-` |
-| 5 | `<` `<=` `>` `>=` |
-| 6 | `==` `!=` |
-| 7 | `and` / `&&` |
-| 8 | `or` / `\|\|` |
-| 9 | `..` `...` (ranges, no chaining) |
+| 5 | `\|>` (pipe) |
+| 6 | `<` `<=` `>` `>=` |
+| 7 | `==` `!=` |
+| 8 | `and` / `&&` |
+| 9 | `or` / `\|\|` |
+| 10 | `..` `...` (ranges, no chaining) |
 
 - `+ - * /` take two numbers of the same type. There is no implicit conversion between `Int` and `Float`. `+` also joins two `String` values.
 - `/` on `Int` truncates toward zero. `%` takes two `Int` values. A zero divisor is a runtime error, also for `Float`.
@@ -208,6 +209,7 @@ Operators, from highest to lowest precedence:
 - Comparisons do not chain: write `a < b and b < c`, not `a < b < c`.
 - `&&`, `||`, `!` take `Bool`, and `&&` / `||` short-circuit. `and`, `or`, `not` are the same operators. `!` / `not` bind tightly: write `!(a >= b)`. A `!` right after a name is part of the name (`read!`).
 - Arguments and operands are evaluated left to right.
+- `x |> f(a)` means `f(x, a)`: the left value is the first argument of the call on the right, which must be a call with parentheses (`f(a)`, `Alias.f(a)`), optionally after `try` (`x |> try f(a)` is `try f(x, a)`) and with a trailing block. It groups to the left (`x |> f() |> g()` is `g(f(x))`), and `a + 1 |> f()` is `f(a + 1)`. Use it to chain user functions: `s.trim |> try parse() |> validate()`. A bare name, field, index or `f(1).g` on the right is `PARSE-PIPE-TARGET`; a builtin with a method form is `CHECK-PIPE-METHOD` (write `s.trim`, not `s |> String.trim()`). Put a multi-line chain in parentheses, one `|>` step per line.
 
 ## Methods on builtin types
 

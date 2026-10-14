@@ -53,6 +53,20 @@
         '(Float . "to_s") "String.from_float"
         '(Float . "to_i") "Float.to_int" '(Float . "to_i!") "Float.to_int!"))
 
+(define (pipe-method-name kind name)
+  (define suffix (cond [(regexp-match #rx"^[^.]*[.](.*)$" name) => cadr] [else #f]))
+  (cond
+    [(and suffix (equal? (resolve-method kind suffix) name)) suffix]
+    [else
+     (for/first ([(key target) (in-hash method-aliases)]
+                 #:when (and (eq? (car key) kind) (equal? target name)))
+       (cdr key))]))
+
+(define (span-text span)
+  (substring (source-text (source-span-source span))
+             (source-position-offset (source-span-start span))
+             (source-position-offset (source-span-end span))))
+
 (define (type-head type)
   (if (pair? type) (car type) type))
 
@@ -217,6 +231,7 @@
   (define capture-boundary #f)
   (define loop-depth 0)
   (define range-chain '())
+  (define node-types (or types (make-hasheq)))
 
   (let/ec return
     (define (bail code message span
@@ -531,7 +546,7 @@
            'String]
           [(index-access? expression) (check-index-access expression)]
           [else (bail 'CHECK-INTERNAL "unsupported expression" (node-span expression))]))
-      (when types (hash-set! types expression actual))
+      (hash-set! node-types expression actual)
       (when (and (eq? actual 'Void) (not completion?))
         (bail 'CHECK-VOID-VALUE "a Void call has no value; use it as a statement" (node-span expression)))
       (ensure actual expected (node-span expression)))
@@ -967,9 +982,37 @@
 
     (define (check-call expression expected)
       (define entry (builtin-ref (call-name expression)))
-      (if entry
-          (check-builtin-call expression expected entry)
-          (check-plain-call expression)))
+      (cond
+        [entry
+         (define result (check-builtin-call expression expected entry))
+         (when (call-piped expression) (check-pipe-method! expression entry))
+         result]
+        [else (check-plain-call expression)]))
+
+    (define (check-pipe-method! expression entry)
+      (define arguments (call-args expression))
+      (define left (car arguments))
+      (define kind (receiver-kind (hash-ref node-types left #f)))
+      (define method (and kind (pipe-method-name kind (builtin-name entry))))
+      (when method
+        (define left-span (node-span left))
+        (define left-text
+          (if (or (name-ref? left) (literal? left) (call? left) (method-call? left)
+                  (field-access? left) (index-access? left))
+              (span-text left-span)
+              (string-append "(" (span-text left-span) ")")))
+        (define rest-arguments (cdr arguments))
+        (define plain (filter (lambda (argument) (not (block-lit? argument))) rest-arguments))
+        (bail 'CHECK-PIPE-METHOD
+              (format "\"~a\" has a method form for ~a, so it is not piped"
+                      (builtin-name entry) (type->string (hash-ref node-types left)))
+              (call-span expression)
+              #:help (string-append
+                      left-text "." method
+                      (if (null? plain)
+                          ""
+                          (string-append "(" (string-join (map (lambda (argument) (span-text (node-span argument))) plain) ", ") ")"))
+                      (if (ormap block-lit? rest-arguments) " do ... end" "")))))
 
     (define (check-plain-call expression)
       (define name (call-name expression))

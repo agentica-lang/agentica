@@ -246,7 +246,10 @@
            (enum-constructor (resolve key enum-name 'enum span) variant-name (walks args) span)]
           [(param name type span) (param name (walk type) span)]
           [(field-decl name type span) (field-decl name (walk type) span)]
-          [(call name args span) (call (resolve key name 'function span) (walks args) span)]
+          [(call name args span piped)
+           (define rewritten (call (resolve key name 'function span) (walks args) span))
+           (when piped (set-call-piped! rewritten #t))
+           rewritten]
           [(function-ref name span) (function-ref (resolve key name 'function span) span)]
           [(construct name args span)
            (define parts (string-split name "."))

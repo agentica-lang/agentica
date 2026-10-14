@@ -629,17 +629,44 @@
 
     (define (parse-comparison)
       (define start (current))
-      (define left (parse-additive))
+      (define left (parse-pipe))
       (cond
         [(memq (token-kind (current)) '(less less-equal greater greater-equal))
          (define operator (advance!))
-         (define right (parse-additive))
+         (define right (parse-pipe))
          (when (memq (token-kind (current)) '(less less-equal greater greater-equal))
            (bail 'PARSE-CHAINED-COMPARISON
                  "comparison does not chain; write \"a < b and b < c\""
                  (current)))
          (binary (token-kind operator) (token-span operator) left right (span-from start))]
         [else left]))
+
+    (define (parse-pipe)
+      (let loop ([left (parse-additive)])
+        (cond
+          [(kind? 'pipe-forward)
+           (advance!)
+           (define right-start (current))
+           (define right (parse-additive))
+           (define right-span (span-from right-start))
+           (define (target-call? node)
+             (and (call? node) (not (call-piped node))))
+           (define (insert-left node)
+             (define piped (call (call-name node) (cons left (call-args node)) (call-span node)))
+             (set-call-piped! piped #t)
+             piped)
+           (define has-parens? (memq (token-kind last-consumed) '(right-paren end)))
+           (loop
+            (cond
+              [(and (target-call? right) has-parens?) (insert-left right)]
+              [(and (try-expr? right) (target-call? (try-expr-operand right)) has-parens?)
+               (try-expr (insert-left (try-expr-operand right)) (try-expr-span right))]
+              [else
+               (return (diagnostic 'PARSE-PIPE-TARGET
+                                   "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)"
+                                   right-span
+                                   #:help "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"))]))]
+          [else left])))
 
     (define (parse-additive) (parse-left-assoc '(plus minus) parse-multiplicative))
 
