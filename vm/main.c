@@ -178,8 +178,10 @@ static void flush_files(agc_vm *vm) {
   agc_notice_end(&notice, true);
 }
 
-static void hide_own_pipe(agc_vm *vm, const agc_output *out, int fd) {
-  if (out->base && out->base->fd != fd) agc_files_forget(&vm->rt->inherited, fd);
+static void print_outcome(agc_vm *vm, const agc_outcome *outcome, bool final) {
+  agc_notice notice;
+  agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, outcome, vm->rt->style, false);
+  agc_notice_end(&notice, final);
 }
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
@@ -189,6 +191,7 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();
   agc_io_goodbye(vm);
+  if (outcome.kind == AGC_FAILED) print_outcome(vm, &outcome, false);
   bool stdout_ok = flush_stream(stdout);
   flush_stream(stderr);
   flush_files(vm);
@@ -212,12 +215,10 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
     outcome.message = write_error;
     outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
+    print_outcome(vm, &outcome, true);
   }
   int code = 0;
   if (outcome.kind == AGC_FAILED) {
-    agc_notice notice;
-    agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, &outcome, vm->rt->style, false);
-    agc_notice_end(&notice, true);
     code = 1;
   } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
     code = (int)outcome.exit_code;
@@ -521,8 +522,6 @@ static int run(int argc, char **argv) {
   vm->rt->in.reserved = reserved;
   agc_output_open(vm, &vm->rt->out, 1);
   agc_output_open(vm, &vm->rt->err, 2);
-  hide_own_pipe(vm, &vm->rt->out, 1);
-  hide_own_pipe(vm, &vm->rt->err, 2);
   agc_io_watch_stop(vm, seen_driver ? driver : 0);
   return end_run(vm, agc_vm_run(vm));
 }

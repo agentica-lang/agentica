@@ -14,7 +14,6 @@ struct agc_test_run {
 };
 
 static const char marker[] = "\x1e" "agentica-bdd ";
-static const char marker_after_text[] = "\n\x1e" "agentica-bdd ";
 
 static agc_string *lit(const char *text) {
   size_t n = strlen(text);
@@ -122,9 +121,9 @@ static bool write_record(agc_vm *vm, agc_json_member *m, size_t n) {
   if (!agc_output_waiting(vm, &vm->rt->out)) {
     m[n++] = member("token", json_text(vm->task->test_run->token));
     const agc_string *text = agc_json_encode(vm, agc_json_object(m, n), 0);
-    record = agc_concat(lit(vm->rt->out_mid_line ? marker_after_text : marker), text);
+    record = agc_concat(lit(marker), text);
   }
-  return agc_write(vm, &vm->rt->out, record, true);
+  return agc_write_record(vm, &vm->rt->out, record);
 }
 
 static bool write_event(agc_vm *vm, const char *event) {

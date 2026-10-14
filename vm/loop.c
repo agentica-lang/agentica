@@ -495,7 +495,7 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task, agc_more_fn more) {
+                               int64_t timeout_ms, const agc_task *task, agc_more_fn more, bool quiet) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
@@ -509,7 +509,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   r->context = context;
   j->slot = r->slot;
   const agc_trace *tr = &vm->rt->trace;
-  if (AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
+  if (!quiet && AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
     j->started_ns = agc_trace_now();
     AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s task=%" PRIu64 " timeout_ms=%" PRId64, r->id,
               kind->name, task ? task->id : 0, timeout_ms);
@@ -535,7 +535,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more);
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
@@ -546,11 +546,11 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, bool flush) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags) {
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL, (flags & AGC_JOB_QUIET) != 0);
   job *j = r->native;
   j->detached = true;
-  j->flush = flush;
+  j->flush = (flags & AGC_JOB_FLUSH) != 0;
   return j;
 }
 
@@ -787,10 +787,10 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   (void)timeout_ms;
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, bool flush) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags) {
   (void)kind;
   (void)data;
-  (void)flush;
+  (void)flags;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 

@@ -142,19 +142,85 @@ end
 AGC
   )
 
-(define big-unwrap-program
-  #<<AGC
+(define (big-unwrap-program doublings)
+  (format
+   #<<AGC
 def parse(text: String) -> Result[Int]
   return error(text)
 end
 
 def main() -> Void
   big = "e"
-  for i in 0..16
+  for i in 0..~a
     big = big + big
   end
   value = Result.unwrap!(parse(big))
   puts(value)
+end
+
+AGC
+   doublings))
+
+(define stuck-print-program
+  #<<AGC
+def printer(big: String) -> Void
+  puts(big)
+  puts(big)
+end
+
+def crasher(k: Int) -> Void
+  x = 1 / 0
+  puts(x)
+end
+
+def main() -> Void
+  big = "z"
+  for i in 0..18
+    big = big + big
+  end
+  Task.spawn(&printer, big)
+  Task.sleep(100)
+  Task.spawn(&crasher, 1)
+  Task.sleep(100)
+end
+
+AGC
+  )
+
+(define cut-print-record-program
+  #<<AGC
+def spill(big: String) -> Void
+  print(big)
+end
+
+def main() -> Void
+  Test.run([
+    Test.test("leaves a long print") do
+      big = "z"
+      for i in 0..17
+        big = big + big
+      end
+      Task.spawn(&spill, big)
+      Task.sleep(100)
+      ok()
+    end
+  ])
+end
+
+AGC
+  )
+
+(define dev-stdout-program
+  #<<AGC
+def main() -> Void
+  out = File.open("/dev/stdout", "write", 1000).unwrap!
+  File.write(out, "via file\n", 1000).unwrap!
+  File.close(out, 1000).unwrap!
+  err = File.open("/dev/stderr", "append", 1000).unwrap!
+  File.write(err, "via stderr\n", 1000).unwrap!
+  File.close(err, 1000).unwrap!
+  puts("normal")
+  IO.warn("after")
 end
 
 AGC
@@ -231,7 +297,7 @@ end
 AGC
   )
 
-(define (run-case work name program #:peer [peer-arguments '()] #:vm [vm-arguments '()])
+(define (run-case work name program #:peer [peer-arguments '()] #:vm [vm-arguments '()] #:args [program-arguments '()])
   (define source (build-path work (string-append name ".agc")))
   (define bytecode (build-path work (string-append name ".agcb")))
   (define out-file (build-path work (string-append name ".out")))
@@ -246,7 +312,8 @@ AGC
            (append peer-arguments
                    (list "--" (path->string vm-file))
                    vm-arguments
-                   (list "--" (path->string bytecode)))))
+                   (list "--" (path->string bytecode))
+                   program-arguments)))
   (check-equal? (first result) 0 (format "~a: the peer ends: ~a" name (third result)))
   (define summary (string->jsexpr (second result)))
   (values summary (file->bytes out-file) (file->string err-file)))
@@ -428,8 +495,40 @@ AGC
           (check-equal? status 1)
           (check-equal? out "done\n"))
 
+        (test-case "a long diagnostic reaches a slow stderr pipe whole"
+          (define-values (summary out err)
+            (run-case work "slow-diagnostic" (big-unwrap-program 17) #:peer '("--error-delay" "1.0") #:vm '("--json")))
+          (check-equal? (hash-ref summary 'status) 1)
+          (check-regexp-match #rx"RUNTIME-UNWRAP-ERROR" err)
+          (check-true (> (string-length err) 262144) "the whole text arrives"))
+
+        (test-case "a print cut by the end of the run does not hold a queued notice or the exit"
+          (define-values (summary out err)
+            (run-case work "stuck-print" stuck-print-program
+                      #:peer '("--delay" "1.0" "--merge") #:vm '("--json" "--flush-timeout" "6000")))
+          (check-equal? (hash-ref summary 'status) 1)
+          (check-true (< (hash-ref summary 'exit) 4) "the run does not wait for the flush limit")
+          (check-false (regexp-match? #rx#"flush_timeout_ms" out))
+          (check-regexp-match #rx#"RUNTIME-DIVISION-BY-ZERO" out))
+
+        (test-case "a protocol record starts a line after a print that was cut"
+          (define-values (summary out err)
+            (run-case work "cut-record" cut-print-record-program
+                      #:peer '("--delay" "1.0" "--stdin" "tok\n0\n") #:args '("--agentica-test" "run")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (define marker (regexp-match-positions #rx#"\x1eagentica-bdd " out))
+          (check-true (and marker #t) "the record is there")
+          (check-equal? (bytes-ref out (sub1 (caar marker))) 10 "the record starts a line")
+          (check-regexp-match #rx#"RUNTIME-TEST-PENDING-TASKS" out))
+
+        (test-case "File calls on /dev/stdout and /dev/stderr still work when they are pipes"
+          (define-values (summary out err) (run-case work "dev-stdout" dev-stdout-program))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-equal? out #"via file\nnormal\n")
+          (check-equal? err "via stderr\nafter\n"))
+
         (test-case "a long error text reaches a stderr file whole"
-          (define-values (status elapsed out err) (run-to-file work "big-error" big-unwrap-program #:stderr-file #t))
+          (define-values (status elapsed out err) (run-to-file work "big-error" (big-unwrap-program 16) #:stderr-file #t))
           (check-equal? status 1)
           (check-equal? out "")
           (check-regexp-match #rx"RUNTIME-UNWRAP-ERROR" err)

@@ -39,10 +39,6 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
   fail_write(vm, out);
 }
 
-static void track(agc_vm *vm, const agc_output *out, uint8_t last) {
-  if (out == &vm->rt->out) vm->rt->out_mid_line = last != '\n';
-}
-
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
 
 bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed; }
@@ -56,7 +52,9 @@ static size_t run_length(const agc_output *s) { return smaller(AGC_OUTPUT_BUFFER
 
 static size_t queued(const agc_output *s) { return s->notice_len - s->notice_at; }
 
-static size_t total(const agc_output_wait *w) { return w->text ? w->text->bytes + (w->newline ? 1 : 0) : 0; }
+static size_t total(const agc_output_wait *w) {
+  return w->text ? (w->lead ? 1 : 0) + w->text->bytes + (w->newline ? 1 : 0) : 0;
+}
 
 static size_t need(const agc_output_wait *w) {
   return w->flush ? AGC_OUTPUT_BUFFER : smaller(total(w) - w->done, AGC_OUTPUT_BUFFER);
@@ -69,8 +67,15 @@ static bool holds(const agc_output *s) {
 
 static agc_output *stream_of(agc_vm *vm, bool to_err) { return to_err ? &vm->rt->err : &vm->rt->out; }
 
+static void trace_run(const agc_output *s, const char *what) {
+  if (s->vm && !s->pooled)
+    AGC_TRACE(&s->vm->rt->trace, AGC_TRACE_IO, "output_%s stream=%s", what, s == &s->vm->rt->out ? "stdout" : "stderr");
+}
+
 static void put_bytes(agc_output *s, const void *data, size_t n) {
   if (!n) return;
+  if (!s->len) trace_run(s, "start");
+  s->mid_line = ((const uint8_t *)data)[n - 1] != '\n';
   size_t end = (s->start + s->len) % AGC_OUTPUT_BUFFER;
   size_t first = smaller(AGC_OUTPUT_BUFFER - end, n);
   memcpy(s->buf + end, data, first);
@@ -81,7 +86,10 @@ static void put_bytes(agc_output *s, const void *data, size_t n) {
 static void consumed(agc_output *s, size_t n) {
   s->start = (s->start + n) % AGC_OUTPUT_BUFFER;
   s->len -= n;
-  if (!s->len) s->start = 0;
+  if (!s->len) {
+    s->start = 0;
+    trace_run(s, "done");
+  }
 }
 
 static void drop_notices(agc_output *s) {
@@ -97,16 +105,6 @@ static void pump(agc_output *s, bool force) {
   put_bytes(s, s->notice + s->notice_at, n);
   s->notice_at += n;
   if (s->notice_at == s->notice_len) drop_notices(s);
-}
-
-static void wake_head(agc_output *s) {
-  agc_task *head = s->waiters;
-  if (head && room(s) >= need(&head->output)) agc_task_wake(s->vm, head, "output");
-}
-
-static void advance(agc_output *s) {
-  pump(s, false);
-  wake_head(s);
 }
 
 static void stop_waiting(agc_output *s, agc_task *t) {
@@ -180,7 +178,7 @@ static void kick(agc_output *s) {
     q->part[1] = s->buf;
     q->length[1] = s->len - first;
     s->writing = true;
-    agc_io_detached(s->vm, &drain_io, q, false);
+    agc_io_detached(s->vm, &drain_io, q, 0);
     return;
   }
   if (s->armed) return;
@@ -189,8 +187,19 @@ static void kick(agc_output *s) {
   q->to_err = s == &s->vm->rt->err;
   q->poller = s->poller;
   s->armed = true;
-  q->job = agc_io_detached(s->vm, &poll_io, q, false);
+  q->job = agc_io_detached(s->vm, &poll_io, q, AGC_JOB_QUIET);
   agc_poller_wait(s->poller, true, polled, q);
+}
+
+static void wake_head(agc_output *s) {
+  agc_task *head = s->waiters;
+  if (head && room(s) >= need(&head->output)) agc_task_wake(s->vm, head, "output");
+}
+
+static void advance(agc_output *s) {
+  pump(s, false);
+  wake_head(s);
+  kick(s);
 }
 
 static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
@@ -209,7 +218,6 @@ static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
   } else {
     consumed(s, written);
     advance(s);
-    kick(s);
   }
   return agc_void();
 }
@@ -225,7 +233,6 @@ static agc_value poll_done(agc_vm *vm, void *data, agc_value context) {
   write_now(s);
   if (status < 0 && s->len && !s->failed) fail_stream(s);
   advance(s);
-  kick(s);
   return agc_void();
 }
 
@@ -236,7 +243,22 @@ static void flush_now(agc_output *s) {
   if (s->failed) return;
   if (!s->pooled) write_now(s);
   advance(s);
-  kick(s);
+}
+
+static void copy_piece(agc_output *s, const agc_output_wait *w, size_t n) {
+  size_t gap = w->lead ? 1 : 0;
+  size_t at = w->done;
+  size_t end = at + n;
+  if (at < gap) {
+    put_bytes(s, "\n", 1);
+    at = gap;
+  }
+  if (at < end && at < gap + w->text->bytes) {
+    size_t k = smaller(end - at, gap + w->text->bytes - at);
+    put_bytes(s, w->text->data + (at - gap), k);
+    at += k;
+  }
+  if (at < end) put_bytes(s, "\n", 1);
 }
 
 static bool wait_turn(agc_vm *vm, agc_output *out) {
@@ -252,43 +274,35 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
     return false;
   }
   if (!w->flush) {
+    if (!w->done && w->lead && !s->mid_line) w->lead = false;
     size_t n = smaller(total(w) - w->done, room(s));
-    size_t bytes = w->text->bytes;
-    if (w->done < bytes) {
-      size_t k = smaller(n, bytes - w->done);
-      put_bytes(s, w->text->data + w->done, k);
-      if (n > k) put_bytes(s, "\n", 1);
-    } else {
-      put_bytes(s, "\n", 1);
-    }
+    copy_piece(s, w, n);
     w->done += n;
     kick(s);
     if (w->done < total(w)) {
       agc_task_park(vm, true);
       return false;
     }
-    track(vm, out, w->newline ? '\n' : (uint8_t)w->text->data[bytes - 1]);
   }
   stop_waiting(s, t);
   advance(s);
   return true;
 }
 
-static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
+static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline, bool own_line) {
   agc_output *s = out->base;
   agc_task *t = vm->task;
   if (t->output.out != out) {
     if (s->failed) fail_write(vm, out);
-    size_t n = agc_size_add(text->bytes, newline ? 1 : 0);
-    if (n == 0) return true;
-    if (!s->waiters && !queued(s) && n <= room(s)) {
-      put_bytes(s, text->data, text->bytes);
-      if (newline) put_bytes(s, "\n", 1);
+    agc_output_wait w = {.out = out, .text = text, .newline = newline, .lead = own_line && s->mid_line};
+    if (total(&w) == 0) return true;
+    if (!s->waiters && !queued(s) && total(&w) <= room(s)) {
+      copy_piece(s, &w, total(&w));
       kick(s);
-      track(vm, out, newline ? '\n' : (uint8_t)text->data[text->bytes - 1]);
       return true;
     }
-    t->output = (agc_output_wait){.out = out, .text = text, .newline = newline};
+    w.lead = own_line;
+    t->output = w;
     agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
   }
   return wait_turn(vm, out);
@@ -328,6 +342,8 @@ bool agc_output_busy(agc_vm *vm) {
     agc_output *s = streams[k];
     if (s->base != s || (!s->len && !queued(s))) continue;
     if (!stopping) {
+      pump(s, true);
+      kick(s);
       busy = true;
     } else if (!s->writing) {
       pump(s, true);
@@ -492,14 +508,25 @@ void agc_notice_end(agc_notice *n, bool final) {
 }
 #endif
 
-bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
+static bool write_text(agc_vm *vm, agc_output *out, const agc_string *text, bool newline, bool own_line) {
 #ifdef __linux__
-  if (out->base) return put(vm, out, text, newline);
+  if (out->base) return put(vm, out, text, newline, own_line);
 #endif
+  bool lead = own_line && out->mid_line;
+  if (lead && fputc('\n', out->file) == EOF) write_failed(vm, out);
   if (text->bytes && fwrite(text->data, 1, text->bytes, out->file) != text->bytes) write_failed(vm, out);
   if (newline && fputc('\n', out->file) == EOF) write_failed(vm, out);
-  if (text->bytes || newline) track(vm, out, newline ? '\n' : (uint8_t)text->data[text->bytes - 1]);
+  if (newline || lead) out->mid_line = false;
+  if (text->bytes && !newline) out->mid_line = text->data[text->bytes - 1] != '\n';
   return true;
+}
+
+bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
+  return write_text(vm, out, text, newline, false);
+}
+
+bool agc_write_record(agc_vm *vm, agc_output *out, const agc_string *text) {
+  return write_text(vm, out, text, true, true);
 }
 
 void agc_flush(agc_vm *vm) {

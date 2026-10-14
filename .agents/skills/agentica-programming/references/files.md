@@ -52,9 +52,10 @@ same end: children stop, files are written, then the VM ends by the
 signal; a second signal ends it at once (after the children are
 stopped). A path that reopens a pipe the VM made itself (`/proc/self/fd/N`
 or `/dev/fd/N`) is refused as not a regular file; pipes the VM got at
-start (standard input, `bash <(...)`) stay readable. Standard output and
-error are the VM's own once the loop writes them, so a path to a pipe
-there (`/dev/stdout`, `/proc/self/fd/1`) is refused the same way. FIFOs
+start (standard input, output and error, `bash <(...)`) stay readable, by
+`/dev/stdout`, `/proc/self/fd/1` and the like; only the number of the
+descriptor the VM itself writes standard output or error through is
+refused. FIFOs
 and devices count as files: a FIFO with no writer gives EOF, and opening
 one for writing with no reader is an error. Calls on pipes, FIFOs and
 terminals (stdin too, when `/proc` lets the VM reopen it) wait on the VM's event loop, not in the thread pool,
