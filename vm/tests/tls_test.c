@@ -1,3 +1,7 @@
+/*
+ * The TLS adapter with two sessions in memory: handshakes in tiny slices, a
+ * 100,000-byte transfer, close_notify, raw EOF and every verify error.
+ */
 #include "../tls.h"
 
 #include <assert.h>

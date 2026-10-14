@@ -1,3 +1,8 @@
+/*
+ * The child channel (Linux only): one bidirectional libuv pipe over a socket,
+ * with line reads and writes, for a child process that talks to its parent.
+ * Service layer. Design: docs/vm/10-io-processes.md §10.4.
+ */
 #include "services.h"
 
 #ifdef __linux__

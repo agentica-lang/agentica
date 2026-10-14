@@ -1,3 +1,9 @@
+/*
+ * The String builtins (one of the tables that agc_find_builtin searches), with
+ * UTF-8 encoding, offsets through a per-task cursor, KMP search, case mapping,
+ * and the Int and Float parsers. Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.3.
+ */
 #include "services.h"
 
 #include <inttypes.h>

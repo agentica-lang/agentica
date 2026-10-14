@@ -1,3 +1,7 @@
+/*
+ * The loop registry: slots after removals, a completed job, a timed-out job,
+ * and agc_io_close, which frees the loop or refuses while a job is stuck.
+ */
 #include "../core.h"
 
 #include <assert.h>

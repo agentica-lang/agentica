@@ -1,3 +1,7 @@
+/*
+ * The trace escaper and line buffer: escapes, invalid UTF-8, lines cut at 512
+ * bytes on a character or escape boundary, and unknown categories.
+ */
 #include "../core.h"
 
 #include <assert.h>

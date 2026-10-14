@@ -8,5 +8,6 @@
   ],
   "minTokens": 50,
   "minLines": 5,
+  "mode": "weak",
   "reporters": ["console"]
 }

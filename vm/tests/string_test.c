@@ -1,3 +1,7 @@
+/*
+ * UTF-8 helpers over every code point, case mapping, KMP search, and the Int
+ * and Float parsing edge cases.
+ */
 #include "../core.h"
 #include "../services.h"
 

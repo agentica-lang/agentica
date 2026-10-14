@@ -1,3 +1,8 @@
+/*
+ * The HTTP body decoder adapter: Content-Length, chunked and close-delimited
+ * bodies, fed in pieces and bounded by the limits in http_parse.h. Adapter
+ * layer, behind http_parse.h. Design: docs/vm/10-io-http.md §10.6.1.
+ */
 #include "value.h"
 #include "http_parse.h"
 

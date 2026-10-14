@@ -1,3 +1,9 @@
+/*
+ * Values in C: allocation through the Boehm GC (with its stress hook), the
+ * checked agc_as_* accessors, String allocation, UTF-8 checks and code point
+ * counts, and agc_error_value (an error Result from C text). Core layer.
+ * Design: docs/vm/05-values-execution-builtins.md §5.
+ */
 #include "core.h"
 
 #include <math.h>

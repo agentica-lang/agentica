@@ -1,3 +1,7 @@
+/*
+ * The File.each_line stepper paths that bytecode cannot reach, driven by hand:
+ * buffer argument errors and a FIFO read that times out.
+ */
 #include "../core.h"
 #include "../services.h"
 

@@ -1,3 +1,9 @@
+/*
+ * The HTTP head and body adapter interface: the limits, agc_http_error with
+ * its status and text, the head parsers, the framing rules and the body
+ * decoder. Adapter header: it uses no core, port or service header. Design:
+ * docs/vm/10-io-http.md §10.6.
+ */
 #ifndef AGC_HTTP_PARSE_H
 #define AGC_HTTP_PARSE_H
 

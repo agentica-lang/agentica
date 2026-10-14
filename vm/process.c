@@ -1,3 +1,8 @@
+/*
+ * The Process builtins and System.env (Linux only): spawning and watching
+ * child processes, their pipes, and the environment entries that the VM keeps
+ * for itself. Service layer. Design: docs/vm/10-io-processes.md §10.4.
+ */
 #include "services.h"
 
 #ifdef __linux__

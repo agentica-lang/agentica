@@ -1,3 +1,9 @@
+/*
+ * The interpreter: agc_run_turn runs one turn of the current task (yield,
+ * parked or done) under the step and cost budgets. It also runs frames,
+ * registers, calls, TAIL_CALL, TRY, Int rules, closures and the List callback
+ * builtins. Core layer. Design: docs/vm/05-values-execution-builtins.md §6.
+ */
 #include "core.h"
 #include "list_impl.h"
 

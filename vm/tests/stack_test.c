@@ -1,3 +1,7 @@
+/*
+ * agc_stack_capture and the three printers on hand-built tasks: frames in main
+ * and in a spawned task, with native frames skipped.
+ */
 #include "../core.h"
 
 #include <assert.h>

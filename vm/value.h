@@ -1,3 +1,9 @@
+/*
+ * The value API that every layer uses: the tagged value type, the program
+ * tables, agc_opcode, the memory functions and the Json value API. Layer
+ * header: the core, the services and the adapters all include it. Design:
+ * docs/vm/15-layers.md §15.4.
+ */
 #ifndef AGC_VALUE_H
 #define AGC_VALUE_H
 

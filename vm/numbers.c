@@ -1,3 +1,8 @@
+/*
+ * The Float, Time and Random builtins (agc_number_builtins). Service layer.
+ * Design: docs/vm/02-reference-behavior.md §2.2 and
+ * docs/vm/05-values-execution-builtins.md §7.4.
+ */
 #include "services.h"
 
 #include <math.h>

@@ -1,3 +1,7 @@
+/*
+ * The Channel builtins, called directly with hand-made tasks and no bytecode:
+ * ring growth and its turn cost, wrap-around, capacity and waiter order.
+ */
 #include "../core.h"
 
 #include <assert.h>

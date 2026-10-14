@@ -1,3 +1,7 @@
+/*
+ * Allocation budget: under AGC_NO_GC, an allocation past agc_set_alloc_limit
+ * longjmps once, and agc_release_all clears the limit.
+ */
 #include "../core.h"
 
 #include <assert.h>

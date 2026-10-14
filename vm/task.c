@@ -1,3 +1,9 @@
+/*
+ * The scheduler: agc_vm_run (a FIFO run queue, one turn per task, libuv polled
+ * between turns), park and wake, spawn, task groups, and cancellation (children
+ * first). It also reports unobserved crashes. Core layer. Design:
+ * docs/vm/10-io-scheduler.md §10.2.1 and docs/vm/14-core-invariants.md.
+ */
 #include "core.h"
 
 #include <inttypes.h>

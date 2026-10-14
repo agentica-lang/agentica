@@ -1,3 +1,7 @@
+/*
+ * Write-escape ranges, String debug forms, list text, and deep lists and
+ * enum or struct chains (a depth of 1,000,000).
+ */
 #include "../core.h"
 
 #include <assert.h>
