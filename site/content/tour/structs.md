@@ -111,7 +111,7 @@ order 7: 8
 
 ## No methods
 
-Structs have fields only. Write functions that take the struct:
+Structs have fields only. A field can be named `to_s`: `b.to_s` then reads the field, not the text form of `b`. Write functions that take the struct:
 
 ```agentica
 struct Rect

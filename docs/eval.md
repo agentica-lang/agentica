@@ -20,6 +20,7 @@ The arms are the context an agent gets:
 - `python`: the same task in Python (untyped). The baseline.
 - `skill`: the `agentica-programming` skill and the `agentica` binary.
 - `grammar`: `docs/grammar.md` and `examples/`, without the skill.
+  The grammar arm's text changed in this PR (the `agentica help` pointer in its prompt, and no dead file links), so older grammar-arm results are not comparable. `agentica help` covers the builtins only, so this arm has no signature source for the `std/` modules (`HTTP`, `Queue`, `BDD`).
 - `binary`: only the binary, `agentica check`, and a one-line hint. No docs.
 
 ## How to run

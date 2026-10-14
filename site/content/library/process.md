@@ -37,6 +37,10 @@ current folder runs as `"./tool"`. A name that is not found gives
 A file that is found but cannot run (no execute permission, say) is an error
 from `spawn`.
 
+An empty command, or a command or argument with a NUL byte, gives `error("process: command must be nonempty and arguments cannot contain NUL")`.
+
+The program gets your program's environment.
+
 ```agentica {mode="check"}
 def main() -> Void
   p = Process.spawn("echo", ["hello"], 1000).unwrap!
@@ -124,6 +128,8 @@ Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 
 Waits for the program to end and gives its exit code. A timeout leaves the
 program running.
+
+Output that the program wrote and you have not read stays readable after `wait`.
 
 ```agentica {mode="check"}
 def main() -> Void

@@ -8,6 +8,8 @@ description: Print to standard output and error, and read standard input.
 Output is buffered; call `IO.flush()` when another program waits for your
 output line by line.
 
+On Linux, a read from standard input waits without stopping other tasks. On other systems a read blocks the whole program until input arrives.
+
 ## puts
 
 ```text
@@ -207,6 +209,8 @@ IO.read_bytes(count: Int) -> Result[List[Int]]
 
 Reads up to `count` bytes, from 0 to 1048576. At the end of input it gives
 `ok([])`.
+
+Text reads and byte reads share one input: bytes that one of them takes are not seen by the other.
 
 ```agentica
 def main() -> Void
