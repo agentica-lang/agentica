@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 4107,
+  "steps": 7069,
   "stdout": [
     "a record line: {\"event\":\"pass\",\"index\":3}",
     "text with a marker: null",
@@ -15,6 +15,8 @@
     "RUNTIME-X",
     "RUNTIME-TASK-CRASHED",
     "false",
+    "RUNTIME-X",
+    "\"{\\\"code\\\":\\\"MINE\\\",\\\"level\\\":\\\"warn\\\"}\"",
     ""
   ],
   "stderr": []
