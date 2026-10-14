@@ -1,0 +1,15 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 57,
+  "stdout": [
+    "false",
+    "ok(\"gone\")",
+    "0",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-close-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":9},\"start\":{\"column\":16,\"line\":9}},\"task\":true}",
+    ""
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 117,
+  "stdout": [
+    "other: ran",
+    "closer: closed",
+    "close woken by the exit: true",
+    "error(\"process: process is closed\")",
+    "error(\"process: process is closed\")",
+    "ok(3)",
+    "closed after wait",
+    "error(\"process: process is closed\")",
+    "closed after exit",
+    "closed while running",
+    "error(\"process: process is closed\")",
+    ""
+  ],
+  "stderr": []
+}

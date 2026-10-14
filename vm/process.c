@@ -1,32 +1,29 @@
 #include "services.h"
 
 #ifdef __linux__
-#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
 #define ERR_CHUNK 4096
-#define REAP_SECONDS 1
-#define REAP_STEP_NS 100000L
+#define REAP_MS 1000
 #define GRACE_MS 1000
 #define URING_ENV "UV_USE_IO_URING="
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
-typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT } req_kind;
+typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE } req_kind;
 typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 
 typedef struct proc proc;
 typedef struct request request;
 typedef struct guard guard;
+typedef struct bound bound;
 
 struct request {
   req_kind kind;
@@ -38,10 +35,15 @@ struct request {
 
 struct guard {
   agc_trace trace;
+  uv_loop_t *loop;
   proc *first;
   size_t running;
-  struct timespec deadline;
   bool released, reaping;
+};
+
+struct bound {
+  uv_timer_t timer;
+  bool over;
 };
 
 struct proc {
@@ -121,7 +123,10 @@ static bool output_over(const proc *p) {
   return p->closed || ((p->out_buf.eof || p->out_buf.error) && p->err_done);
 }
 
-static bool waits_over(const proc *p, req_kind kind) { return kind == REQ_WAIT ? wait_over(p) : output_over(p); }
+static bool waits_over(const proc *p, req_kind kind) {
+  if (kind == REQ_CLOSE) return !p->running;
+  return kind == REQ_WAIT ? wait_over(p) : output_over(p);
+}
 
 static void notify_waits(proc *p) {
   for (request *q = p->waits; q; q = q->next)
@@ -133,44 +138,6 @@ static void finished(proc *p, int64_t status) {
   p->exited = true;
   p->status = status;
   if (p->linked) unlink_child(p);
-}
-
-static void deadline_in(struct timespec *t) {
-  clock_gettime(CLOCK_MONOTONIC, t);
-  t->tv_sec += REAP_SECONDS;
-}
-
-static bool past(const struct timespec *t) {
-  struct timespec now;
-  clock_gettime(CLOCK_MONOTONIC, &now);
-  return now.tv_sec > t->tv_sec || (now.tv_sec == t->tv_sec && now.tv_nsec >= t->tv_nsec);
-}
-
-static bool collected(proc *p) {
-  int status = 0;
-  pid_t pid = waitpid(p->process.pid, &status, WNOHANG);
-  if (pid == p->process.pid) {
-    finished(p, WIFSIGNALED(status) ? 128 + WTERMSIG(status) : WEXITSTATUS(status));
-    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d status=%" PRId64, (int)pid, p->status);
-    return true;
-  }
-  if (pid < 0 && errno == ECHILD) {
-    finished(p, p->status);
-    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d status=%" PRId64 " gone=1", (int)p->process.pid, p->status);
-    return true;
-  }
-  return false;
-}
-
-static void reap(proc *p, const struct timespec *deadline) {
-  struct timespec pause = {0, REAP_STEP_NS};
-  while (!collected(p)) {
-    if (!deadline || past(deadline)) {
-      AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)p->process.pid);
-      return;
-    }
-    nanosleep(&pause, NULL);
-  }
 }
 
 static int signal_child(proc *p, int sig) {
@@ -197,8 +164,9 @@ static void grace_over(uv_timer_t *t) {
 
 /* docs/vm/10-io-processes.md §10.4: a captured child gets SIGTERM and one
    second, from a timer, so a child that is a VM can stop its own children;
-   the program never waits. */
-static int shut(proc *p, const struct timespec *deadline) {
+   the program never waits. A plain child gets SIGKILL and libuv's exit
+   callback reaps it. */
+static int shut(proc *p) {
   if (p->closed) return 0;
   p->closed = true;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "close pid=%d running=%d", (int)p->process.pid, p->running ? 1 : 0);
@@ -210,7 +178,6 @@ static int shut(proc *p, const struct timespec *deadline) {
     }
   } else if (p->running) {
     err = signal_child(p, SIGKILL);
-    reap(p, err ? NULL : deadline);
   }
   close_handle((uv_handle_t *)&p->in, closed_in);
   close_handle((uv_handle_t *)&p->out, closed_out);
@@ -224,33 +191,38 @@ static int shut(proc *p, const struct timespec *deadline) {
   return err;
 }
 
-static int close_proc(proc *p) {
-  struct timespec deadline;
-  deadline_in(&deadline);
-  return shut(p, &deadline);
-}
-
 static bool in_grace(const proc *p) { return p->captured && p->running && p->stop == STOP_TERM; }
 
-static void outlast(guard *g) {
-  struct timespec pause = {0, REAP_STEP_NS};
-  for (;;) {
-    bool left = false;
-    for (proc *p = g->first, *next = NULL; p; p = next) {
-      next = p->run_next;
-      if (!in_grace(p)) continue;
-      if (collected(p))
-        retire(p);
-      else
-        left = true;
-    }
-    if (!left || past(&g->deadline)) return;
-    nanosleep(&pause, NULL);
-  }
+static bool awaited(const proc *p, bool grace) { return p->running && !p->stop_failed && (!grace || in_grace(p)); }
+
+static bool exits_pending(const guard *g, bool grace) {
+  for (const proc *p = g->first; p; p = p->run_next)
+    if (awaited(p, grace)) return true;
+  return false;
+}
+
+static void bound_over(uv_timer_t *timer) { ((bound *)(void *)timer)->over = true; }
+
+static void bound_freed(uv_handle_t *handle) { free(handle); }
+
+/* The end of the run drives the loop for at most REAP_MS, so the exit
+   callbacks reap the children. A child that cannot be killed is not awaited. */
+static void await_exits(guard *g, bool grace) {
+  if (!exits_pending(g, grace)) return;
+  bound *b = calloc(1, sizeof(bound));
+  if (!b) agc_out_of_memory();
+  uv_update_time(g->loop);
+  uv_timer_init(g->loop, &b->timer);
+  uv_timer_start(&b->timer, bound_over, REAP_MS, 0);
+  while (!b->over && exits_pending(g, grace) && uv_run(g->loop, UV_RUN_ONCE)) {}
+  for (const proc *p = g->first; p; p = p->run_next)
+    if (awaited(p, grace)) AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)p->process.pid);
+  uv_close((uv_handle_t *)&b->timer, bound_freed);
+  uv_run(g->loop, UV_RUN_NOWAIT);
 }
 
 /* Plain children get SIGKILL at once; captured ones SIGTERM, then SIGKILL
-   when the shared grace deadline passes, then one more reap deadline. */
+   when the grace wait is over, then one more wait for the exits. */
 static void close_children(guard *g) {
   if (!g->reaping) {
     g->reaping = true;
@@ -262,27 +234,20 @@ static void close_children(guard *g) {
         signal_child(p, SIGKILL);
       grace = grace || in_grace(p);
     }
-    deadline_in(&g->deadline);
-    if (grace) {
-      outlast(g);
-      deadline_in(&g->deadline);
-    }
+    if (grace) await_exits(g, true);
   }
   for (proc *p = g->first, *next = NULL; p; p = next) {
     next = p->run_next;
-    if (p->captured && p->running) {
-      if (p->stop == STOP_TERM) signal_child(p, SIGKILL);
-      reap(p, p->stop_failed ? NULL : &g->deadline);
-      retire(p);
-    }
-    shut(p, &g->deadline);
+    if (p->captured && p->running && p->stop == STOP_TERM) signal_child(p, SIGKILL);
+    shut(p);
   }
+  await_exits(g, false);
 }
 
 static void release_proc(void *native) {
   proc *p = native;
   if (p->g) close_children(p->g);
-  close_proc(p);
+  shut(p);
   p->users--;
   settle(p);
 }
@@ -327,7 +292,7 @@ static agc_value take(agc_vm *vm, proc *p, req_kind kind, size_t count) {
   if (kind != REQ_LINE) return agc_inbuf_bytes(vm, &p->out_buf, count);
   bool over;
   agc_value line = agc_inbuf_line(vm, &p->out_buf, "process: line exceeds 1048576 bytes", "process: end of input", &over);
-  if (over) close_proc(p);
+  if (over) shut(p);
   return line;
 }
 
@@ -361,7 +326,9 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   unlink_request(q);
   if (q->kind == REQ_SEND) agc_charge(vm, q->count);
   agc_value result;
-  if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
+  if (q->kind == REQ_CLOSE) {
+    result = agc_void();
+  } else if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
     result = take(vm, p, q->kind, q->count);
     agc_charge(vm, agc_value_units(result));
   } else if (p->closed) {
@@ -380,7 +347,11 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   request *q = data;
   unlink_request(q);
-  if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT) close_proc(q->p);
+  if (q->kind == REQ_CLOSE) {
+    AGC_TRACE(&q->p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)q->p->process.pid);
+    return agc_void();
+  }
+  if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT) shut(q->p);
   return agc_stream_timed_out();
 }
 
@@ -444,6 +415,7 @@ static guard *guard_of(agc_vm *vm) {
   guard *g = calloc(1, sizeof(guard));
   if (!g) agc_out_of_memory();
   g->trace = vm->rt->trace;
+  g->loop = agc_io_uv(vm);
   agc_each_fd(keep_private, NULL);
   r->native = g;
   vm->process_guard = r;
@@ -697,7 +669,7 @@ static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **e
   close_fd(&fds[1]);
   close_fd(&fds[2]);
   close_fd(&fds[4]);
-  if (rc && p->running) close_proc(p);
+  if (rc && p->running) shut(p);
   return rc;
 }
 
@@ -712,18 +684,22 @@ static char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   return path;
 }
 
-static int end_child(agc_vm *vm, agc_resource *r) {
+static proc *end_child(agc_vm *vm, agc_resource *r, int *err) {
   proc *p = r->native;
-  if (!p) return 0;
+  if (!p) return NULL;
   r->native = NULL;
   agc_unregister(vm, r);
-  int err = close_proc(p);
-  p->users--;
-  settle(p);
-  return err;
+  *err = shut(p);
+  return p;
 }
 
-static void close_child(agc_vm *vm, agc_resource *r) { (void)end_child(vm, r); }
+static void close_child(agc_vm *vm, agc_resource *r) {
+  int err = 0;
+  proc *p = end_child(vm, r, &err);
+  if (!p) return;
+  p->users--;
+  settle(p);
+}
 
 /* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
    resolves before the child changes directory (§10.4). */
@@ -904,8 +880,18 @@ static agc_value builtin_output(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  if (end_child(vm, agc_as_process(vm, args[0])->state))
-    agc_fail(vm, "RUNTIME-PROCESS-CLOSE", "process: the child cannot be stopped", span);
+  int err = 0;
+  proc *p = end_child(vm, agc_as_process(vm, args[0])->state, &err);
+  if (!p) return agc_void();
+  if (!err && !p->captured && p->running) {
+    request *q = new_request(p, REQ_CLOSE);
+    q->next = p->waits;
+    p->waits = q;
+    q->job = agc_io_start(vm, &process_io, q, agc_void(), REAP_MS);
+  }
+  p->users--;
+  settle(p);
+  if (err) agc_fail(vm, "RUNTIME-PROCESS-CLOSE", "process: the child cannot be stopped", span);
   return agc_void();
 }
 

@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 91,
+  "stdout": [
+    "false",
+    "false",
+    "ok(\"gone\")",
+    "ok(\"gone\")",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-close-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":2},\"start\":{\"column\":16,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-close-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":2},\"start\":{\"column\":16,\"line\":2}},\"task\":true}",
+    ""
+  ]
+}
