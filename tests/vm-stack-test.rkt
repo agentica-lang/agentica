@@ -2,9 +2,11 @@
 
 (require rackunit
          racket/runtime-path
-         (only-in "vm-diff-common.rkt" vm-file vm-built? compile-file run-process run-timeout fixture-selected?))
+         (only-in "vm-diff-common.rkt" vm-file vm-built? compile-file run-process run-timeout fixture-selected? check-fixture-filter))
 
 (define-runtime-path fixtures "fixtures")
+
+(check-fixture-filter)
 
 (define cases
   '(("vm/stack-trace-nested" ())

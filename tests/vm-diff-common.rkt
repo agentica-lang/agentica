@@ -24,7 +24,8 @@
          run-process
          run-timeout
          fixture-arg
-         fixture-selected?)
+         fixture-selected?
+         check-fixture-filter)
 
 (define-runtime-path root "..")
 (define-runtime-path fixtures "fixtures/vm")
@@ -326,10 +327,13 @@
         path<?))
 
 (define fixture-filter
-  (let ([text (getenv "AGENTICA_FIXTURES")])
-    (and text
-         (let ([names (string-split text #px"[\\s,]+")])
-           (and (pair? names) names)))))
+  (let* ([text (getenv "AGENTICA_FIXTURES")]
+         [names (and text (string-split text #px"[\\s,]+"))])
+    (and (pair? names)
+         (begin
+           (when (getenv "CI")
+             (error 'vm-diff "AGENTICA_FIXTURES must not be set when CI is set: CI runs every fixture"))
+           names))))
 
 (define (fixture-selected? name)
   (or (not fixture-filter) (and (member name fixture-filter) #t)))
@@ -1240,6 +1244,9 @@
     (lambda () (delete-directory/files work)))
   (define results (test-log #:display? #f #:exit? #f))
   (printf "vm-diff check: ~a of ~a checks failed\n" (car results) (cdr results))
+  (when (zero? (cdr results))
+    (eprintf "vm-diff: no checks ran (a skipped fixture?)\n")
+    (exit 1))
   (unless (zero? (car results))
     (exit 1)))
 
@@ -1273,6 +1280,8 @@
     (lambda () (delete-directory/files work))))
 
 (module+ main
-  (if (equal? (current-command-line-arguments) #("check"))
-      (check-selected)
-      (write-goldens)))
+  (match (vector->list (current-command-line-arguments))
+    ['() (write-goldens)]
+    ['("check") (check-selected)]
+    [_ (eprintf "usage: racket tests/vm-diff-common.rkt [check]\n")
+       (exit 2)]))
