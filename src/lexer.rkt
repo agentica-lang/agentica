@@ -81,6 +81,64 @@
         (advance!)
         (loop))))
 
+  (define (blank-char? char)
+    (or (char=? char #\space) (char=? char #\tab)))
+
+  (define (line-start?)
+    (let loop ([at (sub1 index)])
+      (or (< at 0)
+          (let ([char (string-ref text at)])
+            (cond
+              [(blank-char? char) (loop (sub1 at))]
+              [else (and (memv char '(#\newline #\return)) #t)])))))
+
+  (define (next-line-start)
+    (cond
+      [(>= index source-length) #f]
+      [(char=? (current) #\newline) (add1 index)]
+      [(and (char=? (current) #\return) (equal? (peek 1) #\newline)) (+ index 2)]
+      [else #f]))
+
+  (define (skip-blanks at)
+    (let loop ([at at])
+      (if (and (< at source-length) (blank-char? (string-ref text at)))
+          (loop (add1 at))
+          at)))
+
+  (define (doc-marker-at? at)
+    (and (< (add1 at) source-length)
+         (char=? (string-ref text at) #\#)
+         (char=? (string-ref text (add1 at)) #\#)))
+
+  (define (line-after-doc)
+    (define line-start (next-line-start))
+    (define at (and line-start (skip-blanks line-start)))
+    (cond
+      [(or (not at) (>= at source-length)) 'eof]
+      [(memv (string-ref text at) '(#\newline #\return)) 'blank]
+      [(char=? (string-ref text at) #\#) 'comment]
+      [else 'code]))
+
+  (define (scan-doc-block!)
+    (define start (position))
+    (define lines
+      (let line-loop ([acc '()])
+        (advance!)
+        (advance!)
+        (when (and (< index source-length) (char=? (current) #\space))
+          (advance!))
+        (define text-start index)
+        (scan-while! (lambda (c) (not (memv c '(#\newline #\return)))))
+        (define collected (cons (substring text text-start index) acc))
+        (define line-start (next-line-start))
+        (cond
+          [(and line-start (doc-marker-at? (skip-blanks line-start)))
+           (advance-newline!)
+           (scan-while! blank-char?)
+           (line-loop collected)]
+          [else (reverse collected)])))
+    (emit! 'DOC start (doc-block (string-join lines "\n") (line-after-doc))))
+
   (define return-escape #f)
 
   ;; Scan string text from the current index. Ends at the closing quote or at
@@ -167,6 +225,9 @@
             (define start (advance-newline!))
             (when (statement-level? delimiters)
               (emit! 'NL start #f))
+            (scan)]
+           [(and (char=? char #\#) (doc-marker-at? index) (line-start?))
+            (scan-doc-block!)
             (scan)]
            [(char=? char #\#)
             (scan-while! (lambda (c) (not (memv c '(#\newline #\return)))))

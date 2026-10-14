@@ -1,6 +1,6 @@
 ## 32. Doc comments
 
-**Status:** planned (roadmap [phase 22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets documentation comments written as `##` lines, in the style of Rust's `///`, so that a later tool can generate documentation from the code. Phase 22 is front end only. It comes after 7i, HTTP 20b, task crash isolation (§37), unit tests (§36) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation pilot (order step 7.2.2, §32.7).
+**Status:** 22a is built (§32.2 to §32.4: the `##` syntax, the parser side table and the `std/` docs); 22b (§32.5, §32.6) is planned (roadmap [phase 22](../roadmap/22-doc-comments.md)). Decided on 2026-10-12: Agentica gets documentation comments written as `##` lines, in the style of Rust's `///`, so that a later tool can generate documentation from the code. Phase 22 is front end only. It comes after 7i, HTTP 20b, task crash isolation (§37), unit tests (§36) and HTTP 20c (roadmap order step 7.2.1), and after the evaluation pilot (order step 7.2.2, §32.7).
 
 The idea in one paragraph: a run of lines that start with `##` documents the declaration on the next line. `#` stays an ordinary comment that tools ignore. The text is Markdown. A `##` run at the top of a file documents the module. The parser keeps each run with its declaration, and two tools read it: `agentica doc`, which prints a module's exported API with its docs, and `agentica help`, which learns to show `std/` functions. No tags such as `@param` are needed, because the types are in the signature.
 
@@ -80,7 +80,7 @@ end
 - The lexer keeps doc lines instead of dropping them and emits one `DOC` token per doc block. The token carries the text and the span of the whole block. Inside parentheses, brackets or braces, where no `NL` is emitted, a doc line is still an error (`PARSE-DETACHED-DOC`).
 - The parser attaches each `DOC` token to the declaration, field or variant on the next line, or makes it the module doc.
 - The docs do not go into the existing AST structs. The parser returns them in a side table on `program`: a map from the span of each documented declaration, field or variant to its doc text, plus the module doc. So the checker, lowering and the bytecode see the same AST as before, and the `.agcb` format does not change.
-- `agentica doc` and `help` read the table straight from the parser (§32.5), so `src/modules.rkt` does not change.
+- `agentica doc` and `help` read the table straight from the parser (§32.5), so they need no linking. `src/modules.rkt` only copies the root file's table and module doc into the linked `program`.
 
 ### 32.5 `agentica doc`
 

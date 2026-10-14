@@ -1,22 +1,30 @@
+## Reads Gherkin feature files for `agentica test`.
+##
+## It supports `Feature`, `Background`, `Scenario`, `Scenario Outline` with `Examples`, tags, Doc Strings and Data Tables, in English only.
+
 import "std/test/report" as Report
 
+## A problem in a feature file: a code, a message and its place.
 export struct Diagnostic
   code: String
   message: String
   span: Report.Span
 end
 
+## The result of a read that can fail: `Done` with a value, or `Failed` with a `Diagnostic`.
 export enum Outcome[T]
   Done(T)
   Failed(Diagnostic)
 end
 
+## What follows a step: nothing, a Doc String or a Data Table.
 export enum Argument
   NoArgument
   DocString(String)
   DataTable(List[List[String]])
 end
 
+## One step of a scenario: its kind (`Given`, `When` or `Then`), the text after the keyword, its argument and its place.
 export struct Step
   kind: String
   text: String
@@ -24,6 +32,7 @@ export struct Step
   span: Report.Span
 end
 
+## One scenario, with the `Background` steps first, the tags of the feature, of the scenario and of its `Examples` block, and the example row it came from.
 export struct Scenario
   name: String
   steps: List[Step]
@@ -32,6 +41,7 @@ export struct Scenario
   example: Report.Example
 end
 
+## A parsed feature file. A `Scenario Outline` is already expanded into one scenario for each `Examples` row.
 export struct Feature
   name: String
   scenarios: List[Scenario]
@@ -75,6 +85,7 @@ struct Doc
   next: Int
 end
 
+## Parses the text of the feature file `file`. Returns the `Feature`, or a `Diagnostic` for the first problem.
 export def parse(file: String, text: String) -> Outcome[Feature]
   src = read_lines(file, text)
   count = src.raws.size

@@ -550,4 +550,113 @@
     (check-equal? (target-at "3 |> (U.double)") '(12 22))
     (check-equal? (target-at "1 |> (IO.gets)") '(12 21))
     (check-equal? (target-at "3 |> U.each2 do |y: Int| y end") '(12 37))
-    (check-equal? (target-at "3 |> U.each2") '(12 19))))
+    (check-equal? (target-at "3 |> U.each2") '(12 19)))
+
+  (define (problem-at text)
+    (define result (parse-text text))
+    (check-true (diagnostic? result) text)
+    (define span (diagnostic-span result))
+    (list (diagnostic-code result)
+          (source-position-line (source-span-start span))
+          (source-position-column (source-span-start span))))
+
+  (define (docs-by-line program)
+    (sort (for/list ([(span text) (in-hash (program-docs program))])
+            (cons (source-position-line (source-span-start span)) text))
+          < #:key car))
+
+  (test-case "a doc block attaches to the declaration on the next line"
+    (define program
+      (parse-ok (string-append "## Adds.\n##\n## Two numbers.\ndef add() -> Void\nend\n\n"
+                               "## A point.\nstruct Point\nend\n\n"
+                               "## Shows.\nexport def show() -> Void\nend\n\n"
+                               "## A shape.\nexport struct Shape\nend\n\n"
+                               "## A choice.\nexport enum Choice\n  A\nend\n\n"
+                               "## Plain.\nenum Plain\n  B\nend\n")))
+    (check-equal? (docs-by-line program)
+                  '((4 . "Adds.\n\nTwo numbers.") (8 . "A point.") (12 . "Shows.") (16 . "A shape.")
+                    (20 . "A choice.") (25 . "Plain.")))
+    (check-false (program-module-doc program))
+    (define declarations (program-declarations program))
+    (for ([declaration (in-list declarations)])
+      (check-true (hash-has-key? (program-docs program) (node-span declaration))))
+    (check-true (export-decl? (list-ref declarations 2)))
+    (check-equal? (hash-ref (program-docs program) (node-span (list-ref declarations 2))) "Shows."))
+
+  (test-case "fields and variants take docs, and neighbours without docs stay out of the table"
+    (define program
+      (parse-ok (string-append "struct Point\n  ## Across.\n  x: Int\n  y: Int\n  ## Up.\n  z: Int\nend\n\n"
+                               "enum Option[T]\n  Some(T)\n  ## Nothing here.\n  None\nend\n")))
+    (define point (car (program-declarations program)))
+    (define option (cadr (program-declarations program)))
+    (define fields (struct-decl-fields point))
+    (check-equal? (hash-ref (program-docs program) (node-span (car fields))) "Across.")
+    (check-false (hash-has-key? (program-docs program) (node-span (cadr fields))))
+    (check-equal? (hash-ref (program-docs program) (node-span (caddr fields))) "Up.")
+    (define variants (enum-decl-variants option))
+    (check-false (hash-has-key? (program-docs program) (node-span (car variants))))
+    (check-equal? (hash-ref (program-docs program) (node-span (cadr variants))) "Nothing here.")
+    (check-equal? (hash-count (program-docs program)) 3)
+    (check-equal? (enum-variant-name (cadr variants)) "None"))
+
+  (test-case "a file without doc comments has an empty table and no module doc"
+    (define program (parse-ok "# note\ndef main() -> Void\nend\n"))
+    (check-equal? (program-docs program) (hash))
+    (check-false (program-module-doc program)))
+
+  (test-case "the module doc is the first block when a blank line follows it"
+    (define program (parse-ok "\n\n# license\n\n# more\n## Module.\n##\n## Details.\n\n## Adds.\ndef add() -> Void\nend\n"))
+    (check-equal? (program-module-doc program) "Module.\n\nDetails.")
+    (check-equal? (docs-by-line program) '((11 . "Adds.")))
+    (define only (parse-ok "## Only a module doc.\n\n"))
+    (check-equal? (program-module-doc only) "Only a module doc.")
+    (check-equal? (program-declarations only) '())
+    (define imported (parse-ok "## Module.\n\nimport \"a\" as A\n"))
+    (check-equal? (program-module-doc imported) "Module.")
+    (define attached (parse-ok "## Not a module doc.\ndef main() -> Void\nend\n"))
+    (check-false (program-module-doc attached))
+    (check-equal? (docs-by-line attached) '((2 . "Not a module doc."))))
+
+  (test-case "every detached doc block is PARSE-DETACHED-DOC at its first line"
+    (for ([entry (in-list
+                  (list
+                   (cons "def a() -> Void\nend\n\n## d\n\ndef b() -> Void\nend\n" '(4 1))
+                   (cons "def a() -> Void\nend\n\n## d\n# note\ndef b() -> Void\nend\n" '(4 1))
+                   (cons "## d\n# note\n\ndef a() -> Void\nend\n" '(1 1))
+                   (cons "## d\n## e\n# note\n\ndef a() -> Void\nend\n" '(1 1))
+                   (cons "import \"a\" as A\n## d\nimport \"b\" as B\n" '(2 1))
+                   (cons "## d\nimport \"a\" as A\n" '(1 1))
+                   (cons "import \"a\" as A\n\n## d\n\ndef a() -> Void\nend\n" '(3 1))
+                   (cons "def main() -> Void\n  ## d\n  ## e\n  x = 1\nend\n" '(2 3))
+                   (cons "def main() -> Void\n  x = 1\n  ## d\nend\n" '(3 3))
+                   (cons "def main() -> Void\n  f(1,\n## d\n2)\nend\n" '(3 1))
+                   (cons "def main() -> Void\n  f(1\n## d\n)\nend\n" '(3 1))
+                   (cons "def a() -> Void\nend\n\n## d\n" '(4 1))
+                   (cons "def a() -> Void\nend\n\n## d" '(4 1))
+                   (cons "## d\n" '(1 1))
+                   (cons "## d" '(1 1))
+                   (cons "## a\n\n## b\n\ndef a() -> Void\nend\n" '(3 1))
+                   (cons "## d\nputs(1)\n" '(1 1))
+                   (cons "struct S\n  a: Int\n  ## d\nend\n" '(3 3))
+                   (cons "struct S\n  ## d\n\n  a: Int\nend\n" '(2 3))
+                   (cons "struct S\n  ## d\n  # note\n  a: Int\nend\n" '(2 3))
+                   (cons "enum E\n  A\n  ## d\nend\n" '(3 3))
+                   (cons "enum E\n  ## d\n\n  A\nend\n" '(2 3))))])
+      (check-equal? (problem-at (car entry)) (cons 'PARSE-DETACHED-DOC (cdr entry)) (car entry)))
+    (define multi (diagnostic-span (parse-text "def a() -> Void\nend\n\n## one\n## two\n\ndef b() -> Void\nend\n")))
+    (check-equal? (source-position-line (source-span-start multi)) 4)
+    (check-equal? (source-position-line (source-span-end multi)) 5)
+    (check-equal? (source-position-column (source-span-end multi)) 7))
+
+  (test-case "a doc line does not count as the blank line between declarations"
+    (check-equal? (problem-at "def a() -> Void\nend\n## d\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 3 1))
+    (check-equal? (problem-at "def a() -> Void\nend\n## d\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 3 1))
+    (check-equal? (problem-at "struct S\n  a: Int\nend\n## d\nstruct T\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1))
+    (check-equal? (problem-at "def a() -> Void\nend\n## d\n\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 3 1))
+    (define blank-before (parse-ok "def a() -> Void\nend\n\n## d\ndef b() -> Void\nend\n"))
+    (check-equal? (docs-by-line blank-before) '((5 . "d")))
+    (define comment-before (parse-ok "def a() -> Void\nend\n# note\n## d\ndef b() -> Void\nend\n"))
+    (check-equal? (docs-by-line comment-before) '((5 . "d")))
+    (define after-import (parse-ok "import \"a\" as A\n## d\ndef b() -> Void\nend\n"))
+    (check-equal? (docs-by-line after-import) '((3 . "d")))
+    (check-equal? (problem-at "## d\ndef a() -> Void\nend\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1))))

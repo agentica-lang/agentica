@@ -81,6 +81,7 @@ Types: `Int` (signed 64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]
 ## Rules agents break
 
 - Syntax: no semicolons, braces, `let`, `when`, `elif`, `then`, `match`, or `loop do`. Strings are double-quoted (`'x'` is an error). Comments are `#` only (`//` is an error). `break` and `next` stand alone on a line; write `if x ... break ... end`, not `break if x`.
+- A `##` block directly above a `def`, `struct`, `enum`, field or variant is its Markdown doc (`## Adds two numbers.` above `def add(a: Int, b: Int) -> Int`). The first `##` block of a file, followed by a blank line, documents the module. Any other `##` block is `PARSE-DETACHED-DOC`.
 - Calls take parentheses: `puts("hi")`, `main()`, `run(5) do |x| ... end`. Only a builtin method or a zero-argument module function may drop them: `s.length`, `xs.size`, `IO.gets!`.
 - Values are immutable: `xs = xs.push(4)`, `m = m.put("k", 1)`. A bare `xs.push(4)` is `CHECK-UNUSED-VALUE`. Fields and indexes cannot be assigned.
 - A block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`). A `for x in xs ... end` loop can, so use it for running totals.
