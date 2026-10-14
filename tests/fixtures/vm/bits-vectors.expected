@@ -1,0 +1,10 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 97500,
+  "stdout": [
+    "1037 vectors ok",
+    ""
+  ],
+  "stderr": []
+}
