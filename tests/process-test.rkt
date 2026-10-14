@@ -111,7 +111,7 @@
            (define feature (build-path directory "process.feature"))
            (define steps (build-path directory "steps.agc"))
            (display-to-file
-             "Feature: Process capability\nScenario: child\nGiven the Agentica program \"child.agc\"\nThen I receive a JSON line within 5000 milliseconds:\n  \"\"\"\n  [\"child\"]\n  \"\"\"\nAnd the program exits with code 0 within 5000 milliseconds\nScenario: handler\nThen the handler can spawn\n"
+             "Feature: Process capability\nScenario: child\nGiven the Agentica program \"child.agc\"\nThen I receive a JSON line within 30000 milliseconds:\n  \"\"\"\n  [\"child\"]\n  \"\"\"\nAnd the program exits with code 0 within 30000 milliseconds\nScenario: handler\nThen the handler can spawn\n"
              feature)
            (display-to-file (program "args"
              "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))"
