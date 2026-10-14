@@ -426,8 +426,8 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n) {
   return n->file ? n->file : out->file;
 }
 
-static void queue_notice(agc_output *s, const char *text, size_t n) {
-  if (queued(s) >= AGC_NOTICE_LIMIT) return;
+static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
+  if (!kept && queued(s) >= AGC_NOTICE_LIMIT) return;
   if (s->notice_at) {
     memmove(s->notice, s->notice + s->notice_at, queued(s));
     s->notice_len -= s->notice_at;
@@ -454,7 +454,7 @@ static void finish_text(agc_output *s, const char *text, size_t n) {
   write_now(s);
 }
 
-void agc_notice_end(agc_notice *n, bool final) {
+void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
   agc_output *out = n->out;
   if (!n->file) {
     fflush(out->file);
@@ -463,10 +463,10 @@ void agc_notice_end(agc_notice *n, bool final) {
   fclose(n->file);
   agc_output *s = out->base;
   if (!s->failed && n->len) {
-    if (final) {
+    if (mode == AGC_NOTICE_FINAL) {
       finish_text(s, n->text, n->len);
     } else {
-      queue_notice(s, n->text, n->len);
+      queue_notice(s, n->text, n->len, mode == AGC_NOTICE_KEPT);
       flush_now(s);
     }
   }
@@ -502,8 +502,8 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n) {
   return out->file;
 }
 
-void agc_notice_end(agc_notice *n, bool final) {
-  (void)final;
+void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
+  (void)mode;
   fflush(n->out->file);
 }
 #endif

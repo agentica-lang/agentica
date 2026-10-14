@@ -175,13 +175,21 @@ static void flush_files(agc_vm *vm) {
   const agc_outcome *o = &vm->rt->outcome;
   agc_notice notice;
   agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);
-  agc_notice_end(&notice, true);
+  agc_notice_end(&notice, AGC_NOTICE_FINAL);
 }
 
-static void print_outcome(agc_vm *vm, const agc_outcome *outcome, bool final) {
+static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mode mode) {
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, outcome, vm->rt->style, false);
-  agc_notice_end(&notice, final);
+  agc_notice_end(&notice, mode);
+}
+
+static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
+  if (setjmp(vm->fail) == 0) {
+    print_outcome(vm, outcome, AGC_NOTICE_KEPT);
+    return;
+  }
+  print_outcome(vm, outcome, AGC_NOTICE_FINAL);
 }
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
@@ -191,16 +199,16 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();
   agc_io_goodbye(vm);
-  if (outcome.kind == AGC_FAILED) print_outcome(vm, &outcome, false);
   bool stdout_ok = flush_stream(stdout);
   flush_stream(stderr);
+  if (outcome.kind == AGC_FAILED) announce_outcome(vm, &outcome);
   flush_files(vm);
   agc_files_close(vm);
   stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
   if (vm->rt->flush_expired) {
     agc_notice notice;
     agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
-    agc_notice_end(&notice, true);
+    agc_notice_end(&notice, AGC_NOTICE_FINAL);
   }
   const char *write_error = NULL;
   if (outcome.kind != AGC_FAILED && !agc_io_stop_signal()) {
@@ -215,7 +223,7 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
     outcome.message = write_error;
     outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
-    print_outcome(vm, &outcome, true);
+    print_outcome(vm, &outcome, AGC_NOTICE_FINAL);
   }
   int code = 0;
   if (outcome.kind == AGC_FAILED) {
@@ -520,8 +528,11 @@ static int run(int argc, char **argv) {
   if (reserved) agc_files_forget(&vm->rt->inherited, 0);
   agc_input_open(vm, reserved ? reserve_stdin() : 0, isatty(1));
   vm->rt->in.reserved = reserved;
-  agc_output_open(vm, &vm->rt->out, 1);
-  agc_output_open(vm, &vm->rt->err, 2);
+  const char *blocking_output = getenv("AGENTICA_VM_TEST_BLOCKING_OUTPUT");
+  if (!blocking_output || strcmp(blocking_output, "1") != 0) {
+    agc_output_open(vm, &vm->rt->out, 1);
+    agc_output_open(vm, &vm->rt->err, 2);
+  }
   agc_io_watch_stop(vm, seen_driver ? driver : 0);
   return end_run(vm, agc_vm_run(vm));
 }

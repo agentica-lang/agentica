@@ -292,7 +292,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   }
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
-  agc_notice_end(&notice, false);
+  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
   drop_tree(vm, t, false);
@@ -329,7 +329,7 @@ bool agc_report_unobserved(agc_vm *vm) {
   agc_notice notice;
   agc_print_unobserved(agc_notice_begin(&vm->rt->err, &notice), vm->crash_count - vm->observed_count, first->crash,
                        vm->rt->style);
-  agc_notice_end(&notice, false);
+  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
   return true;
 }
 

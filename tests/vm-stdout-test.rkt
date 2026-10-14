@@ -210,6 +210,18 @@ end
 AGC
   )
 
+(define output-then-crash-program
+  #<<AGC
+def main() -> Void
+  puts("before")
+  print("partial")
+  x = 1 / 0
+  puts(x)
+end
+
+AGC
+  )
+
 (define dev-stdout-program
   #<<AGC
 def main() -> Void
@@ -520,6 +532,18 @@ AGC
           (check-true (and marker #t) "the record is there")
           (check-equal? (bytes-ref out (sub1 (caar marker))) 10 "the record starts a line")
           (check-regexp-match #rx#"RUNTIME-TEST-PENDING-TASKS" out))
+
+        (test-case "blocking stdout and stderr on one pipe: the program output comes before the diagnostic"
+          (putenv "AGENTICA_VM_TEST_BLOCKING_OUTPUT" "1")
+          (define-values (summary out err)
+            (dynamic-wind
+              void
+              (lambda ()
+                (run-case work "blocking-order" output-then-crash-program #:peer '("--merge") #:vm '("--json")))
+              (lambda ()
+                (environment-variables-set! (current-environment-variables) #"AGENTICA_VM_TEST_BLOCKING_OUTPUT" #f))))
+          (check-equal? (hash-ref summary 'status) 1)
+          (check-regexp-match #rx#"^before\npartial[^\n]*RUNTIME-DIVISION-BY-ZERO" out))
 
         (test-case "File calls on /dev/stdout and /dev/stderr still work when they are pipes"
           (define-values (summary out err) (run-case work "dev-stdout" dev-stdout-program))

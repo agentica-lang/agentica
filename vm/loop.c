@@ -326,11 +326,13 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
 
 static void drain(agc_vm *vm) {
   agc_loop *loop = vm->loop;
-  job *j = loop->ready;
-  loop->ready = loop->ready_tail = NULL;
   agc_registry *reg = vm->registry;
-  while (j) {
-    job *next = j->ready_next;
+  size_t batch = 0;
+  for (const job *k = loop->ready; k; k = k->ready_next) batch++;
+  while (batch-- && loop->ready) {
+    job *j = loop->ready;
+    loop->ready = j->ready_next;
+    if (!loop->ready) loop->ready_tail = NULL;
     j->ready_next = NULL;
     j->queued = false;
     if (!j->consumed && reg && j->slot < reg->count && reg->items[j->slot]->native == j) {
@@ -342,7 +344,6 @@ static void drain(agc_vm *vm) {
       else if (j->detached)
         end_detached(vm, r);
     }
-    j = next;
   }
 }
 

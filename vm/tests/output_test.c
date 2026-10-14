@@ -336,7 +336,7 @@ static void test_a_notice_waits_for_room_and_keeps_its_text(void) {
   assert(write_as(a, 'a', CAP - 6, false));
   agc_notice n;
   fputs(text, agc_notice_begin(out(), &n));
-  agc_notice_end(&n, false);
+  agc_notice_end(&n, AGC_NOTICE_QUEUED);
   assert(out()->len == CAP && out()->notice_len - out()->notice_at == length - 6);
   assert(!write_as(b, 'b', 1, false));
   assert(read_pipe() == junk);
@@ -360,7 +360,7 @@ static void test_a_notice_does_not_enter_a_long_print(void) {
   assert(l->output.done == CAP);
   agc_notice n;
   fputs("notice\n", agc_notice_begin(out(), &n));
-  agc_notice_end(&n, false);
+  agc_notice_end(&n, AGC_NOTICE_QUEUED);
   assert(out()->notice_len - out()->notice_at == 7);
   bool done = false;
   for (int round = 0; round < 100 && !done; round++) {
@@ -385,7 +385,7 @@ static void test_a_leaving_long_print_lets_a_notice_and_the_next_writer_through(
   assert(!write_as(t, 't', CAP, false));
   agc_notice n;
   fputs("notice\n", agc_notice_begin(out(), &n));
-  agc_notice_end(&n, false);
+  agc_notice_end(&n, AGC_NOTICE_QUEUED);
   assert(out()->notice_len - out()->notice_at == 7);
   assert(read_pipe() == junk);
   for (int round = 0; round < 10; round++) pump();
@@ -410,7 +410,7 @@ static void test_the_end_of_run_moves_a_notice_held_by_a_stuck_print(void) {
   assert(!write_as(l, 'l', 2 * CAP + 100, false));
   agc_notice n;
   fputs("notice\n", agc_notice_begin(out(), &n));
-  agc_notice_end(&n, false);
+  agc_notice_end(&n, AGC_NOTICE_QUEUED);
   assert(read_pipe() == junk);
   for (int round = 0; round < 10; round++) pump();
   assert(out()->notice_len - out()->notice_at == 7);
@@ -460,13 +460,38 @@ static void test_a_record_behind_a_waiting_print_starts_a_line(void) {
   close_pipe();
 }
 
+static void notice_of(size_t bytes, agc_notice_mode mode) {
+  agc_notice n;
+  FILE *file = agc_notice_begin(out(), &n);
+  for (size_t k = 0; k < bytes; k++) fputc('n', file);
+  agc_notice_end(&n, mode);
+}
+
+static void test_the_notice_queue_is_bounded_but_a_kept_notice_is_not_dropped(void) {
+  open_pipe();
+  block_pipe();
+  fresh(pipe_fds[1]);
+  agc_task *a = make_task();
+  assert(write_as(a, 'a', CAP, false));
+  notice_of(AGC_NOTICE_LIMIT + 10, AGC_NOTICE_QUEUED);
+  size_t full = out()->notice_len - out()->notice_at;
+  assert(full == AGC_NOTICE_LIMIT + 10);
+  notice_of(100, AGC_NOTICE_QUEUED);
+  assert(out()->notice_len - out()->notice_at == full);
+  notice_of(100, AGC_NOTICE_KEPT);
+  assert(out()->notice_len - out()->notice_at == full + 100);
+  vm.rt->flush_timeout = 50;
+  finish();
+  close_pipe();
+}
+
 static void test_a_final_notice_is_written_straight_or_dropped(void) {
   open_pipe();
   fresh(pipe_fds[1]);
   agc_notice n;
   FILE *file = agc_notice_begin(out(), &n);
   for (int k = 0; k < 3000; k++) fputs("final notice line\n", file);
-  agc_notice_end(&n, true);
+  agc_notice_end(&n, AGC_NOTICE_FINAL);
   read_pipe();
   assert(collected_len == (size_t)3000 * 18 && out()->len == 0);
   finish();
@@ -476,7 +501,7 @@ static void test_a_final_notice_is_written_straight_or_dropped(void) {
   fresh(pipe_fds[1]);
   file = agc_notice_begin(out(), &n);
   for (int k = 0; k < 20000; k++) fputs("final notice line\n", file);
-  agc_notice_end(&n, true);
+  agc_notice_end(&n, AGC_NOTICE_FINAL);
   assert(out()->len == CAP && !out()->failed);
   vm.rt->flush_timeout = 50;
   finish();
@@ -503,6 +528,7 @@ int main(void) {
   test_the_end_of_run_moves_a_notice_held_by_a_stuck_print();
   test_a_record_starts_a_line_after_a_cut_print();
   test_a_record_behind_a_waiting_print_starts_a_line();
+  test_the_notice_queue_is_bounded_but_a_kept_notice_is_not_dropped();
   test_a_final_notice_is_written_straight_or_dropped();
   puts("output tests passed");
   return 0;

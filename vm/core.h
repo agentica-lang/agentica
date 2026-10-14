@@ -15,6 +15,8 @@ typedef struct {
   size_t len;
 } agc_notice;
 
+typedef enum { AGC_NOTICE_QUEUED, AGC_NOTICE_KEPT, AGC_NOTICE_FINAL } agc_notice_mode;
+
 extern const agc_builtin agc_core_builtins[];
 extern const size_t agc_core_builtin_count;
 extern const agc_builtin agc_task_builtins[];
@@ -74,7 +76,7 @@ bool agc_output_busy(agc_vm *vm);
 bool agc_output_failed(const agc_output *out);
 void agc_output_close(agc_vm *vm);
 FILE *agc_notice_begin(agc_output *out, agc_notice *n);
-void agc_notice_end(agc_notice *n, bool final);
+void agc_notice_end(agc_notice *n, agc_notice_mode mode);
 
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);
