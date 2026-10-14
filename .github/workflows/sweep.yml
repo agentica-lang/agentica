@@ -19,6 +19,7 @@ jobs:
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: full
+      AGENTICA_GC: vendored
     steps:
       - uses: actions/checkout@v4
         with:

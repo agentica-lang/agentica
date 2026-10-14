@@ -296,8 +296,8 @@ $(GC_STAMP): FORCE
 	@$(GC_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 vm-third-party-key:
-	@$(TP_KEY)
 	@echo 'libgc=$(GC_MODE)'
+	@$(TP_KEY)
 	@$(if $(filter system,$(GC_MODE)),$(GC_SYSTEM_KEY),$(if $(VM_GC),$(GC_KEY),:))
 
 vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)

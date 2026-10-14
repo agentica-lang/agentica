@@ -109,7 +109,7 @@ make vm AGENTICA_OPENSSL=vendored    # OpenSSL from the submodule instead, stati
 make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser and libuv for this mode
-make -s vm-third-party-key           # their build key (starts with libgc=system|vendored; compile lines, compiler, submodule commits and local diffs)
+make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make vm-layers                       # the layer check ("Which layer"): each vm/*.h compiles alone, include and link rules, self-test; Linux, needs rg and nm
 make vm CCACHE=                      # without ccache (used when installed and its cache dir is writable)

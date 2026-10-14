@@ -6,7 +6,7 @@ Docs: [language reference](docs/grammar.md) · [agent reference](.agents/skills/
 
 ## Requirements
 
-Linux, Racket CS 9.3 or newer, a C11 compiler, `make` and OpenSSL 3. See the [install guide](https://sonic182.github.io/agentica/getting-started/).
+Linux, Racket CS 9.3 or newer, a C11 compiler, `make`, OpenSSL 3, and libgc 8.2 or newer with `pkg-config` (or `AGENTICA_GC=vendored` to build libgc from the submodule). See the [install guide](https://sonic182.github.io/agentica/getting-started/).
 
 ## Build
 
