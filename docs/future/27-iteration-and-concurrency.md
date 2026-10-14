@@ -309,7 +309,7 @@ end
 ```
 
 - **Reads.** It opens the file, reads it in blocks of at most `buffer_bytes` bytes, and calls the block once for each line, in order. One read fills the buffer; every complete line in it goes to the block, one by one, before the next read. A partial line at the end of the buffer moves to the front, and the next read fills the rest. So memory stays at about `buffer_bytes`, whatever the file size, and one read serves many lines, so there are far fewer reads than one `File.read_line` per line.
-- **Lines.** A line, with its LF or CRLF, is at most `buffer_bytes` bytes. A longer line ends the call with `error("file: line too long")`, and the buffer never grows. LF or CRLF is removed, as in `File.read_line`. A last line without a newline is still passed. Lines are strict UTF-8, as in `File.read_text`; invalid text ends the call with an error.
+- **Lines.** A line, with its LF or CRLF, is at most `buffer_bytes` bytes. A longer line ends the call with `error("filesystem: line exceeds buffer_bytes")` (the `filesystem:` prefix of the other file errors), and the buffer never grows. LF or CRLF is removed, as in `File.read_line`. A last line without a newline is still passed. Lines are strict UTF-8, as in `File.read_text`; invalid text ends the call with an error.
 - **Limits.** `buffer_bytes` is 1,024 to 16,777,216 (16 MiB); otherwise `RUNTIME-INVALID-COUNT` at the argument, checked before the file is opened. `timeout_ms` bounds each read, not the whole call: a 10 GB file may take as long as it needs while each block arrives in time. A `timeout_ms` of 0 or less is not a diagnostic: the call returns `error("network: timeout must be positive milliseconds")`, which every file call returns today (`vm/files.c`, `bad_timeout`).
 - **Block.** The block returns `Result[Void]`. `ok()` goes on; `error(e)` stops at once, and the call returns that error. `try` works in the block, by the checker rule for a builtin whose block result is `Result[T]` (§25.9). This item adds that rule, since it lands before `Task.map` (§27.1), which reuses it, as `File.open` with a block (§25.9, 15i) does.
 - **Result.** The call returns `ok()` at the end of the file, or the first error: open, read, timeout, a line too long, invalid UTF-8, or the block's error.
@@ -328,7 +328,7 @@ end
 - Lazy steps: `map`, `filter`, `take(n)`, `take_while`. Terminals: `to_list(max)` (an error when the stream has more than `max` items, so an endless stream cannot fill memory), `each`, `reduce`. Terminals return a `Result`, and a read error of the source ends the terminal with that error.
 - Resources: a file source opens its file when a terminal starts and closes it when the terminal returns, whether it reached the end, `take` or `take_while` had enough, a step returned an error, or a `try` failed in a block. That is the guarantee of `File.open` with a block (§25.9), with the terminal call as the block. A stream that is dropped without a terminal opened nothing, so nothing leaks. A runtime diagnostic ends the run, which closes the file as today.
 - Costs: each element pulled costs one step plus its callbacks, like `Range.each`, and a terminal can be switched out between elements (a resumable native frame, §10.2.1).
-- **Form.** Stream steps are methods on `Stream[T]`, since methods come from the receiver's module (§25.6). So the one form of a step is `s.filter(f)`, and `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`, with the help `s.filter(...)` (§25.14). `|>` only brings the path into the source, since a String has no method form for `Stream.lines`:
+- **Form.** Stream steps are methods on `Stream[T]`, since methods come from the receiver's module (§25.6). So the one form of a step is `s.filter(f)`, and `s |> Stream.filter(f)` is `CHECK-PIPE-METHOD`, with the help `s.filter(...)` (§25.14). A source is a plain call; `|>` is for user functions between them (§25.14):
 
 ```agentica
 def is_valid(line: String) -> Bool
@@ -340,7 +340,7 @@ def add_length(total: Int, line: String) -> Int
 end
 
 def total_length(path: String) -> Result[Int]
-  return (path |> Stream.lines(65536, 1000)).filter(&is_valid).take(1000).reduce(0, &add_length)
+  return Stream.lines(path, 65536, 1000).filter(&is_valid).take(1000).reduce(0, &add_length)
 end
 ```
 
