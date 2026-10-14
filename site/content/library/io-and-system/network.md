@@ -1,6 +1,6 @@
 ---
 title: TCP, TLS and HTTP
-weight: 12
+weight: 4
 description: TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
 ---
 

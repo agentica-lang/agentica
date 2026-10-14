@@ -4,11 +4,7 @@
   {{ .Content }}
   <ul class="pages">
     {{- range .Pages.ByWeight }}
-    <li>
-      <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
-      {{- $heading := partial "heading.html" . }}
-      {{- if and $heading (ne $heading .LinkTitle) }} <span>{{ $heading }}</span>{{ end }}
-    </li>
+    {{ partial "list-item.html" . }}
     {{- end }}
   </ul>
 </article>

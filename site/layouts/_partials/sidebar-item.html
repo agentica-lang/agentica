@@ -1,0 +1,13 @@
+{{- $page := .page -}}
+{{- $current := .current -}}
+<li>
+  <a href="{{ $page.RelPermalink }}"{{ if eq $page $current }} aria-current="page"{{ end }}>{{ $page.LinkTitle }}</a>
+  {{- if eq $page $current }}{{ partial "toc.html" $page }}{{ end }}
+  {{- if $page.IsSection }}
+  <ul>
+    {{- range $page.Pages.ByWeight }}
+    {{ partial "sidebar-item.html" (dict "page" . "current" $current) }}
+    {{- end }}
+  </ul>
+  {{- end }}
+</li>

@@ -1,6 +1,6 @@
 ---
 title: Result
-weight: 5
+weight: 1
 description: Build and read Result values.
 ---
 

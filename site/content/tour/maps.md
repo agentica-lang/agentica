@@ -132,5 +132,5 @@ end
 ```
 
 For records with fixed fields of different types, use a
-[struct](/tour/structs/) instead. See the [Map library page](/library/map/)
+[struct](/tour/structs/) instead. See the [Map library page](/library/data-structures/map/)
 for every function.

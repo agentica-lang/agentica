@@ -10,7 +10,7 @@ Values are immutable: a method never changes its receiver, so `xs.push(2)` retur
 
 ### Minimal builtin functions
 
-`puts(value)` writes the value's `to_s` and a newline; `print` writes without one. `gets` and `gets!` are `IO.gets` and `IO.gets!`, and may drop their parentheses (`line = gets!.strip`). `Map` and `List` are builtin modules whose generic functions the checker treats specially. Signatures are in [`library/list.md`](../../site/content/library/list.md) and [`library/map.md`](../../site/content/library/map.md).
+`puts(value)` writes the value's `to_s` and a newline; `print` writes without one. `gets` and `gets!` are `IO.gets` and `IO.gets!`, and may drop their parentheses (`line = gets!.strip`). `Map` and `List` are builtin modules whose generic functions the checker treats specially. Signatures are in [`library/data-structures/list.md`](../../site/content/library/data-structures/list.md) and [`library/data-structures/map.md`](../../site/content/library/data-structures/map.md).
 
 Callbacks (`List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`) take a block, `&name` or a function variable. Each runs once per element, left to right, under the caller's budget. Parameter and return types must match exactly, and a `map` callback returns data, not Void. Annotated block parameters let an empty list or an empty `reduce` initial value infer its type. `List.any?` and `List.all?` stop at the first deciding element.
 
@@ -43,7 +43,7 @@ Expected types flow into these operations for empty collections and Results.
 
 ### JSON
 
-`Json` and `JSON` are reserved. A `Json` value has no constructor, equality, fields or indexing. `IO.inspect` prints `<Json>`; `to_s`, interpolation, `puts` and `JSON.encode` give its text. Signatures are in [`library/json.md`](../../site/content/library/json.md).
+`Json` and `JSON` are reserved. A `Json` value has no constructor, equality, fields or indexing. `IO.inspect` prints `<Json>`; `to_s`, interpolation, `puts` and `JSON.encode` give its text. Signatures are in [`library/text-and-data/json.md`](../../site/content/library/text-and-data/json.md).
 
 - `JSON.object` takes `Map[String, Json]`, `JSON.array` takes `List[Json]`, and `JSON.from` takes any encodable value. A non-finite Float halts with `RUNTIME-JSON-ENCODE`. Null and `false` stay distinct, and so do empty objects and empty arrays.
 - `JSON.schema(T)` takes a named struct, as `decode` does, and returns an object schema with `properties` and `required`. Int bounds are signed 64-bit; lists use `items`; String-keyed maps use `additionalProperties`; nested and recursive structs use `$defs` and `$ref`. Extra keys stay allowed.

@@ -1,6 +1,6 @@
 # Executable BDD specifications
 
-`agentica test` runs `.feature` specifications and `*_test.agc` unit test files in one report. Steps are predefined or written in Agentica. Matching is deterministic: an unknown or ambiguous step fails. Programs under test run as local processes. The step API is the standard module `std/bdd`, and the runner is a fixed Agentica program embedded in `agentica`. The user guide is [`library/bdd.md`](../site/content/library/bdd.md).
+`agentica test` runs `.feature` specifications and `*_test.agc` unit test files in one report. Steps are predefined or written in Agentica. Matching is deterministic: an unknown or ambiguous step fails. Programs under test run as local processes. The step API is the standard module `std/bdd`, and the runner is a fixed Agentica program embedded in `agentica`. The user guide is [`library/testing/bdd.md`](../site/content/library/testing/bdd.md).
 
 ## Run
 
@@ -55,7 +55,7 @@ No match is `CHECK-BDD-UNDEFINED`, and two or more is `CHECK-BDD-AMBIGUOUS`; bot
 
 ## Predefined steps
 
-The patterns are in [`library/bdd.md`](../site/content/library/bdd.md) ("Built-in steps"). Each is a handler in `std/bdd`:
+The patterns are in [`library/testing/bdd.md`](../site/content/library/testing/bdd.md) ("Built-in steps"). Each is a handler in `std/bdd`:
 
 | Step | What it does and its errors |
 | --- | --- |
@@ -70,7 +70,7 @@ JSON lines compare by their canonical text, `JSON.encode(JSON.parse(line))`: key
 
 ## Step programs
 
-A step program is a normal program: its `main` builds the list of steps with `BDD.step` and passes it to `BDD.run`. Signatures are in [`library/bdd.md`](../site/content/library/bdd.md).
+A step program is a normal program: its `main` builds the list of steps with `BDD.step` and passes it to `BDD.run`. Signatures are in [`library/testing/bdd.md`](../site/content/library/testing/bdd.md).
 
 - A handler gets the scenario's context and returns the context it ends with; the next step gets that one. Most `BDD` calls take the context first and return it, and `BDD.doc_string`, `BDD.table` and `BDD.get` return their value instead. Only `BDD.set` and `BDD.given_program` change the context. Use the one each call returns: a handler that drops the context `BDD.given_program` returned loses the program under test.
 - `BDD.doc_string` or `BDD.table` on a step without one is `RUNTIME-BDD-CONTEXT`. `BDD.get` of a missing name is `error("missing scenario state")`. A stream call before `BDD.given_program`, or a second program in a scenario, is `RUNTIME-BDD-CONTEXT`.

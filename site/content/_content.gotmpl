@@ -7,5 +7,5 @@
   {{- $text = printf "%s%s\n\n" $text .Content -}}
 {{- end -}}
 {{- $text = replaceRE `\]\((?:\./)?[0-9]{2}[a-z]?-[a-z0-9-]+\.md#([^)\s]+)\)` `](#${1})` $text -}}
-{{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/([a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2})` $text -}}
+{{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/([a-z0-9-]+)/([a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2}/${3})` $text -}}
 {{- .AddPage (dict "path" "reference" "title" "Language specification" "content" (dict "mediaType" "text/markdown" "value" $text)) -}}

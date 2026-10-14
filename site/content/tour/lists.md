@@ -193,5 +193,5 @@ end
 ```
 
 Reading `xs[i]` walks the list, so it takes longer for big lists. Prefer `for`
-or `each` to visit every element. See the [List library page](/library/list/)
+or `each` to visit every element. See the [List library page](/library/data-structures/list/)
 for every function.

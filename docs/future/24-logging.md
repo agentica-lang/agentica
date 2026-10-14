@@ -110,7 +110,7 @@ System.log_time?() -> Bool       # false under --log-time none
 - `Log.time_text` against vectors from a checked-in Python script (standard library `datetime` only, as in §23.7): the epoch, leap days, 2000-02-29, 2100-03-01, the end of a year, a negative time, and large values.
 - Bad flag values and repeated flags exit 2.
 
-**Docs in the 14c PR:** `grammar.md` (the `System` builtins and the flags; the advice "logs go to stderr with `IO.warn`" points to `std/log`), the programming skill (a `references/log.md` file and its row in the "When to read a reference" table; the stdio advice in `SKILL.md`), `site/content/library/log.md` with runnable examples (`--log-time none`), and `docs/vm/08-loader-and-cli.md` §9 for the flags.
+**Docs in the 14c PR:** `grammar.md` (the `System` builtins and the flags; the advice "logs go to stderr with `IO.warn`" points to `std/log`), the programming skill (a `references/log.md` file and its row in the "When to read a reference" table; the stdio advice in `SKILL.md`), `site/content/library/io-and-system/log.md` with runnable examples (`--log-time none`), and `docs/vm/08-loader-and-cli.md` §9 for the flags.
 
 ### 24.3 Stack traces on runtime errors
 
