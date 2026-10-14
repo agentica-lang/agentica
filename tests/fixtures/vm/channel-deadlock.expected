@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 100,
+  "stdout": [
+    "first: recv: channel: timed out",
+    "second: recv: channel: timed out",
+    "third: send: channel: timed out",
+    "0",
+    ""
+  ],
+  "stderr": []
+}

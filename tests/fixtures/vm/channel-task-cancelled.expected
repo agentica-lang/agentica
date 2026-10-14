@@ -1,0 +1,14 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-TASK-CANCELLED",
+  "steps": 41,
+  "stdout": [
+    "parent: task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/channel-task-cancelled.agc:9:15: division by zero",
+    "waiting for the child",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-task-cancelled.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":9},\"start\":{\"column\":15,\"line\":9}},\"task\":true}",
+    ""
+  ]
+}

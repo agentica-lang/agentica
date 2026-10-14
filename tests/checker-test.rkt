@@ -180,6 +180,56 @@
                    ("t = Task.spawn(&identity, 0)\n  t == t" CHECK-TYPE-MISMATCH))])
       (check-equal? (check-code (string-append prefix (main-with (string-append "  " (car entry))))) (cadr entry)))
     (check-equal? (check-code "struct Task\n  n: Int\nend\n\ndef main() -> Void\nend\n\n") 'CHECK-REDEFINED-NAME))
+  (test-case "channels check their element type and stay out of data operations"
+    (define prefix "struct Box\n  inbox: Channel[Int]\nend\n\ndef take(inbox: Channel[Int]) -> Result[Int]\n  return inbox.recv(10)\nend\n\ndef make() -> Channel[String]\n  return Channel.new(2)\nend\n\n")
+    (check-ok (string-append prefix (main-with (string-append
+                                                "  ch: Channel[Int] = Channel.new(4)\n"
+                                                "  box = Box(inbox: Channel.new(2))\n"
+                                                "  sent: Result[Void] = ch.send(1, 10)\n"
+                                                "  got: Result[Int] = Channel.recv(ch, 10)\n"
+                                                "  ch.close\n"
+                                                "  done: Bool = ch.closed?\n"
+                                                "  names = make()\n"
+                                                "  more: Result[Int] = take(box.inbox)\n"
+                                                "  Channel.close(names)"))))
+    (define (problem body)
+      (define found (check-text (string-append prefix (main-with body))))
+      (list (diagnostic-code found)
+            (source-position-line (source-span-start (diagnostic-span found)))
+            (source-position-column (source-span-start (diagnostic-span found)))))
+    (define ch "  ch: Channel[Int] = Channel.new(4)\n")
+    (check-equal? (problem "  ch = Channel.new(4)") '(CHECK-EXPECTED-TYPE 14 8))
+    (check-regexp-match #rx"Channel\\[Int\\] = Channel.new\\(8\\)"
+                        (diagnostic-help (check-text (string-append prefix (main-with "  ch = Channel.new(4)")))))
+    (check-equal? (problem "  n: Int = Channel.new(4)") '(CHECK-TYPE-MISMATCH 14 12))
+    (check-equal? (problem "  ch: Channel[Void] = Channel.new(4)") '(CHECK-VOID-TYPE 14 15))
+    (check-equal? (problem (string-append ch "  ch.send(\"x\", 10)")) '(CHECK-TYPE-MISMATCH 15 11))
+    (check-equal? (problem (string-append ch "  ch.send(1, \"x\")")) '(CHECK-TYPE-MISMATCH 15 14))
+    (check-equal? (problem (string-append ch "  ch.recv(nil)")) '(CHECK-TYPE-MISMATCH 15 11))
+    (check-equal? (problem "  Channel.close(3)") '(CHECK-TYPE-MISMATCH 14 17))
+    (check-equal? (problem (string-append ch "  puts(ch)")) '(CHECK-TYPE-MISMATCH 15 8))
+    (check-equal? (problem (string-append ch "  puts(\"#{ch}\")")) '(CHECK-TYPE-MISMATCH 15 11))
+    (check-equal? (problem (string-append ch "  same = ch == ch")) '(CHECK-TYPE-MISMATCH 15 13))
+    (check-equal? (problem (string-append ch "  text = ch.to_s")) '(CHECK-UNKNOWN-METHOD 15 10))
+    (check-equal? (problem (string-append ch "  ch.next")) '(CHECK-UNKNOWN-METHOD 15 3))
+    (check-equal? (problem (string-append ch "  text = JSON.encode(Box(inbox: ch))")) '(CHECK-NOT-ENCODABLE 15 22))
+    (for ([declaration '("struct Channel\n  n: Int\nend\n\n" "enum Channel\n  A\nend\n\n")])
+      (check-equal? (check-code (string-append declaration (main-with ""))) 'CHECK-REDEFINED-NAME)))
+  (test-case "foreign generator, agent, lock and queue names show the Agentica form"
+    (for ([entry '(("  e = Enumerator.new(1)" #rx"Task.spawn\\(&produce, ch\\).*ch.recv\\(timeout_ms\\)")
+                   ("  f = Fiber.new(1)" #rx"Task.spawn\\(&produce, ch\\)")
+                   ("  m = Mutex.new" #rx"owner task.*Channel")
+                   ("  q = SizedQueue.new(3)" #rx"Channel.new\\(capacity\\)")
+                   ("  a = Agent.start_link(1)" #rx"reduce.*owner|reduce.*one task.*Channel")
+                   ("  Agent.update(1, 2)" #rx"Channel"))])
+      (define found (check-text (main-with (car entry))))
+      (check-equal? (diagnostic-code found) 'CHECK-UNKNOWN-NAME)
+      (check-equal? (source-position-line (source-span-start (diagnostic-span found))) 2)
+      (check-regexp-match (cadr entry) (diagnostic-help found)))
+    (for ([body '("  xs = [1, 2]\n  ys = xs.lazy" "  ys = (1..3).lazy")])
+      (define found (check-text (main-with body)))
+      (check-equal? (diagnostic-code found) 'CHECK-UNKNOWN-METHOD)
+      (check-regexp-match #rx"lists are eager.*while loop" (diagnostic-help found))))
   (test-case "function values check references, parameters and returns"
     (define prefix "def double(n: Int) -> Int\n  return n * 2\nend\n\n")
     (check-ok (string-append prefix (main-with "  f: Fn[Int, Int] = &double\n  value: Int = f.call(21)")))
