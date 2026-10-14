@@ -124,6 +124,7 @@ static void unlink_task(agc_vm *vm, agc_task *t) {
   if (t->state == AGC_TASK_READY) leave_ready(vm, t);
   if (t->parked) agc_io_detach(vm, t);
   if (t->lock_wait) agc_handle_leave(vm, t);
+  if (t->channel.channel) agc_channel_leave(vm, t);
   if (t->awaiting) agc_task_remove(&t->awaiting->waiters, &t->awaiting->waiters_tail, t);
   t->awaiting = NULL;
   agc_task_remove(&vm->rt->in.waiters, &vm->rt->in.waiters_tail, t);
@@ -449,8 +450,21 @@ bool agc_task_join(agc_vm *vm, agc_task *target) {
   return true;
 }
 
+static bool awaits_caller(agc_vm *vm, const agc_task *target) {
+  uint64_t hops = 0;
+  const agc_task *t = target;
+  while (t && t != vm->task) {
+    t = t->awaiting;
+    hops++;
+  }
+  agc_charge(vm, hops);
+  return t != NULL;
+}
+
 static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool result) {
   agc_task *target = agc_as_task(vm, task);
+  if (target->state != AGC_TASK_DONE && awaits_caller(vm, target))
+    agc_fail(vm, "RUNTIME-TASK-AWAIT-CYCLE", "this await would wait for a task that is waiting for this task", span);
   if (agc_task_join(vm, target)) return agc_void();
   if (target->crashed) {
     agc_task_observe(vm, target);

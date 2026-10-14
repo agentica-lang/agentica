@@ -102,6 +102,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
   `tests/fixtures/tls/`, `tests/vm-http-test.rkt`, `tests/fixtures/http-*`,
   `tests/vm-stop-test.rkt`, `tests/fixtures/stop-peer.py`,
+  `tests/vm-channel-test.rkt`, `tests/fixtures/channel-peer.py`,
   `tests/cli-in-process.rkt`, `tests/bytecode-test.rkt`,
   `tests/fixtures/vm/`;
 - `stdlib/`: every `std/` module written in Agentica, `stdlib/bdd/` too (the

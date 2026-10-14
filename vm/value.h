@@ -23,7 +23,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL
 } agc_tag;
 
 typedef struct {
@@ -133,6 +133,7 @@ typedef struct {
 typedef struct agc_vm agc_vm;
 typedef struct agc_task agc_task;
 typedef struct agc_resource agc_resource;
+typedef struct agc_channel agc_channel;
 
 typedef struct {
   agc_resource *state, *reader, *writer;
@@ -270,6 +271,7 @@ agc_value agc_listener_value(agc_listener *l);
 agc_value agc_http_client_value(agc_http_client *c);
 agc_value agc_test_case_value(agc_test_case *c);
 agc_value agc_http_server_value(agc_http_server *s);
+agc_value agc_channel_value(agc_channel *c);
 bool agc_as_bool(agc_vm *vm, agc_value v);
 int64_t agc_as_int(agc_vm *vm, agc_value v);
 double agc_as_float(agc_vm *vm, agc_value v);
@@ -290,6 +292,7 @@ agc_listener *agc_as_listener(agc_vm *vm, agc_value v);
 agc_http_client *agc_as_http_client(agc_vm *vm, agc_value v);
 agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
+agc_channel *agc_as_channel(agc_vm *vm, agc_value v);
 char *agc_cstr(const agc_string *s);
 uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);

@@ -1,12 +1,12 @@
 ### Lightweight tasks
 
-`Task` is reserved. Tasks are cooperative and share one VM scheduler, so they give I/O concurrency without CPU parallelism. A task yields when it waits for I/O, a timer or another task, and at the end of each turn. Signatures are in [`library/task.md`](../../site/content/library/task.md).
+`Task` is reserved. Tasks are cooperative and share one VM scheduler, so they give I/O concurrency without CPU parallelism. A task yields when it waits for I/O, a timer, a channel or another task, and at the end of each turn. Signatures are in [`library/task.md`](../../site/content/library/task.md).
 
 `Task.spawn` starts a function at once with one argument; use a struct for several values. A block works when it is passed through an `Fn` variable or parameter. Each task has its own scopes, call depth and return handling. `Task.await` returns the cached result and may be repeated; `false`, `nil` and `error` are normal results. Tasks have no constructor, equality, fields, indexing or JSON encoding.
 
 A runtime error in a task other than `main` is a crash. It ends only that task. Its diagnostic goes to stderr at once, with ` in a task` after the code (`--json` adds `"task": true`), and its running descendants are cancelled. The handles it owns close: a handle belongs to the task that opened it, and a handle passed directly to `Task.spawn` moves to the new task. A handle inside a struct, list or block does not move. A normally returning task hands its handles to its parent. A crash never closes an `HttpClient`.
 
-`Task.await` on a crashed task returns `error(text)` when the result type is a Result, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`. For any other type, the awaiter halts with `RUNTIME-TASK-CRASHED` at its await, with that text, so the crash moves up. Each await gives the same outcome. Cancellation reaches the running descendants of a crash, and the handler tasks of `HTTP.close_server`, but only tasks that no program holds. An await of a cancelled task gives `error("task: cancelled")` when the result type is a Result, and halts with `RUNTIME-TASK-CANCELLED` otherwise.
+`Task.await` on a crashed task returns `error(text)` when the result type is a Result, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`. For any other type, the awaiter halts with `RUNTIME-TASK-CRASHED` at its await, with that text, so the crash moves up. Each await gives the same outcome. Cancellation reaches the running descendants of a crash, and the handler tasks of `HTTP.close_server`. A program can hold such a task, since a task can send its child's handle over a channel. An await of a cancelled task gives `error("task: cancelled")` when the result type is a Result, and halts with `RUNTIME-TASK-CANCELLED` otherwise.
 
 Some errors end the whole run, whichever task raises them: a runtime error in `main`, `RUNTIME-STEP-LIMIT`, an internal VM error, and `System.exit` in any task. The first of these wins.
 
@@ -16,9 +16,70 @@ Returning from the entrypoint ends the run, and pending tasks never run again. A
 
 `Task.sleep` takes nonnegative milliseconds; zero yields. A negative duration is `RUNTIME-INVALID-DURATION`. Tasks inherit ports, arguments and builtin services. Shared streams have no ordering guarantee across tasks. All tasks share the `--max-steps` counter.
 
-`Task.pending_count()` counts the tasks of this run that have not ended, not counting `main`: tasks waiting to run, the caller (unless it is `main`), and tasks waiting on a sleep, an await or I/O. A task that has returned or crashed is not counted.
+`Task.pending_count()` counts the tasks of this run that have not ended, not counting `main`: tasks waiting to run, the caller (unless it is `main`), and tasks waiting on a sleep, an await, a channel or I/O. A task that has returned or crashed is not counted.
+
+`Task.await` halts with `RUNTIME-TASK-AWAIT-CYCLE` at the await when the awaited task, or a task it awaits in turn, is waiting for the caller. A task that awaits its own handle is the shortest cycle. A task can reach its own handle through a channel, or through a closure that captures it.
 
 A BDD step handler must finish its tasks before it returns (`RUNTIME-BDD-PENDING-TASKS`), and a crash nothing awaited fails the step with `RUNTIME-TASK-CRASHED`. See [`bdd.md`](../bdd.md).
+
+### Channels
+
+`Channel` is reserved. A `Channel[T]` is a bounded queue that tasks send values into and receive values from. It is a handle: assigning or passing it shares the same channel. Channels run on the VM only.
+
+```agentica
+def send_all(jobs: Channel[Int]) -> Result[Void]
+  for n in 1..5
+    try jobs.send(n, 1000)
+  end
+  return ok()
+end
+
+def produce(jobs: Channel[Int]) -> Result[Void]
+  result = send_all(jobs)
+  jobs.close
+  return result
+end
+
+def main() -> Void
+  jobs: Channel[Int] = Channel.new(2)
+  producer = Task.spawn(&produce, jobs)
+  total = 0
+  while true
+    case jobs.recv(1000)
+      ok(n) -> total += n
+      error(_) ->
+        if jobs.closed?
+          break
+        end
+    end
+  end
+  puts(total)
+  puts(Task.await(producer))
+end
+```
+
+```text
+Channel.new(capacity: Int) -> Channel[T]
+Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
+Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
+Channel.close(channel: Channel[T]) -> Void
+Channel.closed?(channel: Channel[T]) -> Bool
+```
+
+All but `new` are also methods: `jobs.send(v, 1000)`, `jobs.recv(1000)`, `jobs.close`, `jobs.closed?`. Signatures are in [`library/channel.md`](../../site/content/library/channel.md).
+
+- **Type.** `T` is any type a variable can have, so `Channel[Void]` is `CHECK-VOID-TYPE`. A task handle, a socket, a file or another channel is allowed. A user `struct`, `enum` or import alias named `Channel` is `CHECK-REDEFINED-NAME`.
+- **`Channel.new`** needs an expected type, from an annotation, a parameter, a field or a return type: `jobs: Channel[String] = Channel.new(16)`. Without one it is `CHECK-EXPECTED-TYPE` at the call, with a help that shows the annotated form. The capacity is 1 to 1,048,576, else `RUNTIME-INVALID-COUNT` at the argument. A channel is always bounded.
+- **`send`** adds the value at the back and returns `ok()`. When the channel is full, the task waits for a free slot, for a close, or for the timeout. It returns `error("channel: closed")` if the channel is closed before or during the wait, and `error("channel: timed out")` at the timeout. In both cases the value is not added.
+- **`recv`** returns the oldest value as `ok(v)`. When the channel is empty, the task waits for a value, for a close, or for the timeout. It returns `error("channel: closed")` once the channel is closed and drained, and `error("channel: timed out")` at the timeout. Values sent before `close` are still received after it.
+- **Timeouts are required.** `timeout_ms` is 0 or more. Zero never waits: the call tries once. A negative value is `RUNTIME-INVALID-DURATION` at the argument. There is no wait-forever value, so tasks that wait for each other get timeout errors, not a hang.
+- **`close`** returns `Void`, and closing again does nothing. Waiting senders get the closed error, and so do woken senders that have not run yet. Waiting receivers get the values left, then the closed error. The producer closes, on every path, and consumers do not. With several producers, one coordinator awaits all of them and then closes.
+- **`closed?`** is `true` when the channel is closed, its buffer is empty and no value is reserved for a woken receiver. Once `true` it stays `true`. After a `recv` error it tells the end of the stream from a timeout.
+- **Order.** Values come out in the order they went in. Waiting receivers are served in the order they started waiting, and so are waiting senders, with no barging: a value is handed straight to the first waiting receiver. A waiter that leaves before it runs, because it was cancelled or its timeout came first, passes what it was given to the next waiter. A receiver that was given a value returns it even if its deadline passes before it runs. No value is lost or added twice.
+- **No data operations.** `puts`, `print`, interpolation and `==` on a channel are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, a JSON encoding of a struct with a channel field is `CHECK-NOT-ENCODABLE`, and `IO.inspect` prints `<Channel>`.
+- **Effects.** `send`, `recv` and `close` carry `concurrency`. `new` and `closed?` carry none.
+
+There is no `select`, no `for x in channel`, and no unbounded or unbuffered channel. To merge several sources, send them into one `Channel[Event]` of an enum type.
 
 ### Unit tests (`Test`)
 

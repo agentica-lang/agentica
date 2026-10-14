@@ -243,18 +243,18 @@ static agc_loop *loop_of(agc_vm *vm) {
   return loop;
 }
 
-static agc_value lock_woken(agc_vm *vm, void *data, agc_value context) {
+static agc_value wait_woken(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
   (void)data;
   (void)context;
   return agc_void();
 }
 
-static const agc_io_kind lock_io = {NULL, lock_woken, lock_woken, NULL, false, "lock", NULL};
+const agc_io_kind agc_wait_io = {NULL, wait_woken, wait_woken, NULL, false, "lock", NULL};
 
 static void trace_finish(agc_vm *vm, const agc_resource *r, const job *j, bool done, agc_value result) {
   const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns || j->kind == &lock_io) return;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_IO) || !j->started_ns || j->kind == &agc_wait_io) return;
   uint64_t end = j->ended_ns ? j->ended_ns : agc_trace_now();
   uint64_t us = end > j->started_ns ? (end - j->started_ns) / 1000u : 0;
   const char *outcome = !agc_is(result, AGC_T_RESULT) ? "value" : agc_as_result(vm, result)->ok ? "ok" : "error";
@@ -574,7 +574,7 @@ bool agc_io_poll(agc_vm *vm, bool wait) {
   return true;
 }
 
-static uint64_t loop_now(agc_vm *vm) {
+uint64_t agc_io_now(agc_vm *vm) {
   agc_loop *loop = loop_of(vm);
   uv_update_time(&loop->uv);
   return uv_now(&loop->uv);
@@ -590,7 +590,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     return AGC_LOCK_TAKEN;
   }
   uint64_t deadline = t->lock_deadline;
-  uint64_t now = deadline ? loop_now(vm) : 0;
+  uint64_t now = deadline ? agc_io_now(vm) : 0;
   t->lock_wait = NULL;
   if (handle->next_owner == t || (!handle->holder && !handle->next_owner)) {
     if (deadline) agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
@@ -605,7 +605,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     return AGC_LOCK_TAKEN;
   }
   if (!deadline) {
-    now = loop_now(vm);
+    now = agc_io_now(vm);
     deadline = t->lock_deadline = now + (uint64_t)*timeout_ms;
   }
   agc_task_remove(&handle->waiters, &handle->waiters_tail, t);
@@ -618,7 +618,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
             t->id, deadline - now);
   agc_task_enqueue(&handle->waiters, &handle->waiters_tail, t);
   t->lock_wait = handle;
-  agc_io_start(vm, &lock_io, NULL, agc_void(), (int64_t)(deadline - now));
+  agc_io_start(vm, &agc_wait_io, NULL, agc_void(), (int64_t)(deadline - now));
   agc_task_park(vm, true);
   return AGC_LOCK_WAIT;
 }
@@ -789,6 +789,13 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   (void)timeout_ms;
   return AGC_LOCK_TAKEN;
 }
+
+uint64_t agc_io_now(agc_vm *vm) {
+  (void)vm;
+  return 0;
+}
+
+const agc_io_kind agc_wait_io = {NULL, NULL, NULL, NULL, false, "lock", NULL};
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;

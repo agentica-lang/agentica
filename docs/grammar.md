@@ -12,7 +12,7 @@ This is the index of the language definition. The text is split by section into 
 | 5 | File modules and imports, `std/` and `pkg/` resolution, `std/queue`, `std/bdd` | [`grammar/05b-modules.md`](grammar/05b-modules.md) |
 | 6 | Semantic rules: types, operators, scope, Void, functions, enums and `case`, structs, ranges, maps, `Result` and `try`, function values, blocks | [`grammar/06-semantics.md`](grammar/06-semantics.md) |
 | 6 | Builtin library: methods on builtin types, the error behaviour of `List`, `Map`, `String`, `IO`, `Random`, `JSON`, help and the execution budget | [`grammar/06b-builtins.md`](grammar/06b-builtins.md) |
-| 6 | Lightweight tasks, unit tests (`Test`), `agentica test` | [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md) |
+| 6 | Lightweight tasks, channels, unit tests (`Test`), `agentica test` | [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md) |
 | 6 | TCP, TLS and HTTP (`std/http` client and server), files and paths, processes | [`grammar/06d-io-and-network.md`](grammar/06d-io-and-network.md) |
 | 7 | Diagnostics for agents: format, codes, hints for other languages | [`grammar/07-diagnostics.md`](grammar/07-diagnostics.md) |
 | 8 | Examples to review the design | [`grammar/08-examples.md`](grammar/08-examples.md#8-examples-to-review-the-design) |
