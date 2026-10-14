@@ -34,6 +34,7 @@ Interpreter for the Agentica language: a Racket front end and a C bytecode VM th
 - When the language or a builtin changes, update the matching site page too.
 - A PR with a user-visible change adds an entry under `## [Unreleased]` in `CHANGELOG.md`; mark a breaking change with `**Breaking:**`.
 - Do not hard-wrap prose in `site/content/`: one line per paragraph or list item. Code blocks keep their line breaks.
+- Wrap prose at 80 characters in `docs/` files the site does not render (not `docs/grammar/`); site pages and the grammar keep one line per paragraph.
 - When the language changes, update `docs/grammar/` and the programming skill together: the core language is in `.agents/skills/agentica-programming/SKILL.md` (cheat sheet and rules) and `references/language.md` (full rules), and each library area has its own file in `references/` (builtins, modules, JSON, files, processes, tasks, network, BDD, testing, diagnostics, examples). The skill is self-contained and does not read the grammar. Keep `SKILL.md` near 2,000 tokens; put new library detail in the matching reference and its row in the "When to read a reference" table.
 
 ## Working style

@@ -1,11 +1,24 @@
 # Roadmap: foundations (phases 1 to 5n, complete)
 
-Phases 1 to 5h and the completed foundations for general programming and MCP. They were built on the Racket evaluator, which the VM replaced (phase 7, 7i); the language they define is specified in [`docs/grammar.md`](../grammar.md) and its files in `docs/grammar/`, and the tests of each stage are in `tests/<stage>-test.rkt`. The full checklists and design notes that used to be in `done.md` are in git history. The current order is in [`README.md`](README.md).
+Phases 1 to 5h and the completed foundations for general programming and MCP.
+They were built on the Racket evaluator, which the VM replaced (phase 7, 7i);
+the language they define is specified in [`docs/grammar.md`](../grammar.md) and
+its files in `docs/grammar/`, and the tests of each stage are in
+`tests/<stage>-test.rkt`. The full checklists and design notes that used to be
+in `done.md` are in git history. The current order is in
+[`README.md`](README.md).
 
-**Still open from this period** (both tracked here until they are done or dropped):
+**Still open from this period** (both tracked here until they are done or
+dropped):
 
-- [ ] Phase 5d3, the rest of the agent API: `symbols`, `show` and `refs` with one test per command over `examples/`, and the measurement of `--ai` and labels against plain text on the `binary` arm (`docs/eval.md`). The semantic commands for agents are now planned as [phase 26](26-semantic-cli.md) (`outline`, `symbol`, `refs`, `type-at`).
-- [ ] Phase 6a, the Sonnet 5.5 round (postponed; only `pi` for now). Rounds 1 to 8 are done and recorded in `docs/eval.md`; see [`06-validation.md`](06-validation.md).
+- [ ] Phase 5d3, the rest of the agent API: `symbols`, `show` and `refs` with
+  one test per command over `examples/`, and the measurement of `--ai` and
+  labels against plain text on the `binary` arm (`docs/eval.md`). The semantic
+  commands for agents are now planned as [phase 26](26-semantic-cli.md)
+  (`outline`, `symbol`, `refs`, `type-at`).
+- [ ] Phase 6a, the Sonnet 5.5 round (postponed; only `pi` for now). Rounds 1 to
+  8 are done and recorded in `docs/eval.md`; see
+  [`06-validation.md`](06-validation.md).
 
 ## Phases 1 to 5: the front end and the CLI
 
@@ -17,17 +30,30 @@ Phases 1 to 5h and the completed foundations for general programming and MCP. Th
 | 4. Core evaluator | The checked program run to a value or one `RUNTIME-` diagnostic; it trusted the checker and did not re-check types. Replaced by the bytecode VM in phase 7 | grammar §6, §7; `docs/vm/` |
 | 5. CLI and diagnostic quality | Every diagnostic names file, position, stable code, a concrete message and the source line with a caret (`diagnostic.rkt`); the CLI prints the first diagnostic to stderr and exits 1; a missing file or bad usage is one plain message and exit 2; `--dump` prints the checked tree. Every grammar example is a test (`tests/examples-test.rkt`) | `src/main.rkt`, `src/diagnostic.rkt`, grammar §7, §8 |
 
-Rules from these phases that stay: each stage takes the previous stage's output and returns data or exactly one diagnostic, stops at the first error, never prints and never lets a Racket exception escape (also in `AGENTS.md`). Diagnostic codes are stable and prefixed by stage. Internal checker cases that should never happen have their own code, `CHECK-INTERNAL`. The old `CHECK-NOT-A-STRUCT` was replaced by `CHECK-UNKNOWN-METHOD`, and the evaluator's catch-all `RUNTIME-UNREACHABLE` left with the Racket evaluator.
+Rules from these phases that stay: each stage takes the previous stage's output
+and returns data or exactly one diagnostic, stops at the first error, never
+prints and never lets a Racket exception escape (also in `AGENTS.md`).
+Diagnostic codes are stable and prefixed by stage. Internal checker cases that
+should never happen have their own code, `CHECK-INTERNAL`. The old
+`CHECK-NOT-A-STRUCT` was replaced by `CHECK-UNKNOWN-METHOD`, and the evaluator's
+catch-all `RUNTIME-UNREACHABLE` left with the Racket evaluator.
 
 **Decisions of this period** (all closed):
 
-- `?` and `!` are part of function names for every function, as in Ruby and Elixir (`String.contains?`, `String.to_int!`).
-- `Map.has` and `Map.len` became `Map.has_key?` and `Map.size`, with `List.len` becoming `List.size` (5c).
-- Network and filesystem access use host permissions, with no separate capability flag.
+- `?` and `!` are part of function names for every function, as in Ruby and
+  Elixir (`String.contains?`, `String.to_int!`).
+- `Map.has` and `Map.len` became `Map.has_key?` and `Map.size`, with `List.len`
+  becoming `List.size` (5c).
+- Network and filesystem access use host permissions, with no separate
+  capability flag.
 
 ## Phases 5b to 5h: the standard library before validation
 
-Names and shapes copy Ruby and Elixir so an agent can guess them: modules called as `Module.function(...)`, snake_case, `?` for predicates, `!` for the version that halts. Every function that can fail has two forms: `x(...)` returns `Result[T]` and `x!(...)` halts with a `RUNTIME-` diagnostic. All I/O goes through injectable ports, so tests do not touch the real network.
+Names and shapes copy Ruby and Elixir so an agent can guess them: modules called
+as `Module.function(...)`, snake_case, `?` for predicates, `!` for the version
+that halts. Every function that can fail has two forms: `x(...)` returns
+`Result[T]` and `x!(...)` halts with a `RUNTIME-` diagnostic. All I/O goes
+through injectable ports, so tests do not touch the real network.
 
 | Phase | What landed | Where |
 |---|---|---|
@@ -42,7 +68,15 @@ Names and shapes copy Ruby and Elixir so an agent can guess them: modules called
 | 5g. TCP and TLS | Opaque `Socket` and `Listener` handles, `TCP.connect/listen/accept/send/send_bytes/recv_bytes/read_line/close/close_listener/local_port`, full-operation deadlines, verified TLS clients and PEM-configured TLS listeners | [`06d-io-and-network.md`](../grammar/06d-io-and-network.md), `docs/vm/10-io-tls.md` |
 | 5h. HTTP/1.1 and HTTPS | Builtin `Header`, `Request`, `Response` and option records; client pools, keep-alive, bounded deadlines and body sizes, no transparent retries or redirects; verified HTTPS both ways. The builtin `HTTP` module was replaced by `std/http` in phase 20 | [`06d-io-and-network.md`](../grammar/06d-io-and-network.md), `docs/vm/10-io-http.md`, [`20-hybrid-http.md`](20-hybrid-http.md) |
 
-**Independent integration fixtures** (the rule that came with 5g and 5h, kept in `AGENTS.md`): TCP/HTTP interoperability tests use a protocol implementation independent of the Agentica code under test (Node's `http`, `https`, `net`, Python's `http.server` and `socket`, or curl), standard libraries only, localhost, port 0, no external services, with cleanup of processes and ports on every exit. Fixtures live in `tests/fixtures/`. Local runs may skip with a visible message when the tool is missing; CI installs Node and must fail rather than skip. A test against the official MCP SDK needs `npx` and the network, so it stays manual and out of CI.
+**Independent integration fixtures** (the rule that came with 5g and 5h, kept in
+`AGENTS.md`): TCP/HTTP interoperability tests use a protocol implementation
+independent of the Agentica code under test (Node's `http`, `https`, `net`,
+Python's `http.server` and `socket`, or curl), standard libraries only,
+localhost, port 0, no external services, with cleanup of processes and ports on
+every exit. Fixtures live in `tests/fixtures/`. Local runs may skip with a
+visible message when the tool is missing; CI installs Node and must fail rather
+than skip. A test against the official MCP SDK needs `npx` and the network, so
+it stays manual and out of CI.
 
 ## Completed foundations for general programming and MCP
 
