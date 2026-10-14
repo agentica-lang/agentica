@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 204935,
+  "stdout": [
+    "scrambled size 3000 edges 13..261 digest 837385",
+    "sorted size 3000 edges 0..1008 digest 396212",
+    "sorted again size 3000 edges 0..1008 digest 396212",
+    "descending size 3000 edges 0..1008 digest 396212",
+    "strictly descending size 3000 edges 0..2999 digest 220629",
+    "strictly ascending size 3000 edges 0..2999 digest 220629",
+    "by negation size 3000 edges 1008..0 digest 509550",
+    "[\"e\", \"f\", \"c\", \"d\", \"a\", \"b\"]",
+    "[\"f\", \"e\", \"d\", \"c\", \"b\", \"a\"]",
+    "[\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"]",
+    "[\"c\", \"b\", \"a\"]",
+    "[\"c\", \"b\", \"a\"]",
+    "w0,w0,w0,w0,w0,w1,w1,w1,w1,w1,w2,w2,w2,w2,w2,w2,w3,w3,w3,w3,w3,w4,w4,w4,w4,w4,w4,w5,w5,w5,w5,w5,w5,w6,w6,w6,w6,w6,w6,w6",
+    "w6,w1,w2,w3,w4,w5,w6,w1,w2,w3,w4,w5,w6,w0,w2,w3,w4,w5,w6,w0,w2,w3,w4,w5,w6,w0,w1,w3,w4,w5,w6,w0,w1,w2,w4,w5,w6,w0,w1,w2",
+    "[6.5, 21.0, 52.0, 66.5, 97.5, 128.5, 143.0, 174.0, 188.5, 205.0, 219.5, 250.5, 265.0, 281.5, 296.0, 327.0, 341.5, 358.0, 372.5, 403.5, 418.0, 434.5, 449.0, 480.0, 494.5]",
+    "[494.5, 480.0, 449.0, 434.5, 418.0]",
+    ""
+  ],
+  "stderr": []
+}

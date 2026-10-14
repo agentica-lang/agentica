@@ -78,9 +78,16 @@ static list_trie trie_add_leaf(list_branch *root, uint32_t shift, size_t off, li
   return (list_trie){top, shift};
 }
 
-static void *trie_make(agc_list *l, size_t items) {
+static list_leaf *leaf_of(const agc_list *l, size_t k) {
+  const list_branch *node = l->root;
+  for (uint32_t s = l->shift; s > LIST_BITS; s -= LIST_BITS) node = node->child[((k << LIST_BITS) >> s) & LIST_MASK];
+  return node->child[k & LIST_MASK];
+}
+
+/* The first `shared` leaves are leaves first, first + 1, ... of src; the rest are slices of one new block of items. */
+static agc_value *trie_make(agc_list *l, size_t items, const agc_list *src, size_t first, size_t shared) {
   /* runs before shift_for: a len above SIZE_MAX / 16 ends in the out-of-memory exit here (17.7) */
-  size_t bytes = agc_size_mul(items, sizeof(agc_value));
+  size_t bytes = agc_size_mul(items - shared * LIST_WIDTH, sizeof(agc_value));
   list_branch *levels[MAX_LEVELS];
   size_t leaves = items >> LIST_BITS;
   uint32_t shift = shift_for(items);
@@ -90,19 +97,18 @@ static void *trie_make(agc_list *l, size_t items) {
     count = (count + LIST_MASK) >> LIST_BITS;
     levels[depth++] = agc_alloc(agc_size_mul(count, sizeof(list_branch)));
   }
-  void *block = agc_alloc(bytes);
-  char *nodes = block;
-  size_t size = sizeof(list_leaf);
+  char *block = bytes ? agc_alloc(bytes) : NULL;
+  for (size_t k = 0; k < leaves; k++)
+    levels[0][k >> LIST_BITS].child[k & LIST_MASK] =
+        k < shared ? (void *)leaf_of(src, first + k) : block + (k - shared) * sizeof(list_leaf);
   count = leaves;
-  for (size_t d = 0; d < depth; d++) {
-    for (size_t k = 0; k < count; k++) levels[d][k >> LIST_BITS].child[k & LIST_MASK] = nodes + k * size;
-    nodes = (char *)levels[d];
-    size = sizeof(list_branch);
+  for (size_t d = 1; d < depth; d++) {
     count = (count + LIST_MASK) >> LIST_BITS;
+    for (size_t k = 0; k < count; k++) levels[d][k >> LIST_BITS].child[k & LIST_MASK] = levels[d - 1] + k;
   }
   l->root = levels[depth - 1];
   l->shift = shift;
-  return block;
+  return (agc_value *)block;
 }
 
 static const agc_value *list_chunk(const agc_list *l, size_t i, size_t *start, size_t *end) {
@@ -152,21 +158,26 @@ size_t agc_list_len(const agc_list *l) { return list_len(l); }
 
 agc_value agc_list_get(const agc_list *l, size_t i) { return list_get(l, i); }
 
+static void builder_begin(agc_list_builder *b, size_t n, const agc_list *src, size_t first, size_t shared) {
+  size_t items = trie_items(n);
+  agc_list *l = list_alloc(n, n - items);
+  agc_value *block = items ? trie_make(l, items, src, first, shared) : NULL;
+  b->out = l;
+  b->next = block ? block : l->tail;
+  b->stop = block ? block + (items - shared * LIST_WIDTH) : l->tail + (n - items);
+  b->after = block ? l->tail : NULL;
+}
+
 static void builder_put(agc_list_builder *b, const agc_value *src, size_t n) {
-  if (n == 0) return;
-  agc_list *l = b->out;
-  if (n > l->len - b->count) abort();
-  size_t off = list_tail_off(l->len);
-  size_t at = b->count;
-  b->count = at + n;
-  if (at < off) {
-    size_t head = off - at < n ? off - at : n;
-    memcpy((agc_value *)b->leaves + at, src, head * sizeof(agc_value));
-    src += head;
-    at += head;
-    n -= head;
+  while (n) {
+    if (b->next == b->stop) agc_list_builder_advance(b);
+    size_t room = (size_t)(b->stop - b->next);
+    size_t part = room < n ? room : n;
+    memcpy(b->next, src, part * sizeof(agc_value));
+    b->next += part;
+    src += part;
+    n -= part;
   }
-  if (n) memcpy(l->tail + (at - off), src, n * sizeof(agc_value));
 }
 
 static void builder_copy(agc_list_builder *b, const agc_list *src, size_t from, size_t count) {
@@ -179,27 +190,17 @@ static void builder_copy(agc_list_builder *b, const agc_list *src, size_t from, 
   }
 }
 
-void agc_list_builder_sized(agc_list_builder *b, size_t n) {
-  size_t items = trie_items(n);
-  b->out = list_alloc(n, n - items);
-  b->count = 0;
-  b->leaves = items ? trie_make(b->out, items) : NULL;
-}
+void agc_list_builder_sized(agc_list_builder *b, size_t n) { builder_begin(b, n, NULL, 0, 0); }
 
-void agc_list_builder_push(agc_list_builder *b, agc_value v) {
-  agc_list *l = b->out;
-  size_t i = b->count;
-  if (i >= l->len) abort();
-  b->count = i + 1;
-  size_t off = list_tail_off(l->len);
-  if (i >= off)
-    l->tail[i - off] = v;
-  else
-    ((agc_value *)b->leaves)[i] = v;
+void agc_list_builder_advance(agc_list_builder *b) {
+  if (!b->after) abort();
+  b->next = b->after;
+  b->stop = b->after + (b->out->len - list_tail_off(b->out->len));
+  b->after = NULL;
 }
 
 agc_list *agc_list_builder_finish(agc_list_builder *b) {
-  if (b->count != b->out->len) abort();
+  if (!b->out || b->after || b->next != b->stop) abort();
   return b->out;
 }
 
@@ -227,13 +228,9 @@ void agc_list_cursor_begin(agc_list_cursor *c, const agc_list *l, size_t at) {
   c->chunk = NULL;
 }
 
-bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
-  if (c->index >= c->end) {
-    if (c->index >= c->list->len) return false;
-    c->chunk = list_chunk(c->list, c->index, &c->start, &c->end);
-  }
-  *out = c->chunk[c->index - c->start];
-  c->index++;
+bool agc_list_cursor_fill(agc_list_cursor *c) {
+  if (c->index >= c->list->len) return false;
+  c->chunk = list_chunk(c->list, c->index, &c->start, &c->end);
   return true;
 }
 
@@ -285,6 +282,8 @@ agc_list *agc_list_set(const agc_list *l, size_t i, agc_value v) {
 }
 
 agc_list *agc_list_repeat(agc_value v, size_t n) {
+  /* the bound trie_make has, checked before shift_for (17.7) */
+  (void)agc_size_mul(n, sizeof(agc_value));
   size_t items = trie_items(n);
   agc_list *l = list_alloc(n, n - items);
   for (size_t k = 0; k < n - items; k++) l->tail[k] = v;
@@ -323,18 +322,26 @@ agc_list *agc_list_slice(const agc_list *l, size_t from, size_t count) {
     return r;
   }
   agc_list_builder b;
-  agc_list_builder_sized(&b, count);
-  builder_copy(&b, l, from, count);
+  size_t shared = (from & LIST_MASK) == 0 && count >= l->len / 2 ? trie_items(count) >> LIST_BITS : 0;
+  builder_begin(&b, count, l, from >> LIST_BITS, shared);
+  builder_copy(&b, l, from + shared * LIST_WIDTH, count - shared * LIST_WIDTH);
   return agc_list_builder_finish(&b);
 }
 
 agc_list *agc_list_reverse(const agc_list *l) {
   agc_list_builder b;
   size_t start, end;
-  agc_list_builder_sized(&b, l->len);
+  builder_begin(&b, l->len, NULL, 0, 0);
   for (size_t high = l->len; high > 0; high = start) {
     const agc_value *chunk = list_chunk(l, high - 1, &start, &end);
-    for (size_t i = high; i > start; i--) agc_list_builder_push(&b, chunk[i - 1 - start]);
+    for (size_t i = high; i > start;) {
+      if (b.next == b.stop) agc_list_builder_advance(&b);
+      size_t room = (size_t)(b.stop - b.next);
+      size_t part = room < i - start ? room : i - start;
+      for (size_t k = 0; k < part; k++) b.next[k] = chunk[i - 1 - k - start];
+      b.next += part;
+      i -= part;
+    }
   }
   return agc_list_builder_finish(&b);
 }
@@ -344,8 +351,9 @@ agc_list *agc_list_concat(const agc_list *a, const agc_list *b) {
   if (a->len == 0) return (agc_list *)b;
   if (b->len <= LIST_WIDTH) return join_small(a, b);
   agc_list_builder out;
-  agc_list_builder_sized(&out, agc_size_add(a->len, b->len));
-  builder_copy(&out, a, 0, a->len);
+  size_t shared = trie_items(a->len) >> LIST_BITS;
+  builder_begin(&out, agc_size_add(a->len, b->len), a, 0, shared);
+  builder_copy(&out, a, shared * LIST_WIDTH, a->len - shared * LIST_WIDTH);
   builder_copy(&out, b, 0, b->len);
   return agc_list_builder_finish(&out);
 }

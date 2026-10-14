@@ -160,6 +160,7 @@ struct agc_output {
   agc_task *waiters, *waiters_tail;
 };
 
+#define AGC_ASCII_CHARS 128
 #define AGC_FLUSH_TIMEOUT_MS 30000
 #define AGC_FLUSH_TIMEOUT_MAX_MS 86400000
 
@@ -168,6 +169,7 @@ typedef struct {
   agc_output out, err;
   agc_value args;
   agc_string *cwd;
+  agc_value chars[AGC_ASCII_CHARS];
   bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired;
   agc_style style;
   int64_t flush_timeout;

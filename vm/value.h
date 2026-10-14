@@ -41,8 +41,7 @@ typedef struct agc_list agc_list;
 
 typedef struct {
   agc_list *out;
-  size_t count;
-  void *leaves;
+  agc_value *next, *stop, *after;
 } agc_list_builder;
 
 typedef struct {
@@ -340,18 +339,29 @@ agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_va
 size_t agc_list_len(const agc_list *l);
 agc_value agc_list_get(const agc_list *l, size_t i);
 void agc_list_builder_sized(agc_list_builder *b, size_t n);
-void agc_list_builder_push(agc_list_builder *b, agc_value v);
+void agc_list_builder_advance(agc_list_builder *b);
 agc_list *agc_list_builder_finish(agc_list_builder *b);
 agc_list *agc_list_from_array(const agc_value *items, size_t n);
 void agc_list_to_array(const agc_list *l, agc_value *out);
 void agc_list_cursor_begin(agc_list_cursor *c, const agc_list *l, size_t at);
-bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out);
+bool agc_list_cursor_fill(agc_list_cursor *c);
 agc_list *agc_list_append(const agc_list *l, agc_value v);
 agc_list *agc_list_set(const agc_list *l, size_t i, agc_value v);
 agc_list *agc_list_slice(const agc_list *l, size_t from, size_t count);
 agc_list *agc_list_concat(const agc_list *a, const agc_list *b);
 agc_list *agc_list_reverse(const agc_list *l);
 agc_list *agc_list_repeat(agc_value v, size_t n);
+
+static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
+  if (b->next == b->stop) agc_list_builder_advance(b);
+  *b->next++ = v;
+}
+
+static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
+  if (c->index >= c->end && !agc_list_cursor_fill(c)) return false;
+  *out = c->chunk[c->index++ - c->start];
+  return true;
+}
 
 extern const uint32_t agc_write_raw_ranges[][2];
 extern const size_t agc_write_raw_count;

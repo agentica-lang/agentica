@@ -121,8 +121,11 @@ static size_t count_matches(const finder *f, const agc_string *text) {
   return count;
 }
 
-static agc_string *piece(const agc_string *s, size_t start, size_t end) {
-  return agc_make_string(s->data + start, end - start, agc_utf8_count((const uint8_t *)s->data + start, end - start));
+static agc_value piece(agc_vm *vm, const agc_string *s, size_t start, size_t end) {
+  size_t bytes = end - start;
+  if (bytes == 1 && (uint8_t)s->data[start] < AGC_ASCII_CHARS) return vm->rt->chars[(uint8_t)s->data[start]];
+  return agc_string_value(
+      agc_make_string(s->data + start, bytes, agc_utf8_count((const uint8_t *)s->data + start, bytes)));
 }
 
 static const uint32_t *case_row(const uint32_t (*map)[4], size_t count, uint32_t cp) {
@@ -292,10 +295,14 @@ static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
   if (sep->bytes == 0) {
     agc_list_builder_sized(&b, s->chars);
     size_t at = 0;
+    bool ascii = s->bytes == s->chars;
     for (size_t k = 0; k < s->chars; k++) {
       size_t start = at;
-      agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
-      agc_list_builder_push(&b, agc_string_value(agc_make_string(s->data + start, at - start, 1)));
+      if (ascii)
+        at++;
+      else
+        agc_utf8_next((const uint8_t *)s->data, s->bytes, &at);
+      agc_list_builder_push(&b, piece(vm, s, start, at));
     }
     return agc_list_value(agc_list_builder_finish(&b));
   }
@@ -308,10 +315,10 @@ static agc_value builtin_split(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_list_builder_sized(&b, agc_size_add(count_matches(&f, s), 1));
   size_t start = 0;
   for (size_t at = find(&f, s, 0); at != AGC_NOT_FOUND; at = find(&f, s, start)) {
-    agc_list_builder_push(&b, agc_string_value(piece(s, start, at)));
+    agc_list_builder_push(&b, piece(vm, s, start, at));
     start = at + sep->bytes;
   }
-  agc_list_builder_push(&b, agc_string_value(piece(s, start, s->bytes)));
+  agc_list_builder_push(&b, piece(vm, s, start, s->bytes));
   return agc_list_value(agc_list_builder_finish(&b));
 }
 

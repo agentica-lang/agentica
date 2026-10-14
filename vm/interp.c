@@ -5,6 +5,13 @@
 #include <math.h>
 #include <string.h>
 
+typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
+
+typedef struct {
+  uint64_t key;
+  size_t index;
+} sort_entry;
+
 struct agc_native {
   agc_native_kind kind;
   uint32_t span;
@@ -79,6 +86,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   rt->args = agc_list_value(agc_list_from_array(NULL, 0));
+  for (size_t c = 0; c < AGC_ASCII_CHARS; c++) rt->chars[c] = agc_string_value(agc_make_string((const char[]){(char)c}, 1, 1));
   atomic_init(&rt->next_task_id, 1);
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
@@ -240,20 +248,68 @@ static void finish_native(agc_vm *vm, agc_value result) {
   if (t->turn_cost) apply_cost(vm);
 }
 
-static bool key_less(agc_vm *vm, agc_value a, agc_value b) {
-  if (agc_is(a, AGC_T_STRING)) {
-    const agc_string *x = agc_as_string(vm, a), *y = agc_as_string(vm, b);
-    size_t n = x->bytes < y->bytes ? x->bytes : y->bytes;
-    int order = n ? memcmp(x->data, y->data, n) : 0;
-    return order < 0 || (order == 0 && x->bytes < y->bytes);
+static uint64_t int_order(int64_t i) { return (uint64_t)i ^ ((uint64_t)1 << 63); }
+
+static uint64_t float_order(double d) {
+  if (isnan(d)) return UINT64_MAX;
+  if (d == 0) d = 0;
+  uint64_t bits;
+  memcpy(&bits, &d, sizeof bits);
+  return (bits >> 63) ? ~bits : bits | ((uint64_t)1 << 63);
+}
+
+static bool entry_less(sort_kind kind, const sort_entry *x, const sort_entry *y) {
+  if (kind != SORT_TEXT) return x->key < y->key;
+  const agc_string *a = (const agc_string *)(uintptr_t)x->key, *b = (const agc_string *)(uintptr_t)y->key;
+  size_t n = a->bytes < b->bytes ? a->bytes : b->bytes;
+  int order = n ? memcmp(a->data, b->data, n) : 0;
+  return order < 0 || (order == 0 && a->bytes < b->bytes);
+}
+
+static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort_kind kind) {
+  size_t bytes = agc_size_mul(n, sizeof(sort_entry));
+  sort_entry *entries = kind == SORT_TEXT ? agc_alloc(bytes) : agc_alloc_atomic(bytes);
+  agc_list_cursor cursor;
+  agc_value key;
+  agc_list_cursor_begin(&cursor, keys, 0);
+  for (size_t k = 0; agc_list_cursor_next(&cursor, &key); k++) {
+    entries[k].index = k;
+    if (kind == SORT_INT)
+      entries[k].key = int_order(agc_as_int(vm, key));
+    else if (kind == SORT_FLOAT)
+      entries[k].key = float_order(agc_as_float(vm, key));
+    else
+      entries[k].key = (uint64_t)(uintptr_t)agc_as_string(vm, key);
   }
-  if (agc_is(a, AGC_T_FLOAT)) {
-    double x = agc_as_float(vm, a), y = agc_as_float(vm, b);
-    if (isnan(x)) return false;
-    if (isnan(y)) return true;
-    return x < y;
+  return entries;
+}
+
+/* 1 when the keys never decrease, -1 when each is below the one before, else 0 */
+static int sort_direction(sort_kind kind, const sort_entry *entries, size_t n) {
+  bool up = true, down = true;
+  for (size_t k = 1; k < n && (up || down); k++) {
+    bool below = entry_less(kind, &entries[k], &entries[k - 1]);
+    up = up && !below;
+    down = down && below;
   }
-  return agc_as_int(vm, a) < agc_as_int(vm, b);
+  return up ? 1 : down ? -1 : 0;
+}
+
+static const sort_entry *sort_merge(sort_kind kind, sort_entry *from, sort_entry *to, size_t n) {
+  for (size_t width = 1; width < n; width *= 2) {
+    for (size_t lo = 0; lo < n; lo += 2 * width) {
+      size_t mid = n - lo < width ? n : lo + width;
+      size_t hi = n - mid < width ? n : mid + width;
+      size_t i = lo, j = mid, k = lo;
+      while (i < mid && j < hi) to[k++] = entry_less(kind, &from[j], &from[i]) ? from[j++] : from[i++];
+      while (i < mid) to[k++] = from[i++];
+      while (j < hi) to[k++] = from[j++];
+    }
+    sort_entry *swap = from;
+    from = to;
+    to = swap;
+  }
+  return from;
 }
 
 agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys) {
@@ -262,28 +318,18 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   uint64_t rounds = 0;
   for (size_t width = 1; width < n; width *= 2) rounds++;
   agc_charge(vm, (uint64_t)n * rounds);
-  size_t *order = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
-  size_t *merged = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
-  agc_value *sort_keys = agc_alloc(agc_size_mul(n, sizeof(agc_value)));
-  agc_list_to_array(keys, sort_keys);
-  for (size_t k = 0; k < n; k++) order[k] = k;
-  for (size_t width = 1; width < n; width *= 2) {
-    for (size_t lo = 0; lo < n; lo += 2 * width) {
-      size_t mid = n - lo < width ? n : lo + width;
-      size_t hi = n - mid < width ? n : mid + width;
-      size_t i = lo, j = mid, k = lo;
-      while (i < mid && j < hi)
-        merged[k++] = key_less(vm, sort_keys[order[j]], sort_keys[order[i]]) ? order[j++] : order[i++];
-      while (i < mid) merged[k++] = order[i++];
-      while (j < hi) merged[k++] = order[j++];
-    }
-    size_t *swap = order;
-    order = merged;
-    merged = swap;
-  }
+  agc_value first = agc_list_get(keys, 0);
+  sort_kind kind = agc_is(first, AGC_T_STRING) ? SORT_TEXT : agc_is(first, AGC_T_FLOAT) ? SORT_FLOAT : SORT_INT;
+  sort_entry *entries = sort_entries(vm, keys, n, kind);
+  int direction = sort_direction(kind, entries, n);
+  if (direction > 0) return agc_list_value((agc_list *)items);
+  if (direction < 0) return agc_list_value(agc_list_reverse(items));
+  size_t bytes = agc_size_mul(n, sizeof(sort_entry));
+  sort_entry *scratch = kind == SORT_TEXT ? agc_alloc(bytes) : agc_alloc_atomic(bytes);
+  const sort_entry *order = sort_merge(kind, entries, scratch, n);
   agc_list_builder sorted;
   agc_list_builder_sized(&sorted, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, list_get(items, order[k]));
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, list_get(items, order[k].index));
   return agc_list_value(agc_list_builder_finish(&sorted));
 }
 
