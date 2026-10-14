@@ -22,7 +22,31 @@
 
 ### 12.2 PR plan
 
-All items of the plan are merged. The checklist and what each one covers are in `docs/roadmap/07-vm.md`.
+The items keep their numbers, since other docs cite them. All are done. The checklist is in `docs/roadmap/07-vm.md`.
+
+1. Vertical slice: Int, Bool, operators, `if`, `while`, `break` and `next`, functions, steps, `puts`, the loader, the fuzz driver, `--dump-ir`, `compile` and the differential test. Done.
+2. Float: operators, comparisons, Float text (2.2), Nil. Done.
+3. Strings and printing: strings, interpolation, debug forms, the write-escape generator, the three diagnostic formats, exit codes and the GC stress run. Done.
+4. macOS and Windows CI: `make vm vm-test` and the differential and bytecode tests on `macos-15` and `windows-2025`. Done.
+5. Data, in five parts. Done.
+   - 5a Lists: `List[T]`, list literals, `for x in xs`, indexing. Done.
+   - 5b Structs, enums and `case`: user structs and enums, format version 2. Done.
+   - 5c Result values and `try`: `ok`, `error`, the `Result.*` builtins, `TRY`. Done.
+   - 5d Maps: `Map[K, V]` as a persistent HAMT, map literals, `m[key]`. Done.
+   - 5e Closures: blocks with snapshot captures, `&name`, `.call`, the resumable `List` builtins. Done.
+6. Library, in two parts. Done.
+   - 6a IO and System: the stdin and stdout builtins, `System.args`, `System.exit`. Done.
+   - 6b String, List, Map, Float, Time and Random builtins. Done.
+7. JSON, in two parts. Done.
+   - Part 1: `JSON.parse`, the extractors, `JSON.encode` and the builders. Done.
+   - Part 2: `JSON.decode` and `JSON.schema`, format version 3 (4.6). Done.
+8. 7h part 1: the libuv event loop, the resource registry, and the `File`, `Dir` and `Path` builtins on Linux. Done.
+9. 7h tasks: `Task.spawn`, `Task.await`, `Task.sleep`, per-task `Random`, one scheduler. Done.
+10. 7h processes: every `Process` builtin, behind `--allow-run`. Done.
+11. 7h TCP: every `TCP` builtin, with `Socket` and `Listener` values. Done.
+12. 7h TLS: `TLS.connect` and `TLS.listen` on the vendored OpenSSL. Done.
+
+Also done, not numbered: ranges (phase 8a), tail calls (`TAIL_CALL`, 4.3), and linked programs (the front end links them, so the VM needed no new code).
 
 ### 12.3 Plan for HTTP and TlsContext
 

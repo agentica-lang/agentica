@@ -47,12 +47,14 @@ The checker records the type of every expression in a table (`#:types`, an `eq?`
 | `ok`, `error`, `Result.*` | Builtin calls. `Result.Ok(x)` and `Result.Err(m)` are `ok` and `error` calls after parsing. |
 | Interpolation | `step`, then the first part into the target and each later part into the next slot, then `concat`. An expression part that is not a String is followed by `to-text`. String parts charge no step. |
 | `.inspect`, `.to_s` | `inspect`. `.to_s` follows the checker's resolution: the receiver for String, `String.from_int` or `String.from_float` for Int and Float, a one-part interpolation otherwise. |
-| `JSON.decode(s, T)`, `JSON.schema(T)` | The type argument is charged one step and lowers to a String constant with the struct's linked name (`@2::User` when imported). The builtin finds the struct by that name in the Types section. |
+| `JSON.decode(s, T)`, `JSON.schema(T)` | The type argument is charged one step and lowers to a String constant with the struct's linked name (`@2::User` when imported). The builtin finds the struct by that name in the Types section. A target that is not decodable is rejected by the checker (`CHECK-NOT-DECODABLE`). |
 | `&name` | `step`, then `closure dst fn` with no captures. |
 | `f.call(...)` | `step` (invoke span), the target into the window base, the arguments after it, then `call-value base n`. |
 | Blocks | `step` (block span), then closure conversion (3.4). |
 | `return` | The value, or a Void constant. Inside a block it leaves the block. A direct call to a user function (local or imported) ends in `tail-call` instead of `call`, wherever the `return` is: in branches, `case` arms and loop bodies. Builtin calls, calls inside a larger expression (`return 1 + f(n)`) and `return try f(...)` are not tail calls. |
 | Assignment to an existing local | Value into a temporary, then `move`. Lowering straight into the local would let `x = y and x` read the new `x`. A new local is lowered straight into its slot. |
+
+The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table only when the program names them or a checked type mentions them. Then they lower like user structs (`used-builtin-structs` in `src/lower.rkt`).
 
 ### 3.4 Closure conversion
 
@@ -73,6 +75,8 @@ The lowerer and the emitter never raise. Their codes have their own prefixes, so
 | `LOWER-INTERNAL` | `src/lower.rkt` | A Racket exception inside the lowerer (a bug), at the program span. |
 | `BYTECODE-LIMIT` | `src/bytecode.rkt` | A function needs more than 65535 registers, or the program has more than 65535 structs or variants (4.4). |
 | `BYTECODE-INTERNAL` | `src/bytecode.rkt` | A Racket exception in `ir->bytecode` or `write-bytecode` (a bug), at the program span. |
+
+A builtin call lowers only when its implementation key is in `vm-builtins` (`src/lower.rkt`). A builtin outside that list is `LOWER-UNSUPPORTED` at the call span. Today the list covers every catalog key.
 
 `agentica compile` and `--dump-ir` print them like other diagnostics and exit 1. A list literal nested `d` levels deep needs about `d` registers, so nesting beyond about 65,000 levels in one literal is `BYTECODE-LIMIT`. Lowering stays linear in the depth.
 

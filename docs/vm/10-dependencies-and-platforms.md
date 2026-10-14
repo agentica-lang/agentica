@@ -1,6 +1,6 @@
 ## 10. Dependencies and platforms
 
-The VM runs on Linux, macOS and Windows, always in the "C" locale. The Windows specifics are binary-mode stdio, UTF-8 arguments from `wmain`, `BCryptGenRandom`, `GetSystemTimePreciseAsFileTime` and `QueryPerformanceCounter`. Console rendering is outside the contract.
+The VM runs on Linux, macOS and Windows, always in the "C" locale. The Windows specifics are binary-mode stdio (`_setmode`), UTF-8 arguments from `wmain`, `rand_s` for the seed and the hash key, and `QueryPerformanceCounter` for the monotonic clock (`vm/numbers.c`). Console rendering is outside the contract.
 
 | Dependency | Choice |
 |---|---|
