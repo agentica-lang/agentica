@@ -299,7 +299,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 
 The program's side of the channel its parent opened with `Process.spawn_channel`. The rules are those of `channel_read_line` and `channel_send`, and the timeout must be positive. A program that was not given a channel gets `error("process: no parent channel")`. A timeout closes the channel for good.
 
-The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, or a pipe or FIFO open for both reading and writing. A regular file, a device or a one-way FIFO on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
+The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, or a FIFO opened for reading and writing. A regular file, a device or a one-way FIFO on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
 
 These two calls are for runner code such as `agentica test`. A test or step that calls them can break the protocol between the runner and its file, and nothing stops it.
 

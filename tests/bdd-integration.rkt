@@ -188,6 +188,23 @@
        (check-true (< (- (current-inexact-milliseconds) started) 15000))
        (check-equal? (codes report) '("RUNTIME-BDD-OUTPUT-LIMIT")))))
 
+  (test-case "a step program that prints for ever while it lists its steps fails at the output limit"
+    (with-suite
+     `(("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
+                        "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
+                        "  BDD.run([])\nend\n"))
+       ("listing.feature" . "Feature: Listing\nScenario: never runs\nGiven something\n"))
+     (lambda (directory)
+       (define started (current-inexact-milliseconds))
+       (define report (json-test (in directory "listing.feature") "--steps" (in directory "steps.agc")))
+       (check-true (< (- (current-inexact-milliseconds) started) 15000))
+       (check-equal? (for/list ([file (in-list (hash-ref report 'files))])
+                       (define problem (hash-ref file 'error))
+                       (list (hash-ref file 'kind) (and (hash? problem) (hash-ref problem 'code))))
+                     '(("steps" "RUNTIME-BDD-OUTPUT-LIMIT"))))))
+
   (test-case "a JSON line of a few hundred KB fits the step budget"
     (define items (make-list 30000 "abcdefghij"))
     (with-suite

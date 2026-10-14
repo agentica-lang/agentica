@@ -63,6 +63,10 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
   Process.close_stdin(p, 5000)
   deadline = Time.monotonic_ms() + 30000
   read = Child.read_records(p, deadline)
+  if read.problem == "process: output exceeds 1048576 bytes"
+    Process.close(p)
+    return broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's output exceeds 1 MiB while listing its tests", where), "")
+  end
   output = Process.output(p, Child.left(deadline))
   code = Process.wait(p, 5000)
   Process.close(p)

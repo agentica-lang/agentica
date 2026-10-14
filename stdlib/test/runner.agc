@@ -159,6 +159,10 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   Process.close_stdin(p, 5000)
   deadline = Time.monotonic_ms() + 30000
   read = Child.read_records(p, deadline)
+  if read.problem == "process: output exceeds 1048576 bytes"
+    Process.close(p)
+    return Listing.Broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "step program output exceeds 1 MiB", where))
+  end
   output = Process.output(p, Child.left(deadline))
   Process.close(p)
   if read.problem == "network: operation timed out" or not output.ok?

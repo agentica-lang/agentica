@@ -156,7 +156,11 @@
     (match-define (list _ endless) (json-test (fixture "endless_test.agc")))
     (check-true (< (- (current-inexact-milliseconds) started) 15000))
     (check-equal? (map (lambda (item) (list (hash-ref item 'status) (field item 'code))) (cases endless))
-                  '(("failed" "RUNTIME-BDD-OUTPUT-LIMIT") ("not_executed" #f))))
+                  '(("failed" "RUNTIME-BDD-OUTPUT-LIMIT") ("not_executed" #f)))
+    (define listing-started (current-inexact-milliseconds))
+    (match-define (list _ listing) (json-test (fixture "listing_flood_test.agc")))
+    (check-true (< (- (current-inexact-milliseconds) listing-started) 15000))
+    (check-equal? (file-codes listing) '(("tests" "RUNTIME-BDD-OUTPUT-LIMIT"))))
 
   (test-case "test files and features share one report, and test/ is a default path"
     (match-define (list status report)
