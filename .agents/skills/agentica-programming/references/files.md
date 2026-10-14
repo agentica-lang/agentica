@@ -37,8 +37,9 @@ an error for EOF before any line or invalid UTF-8. Byte values are 0..255.
 Close flushes output and is idempotent. Explicit flush and close return
 Results. A file belongs to the task that opened it and is closed, with its
 output flushed, when that task ends (return, crash or cancel), and
-`Task.await` of that task returns after the flush, so a parent that awaits a
-helper reads everything the helper wrote. A file opened in a helper task and
+`Task.await` of that task returns after the flush of a regular file, so a
+parent that awaits a helper reads everything the helper wrote to one (the
+await does not wait for a flush to a FIFO or a pipe). A file opened in a helper task and
 returned through `Task.await` is closed when the helper ends (see
 `tasks.md`). `File.close` on a handle that its owner's end is closing waits
 for that close and returns its result.
