@@ -78,7 +78,7 @@ def main():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_address[1]}"
-    done = subprocess.run(sys.argv[1:] + [url], input=sys.stdin.read(), capture_output=True, text=True, timeout=30)
+    done = subprocess.run(sys.argv[2:] + [url], input=sys.argv[1], capture_output=True, text=True, timeout=30)
     server.shutdown()
     sys.stderr.write(done.stderr)
     sys.stdout.write(done.stdout)

@@ -2,7 +2,7 @@
 
 Write a program that reads a request log and prints the server errors that were slow. The path of the log file is the first command-line argument (`System.args()[0]` in Agentica, `sys.argv[1]` in Python). Save the program as `solution.agc` (or `solution.py`).
 
-The log is large: the tests use files from a few KB up to about 30 MB, with about 600,000 lines, and a few lines are several thousand characters long. A run has about 50 seconds. The input is the file only; nothing is read from standard input.
+The log is large: the tests use files from a few KB up to about 30 MB, with about 600,000 lines, and a few lines are several thousand characters long. Do not read the whole file into memory; process it line by line. No line is longer than 4000 bytes. A run has about 50 seconds. The input is the file only; nothing is read from standard input.
 
 ## The log
 

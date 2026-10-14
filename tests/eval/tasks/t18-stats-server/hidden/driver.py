@@ -57,8 +57,8 @@ def request(port, line):
 
 
 def main():
-    script = [line for line in sys.stdin.read().splitlines() if line.strip()]
-    proc = subprocess.Popen(sys.argv[1:], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+    script = [line for line in sys.argv[1].splitlines() if line.strip()]
+    proc = subprocess.Popen(sys.argv[2:], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, start_new_session=True)
     port = read_port(proc)
     if port is None:

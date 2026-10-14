@@ -5,11 +5,11 @@ import tempfile
 
 
 def main():
-    text = sys.stdin.read()
+    text = sys.argv[1]
     with tempfile.TemporaryDirectory(prefix="orders-") as directory:
         with open(os.path.join(directory, "orders.csv"), "w", encoding="utf-8", newline="") as handle:
             handle.write(text)
-        done = subprocess.run(sys.argv[1:] + ["orders.csv", "report.json"], cwd=directory,
+        done = subprocess.run(sys.argv[2:] + ["orders.csv", "report.json"], cwd=directory,
                               capture_output=True, text=True, timeout=30)
         sys.stderr.write(done.stderr)
         sys.stdout.write(done.stdout)

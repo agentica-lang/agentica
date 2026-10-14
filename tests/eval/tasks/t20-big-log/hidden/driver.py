@@ -69,7 +69,7 @@ def write_small(path):
 
 
 def main():
-    scenario = sys.stdin.read().strip()
+    scenario = sys.argv[1].strip()
     with tempfile.TemporaryDirectory(prefix="biglog-") as directory:
         path = os.path.join(directory, "requests.log")
         if scenario == "small":
@@ -77,7 +77,7 @@ def main():
         else:
             expected = write_generated(path, {"medium": 50000, "big": 600000}[scenario])
         size = os.path.getsize(path)
-        done = subprocess.run(sys.argv[1:] + [path], cwd=directory, capture_output=True, text=True, timeout=50)
+        done = subprocess.run(sys.argv[2:] + [path], cwd=directory, capture_output=True, text=True, timeout=50)
     sys.stderr.write(done.stderr)
     actual = done.stdout.split("\n")
     if actual and actual[-1] == "":
