@@ -1,0 +1,1 @@
+This is Agentica {{ partial "version.html" }}. [Release {{ partial "version.html" }}]({{ partial "release-url.html" }}) has the source archive of that version and the prebuilt Linux x86-64 archive that the release workflow builds, with a `SHA256SUMS` file; it is Linux only for now. [All releases]({{ site.Params.repo }}/releases) lists the other versions.

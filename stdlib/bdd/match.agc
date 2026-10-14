@@ -1,3 +1,7 @@
+## Matches step text against step patterns for `agentica test`.
+##
+## A pattern is plain text with `{string}` and `{int}` placeholders.
+
 import "gherkin" as Gherkin
 import "std/test/report" as Report
 
@@ -11,18 +15,21 @@ struct Slot
   literal: List[String]
 end
 
+## A compiled step pattern. `compile` builds them.
 export struct Pattern
   text: String
   head: List[String]
   slots: List[Slot]
 end
 
+## The pattern a step matched: its index in the list and the values it captured.
 export struct Resolved
   index: Int
   captures: List[String]
 end
 
-# Checks the definitions in order, each for a duplicate first, then for a bad pattern.
+## Compiles the step patterns `texts`. Checks them in order and returns a failure at `where` for the first duplicate (`RUNTIME-BDD-DUPLICATE`)
+## or bad pattern (`RUNTIME-BDD-PATTERN`).
 export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
   compiled = texts.map do |text| compile_one(text) end
   seen: Map[String, Bool] = {}
@@ -39,6 +46,7 @@ export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[L
   return Gherkin.Outcome.Done(compiled.map do |pattern| pattern.unwrap! end)
 end
 
+## Finds the one pattern that matches the text of `step`. Fails with `CHECK-BDD-UNDEFINED` when none does and `CHECK-BDD-AMBIGUOUS` when several do.
 export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outcome[Resolved]
   found = patterns.map do |pattern| captures(pattern, step.text) end
   hits = 0
@@ -60,6 +68,7 @@ export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outco
   return Gherkin.Outcome.Done(Resolved(index: first, captures: found[first].unwrap!))
 end
 
+## Matches `text` against `pattern`. Returns the captured values as strings, or an error when the text does not match.
 export def captures(pattern: Pattern, text: String) -> Result[List[String]]
   chars = text.split("")
   if not literal_at?(chars, 0, pattern.head)

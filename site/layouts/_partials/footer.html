@@ -1,4 +1,5 @@
 <footer class="site-footer">
+  <p class="release-links">Agentica {{ partial "version.html" . }} · <a href="{{ partial "release-url.html" . }}">Release {{ partial "version.html" . }}</a> · <a href="{{ site.Params.repo }}/releases">All releases</a></p>
   {{- if site.Params.repoPublic }}
   {{- with partial "source-path.html" . }}
   <a href="{{ site.Params.repo }}/blob/master/{{ . }}">Page source</a> ·

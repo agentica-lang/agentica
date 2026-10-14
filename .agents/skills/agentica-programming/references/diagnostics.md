@@ -18,7 +18,8 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `LEX-INVALID-NUMBER` | a `_` in a number literal that is not between two digits: `1_`, `1__0`, `1_.5`, `1._5`. Write `1_000` or `0.000_5`; the `_` is only visual |
 | `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
-| `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one |
+| `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one; a `##` doc block counts as part of the next declaration, so the blank line goes before it |
+| `PARSE-DETACHED-DOC` | a `##` doc block that is not directly above a `def`, `struct`, `enum`, field or variant: a blank line, a `#` comment, an `import` or the end of the file follows it, or it stands in a function body or inside brackets. Move it onto the line above what it documents, or write `#`. Only the first block of a file, followed by a blank line, may stand alone (the module doc) |
 | `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function (put it in `def main() -> Void`), or an extra `end` (a stray `else` or `elsif` has no matching `if`) |
 | `PARSE-CHAINED-COMPARISON` | `a < b < c` |
 | `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |

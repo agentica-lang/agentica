@@ -1,3 +1,7 @@
+## The runner of `agentica test`.
+##
+## `agentica test` compiles a small program that calls `main`. It reads its configuration, runs the feature files and test files, and prints the report.
+
 import "std/bdd/gherkin" as Gherkin
 import "std/bdd/match" as Match
 import "report" as Report
@@ -45,6 +49,8 @@ struct Run
   verdict: Report.Verdict
 end
 
+## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and prints the report.
+## Exits with a non-zero code when something failed.
 export def main() -> Void
   args = System.args()
   if args.size != 1

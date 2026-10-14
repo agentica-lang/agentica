@@ -23,6 +23,7 @@ Every program now runs on a new C bytecode VM, the Racket evaluator is gone, and
 - **Ranges:** `a..b` and `a...b`, `for x in range` without building a list, `Range` methods, and `Int.times`, `Int.upto` and `Int.downto` with a block (#76).
 - **Pipe operator:** `x |> f(a, b)` means `f(x, a, b)`; new `PARSE-PIPE-TARGET` and `CHECK-PIPE-METHOD` (#182).
 - **Digit separators:** `1_000` and `1_000.000_5`; a bad `_` is the new `LEX-INVALID-NUMBER` (#203).
+- **Doc comments:** a line that starts with `##` documents the next `def`, `struct`, `enum`, field or variant, or the module when it comes first; a block that documents nothing is `PARSE-DETACHED-DOC`. Every `std/` module now has a module doc and a doc on each export (#208).
 - **Everyday library:** `List.sort` and `List.sort_by`, `String.index_of`, `at`, `reverse`, `code` and `from_code`, `Float.from_int`, `Float.to_int` and `to_int!`, `Time.now_ms`, `Time.monotonic_ms`, `Random.int` and `Random.float`, and `--seed N` for repeatable runs (#22).
 - **Modules:** the embedded standard library with `std/queue`, and `pkg/` imports from project-local, `AGENTICA_PATH`, user-data and system roots (#19).
 - **`Channel[T]`:** bounded channels between tasks with `Channel.new`, `send`, `recv`, `close` and `closed?`, with timeouts; `Task.await` cycles are `RUNTIME-TASK-AWAIT-CYCLE` (#179).
@@ -35,7 +36,7 @@ Every program now runs on a new C bytecode VM, the Racket evaluator is gone, and
 - **VM options:** `--flush-timeout MS` and `AGENTICA_FLUSH_TIMEOUT_MS` bound the wait for file data and buffered output at the end of a run (default 30000) (#177); `AGENTICA_VM_TRACE=sched,io,proc,loader,gc,tls` (or `all`) traces VM internals, and `AGENTICA_VM` names the VM binary (#102, #103).
 - **`agentica compile file.agc -o file.agcb`** and `--dump-ir` for the bytecode, and the VM tail-calls `return f(...)` of a user function, so tail recursion runs at any depth (#40, #54).
 - **Better help for agents:** `agentica --help` and `agentica help` list the subcommands and five core rules (#198), and many diagnostics got concrete `help` text for habits from other languages, semicolons and braces, comments, `s[0]`, Int/Float mixing and captured assignment (#30, #195, #200, #201). `CHECK-UNUSED-VALUE` flags an ignored builtin result (#26).
-- **Documentation site** built with Hugo: getting started, a language tour, one page per library module with runnable examples that CI checks, search, a "Copy page" button, `llms.txt`, and pages on the VM and on design decisions (#50, #56, #141, #152, #153, #186, #188).
+- **Documentation site** built with Hugo: getting started, a language tour, one page per library module with runnable examples that CI checks, search, a "Copy page" button, `llms.txt`, and pages on the VM and on design decisions. It shows the current version and links to its GitHub release (#50, #56, #141, #152, #153, #186, #188, #206).
 - **Release archive** ships `agentica-vm` next to `agentica`, built against glibc 2.28, with the licenses of the bundled libraries (#103, #117).
 
 ### Changed
@@ -49,6 +50,7 @@ Every program now runs on a new C bytecode VM, the Racket evaluator is gone, and
 - **Breaking:** reserved names. New: `Range` (#76), `Channel` (#179), `Time` and `Random` (#22), `Test` and `TestCase` (#147), `HttpWire` and `HttpResponse` (#118), and `ProcessOutput` (#128). A user struct, enum, function or import alias with one of these names is `CHECK-REDEFINED-NAME`. `print`, `gets` and `gets!` can no longer be declared as functions, variables, parameters or loop variables (#33). `BDD` is free again.
 - **Breaking:** imports name the module without `.agc`: `import "models" as Models`. A path ending in `.agc`, an empty path, a trailing `/` or a dot in the last part is `CHECK-IMPORT-PATH` (#116).
 - **Breaking:** each `def`, `struct` or `enum` must be followed by a blank line before the next declaration (`PARSE-MISSING-BLANK-LINE`) (#29).
+- **Breaking:** a line that starts with `##` is now a doc comment; one inside a function body or not followed by a declaration is `PARSE-DETACHED-DOC`. `##` after code and inside strings stays plain text (#208).
 - **Breaking:** `#{` inside a string starts an interpolation; write `\#{` for the old text (#27).
 - **Breaking:** `String.split` keeps every empty part, so `"a\n".split("\n")` is `["a", ""]` (#57).
 - **Breaking:** field access on a non-struct value is a method call and unknown names are `CHECK-UNKNOWN-METHOD` (replaces `CHECK-NOT-A-STRUCT`); `IO.puts`, `IO.print` and `IO.warn` take any value, not only `String`; interpolating a `Json` value inserts its JSON text; functions, tasks and resource handles have no `to_s` and are `CHECK-TYPE-MISMATCH` (#26, #36).

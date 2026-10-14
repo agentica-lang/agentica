@@ -1,3 +1,8 @@
+## The step API of `agentica test`.
+##
+## A step program builds a list of steps with `step` and passes it to `run`. A handler gets the context of its scenario and returns it:
+## most functions here take the context first and return it, so keep the one they return.
+
 struct Settings
   base: String
   agentica: List[String]
@@ -29,20 +34,27 @@ struct Scenario
   program: Program
 end
 
+## The state of one scenario: the values saved with `set`, the current step and the program under test.
 export struct Context
+  ## The scenario's state.
   scenario: Scenario
 end
 
+## A step definition: a pattern and the handler that runs for the steps that match it. Build one with `step`.
 export struct Step
+  ## The step text to match. `{string}` and `{int}` capture a value.
   pattern: String
+  ## Gets the context and the captured values as strings, in order, and returns the context.
   handler: Fn[Context, List[String], Context]
 end
 
+## Returns a step that runs `handler` for the steps whose text matches `pattern`.
 export def step(pattern: String, handler: Fn[Context, List[String], Context]) -> Step
   return Step(pattern: pattern, handler: handler)
 end
 
-# Serves the mode in System.args: "list" sends the patterns, "scenario" runs the steps the runner sends on the parent channel.
+## Serves the steps that `agentica test` asks for, with the built-in steps added in front of `steps`. It never returns.
+## Run any other way, it prints how to run the step program and exits with code 2.
 export def run(steps: List[Step]) -> Void
   all = predefined().concat(steps)
   args = System.args()
@@ -66,6 +78,7 @@ export def run(steps: List[Step]) -> Void
   System.exit(2)
 end
 
+## Returns the Doc String under the current step. Ends the scenario with an error when the step has none.
 export def doc_string(ctx: Context) -> String
   if ctx.scenario.step.has_doc
     return ctx.scenario.step.doc
@@ -74,6 +87,7 @@ export def doc_string(ctx: Context) -> String
   return ""
 end
 
+## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has none.
 export def table(ctx: Context) -> List[List[String]]
   rows: List[List[String]] = ctx.scenario.step.table
   if not ctx.scenario.step.has_table
@@ -82,6 +96,7 @@ export def table(ctx: Context) -> List[List[String]]
   return rows
 end
 
+## Fails the scenario with `message` when `condition` is false. Returns the context.
 export def assert(ctx: Context, condition: Bool, message: String) -> Context
   emit("assert")
   if not condition
@@ -90,10 +105,12 @@ export def assert(ctx: Context, condition: Bool, message: String) -> Context
   return ctx
 end
 
+## Returns the context with `value` saved under `name`, for the later steps of the same scenario.
 export def set(ctx: Context, name: String, value: Json) -> Context
   return with_state(ctx, ctx.scenario.state.put(name, value))
 end
 
+## Returns the value saved under `name`, or an error when there is none.
 export def get(ctx: Context, name: String) -> Result[Json]
   if ctx.scenario.state.has_key?(name)
     return ctx.scenario.state.get(name)
@@ -101,6 +118,7 @@ export def get(ctx: Context, name: String) -> Result[Json]
   return error("missing scenario state")
 end
 
+## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. One program may start per scenario.
 export def given_program(ctx: Context, path: String) -> Context
   case ctx.scenario.program
     Program.Running(_) -> halt("RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
@@ -109,14 +127,17 @@ export def given_program(ctx: Context, path: String) -> Context
   return ctx
 end
 
+## Sends `text` and a newline to the program's input.
 export def when_line(ctx: Context, text: String) -> Context
   return send(ctx, text + "\n")
 end
 
+## Sends `text` to the program's input as it is.
 export def when_input(ctx: Context, text: String) -> Context
   return send(ctx, text)
 end
 
+## Closes the program's input.
 export def when_eof(ctx: Context) -> Context
   p = program(ctx)
   closed = Process.close_stdin(p, 5000)
@@ -124,10 +145,12 @@ export def when_eof(ctx: Context) -> Context
   return ctx
 end
 
+## Checks that the next output line of the program is `expected`, waiting up to `timeout_ms` milliseconds.
 export def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
   return compare_text(ctx, read_line(ctx, timeout_ms), expected)
 end
 
+## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to `timeout_ms` milliseconds.
 export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
   actual = read_line(ctx, timeout_ms)
   left = JSON.parse(expected)
@@ -139,6 +162,7 @@ export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Co
   return compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
 end
 
+## Checks that the program is still running with its input open.
 export def then_stdin_open(ctx: Context) -> Context
   p = program(ctx)
   wanted = "open stdin and active program"
@@ -149,6 +173,7 @@ export def then_stdin_open(ctx: Context) -> Context
   return compare(ctx, Test.eq(state, wanted), wanted, state)
 end
 
+## Waits up to `timeout_ms` milliseconds for the program to exit and checks that its exit code is `code`.
 export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
   p = program(ctx)
   positive(timeout_ms)
@@ -159,10 +184,12 @@ export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
   return compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
 end
 
+## Checks that the output no line step has read yet is `expected`. The program must have exited.
 export def then_stdout(ctx: Context, expected: String) -> Context
   return compare_text(ctx, finished(exited(program(ctx))).stdout, expected)
 end
 
+## Checks that the whole error output is `expected`. The program must have exited.
 export def then_stderr(ctx: Context, expected: String) -> Context
   return compare_text(ctx, finished(exited(program(ctx))).stderr, expected)
 end
