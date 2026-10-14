@@ -8,6 +8,10 @@
 #include <windows.h>
 #endif
 
+#define AGC_CANONICAL_NAN64 UINT64_C(0x7FF8000000000000)
+#define AGC_CANONICAL_NAN32 UINT32_C(0x7FC00000)
+#define AGC_FLOAT32_OVERFLOW 0x1.ffffffp127
+
 static agc_value builtin_random_int(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t value;
   if (!agc_random_int(&vm->task->random, agc_as_int(vm, args[0]), agc_as_int(vm, args[1]), &value))
@@ -52,6 +56,102 @@ static agc_value builtin_float_to_int_bang(agc_vm *vm, agc_value *args, uint32_t
   return float_to_int(vm, args, span, true);
 }
 
+static int64_t int_from_bits(uint64_t bits) {
+  return bits <= (uint64_t)INT64_MAX ? (int64_t)bits : -(int64_t)(~bits) - 1;
+}
+
+static agc_value builtin_int_bit_and(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits((uint64_t)agc_as_int(vm, args[0]) & (uint64_t)agc_as_int(vm, args[1])));
+}
+
+static agc_value builtin_int_bit_or(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits((uint64_t)agc_as_int(vm, args[0]) | (uint64_t)agc_as_int(vm, args[1])));
+}
+
+static agc_value builtin_int_bit_xor(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits((uint64_t)agc_as_int(vm, args[0]) ^ (uint64_t)agc_as_int(vm, args[1])));
+}
+
+static agc_value builtin_int_bit_not(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int(int_from_bits(~(uint64_t)agc_as_int(vm, args[0])));
+}
+
+static uint64_t shift_count(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t count = agc_as_int(vm, args[1]);
+  if (count < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "shift count must be nonnegative", span + 2);
+  return (uint64_t)count;
+}
+
+static agc_value builtin_int_shift_left(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t count = shift_count(vm, args, span);
+  uint64_t bits = (uint64_t)agc_as_int(vm, args[0]);
+  return agc_int(int_from_bits(count >= 64 ? 0 : bits << count));
+}
+
+static agc_value builtin_int_shift_right(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t count = shift_count(vm, args, span);
+  uint64_t bits = (uint64_t)agc_as_int(vm, args[0]);
+  bool negative = (bits >> 63) != 0;
+  if (count >= 64) return agc_int(negative ? -1 : 0);
+  return agc_int(int_from_bits(negative ? ~(~bits >> count) : bits >> count));
+}
+
+static agc_value builtin_int_shift_right_unsigned(agc_vm *vm, agc_value *args, uint32_t span) {
+  uint64_t count = shift_count(vm, args, span);
+  uint64_t bits = (uint64_t)agc_as_int(vm, args[0]);
+  return agc_int(int_from_bits(count >= 64 ? 0 : bits >> count));
+}
+
+static double float64_from_bits(uint64_t bits) {
+  double x;
+  memcpy(&x, &bits, sizeof x);
+  return x;
+}
+
+static uint64_t float64_to_bits(double x) {
+  uint64_t bits;
+  memcpy(&bits, &x, sizeof bits);
+  return bits;
+}
+
+static agc_value builtin_float_to_bits(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  double x = agc_as_float(vm, args[0]);
+  return agc_int(int_from_bits(isnan(x) ? AGC_CANONICAL_NAN64 : float64_to_bits(x)));
+}
+
+static agc_value builtin_float_from_bits(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  double x = float64_from_bits((uint64_t)agc_as_int(vm, args[0]));
+  return agc_float(isnan(x) ? float64_from_bits(AGC_CANONICAL_NAN64) : x);
+}
+
+static agc_value builtin_float_to_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  double x = agc_as_float(vm, args[0]);
+  if (isnan(x)) return agc_int(AGC_CANONICAL_NAN32);
+  uint32_t sign = signbit(x) ? UINT32_C(0x80000000) : 0;
+  if (fabs(x) >= AGC_FLOAT32_OVERFLOW) return agc_int(sign | UINT32_C(0x7F800000));
+  float narrow = (float)x;
+  uint32_t bits;
+  memcpy(&bits, &narrow, sizeof bits);
+  return agc_int(bits);
+}
+
+static agc_value builtin_float_from_bits32(agc_vm *vm, agc_value *args, uint32_t span) {
+  int64_t value = agc_as_int(vm, args[0]);
+  if (value < 0 || value > UINT32_MAX)
+    agc_fail(vm, "RUNTIME-INVALID-NUMBER", "bits must be between 0 and 4294967295", span + 1);
+  uint32_t bits = (uint32_t)value;
+  float narrow;
+  memcpy(&narrow, &bits, sizeof narrow);
+  return agc_float(isnan(narrow) ? float64_from_bits(AGC_CANONICAL_NAN64) : (double)narrow);
+}
+
 static int64_t floor_ms(int64_t seconds, int64_t nanoseconds) { return seconds * 1000 + nanoseconds / 1000000; }
 
 static agc_value builtin_now_ms(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -80,6 +180,17 @@ const agc_builtin agc_number_builtins[] = {
   {"Float.from_int", 1, builtin_float_from_int, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Float.to_int", 1, builtin_float_to_int, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Float.to_int!", 1, builtin_float_to_int_bang, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.bit_and", 2, builtin_int_bit_and, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.bit_or", 2, builtin_int_bit_or, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.bit_xor", 2, builtin_int_bit_xor, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.bit_not", 1, builtin_int_bit_not, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.shift_left", 2, builtin_int_shift_left, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.shift_right", 2, builtin_int_shift_right, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Int.shift_right_unsigned", 2, builtin_int_shift_right_unsigned, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Float.to_bits", 1, builtin_float_to_bits, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Float.from_bits", 1, builtin_float_from_bits, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Float.to_bits32", 1, builtin_float_to_bits32, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Float.from_bits32", 1, builtin_float_from_bits32, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Time.now_ms", 0, builtin_now_ms, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Time.monotonic_ms", 0, builtin_monotonic_ms, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE},
