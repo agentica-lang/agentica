@@ -132,6 +132,7 @@
       "  agentica help                           this summary and the builtin namespaces"
       "Core rules:"
       "  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\")."
+      "  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\"."
       "  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v)."
       "  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):"
       "    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end."

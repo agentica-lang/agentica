@@ -69,8 +69,8 @@
                        token-span)
                 reversed-tokens)))
 
-  (define (fail code message start)
-    (diagnostic code message (span-from start)))
+  (define (fail code message start #:help [help #f])
+    (diagnostic code message (span-from start) #:help help))
 
   (define (scan-while! predicate)
     (let loop ()
@@ -141,7 +141,9 @@
              (return (fail 'LEX-UNTERMINATED-STRING "unterminated string" (cadr opening))))
            (return (fail 'LEX-UNCLOSED-DELIMITER
                          (format "unclosed ~a delimiter" (car opening))
-                         (cdr opening))))
+                         (cdr opening)
+                         #:help (and (eqv? (car opening) #\{)
+                                     "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no braces and end with \"end\""))))
          (emit! 'EOF (position) #f)
          (reverse reversed-tokens)]
         [else
@@ -241,8 +243,12 @@
             (unless kind
               (advance!)
               (return (fail 'LEX-UNEXPECTED-CHAR
-                            (format "unexpected character ~s" char)
-                            start)))
+                            (if (and (char-graphic? char) (not (char-blank? char)))
+                                (format "unexpected character \"~a\"" char)
+                                (format "unexpected character ~s" char))
+                            start
+                            #:help (and (char=? char #\;)
+                                        "Agentica has no semicolons; end the statement with a newline"))))
             (for ([unused (in-string lexeme)]) (advance!))
             (cond
               [(and (eq? kind 'right-brace) (pair? delimiters) (interpolation-frame? (car delimiters)))
@@ -259,7 +265,10 @@
                               (eqv? (caar delimiters) expected))
                    (return (fail 'LEX-UNMATCHED-DELIMITER
                                  (format "unmatched ~a delimiter" char)
-                                 start)))
+                                 start
+                                 #:help (and (char=? char #\})
+                                             (statement-level? delimiters)
+                                             "blocks end with \"end\", not \"}\""))))
                  (set! delimiters (cdr delimiters)))
                (emit! kind start lexeme)
                (scan)])])]))))

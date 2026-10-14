@@ -131,6 +131,23 @@
     (check-equal? (diagnostic-code (lex-text "\"bad\\q\""))
                   'LEX-INVALID-ESCAPE))
 
+  (test-case "C-style habits get a help that names the fix"
+    (define semicolon (lex-text "x = 1;\ny = 2"))
+    (check-equal? (diagnostic-code semicolon) 'LEX-UNEXPECTED-CHAR)
+    (check-equal? (diagnostic-message semicolon) "unexpected character \";\"")
+    (check-equal? (source-position-column (source-span-start (diagnostic-span semicolon))) 6)
+    (check-regexp-match #rx"newline" (diagnostic-help semicolon))
+    (check-false (diagnostic-help (lex-text "x @")))
+    (define stray (lex-text "def main() -> Void\n  puts(1)\n}\n"))
+    (check-equal? (diagnostic-code stray) 'LEX-UNMATCHED-DELIMITER)
+    (check-equal? (source-position-line (source-span-start (diagnostic-span stray))) 3)
+    (check-regexp-match #rx"\"end\"" (diagnostic-help stray))
+    (check-false (diagnostic-help (lex-text "f(1}")))
+    (check-false (diagnostic-help (lex-text ")")))
+    (define unclosed (lex-text "x = {\"a\": 1"))
+    (check-equal? (diagnostic-code unclosed) 'LEX-UNCLOSED-DELIMITER)
+    (check-regexp-match #rx"\"end\"" (diagnostic-help unclosed)))
+
   (test-case "mismatched and unclosed delimiters are diagnostics"
     (check-equal? (diagnostic-code (lex-text ")"))
                   'LEX-UNMATCHED-DELIMITER)

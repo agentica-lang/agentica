@@ -16,8 +16,8 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 
 | Code | Meaning |
 |---|---|
-| `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket |
-| `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here |
+| `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
+| `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
 | `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one |
 | `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function |
