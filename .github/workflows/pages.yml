@@ -10,11 +10,6 @@ on:
       - '.github/workflows/pages.yml'
       - 'Makefile'
   workflow_dispatch:
-    inputs:
-      cancel_sha:
-        description: 'Cancel the stuck Pages deployment of this commit SHA before deploying'
-        required: false
-        default: ''
 
 permissions:
   contents: read
@@ -50,15 +45,15 @@ jobs:
           tar -xzf "$RUNNER_TEMP/dart-sass.tar.gz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/dart-sass" >> "$GITHUB_PATH"
       - id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - run: make site HUGO_FLAGS="--baseURL ${{ steps.pages.outputs.base_url }}/"
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site/public
 
   deploy:
     needs: build
-    runs-on: [self-hosted, linux, docker-runner]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       pages: write
@@ -67,12 +62,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - if: inputs.cancel_sha != ''
-        env:
-          TOKEN: ${{ github.token }}
-          CANCEL_SHA: ${{ inputs.cancel_sha }}
-        run: |
-          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages/deployments/$CANCEL_SHA/cancel"
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
