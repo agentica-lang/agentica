@@ -7,7 +7,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-preempt-fail.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":13,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-preempt-fail.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":2},\"start\":{\"column\":13,\"line\":2}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/task-preempt-fail.agc\",\"line\":6},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/task-preempt-fail.agc\",\"function\":\"boom\",\"line\":2}],\"task\":true}",
     ""
   ]
 }

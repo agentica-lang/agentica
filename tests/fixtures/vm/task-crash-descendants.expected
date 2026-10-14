@@ -10,7 +10,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-crash-descendants.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":15},\"start\":{\"column\":16,\"line\":15}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-crash-descendants.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":15},\"start\":{\"column\":16,\"line\":15}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/task-crash-descendants.agc\",\"line\":24},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/task-crash-descendants.agc\",\"function\":\"parent\",\"line\":15}],\"task\":true}",
     ""
   ]
 }

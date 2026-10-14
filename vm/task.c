@@ -389,6 +389,8 @@ agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   agc_task *child = agc_new_task(vm);
   child->input_seen = vm->rt->in.eof_seq;
   child->test = vm->task->test;
+  child->spawned = true;
+  child->spawn_span = span;
   agc_task_call(vm, child, fn, args, argc, span);
   adopt(parent, child);
   trace_spawn(vm, child, parent);

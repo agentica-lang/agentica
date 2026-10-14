@@ -1,0 +1,8 @@
+@fixtures/vm/stack-trace-block.agc:4:7 error[RUNTIME-DIVISION-BY-ZERO]
+division by zero
+
+4 |     8 / x
+  |       ^
+  = stack, innermost first:
+    block at @fixtures/vm/stack-trace-block.agc:4:7
+    main at @fixtures/vm/stack-trace-block.agc:3:11

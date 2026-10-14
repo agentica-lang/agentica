@@ -10,7 +10,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":24},\"start\":{\"column\":15,\"line\":24}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":24},\"start\":{\"column\":15,\"line\":24}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"line\":41},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/http-server-owner-cancel.agc\",\"function\":\"supervisor\",\"line\":24}],\"task\":true}",
     ""
   ]
 }

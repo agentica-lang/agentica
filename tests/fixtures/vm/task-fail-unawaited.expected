@@ -8,7 +8,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-INDEX-OUT-OF-RANGE\",\"file\":\"@fixtures/vm/task-fail-unawaited.agc\",\"message\":\"index 5 is outside a list of length 3\",\"range\":{\"end\":{\"column\":14,\"line\":3},\"start\":{\"column\":13,\"line\":3}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INDEX-OUT-OF-RANGE\",\"file\":\"@fixtures/vm/task-fail-unawaited.agc\",\"message\":\"index 5 is outside a list of length 3\",\"range\":{\"end\":{\"column\":14,\"line\":3},\"start\":{\"column\":13,\"line\":3}},\"spawned_at\":{\"column\":7,\"file\":\"@fixtures/vm/task-fail-unawaited.agc\",\"line\":7},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/task-fail-unawaited.agc\",\"function\":\"boom\",\"line\":3}],\"task\":true}",
     "{\"unobserved_crashes\":1,\"first\":\"task crashed: RUNTIME-INDEX-OUT-OF-RANGE at @fixtures/vm/task-fail-unawaited.agc:3:13: index 5 is outside a list of length 3\"}",
     ""
   ]

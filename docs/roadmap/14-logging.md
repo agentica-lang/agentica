@@ -21,13 +21,20 @@ Agentica code, and only the three settings are builtins, under its exception 1.
   and stderr do not change. Docs: `docs/vm/` and the development skill. Done: as
   built in `docs/vm/08-loader-and-cli.md` §9 ("VM tracing (as built)"); `tls` is
   defined and has no trace points yet.
-- [ ] 14b Stack traces on runtime errors (`docs/future/24-logging.md` §24.3),
+- [x] 14b Stack traces on runtime errors (`docs/future/24-logging.md` §24.3),
   always on in the plain, `--ai` and `--json` formats: names and places per
   frame, the tail-call mark, merged repeats, at most 20 lines, the spawn place
   of a failing task. Fixed expected stderr in the three formats. Docs:
   `grammar.md` §7, `docs/vm/02-reference-behavior.md` §2.5 and
   `docs/vm/05-values-execution-builtins.md` §6.1, the programming skill's
-  diagnostics reference.
+  diagnostics reference. Done: as built in
+  `docs/vm/05-values-execution-builtins.md` §6.1 (`agc_stack_capture` in
+  `vm/diag.c`, called by `agc_fail`; the `tail` flag of the frame; `spawn_span`
+  of the task);
+  `vm/tests/stack_test.c` for the walk, the merge, the cut and hostile frames,
+  `tests/vm-stack-test.rkt` with the exact stderr of the fixtures
+  `tests/fixtures/vm/stack-trace-*.agc` in the three formats (`make goldens`
+  rewrites them), and the 32 goldens with a task crash line now hold its stack.
 - [ ] 14c `std/log` (`docs/future/24-logging.md` §24.2): `stdlib/log.agc`
   (levels, a `fields: Map[String, String] = {}` parameter on each level
   function, which needs 15a, text and JSON lines, `Log.debug?`,

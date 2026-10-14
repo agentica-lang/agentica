@@ -55,6 +55,7 @@ typedef struct {
 
 typedef struct {
   uint32_t function, pc, base, ret;
+  bool tail;
   agc_native *native;
 } agc_frame;
 
@@ -84,6 +85,21 @@ typedef enum { AGC_DONE, AGC_FAILED, AGC_EXITED } agc_outcome_kind;
 
 typedef enum { AGC_STYLE_PLAIN, AGC_STYLE_AI, AGC_STYLE_JSON } agc_style;
 
+#define AGC_STACK_HEAD 15
+#define AGC_STACK_TAIL 5
+
+typedef struct {
+  uint32_t function, span, repeat;
+  bool tail;
+} agc_stack_line;
+
+typedef struct {
+  bool shown, spawned;
+  uint32_t count, head, spawn_span;
+  uint64_t omitted;
+  agc_stack_line lines[AGC_STACK_HEAD + AGC_STACK_TAIL];
+} agc_stack;
+
 typedef struct {
   agc_outcome_kind kind;
   const char *code;
@@ -92,6 +108,7 @@ typedef struct {
   size_t message_len;
   uint32_t span;
   int64_t exit_code;
+  agc_stack stack;
 } agc_outcome;
 
 typedef enum { AGC_INPUT_OK, AGC_INPUT_EOF, AGC_INPUT_WAIT, AGC_INPUT_FAILED } agc_input_status;
@@ -190,7 +207,8 @@ struct agc_task {
   int64_t turn_cost;
   uint64_t lock_deadline, await_deadline, input_seen;
   agc_task_state state;
-  bool cancelled, crashed, observed, left_children, group, hidden;
+  bool cancelled, crashed, observed, left_children, group, hidden, spawned;
+  uint32_t spawn_span;
   agc_value result;
   agc_string *crash, *crash_message;
   const char *crash_code;

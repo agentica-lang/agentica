@@ -138,13 +138,35 @@ is not repeated here; read the file.
 
 ### 2.5 Diagnostics, streams and exit codes
 
-- A runtime diagnostic carries a code, a message and a span. Only the code is
-  contract.
+- A runtime diagnostic carries a code, a message and a span, and the call stack
+  of the failing task when there is one to show (6.1). Only the code is
+  contract; the stack lines have fixed expected text in
+  `tests/vm-stack-test.rkt`.
 - Plain format: the diagnostic as usual. `--ai` prints `check failed: 1 error`,
   a blank line, `[CODE]`, `  message: `, `  at: file:line:column` and
   `  source: ` with the source line trimmed of space, `\t`, `\n`, `\f` and `\r`
   at both ends. `--json` prints one line with keys in this order: `code`,
-  `file`, `message`, `range`.
+  `file`, `message`, `range`, `spawned_at`, `stack`, `stack_omitted`, `task`
+  (the last four only when they apply).
+- Stack lines (`docs/future/24-logging.md` §24.3, as built): plain adds
+  `  = stack, innermost first:` after the caret line, `--ai` adds `  stack:`
+  after `source:`, and each frame is a line of four spaces,
+  `name at file:line:column`, then ` (N times)` for a merged run and
+  ` (after a tail call)`. A cut stack has `    ... N frames not shown ...`
+  (`N` counts frames, a merged run counts its repeats) after the 15th line, and
+  a task ends with `    task spawned at file:line:column`. `--json` has
+  `stack` (objects with `column`, `file`, `function`, `line`, `repeat` and
+  `tail`), `stack_omitted` and `spawned_at`. The names are the declared names
+  without the linker's `@N::` prefix, and every function made from a block is
+  `block`. Names, files and the message are written as raw bytes in plain and
+  `--ai`, except that a line break in a name or a file is written as `\n` or
+  `\r`, so a stack line is always one line.
+- The stack is shown for every `RUNTIME-` diagnostic raised while a task runs
+  (the step limit and the stack overflow too, and the crash line of a task) when
+  that task has more than one frame or is not `main`. It is not shown for
+  `System.exit`, the out-of-memory exit (6.3), the stall check
+  (`RUNTIME-INTERNAL`, raised between turns) or a failed flush at the end of
+  the run.
 - Columns count characters. Source lines split on LF with a trailing CR removed.
   Source names and lines print as raw bytes, control characters included.
 - Order: flush stdout, write the diagnostic to stderr, exit 1. How the two

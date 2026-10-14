@@ -9,7 +9,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":5},\"start\":{\"column\":15,\"line\":5}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":5},\"start\":{\"column\":15,\"line\":5}},\"spawned_at\":{\"column\":19,\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"line\":13},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"function\":\"block\",\"line\":5},{\"column\":10,\"file\":\"@fixtures/vm/file-each-line-crash.agc\",\"function\":\"divide\",\"line\":2}],\"task\":true}",
     ""
   ]
 }

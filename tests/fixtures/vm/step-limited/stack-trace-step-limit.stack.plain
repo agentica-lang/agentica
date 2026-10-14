@@ -1,0 +1,9 @@
+@fixtures/vm/step-limited/stack-trace-step-limit.agc:3:5 error[RUNTIME-STEP-LIMIT]
+execution step budget exhausted
+
+3 |     n += 1
+  |     ^^^^^^
+  = stack, innermost first:
+    spin at @fixtures/vm/step-limited/stack-trace-step-limit.agc:3:5
+    run at @fixtures/vm/step-limited/stack-trace-step-limit.agc:9:10
+    main at @fixtures/vm/step-limited/stack-trace-step-limit.agc:13:8

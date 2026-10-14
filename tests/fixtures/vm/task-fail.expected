@@ -7,7 +7,7 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-fail.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":3},\"start\":{\"column\":13,\"line\":3}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-fail.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":3},\"start\":{\"column\":13,\"line\":3}},\"spawned_at\":{\"column\":22,\"file\":\"@fixtures/vm/task-fail.agc\",\"line\":8},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/task-fail.agc\",\"function\":\"boom\",\"line\":3}],\"task\":true}",
     ""
   ]
 }

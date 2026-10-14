@@ -27,9 +27,9 @@
     ""
   ],
   "stderr": [
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":29},\"start\":{\"column\":15,\"line\":29}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":42},\"start\":{\"column\":15,\"line\":42}},\"task\":true}",
-    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":53},\"start\":{\"column\":15,\"line\":53}},\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":29},\"start\":{\"column\":15,\"line\":29}},\"spawned_at\":{\"column\":30,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"line\":79},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"function\":\"crashes\",\"line\":29}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":42},\"start\":{\"column\":15,\"line\":42}},\"spawned_at\":{\"column\":31,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"line\":83},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"function\":\"abandons\",\"line\":42}],\"task\":true}",
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":53},\"start\":{\"column\":15,\"line\":53}},\"spawned_at\":{\"column\":37,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"line\":100},\"stack\":[{\"column\":15,\"file\":\"@fixtures/vm/channel-owner-ends.agc\",\"function\":\"abandons_listener\",\"line\":53}],\"task\":true}",
     ""
   ]
 }
