@@ -840,9 +840,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   and calls inside larger expressions do not count) and emits no `return`
   after it. `TAIL_CALL` grows the registers to the frame base plus the
   callee's count first, then `memmove`s the argument window to `R[0..]`
-  (windows overlap). It does not touch the depth, so on the VM deep tail
-  recursion runs while the evaluator gives `RUNTIME-STACK-OVERFLOW`
-  (documented in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
+  (windows overlap). It does not touch the depth, so a deep tail recursion
+  runs (the depth rule is in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
   non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
   deep tail-recursion case lives in `tests/vm-diff-common.rkt`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
