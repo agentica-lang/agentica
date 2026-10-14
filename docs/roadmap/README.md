@@ -93,6 +93,11 @@ Designed, not scheduled: dates and times (§41,
 It has no row in this table. Its builtin types are checker changes, so they
 land before row 7.2.7 or after the Agentica front end (§41.13).
 
+Designed, not scheduled: sized numeric types (§42,
+[`docs/future/42-sized-numeric-types.md`](../future/42-sized-numeric-types.md)).
+It has no row in this table. Its types are checker changes, so they start
+after the bootstrap, in the Agentica front end (§42.14).
+
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
 diagnostics, behavior tests, grammar, and the self-contained programming

@@ -109,6 +109,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 39 | Semantic CLI for agents | [`39-semantic-cli.md`](39-semantic-cli.md) | Planned (roadmap phase 26, order step 7.2b) |
 | 40 | Native code and FFI | [`40-native-code.md`](40-native-code.md) | Idea, not in the roadmap order: the JIT (roadmap 9.1) first; FFI and AOT wait for a need or a measurement |
 | 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; not scheduled |
+| 42 | Sized numeric types | [`42-sized-numeric-types.md`](42-sized-numeric-types.md) | Designed by the owner's scope of 2026-10-14; implement after the bootstrap (§35) |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
 twin ([roadmap
