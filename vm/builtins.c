@@ -2,16 +2,17 @@
 
 #include <string.h>
 
-static void write_text(agc_vm *vm, agc_output *out, agc_value v, bool newline) {
-  if (vm->task->output.out == out) {
-    agc_write(vm, out, NULL, 0, newline);
-  } else if (!agc_is(v, AGC_T_NIL) && !agc_is(v, AGC_T_BOOL) && !agc_is(v, AGC_T_INT) && !agc_is(v, AGC_T_FLOAT)) {
-    agc_string *s = agc_text(vm, v);
-    agc_write(vm, out, s->data, s->bytes, newline);
-  } else {
+static agc_string *text_of(agc_vm *vm, agc_value v) {
+  if (agc_is(v, AGC_T_NIL) || agc_is(v, AGC_T_BOOL) || agc_is(v, AGC_T_INT) || agc_is(v, AGC_T_FLOAT)) {
     char text[AGC_SCALAR_TEXT];
-    agc_write(vm, out, text, agc_scalar_text(vm, v, text), newline);
+    size_t n = agc_scalar_text(vm, v, text);
+    return agc_make_string(text, n, n);
   }
+  return agc_text(vm, v);
+}
+
+static void write_text(agc_vm *vm, agc_output *out, agc_value v, bool newline) {
+  agc_write(vm, out, agc_output_waiting(vm, out) ? NULL : text_of(vm, v), newline);
 }
 
 static agc_value builtin_puts(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -35,12 +36,7 @@ static agc_value builtin_warn(agc_vm *vm, agc_value *args, uint32_t span) {
 static agc_value builtin_inspect(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_value v = args[0];
-  if (vm->task->output.out == &vm->rt->out) {
-    agc_write(vm, &vm->rt->out, NULL, 0, true);
-  } else {
-    agc_string *s = agc_debug(vm, v);
-    agc_write(vm, &vm->rt->out, s->data, s->bytes, true);
-  }
+  agc_write(vm, &vm->rt->out, agc_output_waiting(vm, &vm->rt->out) ? NULL : agc_debug(vm, v), true);
   return v;
 }
 
@@ -93,7 +89,7 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
 static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
-  agc_drain(vm, &vm->rt->out);
+  agc_drain(vm);
   return agc_void();
 }
 

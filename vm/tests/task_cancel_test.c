@@ -67,7 +67,7 @@ static int cancel_calls;
 static _Atomic bool on_loop;
 static int out_pipe[2] = {-1, -1};
 static size_t junk_len, got_len;
-static uint8_t block[16384];
+static char block[16384];
 static uint8_t got[1 << 20];
 
 static agc_value ext_done(agc_vm *vm, void *data, agc_value context) {
@@ -324,7 +324,8 @@ static agc_value test_print(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t tag = agc_as_int(vm, args[0]);
   size_t n = tag == 2 ? 1024 : sizeof block;
   memset(block, tag == 0 ? 'a' : tag == 1 ? 'b' : 'c', n);
-  agc_write(vm, &vm->rt->out, block, n, false);
+  agc_output *out = &vm->rt->out;
+  agc_write(vm, out, agc_output_waiting(vm, out) ? NULL : agc_make_string(block, n, n), false);
   return agc_void();
 }
 

@@ -70,7 +70,8 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
 
 void agc_output_open(agc_vm *vm, agc_output *out, int fd);
 void agc_output_leave(agc_vm *vm, agc_task *t);
-bool agc_output_busy(const agc_vm *vm);
+bool agc_output_busy(agc_vm *vm);
+bool agc_output_failed(const agc_output *out);
 void agc_output_close(agc_vm *vm);
 FILE *agc_notice_begin(agc_output *out, agc_notice *n);
 void agc_notice_end(agc_notice *n, bool final);

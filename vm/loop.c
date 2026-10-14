@@ -7,6 +7,7 @@
 
 #ifdef __linux__
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
 #include <uv.h>
@@ -454,6 +455,12 @@ static void poller_closed(uv_handle_t *handle) {
   free(p);
 }
 
+int agc_fd_reopen(int fd, int access) {
+  char path[32];
+  snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
+  return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+}
+
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();
@@ -539,10 +546,11 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, bool flush) {
   agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL);
   job *j = r->native;
-  j->detached = j->flush = true;
+  j->detached = true;
+  j->flush = flush;
   return j;
 }
 
@@ -680,7 +688,7 @@ void agc_io_goodbye(agc_vm *vm) {
   }
 }
 
-static bool flushing(const agc_vm *vm) {
+static bool flushing(agc_vm *vm) {
   for (size_t k = registry_count(vm); k-- > 0;) {
     const job *j = job_at(vm, k);
     if (j && j->flush && !j->work_done) return true;
@@ -779,9 +787,10 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   (void)timeout_ms;
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, bool flush) {
   (void)kind;
   (void)data;
+  (void)flush;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 

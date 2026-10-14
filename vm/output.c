@@ -6,16 +6,23 @@
 
 #ifdef __linux__
 #include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 typedef struct {
-  agc_output *out;
-  const agc_io_kind *kind;
-  int fd, err;
+  bool to_err;
+  int fd, status;
   const uint8_t *part[2];
   size_t length[2], written;
 } drain_request;
+
+typedef struct {
+  bool to_err;
+  int status;
+  agc_poller *poller;
+  agc_io_job *job;
+} poll_request;
 #endif
 
 static _Noreturn void fail_write(agc_vm *vm, const agc_output *out) {
@@ -36,75 +43,98 @@ static void track(agc_vm *vm, const agc_output *out, uint8_t last) {
   if (out == &vm->rt->out) vm->rt->out_mid_line = last != '\n';
 }
 
+bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
+
+bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed; }
+
 #ifdef __linux__
-static size_t room(const agc_output *out) { return AGC_OUTPUT_BUFFER - out->len; }
+static size_t smaller(size_t a, size_t b) { return a < b ? a : b; }
 
-static size_t run_length(const agc_output *out) {
-  size_t to_end = AGC_OUTPUT_BUFFER - out->start;
-  return to_end < out->len ? to_end : out->len;
-}
+static size_t room(const agc_output *s) { return AGC_OUTPUT_BUFFER - s->len; }
 
-static void put_bytes(agc_output *out, const void *data, size_t n) {
-  if (!n) return;
-  size_t end = (out->start + out->len) % AGC_OUTPUT_BUFFER;
-  size_t first = AGC_OUTPUT_BUFFER - end < n ? AGC_OUTPUT_BUFFER - end : n;
-  memcpy(out->buf + end, data, first);
-  if (n > first) memcpy(out->buf, (const uint8_t *)data + first, n - first);
-  out->len += n;
-}
+static size_t run_length(const agc_output *s) { return smaller(AGC_OUTPUT_BUFFER - s->start, s->len); }
 
-static void consumed(agc_output *out, size_t n) {
-  out->start = (out->start + n) % AGC_OUTPUT_BUFFER;
-  out->len -= n;
-  if (!out->len) out->start = 0;
-}
+static size_t queued(const agc_output *s) { return s->notice_len - s->notice_at; }
+
+static size_t total(const agc_output_wait *w) { return w->text ? w->text->bytes + (w->newline ? 1 : 0) : 0; }
 
 static size_t need(const agc_output_wait *w) {
-  if (w->flush) return AGC_OUTPUT_BUFFER;
-  size_t rest = w->len - w->done;
-  return rest < AGC_OUTPUT_BUFFER ? rest : AGC_OUTPUT_BUFFER;
+  return w->flush ? AGC_OUTPUT_BUFFER : smaller(total(w) - w->done, AGC_OUTPUT_BUFFER);
 }
 
-static void wake_head(agc_output *out) {
-  agc_task *t = out->waiters;
-  if (t && room(out) >= need(&t->output)) agc_task_wake(out->vm, t, "output");
+static bool holds(const agc_output *s) {
+  const agc_task *head = s->waiters;
+  return head && !head->output.flush && head->output.done > 0 && head->output.done < total(&head->output);
 }
 
-static void fail_stream(agc_output *out) {
-  out->failed = true;
-  out->start = out->len = 0;
-  if (out->armed) agc_poller_pause(out->poller);
-  out->armed = false;
-  for (agc_task *t = out->waiters; t; t = t->wait_next) agc_task_wake(out->vm, t, "output");
+static agc_output *stream_of(agc_vm *vm, bool to_err) { return to_err ? &vm->rt->err : &vm->rt->out; }
+
+static void put_bytes(agc_output *s, const void *data, size_t n) {
+  if (!n) return;
+  size_t end = (s->start + s->len) % AGC_OUTPUT_BUFFER;
+  size_t first = smaller(AGC_OUTPUT_BUFFER - end, n);
+  memcpy(s->buf + end, data, first);
+  if (n > first) memcpy(s->buf, (const uint8_t *)data + first, n - first);
+  s->len += n;
 }
 
-static void write_now(agc_output *out) {
-  while (out->len) {
-    ssize_t n = write(out->fd, out->buf + out->start, run_length(out));
-    if (n > 0) {
-      consumed(out, (size_t)n);
+static void consumed(agc_output *s, size_t n) {
+  s->start = (s->start + n) % AGC_OUTPUT_BUFFER;
+  s->len -= n;
+  if (!s->len) s->start = 0;
+}
+
+static void drop_notices(agc_output *s) {
+  free(s->notice);
+  s->notice = NULL;
+  s->notice_at = s->notice_len = 0;
+}
+
+static void pump(agc_output *s, bool force) {
+  size_t left = queued(s);
+  if (!left || s->failed || (!force && holds(s))) return;
+  size_t n = smaller(left, room(s));
+  put_bytes(s, s->notice + s->notice_at, n);
+  s->notice_at += n;
+  if (s->notice_at == s->notice_len) drop_notices(s);
+}
+
+static void wake_head(agc_output *s) {
+  agc_task *head = s->waiters;
+  if (head && room(s) >= need(&head->output)) agc_task_wake(s->vm, head, "output");
+}
+
+static void advance(agc_output *s) {
+  pump(s, false);
+  wake_head(s);
+}
+
+static void stop_waiting(agc_output *s, agc_task *t) {
+  agc_task_remove(&s->waiters, &s->waiters_tail, t);
+  t->output = (agc_output_wait){0};
+}
+
+static void fail_stream(agc_output *s) {
+  s->failed = true;
+  s->start = s->len = 0;
+  drop_notices(s);
+  for (agc_task *t = s->waiters; t; t = t->wait_next) agc_task_wake(s->vm, t, "output");
+}
+
+static void write_now(agc_output *s) {
+  while (s->len) {
+    size_t n = run_length(s);
+    ssize_t done = s->socket ? send(s->fd, s->buf + s->start, n, MSG_DONTWAIT | MSG_NOSIGNAL)
+                             : write(s->fd, s->buf + s->start, n);
+    if (done > 0) {
+      consumed(s, (size_t)done);
       continue;
     }
-    if (n < 0 && errno == EINTR) continue;
-    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
-    fail_stream(out);
+    if (done < 0 && errno == EINTR) continue;
+    if (done < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
+    fail_stream(s);
     return;
   }
-}
-
-static void settle(agc_output *out) {
-  if (!out->len && out->armed) {
-    out->armed = false;
-    agc_poller_pause(out->poller);
-  }
-  wake_head(out);
-}
-
-static void writable(void *data, int status) {
-  agc_output *out = data;
-  write_now(out);
-  if (status < 0 && out->len && !out->failed) fail_stream(out);
-  settle(out);
 }
 
 static void drain_work(void *data) {
@@ -115,7 +145,7 @@ static void drain_work(void *data) {
       ssize_t n = write(q->fd, q->part[k] + at, q->length[k] - at);
       if (n < 0 && errno == EINTR) continue;
       if (n <= 0) {
-        q->err = n < 0 ? errno : EIO;
+        q->status = n < 0 ? errno : EIO;
         return;
       }
       at += (size_t)n;
@@ -124,162 +154,214 @@ static void drain_work(void *data) {
   }
 }
 
-static void start_run(agc_output *out, const agc_io_kind *kind) {
-  drain_request *q = calloc(1, sizeof(drain_request));
+static void request_drop(void *data) { free(data); }
+
+static void polled(void *data, int status) {
+  poll_request *q = data;
+  agc_poller_pause(q->poller);
+  q->status = status;
+  agc_io_ready(q->job);
+}
+
+static const agc_io_kind drain_io;
+static const agc_io_kind poll_io;
+
+static void kick(agc_output *s) {
+  if (s->failed || !s->len) return;
+  if (s->pooled) {
+    if (s->writing) return;
+    drain_request *q = calloc(1, sizeof(drain_request));
+    if (!q) agc_out_of_memory();
+    size_t first = run_length(s);
+    q->to_err = s == &s->vm->rt->err;
+    q->fd = s->fd;
+    q->part[0] = s->buf + s->start;
+    q->length[0] = first;
+    q->part[1] = s->buf;
+    q->length[1] = s->len - first;
+    s->writing = true;
+    agc_io_detached(s->vm, &drain_io, q, false);
+    return;
+  }
+  if (s->armed) return;
+  poll_request *q = calloc(1, sizeof(poll_request));
   if (!q) agc_out_of_memory();
-  size_t first = run_length(out);
-  q->out = out;
-  q->kind = kind;
-  q->fd = out->fd;
-  q->part[0] = out->buf + out->start;
-  q->length[0] = first;
-  q->part[1] = out->buf;
-  q->length[1] = out->len - first;
-  out->writing = true;
-  agc_io_detached(out->vm, kind, q);
+  q->to_err = s == &s->vm->rt->err;
+  q->poller = s->poller;
+  s->armed = true;
+  q->job = agc_io_detached(s->vm, &poll_io, q, false);
+  agc_poller_wait(s->poller, true, polled, q);
 }
 
 static agc_value drain_done(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
   (void)context;
   drain_request *q = data;
-  agc_output *out = q->out;
-  const agc_io_kind *kind = q->kind;
+  agc_output *s = stream_of(vm, q->to_err);
   size_t written = q->written;
-  int err = q->err;
+  int status = q->status;
   free(q);
-  out->writing = false;
-  if (err) {
-    fail_stream(out);
+  s->writing = false;
+  if (!s->base) {
+    free(s->buf);
+    s->buf = NULL;
+  } else if (status) {
+    fail_stream(s);
   } else {
-    consumed(out, written);
-    if (out->len) start_run(out, kind);
+    consumed(s, written);
+    advance(s);
+    kick(s);
   }
-  wake_head(out);
   return agc_void();
 }
 
-static void drain_drop(void *data) { free(data); }
-
-static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, drain_drop, false, "output", NULL};
-
-static void kick(agc_output *out) {
-  if (out->failed || !out->len) return;
-  if (out->pooled) {
-    if (!out->writing) start_run(out, &drain_io);
-  } else if (!out->armed) {
-    out->armed = true;
-    agc_poller_wait(out->poller, true, writable, out);
-  }
+static agc_value poll_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  poll_request *q = data;
+  agc_output *s = stream_of(vm, q->to_err);
+  int status = q->status;
+  free(q);
+  s->armed = false;
+  if (!s->base || s->failed) return agc_void();
+  write_now(s);
+  if (status < 0 && s->len && !s->failed) fail_stream(s);
+  advance(s);
+  kick(s);
+  return agc_void();
 }
 
-static void flush_now(agc_output *out) {
-  if (out->failed) return;
-  if (!out->pooled) {
-    write_now(out);
-    settle(out);
-  }
-  kick(out);
+static const agc_io_kind drain_io = {drain_work, drain_done, drain_done, request_drop, false, "output", NULL};
+static const agc_io_kind poll_io = {NULL, poll_done, poll_done, request_drop, true, "output", NULL};
+
+static void flush_now(agc_output *s) {
+  if (s->failed) return;
+  if (!s->pooled) write_now(s);
+  advance(s);
+  kick(s);
 }
 
 static bool wait_turn(agc_vm *vm, agc_output *out) {
+  agc_output *s = out->base;
   agc_task *t = vm->task;
   agc_output_wait *w = &t->output;
-  if (out->failed) {
-    agc_task_remove(&out->waiters, &out->waiters_tail, t);
-    *w = (agc_output_wait){0};
+  if (s->failed) {
+    stop_waiting(s, t);
     fail_write(vm, out);
   }
-  if (out->waiters != t || room(out) < need(w)) {
+  if (s->waiters != t || room(s) < need(w)) {
     agc_task_park(vm, true);
     return false;
   }
   if (!w->flush) {
-    size_t n = w->len - w->done;
-    if (n > room(out)) n = room(out);
-    put_bytes(out, w->data + w->done, n);
+    size_t n = smaller(total(w) - w->done, room(s));
+    size_t bytes = w->text->bytes;
+    if (w->done < bytes) {
+      size_t k = smaller(n, bytes - w->done);
+      put_bytes(s, w->text->data + w->done, k);
+      if (n > k) put_bytes(s, "\n", 1);
+    } else {
+      put_bytes(s, "\n", 1);
+    }
     w->done += n;
-    kick(out);
-    if (w->done < w->len) {
+    kick(s);
+    if (w->done < total(w)) {
       agc_task_park(vm, true);
       return false;
     }
-    track(vm, out, w->data[w->len - 1]);
+    track(vm, out, w->newline ? '\n' : (uint8_t)w->text->data[bytes - 1]);
   }
-  agc_task_remove(&out->waiters, &out->waiters_tail, t);
-  *w = (agc_output_wait){0};
-  wake_head(out);
+  stop_waiting(s, t);
+  advance(s);
   return true;
 }
 
-static bool put(agc_vm *vm, agc_output *out, const void *data, size_t len, bool newline) {
+static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
+  agc_output *s = out->base;
   agc_task *t = vm->task;
   if (t->output.out != out) {
-    if (out->failed) fail_write(vm, out);
-    size_t total = agc_size_add(len, newline ? 1 : 0);
-    if (total == 0) return true;
-    if (!out->waiters && total <= room(out)) {
-      put_bytes(out, data, len);
-      if (newline) put_bytes(out, "\n", 1);
-      kick(out);
-      track(vm, out, newline ? '\n' : ((const uint8_t *)data)[len - 1]);
+    if (s->failed) fail_write(vm, out);
+    size_t n = agc_size_add(text->bytes, newline ? 1 : 0);
+    if (n == 0) return true;
+    if (!s->waiters && !queued(s) && n <= room(s)) {
+      put_bytes(s, text->data, text->bytes);
+      if (newline) put_bytes(s, "\n", 1);
+      kick(s);
+      track(vm, out, newline ? '\n' : (uint8_t)text->data[text->bytes - 1]);
       return true;
     }
-    uint8_t *copy = agc_alloc_atomic(total);
-    if (len) memcpy(copy, data, len);
-    if (newline) copy[len] = '\n';
-    t->output = (agc_output_wait){out, copy, total, 0, false};
-    agc_task_enqueue(&out->waiters, &out->waiters_tail, t);
+    t->output = (agc_output_wait){.out = out, .text = text, .newline = newline};
+    agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
   }
   return wait_turn(vm, out);
 }
 
-bool agc_drain(agc_vm *vm, agc_output *out) {
-  if (out->fd < 0) {
+bool agc_drain(agc_vm *vm) {
+  agc_output *out = &vm->rt->out;
+  if (!out->base) {
     if (fflush(out->file) != 0) write_failed(vm, out);
     return true;
   }
+  agc_output *s = out->base;
   agc_task *t = vm->task;
   if (t->output.out != out) {
-    if (out->failed) fail_write(vm, out);
-    flush_now(out);
-    if (!out->len && !out->waiters) return true;
+    if (s->failed) fail_write(vm, out);
+    flush_now(s);
+    if (s->failed) fail_write(vm, out);
+    if (!s->len && !s->waiters && !queued(s)) return true;
     t->output = (agc_output_wait){.out = out, .flush = true};
-    agc_task_enqueue(&out->waiters, &out->waiters_tail, t);
+    agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
   }
   return wait_turn(vm, out);
 }
 
 void agc_output_leave(agc_vm *vm, agc_task *t) {
   (void)vm;
-  agc_output *out = t->output.out;
-  agc_task_remove(&out->waiters, &out->waiters_tail, t);
-  t->output = (agc_output_wait){0};
-  wake_head(out);
+  agc_output *s = t->output.out->base;
+  stop_waiting(s, t);
+  advance(s);
 }
 
-bool agc_output_busy(const agc_vm *vm) { return vm->rt->out.len > 0 || vm->rt->err.len > 0; }
+bool agc_output_busy(agc_vm *vm) {
+  bool stopping = agc_io_stop_signal() != 0;
+  bool busy = false;
+  agc_output *streams[2] = {&vm->rt->out, &vm->rt->err};
+  for (size_t k = 0; k < 2; k++) {
+    agc_output *s = streams[k];
+    if (s->base != s || (!s->len && !queued(s))) continue;
+    if (!stopping) {
+      busy = true;
+    } else if (!s->writing) {
+      pump(s, true);
+      write_now(s);
+    }
+  }
+  return busy;
+}
 
 void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   struct stat info;
   int flags = fcntl(fd, F_GETFL);
   if (flags < 0 || (flags & O_ACCMODE) == O_RDONLY || fstat(fd, &info) != 0) return;
+  const agc_output *first = out == &vm->rt->err ? &vm->rt->out : NULL;
+  if (first && first->base && first->dev == (uint64_t)info.st_dev && first->ino == (uint64_t)info.st_ino) {
+    out->base = first->base;
+    return;
+  }
   bool pooled = S_ISREG(info.st_mode) || S_ISBLK(info.st_mode);
+  bool socket = S_ISSOCK(info.st_mode);
   int use = fd;
   agc_poller *poller = NULL;
   if (!pooled) {
-    if (!S_ISFIFO(info.st_mode) && !S_ISCHR(info.st_mode)) return;
-    char path[32];
-    snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
-    int again = open(path, O_WRONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    if (!socket && !S_ISFIFO(info.st_mode) && !S_ISCHR(info.st_mode)) return;
+    int again = socket ? fcntl(fd, F_DUPFD_CLOEXEC, 3) : agc_fd_reopen(fd, O_WRONLY);
     if (again < 0) return;
     int err = 0;
     poller = agc_poller_open(vm, again, &err);
+    if (socket) fcntl(again, F_SETFL, flags);
     if (poller) {
       use = again;
     } else {
       close(again);
-      if (err != EPERM) return;
+      if (err != EPERM || socket) return;
       pooled = true;
     }
   }
@@ -287,24 +369,31 @@ void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   if (!out->buf) agc_out_of_memory();
   out->vm = vm;
   out->fd = use;
+  out->dev = (uint64_t)info.st_dev;
+  out->ino = (uint64_t)info.st_ino;
   out->poller = poller;
   out->pooled = pooled;
+  out->socket = socket && poller;
+  out->base = out;
 }
 
-static void close_stream(agc_output *out) {
-  if (out->fd < 0) return;
-  if (out->poller) {
-    agc_poller_pause(out->poller);
-    agc_poller_close(out->poller);
-    out->poller = NULL;
+static void close_stream(agc_output *s) {
+  if (!s->base) return;
+  if (s->base == s) {
+    if (s->poller) {
+      agc_poller_pause(s->poller);
+      agc_poller_close(s->poller);
+      s->poller = NULL;
+    }
+    if (!s->writing) {
+      free(s->buf);
+      s->buf = NULL;
+    }
+    drop_notices(s);
+    s->armed = false;
+    s->len = 0;
   }
-  if (!out->writing) {
-    free(out->buf);
-    out->buf = NULL;
-  }
-  out->fd = -1;
-  out->armed = false;
-  out->len = 0;
+  s->base = NULL;
 }
 
 void agc_output_close(agc_vm *vm) {
@@ -317,8 +406,36 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n) {
   n->file = NULL;
   n->text = NULL;
   n->len = 0;
-  if (out->fd >= 0) n->file = open_memstream(&n->text, &n->len);
+  if (out->base) n->file = open_memstream(&n->text, &n->len);
   return n->file ? n->file : out->file;
+}
+
+static void queue_notice(agc_output *s, const char *text, size_t n) {
+  if (queued(s) >= AGC_NOTICE_LIMIT) return;
+  if (s->notice_at) {
+    memmove(s->notice, s->notice + s->notice_at, queued(s));
+    s->notice_len -= s->notice_at;
+    s->notice_at = 0;
+  }
+  uint8_t *grown = realloc(s->notice, s->notice_len + n);
+  if (!grown) return;
+  memcpy(grown + s->notice_len, text, n);
+  s->notice = grown;
+  s->notice_len += n;
+}
+
+static void finish_text(agc_output *s, const char *text, size_t n) {
+  if (s->writing) return;
+  pump(s, true);
+  size_t at = 0;
+  while (at < n && !s->failed) {
+    write_now(s);
+    size_t k = smaller(n - at, room(s));
+    if (!k) break;
+    put_bytes(s, text + at, k);
+    at += k;
+  }
+  write_now(s);
 }
 
 void agc_notice_end(agc_notice *n, bool final) {
@@ -328,18 +445,20 @@ void agc_notice_end(agc_notice *n, bool final) {
     return;
   }
   fclose(n->file);
-  if (!out->failed && n->len <= room(out)) {
-    put_bytes(out, n->text, n->len);
-    if (!final)
-      flush_now(out);
-    else if (!out->writing)
-      write_now(out);
+  agc_output *s = out->base;
+  if (!s->failed && n->len) {
+    if (final) {
+      finish_text(s, n->text, n->len);
+    } else {
+      queue_notice(s, n->text, n->len);
+      flush_now(s);
+    }
   }
   free(n->text);
 }
 #else
-bool agc_drain(agc_vm *vm, agc_output *out) {
-  if (fflush(out->file) != 0) write_failed(vm, out);
+bool agc_drain(agc_vm *vm) {
+  if (fflush(vm->rt->out.file) != 0) write_failed(vm, &vm->rt->out);
   return true;
 }
 
@@ -348,7 +467,7 @@ void agc_output_leave(agc_vm *vm, agc_task *t) {
   (void)t;
 }
 
-bool agc_output_busy(const agc_vm *vm) {
+bool agc_output_busy(agc_vm *vm) {
   (void)vm;
   return false;
 }
@@ -373,21 +492,21 @@ void agc_notice_end(agc_notice *n, bool final) {
 }
 #endif
 
-bool agc_write(agc_vm *vm, agc_output *out, const void *data, size_t len, bool newline) {
+bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
 #ifdef __linux__
-  if (out->fd >= 0) return put(vm, out, data, len, newline);
+  if (out->base) return put(vm, out, text, newline);
 #endif
-  if (len && fwrite(data, 1, len, out->file) != len) write_failed(vm, out);
+  if (text->bytes && fwrite(text->data, 1, text->bytes, out->file) != text->bytes) write_failed(vm, out);
   if (newline && fputc('\n', out->file) == EOF) write_failed(vm, out);
-  if (len || newline) track(vm, out, newline ? '\n' : ((const uint8_t *)data)[len - 1]);
+  if (text->bytes || newline) track(vm, out, newline ? '\n' : (uint8_t)text->data[text->bytes - 1]);
   return true;
 }
 
 void agc_flush(agc_vm *vm) {
   agc_output *out = &vm->rt->out;
 #ifdef __linux__
-  if (out->fd >= 0) {
-    flush_now(out);
+  if (out->base) {
+    flush_now(out->base);
     return;
   }
 #endif

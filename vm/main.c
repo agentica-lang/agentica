@@ -178,6 +178,10 @@ static void flush_files(agc_vm *vm) {
   agc_notice_end(&notice, true);
 }
 
+static void hide_own_pipe(agc_vm *vm, const agc_output *out, int fd) {
+  if (out->base && out->base->fd != fd) agc_files_forget(&vm->rt->inherited, fd);
+}
+
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
    then standard output and the files, then the exit. Nothing else is
    drained: the OS frees descriptors and memory. */
@@ -189,16 +193,23 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
   flush_stream(stderr);
   flush_files(vm);
   agc_files_close(vm);
-  stdout_ok = stdout_ok && !vm->rt->out.failed;
+  stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
   if (vm->rt->flush_expired) {
     agc_notice notice;
     agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
     agc_notice_end(&notice, true);
   }
-  if (outcome.kind != AGC_FAILED && !agc_io_stop_signal() && (!stdout_ok || !flush_stream(stdout))) {
+  const char *write_error = NULL;
+  if (outcome.kind != AGC_FAILED && !agc_io_stop_signal()) {
+    if (!stdout_ok || !flush_stream(stdout))
+      write_error = "cannot write to standard output";
+    else if (agc_output_failed(&vm->rt->err))
+      write_error = "cannot write to standard error";
+  }
+  if (write_error) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
-    outcome.message = "cannot write to standard output";
+    outcome.message = write_error;
     outcome.message_len = strlen(outcome.message);
     outcome.span = 0;
   }
@@ -508,8 +519,10 @@ static int run(int argc, char **argv) {
   if (reserved) agc_files_forget(&vm->rt->inherited, 0);
   agc_input_open(vm, reserved ? reserve_stdin() : 0, isatty(1));
   vm->rt->in.reserved = reserved;
-  if (!reserved) agc_output_open(vm, &vm->rt->out, 1);
+  agc_output_open(vm, &vm->rt->out, 1);
   agc_output_open(vm, &vm->rt->err, 2);
+  hide_own_pipe(vm, &vm->rt->out, 1);
+  hide_own_pipe(vm, &vm->rt->err, 2);
   agc_io_watch_stop(vm, seen_driver ? driver : 0);
   return end_run(vm, agc_vm_run(vm));
 }

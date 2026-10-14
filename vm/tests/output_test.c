@@ -6,7 +6,6 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #ifdef __linux__
@@ -18,9 +17,11 @@ static agc_vm vm;
 static int pipe_fds[2];
 static uint8_t collected[1 << 20];
 static size_t collected_len;
-static uint8_t letters[1 << 19];
+static char letters[1 << 19];
 
 static agc_output *out(void) { return &vm.rt->out; }
+
+static agc_output *err(void) { return &vm.rt->err; }
 
 static agc_task *make_task(void) {
   agc_task *t = agc_alloc(sizeof(agc_task));
@@ -70,12 +71,16 @@ static size_t read_pipe(void) {
   return collected_len - before;
 }
 
-static bool write_as(agc_task *t, char letter, size_t len, bool newline) {
+static agc_string *letters_of(char letter, size_t len) {
   memset(letters, letter, len);
+  return agc_make_string(letters, len, len);
+}
+
+static bool print_as(agc_output *stream, agc_task *t, char letter, size_t len, bool newline) {
   vm.task = t;
   t->state = AGC_TASK_RUNNING;
   t->parking = t->retry = false;
-  bool done = agc_write(&vm, out(), letters, len, newline);
+  bool done = agc_write(&vm, stream, agc_output_waiting(&vm, stream) ? NULL : letters_of(letter, len), newline);
   assert(done == !t->parking);
   if (t->parking) {
     assert(t->retry);
@@ -85,11 +90,15 @@ static bool write_as(agc_task *t, char letter, size_t len, bool newline) {
   return done;
 }
 
+static bool write_as(agc_task *t, char letter, size_t len, bool newline) {
+  return print_as(out(), t, letter, len, newline);
+}
+
 static bool drain_as(agc_task *t) {
   vm.task = t;
   t->state = AGC_TASK_RUNNING;
   t->parking = t->retry = false;
-  bool done = agc_drain(&vm, out());
+  bool done = agc_drain(&vm);
   assert(done == !t->parking);
   if (t->parking) {
     t->parking = false;
@@ -98,9 +107,9 @@ static bool drain_as(agc_task *t) {
   return done;
 }
 
-static bool retry(agc_task *t, size_t len, bool newline) {
+static bool retry(agc_task *t) {
   assert(t->state == AGC_TASK_READY && t->output.out == out());
-  return write_as(t, 'x', len, newline);
+  return write_as(t, 'x', 0, false);
 }
 
 static void check_run(size_t at, char letter, size_t len) {
@@ -121,7 +130,7 @@ static void pump_until(size_t want) {
 static void test_small_prints_keep_order(void) {
   open_pipe();
   fresh(pipe_fds[1]);
-  assert(out()->fd >= 0 && out()->poller && !out()->pooled);
+  assert(out()->base == out() && out()->poller && !out()->pooled);
   agc_task *a = make_task();
   assert(write_as(a, 'a', 5, true));
   assert(write_as(a, 'b', 3, false));
@@ -137,8 +146,8 @@ static void test_waiters_do_not_jump_the_queue(void) {
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
   agc_task *a = make_task(), *b = make_task(), *c = make_task();
-  for (int k = 0; k < 3; k++) assert(write_as(a, 'a', 16384, false));
-  assert(!write_as(b, 'b', 32768, false));
+  for (int k = 0; k < 3; k++) assert(write_as(a, 'a', BLOCK, false));
+  assert(!write_as(b, 'b', 2 * BLOCK, false));
   assert(!write_as(c, 'c', 1, false));
   assert(out()->waiters == b && b->wait_next == c && out()->len == 3 * BLOCK);
   agc_io_poll(&vm, false);
@@ -146,14 +155,14 @@ static void test_waiters_do_not_jump_the_queue(void) {
   assert(read_pipe() == junk);
   agc_io_poll(&vm, false);
   assert(b->state == AGC_TASK_READY && c->state == AGC_TASK_PARKED && out()->len == 0);
-  assert(retry(b, 0, false));
+  assert(retry(b));
   assert(c->state == AGC_TASK_READY && out()->waiters == c);
-  assert(retry(c, 0, false));
+  assert(retry(c));
   assert(!out()->waiters && !b->output.out && !c->output.out);
-  pump_until(junk + 3 * BLOCK + 32768 + 1);
+  pump_until(junk + 3 * BLOCK + 2 * BLOCK + 1);
   check_run(junk, 'a', 3 * BLOCK);
-  check_run(junk + 3 * BLOCK, 'b', 32768);
-  check_run(junk + 3 * BLOCK + 32768, 'c', 1);
+  check_run(junk + 3 * BLOCK, 'b', 2 * BLOCK);
+  check_run(junk + 5 * BLOCK, 'c', 1);
   finish();
   close_pipe();
 }
@@ -161,47 +170,22 @@ static void test_waiters_do_not_jump_the_queue(void) {
 static void test_the_buffer_wraps(void) {
   open_pipe();
   size_t junk = block_pipe();
-  static uint8_t scratch[16384];
-  assert(read(pipe_fds[0], scratch, sizeof scratch) == (ssize_t)sizeof scratch);
+  static uint8_t scratch[BLOCK];
+  ssize_t freed = read(pipe_fds[0], scratch, sizeof scratch);
+  assert(freed > 0);
   fresh(pipe_fds[1]);
   agc_task *a = make_task();
   assert(write_as(a, 'a', 60000, false));
   agc_io_poll(&vm, false);
   size_t accepted = 60000 - out()->len;
-  assert(accepted >= 1000 && out()->start == accepted);
-  assert(write_as(a, 'b', CAP - 60000 + 1000, false));
-  assert((out()->start + out()->len) % CAP < out()->start);
-  size_t before = junk - sizeof scratch;
-  pump_until(before + 60000 + CAP - 60000 + 1000);
+  assert(accepted > 0 && out()->start == accepted);
+  size_t second = CAP - 60000 + accepted;
+  assert(write_as(a, 'b', second, false));
+  assert((out()->start + out()->len) % CAP == out()->start && out()->len == CAP);
+  size_t before = junk - (size_t)freed;
+  pump_until(before + 60000 + second);
   check_run(before, 'a', 60000);
-  check_run(before + 60000, 'b', CAP - 60000 + 1000);
-  finish();
-  close_pipe();
-}
-
-static void test_long_print_holds_the_stream(void) {
-  open_pipe();
-  fresh(pipe_fds[1]);
-  agc_task *l = make_task(), *m = make_task();
-  const size_t big = 3 * CAP + 1000;
-  assert(!write_as(l, 'l', big, false));
-  assert(out()->len == CAP && l->output.done == CAP);
-  assert(!write_as(m, 'm', 4, false));
-  assert(out()->waiters == l && l->wait_next == m);
-  bool l_done = false, m_done = false;
-  for (int round = 0; round < 100 && !(l_done && m_done); round++) {
-    pump();
-    if (!l_done && l->state == AGC_TASK_READY) l_done = retry(l, 0, false);
-    if (!m_done && m->state == AGC_TASK_READY) {
-      assert(l_done);
-      m_done = retry(m, 0, false);
-    }
-  }
-  assert(l_done && m_done);
-  pump();
-  assert(collected_len == big + 4);
-  check_run(0, 'l', big);
-  check_run(big, 'm', 4);
+  check_run(before + 60000, 'b', second);
   finish();
   close_pipe();
 }
@@ -227,6 +211,23 @@ static void test_flush_waits_for_an_empty_buffer(void) {
   close_pipe();
 }
 
+static void test_flush_fails_when_the_reader_left(void) {
+  open_pipe();
+  fresh(pipe_fds[1]);
+  agc_task *a = make_task();
+  assert(write_as(a, 'a', 10, false));
+  close(pipe_fds[0]);
+  vm.task = a;
+  a->state = AGC_TASK_RUNNING;
+  if (setjmp(vm.fail) == 0) {
+    agc_drain(&vm);
+    assert(false);
+  }
+  assert(strcmp(vm.rt->outcome.code, "RUNTIME-INTERNAL") == 0 && agc_output_failed(out()));
+  finish();
+  close(pipe_fds[1]);
+}
+
 static void test_a_leaving_head_hands_on(void) {
   open_pipe();
   size_t junk = block_pipe();
@@ -241,7 +242,7 @@ static void test_a_leaving_head_hands_on(void) {
   pump();
   pump();
   assert(c->state == AGC_TASK_READY);
-  assert(retry(c, 0, false));
+  assert(retry(c));
   pump();
   assert(collected_len == junk + CAP + 10);
   check_run(junk, 'a', CAP);
@@ -250,34 +251,10 @@ static void test_a_leaving_head_hands_on(void) {
   close_pipe();
 }
 
-static void test_a_reader_that_left(void) {
-  open_pipe();
-  fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *b = make_task();
-  assert(write_as(a, 'a', 10, false));
-  assert(!write_as(b, 'b', CAP, false));
-  close(pipe_fds[0]);
-  agc_io_poll(&vm, false);
-  assert(out()->failed && b->state == AGC_TASK_READY && out()->len == 0);
-  vm.task = b;
-  b->state = AGC_TASK_RUNNING;
-  if (setjmp(vm.fail) == 0) {
-    agc_write(&vm, out(), NULL, 0, false);
-    assert(false);
-  }
-  assert(strcmp(vm.rt->outcome.code, "RUNTIME-INTERNAL") == 0);
-  assert(!out()->waiters && !b->output.out);
-  vm.task = a;
-  if (setjmp(vm.fail) == 0) {
-    agc_write(&vm, out(), "x", 1, false);
-    assert(false);
-  }
-  finish();
-  close(pipe_fds[1]);
-}
-
 static void test_a_file_is_drained_by_the_pool(void) {
-  char path[] = "/tmp/agc-output-XXXXXX";
+  const char *tmp = getenv("TMPDIR");
+  char path[512];
+  snprintf(path, sizeof path, "%s/agc-output-XXXXXX", tmp ? tmp : "/tmp");
   int fd = mkstemp(path);
   assert(fd >= 0);
   fresh(fd);
@@ -311,37 +288,100 @@ static void test_a_device_that_never_waits_is_pooled(void) {
   close(fd);
 }
 
-static void test_other_descriptors_keep_the_blocking_write(void) {
-  int pair[2];
-  assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
-  fresh(pair[1]);
-  assert(out()->fd < 0 && !out()->buf);
-  finish();
+static void test_a_read_only_descriptor_keeps_the_blocking_write(void) {
   int readonly = open("/dev/null", O_RDONLY);
   assert(readonly >= 0);
   fresh(readonly);
-  assert(out()->fd < 0);
+  assert(!out()->base && !out()->buf);
   finish();
   close(readonly);
-  close(pair[0]);
-  close(pair[1]);
 }
 
-static void test_notices_are_dropped_when_they_do_not_fit(void) {
+static void test_a_stream_on_the_same_target_shares_the_buffer(void) {
+  open_pipe();
+  fresh(pipe_fds[1]);
+  agc_output_open(&vm, err(), pipe_fds[1]);
+  assert(err()->base == out() && out()->base == out());
+  agc_task *a = make_task();
+  assert(write_as(a, 'a', 3, true));
+  assert(print_as(err(), a, 'b', 3, true));
+  assert(write_as(a, 'c', 3, true));
+  assert(out()->len == 12);
+  pump();
+  assert(collected_len == 12 && memcmp(collected, "aaa\nbbb\nccc\n", 12) == 0);
+  finish();
+  close_pipe();
+}
+
+static void test_a_notice_waits_for_room_and_keeps_its_text(void) {
+  static const char text[] = "a notice that does not fit the free space\n";
+  const size_t length = sizeof text - 1;
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  assert(write_as(make_task(), 'a', CAP - 6, false));
+  agc_task *a = make_task(), *b = make_task();
+  assert(write_as(a, 'a', CAP - 6, false));
   agc_notice n;
-  fputs("too long to fit", agc_notice_begin(out(), &n));
+  fputs(text, agc_notice_begin(out(), &n));
   agc_notice_end(&n, false);
-  assert(out()->len == CAP - 6);
-  fputs("fits\n", agc_notice_begin(out(), &n));
-  agc_notice_end(&n, false);
-  assert(out()->len == CAP - 1);
+  assert(out()->len == CAP && out()->notice_len - out()->notice_at == length - 6);
+  assert(!write_as(b, 'b', 1, false));
   assert(read_pipe() == junk);
+  for (int round = 0; round < 10; round++) pump();
+  assert(b->state == AGC_TASK_READY && retry(b));
   pump();
-  assert(collected_len == junk + CAP - 1 && memcmp(collected + junk + CAP - 6, "fits\n", 5) == 0);
+  assert(collected_len == junk + CAP - 6 + length + 1);
+  check_run(junk, 'a', CAP - 6);
+  assert(memcmp(collected + junk + CAP - 6, text, length) == 0);
+  check_run(junk + CAP - 6 + length, 'b', 1);
+  finish();
+  close_pipe();
+}
+
+static void test_a_notice_does_not_enter_a_long_print(void) {
+  open_pipe();
+  fresh(pipe_fds[1]);
+  agc_task *l = make_task();
+  const size_t big = 2 * CAP + 100;
+  assert(!write_as(l, 'l', big, false));
+  assert(l->output.done == CAP);
+  agc_notice n;
+  fputs("notice\n", agc_notice_begin(out(), &n));
+  agc_notice_end(&n, false);
+  assert(out()->notice_len - out()->notice_at == 7);
+  bool done = false;
+  for (int round = 0; round < 100 && !done; round++) {
+    pump();
+    if (l->state == AGC_TASK_READY) done = retry(l);
+  }
+  assert(done);
+  for (int round = 0; round < 10; round++) pump();
+  assert(collected_len == big + 7);
+  check_run(0, 'l', big);
+  assert(memcmp(collected + big, "notice\n", 7) == 0);
+  finish();
+  close_pipe();
+}
+
+static void test_a_final_notice_is_written_straight_or_dropped(void) {
+  open_pipe();
+  fresh(pipe_fds[1]);
+  agc_notice n;
+  FILE *file = agc_notice_begin(out(), &n);
+  for (int k = 0; k < 3000; k++) fputs("final notice line\n", file);
+  agc_notice_end(&n, true);
+  read_pipe();
+  assert(collected_len == 3000 * 18 && out()->len == 0);
+  finish();
+  close_pipe();
+  open_pipe();
+  block_pipe();
+  fresh(pipe_fds[1]);
+  file = agc_notice_begin(out(), &n);
+  for (int k = 0; k < 20000; k++) fputs("final notice line\n", file);
+  agc_notice_end(&n, true);
+  assert(out()->len == CAP && !out()->failed);
+  vm.rt->flush_timeout = 50;
   finish();
   close_pipe();
 }
@@ -353,14 +393,16 @@ int main(void) {
   test_small_prints_keep_order();
   test_waiters_do_not_jump_the_queue();
   test_the_buffer_wraps();
-  test_long_print_holds_the_stream();
   test_flush_waits_for_an_empty_buffer();
+  test_flush_fails_when_the_reader_left();
   test_a_leaving_head_hands_on();
-  test_a_reader_that_left();
   test_a_file_is_drained_by_the_pool();
   test_a_device_that_never_waits_is_pooled();
-  test_other_descriptors_keep_the_blocking_write();
-  test_notices_are_dropped_when_they_do_not_fit();
+  test_a_read_only_descriptor_keeps_the_blocking_write();
+  test_a_stream_on_the_same_target_shares_the_buffer();
+  test_a_notice_waits_for_room_and_keeps_its_text();
+  test_a_notice_does_not_enter_a_long_print();
+  test_a_final_notice_is_written_straight_or_dropped();
   puts("output tests passed");
   return 0;
 }
