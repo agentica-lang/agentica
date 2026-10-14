@@ -42,7 +42,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 28 | VM metrics | [`28-vm-metrics.md`](28-vm-metrics.md) | Planned (roadmap phase 18) |
 | 29 | TLS contexts | [`29-tls-context.md`](29-tls-context.md) | Planned (roadmap phase 19, order step 7.4) |
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies planned; the rest of phase 20 is built: [`docs/vm/10-io-http.md`](../vm/10-io-http.md) |
-| 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | Planned (roadmap phase 22, after 7i, phases 24 and 25 and the evaluation pilot, order step 7.2a) |
+| 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | 22a built, 22b planned (roadmap phase 22, order step 7.2a) |
 | 33 | Digit separators | [`33-digit-separators.md`](33-digit-separators.md) | Done (roadmap phase 23, 23a) |
 | 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Candidate (roadmap 7g); needs a measurement |
 | 35 | Self-hosted front end and a single binary | [`35-self-hosting.md`](35-self-hosting.md) | Planned, in the roadmap order from row 7.2.7 on |

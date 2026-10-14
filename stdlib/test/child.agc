@@ -32,12 +32,12 @@ export def record_of(line: String) -> Json
   return JSON.parse(line).unwrap_or(JSON.null())
 end
 
-## Returns the `event` text of a record, or an empty string.
+## Returns the `event` text of a record, or an empty string when it is missing or not a string.
 export def event_of(record: Json) -> String
   return text_of(record, "event")
 end
 
-## Returns the string at `key` in a record, or an empty string.
+## Returns the string at `key` in a record, or an empty string when it is missing or not a string.
 export def text_of(record: Json, key: String) -> String
   found = JSON.get(record, key)
   if found.ok?
@@ -46,7 +46,7 @@ export def text_of(record: Json, key: String) -> String
   return ""
 end
 
-## Returns the integer at `key` in a record, or 1 when there is none.
+## Returns the integer at `key` in a record, or 1 when it is missing or not an integer.
 export def int_of(record: Json, key: String) -> Int
   found = JSON.get(record, key)
   if found.ok?

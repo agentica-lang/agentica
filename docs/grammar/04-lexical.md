@@ -43,6 +43,8 @@ DOC_LINE   = { " " | TAB }, "##", [ " " ], { ANY_BUT_NEWLINE } ;
 DOC        = DOC_LINE, { NL, DOC_LINE } ;
 ```
 
+`TAB` is the tab character, and `ANY_BUT_NEWLINE` is any character except a line feed or carriage return.
+
 The text is CommonMark. Section 5 says where a doc block may stand and what it documents.
 
 ### Literals

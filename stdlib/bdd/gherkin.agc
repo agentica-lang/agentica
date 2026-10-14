@@ -32,7 +32,7 @@ export struct Step
   span: Report.Span
 end
 
-## One scenario, with the `Background` steps first, the tags of the feature and of the scenario, and the example row it came from.
+## One scenario, with the `Background` steps first, the tags of the feature, of the scenario and of its `Examples` block, and the example row it came from.
 export struct Scenario
   name: String
   steps: List[Step]

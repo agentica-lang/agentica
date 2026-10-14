@@ -25,7 +25,7 @@ no new line, then one
 `#` starts a comment that runs to the end of the line. Code cannot sit at the
 top of the file outside a function.
 
-A comment that starts with `##` is a doc comment. Put it on the lines directly above a `def`, `struct`, `enum`, field or variant to document it. The text is Markdown, and it does not change how the program runs.
+A line that starts with `##` is a doc comment. Put it on the lines directly above a `def`, `struct`, `enum`, field or variant to document it. The text is Markdown, and it does not change how the program runs.
 
 ```agentica
 # An ordinary comment: nothing reads it.
