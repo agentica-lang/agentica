@@ -6,6 +6,8 @@ description: How Agentica runs your program, the bytecode VM called Aurora, and 
 
 Every Agentica program runs on a bytecode virtual machine written in C11. Its codename is Aurora. The codename appears only in the docs: the binary is `agentica-vm`, and bytecode files end in `.agcb`.
 
+For the reasons behind these choices, see [Design decisions](/design/).
+
 ## From source to bytecode
 
 The `agentica` command has two parts. The front end, written in Racket, reads your program: the lexer, the parser, the module linker, the checker and the lowering step. It turns the checked program into bytecode, writes it to a private temporary `.agcb` file and starts `agentica-vm` on it. The VM runs every program; there is no other backend.
