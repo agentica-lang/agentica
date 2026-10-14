@@ -1,8 +1,9 @@
 ## 23. Binary data
 
-**Status:** planned (roadmap phase 13). It is a new feature after 7i (roadmap
-order row 7.2.4, before the freeze), VM-only, and comes before UDP. No grammar
-change: new `Int` and `Float` builtins, and a new `std/binary` module.
+**Status:** done (roadmap phase 13: 13a the builtins, 13b `std/binary`). It is
+a new feature after 7i (roadmap order row 7.2.4, before the freeze), VM-only,
+and comes before UDP. No grammar change: new `Int` and `Float` builtins, and a
+new `std/binary` module.
 
 Programs that speak a binary format must turn numbers into bytes and back: the
 4-byte length in front of a message (§16.7), UDP and other packet headers, file

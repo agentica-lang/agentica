@@ -36,7 +36,7 @@ in Agentica, and the bit operations are builtins under its exception 5.
     `tests/fixtures/bits-vectors.py` writes (Python `struct`, run by hand; CI
     does not run Python for it); `tests/vm-bits-test.rkt` for the spans of the
     errors. There are no evaluator tests, since the evaluator is gone.
-- [ ] 13b `std/binary` (`stdlib/binary.agc`, registered in `src/stdlib.rkt`),
+- [x] 13b `std/binary` (`stdlib/binary.agc`, registered in `src/stdlib.rkt`),
   its own PR after 13a (`docs/future/23-binary-data.md` §23.5): readers and
   writers for `u8` to `i64`, `f32` and `f64` in both byte orders, `concat`, and
   the 4-byte length framing, written in Agentica on the 13a builtins. Docs: a
@@ -48,6 +48,23 @@ in Agentica, and the bit operations are builtins under its exception 5.
   vectors checked in with their generator, round trips, error cases, both
   backends through the vm-diff fixtures, and the fixed-output check in
   `tests/std-binary-test.rkt`.
+  - **Done.** `stdlib/binary.agc` (registered in `src/stdlib.rkt`) has the 18
+    readers, the 18 writers, `concat`, `frame` and `read_frame_length`, with the
+    signatures and the error order of §23.5. A reader checks the offset,
+    reads the items by index, checks them all with one `bit_or` and one range
+    test, and walks them again only to name the first bad one; a writer checks
+    the range and returns a list literal. There is no loop over bytes on the
+    success path and no module state; `concat` splits its parts in halves.
+    Docs: `docs/grammar/05b-modules.md`, the programming skill
+    (`references/binary.md`, `references/modules.md`, its row in `SKILL.md`) and
+    `site/content/library/text-and-data/binary.md`. Tests: the goldens
+    `std-binary` (round trips both ways, offset, item, writer, u64 and frame
+    errors, `concat`) and `std-binary-vectors`, which checks the 808 vectors of
+    `tests/fixtures/vm/std-binary-vectors.stdin` that
+    `tests/fixtures/std-binary-vectors.py` writes (Python `struct`, run by hand;
+    CI does not run Python for it); `tests/std-binary-test.rkt` for the fixed
+    output. There is no evaluator backend, so "both backends" is the VM in its
+    three output formats, as for every golden.
 - Not in this phase: `Bytes` (`docs/future/12-data-structures.md` §12.5), which
   this work does not replace; when `Bytes` lands, the `std/binary` API moves to
   it together with the `*_bytes` builtins. No mutable buffers or references.
