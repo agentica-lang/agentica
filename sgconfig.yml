@@ -1,0 +1,3 @@
+languageGlobs:
+  ruby:
+    - "*.agc"
