@@ -290,6 +290,20 @@
     (check-equal? (car unknown) 2)
     (check-regexp-match #rx"String.to_int" (caddr unknown)))
 
+  (test-case "help lists the subcommands, the core rules and the builtin namespaces"
+    (define usage (cli "--help"))
+    (check-equal? (car usage) 0)
+    (for ([token '("agentica check" "agentica test" "--steps FILE" "agentica help NAME" "def main() -> Void"
+                   "xs = xs.push(2)" "CHECK-CAPTURED-ASSIGNMENT" "--allow-run")])
+      (check-true (string-contains? (cadr usage) token) token))
+    (define overview (cli "help"))
+    (check-equal? (car overview) 0)
+    (check-equal? (caddr overview) "")
+    (for ([token '("agentica check" "agentica test" "namespaces:" "List" "Map" "String" "JSON" "Task" "puts")])
+      (check-true (string-contains? (cadr overview) token) token))
+    (check-false (string-contains? (cadr overview) "HttpWire"))
+    (check-equal? (car (cli "help" "List.map" "String.split")) 2))
+
   (test-case "new diagnostics retain their codes across the three printers"
     (define file (make-temporary-file "agentica-result~a.agc"))
     (dynamic-wind
