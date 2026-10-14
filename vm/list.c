@@ -31,9 +31,9 @@ static list_branch *branch_copy(const list_branch *src) {
   return b;
 }
 
-static list_leaf *leaf_copy(const agc_value *items) {
+static list_leaf *leaf_copy(const agc_value *items, size_t count) {
   list_leaf *leaf = agc_alloc(sizeof(list_leaf));
-  memcpy(leaf->item, items, sizeof(leaf->item));
+  memcpy(leaf->item, items, count * sizeof(agc_value));
   return leaf;
 }
 
@@ -117,7 +117,7 @@ static agc_list *join_small(const agc_list *a, const agc_list *b) {
     memcpy(r->tail + tail, b->tail, b->len * sizeof(agc_value));
     return r;
   }
-  list_leaf *leaf = leaf_copy(a->tail);
+  list_leaf *leaf = leaf_copy(a->tail, tail);
   memcpy(leaf->item + tail, b->tail, room * sizeof(agc_value));
   list_trie t = trie_add_leaf(a->root, a->shift, off, leaf);
   agc_list *r = list_alloc(len, b->len - room);
@@ -225,7 +225,7 @@ agc_list *agc_list_append(const agc_list *l, agc_value v) {
     r->tail[tail] = v;
     return r;
   }
-  list_trie t = trie_add_leaf(l->root, l->shift, off, leaf_copy(l->tail));
+  list_trie t = trie_add_leaf(l->root, l->shift, off, leaf_copy(l->tail, LIST_WIDTH));
   agc_list *r = list_alloc(len, 1);
   r->root = t.root;
   r->shift = t.shift;
@@ -254,7 +254,7 @@ agc_list *agc_list_set(const agc_list *l, size_t i, agc_value v) {
     dst = copy;
   }
   size_t slot = (i >> LIST_BITS) & LIST_MASK;
-  list_leaf *leaf = leaf_copy(((const list_leaf *)dst->child[slot])->item);
+  list_leaf *leaf = leaf_copy(((const list_leaf *)dst->child[slot])->item, LIST_WIDTH);
   leaf->item[i & LIST_MASK] = v;
   dst->child[slot] = leaf;
   return r;
