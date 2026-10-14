@@ -183,7 +183,7 @@
   (define-values (raw joiner blank) (tables))
   (define-values (up down cased ignorable) (case-tables))
   (string-append
-   "#include \"agc.h\"\n\n"
+   "#include \"core.h\"\n\n"
    (c-table "agc_write_raw" raw)
    "\n"
    (c-table "agc_write_joiner" joiner)

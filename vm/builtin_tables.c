@@ -1,4 +1,5 @@
-#include "agc.h"
+#include "core.h"
+#include "services.h"
 
 const agc_builtin_table agc_builtin_tables[] = {
   {agc_core_builtins, &agc_core_builtin_count},

@@ -1,4 +1,4 @@
-#include "../agc.h"
+#include "../core.h"
 
 #include <assert.h>
 #include <stdio.h>

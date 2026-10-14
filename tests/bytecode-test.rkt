@@ -12,7 +12,7 @@
          "../src/source.rkt")
 
 (define-runtime-path main-file "../src/main.rkt")
-(define-runtime-path vm-header "../vm/agc.h")
+(define-runtime-path vm-header "../vm/value.h")
 
 (for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
   (environment-variables-set! (current-environment-variables) name #f))
@@ -137,7 +137,7 @@
     (check-equal? ops '(sub-i add-i range range-bounds add-i))
     (check-false (diagnostic? (ir->bytecode ir))))
 
-  (test-case "opcode numbers match vm/agc.h"
+  (test-case "opcode numbers match vm/value.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)
                                                 #:match-select cadr))]
