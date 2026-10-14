@@ -112,3 +112,11 @@ The site is built only after a merge: `.github/workflows/pages.yml` runs
 `make site` on `master` pushes that touch the site or its sources and
 deploys it to GitHub Pages. So run `make site` locally before merging a
 site change.
+
+Both jobs run on the self-hosted runners: GitHub-hosted runners do not
+start for this repository (a deploy job on `ubuntu-latest` failed at once
+with no runner on 2026-10-14). Never
+cancel a Pages run while its `deploy-pages` step runs: GitHub keeps that
+Pages deployment "in progress", every later deploy fails with "due to in
+progress deployment", and only time (about half an hour on 2026-10-14) or
+Settings → Pages → Source clears it.
