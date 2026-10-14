@@ -19,6 +19,7 @@
 _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_MAX_READ_BYTES ((int64_t)1024 * 1024)
 #define AGC_MAX_LIST_COUNT ((int64_t)1024 * 1024)
+#define AGC_LIST_WIDTH 32
 #define AGC_TURN_STEPS 2000
 #define AGC_COST_BYTES 64
 

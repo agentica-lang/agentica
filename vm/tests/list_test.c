@@ -1,11 +1,13 @@
 #include "../core.h"
+#include "../list_impl.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-#define APPEND_MAX ((size_t)1100)
 #define LARGE ((size_t)33000)
+#define EXTEND_MAX ((size_t)1100)
+#define EXTENSION 70
 #ifdef AGC_GC_STRESS
 #define MAX_LENGTH ((size_t)1000)
 #define KEPT ((size_t)1000)
@@ -49,6 +51,33 @@ static agc_list *appended(size_t n) {
   return l;
 }
 
+static uint32_t expected_shift(size_t n) {
+  if (n >= 1048609) return 20;
+  if (n >= 32801) return 15;
+  if (n >= 1057) return 10;
+  return n >= 33 ? 5 : 0;
+}
+
+static size_t count_leaves(const list_branch *node, uint32_t level) { // NOLINT(misc-no-recursion)
+  size_t used = 0, leaves = 0;
+  while (used < LIST_WIDTH && node->child[used]) used++;
+  assert(used > 0);
+  for (size_t k = used; k < LIST_WIDTH; k++) assert(!node->child[k]);
+  for (size_t k = 0; k < used; k++) {
+    size_t below = level == LIST_BITS ? 1 : count_leaves(node->child[k], level - LIST_BITS);
+    if (k + 1 < used) assert(below == (level == LIST_BITS ? 1 : (size_t)1 << (level - LIST_BITS)));
+    leaves += below;
+  }
+  return leaves;
+}
+
+static void expect_shape(const agc_list *l, size_t n) {
+  assert(agc_list_len(l) == n);
+  assert((l->root == NULL) == (n <= LIST_WIDTH));
+  assert(l->shift == expected_shift(n));
+  if (n > LIST_WIDTH) assert(count_leaves(l->root, l->shift) == (n - 1) / LIST_WIDTH);
+}
+
 static void expect_run(const agc_list *l, size_t from, size_t n) {
   assert(agc_list_len(l) == n);
   for (size_t k = 0; k < n; k++) assert(is_item(agc_list_get(l, k), from + k));
@@ -68,6 +97,7 @@ static void expect_cursor(const agc_list *l, size_t at) {
 }
 
 static void expect_list(const agc_list *l, size_t n) {
+  expect_shape(l, n);
   expect_run(l, 0, n);
   size_t starts[] = {0, 1, 31, 32, 33, n / 2, n ? n - 1 : 0, n};
   for (size_t s = 0; s < sizeof starts / sizeof starts[0]; s++)
@@ -75,7 +105,9 @@ static void expect_list(const agc_list *l, size_t n) {
   agc_value *copy = agc_alloc(agc_size_mul(n, sizeof(agc_value)));
   agc_list_to_array(l, copy);
   for (size_t k = 0; k < n; k++) assert(is_item(copy[k], k));
-  expect_run(agc_list_from_array(copy, n), 0, n);
+  const agc_list *again = agc_list_from_array(copy, n);
+  expect_shape(again, n);
+  expect_run(again, 0, n);
 }
 
 static void expect_appended(const agc_list *l, size_t n, size_t id) {
@@ -87,6 +119,21 @@ static void expect_appended(const agc_list *l, size_t n, size_t id) {
 static void expect_replaced(const agc_list *l, size_t n, size_t at) {
   assert(agc_list_len(l) == n);
   for (size_t k = 0; k < n; k++) assert(k == at ? is_other(agc_list_get(l, k), at) : is_item(agc_list_get(l, k), k));
+}
+
+static void expect_extends(const agc_list *r) {
+  size_t n = agc_list_len(r);
+  if (n > EXTEND_MAX) return;
+  agc_value *snapshot = agc_alloc(agc_size_mul(n, sizeof(agc_value)));
+  agc_list_to_array(r, snapshot);
+  const agc_list *grown = r;
+  for (size_t j = 0; j < EXTENSION; j++) grown = agc_list_append(grown, other(j));
+  expect_shape(grown, n + EXTENSION);
+  for (size_t k = 0; k < n; k++) {
+    assert(int_of(agc_list_get(r, k)) == int_of(snapshot[k]));
+    assert(int_of(agc_list_get(grown, k)) == int_of(snapshot[k]));
+  }
+  for (size_t j = 0; j < EXTENSION; j++) assert(is_other(agc_list_get(grown, n + j), j));
 }
 
 static void expect_light(const agc_list *l, size_t n) {
@@ -108,25 +155,43 @@ static void expect_persistent(const agc_list *l, size_t n) {
   expect_run(l, 0, n);
   expect_appended(first, n, 0);
   expect_appended(second, n, 1);
-  for (size_t s = 0; s < sizeof at / sizeof at[0]; s++)
-    if (changed[s]) expect_replaced(changed[s], n, at[s]);
+  expect_shape(first, n + 1);
+  expect_shape(second, n + 1);
+  expect_extends(first);
+  for (size_t s = 0; s < sizeof at / sizeof at[0]; s++) {
+    if (!changed[s]) continue;
+    expect_replaced(changed[s], n, at[s]);
+    expect_shape(changed[s], n);
+    expect_extends(changed[s]);
+  }
+}
+
+static void expect_part(const agc_list *part, size_t from, size_t count) {
+  expect_run(part, from, count);
+  expect_shape(part, count);
+  expect_extends(part);
 }
 
 static void expect_slices(const agc_list *l, size_t n) {
-  size_t cuts[] = {0, 1, 31, 32, 33, n ? n - 1 : 0, n};
+  size_t trie = n ? list_tail_off(n) : 0;
+  size_t cuts[] = {0, 1, 31, 32, 33, n ? n - 1 : 0, n, trie, trie + 1, trie + 2};
   for (size_t s = 0; s < sizeof cuts / sizeof cuts[0]; s++) {
     size_t k = cuts[s];
     if (k > n) continue;
     size_t span = n - k < 33 ? n - k : 33;
-    expect_run(agc_list_slice(l, 0, k), 0, k);
-    expect_run(agc_list_slice(l, k, n - k), k, n - k);
-    expect_run(agc_list_slice(l, k, span), k, span);
+    const agc_list *taken = agc_list_slice(l, 0, k);
+    expect_part(taken, 0, k);
+    if (k > trie && k < n) assert(taken->root == l->root && taken->shift == l->shift);
+    expect_part(agc_list_slice(l, k, n - k), k, n - k);
+    expect_part(agc_list_slice(l, k, span), k, span);
   }
   expect_run(l, 0, n);
 }
 
 static void expect_joined(const agc_list *r, size_t items, size_t extra, bool extra_first) {
   assert(agc_list_len(r) == items + extra);
+  expect_shape(r, items + extra);
+  expect_extends(r);
   size_t lead = extra_first ? extra : items;
   for (size_t k = 0; k < items + extra; k++) {
     bool in_lead = k < lead;
@@ -136,7 +201,7 @@ static void expect_joined(const agc_list *r, size_t items, size_t extra, bool ex
 }
 
 static void expect_concats(const agc_list *l, size_t n) {
-  size_t sizes[] = {0, 1, 32, 33};
+  size_t sizes[] = {0, 1, 2, 31, 32, 33};
   for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
     size_t m = sizes[s];
     agc_list *right = others(m);
@@ -158,6 +223,43 @@ static void expect_debug(void) {
   assert(d->bytes == at && memcmp(d->data, want, at) == 0);
   d = agc_debug(&vm, agc_list_value(agc_list_from_array(NULL, 0)));
   assert(d->bytes == 2 && memcmp(d->data, "[]", 2) == 0);
+}
+
+static size_t chain_index(size_t k, size_t n) {
+  size_t trie = list_tail_off(n);
+  size_t pins[] = {0, 31, 32, trie ? trie - 1 : 0, trie, n - 1};
+  return k < sizeof pins / sizeof pins[0] ? pins[k] % n : (k * 37) % n;
+}
+
+static void expect_set_chain(size_t n) {
+  enum { STEPS = 60 };
+  agc_list *versions[STEPS + 1];
+  versions[0] = built(n);
+  for (size_t k = 0; k < STEPS; k++) versions[k + 1] = agc_list_set(versions[k], chain_index(k, n), other(k));
+  for (size_t j = 0; j <= STEPS; j++) {
+    expect_shape(versions[j], n);
+    for (size_t i = 0; i < n; i++) {
+      size_t hit = STEPS;
+      for (size_t k = 0; k < j; k++)
+        if (chain_index(k, n) == i) hit = k;
+      agc_value got = agc_list_get(versions[j], i);
+      assert(hit == STEPS ? is_item(got, i) : is_other(got, hit));
+    }
+  }
+}
+
+static void expect_sharing(void) {
+  agc_list *base = built(33);
+  const agc_list *fits = agc_list_concat(base, others(2));
+  assert(fits->root == base->root && fits->shift == base->shift);
+  expect_joined(fits, 33, 2, false);
+  agc_list *full = built(64);
+  const agc_list *spills = agc_list_concat(full, others(1));
+  expect_joined(spills, 64, 1, false);
+  expect_run(full, 0, 64);
+  const agc_list *topped = agc_list_append(built(1056), other(0));
+  assert(topped->shift == 10);
+  expect_shape(topped, 1057);
 }
 
 static void expect_versions(void) {
@@ -182,10 +284,11 @@ int main(void) {
     if (n > MAX_LENGTH) continue;
     agc_list *l = built(n);
     expect_list(l, n);
-    if (n <= APPEND_MAX) {
+    if (n <= LARGE) {
       agc_list *grown = appended(n);
       expect_list(grown, n);
       expect_run(grown, 0, n);
+      assert(grown->shift == l->shift && (grown->root == NULL) == (l->root == NULL));
     }
     if (n <= LARGE) {
       expect_persistent(l, n);
@@ -201,6 +304,10 @@ int main(void) {
   assert(agc_list_len(agc_list_builder_finish(&empty)) == 0);
   expect_debug();
   expect_versions();
+  expect_sharing();
+  const size_t chains[] = {33, 65, 1057, 1100};
+  for (size_t s = 0; s < sizeof chains / sizeof chains[0]; s++)
+    if (chains[s] <= MAX_LENGTH) expect_set_chain(chains[s]);
 
   puts("list tests passed");
   return 0;

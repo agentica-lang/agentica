@@ -25,6 +25,7 @@ NAMES = [
     "arithmetic",
     "strings",
     "lists",
+    "list-build",
     "maps",
     "calls",
     "case",

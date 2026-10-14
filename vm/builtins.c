@@ -125,7 +125,10 @@ static agc_value builtin_from_float(agc_vm *vm, agc_value *args, uint32_t span) 
 
 static agc_value builtin_list_concat(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_list_value(agc_list_concat(agc_as_list(vm, args[0]), agc_as_list(vm, args[1])));
+  const agc_list *a = agc_as_list(vm, args[0]);
+  const agc_list *b = agc_as_list(vm, args[1]);
+  if (agc_list_len(b) > AGC_LIST_WIDTH) agc_charge(vm, 2 * ((uint64_t)agc_list_len(a) + agc_list_len(b)));
+  return agc_list_value(agc_list_concat(a, b));
 }
 
 static agc_value builtin_map_put(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -373,12 +376,12 @@ const agc_builtin agc_core_builtins[] = {
   {"System.exit", 1, builtin_exit, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"String.from_int", 1, builtin_from_int, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"String.from_float", 1, builtin_from_float, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"List.concat", 2, builtin_list_concat, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.concat", 2, builtin_list_concat, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Map.put", 3, builtin_map_put, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"List.size", 1, builtin_list_size, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"List.append", 2, builtin_list_append, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.append", 2, builtin_list_append, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"List.at", 2, builtin_list_at, AGC_NATIVE_NONE, AGC_COST_NONE},
-  {"List.set", 3, builtin_list_set, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"List.set", 3, builtin_list_set, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"List.repeat", 2, builtin_list_repeat, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"List.take", 2, builtin_list_take, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"List.drop", 2, builtin_list_drop, AGC_NATIVE_NONE, AGC_COST_SIZE},
