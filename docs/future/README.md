@@ -45,7 +45,7 @@ Each numbered section has its own file, named by its number, so `§23` is in `23
 | 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | Planned (roadmap phase 22, after 7i, phases 24 and 25 and the evaluation pilot, order step 7.2a) |
 | 33 | Digit separators | [`33-digit-separators.md`](33-digit-separators.md) | Planned (roadmap phase 23, after phase 22, order step 7.2a) |
 | 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Candidate (roadmap 7g); needs a measurement |
-| 35 | Self-hosted front end and a single binary | [`35-self-hosting.md`](35-self-hosting.md) | Planned, long-term (after the current roadmap order) |
+| 35 | Self-hosted front end and a single binary | [`35-self-hosting.md`](35-self-hosting.md) | Planned, in the roadmap order from row 7.2.7 on |
 | 36 | Unit tests (`Test`) | [`36-unit-tests.md`](36-unit-tests.md) | `Test` module done (25a); `agentica test` for test files planned (25b) |
 | 37 | Task crash isolation | [`37-task-crash-isolation.md`](37-task-crash-isolation.md) | Planned (roadmap phase 24, after 7i and 20b); semantics for the owner to review |
 | 38 | Value representation | [`38-value-representation.md`](38-value-representation.md) | Note, no change planned; revisit with 8d and the benchmarks (roadmap order rows 9 and 14) |
