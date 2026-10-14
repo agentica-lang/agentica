@@ -60,6 +60,9 @@
   (define-values (process out in err) (apply subprocess #f #f (current-error-port) python peer-file arguments))
   (values process out in))
 
+(define (start-vm disposition error-port . arguments)
+  (apply subprocess #f #f error-port python peer-file "launch" disposition (path->string vm-file) arguments))
+
 (define (with-full-fifo root proc)
   (define fifo (path->string (build-path root "fifo")))
   (define-values (peer out in) (start-peer "fill" fifo))
@@ -100,12 +103,28 @@
            (define label (format "~a" run))
            (define path (path->string (build-path root "out.txt")))
            (define bytecode (compile-program root (child-program)))
-           (define-values (vm out in err) (subprocess #f #f #f vm-file "--allow-run" "--" bytecode path (first run)))
+           (define-values (vm out in err) (start-vm "default" #f "--allow-run" "--" bytecode path (first run)))
            (close-output-port in)
            (define pid (string->number (sync/timeout wait-seconds (read-line-evt out))))
            (unix-kill (subprocess-pid vm) (second run))
            (check-equal? (finish vm (lambda () (close-input-port out) (close-input-port err))) (+ 128 (second run)) label)
            (check-stopped pid path label))))))
+
+  (test-case "a stop signal the VM inherited as ignored stays ignored"
+    (when (ready? "the inherited ignore test")
+      (with-temp-dir
+       (lambda (root)
+         (define bytecode (compile-program root "def main() -> Void\n  puts(\"ready\")\n  IO.flush()\n  Task.sleep(30000)\nend\n"))
+         (define-values (vm out in err) (start-vm "ignore" #f "--" bytecode))
+         (close-output-port in)
+         (check-equal? (sync/timeout wait-seconds (read-line-evt out)) "ready")
+         (unix-kill (subprocess-pid vm) sighup)
+         (unix-kill (subprocess-pid vm) sigint)
+         (check-false (sync/timeout 0.5 vm) "the ignored signals do not stop the VM")
+         (subprocess-kill vm #t)
+         (subprocess-wait vm)
+         (close-input-port out)
+         (close-input-port err)))))
 
   (test-case "an outside SIGALRM keeps its default action"
     (when (ready? "the SIGALRM test")
@@ -141,7 +160,7 @@
           root
           (lambda (fifo)
             (define bytecode (compile-program root stuck-flush))
-            (define-values (vm out in err) (subprocess #f #f (current-error-port) vm-file "--" bytecode fifo))
+            (define-values (vm out in err) (start-vm "default" (current-error-port) "--" bytecode fifo))
             (close-output-port in)
             (check-equal? (sync/timeout wait-seconds (read-line-evt out)) "ready")
             (sleep 0.3)
