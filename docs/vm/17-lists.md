@@ -102,7 +102,11 @@ measured, not only derived. The model is not in the repository.
     1 leaf) and write the slot in the leaf copy.
   - Costs: `append` copies at most 536 bytes, and every 32nd also one leaf and
     at most 4 branches. `set` in the trie copies at most 536 + 512 + 4·256 bytes
-    (1M items). The branches add 1.6% to memory.
+    (1M items). The branches add 1.6% to memory. Measured: a process that
+  builds a list of 1,000,000 items peaks at 21.5 to 22.4 MB, against 21.4 MB on
+  the flat array (5.6 MB is the start-up), because a build makes its leaves
+  slices of one array (`docs/vm-benchmarks.md`, "Bulk builds and memory"). A
+  version that allocated each 512-byte leaf alone peaked at 28.6 MB.
 - **Builders** are the only code that writes to a list, and only before it is
   returned (the rule of
   [§34.3](../future/34-shared-small-values.md#343-why-it-is-safe)). A literal, a

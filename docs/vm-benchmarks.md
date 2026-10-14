@@ -99,18 +99,71 @@ are 2.2, 1.9, 2.2 and 1.7.
 
 No other benchmark is slower by more than the noise of the link layout. The
 full run at size 4 (5 alternating rounds of 5 runs, median s, master / this VM):
-arithmetic 0.271 / 0.269, calls 0.126 / 0.110, case 0.121 / 0.111, knight-tour
-0.172 / 0.172, lists 0.841 / 0.161, maps 0.570 / 0.550, maze-bfs 0.220 / 0.222,
-string-library 0.100 / 0.102, strings 0.124 / 0.128, traveling-salesman 0.171 /
-0.171. Only `strings` (+3.2%) and `string-library` (+2%) are above 2%, and
-neither does list work: `strings` loops over a five-item list once per round.
-The same binary moves by that much when only its link layout changes. At size 8,
-three layouts of each VM (the unchanged link, and 1,000 and 2,600 bytes of
-padding in `value.o`) gave `arithmetic` 0.56 to 0.65 s (no lists at all) and
-`strings` 0.234 to 0.243 s on master alone. Across the three layouts the means
-of this VM against master were: maze-bfs +0.2%, maps -0.8%, knight-tour -1.3%,
-arithmetic +0.2% and strings +1.8%; `lists` is 5.6 times faster (1.72 s to 0.31
-s at size 8).
+arithmetic 0.272 / 0.289, calls 0.123 / 0.115, case 0.121 / 0.110, knight-tour
+0.171 / 0.170, list-build 57.4 / 0.215, list-bulk 0.867 / 0.807, lists 0.873 /
+0.168, maps 0.599 / 0.557, maze-bfs 0.224 / 0.224, string-library 0.101 /
+0.105, strings 0.127 / 0.135, traveling-salesman 0.167 / 0.166. Only
+`arithmetic` (+6%), `strings` (+6%) and `string-library` (+4%) are above 2%,
+and none of them does list work: the same binary moves by that much when only
+its link layout changes. Padding `list.o` by 48, 400 and 1,500 bytes gave
+`arithmetic` 0.270, 0.311 and 0.304 s against 0.270 for master and 0.291 for
+the unpadded build, with the same code. At size 8, three layouts of each VM
+(the unchanged link, and 1,000 and 2,600 bytes of padding in `value.o`) gave
+`arithmetic` 0.56 to 0.65 s (no lists at all) and `strings` 0.234 to 0.243 s on
+master alone. Across the three layouts the means of this VM against master were:
+maze-bfs +0.2%, maps -0.8%, knight-tour -1.3%, arithmetic +0.2% and strings
++1.8%; `lists` is 5.6 times faster (1.72 s to 0.31 s at size 8).
+
+### Bulk builds and memory
+
+A list built at once (`List.repeat`, `Range.to_a`, `reverse`, `take`, `drop`,
+`concat`, `String.split`, `sort`) allocates its trie in a handful of blocks, and
+`List.repeat` shares one leaf. The first version of the trie attached one leaf
+per 32 pushes, took six times as long as the flat array to build a million
+items, and made the GC-stress run of `process-channel-close.agc` miss its 100 ms
+window. Milliseconds on 1,000,000 items, median of 7 runs, alternating the three
+binaries (master 71717e0, the earlier head 82677b9, this VM); the GC lands in a
+different operation from run to run, so read a row to within a few ms:
+
+| Operation | Master | Earlier head | This VM |
+|---|---:|---:|---:|
+| `List.repeat(7, n)` | 5 | 19 | under 1 |
+| `List.repeat("x", n)` | 6 | 15 | under 1 |
+| `take(n / 2)` and `drop(n / 2)` | 2 | 21 | 6 |
+| `reverse` | 6 | 27 | 5 |
+| `(0...n).to_a` | 6 | 60 | 7 |
+| `String.split(big, "")` of 1 MB | 95 | 44 | 43 |
+| `join("")` | 20 | 30 | 20 |
+| `sort` of a scattered list | 300 | 326 | 319 |
+| `map` | 97 | 112 | 99 |
+| `xs[i]` for every 7th item | 23 | 29 | 30 |
+| `for x in xs` sum | 134 | 142 | 142 |
+| `filter` | 144 | 157 | 148 |
+| `concat` of two halves | 2 | 24 | 5 |
+| 20,000 pushes | 2,087 | 7 | 7 |
+
+`take` and `drop` still copy their items (a leaf at a time, with `memcpy`):
+`drop(n / 2)` takes about 10 ms against 8 on master, and `take` shares nothing
+either. Indexing and `for` stay about 1.3 and 1.06 times master, the price of
+the two to four loads per item. `list-bulk` (`repeat`, `to_a`, `reverse`,
+`take`, `drop`, `concat`, `join`, `split` and `sort`, size 4) takes 0.867 s on
+master and 0.807 s here.
+
+Peak RSS of a process that builds one list of 1,000,000 items and prints its
+size (the start-up cost of the VM is 5.6 MB), median of 3:
+
+| List | Master MB | Earlier head MB | This VM MB |
+|---|---:|---:|---:|
+| `(0...1000000).to_a` | 21.4 | 28.6 | 21.5 to 22.4 |
+| `List.repeat(7, 1000000)` | 21.4 | 28.4 to 29.7 | 5.6 |
+| 1,000,000 `push` calls in a loop | not run (quadratic) | 43.4 | 43.5 |
+
+The earlier head spent 45% more than master on the same list, because every
+512-byte leaf and 256-byte branch was a separate allocation. Now the leaves of
+one build are slices of one array, so the cost over master is the branches, 1.6%
+(about 264 KB for a million items). A list grown by pushes holds its leaves
+separately and the path copies are garbage until the next collection, which is
+why the push loop peaks higher.
 
 ## Conclusions
 
