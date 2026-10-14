@@ -90,19 +90,6 @@ static bool print_as(agc_output *stream, agc_task *t, char letter, size_t len, b
   return done;
 }
 
-static bool record_as(agc_task *t, char letter, size_t len) {
-  vm.task = t;
-  t->state = AGC_TASK_RUNNING;
-  t->parking = t->retry = false;
-  bool done = agc_write_record(&vm, out(), agc_output_waiting(&vm, out()) ? NULL : letters_of(letter, len));
-  assert(done == !t->parking);
-  if (t->parking) {
-    t->parking = false;
-    t->state = AGC_TASK_PARKED;
-  }
-  return done;
-}
-
 static bool write_as(agc_task *t, char letter, size_t len, bool newline) {
   return print_as(out(), t, letter, len, newline);
 }
@@ -422,44 +409,6 @@ static void test_the_end_of_run_moves_a_notice_held_by_a_stuck_print(void) {
   close_pipe();
 }
 
-static void test_a_record_starts_a_line_after_a_cut_print(void) {
-  open_pipe();
-  fresh(pipe_fds[1]);
-  agc_task *l = make_task(), *r = make_task();
-  assert(!write_as(l, 'l', 2 * CAP + 100, false));
-  agc_output_leave(&vm, l);
-  assert(!record_as(r, 'r', 5));
-  for (int round = 0; round < 10; round++) pump();
-  assert(r->state == AGC_TASK_READY && retry(r));
-  assert(record_as(make_task(), 's', 3));
-  assert(write_as(r, 'p', 2, false));
-  assert(record_as(r, 'q', 1));
-  for (int round = 0; round < 10; round++) pump();
-  assert(collected_len == CAP + 16);
-  check_run(0, 'l', CAP);
-  assert(memcmp(collected + CAP, "\nrrrrr\nsss\npp\nq\n", 16) == 0);
-  finish();
-  close_pipe();
-}
-
-static void test_a_record_behind_a_waiting_print_starts_a_line(void) {
-  open_pipe();
-  fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
-  assert(write_as(a, 'a', CAP - 1, true));
-  assert(!write_as(b, 'b', 2, false));
-  assert(!record_as(c, 'c', 1));
-  for (int round = 0; round < 10; round++) pump();
-  assert(b->state == AGC_TASK_READY && retry(b));
-  for (int round = 0; round < 10; round++) pump();
-  assert(c->state == AGC_TASK_READY && retry(c));
-  pump();
-  assert(collected_len == CAP + 5);
-  assert(memcmp(collected + CAP, "bb\nc\n", 5) == 0);
-  finish();
-  close_pipe();
-}
-
 static void notice_of(size_t bytes, agc_notice_mode mode) {
   agc_notice n;
   FILE *file = agc_notice_begin(out(), &n);
@@ -526,8 +475,6 @@ int main(void) {
   test_a_notice_does_not_enter_a_long_print();
   test_a_leaving_long_print_lets_a_notice_and_the_next_writer_through();
   test_the_end_of_run_moves_a_notice_held_by_a_stuck_print();
-  test_a_record_starts_a_line_after_a_cut_print();
-  test_a_record_behind_a_waiting_print_starts_a_line();
   test_the_notice_queue_is_bounded_but_a_kept_notice_is_not_dropped();
   test_a_final_notice_is_written_straight_or_dropped();
   puts("output tests passed");

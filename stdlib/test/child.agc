@@ -1,12 +1,27 @@
 import "report" as Report
 
-export def marker() -> String
-  return String.from_code(30) + "agentica-bdd "
+export struct Records
+  items: List[Json]
+  problem: String
+end
+
+export def read_records(p: Process, deadline: Int) -> Records
+  items: List[Json] = []
+  while true
+    line = Process.channel_read_line(p, left(deadline))
+    if not line.ok?
+      return Records(items: items, problem: line.message)
+    end
+    record = record_of(line.unwrap!)
+    if not JSON.null?(record)
+      items = items.push(record)
+    end
+  end
+  return Records(items: items, problem: "")
 end
 
 export def record_of(line: String) -> Json
-  at = line.index_of(marker()).unwrap_or(0) + marker().length
-  return JSON.parse(line.slice(at, line.length - at)).unwrap_or(JSON.null())
+  return JSON.parse(line).unwrap_or(JSON.null())
 end
 
 export def event_of(record: Json) -> String
@@ -37,6 +52,18 @@ export def detail_of(record: Json, key: String) -> Report.Detail
   return Report.Detail.Unknown
 end
 
+export def gone?(message: String) -> Bool
+  return message == "process: end of input" or message == "process: channel is closed" or message.starts_with?("error writing to stream port")
+end
+
+export def brief(deadline: Int) -> Int
+  remaining = left(deadline)
+  if remaining < 2000
+    return remaining
+  end
+  return 2000
+end
+
 export def left(deadline: Int) -> Int
   remaining = deadline - Time.monotonic_ms()
   if remaining < 1
@@ -49,15 +76,11 @@ export def located(code: String, message: String, path: String) -> Report.Error
   return Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
 end
 
-export def record_for(line: String, token: String) -> Json
-  if not line.start_with?(marker())
-    return JSON.null()
+export def printed(output: String) -> String
+  if output.end_with?("\n")
+    return output.slice(0, output.length - 1)
   end
-  record = record_of(line)
-  if text_of(record, "token") != token
-    return JSON.null()
-  end
-  return record
+  return output
 end
 
 export def tail(text: String, limit: Int) -> String

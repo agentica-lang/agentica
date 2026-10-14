@@ -1,11 +1,13 @@
 #include "services.h"
 
 #ifdef __linux__
+#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <uv.h>
@@ -15,6 +17,9 @@
 #define REAP_MS 1000
 #define GRACE_MS 1000
 #define URING_ENV "UV_USE_IO_URING="
+#define CHANNEL_PREFIX AGC_CHANNEL_ENV "="
+#define DRAIN_LIMIT ((size_t)2097152)
+#define STDIO_SLOTS 4
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE } req_kind;
@@ -47,6 +52,7 @@ struct proc {
   uv_timer_t grace;
   uv_write_t write_req;
   FILE *forward;
+  agc_duplex *channel;
   guard *g;
   proc *run_prev, *run_next;
   size_t users, handles;
@@ -72,6 +78,7 @@ static void settle(proc *p) {
   agc_inbuf_free(&p->out_buf);
   agc_inbuf_free(&p->err_kept);
   free(p->write_data);
+  if (p->channel) agc_duplex_release(p->channel);
   free(p);
 }
 
@@ -179,6 +186,7 @@ static int shut(proc *p) {
   close_handle((uv_handle_t *)&p->err, closed_err);
   agc_inbuf_free(&p->out_buf);
   agc_inbuf_free(&p->err_kept);
+  if (p->channel) agc_duplex_shut(p->channel);
   if (p->reader) agc_io_ready(p->reader->job);
   if (p->writer) agc_io_ready(p->writer->job);
   notify_waits(p);
@@ -499,6 +507,7 @@ static void keep_scratch(proc *p, agc_inbuf *b, bool *cut, size_t n, const char 
   *cut = true;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "truncated pid=%d pipe=%s", (int)p->process.pid, pipe);
   if (p->reader) agc_io_ready(p->reader->job);
+  if (p->channel) agc_duplex_overflow(p->channel, over_text);
 }
 
 /* Once cut, a stream's bytes are dropped; a cut wakes the reader, since
@@ -595,15 +604,18 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
   return argv;
 }
 
-static char **child_env(void) {
+static char **child_env(bool drop_uring, char *marker) {
   extern char **environ; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
   size_t n = 0;
   while (environ[n]) n++;
-  char **env = calloc(agc_size_add(n, 1), sizeof(char *));
+  char **env = calloc(agc_size_add(n, 2), sizeof(char *));
   if (!env) agc_out_of_memory();
   size_t kept = 0;
-  for (size_t k = 0; k < n; k++)
-    if (strncmp(environ[k], URING_ENV, sizeof URING_ENV - 1) != 0) env[kept++] = environ[k];
+  for (size_t k = 0; k < n; k++) {
+    bool uring = drop_uring && strncmp(environ[k], URING_ENV, sizeof URING_ENV - 1) == 0;
+    if (!uring && strncmp(environ[k], CHANNEL_PREFIX, sizeof CHANNEL_PREFIX - 1) != 0) env[kept++] = environ[k];
+  }
+  if (marker) env[kept] = marker;
   return env;
 }
 
@@ -619,16 +631,20 @@ static int open_pipe(uv_pipe_t *pipe, int *fd, int rc) {
   return rc;
 }
 
-static int start_child(guard *g, proc *p, char **argv, char **env, const char *cwd) {
+static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, const char *cwd, bool channel) {
   int fds[6] = {-1, -1, -1, -1, -1, -1};
+  int link[2] = {-1, -1};
   int rc = 0;
   for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
+  if (!rc && channel) rc = uv_socketpair(SOCK_STREAM, 0, link, 0, 0);
   if (!rc) {
-    uv_stdio_container_t stdio[3];
+    uv_stdio_container_t stdio[STDIO_SLOTS];
     for (size_t k = 0; k < 3; k++) {
       stdio[k].flags = UV_INHERIT_FD;
       stdio[k].data.fd = fds[2 * k + (k == 0 ? 0 : 1)];
     }
+    stdio[AGC_CHANNEL_FD].flags = UV_INHERIT_FD;
+    stdio[AGC_CHANNEL_FD].data.fd = link[1];
     uv_process_options_t options;
     memset(&options, 0, sizeof options);
     options.exit_cb = exited;
@@ -636,7 +652,7 @@ static int start_child(guard *g, proc *p, char **argv, char **env, const char *c
     options.args = argv;
     options.env = env;
     options.cwd = cwd;
-    options.stdio_count = 3;
+    options.stdio_count = channel ? STDIO_SLOTS : STDIO_SLOTS - 1;
     options.stdio = stdio;
     link_child(g, p);
     rc = uv_spawn(g->loop, &p->process, &options);
@@ -650,6 +666,7 @@ static int start_child(guard *g, proc *p, char **argv, char **env, const char *c
   close_fd(&fds[0]);
   close_fd(&fds[3]);
   close_fd(&fds[5]);
+  close_fd(&link[1]);
   if (!rc) {
     uv_pipe_init(g->loop, &p->in, 0);
     uv_pipe_init(g->loop, &p->out, 0);
@@ -660,11 +677,17 @@ static int start_child(guard *g, proc *p, char **argv, char **env, const char *c
       p->handles++;
     }
     rc = open_pipe(&p->err, &fds[4], open_pipe(&p->out, &fds[2], open_pipe(&p->in, &fds[1], 0)));
+    if (!rc && channel) {
+      p->channel = agc_duplex_new(vm, link[0]);
+      link[0] = -1;
+      if (!p->channel) rc = UV_ENOMEM;
+    }
     if (!rc) rc = p->captured ? start_kept(p) : uv_read_start((uv_stream_t *)&p->err, alloc_err, forward_err);
   }
   close_fd(&fds[1]);
   close_fd(&fds[2]);
   close_fd(&fds[4]);
+  close_fd(&link[0]);
   if (rc && p->running) shut(p);
   return rc;
 }
@@ -698,7 +721,7 @@ static void close_child(agc_vm *vm, agc_resource *r) {
 
 /* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
    resolves before the child changes directory (§10.4). */
-static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout) {
+static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel) {
   if (!vm->rt->allow_run) return agc_error_value("process: spawning requires --allow-run");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
@@ -711,6 +734,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
+  if (channel) pr->channel = (agc_lines){agc_new_lock(vm), agc_new_lock(vm)};
   guard *g = guard_of(vm);
   char *path = resolve(vm, command);
   if (!path) {
@@ -726,21 +750,24 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     return agc_error_value("process: directory is unavailable");
   }
   char **argv = child_args(vm, path, list);
-  char **env = vm->rt->drop_uring_env ? child_env() : NULL;
+  char *marker = channel ? strdup(CHANNEL_PREFIX AGC_CHANNEL_VALUE) : NULL;
+  if (channel && !marker) agc_out_of_memory();
+  char **env = child_env(vm->rt->drop_uring_env, marker);
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
   p->forward = vm->rt->err.file;
   p->captured = dir != NULL;
-  int rc = start_child(g, p, argv, env, cwd);
+  int rc = start_child(vm, g, p, argv, env, cwd, channel);
   if (rc)
     AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, rc);
   else
-    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn pid=%d path=%s args=%zu captured=%d", (int)p->process.pid, path,
-              list->len, p->captured ? 1 : 0);
+    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn pid=%d path=%s args=%zu captured=%d channel=%d", (int)p->process.pid,
+              path, list->len, p->captured ? 1 : 0, channel ? 1 : 0);
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
   free(env);
+  free(marker);
   free(cwd);
   if (rc) {
     settle(p);
@@ -755,12 +782,17 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]));
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false);
 }
 
 static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]));
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false);
+}
+
+static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true);
 }
 
 static proc *live(const agc_process *pr) {
@@ -889,6 +921,93 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static agc_duplex *channel_of(agc_vm *vm, agc_value handle, agc_process **pr, agc_value *result) {
+  *pr = agc_as_process(vm, handle);
+  const proc *p = live(*pr);
+  if (!p) *result = agc_error_value(closed_text);
+  else if (!p->channel) *result = agc_error_value("process: the child has no channel");
+  return p ? p->channel : NULL;
+}
+
+static agc_value builtin_channel_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_process *pr;
+  agc_value result;
+  agc_duplex *d = channel_of(vm, args[0], &pr, &result);
+  return d ? agc_duplex_read_line(vm, d, pr->channel.reader, agc_as_int(vm, args[1])) : result;
+}
+
+static agc_value builtin_channel_send(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_process *pr;
+  agc_value result;
+  agc_duplex *d = channel_of(vm, args[0], &pr, &result);
+  return d ? agc_duplex_send(vm, d, pr->channel.writer, args[1], agc_as_int(vm, args[2])) : result;
+}
+
+static agc_value builtin_channel_close(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_process *pr;
+  agc_value result;
+  agc_duplex *d = channel_of(vm, args[0], &pr, &result);
+  return d ? agc_duplex_close_write(vm, d, pr->channel.writer, agc_as_int(vm, args[1])) : result;
+}
+
+static void drain_out(proc *p) {
+  uv_os_fd_t fd;
+  size_t total = 0;
+  if (p->out_buf.eof || p->out_buf.error || uv_fileno((uv_handle_t *)&p->out, &fd) != 0) return;
+  while (total < DRAIN_LIMIT) {
+    uv_buf_t buf;
+    alloc_kept_out((uv_handle_t *)&p->out, 0, &buf);
+    ssize_t n = buf.base ? read(fd, buf.base, buf.len) : UV_ENOBUFS;
+    if (n < 0 && buf.base) {
+      if (errno == EINTR) continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK) return;
+      n = -errno;
+    } else if (n == 0) {
+      n = UV_EOF;
+    }
+    read_kept_out((uv_stream_t *)&p->out, n, &buf);
+    if (n < 0) return;
+    total += (size_t)n;
+  }
+}
+
+static size_t whole_prefix(const uint8_t *data, size_t n) {
+  size_t back = 0;
+  while (back < 3 && back < n && (data[n - 1 - back] & 0xC0) == 0x80) back++;
+  if (back == n) return n;
+  uint8_t lead = data[n - 1 - back];
+  size_t need = 1;
+  if (lead >= 0xF0 && lead <= 0xF4)
+    need = 4;
+  else if (lead >= 0xE0 && lead < 0xF0)
+    need = 3;
+  else if (lead >= 0xC2 && lead < 0xE0)
+    need = 2;
+  return back + 1 < need ? n - (back + 1) : n;
+}
+
+static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_process *pr = agc_as_process(vm, args[0]);
+  int64_t timeout = agc_as_int(vm, args[1]);
+  agc_value result;
+  if (!agc_stream_lock(vm, pr->reader, &timeout, &result)) return result;
+  proc *p = live(pr);
+  if (!p) return agc_error_value(closed_text);
+  if (!p->captured) return agc_error_value("process: output is not captured");
+  drain_out(p);
+  if (p->out_cut || p->err_cut) return agc_error_value(over_text);
+  size_t n = agc_inbuf_pending(&p->out_buf);
+  if (!p->out_buf.eof && !p->out_buf.error) n = whole_prefix(pending_data(&p->out_buf), n);
+  agc_charge_bytes(vm, n);
+  agc_string *text = agc_utf8_decode(pending_data(&p->out_buf), n, "\xEF\xBF\xBD", false);
+  agc_inbuf_take(&p->out_buf, n);
+  return agc_result_value(true, agc_string_value(text));
+}
+
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -900,6 +1019,11 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE},
+  {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Process.read_available", 2, builtin_read_available, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 const size_t agc_process_builtin_count = sizeof agc_process_builtins / sizeof agc_process_builtins[0];

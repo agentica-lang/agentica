@@ -102,7 +102,10 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   directory; a change of mode changes the stamps, which forces a full
   recompile and relink. `fuzz.yml` stays on the system default.
 - The `test` and `vm-sanitizers` jobs need Node and Python 3 for the
-  network peers.
+  network peers. The golden tests need Python 3 too (the child channel
+  fixtures run through `tests/fixtures/channel-run.py`): `sweep.yml` and the
+  golden step of `release.yml` print `python3 --version` before them, and
+  the goldens fail in CI when it is missing.
 
 ### When `vm-sanitizers` runs
 
@@ -121,6 +124,9 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/vm-channel-test.rkt`, `tests/fixtures/channel-peer.py`,
   `tests/vm-stdout-test.rkt`, `tests/fixtures/stdout-peer.py`,
   `tests/vm-file-lines-test.rkt`, `tests/fixtures/lines-peer.py`,
+  `tests/vm-test-protocol-test.rkt`, `tests/fixtures/test-protocol-peer.*`,
+  `tests/vm-child-channel-test.rkt`, `tests/fixtures/child-channel*`,
+  `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
   `tests/cli-in-process.rkt`, `tests/bytecode-test.rkt`,
   `tests/fixtures/vm/`;
 - `stdlib/`: every `std/` module written in Agentica, `stdlib/bdd/` too (the

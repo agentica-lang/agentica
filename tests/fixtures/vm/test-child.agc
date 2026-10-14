@@ -2,16 +2,18 @@ import "std/test/child" as Child
 import "std/test/report" as Report
 
 def show(label: String, line: String) -> Void
-  puts("#{label}: #{JSON.encode(Child.record_for(line, "k3y"))}")
+  puts("#{label}: #{JSON.encode(Child.record_of(line))}")
 end
 
 def main() -> Void
-  record = "{\"event\":\"pass\",\"token\":\"k3y\"}"
-  show("the run token at a line start", Child.marker() + record)
-  show("another token", Child.marker() + "{\"event\":\"pass\",\"token\":\"guess\"}")
-  show("no token", Child.marker() + "{\"event\":\"pass\"}")
-  show("after other text", "text " + Child.marker() + record)
-  show("not JSON", Child.marker() + "pass")
+  show("a record line", "{\"event\":\"pass\",\"index\":3}")
+  show("text with a marker", "x" + String.from_code(30) + "agentica-bdd {\"event\":\"pass\"}")
+  show("not JSON", "pass")
+  show("an empty line", "")
+  puts(Child.printed("a\nb\n").inspect)
+  puts(Child.printed("a\n\n").inspect)
+  puts(Child.printed("a").inspect)
+  puts(Child.printed("").inspect)
   vm = "{\"code\":\"RUNTIME-X\",\"file\":\"a.agc\",\"message\":\"m\",\"range\":{\"end\":{\"column\":3,\"line\":1},\"start\":{\"column\":1,\"line\":1}}}"
   task = vm.slice(0, vm.length - 1) + ",\"task\":true}"
   summary = "{\"unobserved_crashes\":1,\"first\":\"task crashed\"}"

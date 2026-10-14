@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 110,
+  "stdout": [
+    "error(\"process: channel is closed\")",
+    "error(\"process: channel is closed\")",
+    "false",
+    "0",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/process-channel-close.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":18},\"start\":{\"column\":16,\"line\":18}},\"task\":true}",
+    ""
+  ]
+}

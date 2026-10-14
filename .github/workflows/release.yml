@@ -101,7 +101,9 @@ jobs:
           AGENTICA_VM_BINARY: dist/agentica-vm
           AGENTICA_REQUIRE_VM: '1'
           AGENTICA_SWEEP: full
-        run: make vm-diff-test JOBS=4
+        run: |
+          python3 --version
+          make vm-diff-test JOBS=4
       - name: Build and smoke-test
         run: |
           make exe

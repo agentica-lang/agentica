@@ -127,7 +127,10 @@
                         "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
                         "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
                         "    puts(String.join(List.repeat(String.join(List.repeat(\"x\", 1000), \"\"), 1100), \"\\n\"))\n"
-                        "    ctx\n  end])\nend\n"))
+                        "    ctx\n  end,\n"
+                        "  BDD.step(\"the handler fails with a huge message\") do |ctx, args|\n"
+                        "    BDD.assert(ctx, false, String.join(List.repeat(\"xxxxxxxxxx\", 110000), \"\"))\n"
+                        "  end])\nend\n"))
        ("lifecycle.feature" . "Feature: Lifecycle\n"))
      (lambda (directory)
        (display-to-file
@@ -152,13 +155,15 @@
          "Scenario: JSON mismatch\nGiven the Agentica program \"json.agc\"\n"
          "Then I receive a JSON line within 5000 milliseconds:\n" (doc "{\"a\": 1, \"b\": 3}")
          "Scenario: long mismatch\nGiven the Agentica program \"quotes.agc\"\n"
-         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x"))
+         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x")
+         "Scenario: record over 1 MiB\nGiven the handler fails with a huge message\n")
         (build-path directory "lifecycle.feature") #:exists 'append)
        (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
        (check-equal? (codes report)
                      '(#f "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
                        "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"))
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
+                       "RUNTIME-BDD-OUTPUT-LIMIT"))
        (define (details item)
          (define problem (hash-ref item 'error))
          (list (hash-ref problem 'expected) (hash-ref problem 'actual)))
@@ -167,6 +172,38 @@
        (define long (cadr (details (list-ref (cases report) 12))))
        (check-equal? (string-length long) (+ 65536 (string-length "... (534468 more characters)")))
        (check-true (string-suffix? long "\\... (534468 more characters)")))))
+
+  (test-case "a handler that prints for ever fails at the output limit, long before the scenario deadline"
+    (with-suite
+     `(("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  BDD.run([BDD.step(\"the handler prints for ever\") do |ctx, args|\n"
+                        "    chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
+                        "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
+                        "    ctx\n  end])\nend\n"))
+       ("endless.feature" . "Feature: Endless\nScenario: endless\nGiven the handler prints for ever\n"))
+     (lambda (directory)
+       (define started (current-inexact-milliseconds))
+       (define report (json-test (in directory "endless.feature") "--steps" (in directory "steps.agc")))
+       (check-true (< (- (current-inexact-milliseconds) started) 15000))
+       (check-equal? (codes report) '("RUNTIME-BDD-OUTPUT-LIMIT")))))
+
+  (test-case "a step program that prints for ever while it lists its steps fails at the output limit"
+    (with-suite
+     `(("steps.agc" . ,(string-append
+                        "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
+                        "  chunk = String.join(List.repeat(\"x\", 100000), \"\")\n"
+                        "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
+                        "  BDD.run([])\nend\n"))
+       ("listing.feature" . "Feature: Listing\nScenario: never runs\nGiven something\n"))
+     (lambda (directory)
+       (define started (current-inexact-milliseconds))
+       (define report (json-test (in directory "listing.feature") "--steps" (in directory "steps.agc")))
+       (check-true (< (- (current-inexact-milliseconds) started) 15000))
+       (check-equal? (for/list ([file (in-list (hash-ref report 'files))])
+                       (define problem (hash-ref file 'error))
+                       (list (hash-ref file 'kind) (and (hash? problem) (hash-ref problem 'code))))
+                     '(("steps" "RUNTIME-BDD-OUTPUT-LIMIT"))))))
 
   (test-case "a JSON line of a few hundred KB fits the step budget"
     (define items (make-list 30000 "abcdefghij"))

@@ -26,7 +26,7 @@ agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [-
 - **JSON report.** Keys: `ok`, `passed`, `failed`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`. Each file has `path`, `feature`, `kind` (`feature`, `tests`, `steps` for the step program, or `""`), `status`, `scenarios`, `error` and `output`. Each test is a scenario with `steps: []` at its `Test.test` call. A test is `passed`, `failed`, or `not_executed` (after a test that ended the file's child VM).
 - **Text report.** `PASS`, `FAIL` or `NOT RUN`, then `file / name`. Only failed tests have `output`: their stdout, plus stderr if their child VM died during them, the last 64 Ki characters. Stdout printed by `main` before `Test.run` belongs to the first test.
 - **Summary line.** The text report ends with `N passed, M failed, K not executed, F file errors`, and `, seed S` is added when the run fails.
-- **Limits.** Unread stdout over 1 MiB fails the running test with `RUNTIME-BDD-OUTPUT-LIMIT`. Stderr is captured for the whole file, up to 1 MiB; past that the file fails, and the test then running is `NOT RUN`. These limits count characters. Longer texts in reports are cut at 64 Ki characters, with `...`.
+- **Limits.** Unread stdout over 1 MiB fails the running test with `RUNTIME-BDD-OUTPUT-LIMIT`. Stderr is captured for the whole file, up to 1 MiB; past that the file fails, and the test then running is `NOT RUN`, when the file exits within a 2-second grace after the cut. A file still running after the grace (it is stuck in the test that printed) is reported as that test failing with `RUNTIME-BDD-OUTPUT-LIMIT`. A file that prints more than 1 MiB while it lists its tests is a file error with the same code. These limits count characters. Longer texts in reports are cut at 64 Ki characters, with `...`.
 - **Expected and actual.** A failed `then_*` check compares with `Test.eq` and shows its values in inspect form (a JSON line as its canonical text). An undefined or ambiguous step's `actual` is the step text. Front-end type errors keep `expected` and `actual` as raw type names, such as `Int` and `String`. Reports show no other handler or program output.
 
 ## Feature files
@@ -78,7 +78,7 @@ A step program is a normal program: its `main` builds the list of steps with `BD
 - `BDD.run` adds the predefined steps in front of the list and never returns. A step program that never calls it is `RUNTIME-BDD-CONTEXT`. Run directly, it prints `run this step program with agentica test --steps FILE` on stderr and exits 2.
 - `main` runs once to list the steps and again in each scenario, so it should only build the list. Anything else it prints goes nowhere.
 - Handlers may use tasks and pass `ctx` in a struct. Assertions made in tasks count. A context changed in a task is lost unless the handler takes it back from `Task.await`. Tasks must end before the handler returns (`RUNTIME-BDD-PENDING-TASKS`); the same holds for tasks that `main` leaves running before `BDD.run`.
-- A handler's stdin is the runner's protocol pipe, so handlers must not read it.
+- A handler's stdin is an empty pipe the runner closes at once: reading it gives the end of input. The protocol is on the child channel, not on stdin or stdout, so a handler may print anything.
 - A step program that does not compile is one file error. A crash in a step keeps the VM's code and its span in the step program. BDD failures are located at the feature step.
 
 ## Isolation and process lifetime
@@ -97,40 +97,40 @@ A step program is a normal program: its `main` builds the list of steps with `BD
 agentica test [PATH...] [--steps FILE]        (Racket driver, src/bdd-driver.rkt)
   compiles std/test/runner (embedded) and the step program to .agcb files
   in a private temporary directory, then runs the runner on the VM:
-    1. list child:    steps.agcb --agentica-bdd list   -> the patterns, in order
+    1. list child:    steps.agcb --agentica-bdd list   -> the patterns, in order (channel)
     2. per .feature:  parse, expand, match
     3. per scenario:  steps.agcb --agentica-bdd scenario (own child VM)
-                      <- one init line, then one line per step (stdin)
-                      -> assert, end, fail records (stdout)
+                      <- one init line, then one line per step (channel)
+                      -> assert, end, fail records (channel)
     4. the report: plain, --ai or --json on stdout; exit 0, 1 or 2
 ```
 
 - **The runner is a fixed program.** User code never runs in the process that writes the report. A user's `main` runs only in children, always under a step limit, a deadline and captured output.
 - **One step program, two modes.** The list child and the scenario child are the same `.agcb`, chosen by `System.args`, so step numbers match.
 - **Scenario child.** Started with `--json` (so a crash leaves its diagnostic as the last stderr line), `--allow-run`, and `--max-steps` of 1,000,000 times the number of steps plus one. The list child is the same with `list` and a 30-second limit.
-- **Protocol.** One JSON record per line. A child's record starts with U+001E, then `agentica-bdd `, then the JSON; the runner finds the marker anywhere in a line, and everything else on stdout is handler output. The runner sends a step only after the previous one ended.
+- **Protocol.** One JSON record per line, on the child channel: a bidirectional socket pair of its own, opened by `Process.spawn_channel` and found by the child on descriptor 3 (`docs/vm/10-io-processes.md` §10.4). A record is plain JSON with no marker and no token. The child's stdin is closed at once, and its stdout and stderr are the program's own, so nothing a handler prints can pass for a record. The child flushes its stdout before it sends a record. The runner sends a step only after the previous one ended.
 
 | Direction | Record | Meaning |
 |---|---|---|
 | runner to child | settings, once (`base`, `agentica`, `allow_run`, `seeded`, `seed`) | Where programs resolve and run, how to start `agentica`, and what to pass on |
 | runner to child | `{"index":2,"definition":14,...}` | Run step 2 with definition 14; a pattern mismatch is `RUNTIME-BDD-INFRA` |
-| runner to child | end of stdin | `BDD.run` ends the child with `System.exit(0)` |
+| runner to child | end of the channel (`Process.channel_close`) | `BDD.run` ends the child with `System.exit(0)` |
 | child to runner | `assert`, `end` (with `index`), `fail` (with `code`, `message`, and `expected` and `actual` when known) | A passing assertion; the handler returned with no task left running; a BDD failure (the child then exits 1) |
 | list child to runner | `step` records, then `ready` | The definitions in order |
 
-**Outcome of a step.** After sending step `i`, the runner reads the child's stdout with `Process.read_line`, up to the scenario deadline:
+**Outcome of a step.** After sending step `i`, the runner reads the channel with `Process.channel_read_line`, up to the scenario deadline. After an `end` or `fail` record it reads what the handler printed with `Process.read_available`, which the child flushed before the record:
 
 | What happens | Step `i` | Scenario error |
 |---|---|---|
 | `end`, and step `i` is a `Then` (or its `And`/`But`) with no `assert` since it was sent | failed | `RUNTIME-BDD-NO-ASSERTION` (the child is closed) |
 | `end` otherwise | passed | none |
 | `fail` record | failed | that record's code, message, expected and actual, at the step |
-| stdout ends, and the last stderr line is a JSON diagnostic | failed | that diagnostic, with its span in the step program |
-| stdout ends otherwise (a `System.exit`, even 0, or no diagnostic) | failed | `RUNTIME-BDD-PREMATURE-EXIT` |
-| the deadline passes | failed | `RUNTIME-BDD-TIMEOUT` (the read closes the child) |
-| handler output over 1 MiB (non-record stdout, or stderr) | failed | `RUNTIME-BDD-OUTPUT-LIMIT` |
+| the channel ends, and the last stderr line is a JSON diagnostic | failed | that diagnostic, with its span in the step program |
+| the channel ends otherwise (a `System.exit`, even 0, or no diagnostic) | failed | `RUNTIME-BDD-PREMATURE-EXIT` |
+| the deadline passes | failed | `RUNTIME-BDD-TIMEOUT` (the read closes the channel, and the runner then closes the child) |
+| handler output over 1 MiB unread (stdout, or stderr) | failed | `RUNTIME-BDD-OUTPUT-LIMIT` |
 
-Every step after a failed one is `not_executed`. After the last step passes, the runner closes stdin, waits for exit 0, and fails the scenario with `RUNTIME-BDD-NO-ASSERTION` when no step asserted. The runner closes each child on every path.
+Every step after a failed one is `not_executed`. After the last step passes, the runner closes the channel, waits for its end and for exit 0, and fails the scenario with `RUNTIME-BDD-NO-ASSERTION` when no step asserted. The runner closes each child on every path.
 
 - **Pending tasks.** `BDD.run` checks `Task.pending_count() == 0` on entry, and the child checks it after each handler. A count above zero is a `fail` record with `RUNTIME-BDD-PENDING-TASKS`. Without this check, a task left running would be cancelled silently, and its failed assertion would never be reported. Then, if a program under test is running, the child probes it with a zero-byte `Process.read_bytes`; a truncated stream is `RUNTIME-BDD-OUTPUT-LIMIT`.
 - **Driver.** `src/bdd-driver.rkt` parses the options and writes the configuration to `config.jsonl`, one line per file, so long lists never meet an argument or line limit. If the runner fails with stderr output, the driver reports one `RUNTIME-BDD-INFRA` file error and exits 2.
@@ -139,10 +139,10 @@ Every step after a failed one is `not_executed`. After the last step passes, the
 
 A unit test file is a `*_test.agc` program whose `main` calls `Test.run`; the language rules are in [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md). Each file is compiled on its own, and runs in its own child VM with one task per test. A test over 30 seconds is `RUNTIME-TEST-TIMEOUT`, and the rest of the file does not run.
 
-The runner starts the file with `--agentica-test list` or `--agentica-test run` and sends a token as the first stdin line. Every record carries the token and starts a line, so program output cannot pass for one. For the program, stdin is empty: `IO.gets` gives the end-of-input error, and file descriptor 0 is `/dev/null`.
+The runner starts the file with `--agentica-test list` or `--agentica-test run` and a child channel (`Process.spawn_channel`, descriptor 3, `docs/vm/10-io-processes.md` §10.4). The records and the test indexes travel on the channel, as plain JSON lines with no marker and no token. The test's own stdin and stdout are free: the runner closes the child's stdin at once, so `IO.gets` gives the end-of-input error, and whatever the test prints, even a line shaped like a record, is only output. `Test.run` flushes stdout before it sends each record, and the runner reads the output of a test with `Process.read_available` once the record has arrived. A failed test shows the last 64 Ki characters of that output; a passing test shows none. A test that prints more than 1 MiB is `RUNTIME-BDD-OUTPUT-LIMIT`, also when it never ends: the runner learns of the cut from its pending read, closes the channel, gives the child a short grace and then fails the test (with no output when the child was still running). `Test.run` without a channel, under these arguments, is `RUNTIME-TEST-RUN`, and so is a call from any task but `main`'s own. `Process.parent_read_line` and `Process.parent_send` are for runner code: a test that calls them can break the protocol, and nothing stops it.
 
-- `list` writes `{"column":C,"event":"test","line":L,"name":N,"token":T}` for each test, then `{"event":"ready"}`. No test runs.
-- `run` reads one test index per line, from 0. It runs each test in a new task, a child of `main`'s task, and writes `{"event":"pass"}` or a `fail` record: the `--json` diagnostic (`code`, `file`, `message`, `range`) with `"event":"fail"`, plus `expected` and `actual` for an assertion. A line that is not a plain index is a `fail` record with `RUNTIME-BDD-INFRA`, and exit 1.
+- `list` sends `{"column":C,"event":"test","line":L,"name":N}` for each test, then `{"event":"ready"}`. No test runs.
+- `run` reads one test index per line from the channel, from 0, and ends at the end of the channel. It runs each test in a new task, a child of the task that called `Test.run`, and sends `{"event":"pass"}` or a `fail` record: the `--json` diagnostic (`code`, `file`, `message`, `range`) with `"event":"fail"`, plus `expected` and `actual` for an assertion. A line that is not a plain index, or not valid UTF-8, is a `fail` record with `RUNTIME-BDD-INFRA`, and exit 1.
 
 The order in which a failed test reports its failure is part of the `Test` builtin: see [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md#unit-tests-test).
 

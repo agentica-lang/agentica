@@ -62,6 +62,9 @@
 (define extras-shard 8)
 (define fixture-input (make-parameter #""))
 (define fixture-args (make-parameter '()))
+(define fixture-channel (make-parameter #f))
+(define python (find-executable-path "python3"))
+(define channel-run-file (build-path tests-directory "fixtures" "channel-run.py"))
 (define fixture-allow-run (make-parameter #f))
 (define allow-run-prefix "process-")
 (define tmp-token "@tmp")
@@ -169,8 +172,23 @@
       [(> (current-inexact-milliseconds) deadline) #f]
       [else (sleep 0.02) (wait)])))
 
+(define (run-vm-process #:timeout timeout . arguments)
+  (when (and (fixture-channel) (not python))
+    (error 'vm-diff "the child channel needs Python 3"))
+  (if (fixture-channel)
+      (apply run-process python #:input (fixture-input) #:timeout timeout
+             (path->string channel-run-file) (path->string (fixture-channel)) (path->string vm-file) arguments)
+      (apply run-process vm-file #:input (fixture-input) #:timeout timeout arguments)))
+
+(define (channel-words)
+  (if (fixture-channel)
+      (string-append (string-join (map shell-quote (list (path->string python) (path->string channel-run-file)
+                                                         (path->string (fixture-channel)))))
+                     " ")
+      ""))
+
 (define (run-vm bytecode limit #:style [style 'json] #:timeout [timeout #f] . extra)
-  (apply run-process vm-file #:input (fixture-input) #:timeout timeout
+  (apply run-vm-process #:timeout timeout
          (append (allow-options)
                  (limit-options limit)
                  (style-options style)
@@ -243,9 +261,10 @@
             (define out-file (shell-quote (string-append base ".out")))
             (define err-file (shell-quote (string-append base ".err")))
             (write-string
-             (format (string-append "if [ $hung = 0 ]; then\n  ~a~a ~a ~a < ~a > ~a 2> ~a\n  status=$?\n"
+             (format (string-append "if [ $hung = 0 ]; then\n  ~a~a~a ~a ~a < ~a > ~a 2> ~a\n  status=$?\n"
                                     "else\n  : > ~a\n  : > ~a\n  status=124\nfi\n"
                                     "echo $status > ~a\ncase $status in 124|137) hung=1 ;; esac\n")
+                     (channel-words)
                      (if timeout-program
                          (format "~a --foreground -k 5 ~a "
                                  (shell-quote (path->string timeout-program)) run-timeout)
@@ -368,7 +387,7 @@
      (dynamic-wind
        void
        (lambda ()
-         (untmp directory (apply run-process vm-file #:input (fixture-input) #:timeout run-timeout
+         (untmp directory (apply run-vm-process #:timeout run-timeout
                                  (append (allow-options) (limit-options limit) (style-options 'json)
                                          (list "--" (path->string bytecode)) (tmp-args directory)))))
        (lambda () (delete-directory/files directory #:must-exist? #f)))]
@@ -501,6 +520,7 @@
     (if (file-exists? file) (read-it file) default))
   (parameterize ([fixture-input (sidecar #".stdin" file->bytes #"")]
                  [fixture-args (sidecar #".args" (lambda (file) (map fixture-arg (file->value file))) '())]
+                 [fixture-channel (sidecar #".channel" values #f)]
                  [fixture-allow-run (string-prefix? (fixture-name program) allow-run-prefix)])
     (thunk)))
 
@@ -509,6 +529,15 @@
   (compile-file program bytecode)
   bytecode)
 
+(define (python-ready? name)
+  (cond
+    [python #t]
+    [(getenv "CI") (error 'vm-diff "~a needs Python 3 for its child channel in CI" name)]
+    [else (printf "SKIP ~a: python3 is unavailable\n" name) #f]))
+
+(define (channel-ready? name)
+  (or (not (fixture-channel)) (python-ready? name)))
+
 (define (run-fixture work program)
   (define name (fixture-name program))
   (define bytecode (fixture-bytecode work program))
@@ -516,23 +545,24 @@
   (call-with-fixture
    program
    (lambda ()
-     (test-case (format "~a gives its expected exit code, stdout, stderr and diagnostic code under every --max-steps" name)
-       (define full (read-expected program))
-       (define expected-steps (read-expected-steps program))
-       (define total (total-steps bytecode))
-       (check-steps total expected-steps name)
-       (define limits (if sampled-sweep? (sampled-limits total expected-steps name) (sweep-limits total expected-steps)))
-       (define text-styles '(plain ai))
-       (define vm-results
-         (vm-batch name bytecode runs
-                   (append (list (style-options 'json))
-                           (map style-options text-styles)
-                           (for/list ([limit (in-list limits)])
-                             (append (limit-options limit) (style-options 'json))))))
-       (check-equal? (outcome (first vm-results)) full name)
-       (for ([style (in-list text-styles)] [on-vm (in-list (rest vm-results))])
-         (check-text-format on-vm full (format "~a ~a" name style)))
-       (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name #:note (sweep-note))))))
+     (when (channel-ready? name)
+       (test-case (format "~a gives its expected exit code, stdout, stderr and diagnostic code under every --max-steps" name)
+         (define full (read-expected program))
+         (define expected-steps (read-expected-steps program))
+         (define total (total-steps bytecode))
+         (check-steps total expected-steps name)
+         (define limits (if sampled-sweep? (sampled-limits total expected-steps name) (sweep-limits total expected-steps)))
+         (define text-styles '(plain ai))
+         (define vm-results
+           (vm-batch name bytecode runs
+                     (append (list (style-options 'json))
+                             (map style-options text-styles)
+                             (for/list ([limit (in-list limits)])
+                               (append (limit-options limit) (style-options 'json))))))
+         (check-equal? (outcome (first vm-results)) full name)
+         (for ([style (in-list text-styles)] [on-vm (in-list (rest vm-results))])
+           (check-text-format on-vm full (format "~a ~a" name style)))
+         (check-sweep (list-tail vm-results (add1 (length text-styles))) limits full name #:note (sweep-note)))))))
 
 (define (json-crash-free text)
   (for/fold ([kept '()] [codes '()] [summaries '()]
@@ -662,24 +692,28 @@
     (check-equal? (first (seeded "0002147483647")) 0)
     (check-equal? (seeded "7") (seeded "7"))
     (check-not-equal? (second (seeded "7")) (second (seeded "8")))
-    (define tests (build-path work "seeded-tests.agc"))
-    (display-to-file (string-append "def main() -> Void\n  Test.run([\n"
-                                    "    Test.test(\"a\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end,\n"
-                                    "    Test.test(\"b\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end\n"
-                                    "  ])\nend\n")
-                     tests #:exists 'replace)
-    (define tests-bytecode (build-path work "seeded-tests.agcb"))
-    (compile-file tests tests-bytecode)
-    (define (test-draws seed order)
-      (define run (run-process vm-file #:input order "--seed" seed "--" (path->string tests-bytecode)
-                               "--agentica-test" "run"))
-      (check-equal? (first run) 0 (third run))
-      (filter (lambda (line) (not (string-contains? line "agentica-bdd"))) (string-split (second run) "\n")))
-    (define alone (test-draws "7" #"t\n1\n"))
-    (define mixed (test-draws "7" #"t\n0\n1\n1\n"))
-    (check-equal? (list (second mixed) (third mixed)) (list (first alone) (first alone)))
-    (check-not-equal? (first mixed) (second mixed))
-    (check-not-equal? (test-draws "8" #"t\n1\n") alone)
+    (when (python-ready? "seeded Test.run draws")
+      (define tests (build-path work "seeded-tests.agc"))
+      (display-to-file (string-append "def main() -> Void\n  Test.run([\n"
+                                      "    Test.test(\"a\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end,\n"
+                                      "    Test.test(\"b\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end\n"
+                                      "  ])\nend\n")
+                       tests #:exists 'replace)
+      (define tests-bytecode (build-path work "seeded-tests.agcb"))
+      (compile-file tests tests-bytecode)
+      (define (test-draws seed order)
+        (define feed (build-path work (format "seeded-~a.channel" (equal-hash-code order))))
+        (display-to-file order feed #:exists 'replace)
+        (define run
+          (parameterize ([fixture-channel feed])
+            (run-vm-process #:timeout run-timeout "--seed" seed "--" (path->string tests-bytecode) "--agentica-test" "run")))
+        (check-equal? (first run) 0 (third run))
+        (filter (lambda (line) (not (string-prefix? line "channel> "))) (string-split (second run) "\n")))
+      (define alone (test-draws "7" #"1\n"))
+      (define mixed (test-draws "7" #"0\n1\n1\n"))
+      (check-equal? (list (second mixed) (third mixed)) (list (first alone) (first alone)))
+      (check-not-equal? (first mixed) (second mixed))
+      (check-not-equal? (test-draws "8" #"1\n") alone))
     (define duplicate (build-path work "test-name-duplicate.agcb"))
     (compile-file (build-path fixtures "test-name-duplicate.agc") duplicate)
     (define named (run-process vm-file "--json" "--" (path->string duplicate) "--agentica-test" "run"))

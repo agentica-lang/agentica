@@ -10,6 +10,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_task_builtins, &agc_task_builtin_count},
   {agc_channel_builtins, &agc_channel_builtin_count},
   {agc_process_builtins, &agc_process_builtin_count},
+  {agc_duplex_builtins, &agc_duplex_builtin_count},
   {agc_tcp_builtins, &agc_tcp_builtin_count},
   {agc_http_builtins, &agc_http_builtin_count},
   {agc_http_server_builtins, &agc_http_server_builtin_count},

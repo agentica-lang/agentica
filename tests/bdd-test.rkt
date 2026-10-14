@@ -177,9 +177,9 @@
        (check-equal? (start-line (file-error http)) 4)
        (check-regexp-match #rx"std/http" (hash-ref (file-error http) 'help))
        (match-define (list forged-status forged) (json-test (in directory "forged.feature") "--steps" (in directory "forged.agc")))
-       (check-equal? forged-status 2)
-       (check-equal? (code-of (car (cases forged))) "RUNTIME-BDD-INFRA")
-       (check-equal? (map (lambda (step) (hash-ref step 'status)) (hash-ref (car (cases forged)) 'steps)) '("failed" "not_executed")))))
+       (check-equal? forged-status 1)
+       (check-equal? (code-of (car (cases forged))) "RUNTIME-BDD-ASSERTION")
+       (check-equal? (map (lambda (step) (hash-ref step 'status)) (hash-ref (car (cases forged)) 'steps)) '("passed" "failed")))))
 
   (test-case "discovery reports unreadable folders, broken links, bad names and large files, and skips folder links"
     (with-suite

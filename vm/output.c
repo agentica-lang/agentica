@@ -53,7 +53,7 @@ static size_t run_length(const agc_output *s) { return smaller(AGC_OUTPUT_BUFFER
 static size_t queued(const agc_output *s) { return s->notice_len - s->notice_at; }
 
 static size_t total(const agc_output_wait *w) {
-  return w->text ? (w->lead ? 1 : 0) + w->text->bytes + (w->newline ? 1 : 0) : 0;
+  return w->text ? w->text->bytes + (w->newline ? 1 : 0) : 0;
 }
 
 static size_t need(const agc_output_wait *w) {
@@ -75,7 +75,6 @@ static void trace_run(const agc_output *s, const char *what) {
 static void put_bytes(agc_output *s, const void *data, size_t n) {
   if (!n) return;
   if (!s->len) trace_run(s, "start");
-  s->mid_line = ((const uint8_t *)data)[n - 1] != '\n';
   size_t end = (s->start + s->len) % AGC_OUTPUT_BUFFER;
   size_t first = smaller(AGC_OUTPUT_BUFFER - end, n);
   memcpy(s->buf + end, data, first);
@@ -246,16 +245,11 @@ static void flush_now(agc_output *s) {
 }
 
 static void copy_piece(agc_output *s, const agc_output_wait *w, size_t n) {
-  size_t gap = w->lead ? 1 : 0;
   size_t at = w->done;
   size_t end = at + n;
-  if (at < gap) {
-    put_bytes(s, "\n", 1);
-    at = gap;
-  }
-  if (at < end && at < gap + w->text->bytes) {
-    size_t k = smaller(end - at, gap + w->text->bytes - at);
-    put_bytes(s, w->text->data + (at - gap), k);
+  if (at < end && at < w->text->bytes) {
+    size_t k = smaller(end - at, w->text->bytes - at);
+    put_bytes(s, w->text->data + at, k);
     at += k;
   }
   if (at < end) put_bytes(s, "\n", 1);
@@ -274,7 +268,6 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
     return false;
   }
   if (!w->flush) {
-    if (!w->done && w->lead && !s->mid_line) w->lead = false;
     size_t n = smaller(total(w) - w->done, room(s));
     copy_piece(s, w, n);
     w->done += n;
@@ -289,19 +282,18 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
   return true;
 }
 
-static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline, bool own_line) {
+static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
   agc_output *s = out->base;
   agc_task *t = vm->task;
   if (t->output.out != out) {
     if (s->failed) fail_write(vm, out);
-    agc_output_wait w = {.out = out, .text = text, .newline = newline, .lead = own_line && s->mid_line};
+    agc_output_wait w = {.out = out, .text = text, .newline = newline};
     if (total(&w) == 0) return true;
     if (!s->waiters && !queued(s) && total(&w) <= room(s)) {
       copy_piece(s, &w, total(&w));
       kick(s);
       return true;
     }
-    w.lead = own_line;
     t->output = w;
     agc_task_enqueue(&s->waiters, &s->waiters_tail, t);
   }
@@ -506,25 +498,13 @@ void agc_notice_end(agc_notice *n, agc_notice_mode mode) {
 }
 #endif
 
-static bool write_text(agc_vm *vm, agc_output *out, const agc_string *text, bool newline, bool own_line) {
+bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
 #ifdef __linux__
-  if (out->base) return put(vm, out, text, newline, own_line);
+  if (out->base) return put(vm, out, text, newline);
 #endif
-  bool lead = own_line && out->mid_line;
-  if (lead && fputc('\n', out->file) == EOF) write_failed(vm, out);
   if (text->bytes && fwrite(text->data, 1, text->bytes, out->file) != text->bytes) write_failed(vm, out);
   if (newline && fputc('\n', out->file) == EOF) write_failed(vm, out);
-  if (newline || lead) out->mid_line = false;
-  if (text->bytes && !newline) out->mid_line = text->data[text->bytes - 1] != '\n';
   return true;
-}
-
-bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
-  return write_text(vm, out, text, newline, false);
-}
-
-bool agc_write_record(agc_vm *vm, agc_output *out, const agc_string *text) {
-  return write_text(vm, out, text, true, true);
 }
 
 void agc_flush(agc_vm *vm) {
