@@ -13,6 +13,14 @@
   (format "  p = Result.unwrap!(Process.spawn(~s, [~s, ~s~a], 5000))\n"
           (path->string node) (path->string peer) mode extra))
 
+(define (captured mode body [prefix ""])
+  (format "~adef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(~s, [~s, ~s], \".\", 5000))\n~a\nend\n\n"
+          prefix (path->string node) (path->string peer) mode body))
+
+(define (probe pid)
+  (format "Process.wait(Result.unwrap!(Process.spawn(~s, [~s, \"probe\", ~a], 5000)), 5000)"
+          (path->string node) (path->string peer) pid))
+
 (define (program mode body [prefix ""] [extra ""])
   (string-append prefix "def main() -> Void\n" (spawn mode extra) body "\nend\n\n"))
 
@@ -211,4 +219,15 @@
          (check-regexp-match #px"^[0-9]+\n$" out)
          (when (string-contains? ending "crash")
            (check-equal? result 'RUNTIME-TASK-CRASHED))
-         (check-false (alive? out))))]))
+         (check-false (alive? out)))
+       (define-values (result out err)
+         (run (captured "stubborn" "  puts(Result.unwrap!(Process.read_line(p, 5000)))")))
+       (check-pred void? result)
+       (check-regexp-match #px"^[0-9]+\n$" out)
+       (check-false (alive? out)))
+
+     (test-case "closing a plain child returns only after it is gone, even when it ignores SIGTERM"
+       (check-equal? (output (program "stubborn"
+         (string-append "  pid = Result.unwrap!(Process.read_line(p, 5000))\n"
+                        "  Process.close(p)\n  IO.inspect(" (probe "pid") ")")))
+         "ok(1)\n"))]))

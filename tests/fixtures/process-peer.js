@@ -20,6 +20,10 @@ if (mode === "probe") {
   process.stdout.write(Buffer.alloc(2097152, 65), () => process.exit(0));
 } else if (mode === "stderr") {
   process.stderr.write(Buffer.alloc(2097152, 115), () => process.exit(0));
+} else if (mode === "stubborn") {
+  process.on("SIGTERM", () => {});
+  process.stdout.write(String(process.pid) + "\n");
+  setInterval(() => {}, 1000);
 } else if (mode === "hold" || mode === "release") {
   process.stdout.write(String(process.pid) + "\n");
   setInterval(() => {}, 1000);
