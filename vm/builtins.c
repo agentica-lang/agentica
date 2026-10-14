@@ -2,11 +2,6 @@
 
 #include <string.h>
 
-typedef struct {
-  const agc_builtin *entries;
-  const size_t *count;
-} builtin_table;
-
 static void write_text(agc_vm *vm, FILE *stream, agc_value v, bool newline) {
   if (!agc_is(v, AGC_T_NIL) && !agc_is(v, AGC_T_BOOL) && !agc_is(v, AGC_T_INT) && !agc_is(v, AGC_T_FLOAT)) {
     agc_string *s = agc_text(vm, v);
@@ -370,7 +365,7 @@ static agc_value builtin_range_last(agc_vm *vm, agc_value *args, uint32_t span) 
   return range_end(vm, args[0], false);
 }
 
-static const agc_builtin table[] = {
+const agc_builtin agc_core_builtins[] = {
   {"puts", 1, builtin_puts, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"IO.print", 1, builtin_print, AGC_NATIVE_NONE, AGC_COST_SIZE},
   {"IO.warn", 1, builtin_warn, AGC_NATIVE_NONE, AGC_COST_SIZE},
@@ -428,26 +423,12 @@ static const agc_builtin table[] = {
   {"Int.downto", 3, NULL, AGC_NATIVE_DOWNTO, AGC_COST_NONE},
 };
 
-static const size_t table_count = sizeof table / sizeof table[0];
-
-static const builtin_table tables[] = {
-  {table, &table_count},
-  {agc_string_builtins, &agc_string_builtin_count},
-  {agc_number_builtins, &agc_number_builtin_count},
-  {agc_json_builtins, &agc_json_builtin_count},
-  {agc_file_builtins, &agc_file_builtin_count},
-  {agc_task_builtins, &agc_task_builtin_count},
-  {agc_process_builtins, &agc_process_builtin_count},
-  {agc_tcp_builtins, &agc_tcp_builtin_count},
-  {agc_http_builtins, &agc_http_builtin_count},
-  {agc_http_server_builtins, &agc_http_server_builtin_count},
-  {agc_test_builtins, &agc_test_builtin_count},
-};
+const size_t agc_core_builtin_count = sizeof agc_core_builtins / sizeof agc_core_builtins[0];
 
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity) {
-  for (size_t t = 0; t < sizeof tables / sizeof tables[0]; t++) {
-    for (size_t i = 0; i < *tables[t].count; i++) {
-      const agc_builtin *b = &tables[t].entries[i];
+  for (size_t t = 0; t < agc_builtin_table_count; t++) {
+    for (size_t i = 0; i < *agc_builtin_tables[t].count; i++) {
+      const agc_builtin *b = &agc_builtin_tables[t].entries[i];
       if (b->arity == arity && strlen(b->name) == len && memcmp(b->name, name, len) == 0) return b;
     }
   }

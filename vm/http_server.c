@@ -1,6 +1,6 @@
 /* The HttpWire server builtins, called only by stdlib/http.agc: reading one
    whole request, writing one whole response, and the HttpServer task group
-   (docs/vm/10-io-tls-processes-http.md §10.7.2). */
+   (docs/vm/10-io-http.md §10.7.2). */
 #include "http_fields.h"
 #include "net.h"
 
@@ -168,8 +168,8 @@ static void keep_line(reader *r, const agc_http_head *head) {
   r->method_len = head->method.len;
 }
 
-/* The order of §30.4: head checks, then the Content-Length limit, then
-   100 Continue, then the body. */
+/* The order of docs/vm/10-io-http.md §10.7.3: head checks, then the
+   Content-Length limit, then 100 Continue, then the body. */
 static bool head_step(reader *r, agc_inbuf *in) {
   size_t pending = agc_inbuf_pending(in);
   if (pending == 0) return false;

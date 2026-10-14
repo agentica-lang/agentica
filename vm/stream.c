@@ -15,11 +15,6 @@
 static const char bad_timeout[] = "network: timeout must be positive milliseconds";
 static const char timed_out[] = "network: operation timed out";
 
-agc_value agc_error_value(const char *message) {
-  size_t n = strlen(message);
-  return agc_result_value(false, agc_string_value(agc_make_string(message, n, n)));
-}
-
 agc_value agc_stream_bad_timeout(void) { return agc_error_value(bad_timeout); }
 
 agc_value agc_stream_timed_out(void) { return agc_error_value(timed_out); }

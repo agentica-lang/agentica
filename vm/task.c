@@ -440,25 +440,28 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_task_value(child);
 }
 
-static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool result) {
-  agc_task *target = agc_as_task(vm, task);
+bool agc_task_join(agc_vm *vm, agc_task *target) {
   vm->task->awaiting = NULL;
-  if (target->state == AGC_TASK_DONE) {
-    if (target->crashed) {
-      agc_task_observe(vm, target);
-      if (result) return agc_result_value(false, agc_string_value(target->crash));
-      agc_fail_text(vm, "RUNTIME-TASK-CRASHED", target->crash, span);
-    }
-    if (target->cancelled) {
-      if (result) return agc_error_value("task: cancelled");
-      agc_fail(vm, "RUNTIME-TASK-CANCELLED", "task was cancelled", span);
-    }
-    return target->result;
-  }
+  if (target->state == AGC_TASK_DONE) return false;
   vm->task->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, vm->task);
   agc_task_park(vm, true);
-  return agc_void();
+  return true;
+}
+
+static agc_value await_task(agc_vm *vm, agc_value task, uint32_t span, bool result) {
+  agc_task *target = agc_as_task(vm, task);
+  if (agc_task_join(vm, target)) return agc_void();
+  if (target->crashed) {
+    agc_task_observe(vm, target);
+    if (result) return agc_result_value(false, agc_string_value(target->crash));
+    agc_fail_text(vm, "RUNTIME-TASK-CRASHED", target->crash, span);
+  }
+  if (target->cancelled) {
+    if (result) return agc_error_value("task: cancelled");
+    agc_fail(vm, "RUNTIME-TASK-CANCELLED", "task was cancelled", span);
+  }
+  return target->result;
 }
 
 static agc_value builtin_await(agc_vm *vm, agc_value *args, uint32_t span) {
