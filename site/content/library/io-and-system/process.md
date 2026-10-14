@@ -233,7 +233,7 @@ false
 Process.spawn_channel(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
 ```
 
-Starts a program like `Process.spawn_captured`, and also opens a channel to it: one pipe, apart from its standard input, standard output and standard error, that carries lines of text in both directions. Linux only.
+Starts a program like `Process.spawn_captured`, and also opens a channel to it: a bidirectional socket pair, apart from its standard input, standard output and standard error, that carries lines of text in both directions. Linux only.
 
 The program finds the channel on file descriptor 3, and its environment holds `AGENTICA_CHANNEL=3`. `Process.spawn` and `Process.spawn_captured` remove that variable from the environment they pass on, so a program only sees a channel that its own parent opened for it.
 
@@ -247,7 +247,7 @@ Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
 ```
 
-`channel_read_line` reads one line the program sent, as `Process.read_line` does: at most 1 MiB, with the line ending removed, and `error("process: end of input")` when the channel has ended. `channel_send` sends at most 1048576 bytes, exactly as given, so add your own `"\n"`. `channel_close` closes only the sending side: the program reads the end of its input, and you can still read what it sends. Closing twice is fine.
+`channel_read_line` reads one line the program sent, as `Process.read_line` does: at most 1 MiB, with the line ending removed, and `error("process: end of input")` when the channel has ended. `channel_send` sends at most 1048576 bytes, exactly as given, so add your own `"\n"`. `channel_close` closes only the sending side: the program reads the end of its input, and you can still read what it sends. Closing twice is fine, and so is closing after the program has exited.
 
 A timeout in `channel_read_line` or `channel_send` closes the channel, and only the channel: the program keeps running, and later channel calls give `error("process: channel is closed")`. On a program started without a channel, the three give `error("process: the child has no channel")`.
 
@@ -271,7 +271,7 @@ ok("got hello")
 Process.read_available(p: Process, timeout_ms: Int) -> Result[String]
 ```
 
-Gives the standard output of a captured program that has arrived since the last call, and removes it. It never waits for more output; the timeout only bounds the wait for the read lock. What the program wrote to its standard output before it wrote a line on the channel is in the text once you have read that line, so a program that flushes its output before it sends a record has that output tied to the record.
+Gives the standard output of a captured program that has arrived since the last call, and removes it. It never waits for more output; the timeout only bounds the wait for the read lock. One call takes at most about 2 MiB, so call it again for the rest. When the arrived bytes end in the middle of a UTF-8 character, the incomplete bytes stay for the next call, so a character is never split between two calls (unless the output has ended). What the program wrote to its standard output before it wrote a line on the channel is in the text once you have read that line, so a program that flushes its output before it sends a record has that output tied to the record.
 
 After the output was truncated it gives `error("process: output exceeds 1048576 bytes")`, and on a program from `Process.spawn` it gives `error("process: output is not captured")`.
 
@@ -299,7 +299,9 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 
 The program's side of the channel its parent opened with `Process.spawn_channel`. The rules are those of `channel_read_line` and `channel_send`, and the timeout must be positive. A program that was not given a channel gets `error("process: no parent channel")`. A timeout closes the channel for good.
 
-The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a pipe or a socket. It then hides the descriptor and removes the variable, so the program's own children do not inherit either.
+The VM takes the channel when it starts, and only when `AGENTICA_CHANNEL=3` is set and descriptor 3 is a socket, a pipe or a FIFO. A regular file or a device on descriptor 3 is left alone and the program has no channel. The VM hides the descriptor and removes the variable, so the program's own children do not inherit either.
+
+These two calls are for runner code such as `agentica test`. A test or step that calls them can break the protocol between the runner and its file, and nothing stops it.
 
 ```agentica {mode="check"}
 def main() -> Void

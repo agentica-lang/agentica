@@ -211,7 +211,7 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
   if message == "process: output exceeds 1048576 bytes"
     return overflow(settings, p, deadline, span)
   end
-  if message != "process: end of input" and message != "process: stdin is closed" and message != "process: channel is closed"
+  if not Child.gone?(message)
     return Failure(problem: Report.error_at("RUNTIME-BDD-IO", message, span), output: "", blame: true)
   end
   output = Process.output(p, Child.left(deadline))

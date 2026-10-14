@@ -3,17 +3,13 @@ import selectors
 import socket
 import sys
 
-from child_channel import launch
+from child_channel import launch, read_ready
 
 PREFIX = b"channel> "
 
 
 def drain(stream, out):
-    os.set_blocking(stream.fileno(), False)
-    try:
-        data = stream.read()
-    finally:
-        os.set_blocking(stream.fileno(), True)
+    data = read_ready(stream)
     if data:
         out.write(data)
         out.flush()

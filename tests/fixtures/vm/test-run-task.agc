@@ -1,14 +1,10 @@
 def serve(n: Int) -> Int
-  Test.run([
-    Test.test("served from a task") do
-      puts("inside the test")
-      ok()
-    end
-  ])
+  Test.run([])
   return n
 end
 
 def main() -> Void
   task = Task.spawn(&serve, 1)
-  puts(Task.await(task))
+  Task.sleep(0)
+  puts(Task.unobserved_crash())
 end

@@ -9,8 +9,6 @@
 #include <uv.h>
 
 #define LIMIT ((size_t)1048576)
-#define CHANNEL_ENV "AGENTICA_CHANNEL"
-#define CHANNEL_FD 3
 #define OWNER(ptr, field) ((agc_duplex *)(void *)((char *)(ptr) - offsetof(agc_duplex, field)))
 
 typedef struct request request;
@@ -31,7 +29,7 @@ struct agc_duplex {
   request *reader, *writer;
   size_t refs;
   int fd, write_status;
-  bool attached, reading, closed, write_closed, served, sent;
+  bool attached, reading, closed, write_closed, sent;
 };
 
 static const char closed_text[] = "process: channel is closed";
@@ -226,7 +224,7 @@ static bool usable(const agc_duplex *d, const request *pending, agc_value *resul
     *result = agc_error_value(closed_text);
     return false;
   }
-  if (d->served || pending) {
+  if (pending) {
     *result = agc_error_value(busy_text);
     return false;
   }
@@ -273,7 +271,7 @@ agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, 
   int rc = uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->pipe, shutdown_done);
   if (rc) {
     d->refs--;
-    return agc_system_error(vm, "error closing the channel", -rc);
+    if (rc != UV_ENOTCONN) return agc_system_error(vm, "error closing the channel", -rc);
   }
   return ok_void();
 }
@@ -291,39 +289,32 @@ static agc_duplex *parent_of(agc_vm *vm) {
 static void release_parent(void *native) { agc_duplex_release(native); }
 
 void agc_parent_take(agc_vm *vm) {
-  const char *marker = getenv(CHANNEL_ENV);
+  const char *marker = getenv(AGC_CHANNEL_ENV);
   struct stat info;
-  if (!marker || strcmp(marker, "3") != 0 || fstat(CHANNEL_FD, &info) != 0 ||
+  if (!marker || strcmp(marker, AGC_CHANNEL_VALUE) != 0 || fstat(AGC_CHANNEL_FD, &info) != 0 ||
       !(S_ISFIFO(info.st_mode) || S_ISSOCK(info.st_mode)))
     return;
-  int fd = fcntl(CHANNEL_FD, F_DUPFD_CLOEXEC, CHANNEL_FD);
+  int fd = fcntl(AGC_CHANNEL_FD, F_DUPFD_CLOEXEC, AGC_CHANNEL_FD);
   if (fd < 0) return;
-  agc_files_forget(&vm->rt->inherited, CHANNEL_FD);
-  close(CHANNEL_FD);
-  unsetenv(CHANNEL_ENV);
+  agc_files_forget(&vm->rt->inherited, AGC_CHANNEL_FD);
+  close(AGC_CHANNEL_FD);
+  unsetenv(AGC_CHANNEL_ENV);
   vm->parent = agc_register(vm, make(fd), release_parent);
   vm->parent_locks = (agc_lines){agc_new_lock(vm), agc_new_lock(vm)};
 }
 
-bool agc_parent_served(const agc_vm *vm) {
-  const agc_duplex *d = vm->parent ? vm->parent->native : NULL;
-  return d && d->served;
+bool agc_parent_open(agc_vm *vm) {
+  const agc_duplex *d = parent_of(vm);
+  return d && !d->closed;
 }
 
-bool agc_parent_claim(agc_vm *vm) {
-  agc_duplex *d = parent_of(vm);
-  if (!d || d->closed || d->served) return false;
-  d->served = true;
-  return true;
-}
-
-static agc_duplex *served(agc_vm *vm) {
+static agc_duplex *opened(agc_vm *vm) {
   agc_duplex *d = vm->parent ? vm->parent->native : NULL;
-  return d && d->served && !d->closed ? d : NULL;
+  return d && d->attached && !d->closed ? d : NULL;
 }
 
 agc_input_status agc_parent_line(agc_vm *vm, agc_string **line) {
-  agc_duplex *d = served(vm);
+  agc_duplex *d = opened(vm);
   if (!d || d->reader) return AGC_INPUT_FAILED;
   if (!agc_inbuf_ready(&d->in, true, 0)) {
     request *q = new_request(d, false, true);
@@ -342,7 +333,7 @@ agc_input_status agc_parent_line(agc_vm *vm, agc_string **line) {
 }
 
 bool agc_parent_send(agc_vm *vm, const agc_string *text) {
-  agc_duplex *d = served(vm);
+  agc_duplex *d = opened(vm);
   if (d && d->sent) {
     d->sent = false;
     if (d->write_status >= 0) return true;
@@ -393,12 +384,7 @@ const size_t agc_duplex_builtin_count = 0;
 
 void agc_parent_take(agc_vm *vm) { (void)vm; }
 
-bool agc_parent_served(const agc_vm *vm) {
-  (void)vm;
-  return false;
-}
-
-bool agc_parent_claim(agc_vm *vm) {
+bool agc_parent_open(agc_vm *vm) {
   (void)vm;
   return false;
 }

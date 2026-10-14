@@ -13,7 +13,6 @@ struct agc_test_run {
   agc_string *line, *record;
   agc_task *current;
   const agc_test_case *test;
-  bool drained;
 };
 
 static agc_string *lit(const char *text) {
@@ -129,18 +128,31 @@ static agc_string *event_line(agc_vm *vm, const char *event) {
 
 static agc_string *list_lines(agc_vm *vm, const agc_list *tests) {
   const agc_program *p = vm->rt->program;
-  agc_string *lines = lit("");
-  for (size_t k = 0; k < tests->len; k++) {
-    const agc_test_case *c = case_at(vm, tests, k);
-    const agc_span *at = &p->spans[c->span];
-    agc_json_member *m = members(4);
-    m[0] = member("column", json_int(at->start_column));
-    m[1] = member("event", json_text(lit("test")));
-    m[2] = member("line", json_int(at->start_line));
-    m[3] = member("name", json_text(c->name));
-    lines = agc_concat(lines, record_line(vm, m, 4));
+  agc_string **lines = agc_alloc(agc_size_mul(agc_size_add(tests->len, 1), sizeof(agc_string *)));
+  size_t bytes = 0, chars = 0;
+  for (size_t k = 0; k <= tests->len; k++) {
+    if (k == tests->len) {
+      lines[k] = event_line(vm, "ready");
+    } else {
+      const agc_test_case *c = case_at(vm, tests, k);
+      const agc_span *at = &p->spans[c->span];
+      agc_json_member *m = members(4);
+      m[0] = member("column", json_int(at->start_column));
+      m[1] = member("event", json_text(lit("test")));
+      m[2] = member("line", json_int(at->start_line));
+      m[3] = member("name", json_text(c->name));
+      lines[k] = record_line(vm, m, 4);
+    }
+    bytes = agc_size_add(bytes, lines[k]->bytes);
+    chars = agc_size_add(chars, lines[k]->chars);
   }
-  return agc_concat(lines, event_line(vm, "ready"));
+  agc_string *all = agc_new_string(bytes, chars);
+  char *at = all->data;
+  for (size_t k = 0; k <= tests->len; k++) {
+    memcpy(at, lines[k]->data, lines[k]->bytes);
+    at += lines[k]->bytes;
+  }
+  return all;
 }
 
 static agc_string *fail_line(agc_vm *vm, const char *code, agc_string *message, uint32_t span, const agc_test_note *n) {
@@ -240,12 +252,7 @@ static void next_test(agc_vm *vm, agc_test_run *r, const agc_list *tests, uint32
 }
 
 static bool deliver(agc_vm *vm, agc_test_run *r) {
-  if (!r->drained) {
-    if (!agc_drain(vm)) return false;
-    r->drained = true;
-  }
-  if (!agc_parent_send(vm, r->record)) return false;
-  r->drained = false;
+  if (!agc_drain(vm) || !agc_parent_send(vm, r->record)) return false;
   r->record = NULL;
   return true;
 }
@@ -263,7 +270,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_list *tests = agc_as_list(vm, args[0]);
   agc_test_run *r = vm->task->test_run;
   if (!r) {
-    if (agc_parent_served(vm)) agc_fail(vm, "RUNTIME-TEST-RUN", "call Test.run once, outside every test", span);
+    if (vm->task != vm->main) agc_fail(vm, "RUNTIME-TEST-RUN", "call Test.run from main, outside every test", span);
     check_names(vm, tests);
     run_mode mode = mode_of(vm);
     if (mode == MODE_NONE) {
@@ -271,7 +278,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
       if (!agc_write(vm, &vm->rt->err, usage, false)) return agc_void();
       agc_exit(vm, 2);
     }
-    if (!agc_parent_claim(vm))
+    if (!agc_parent_open(vm))
       agc_fail(vm, "RUNTIME-TEST-RUN", "Test.run needs the parent channel that agentica test opens", span);
     r = agc_alloc(sizeof(agc_test_run));
     r->mode = mode;

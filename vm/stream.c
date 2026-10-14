@@ -121,14 +121,18 @@ agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const c
   return agc_result_value(true, agc_string_value(agc_make_string((const char *)data, len, chars)));
 }
 
+void agc_inbuf_take(agc_inbuf *b, size_t n) {
+  b->start += n;
+  b->scanned = b->scanned > n ? b->scanned - n : 0;
+}
+
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
   if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
   agc_list *l = agc_new_list(n);
   for (size_t k = 0; k < n; k++) l->items[k] = agc_int(b->data[b->start + k]);
-  b->start += n;
-  b->scanned = b->scanned > n ? b->scanned - n : 0;
+  agc_inbuf_take(b, n);
   return agc_result_value(true, agc_list_value(l));
 }
 

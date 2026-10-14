@@ -381,7 +381,7 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   if message == "process: output exceeds 1048576 bytes" or message == "process: line exceeds 1048576 bytes"
     return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span)
   end
-  if message != "process: end of input" and message != "process: channel is closed"
+  if not Child.gone?(message)
     return Report.error_at("RUNTIME-BDD-IO", message, span)
   end
   output = Process.output(p, Child.left(deadline))

@@ -52,6 +52,10 @@ export def detail_of(record: Json, key: String) -> Report.Detail
   return Report.Detail.Unknown
 end
 
+export def gone?(message: String) -> Bool
+  return message == "process: end of input" or message == "process: stdin is closed" or message == "process: channel is closed" or message.starts_with?("error writing to stream port")
+end
+
 export def left(deadline: Int) -> Int
   remaining = deadline - Time.monotonic_ms()
   if remaining < 1

@@ -64,8 +64,13 @@ uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
 agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
+void agc_inbuf_take(agc_inbuf *b, size_t n);
 int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,
                      size_t len, void (*done)(struct uv_write_s *req, int status));
+
+#define AGC_CHANNEL_ENV "AGENTICA_CHANNEL"
+#define AGC_CHANNEL_VALUE "3"
+#define AGC_CHANNEL_FD 3
 
 typedef struct agc_duplex agc_duplex;
 
@@ -76,8 +81,7 @@ agc_value agc_duplex_read_line(agc_vm *vm, agc_duplex *d, agc_resource *lock, in
 agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_value line, int64_t timeout);
 agc_value agc_duplex_close_write(agc_vm *vm, agc_duplex *d, agc_resource *lock, int64_t timeout);
 void agc_parent_take(agc_vm *vm);
-bool agc_parent_served(const agc_vm *vm);
-bool agc_parent_claim(agc_vm *vm);
+bool agc_parent_open(agc_vm *vm);
 agc_input_status agc_parent_line(agc_vm *vm, agc_string **line);
 bool agc_parent_send(agc_vm *vm, const agc_string *text);
 

@@ -127,7 +127,10 @@
                         "import \"std/bdd\" as BDD\n\ndef main() -> Void\n"
                         "  BDD.run([BDD.step(\"the handler floods stdout\") do |ctx, args|\n"
                         "    puts(String.join(List.repeat(String.join(List.repeat(\"x\", 1000), \"\"), 1100), \"\\n\"))\n"
-                        "    ctx\n  end])\nend\n"))
+                        "    ctx\n  end,\n"
+                        "  BDD.step(\"the handler fails with a huge message\") do |ctx, args|\n"
+                        "    BDD.assert(ctx, false, String.join(List.repeat(\"xxxxxxxxxx\", 110000), \"\"))\n"
+                        "  end])\nend\n"))
        ("lifecycle.feature" . "Feature: Lifecycle\n"))
      (lambda (directory)
        (display-to-file
@@ -152,13 +155,15 @@
          "Scenario: JSON mismatch\nGiven the Agentica program \"json.agc\"\n"
          "Then I receive a JSON line within 5000 milliseconds:\n" (doc "{\"a\": 1, \"b\": 3}")
          "Scenario: long mismatch\nGiven the Agentica program \"quotes.agc\"\n"
-         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x"))
+         "Then the program exits with code 0 within 5000 milliseconds\nAnd stdout is:\n" (doc "x")
+         "Scenario: record over 1 MiB\nGiven the handler fails with a huge message\n")
         (build-path directory "lifecycle.feature") #:exists 'append)
        (define report (json-test (in directory "lifecycle.feature") "--steps" (in directory "steps.agc")))
        (check-equal? (codes report)
                      '(#f "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
                        "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-OUTPUT-LIMIT" #f #f #f
-                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"))
+                       "RUNTIME-BDD-OUTPUT-LIMIT" "RUNTIME-BDD-IO" "RUNTIME-BDD-ASSERTION" "RUNTIME-BDD-ASSERTION"
+                       "RUNTIME-BDD-OUTPUT-LIMIT"))
        (define (details item)
          (define problem (hash-ref item 'error))
          (list (hash-ref problem 'expected) (hash-ref problem 'actual)))

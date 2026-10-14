@@ -55,7 +55,17 @@
           (check-equal? (part 'spawning 'stdout) spawned)
           (check-equal? (part 'spawning_marker_only 'stdout) spawned)
           (for ([name '(serve idle bare bare_marker_only spawning spawning_marker_only)])
-            (check-equal? (part name 'exit) 0 (symbol->string name))))
+            (check-equal? (part name 'exit) 0 (symbol->string name)))
+          (define refused (lines "read: error(\"process: no parent channel\")" "send: error(\"process: no parent channel\")" "ready"))
+          (define (pinned kind key) (hash-ref (hash-ref (hash-ref answer 'pinned) kind) key))
+          (for ([kind '(file device fifo)])
+            (check-equal? (pinned kind 'exit) 0 (symbol->string kind)))
+          (check-equal? (pinned 'file 'head) refused)
+          (check-true (string-suffix? (pinned 'file 'target) "/plain.txt"))
+          (check-equal? (pinned 'file 'content) "")
+          (check-equal? (pinned 'device 'head) refused)
+          (check-equal? (pinned 'device 'target) "/dev/null")
+          (check-equal? (pinned 'fifo 'head) (lines "read: ok(\"hello\")" "ready")))
         (lambda () (delete-directory/files work)))))
 
   (test-case "the parent side of the channel: send, read, read_available, close, timeouts and limits"
@@ -78,6 +88,10 @@
           (check-equal? (ask bytecode "long")
                         (lines "read: error(\"process: line exceeds 1048576 bytes\")" "again: error(\"process: channel is closed\")"))
           (check-equal? (ask bytecode "loud") (lines "read: ok(\"done\")" "printed: ok(\"noise\\n\")"))
+          (check-equal? (ask bytecode "split")
+                        (lines "first: ok(\"one\")" "printed: ok(\"a\")" "send: ok()" "second: ok(\"two\")" "printed: ok(\"éb\\n\")"))
+          (check-equal? (ask bytecode "gone")
+                        (lines "exit: ok(0)" "end: error(\"process: end of input\")" "close: ok()" "close again: ok()"))
           (check-equal? (ask bytecode "plain")
                         (lines "read: error(\"process: the child has no channel\")" "send: error(\"process: the child has no channel\")"
                                "close: error(\"process: the child has no channel\")" "exit: ok(0)"

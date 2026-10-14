@@ -28,6 +28,21 @@ def bare() -> Void
   done("zero", Process.parent_send("x\n", 0))
 end
 
+def pinned() -> Void
+  show("read", Process.parent_read_line(100))
+  done("send", Process.parent_send("x\n", 100))
+  puts("ready")
+  IO.flush()
+  IO.gets()
+end
+
+def piped() -> Void
+  show("read", Process.parent_read_line(3000))
+  puts("ready")
+  IO.flush()
+  IO.gets()
+end
+
 def spawn_shell(script: String, channel: Bool) -> Void
   args = ["-c", script]
   spawned = Process.spawn_captured("sh", args, ".", 5000)
@@ -71,6 +86,17 @@ def ask(python: String, peer: String, mode: String) -> Void
   elsif mode == "loud"
     show("read", Process.channel_read_line(p, 5000))
     show("printed", Process.read_available(p, 1000))
+  elsif mode == "split"
+    show("first", Process.channel_read_line(p, 5000))
+    show("printed", Process.read_available(p, 1000))
+    done("send", Process.channel_send(p, "go\n", 1000))
+    show("second", Process.channel_read_line(p, 5000))
+    show("printed", Process.read_available(p, 1000))
+  elsif mode == "gone"
+    puts("exit: #{Process.wait(p, 3000).inspect}")
+    show("end", Process.channel_read_line(p, 2000))
+    done("close", Process.channel_close(p, 1000))
+    done("close again", Process.channel_close(p, 1000))
   end
   Process.close(p)
 end
@@ -99,6 +125,10 @@ def main() -> Void
     bare()
   elsif mode == "spawning"
     spawning()
+  elsif mode == "pinned"
+    pinned()
+  elsif mode == "piped"
+    piped()
   elsif mode == "plain"
     plain(args[1], args[2])
   else

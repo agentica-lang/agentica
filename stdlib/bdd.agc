@@ -194,7 +194,7 @@ end
 
 # One step per channel line until the runner closes the channel; a failure has already ended the run with a fail record.
 def serve(all: List[Step]) -> Void
-  init = Process.parent_read_line(86400000)
+  init = Process.parent_read_line(idle_ms())
   if not init.ok?
     System.exit(0)
   end
@@ -205,7 +205,7 @@ def serve(all: List[Step]) -> Void
   empty: List[List[String]] = []
   blank = StepLine(index: 0, definition: 0, pattern: "", captures: [], has_doc: false, doc: "", has_table: false, table: empty)
   ctx = Context(scenario: Scenario(settings: settings.unwrap!, state: {}, step: blank, program: Program.NotStarted))
-  line = Process.parent_read_line(86400000)
+  line = Process.parent_read_line(idle_ms())
   while line.ok?
     found = JSON.decode(line.unwrap!, StepLine)
     if not found.ok?
@@ -223,7 +223,7 @@ def serve(all: List[Step]) -> Void
     probe(ctx)
     fields: Map[String, Json] = {"event": JSON.from("end"), "index": JSON.from(current.index)}
     deliver(record_text(fields))
-    line = Process.parent_read_line(86400000)
+    line = Process.parent_read_line(idle_ms())
   end
   System.exit(0)
 end
@@ -403,10 +403,24 @@ end
 
 def deliver(text: String) -> Void
   IO.flush()
-  sent = Process.parent_send(text, 5000)
+  sent = Process.parent_send(text, send_ms())
   if not sent.ok?
+    if sent.message == "process: send exceeds 1048576 bytes"
+      fields: Map[String, Json] = {"event": JSON.from("fail"), "code": JSON.from("RUNTIME-BDD-OUTPUT-LIMIT"), "message": JSON.from("handler output exceeds 1 MiB")}
+      Process.parent_send(record_text(fields), send_ms())
+    else
+      IO.warn("BDD could not send a record to the runner: #{sent.message}")
+    end
     System.exit(1)
   end
+end
+
+def idle_ms() -> Int
+  return 86400000
+end
+
+def send_ms() -> Int
+  return 5000
 end
 
 def record_text(fields: Map[String, Json]) -> String

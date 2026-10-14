@@ -529,11 +529,14 @@
   (compile-file program bytecode)
   bytecode)
 
-(define (channel-ready? name)
+(define (python-ready? name)
   (cond
-    [(or python (not (fixture-channel))) #t]
+    [python #t]
     [(getenv "CI") (error 'vm-diff "~a needs Python 3 for its child channel in CI" name)]
     [else (printf "SKIP ~a: python3 is unavailable\n" name) #f]))
+
+(define (channel-ready? name)
+  (or (not (fixture-channel)) (python-ready? name)))
 
 (define (run-fixture work program)
   (define name (fixture-name program))
@@ -689,27 +692,28 @@
     (check-equal? (first (seeded "0002147483647")) 0)
     (check-equal? (seeded "7") (seeded "7"))
     (check-not-equal? (second (seeded "7")) (second (seeded "8")))
-    (define tests (build-path work "seeded-tests.agc"))
-    (display-to-file (string-append "def main() -> Void\n  Test.run([\n"
-                                    "    Test.test(\"a\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end,\n"
-                                    "    Test.test(\"b\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end\n"
-                                    "  ])\nend\n")
-                     tests #:exists 'replace)
-    (define tests-bytecode (build-path work "seeded-tests.agcb"))
-    (compile-file tests tests-bytecode)
-    (define (test-draws seed order)
-      (define feed (build-path work (format "seeded-~a.channel" (equal-hash-code order))))
-      (display-to-file order feed #:exists 'replace)
-      (define run
-        (parameterize ([fixture-channel feed])
-          (run-vm-process #:timeout run-timeout "--seed" seed "--" (path->string tests-bytecode) "--agentica-test" "run")))
-      (check-equal? (first run) 0 (third run))
-      (filter (lambda (line) (not (string-prefix? line "channel> "))) (string-split (second run) "\n")))
-    (define alone (test-draws "7" #"1\n"))
-    (define mixed (test-draws "7" #"0\n1\n1\n"))
-    (check-equal? (list (second mixed) (third mixed)) (list (first alone) (first alone)))
-    (check-not-equal? (first mixed) (second mixed))
-    (check-not-equal? (test-draws "8" #"1\n") alone)
+    (when (python-ready? "seeded Test.run draws")
+      (define tests (build-path work "seeded-tests.agc"))
+      (display-to-file (string-append "def main() -> Void\n  Test.run([\n"
+                                      "    Test.test(\"a\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end,\n"
+                                      "    Test.test(\"b\") do\n      puts(Random.int(0, 1000000000))\n      ok()\n    end\n"
+                                      "  ])\nend\n")
+                       tests #:exists 'replace)
+      (define tests-bytecode (build-path work "seeded-tests.agcb"))
+      (compile-file tests tests-bytecode)
+      (define (test-draws seed order)
+        (define feed (build-path work (format "seeded-~a.channel" (equal-hash-code order))))
+        (display-to-file order feed #:exists 'replace)
+        (define run
+          (parameterize ([fixture-channel feed])
+            (run-vm-process #:timeout run-timeout "--seed" seed "--" (path->string tests-bytecode) "--agentica-test" "run")))
+        (check-equal? (first run) 0 (third run))
+        (filter (lambda (line) (not (string-prefix? line "channel> "))) (string-split (second run) "\n")))
+      (define alone (test-draws "7" #"1\n"))
+      (define mixed (test-draws "7" #"0\n1\n1\n"))
+      (check-equal? (list (second mixed) (third mixed)) (list (first alone) (first alone)))
+      (check-not-equal? (first mixed) (second mixed))
+      (check-not-equal? (test-draws "8" #"1\n") alone))
     (define duplicate (build-path work "test-name-duplicate.agcb"))
     (compile-file (build-path fixtures "test-name-duplicate.agc") duplicate)
     (define named (run-process vm-file "--json" "--" (path->string duplicate) "--agentica-test" "run"))

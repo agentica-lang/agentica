@@ -102,7 +102,10 @@ CI runs its checks on pull requests, on the self-hosted Linux runner
   directory; a change of mode changes the stamps, which forces a full
   recompile and relink. `fuzz.yml` stays on the system default.
 - The `test` and `vm-sanitizers` jobs need Node and Python 3 for the
-  network peers.
+  network peers. The golden tests need Python 3 too (the child channel
+  fixtures run through `tests/fixtures/channel-run.py`): `sweep.yml` and the
+  golden step of `release.yml` print `python3 --version` before them, and
+  the goldens fail in CI when it is missing.
 
 ### When `vm-sanitizers` runs
 

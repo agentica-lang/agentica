@@ -17,14 +17,14 @@
     "channel> {\"code\":\"RUNTIME-TEST-PENDING-TASKS\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"the test returned while its tasks were still running\",\"range\":{\"end\":{\"column\":8,\"line\":77},\"start\":{\"column\":5,\"line\":74}}}",
     "channel> {\"code\":\"RUNTIME-TASK-CRASHED\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/test-assertions.agc:16:13: division by zero\",\"range\":{\"end\":{\"column\":8,\"line\":82},\"start\":{\"column\":5,\"line\":78}}}",
     "channel> {\"actual\":\"3\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"4\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":23,\"line\":26},\"start\":{\"column\":10,\"line\":26}}}",
-    "channel> {\"code\":\"RUNTIME-TEST-RUN\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"call Test.run once, outside every test\",\"range\":{\"end\":{\"column\":19,\"line\":88},\"start\":{\"column\":7,\"line\":88}}}",
+    "channel> {\"code\":\"RUNTIME-TEST-RUN\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"call Test.run from main, outside every test\",\"range\":{\"end\":{\"column\":19,\"line\":88},\"start\":{\"column\":7,\"line\":88}}}",
     "channel> {\"actual\":\"[{\\\"a\\\":[true,null],\\\"b\\\":1}]\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"[1.5]\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":37,\"line\":96},\"start\":{\"column\":7,\"line\":96}}}",
     ""
   ],
   "stderr": [
     "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":16},\"start\":{\"column\":13,\"line\":16}},\"task\":true}",
     "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":16},\"start\":{\"column\":13,\"line\":16}},\"task\":true}",
-    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"call Test.run once, outside every test\",\"range\":{\"end\":{\"column\":19,\"line\":88},\"start\":{\"column\":7,\"line\":88}},\"task\":true}",
+    "{\"code\":\"RUNTIME-TEST-RUN\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"call Test.run from main, outside every test\",\"range\":{\"end\":{\"column\":19,\"line\":88},\"start\":{\"column\":7,\"line\":88}},\"task\":true}",
     ""
   ]
 }

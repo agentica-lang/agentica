@@ -45,7 +45,7 @@ def run(vm, bytecode, count):
             if line == "":
                 raise SystemExit("the run child ended during test %d" % index)
             found = json.loads(line)
-            results.append([found["event"], found.get("code"), read_ready(child.stdout)])
+            results.append([found["event"], found.get("code"), read_ready(child.stdout).decode("utf-8", "replace")])
         code, out, _ = finish(child, channel)
         return results, code, out
     finally:

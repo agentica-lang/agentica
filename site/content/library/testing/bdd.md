@@ -125,7 +125,8 @@ crashed without being awaited fails the step with `RUNTIME-TASK-CRASHED`. `main`
 each scenario: it should only build the list of steps and call `BDD.run`.
 Run on its own, a step program only prints how to run it and exits with
 code 2. Steps can import other files and start other programs with
-`Process.spawn`. A step must not read standard input.
+`Process.spawn`.
+A step's standard input is empty, so `IO.gets` returns the end-of-input error, and what a step prints is only output: the runner talks to the step program on a channel of its own. A step must not call `Process.parent_read_line` or `Process.parent_send`, which belong to the runner's protocol.
 
 ## BDD.step and BDD.run
 

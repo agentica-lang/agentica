@@ -17,7 +17,8 @@
 #define REAP_MS 1000
 #define GRACE_MS 1000
 #define URING_ENV "UV_USE_IO_URING="
-#define CHANNEL_ENV "AGENTICA_CHANNEL="
+#define CHANNEL_PREFIX AGC_CHANNEL_ENV "="
+#define DRAIN_LIMIT ((size_t)2097152)
 #define OWNER(ptr, field) ((proc *)(void *)((char *)(ptr) - offsetof(proc, field)))
 
 typedef enum { REQ_LINE, REQ_BYTES, REQ_SEND, REQ_WAIT, REQ_OUTPUT, REQ_CLOSE } req_kind;
@@ -601,7 +602,7 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
   return argv;
 }
 
-static char **child_env(bool drop_uring, bool channel) {
+static char **child_env(bool drop_uring, char *marker) {
   extern char **environ; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
   size_t n = 0;
   while (environ[n]) n++;
@@ -610,18 +611,10 @@ static char **child_env(bool drop_uring, bool channel) {
   size_t kept = 0;
   for (size_t k = 0; k < n; k++) {
     bool uring = drop_uring && strncmp(environ[k], URING_ENV, sizeof URING_ENV - 1) == 0;
-    if (!uring && strncmp(environ[k], CHANNEL_ENV, sizeof CHANNEL_ENV - 1) != 0) env[kept++] = environ[k];
+    if (!uring && strncmp(environ[k], CHANNEL_PREFIX, sizeof CHANNEL_PREFIX - 1) != 0) env[kept++] = environ[k];
   }
-  if (channel) env[kept] = strdup(CHANNEL_ENV "3");
-  if (channel && !env[kept]) agc_out_of_memory();
+  if (marker) env[kept] = marker;
   return env;
-}
-
-static void free_env(char **env, bool channel) {
-  size_t n = 0;
-  while (env[n]) n++;
-  if (channel && n) free(env[n - 1]);
-  free(env);
 }
 
 static void close_fd(int *fd) {
@@ -643,13 +636,13 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
   for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
   if (!rc && channel) rc = uv_socketpair(SOCK_STREAM, 0, link, 0, 0);
   if (!rc) {
-    uv_stdio_container_t stdio[4];
+    uv_stdio_container_t stdio[AGC_CHANNEL_FD + 1];
     for (size_t k = 0; k < 3; k++) {
       stdio[k].flags = UV_INHERIT_FD;
       stdio[k].data.fd = fds[2 * k + (k == 0 ? 0 : 1)];
     }
-    stdio[3].flags = UV_INHERIT_FD;
-    stdio[3].data.fd = link[1];
+    stdio[AGC_CHANNEL_FD].flags = UV_INHERIT_FD;
+    stdio[AGC_CHANNEL_FD].data.fd = link[1];
     uv_process_options_t options;
     memset(&options, 0, sizeof options);
     options.exit_cb = exited;
@@ -657,7 +650,7 @@ static int start_child(agc_vm *vm, guard *g, proc *p, char **argv, char **env, c
     options.args = argv;
     options.env = env;
     options.cwd = cwd;
-    options.stdio_count = channel ? 4 : 3;
+    options.stdio_count = channel ? AGC_CHANNEL_FD + 1 : AGC_CHANNEL_FD;
     options.stdio = stdio;
     link_child(g, p);
     rc = uv_spawn(g->loop, &p->process, &options);
@@ -755,7 +748,9 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     return agc_error_value("process: directory is unavailable");
   }
   char **argv = child_args(vm, path, list);
-  char **env = child_env(vm->rt->drop_uring_env, channel);
+  char *marker = channel ? strdup(CHANNEL_PREFIX AGC_CHANNEL_VALUE) : NULL;
+  if (channel && !marker) agc_out_of_memory();
+  char **env = child_env(vm->rt->drop_uring_env, marker);
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
@@ -769,7 +764,8 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
               path, list->len, p->captured ? 1 : 0, channel ? 1 : 0);
   for (size_t k = 0; argv[k]; k++) free(argv[k]);
   free(argv);
-  free_env(env, channel);
+  free(env);
+  free(marker);
   free(cwd);
   if (rc) {
     settle(p);
@@ -957,8 +953,9 @@ static agc_value builtin_channel_close(agc_vm *vm, agc_value *args, uint32_t spa
 
 static void drain_out(proc *p) {
   uv_os_fd_t fd;
+  size_t total = 0;
   if (p->out_buf.eof || p->out_buf.error || uv_fileno((uv_handle_t *)&p->out, &fd) != 0) return;
-  for (;;) {
+  while (total < DRAIN_LIMIT) {
     uv_buf_t buf;
     alloc_kept_out((uv_handle_t *)&p->out, 0, &buf);
     ssize_t n = buf.base ? read(fd, buf.base, buf.len) : UV_ENOBUFS;
@@ -971,7 +968,23 @@ static void drain_out(proc *p) {
     }
     read_kept_out((uv_stream_t *)&p->out, n, &buf);
     if (n < 0) return;
+    total += (size_t)n;
   }
+}
+
+static size_t whole_prefix(const uint8_t *data, size_t n) {
+  size_t back = 0;
+  while (back < 3 && back < n && (data[n - 1 - back] & 0xC0) == 0x80) back++;
+  if (back == n) return n;
+  uint8_t lead = data[n - 1 - back];
+  size_t need = 1;
+  if (lead >= 0xF0 && lead <= 0xF4)
+    need = 4;
+  else if (lead >= 0xE0 && lead < 0xF0)
+    need = 3;
+  else if (lead >= 0xC2 && lead < 0xE0)
+    need = 2;
+  return back + 1 < need ? n - (back + 1) : n;
 }
 
 static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -986,10 +999,10 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
   drain_out(p);
   if (p->out_cut || p->err_cut) return agc_error_value(over_text);
   size_t n = agc_inbuf_pending(&p->out_buf);
+  if (!p->out_buf.eof && !p->out_buf.error) n = whole_prefix(pending_data(&p->out_buf), n);
   agc_charge_bytes(vm, n);
   agc_string *text = agc_utf8_decode(pending_data(&p->out_buf), n, "\xEF\xBF\xBD", false);
-  p->out_buf.start += n;
-  p->out_buf.scanned = 0;
+  agc_inbuf_take(&p->out_buf, n);
   return agc_result_value(true, agc_string_value(text));
 }
 

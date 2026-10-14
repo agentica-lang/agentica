@@ -101,7 +101,7 @@ tests/
   vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, a socket and a pty as stdout, the order of stdout and stderr on one target, notices, a gone reader, a crashed parent
   vm-file-lines-test.rkt # File.each_line: a 10 MB file streamed in buffer-sized reads, the step limit, a FIFO fed in pieces, a stall timeout, closing a read FIFO with read-ahead, a crash while parked (fixtures/lines-peer.py)
   vm-test-protocol-test.rkt # a Python peer plays the runner of a test file over the child channel (fixtures/test-protocol-peer.py, child_channel.py): list and run records, free stdin and stdout, no channel
-  vm-child-channel-test.rkt # the child channel on its own, both sides, against Python peers (fixtures/child-channel-peer.py): lines, EOF, timeouts, no channel, a marker or a descriptor alone, a grandchild
+  vm-child-channel-test.rkt # the child channel on its own, both sides, against Python peers (fixtures/child-channel-peer.py): lines, EOF, timeouts, no channel, a marker or a descriptor alone, fd 3 as a regular file, a device (refused) or a FIFO (taken), a UTF-8 character split between reads, a grandchild
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
