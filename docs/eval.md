@@ -100,6 +100,7 @@ t20 generates its logs (a fixed pseudo-random sequence, 50,000 and 600,000 lines
 - Network access for the agents. Agent containers can reach the provider, so they can reach the whole internet, and the programming skill links `https://sonic182.github.io/agentica/llms.txt`, so an agent with a shell can read the public site. Decide before a round whether that is allowed, and record it with the results: `run.json` has `agent_network` (`true` for a model run, `false` for `--check-references`), and `net_commands` counts the commands that mention `wget`, `git clone`, `github.com`, `pip install`, `npm`, `apt`, or `curl` or `urllib` to a host other than `localhost` and `127.0.0.1`. The runner has no allow-list for the provider host, so closing the network for the agents needs a proxy or firewall that you provide.
 - Rebuild the image if the Dockerfile changed, and run `--check-references`.
 - Do not merge anything or change the skill while a round runs.
+- If `/tmp` is a small `tmpfs`, point `TMPDIR` at a directory on disk before you start the runner. Each run copies the runtime bundle (about 580 MB) into a temporary directory, and t20 writes big logs there, so four runs at a time can fill a 6 GB `/tmp` and stop the round with `No space left on device`.
 
 ## Results
 
@@ -185,6 +186,41 @@ The `binary` arm on master `e24fac9` (the C VM runs every program; the evaluator
 - t4 (word count) cost DeepSeek about 60,000 tokens per run, three times the other easy tasks. The most repeated error was `CHECK-CAPTURED-ASSIGNMENT`, about 17 times per run: the agents assign a counter inside an `each` block, Ruby style. PR #195 made its help name the rewrite (`for w in words ... end`).
 - The `binary` arm is not docs-free. Its workspace holds the `raco distribute` bundle, which includes the Racket source of the front end (`lib/plt/agentica/.../main.rkt`), and the agents read it and grep the binary for builtin descriptions. This was true in the earlier rounds too, so the comparison holds.
 
+### Round 10: the 6c pilot, Agentica against typed Python (2026-10-14)
+
+The `skill` arm against the `typed-python` arm (`mypy --strict`) on all twenty tasks, 3 reps per cell, master `38fe556`, 60 runs per arm and model. Seconds are left out: to finish sooner, the runs went 4 to 6 at a time, next to other rounds, so they are not comparable. Rounds 10 and 11 together cost $3.75.
+
+| Model | `skill` passed | `typed-python` passed | `skill` tokens/run | `typed-python` tokens/run | `skill` cost/run | `typed-python` cost/run |
+|---|---|---|---|---|---|---|
+| DeepSeek V4.1 flash | 59/60 | 57/60 | 24,444 | 12,969 | $0.0082 | $0.0053 |
+| GLM 5.3 flash | 58/60 | 52/60 | 15,607 | 5,035 | $0.0056 | $0.0017 |
+| gpt-oss-120b | 31/60 | 45/60 | 21,980 | 8,303 | $0.0087 | $0.0028 |
+
+- With DeepSeek and GLM, Agentica passed as often as typed Python or more. Almost every failure on both sides is a logic error on a hidden case (GLM's eight typed-Python failures are all logic errors); one GLM Agentica run crashed at run time.
+- Agentica costs 1.5 to 3.3 times more per run. Most of the gap is reading the skill: the tokens per run are two to three times those of Python, and on the easy tasks the skill is most of the cost.
+- Typed Python escaped the checker about 0.5 to 0.9 times per run (`Any`, `cast(`, `no_type_check`, `TYPE_CHECKING`). No DeepSeek or GLM run used `# type: ignore`; gpt-oss tried it 8 times, and those runs failed as `ignore`.
+- gpt-oss did worse in Agentica. It writes C-style code (`;` at the end of a line, braces for blocks), gets `LEX-UNEXPECTED-CHAR` and `LEX-UNMATCHED-DELIMITER`, and in five runs wrote no `solution.agc` (the runs checked by hand wrote `solution.py` instead). Its Agentica failures: 13 logic, 7 syntax, 5 no file, 3 check, 1 run time.
+- t20, the streaming probe, reported apart: DeepSeek and GLM passed it 3/3 in both arms; gpt-oss passed 0/3 in Agentica and 3/3 in typed Python.
+- Nemotron Lightning 3.5 (30B, about 3B active) was dropped part way: 1 of 23 Agentica runs passed, against 14 of 24 typed-Python runs. It rarely wrote Agentica: it wrote `solution.py` and stopped.
+- With 3 reps per cell, these are directions, not claims. The full round (step 10) needs more reps.
+
+### Round 11: the new `agentica --help` (2026-10-14)
+
+The `binary` arm, t1 to t8, 3 reps, on master `38fe556` plus PR #198, which made `agentica --help` and `agentica help` list the subcommands, four core rules (calls need parentheses; values are immutable, so assign the result; a block cannot assign an outer variable, use `for` or `reduce`; `Result` and `try`) and the builtin namespaces. The prompt is the same as in round 9. Run next to round 10, so seconds are left out.
+
+| Model | Tasks | Round 9 (old help) | Round 11 (new help) |
+|---|---|---|---|
+| DeepSeek V4.1 flash | t1 to t5 | 14/15, 21,184 tokens, 2.7 failing, $0.0073 | 15/15, 13,997, 1.2, $0.0048 |
+| DeepSeek V4.1 flash | t6 to t8 | 9/9, 62,955, 7.8, $0.0271 | 9/9, 37,996, 5.4, $0.0156 |
+| GLM 5.3 flash | t1 to t5 | 14/15, 8,456, 4.1, $0.0042 | 15/15, 6,662, 2.7, $0.0035 |
+| GLM 5.3 flash | t6 to t8 | 7/9, 25,777, 18.2, $0.0181 | 8/9, 22,821, 13.7, $0.0156 |
+| gpt-oss-120b | t1 to t5 | – | 10/15, 8,314, 2.8, $0.0032 |
+| gpt-oss-120b | t6 to t8 | – | 0/9, 18,319, 4.4, $0.0072 |
+
+- The new help cut tokens by a third to a half for DeepSeek and by 10 to 20% for GLM, with fewer failing runs and the same or better accuracy. The agents read `agentica --help` early and use its rules.
+- gpt-oss reads the help but still writes `;` and braces, which the help does not mention, and the lexer diagnostics for them give no hint. It then asks `agentica help while`, which only covers builtins.
+- Nemotron passed 8 of 19 before it was dropped.
+
 ### JSON tasks: smoke run (2026-10-03)
 
 One rep per cell, DeepSeek V4.1 flash, 4 runs at a time, 600 s limit. The reference solutions passed all 28 hidden-case runs in Docker.
@@ -222,6 +258,7 @@ Hits of the top codes in the `binary` arm, from `tests/eval/diagnostics.py`, in 
 ## What the results do not show
 
 - Accuracy on harder tasks. These tasks do not need sorting or building a list, and most of them pass.
-- Other models than DeepSeek and GLM. A Sonnet round is postponed, because isolating `claude -p` from the global configuration is not solved.
+- Strong models. Only small and cheap ones ran (DeepSeek, GLM, gpt-oss, and Nemotron in part). A Sonnet round is postponed, because isolating `claude -p` from the global configuration is not solved.
 - Whether `--ai` or `--json` help. They were not measured.
-- Whether the Agentica arms beat a typed Python. The Python arm of the rounds above is untyped. The typed arm and the twelve harder tasks are ready (see "How to run"), but the pilot has not run, so there are no results yet. The full comparison is [roadmap phase 6c](roadmap/06-validation.md#phase-6c-agentica-against-typed-python).
+- Whether Agentica beats typed Python with confidence. The round 10 pilot points that way for two of three models, with 3 reps per cell. The full comparison is [roadmap phase 6c](roadmap/06-validation.md#phase-6c-agentica-against-typed-python).
+- Time in rounds 10 and 11, which ran next to each other with more runs at a time.
