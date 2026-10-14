@@ -12,7 +12,7 @@ Some errors end the whole run, whichever task raises them: a runtime error in `m
 
 A crash is observed when an await returns its error or halts, or when `Test.run` reports it. If `main` returns with a crash never observed, the run exits 1 and prints one line on stderr: `2 task crashes were not observed; first: task crashed: ...` (with `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`). `Task.unobserved_crash()` returns `ok(text)` for the first unobserved crash, or `error("no unobserved crash")`; calling it does not observe the crash.
 
-Returning from the entrypoint ends the run, and pending tasks never run again. At the end of any run the VM flushes and closes open files (bounded by the flush limit, 30 seconds by default, `--flush-timeout`), closes sockets and listeners, and stops and reaps the child processes it started. Standard streams stay open.
+Returning from the entrypoint ends the run, and pending tasks never run again. At the end of any run the VM flushes and closes open files and waits for the buffered output of stdout and stderr to reach the pipe or file (bounded by the flush limit, 30 seconds by default, `--flush-timeout`), closes sockets and listeners, and stops and reaps the child processes it started. Standard streams stay open.
 
 `Task.sleep` takes nonnegative milliseconds; zero yields. A negative duration is `RUNTIME-INVALID-DURATION`. Tasks inherit ports, arguments and builtin services. Shared streams have no ordering guarantee across tasks. All tasks share the `--max-steps` counter.
 

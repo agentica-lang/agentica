@@ -432,7 +432,32 @@ static int checked(op *o, int fd) {
   return -1;
 }
 
+static bool same_directory(const struct stat *info, const char *path) {
+  struct stat other;
+  return stat(path, &other) == 0 && other.st_dev == info->st_dev && other.st_ino == info->st_ino;
+}
+
+static bool names_output_fd(const op *o) {
+  const char *slash = strrchr(o->path, '/');
+  const char *name = slash ? slash + 1 : o->path;
+  char *end = NULL;
+  long fd = strtol(name, &end, 10);
+  if (end == name || *end || fd <= 2 || (fd != o->rt->out.fd && fd != o->rt->err.fd)) return false;
+  char copy[PATH_MAX];
+  size_t len = slash ? (size_t)(slash - o->path) : 0;
+  if (len >= sizeof copy) return false;
+  memcpy(copy, o->path, len);
+  copy[len] = '\0';
+  struct stat info;
+  if (stat(slash ? (len ? copy : "/") : ".", &info) != 0) return false;
+  return same_directory(&info, "/proc/self/fd") || same_directory(&info, "/proc/thread-self/fd");
+}
+
 static int open_for(op *o, bool reading, bool append) {
+  if (names_output_fd(o)) {
+    fail_op(o, FS_NOT_REGULAR, 0);
+    return -1;
+  }
   if (reading) {
     struct stat info;
     if (stat(o->path, &info) != 0 || S_ISDIR(info.st_mode)) {
@@ -961,11 +986,11 @@ static void close_file(agc_vm *vm, agc_resource *r) {
   r->native = NULL;
   agc_unregister(vm, r);
   if (!o->st->poller) {
-    agc_io_detached(vm, &close_io, o);
+    agc_io_detached(vm, &close_io, o, AGC_JOB_FLUSH);
   } else if (step(o)) {
     drop(o);
   } else {
-    o->job = agc_io_detached(vm, &poll_close_io, o);
+    o->job = agc_io_detached(vm, &poll_close_io, o, AGC_JOB_FLUSH);
     agc_poller_wait(o->st->poller, true, ready, o);
   }
 }

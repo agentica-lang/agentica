@@ -12,7 +12,7 @@ expected Int, found String
 
 When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
-`agentica --ai` and `agentica --json` print the same diagnostic as compact text, or as one JSON object. In `--json` mode, when a diagnostic ends the run, it is the last line of stderr. Task crash lines (with `"task": true`), the unobserved-crash summary (`{"unobserved_crashes": N, "first": "..."}`) and the flush warning of §6 are not the run's diagnostic.
+`agentica --ai` and `agentica --json` print the same diagnostic as compact text, or as one JSON object. In `--json` mode, when a diagnostic ends the run, it is the last line of stderr, except that a warning about the flush of files or output (§6) can follow it when the end-of-run flush fails or runs out of time. Task crash lines (with `"task": true`), the unobserved-crash summary (`{"unobserved_crashes": N, "first": "..."}`) and the flush warning of §6 are not the run's diagnostic.
 
 The code carries the prefix of the stage that failed: `LEX-`, `PARSE-`, `CHECK-` (before running), or `RUNTIME-` (while running). The VM compiler stages use `LOWER-` and `BYTECODE-`. Each stage stops at the first error. The diagnostics that an agent most needs to tell apart are: invalid syntax, unknown name, incompatible type, wrong arity, unknown or missing field, missing return, and runtime error.
 

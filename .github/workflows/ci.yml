@@ -163,7 +163,7 @@ jobs:
                   trace=true ;;
               esac
               case "$f" in
-                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/vm-trace-test.rkt|tests/vm-tcp-test.rkt|tests/fixtures/tcp-peer.js|tests/vm-tls-test.rkt|tests/fixtures/tls-peer.js|tests/fixtures/tls-peer.py|tests/fixtures/tls/*|tests/vm-http-test.rkt|tests/fixtures/http-*|tests/vm-test-protocol-test.rkt|tests/fixtures/test-protocol-peer.*|tests/vm-stop-test.rkt|tests/fixtures/stop-peer.py|tests/vm-channel-test.rkt|tests/fixtures/channel-peer.py|stdlib/*|src/stdlib.rkt|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
+                vm/*|src/lower.rkt|src/bytecode.rkt|src/version.rkt|tests/vm-diff-*|tests/vm-trace-test.rkt|tests/vm-tcp-test.rkt|tests/fixtures/tcp-peer.js|tests/vm-tls-test.rkt|tests/fixtures/tls-peer.js|tests/fixtures/tls-peer.py|tests/fixtures/tls/*|tests/vm-http-test.rkt|tests/fixtures/http-*|tests/vm-test-protocol-test.rkt|tests/fixtures/test-protocol-peer.*|tests/vm-stop-test.rkt|tests/fixtures/stop-peer.py|tests/vm-channel-test.rkt|tests/fixtures/channel-peer.py|tests/vm-stdout-test.rkt|tests/fixtures/stdout-peer.py|stdlib/*|src/stdlib.rkt|tests/cli-in-process.rkt|tests/bytecode-test.rkt|tests/fixtures/vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
                   vm=true ;;
               esac
             done <<< "$files"

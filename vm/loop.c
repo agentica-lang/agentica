@@ -7,6 +7,7 @@
 
 #ifdef __linux__
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
 #include <uv.h>
@@ -325,11 +326,13 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
 
 static void drain(agc_vm *vm) {
   agc_loop *loop = vm->loop;
-  job *j = loop->ready;
-  loop->ready = loop->ready_tail = NULL;
   agc_registry *reg = vm->registry;
-  while (j) {
-    job *next = j->ready_next;
+  size_t batch = 0;
+  for (const job *k = loop->ready; k; k = k->ready_next) batch++;
+  while (batch-- && loop->ready) {
+    job *j = loop->ready;
+    loop->ready = j->ready_next;
+    if (!loop->ready) loop->ready_tail = NULL;
     j->ready_next = NULL;
     j->queued = false;
     if (!j->consumed && reg && j->slot < reg->count && reg->items[j->slot]->native == j) {
@@ -341,7 +344,6 @@ static void drain(agc_vm *vm) {
       else if (j->detached)
         end_detached(vm, r);
     }
-    j = next;
   }
 }
 
@@ -454,6 +456,12 @@ static void poller_closed(uv_handle_t *handle) {
   free(p);
 }
 
+int agc_fd_reopen(int fd, int access) {
+  char path[32];
+  snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
+  return open(path, access | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+}
+
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();
@@ -488,7 +496,7 @@ const char *agc_uv_version(void) { return uv_version_string(); }
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return &loop_of(vm)->uv; }
 
 static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task, agc_more_fn more) {
+                               int64_t timeout_ms, const agc_task *task, agc_more_fn more, bool quiet) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   agc_loop *loop = loop_of(vm);
   job *j = calloc(1, sizeof(job));
@@ -502,7 +510,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
   r->context = context;
   j->slot = r->slot;
   const agc_trace *tr = &vm->rt->trace;
-  if (AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
+  if (!quiet && AGC_TRACE_ON(tr, AGC_TRACE_IO)) {
     j->started_ns = agc_trace_now();
     AGC_TRACE(tr, AGC_TRACE_IO, "start job=%" PRIu64 " kind=%s task=%" PRIu64 " timeout_ms=%" PRId64, r->id,
               kind->name, task ? task->id : 0, timeout_ms);
@@ -528,7 +536,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more);
+  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, false);
   r->task = vm->task;
   vm->task->parked = r;
   agc_task_park(vm, false);
@@ -539,10 +547,11 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
   return agc_io_start_then(vm, kind, data, context, timeout_ms, NULL);
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags) {
+  agc_resource *r = start_job(vm, kind, data, agc_void(), -1, NULL, NULL, (flags & AGC_JOB_QUIET) != 0);
   job *j = r->native;
-  j->detached = j->flush = true;
+  j->detached = true;
+  j->flush = (flags & AGC_JOB_FLUSH) != 0;
   return j;
 }
 
@@ -680,12 +689,12 @@ void agc_io_goodbye(agc_vm *vm) {
   }
 }
 
-static bool flushing(const agc_vm *vm) {
+static bool flushing(agc_vm *vm) {
   for (size_t k = registry_count(vm); k-- > 0;) {
     const job *j = job_at(vm, k);
     if (j && j->flush && !j->work_done) return true;
   }
-  return false;
+  return agc_output_busy(vm);
 }
 
 static void close_files(agc_vm *vm) {
@@ -710,8 +719,15 @@ static void finish_flushes(agc_vm *vm) {
   uv_timer_init(&loop->uv, &loop->deadline);
   loop->deadline.data = loop;
   uv_timer_start(&loop->deadline, flush_expired, (uint64_t)vm->rt->flush_timeout, 0);
-  while (flushing(vm) && !loop->expired)
-    if (!uv_run(&loop->uv, UV_RUN_ONCE)) break;
+  for (;;) {
+    drain(vm);
+    if (!flushing(vm) || loop->expired) break;
+    uv_run(&loop->uv, UV_RUN_ONCE);
+    if (!uv_loop_alive(&loop->uv)) {
+      drain(vm);
+      break;
+    }
+  }
   uv_close((uv_handle_t *)&loop->deadline, NULL);
   vm->rt->flush_expired = flushing(vm);
 }
@@ -732,6 +748,7 @@ static bool close_all(agc_vm *vm) {
     close_timer(j);
   }
   agc_input_close(vm);
+  agc_output_close(vm);
   release_handles(vm);
   if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
@@ -771,9 +788,10 @@ void agc_io_extend(agc_io_job *j, int64_t timeout_ms) {
   (void)timeout_ms;
 }
 
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags) {
   (void)kind;
   (void)data;
+  (void)flags;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 

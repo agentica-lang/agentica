@@ -1,6 +1,5 @@
 #include "core.h"
 
-#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
@@ -49,25 +48,6 @@ void agc_stop(agc_vm *vm, int sig) {
   agc_exit(vm, 128 + sig);
 }
 
-static _Noreturn void write_failed(agc_vm *vm, FILE *stream) {
-  int sig = agc_io_stop_signal();
-  if (errno == EINTR && sig) {
-    clearerr(stream);
-    agc_stop(vm, sig);
-  }
-  agc_fail(vm, "RUNTIME-INTERNAL",
-           stream == vm->rt->err ? "cannot write to standard error" : "cannot write to standard output", 0);
-}
-
-void agc_flush(agc_vm *vm) {
-  if (fflush(vm->rt->out) != 0) write_failed(vm, vm->rt->out);
-}
-
-void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len) {
-  if (len && fwrite(data, 1, len, stream) != len) write_failed(vm, stream);
-  if (len && stream == vm->rt->out) vm->rt->out_mid_line = ((const uint8_t *)data)[len - 1] != '\n';
-}
-
 agc_task *agc_new_task(agc_vm *vm) {
   agc_task *t = agc_alloc(sizeof(agc_task));
   t->id = atomic_fetch_add(&vm->rt->next_task_id, 1);
@@ -80,8 +60,10 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   memset(vm, 0, sizeof *vm);
   agc_runtime *rt = agc_alloc(sizeof(agc_runtime));
   rt->program = program;
-  rt->out = out;
-  rt->err = err;
+  rt->out.file = out;
+  rt->out.fd = -1;
+  rt->err.file = err;
+  rt->err.fd = -1;
   atomic_init(&rt->steps_left, max_steps);
   rt->in.fd = -1;
   rt->flush_timeout = AGC_FLUSH_TIMEOUT_MS;

@@ -5,10 +5,11 @@ description: Print to standard output and error, and read standard input.
 ---
 
 `puts`, `print`, `gets` and `gets!` can be called without the `IO.` prefix.
-Output is buffered; call `IO.flush()` when another program waits for your
-output line by line.
+On Linux, a print reaches a pipe or file without `IO.flush()`: the VM writes it as soon as the reader takes it. On other systems output is buffered, so call `IO.flush()` when another program waits for your output line by line.
 
 On Linux, a read from standard input waits without stopping other tasks. On other systems a read blocks the whole program until input arrives.
+
+On Linux, writing to standard output or standard error also waits without stopping other tasks. Each stream keeps up to 64 KiB of output; when a pipe is full, the tasks that print wait their turn, in order, and the other tasks keep running. A print has no timeout, and the text of one print is never split by another print. Output on one stream keeps the order of the calls. When standard output and standard error go to the same terminal or file (for example with `2>&1`), they share one buffer, so `puts` and `IO.warn` appear in the order of the calls. When they go to different places, there is no order between them. A crash message from a task waits for room in the same way and is never put in the middle of a print. At the end of the run the program waits, within the flush limit, until the output has been written. On other systems a write blocks the whole program until the reader takes it.
 
 ## puts
 
@@ -235,7 +236,7 @@ ok("hi")
 IO.flush() -> Void
 ```
 
-Sends buffered standard output now.
+Sends buffered standard output now. On Linux the task waits until the output has reached the pipe or file, so it can wait when the reader is slow. It fails if the reader has gone away.
 
 ```agentica
 def main() -> Void

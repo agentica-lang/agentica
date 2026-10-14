@@ -125,6 +125,7 @@ static void unlink_task(agc_vm *vm, agc_task *t) {
   if (t->parked) agc_io_detach(vm, t);
   if (t->lock_wait) agc_handle_leave(vm, t);
   if (t->channel.channel) agc_channel_leave(vm, t);
+  if (t->output.out) agc_output_leave(vm, t);
   if (t->awaiting) agc_task_remove(&t->awaiting->waiters, &t->awaiting->waiters_tail, t);
   t->awaiting = NULL;
   agc_task_remove(&vm->rt->in.waiters, &vm->rt->in.waiters_tail, t);
@@ -289,7 +290,9 @@ static void crash(agc_vm *vm, agc_task *t) {
       vm->crashes = t;
     vm->crashes_tail = t;
   }
-  agc_print_diagnostic(vm->rt->err, vm->rt->program, o, vm->rt->style, true);
+  agc_notice notice;
+  agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, o, vm->rt->style, true);
+  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
   o->kind = AGC_DONE;
   unlink_task(vm, t);
   drop_tree(vm, t, false);
@@ -323,7 +326,10 @@ static agc_task *first_unobserved(const agc_vm *vm) {
 bool agc_report_unobserved(agc_vm *vm) {
   const agc_task *first = first_unobserved(vm);
   if (!first) return false;
-  agc_print_unobserved(vm->rt->err, vm->crash_count - vm->observed_count, first->crash, vm->rt->style);
+  agc_notice notice;
+  agc_print_unobserved(agc_notice_begin(&vm->rt->err, &notice), vm->crash_count - vm->observed_count, first->crash,
+                       vm->rt->style);
+  agc_notice_end(&notice, AGC_NOTICE_QUEUED);
   return true;
 }
 
