@@ -91,3 +91,4 @@ Every failure is an error value. The checks run in this order:
 - `Path.join` checks every part, then refuses an absolute later part. `Path.resolve` completes the path, drops `.`, pops `..` (never above `/`) and collapses `/`. The result ends in `/` when the input did, or ended in `.` or `..`.
 - After a timeout on an active handle operation the handle is closed: later operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2). `File.read_text` of a pipe reads to end of file.
+- `File.each_line` accepts a line of at most `buffer_bytes` bytes counting its terminator, and a last line without a terminator of exactly `buffer_bytes` bytes. It checks the buffer range first (`RUNTIME-INVALID-COUNT` at the argument), then the timeout, then the path.

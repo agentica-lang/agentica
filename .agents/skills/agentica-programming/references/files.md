@@ -14,6 +14,7 @@ File.write(handle: FileHandle, text: String, timeout_ms: Int) -> Result[Void]
 File.write_bytes(handle: FileHandle, bytes: List[Int], timeout_ms: Int) -> Result[Void]
 File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
+File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
@@ -34,6 +35,18 @@ for EOF before any line or invalid UTF-8. Byte values are 0..255. Close
 flushes output and is idempotent. Explicit flush and close return Results.
 `File.close` on a handle that is already closing (its owner task crashed)
 returns `ok()` at once; the run still waits for that close's flush.
+
+`File.each_line` opens `path`, reads it one line at a time and calls the block
+with each line, never reading the whole file. The block returns
+`Result[Void]`: `ok()` goes on, an `error(...)` stops and becomes the result;
+`try` and `return error(...)` work in it. A line is at most `buffer_bytes` bytes counting its
+terminator (1024..16777216, else `RUNTIME-INVALID-COUNT` at that argument,
+before the file opens); a longer line gives
+`error("filesystem: line exceeds buffer_bytes")`. `timeout_ms` is per read and
+must be positive (else an error Result). LF and CRLF are removed, a final
+unterminated line is passed, invalid UTF-8 ends the call with an error, and
+the file is closed on every return path. FIFOs and pipes wait on the event
+loop for each read.
 
 Timeouts are positive milliseconds and include the serialized handle lock
 wait. Timing out active I/O closes that handle (later calls say the handle is

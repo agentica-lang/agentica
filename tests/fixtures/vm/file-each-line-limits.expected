@@ -1,0 +1,24 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 280,
+  "stdout": [
+    "buffer 1024: ok 1024",
+    "buffer 16777216: ok 16777216",
+    "buffer 1023: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/file-each-line-limits.agc:2:28: buffer_bytes must be between 1024 and 16777216",
+    "buffer 16777217: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/file-each-line-limits.agc:2:28: buffer_bytes must be between 1024 and 16777216",
+    "buffer 0: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/file-each-line-limits.agc:2:28: buffer_bytes must be between 1024 and 16777216",
+    "buffer -1: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/file-each-line-limits.agc:2:28: buffer_bytes must be between 1024 and 16777216",
+    "missing file, buffer 4096: filesystem: path does not refer to a regular file",
+    "missing file, buffer 10: task crashed: RUNTIME-INVALID-COUNT at @fixtures/vm/file-each-line-limits.agc:2:28: buffer_bytes must be between 1024 and 16777216",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/file-each-line-limits.agc\",\"message\":\"buffer_bytes must be between 1024 and 16777216\",\"range\":{\"end\":{\"column\":34,\"line\":2},\"start\":{\"column\":28,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/file-each-line-limits.agc\",\"message\":\"buffer_bytes must be between 1024 and 16777216\",\"range\":{\"end\":{\"column\":34,\"line\":2},\"start\":{\"column\":28,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/file-each-line-limits.agc\",\"message\":\"buffer_bytes must be between 1024 and 16777216\",\"range\":{\"end\":{\"column\":34,\"line\":2},\"start\":{\"column\":28,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/file-each-line-limits.agc\",\"message\":\"buffer_bytes must be between 1024 and 16777216\",\"range\":{\"end\":{\"column\":34,\"line\":2},\"start\":{\"column\":28,\"line\":2}},\"task\":true}",
+    "{\"code\":\"RUNTIME-INVALID-COUNT\",\"file\":\"@fixtures/vm/file-each-line-limits.agc\",\"message\":\"buffer_bytes must be between 1024 and 16777216\",\"range\":{\"end\":{\"column\":34,\"line\":2},\"start\":{\"column\":28,\"line\":2}},\"task\":true}",
+    ""
+  ]
+}

@@ -16,6 +16,8 @@
 #define FORM_WIDTH 256
 #define CHUNK ((size_t)65536)
 #define WRITE_BUFFER ((size_t)4096)
+#define MIN_LINE_BUFFER ((int64_t)1024)
+#define MAX_LINE_BUFFER ((int64_t)16777216)
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
@@ -24,15 +26,15 @@ typedef enum {
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
-  OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_WRITE, OP_CLOSE
+  OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE
 } op_kind;
 
 typedef struct {
   int fd;
-  bool readable, writable, polled;
+  bool readable, writable, polled, eof;
   agc_poller *poller;
   uint8_t *buf;
-  size_t start, end, cap;
+  size_t start, end, cap, scan;
 } file_state;
 
 typedef struct {
@@ -60,6 +62,15 @@ typedef struct {
   bool found;
 } pipe_search;
 
+typedef enum { LINES_START, LINES_OPENED, LINES_SCAN, LINES_READ, LINES_BLOCK, LINES_CLOSE, LINES_CLOSED } lines_phase;
+
+typedef struct {
+  lines_phase phase;
+  agc_value path, handle, outcome;
+  size_t limit;
+  int64_t timeout;
+} lines;
+
 typedef struct {
   char *data;
   size_t len, cap;
@@ -67,6 +78,7 @@ typedef struct {
 
 static const char not_regular[] = "filesystem: path does not refer to a regular file";
 static const char timed_out[] = "filesystem: operation timed out";
+static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
 static const char bad_timeout[] = "network: timeout must be positive milliseconds";
 static const char complete_who[] = "path->complete-path";
 static const char complete_expected[] = "(or/c path-string? path-for-some-system?)";
@@ -655,22 +667,14 @@ static void work_read_bytes(op *o) {
   o->out_len = have + got;
 }
 
-static bool fill(file_state *st, int *err, bool *eof) {
-  if (st->start) {
-    memmove(st->buf, st->buf + st->start, pending(st));
-    st->end -= st->start;
-    st->start = 0;
-  }
-  if (st->end == st->cap) {
-    size_t cap = st->cap ? st->cap * 2 : CHUNK;
-    uint8_t *bigger = realloc(st->buf, cap);
-    if (!bigger) {
-      *err = ENOMEM;
-      return false;
-    }
-    st->buf = bigger;
-    st->cap = cap;
-  }
+static void compact(file_state *st) {
+  if (!st->start) return;
+  memmove(st->buf, st->buf + st->start, pending(st));
+  st->end -= st->start;
+  st->start = 0;
+}
+
+static bool read_more(file_state *st, int *err, bool *eof) {
   for (;;) {
     ssize_t n = read(st->fd, st->buf + st->end, st->cap - st->end);
     if (n < 0 && errno == EINTR) continue;
@@ -682,6 +686,21 @@ static bool fill(file_state *st, int *err, bool *eof) {
     st->end += (size_t)n;
     return true;
   }
+}
+
+static bool fill(file_state *st, int *err, bool *eof) {
+  compact(st);
+  if (st->end == st->cap) {
+    size_t cap = st->cap ? st->cap * 2 : CHUNK;
+    uint8_t *bigger = realloc(st->buf, cap);
+    if (!bigger) {
+      *err = ENOMEM;
+      return false;
+    }
+    st->buf = bigger;
+    st->cap = cap;
+  }
+  return read_more(st, err, eof);
 }
 
 static bool take_line(op *o, size_t len, size_t consume) {
@@ -730,6 +749,20 @@ static void work_read_line(op *o) {
   }
 }
 
+static void work_read_block(op *o) {
+  file_state *st = o->st;
+  if (!st->buf) {
+    st->buf = malloc(o->count + 1);
+    if (!st->buf) {
+      fail_op(o, FS_READ, ENOMEM);
+      return;
+    }
+    st->cap = o->count + 1;
+  }
+  compact(st);
+  if (!read_more(st, &o->err, &st->eof)) o->status = FS_READ;
+}
+
 static void work_write(op *o) {
   if (!write_all(o->st->fd, o->in, o->in_len, &o->err)) o->status = FS_WRITE;
 }
@@ -756,6 +789,7 @@ static void work(void *data) {
     case OP_OPEN_APPEND: work_open(o); break;
     case OP_READ_BYTES: work_read_bytes(o); break;
     case OP_READ_LINE: work_read_line(o); break;
+    case OP_READ_BLOCK: work_read_block(o); break;
     case OP_WRITE: work_write(o); break;
     case OP_CLOSE: work_close(o); break;
   }
@@ -771,7 +805,9 @@ static void drop(void *data) {
   free_op(o);
 }
 
-static bool writes(const op *o) { return o->kind != OP_READ_TEXT && o->kind != OP_READ_LINE && o->kind != OP_READ_BYTES; }
+static bool writes(const op *o) {
+  return o->kind != OP_READ_TEXT && o->kind != OP_READ_LINE && o->kind != OP_READ_BYTES && o->kind != OP_READ_BLOCK;
+}
 
 static agc_poller *poller_of(const op *o) { return o->st && o->st->poller ? o->st->poller : o->poller; }
 
@@ -812,6 +848,7 @@ static bool step(op *o) {
   switch (o->kind) {
     case OP_READ_TEXT: step_read_text(o); break;
     case OP_READ_LINE: work_read_line(o); break;
+    case OP_READ_BLOCK: work_read_block(o); break;
     case OP_READ_BYTES: step_read_bytes(o); break;
     case OP_CLOSE: send_rest(o, o->st->fd, o->st->buf, o->st->end); break;
     default: send_rest(o, o->st ? o->st->fd : o->fd, o->in, o->in_len); break;
@@ -1105,6 +1142,23 @@ static agc_value builtin_dir_mkdir(agc_vm *vm, agc_value *args, uint32_t span) {
                  "path-string?");
 }
 
+static op *open_op(agc_vm *vm, op_kind kind, const agc_string *path) {
+  op *o = new_op(vm, kind);
+  o->path = agc_host_path(vm, path);
+  o->st = new_state(kind == OP_OPEN_READ, kind != OP_OPEN_READ);
+  o->owns_st = true;
+  return o;
+}
+
+static agc_value close_handle(agc_vm *vm, agc_resource *r, agc_value handle, int64_t timeout) {
+  op *o = new_op(vm, OP_CLOSE);
+  o->st = r->native;
+  o->owns_st = true;
+  r->native = NULL;
+  agc_unregister(vm, r);
+  return start(vm, o, handle, timeout);
+}
+
 static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   const agc_string *path = agc_as_string(vm, args[0]);
@@ -1122,11 +1176,7 @@ static agc_value builtin_open(agc_vm *vm, agc_value *args, uint32_t span) {
     return error_of("filesystem: mode must be read, write, or append");
   }
   if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
-  op *o = new_op(vm, kind);
-  o->path = agc_host_path(vm, path);
-  o->st = new_state(kind == OP_OPEN_READ, kind != OP_OPEN_READ);
-  o->owns_st = true;
-  return start(vm, o, agc_void(), timeout);
+  return start(vm, open_op(vm, kind, path), agc_void(), timeout);
 }
 
 static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *result) {
@@ -1243,12 +1293,126 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_value failure;
   if (blocked(vm, args[0], &timeout, &failure)) return failure;
   if (!r->native || r->closing) return ok_void();
-  op *o = new_op(vm, OP_CLOSE);
-  o->st = r->native;
-  o->owns_st = true;
-  r->native = NULL;
-  agc_unregister(vm, r);
-  return start(vm, o, args[0], timeout);
+  return close_handle(vm, r, args[0], timeout);
+}
+
+static agc_step lines_wait(void) { return (agc_step){AGC_STEP_WAIT, agc_void()}; }
+
+static agc_step lines_end(agc_value result) { return (agc_step){AGC_STEP_END, result}; }
+
+static file_state *lines_file(agc_vm *vm, const lines *s) {
+  const agc_resource *r = agc_as_handle(vm, s->handle);
+  return r->closing ? NULL : r->native;
+}
+
+static bool lines_take(agc_vm *vm, lines *s, file_state *st, size_t len, size_t consume, agc_value *line) {
+  const uint8_t *data = st->buf + st->start;
+  size_t chars;
+  agc_charge_bytes(vm, consume);
+  bool valid = agc_utf8_chars(data, len, &chars);
+  if (valid)
+    *line = agc_string_value(agc_make_string((const char *)data, len, chars));
+  else
+    s->outcome = agc_utf8_error(data, len);
+  st->start += consume;
+  st->scan = 0;
+  return valid;
+}
+
+static agc_step lines_step(agc_vm *vm, void *data, agc_value last) {
+  lines *s = data;
+  for (;;) {
+    switch (s->phase) {
+      case LINES_START:
+        s->phase = LINES_OPENED;
+        last = start(vm, open_op(vm, OP_OPEN_READ, agc_as_string(vm, s->path)), agc_void(), s->timeout);
+        if (vm->task->parking) return lines_wait();
+        break;
+      case LINES_OPENED: {
+        const agc_result *opened = agc_as_result(vm, last);
+        if (!opened->ok) return lines_end(last);
+        s->handle = opened->value;
+        s->phase = LINES_SCAN;
+        break;
+      }
+      case LINES_SCAN: {
+        file_state *st = lines_file(vm, s);
+        if (!st) return lines_end(error_of("filesystem: file handle is closed"));
+        size_t have = pending(st);
+        size_t window = have < s->limit ? have : s->limit;
+        const uint8_t *lf = NULL;
+        if (window > st->scan) lf = memchr(st->buf + st->start + st->scan, '\n', window - st->scan);
+        agc_value line = agc_void();
+        s->phase = LINES_CLOSE;
+        if (lf) {
+          size_t len = (size_t)(lf - (st->buf + st->start));
+          size_t keep = len && st->buf[st->start + len - 1] == '\r' ? len - 1 : len;
+          if (!lines_take(vm, s, st, keep, len + 1, &line)) break;
+        } else if (have > s->limit) {
+          s->outcome = error_of(line_too_long);
+          break;
+        } else if (st->eof && have == 0) {
+          s->outcome = ok_void();
+          break;
+        } else if (st->eof) {
+          if (!lines_take(vm, s, st, have, have, &line)) break;
+        } else {
+          st->scan = window;
+          op *o = new_op(vm, OP_READ_BLOCK);
+          o->st = st;
+          o->count = s->limit;
+          s->phase = LINES_READ;
+          last = start(vm, o, s->handle, s->timeout);
+          if (vm->task->parking) return lines_wait();
+          break;
+        }
+        s->phase = LINES_BLOCK;
+        return (agc_step){AGC_STEP_CALL, line};
+      }
+      case LINES_READ:
+        s->phase = LINES_SCAN;
+        if (!agc_as_result(vm, last)->ok) {
+          s->outcome = last;
+          s->phase = LINES_CLOSE;
+        }
+        break;
+      case LINES_BLOCK:
+        s->phase = LINES_SCAN;
+        if (!agc_as_result(vm, last)->ok) {
+          s->outcome = last;
+          s->phase = LINES_CLOSE;
+        }
+        break;
+      case LINES_CLOSE: {
+        agc_resource *r = agc_as_handle(vm, s->handle);
+        if (!r->native || r->closing) return lines_end(s->outcome);
+        s->phase = LINES_CLOSED;
+        last = close_handle(vm, r, s->handle, s->timeout);
+        if (vm->task->parking) return lines_wait();
+        break;
+      }
+      case LINES_CLOSED: return lines_end(s->outcome);
+    }
+  }
+}
+
+static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
+  files_on(vm, span);
+  const agc_string *path = agc_as_string(vm, args[0]);
+  int64_t limit = agc_as_int(vm, args[1]);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  if (limit < MIN_LINE_BUFFER || limit > MAX_LINE_BUFFER)
+    agc_fail(vm, "RUNTIME-INVALID-COUNT", "buffer_bytes must be between 1024 and 16777216", span + 2);
+  if (timeout <= 0) return error_of(bad_timeout);
+  if (!path_string(path)) return contract_error(complete_who, complete_expected, path);
+  lines *s = agc_alloc(sizeof(lines));
+  s->path = args[0];
+  s->handle = agc_void();
+  s->outcome = ok_void();
+  s->limit = (size_t)limit;
+  s->timeout = timeout;
+  agc_task_stepper(vm, lines_step, s, args[3]);
+  return agc_void();
 }
 
 static agc_value builtin_cwd(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1350,6 +1514,7 @@ const agc_builtin agc_file_builtins[] = {
   {"File.write_bytes", 3, builtin_write_list, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.flush", 2, builtin_flush, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.close", 2, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"File.each_line", 4, builtin_each_line, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.read_text", 2, builtin_read_text, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.write_text", 3, builtin_write_text, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"File.append_text", 3, builtin_append_text, AGC_NATIVE_NONE, AGC_COST_NONE},

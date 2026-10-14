@@ -57,6 +57,15 @@ typedef struct {
   agc_native *native;
 } agc_frame;
 
+typedef enum { AGC_STEP_CALL, AGC_STEP_WAIT, AGC_STEP_END } agc_step_kind;
+
+typedef struct {
+  agc_step_kind kind;
+  agc_value value;
+} agc_step;
+
+typedef agc_step (*agc_step_fn)(agc_vm *vm, void *state, agc_value last);
+
 typedef struct {
   agc_channel *channel;
   agc_value value;
@@ -141,6 +150,9 @@ struct agc_task {
   agc_resource *parked;
   uint32_t park_reg;
   bool parking, retry;
+  agc_step_fn stepper;
+  void *stepper_state;
+  agc_value stepper_block;
   int64_t turn_cost;
   uint64_t lock_deadline, input_seen;
   agc_task_state state;
@@ -186,6 +198,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 void agc_task_park(agc_vm *vm, bool retry);
+void agc_task_stepper(agc_vm *vm, agc_step_fn step, void *state, agc_value block);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
