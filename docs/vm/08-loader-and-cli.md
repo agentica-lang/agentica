@@ -1,44 +1,173 @@
 ## 8. Loader safety
 
-The loader validates the whole file before anything runs. A failure prints `agentica-vm: invalid bytecode: <reason>` and exits 2. Types are not checked statically: run-time tag checks are simpler, and each costs one predictable branch.
+The loader validates the whole file before anything runs. A failure prints
+`agentica-vm: invalid bytecode: <reason>` and exits 2. Types are not checked
+statically: run-time tag checks are simpler, and each costs one predictable
+branch.
 
-- **Input**: a regular file of at most 256 MiB, read with bounds checks. Every count is checked against the bytes left before anything is allocated. Index and size sums use `uint64_t`. The loader has a memory budget of 4 times the file length plus 1 MiB, and every allocation is charged to it first.
-- **Header**: magic, format version and Agentica version match exactly. The file ends right after the entry.
+- **Input**: a regular file of at most 256 MiB, read with bounds checks. Every
+  count is checked against the bytes left before anything is allocated. Index
+  and size sums use `uint64_t`. The loader has a memory budget of 4 times the
+  file length plus 1 MiB, and every allocation is charged to it first.
+- **Header**: magic, format version and Agentica version match exactly. The file
+  ends right after the entry.
 - **Strings**: valid UTF-8 with no surrogates. Character counts are computed.
-- **Spans**: the source exists, `start <= end`, and each line is within the source's line count and each column within the line's length plus 1.
-- **Tables**: constant kinds 0 to 6 only. Field counts and variant arities are at most 65535. The loader does not check builtin records: a builtin finds its record by exact name and fields at run time (5.2). Every builtin `(name, arity)` pair exists.
-- **Types**: at most 65535 types with known kinds. A List or Map entry names an earlier type and nests at most 1024 levels (the writer gives `BYTECODE-LIMIT` past that). A Struct entry names a struct in range that has a decodable record. Records name structs in increasing order with distinct names, have one field type per field, and every index is in range. So cycles only go through named structs.
-- **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`. At least one instruction, and the last is `RETURN` or `JUMP`. Every opcode is known. Every register operand is below `registers`, including each window: `LIST` `b..b+c-1`, `MAP` `b..b+2c-1` (with `c <= 255`), `STRUCT` and `ENUM` by their sizes, `CALL` and `TAIL_CALL` by the callee's parameter count, `CALL_VALUE` `a..a+b`, `CALL_BUILTIN` by its arity, `CLOSURE` by its captures. Constant, function, builtin, type, struct, field, variant and span indexes are in range, including the extra spans of `STEP` and `CALL_BUILTIN`. Jump targets are inside the function, and a `STEP` count is at least 1. `RANGE` checks `a`, the window `b..b+1` and that `c <= 1`; `RANGE_BOUNDS` checks `b` and the window `a..a+2`.
-- **Termination**: every backward jump targets a `STEP`. Every function starts with a `STEP`, unless it has at most 2 instructions and no call (an empty body). The lowering (3.3) always meets these rules. Together they mean every unbounded repetition charges a step, so `--max-steps` holds even for hostile files. The budget bounds instructions to about steps times code size. It does not bound bytes: `CONCAT` and `INSPECT` cost time and memory in proportion to their strings (§1). `LIST` and `TAIL_CALL` copy up to 65534 values in one instruction. `MAP` hashes at most 255 pairs per instruction, and longer literals are extended with `Map.put`.
+- **Spans**: the source exists, `start <= end`, and each line is within the
+  source's line count and each column within the line's length plus 1.
+- **Tables**: constant kinds 0 to 6 only. Field counts and variant arities are
+  at most 65535. The loader does not check builtin records: a builtin finds its
+  record by exact name and fields at run time (5.2). Every builtin
+  `(name, arity)` pair exists.
+- **Types**: at most 65535 types with known kinds. A List or Map entry names an
+  earlier type and nests at most 1024 levels (the writer gives `BYTECODE-LIMIT`
+  past that). A Struct entry names a struct in range that has a decodable
+  record. Records name structs in increasing order with distinct names, have one
+  field type per field, and every index is in range. So cycles only go through
+  named structs.
+- **Functions**: `1 <= registers <= 65535` and `params + captures <= registers`.
+  At least one instruction, and the last is `RETURN` or `JUMP`. Every opcode is
+  known. Every register operand is below `registers`, including each window:
+  `LIST` `b..b+c-1`, `MAP` `b..b+2c-1` (with `c <= 255`), `STRUCT` and `ENUM` by
+  their sizes, `CALL` and `TAIL_CALL` by the callee's parameter count,
+  `CALL_VALUE` `a..a+b`, `CALL_BUILTIN` by its arity, `CLOSURE` by its captures.
+  Constant, function, builtin, type, struct, field, variant and span indexes are
+  in range, including the extra spans of `STEP` and `CALL_BUILTIN`. Jump targets
+  are inside the function, and a `STEP` count is at least 1. `RANGE` checks `a`,
+  the window `b..b+1` and that `c <= 1`; `RANGE_BOUNDS` checks `b` and the
+  window `a..a+2`.
+- **Termination**: every backward jump targets a `STEP`. Every function starts
+  with a `STEP`, unless it has at most 2 instructions and no call (an empty
+  body). The lowering (3.3) always meets these rules. Together they mean every
+  unbounded repetition charges a step, so `--max-steps` holds even for hostile
+  files. The budget bounds instructions to about steps times code size. It does
+  not bound bytes: `CONCAT` and `INSPECT` cost time and memory in proportion to
+  their strings (§1). `LIST` and `TAIL_CALL` copy up to 65534 values in one
+  instruction. `MAP` hashes at most 255 pairs per instruction, and longer
+  literals are extended with `Map.put`.
 - **Entry**: exists, with no parameters or captures.
-- **Closures**: `CALL_VALUE` checks its window. `CLOSURE` checks the function index and the window of its captures. `CALL` and `TAIL_CALL` may not name a function with captures, since only `CALL_VALUE` fills them. A `CALL_VALUE` counts as a call for the termination rules.
-- **Run time**: parameter and capture counts of `CALL_VALUE` and callbacks, tags (5.2), list, map and string bounds, and the register cap (6.1).
+- **Closures**: `CALL_VALUE` checks its window. `CLOSURE` checks the function
+  index and the window of its captures. `CALL` and `TAIL_CALL` may not name a
+  function with captures, since only `CALL_VALUE` fills them. A `CALL_VALUE`
+  counts as a call for the termination rules.
+- **Run time**: parameter and capture counts of `CALL_VALUE` and callbacks, tags
+  (5.2), list, map and string bounds, and the register cap (6.1).
 
-`vm/tests/loader_test.c` checks each rule by its reason, and truncation at every byte of a file with a type table.
+`vm/tests/loader_test.c` checks each rule by its reason, and truncation at every
+byte of a file with a type table.
 
 ## 9. CLI and packaging
 
-- `agentica compile file.agc -o file.agcb` runs the front end and writes bytecode.
-- `agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- file.agcb [args...]`. The option parser is hand written. It stops at the first non-option and honors `--`. Callers always pass `--` before the file, so an option after the file is a program argument. Option errors (a repeated option, an unknown switch, a missing or bad value, a bad `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and `--json` may both appear, and the last one wins.
-- `--flush-timeout MS` sets the end-of-run wait for file close jobs and for the buffered output of stdout and stderr (10.2.2, End of run). The wait is always bounded: 30000 ms by default, and the environment variable `AGENTICA_FLUSH_TIMEOUT_MS` (an integer from 0 to 86400000, read by the VM, so `agentica` and `agentica-vm` both honour it) sets it when the flag is absent; the flag wins. `0` means no wait, and there is no way to turn the limit off: values above 86400000 (24 hours) are rejected. A bad flag or variable value exits 2. When it runs out, the VM prints `agentica: file data may not be written: the flush took longer than MS ms` (with `--json`, a JSON object with the same warning), after the flush and after the diagnostic of a failed run, which is queued before the wait so that the limit covers it. The exit code is kept.
-- `--version` prints the VM version and the versions of the libraries it links: libgc, yyjson, libuv and OpenSSL (the one that runs). OpenSSL is linked statically in the release.
+- `agentica compile file.agc -o file.agcb` runs the front end and writes
+  bytecode.
+- `agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- file.agcb [args...]`.
+  The option parser is hand written. It stops at the first non-option and honors
+  `--`. Callers always pass `--` before the file, so an option after the file is
+  a program argument. Option errors (a repeated option, an unknown switch, a
+  missing or bad value, a bad `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and
+  `--json` may both appear, and the last one wins.
+- `--flush-timeout MS` sets the end-of-run wait for file close jobs and for the
+  buffered output of stdout and stderr (10.2.2, End of run). The wait is always
+  bounded: 30000 ms by default, and the environment variable
+  `AGENTICA_FLUSH_TIMEOUT_MS` (an integer from 0 to 86400000, read by the VM, so
+  `agentica` and `agentica-vm` both honour it) sets it when the flag is absent;
+  the flag wins. `0` means no wait, and there is no way to turn the limit off:
+  values above 86400000 (24 hours) are rejected. A bad flag or variable value
+  exits 2. When it runs out, the VM prints
+  `agentica: file data may not be written: the flush took longer than MS ms`
+  (with `--json`, a JSON object with the same warning), after the flush and
+  after the diagnostic of a failed run, which is queued before the wait so that
+  the limit covers it. The exit code is kept.
+- `--version` prints the VM version and the versions of the libraries it links:
+  libgc, yyjson, libuv and OpenSSL (the one that runs). OpenSSL is linked
+  statically in the release.
 - The planned `--schedulers N` (10.2.3) is not in the VM yet.
-- Windows: arguments come from `wmain` and are converted to UTF-8. The input opens with `_wopen` on the original UTF-16 name, so a lone surrogate never maps to another file. The size comes from `_fstat64`, and a file above the 256 MiB limit is refused. There is no long-path handling: `vm/main.c` passes the path as given, with no `\\?\` prefix and no long-path manifest.
-- `agentica file.agc [args...]` runs on the VM. `src/main.rkt` runs the front end and `lower`, then writes the bytecode to `agentica-<32 hex>.agcb` in `TMPDIR`. The file is created exclusively with mode 0600. The driver runs `agentica-vm [options] --driver-pid PID -- file [args...]`. `--driver-pid` is a hidden flag. Only a driver that hands the VM a private one-shot file may pass it: the normal run and the BDD runner of `agentica test`.
-- On Linux, the VM first resets `SIGTERM` to its default, sets `prctl(PR_SET_PDEATHSIG, SIGTERM)` (`SIGTERM`, so the VM kills its children before it ends, 10.4) and checks that `getppid()` is `PID`. If not, the driver is already gone, and the VM exits 2 without reading the input. Then it opens the input with `O_NOFOLLOW` and loads it only if it is a regular file owned by the VM's user with one link and no group or other permission bits. The file is deleted after loading, but only if the path still names the file it opened (same device and inode). The driver also deletes the file when the VM never ran, or failed before loading.
-- On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver), the driver waits up to 2 seconds, since Ctrl-C also reaches the VM and a second `SIGTERM` would skip the file flush (10.2.2). Then it sends `SIGTERM`, waits up to 2 more seconds, and only then sends `SIGKILL`. On another way out (a failed stdin read) it sends `SIGTERM` at once. A VM whose driver died ends on its first stop signal, without the file flush, after it kills its children.
-- When the driver's output is not a file (captured output), it copies that stream through a pipe. A non-file stdin is copied into the VM's stdin by a thread that stops when the VM exits, so the driver may read ahead of what the program consumes. A special (non-byte) value on the port ends the input like EOF. If reading the driver's stdin fails, the VM is stopped and the driver reports `RUNTIME-INTERNAL` (exit 1).
-- Front-end and `LOWER-` diagnostics print as usual (exit 1). `--vm` and `--legacy-eval` are unknown switches.
-- The VM is found and never looked up in the current directory: `AGENTICA_VM=path` wins. Under `racket src/main.rkt` it is `dist/agentica-vm` of the checkout. In a `raco exe` build it is `agentica-vm` next to the executable, with symlinks resolved. The release archive has it in `bin/`. A missing or non-executable VM prints `agentica: cannot find the VM at PATH; run make vm or set AGENTICA_VM` and exits 2, after the front end and the lowering, so a program diagnostic wins. The lookup does not use `define-runtime-path`, since `raco distribute` would copy the VM into `lib/`.
-- `agentica test` runs on the VM (`docs/bdd.md`). `src/bdd-driver.rkt` compiles the step program and the runner, starts the runner with `--driver-pid`, and the runner starts one VM per scenario.
-- `make vm` builds `dist/agentica-vm` (`.exe` on Windows). `make exe` and `make test` build it first. The release builds it against glibc 2.28 (11).
-- Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`. On macOS there is no parent-death signal, so the closest safe thing is the delete-after-load flag alone, or a pipe the VM watches. On macOS the flag skips only the parent check. The `O_NOFOLLOW`, privacy and inode checks run on every non-Windows system. The VM driver is tested on Linux only.
-- `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the driver must call `subprocess` from the main thread.
-- On Linux, `main` first opens `/dev/null` onto any of descriptors 0, 1 and 2 that is closed or in the wrong direction. So libuv never gets a low descriptor and trips its assertion, and reads and writes on that stream still fail with `EBADF`.
+- Windows: arguments come from `wmain` and are converted to UTF-8. The input
+  opens with `_wopen` on the original UTF-16 name, so a lone surrogate never
+  maps to another file. The size comes from `_fstat64`, and a file above the 256
+  MiB limit is refused. There is no long-path handling: `vm/main.c` passes the
+  path as given, with no `\\?\` prefix and no long-path manifest.
+- `agentica file.agc [args...]` runs on the VM. `src/main.rkt` runs the front
+  end and `lower`, then writes the bytecode to `agentica-<32 hex>.agcb` in
+  `TMPDIR`. The file is created exclusively with mode 0600. The driver runs
+  `agentica-vm [options] --driver-pid PID -- file [args...]`. `--driver-pid` is
+  a hidden flag. Only a driver that hands the VM a private one-shot file may
+  pass it: the normal run and the BDD runner of `agentica test`.
+- On Linux, the VM first resets `SIGTERM` to its default, sets
+  `prctl(PR_SET_PDEATHSIG, SIGTERM)` (`SIGTERM`, so the VM kills its children
+  before it ends, 10.4) and checks that `getppid()` is `PID`. If not, the driver
+  is already gone, and the VM exits 2 without reading the input. Then it opens
+  the input with `O_NOFOLLOW` and loads it only if it is a regular file owned by
+  the VM's user with one link and no group or other permission bits. The file is
+  deleted after loading, but only if the path still names the file it opened
+  (same device and inode). The driver also deletes the file when the VM never
+  ran, or failed before loading.
+- On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver), the driver waits
+  up to 2 seconds, since Ctrl-C also reaches the VM and a second `SIGTERM` would
+  skip the file flush (10.2.2). Then it sends `SIGTERM`, waits up to 2 more
+  seconds, and only then sends `SIGKILL`. On another way out (a failed stdin
+  read) it sends `SIGTERM` at once. A VM whose driver died ends on its first
+  stop signal, without the file flush, after it kills its children.
+- When the driver's output is not a file (captured output), it copies that
+  stream through a pipe. A non-file stdin is copied into the VM's stdin by a
+  thread that stops when the VM exits, so the driver may read ahead of what the
+  program consumes. A special (non-byte) value on the port ends the input like
+  EOF. If reading the driver's stdin fails, the VM is stopped and the driver
+  reports `RUNTIME-INTERNAL` (exit 1).
+- Front-end and `LOWER-` diagnostics print as usual (exit 1). `--vm` and
+  `--legacy-eval` are unknown switches.
+- The VM is found and never looked up in the current directory:
+  `AGENTICA_VM=path` wins. Under `racket src/main.rkt` it is `dist/agentica-vm`
+  of the checkout. In a `raco exe` build it is `agentica-vm` next to the
+  executable, with symlinks resolved. The release archive has it in `bin/`. A
+  missing or non-executable VM prints
+  `agentica: cannot find the VM at PATH; run make vm or set AGENTICA_VM` and
+  exits 2, after the front end and the lowering, so a program diagnostic wins.
+  The lookup does not use `define-runtime-path`, since `raco distribute` would
+  copy the VM into `lib/`.
+- `agentica test` runs on the VM (`docs/bdd.md`). `src/bdd-driver.rkt` compiles
+  the step program and the runner, starts the runner with `--driver-pid`, and
+  the runner starts one VM per scenario.
+- `make vm` builds `dist/agentica-vm` (`.exe` on Windows). `make exe` and
+  `make test` build it first. The release builds it against glibc 2.28 (11).
+- Planned: on Windows a kill-on-close job object instead of `PR_SET_PDEATHSIG`.
+  On macOS there is no parent-death signal, so the closest safe thing is the
+  delete-after-load flag alone, or a pipe the VM watches. On macOS the flag
+  skips only the parent check. The `O_NOFOLLOW`, privacy and inode checks run on
+  every non-Windows system. The VM driver is tested on Linux only.
+- `PR_SET_PDEATHSIG` follows the OS thread that forked the VM, so the driver
+  must call `subprocess` from the main thread.
+- On Linux, `main` first opens `/dev/null` onto any of descriptors 0, 1 and 2
+  that is closed or in the wrong direction. So libuv never gets a low descriptor
+  and trips its assertion, and reads and writes on that stream still fail with
+  `EBADF`.
 
-**VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4. This note lists what the code chose.
+**VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
+This note lists what the code chose.
 
-- `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`, `tls`, `loader` and `gc`. Trace lines go to stderr. When `AGENTICA_VM_TRACE_FILE` is also set, they go to that file instead, and the `unknown category` warning follows them there. If the file cannot be opened, the `cannot open` line goes to stderr and tracing is off. `make vm TRACE=0` compiles the trace points out, and `--version` then says `trace off`.
-- The trace file is opened with `O_NONBLOCK` and `O_NOFOLLOW`, and only a regular file owned by the VM's user is taken, so start-up never blocks on a FIFO or a device.
-- Every line is valid UTF-8. A text value with a byte that is not part of a valid UTF-8 sequence is quoted, and each such byte is written as `\u00XX`. A cut line ends with `...` after a whole escape or sequence.
-- Events by category: `sched` (spawn, turn, wake, cancel, stall, fail, stop, exit); `io` (start, done, timeout, lock wait and handoff, stdin, poll, end; a regular file as stdout or stderr shows as `kind=output` jobs, and a pipe, FIFO, terminal or socket as one `output_start stream=stdout|stderr` line and one `output_done` line per run of data; channel waits appear as `kind=lock` in `start` and `detach`, and have no `done` or `timeout` line); `proc` (spawn, spawn_failed, exit, close, term, kill, eof, truncated, stderr, guard_cleanup, and `reap pid=N alive=1` when a child is still alive after its bound); `loader` (file, format, tables, done, reject); `gc` (`collect at=turn|end count= heap= free= since=`, from `trace_gc` in `vm/task.c`); `tls` (handshake and its errors, read error, close; `tls_handshake_done` carries `protocol` and `cipher`, `vm/tcp.c`); and the TCP events of 10.3.1 (`tcp_connect`, `tcp_listen`, `tcp_accept`, `tcp_eof`, `tcp_close`, and their error forms). Field names are in `vm/trace.c` and `vm/loop.c`.
+- `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`,
+  `tls`, `loader` and `gc`. Trace lines go to stderr. When
+  `AGENTICA_VM_TRACE_FILE` is also set, they go to that file instead, and the
+  `unknown category` warning follows them there. If the file cannot be opened,
+  the `cannot open` line goes to stderr and tracing is off. `make vm TRACE=0`
+  compiles the trace points out, and `--version` then says `trace off`.
+- The trace file is opened with `O_NONBLOCK` and `O_NOFOLLOW`, and only a
+  regular file owned by the VM's user is taken, so start-up never blocks on a
+  FIFO or a device.
+- Every line is valid UTF-8. A text value with a byte that is not part of a
+  valid UTF-8 sequence is quoted, and each such byte is written as `\u00XX`. A
+  cut line ends with `...` after a whole escape or sequence.
+- Events by category: `sched` (spawn, turn, wake, cancel, stall, fail, stop,
+  exit); `io` (start, done, timeout, lock wait and handoff, stdin, poll, end; a
+  regular file as stdout or stderr shows as `kind=output` jobs, and a pipe,
+  FIFO, terminal or socket as one `output_start stream=stdout|stderr` line and
+  one `output_done` line per run of data; channel waits appear as `kind=lock` in
+  `start` and `detach`, and have no `done` or `timeout` line); `proc` (spawn,
+  spawn_failed, exit, close, term, kill, eof, truncated, stderr, guard_cleanup,
+  and `reap pid=N alive=1` when a child is still alive after its bound);
+  `loader` (file, format, tables, done, reject); `gc`
+  (`collect at=turn|end count= heap= free= since=`, from `trace_gc` in
+  `vm/task.c`); `tls` (handshake and its errors, read error, close;
+  `tls_handshake_done` carries `protocol` and `cipher`, `vm/tcp.c`); and the TCP
+  events of 10.3.1 (`tcp_connect`, `tcp_listen`, `tcp_accept`, `tcp_eof`,
+  `tcp_close`, and their error forms). Field names are in `vm/trace.c` and
+  `vm/loop.c`.

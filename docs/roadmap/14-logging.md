@@ -1,10 +1,46 @@
 ## Phase 14: Logging and debugging
 
-Specified in [`docs/future/24-logging.md` section 24](../future/24-logging.md#24-logging-and-debugging). Three small PRs, on the VM only. 14a is in order step 7.1, right after 7h processes and before TCP and TLS, to speed up debugging of the rest of 7h; 14b is order row 7.2.5 (taken out of row 7.5 by the owner on 2026-10-14, before the freeze of row 7.2.7), and it goes first: it adds no API, and agents get the most from it. 14c is order step 7.5, a new feature after 7i; it comes after default parameter values (15a, row 7.5a). 14c follows the library rule (after the order table): the module is Agentica code, and only the three settings are builtins, under its exception 1.
+Specified in [`docs/future/24-logging.md` section
+24](../future/24-logging.md#24-logging-and-debugging). Three small PRs, on the
+VM only. 14a is in order step 7.1, right after 7h processes and before TCP and
+TLS, to speed up debugging of the rest of 7h; 14b is order row 7.2.5 (taken out
+of row 7.5 by the owner on 2026-10-14, before the freeze of row 7.2.7), and it
+goes first: it adds no API, and agents get the most from it. 14c is order step
+7.5, a new feature after 7i; it comes after default parameter values (15a, row
+7.5a). 14c follows the library rule (after the order table): the module is
+Agentica code, and only the three settings are builtins, under its exception 1.
 
-- [x] 14a VM tracing (`docs/future/24-logging.md` §24.4): `vm/trace.h` and `vm/trace.c`, `AGENTICA_VM_TRACE` (and `AGENTICA_VM_TRACE_FILE`) with the categories `sched`, `io`, `proc`, `tls` (its trace points came with the TLS PR; the TCP PR added its events to `io`), `loader` and `gc`; one `write(2)` per `agc-trace` line; `make vm TRACE=0` compiles it out (built in the `vm-sanitizers` job on manual CI runs and when the trace files change); the Makefile `unexport`s both variables and the VM test runners remove them; `tests/vm-trace-test.rkt` traces to a file and checks that exit code, stdout and stderr do not change. Docs: `docs/vm/` and the development skill. Done: as built in `docs/vm/08-loader-and-cli.md` §9 ("VM tracing (as built)"); `tls` is defined and has no trace points yet.
-- [ ] 14b Stack traces on runtime errors (`docs/future/24-logging.md` §24.3), always on in the plain, `--ai` and `--json` formats: names and places per frame, the tail-call mark, merged repeats, at most 20 lines, the spawn place of a failing task. Fixed expected stderr in the three formats. Docs: `grammar.md` §7, `docs/vm/02-reference-behavior.md` §2.5 and `docs/vm/05-values-execution-builtins.md` §6.1, the programming skill's diagnostics reference.
-- [ ] 14c `std/log` (`docs/future/24-logging.md` §24.2): `stdlib/log.agc` (levels, a `fields: Map[String, String] = {}` parameter on each level function, which needs 15a, text and JSON lines, `Log.debug?`, `Log.time_text`), the `--log-level`, `--log-format` and `--log-time` flags on `agentica` and `agentica-vm`, the `System.log_level`, `System.log_format` and `System.log_time?` builtins, `IO.warn` in one `write(2)`, and "did you mean" help for `CHECK-IMPORT-NAME`. Tests with `--log-time none` and fixed expected stderr, whole lines from several tasks, and `Log.time_text` against Python `datetime` vectors. Docs: `grammar.md`, the programming skill (`references/log.md`), `site/content/library/io-and-system/log.md`, `docs/vm/08-loader-and-cli.md` §9.
+- [x] 14a VM tracing (`docs/future/24-logging.md` §24.4): `vm/trace.h` and
+  `vm/trace.c`, `AGENTICA_VM_TRACE` (and `AGENTICA_VM_TRACE_FILE`) with the
+  categories `sched`, `io`, `proc`, `tls` (its trace points came with the TLS
+  PR; the TCP PR added its events to `io`), `loader` and `gc`; one `write(2)`
+  per `agc-trace` line; `make vm TRACE=0` compiles it out (built in the
+  `vm-sanitizers` job on manual CI runs and when the trace files change); the
+  Makefile `unexport`s both variables and the VM test runners remove them;
+  `tests/vm-trace-test.rkt` traces to a file and checks that exit code, stdout
+  and stderr do not change. Docs: `docs/vm/` and the development skill. Done: as
+  built in `docs/vm/08-loader-and-cli.md` §9 ("VM tracing (as built)"); `tls` is
+  defined and has no trace points yet.
+- [ ] 14b Stack traces on runtime errors (`docs/future/24-logging.md` §24.3),
+  always on in the plain, `--ai` and `--json` formats: names and places per
+  frame, the tail-call mark, merged repeats, at most 20 lines, the spawn place
+  of a failing task. Fixed expected stderr in the three formats. Docs:
+  `grammar.md` §7, `docs/vm/02-reference-behavior.md` §2.5 and
+  `docs/vm/05-values-execution-builtins.md` §6.1, the programming skill's
+  diagnostics reference.
+- [ ] 14c `std/log` (`docs/future/24-logging.md` §24.2): `stdlib/log.agc`
+  (levels, a `fields: Map[String, String] = {}` parameter on each level
+  function, which needs 15a, text and JSON lines, `Log.debug?`,
+  `Log.time_text`), the `--log-level`, `--log-format` and `--log-time` flags on
+  `agentica` and `agentica-vm`, the `System.log_level`, `System.log_format` and
+  `System.log_time?` builtins, `IO.warn` in one `write(2)`, and "did you mean"
+  help for `CHECK-IMPORT-NAME`. Tests with `--log-time none` and fixed expected
+  stderr, whole lines from several tasks, and `Log.time_text` against Python
+  `datetime` vectors. Docs: `grammar.md`, the programming skill
+  (`references/log.md`), `site/content/library/io-and-system/log.md`,
+  `docs/vm/08-loader-and-cli.md` §9.
 
-**Done when:** a VM developer can trace the scheduler, I/O, processes and TLS without editing C; a runtime error shows its call stack; and the site page's `std/log` examples run.
+**Done when:** a VM developer can trace the scheduler, I/O, processes and TLS
+without editing C; a runtime error shows its call stack; and the site page's
+`std/log` examples run.
 
