@@ -86,7 +86,12 @@ static void leave_parent(agc_task *t) {
   t->parent = t->prev_sibling = t->next_sibling = NULL;
 }
 
+void agc_task_close_done(agc_vm *vm, agc_task *t) {
+  if (--t->closing == 0) agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+}
+
 static void finish_task(agc_vm *vm, agc_task *t) {
+  t->left_children = t->children != NULL;
   agc_close_owned(vm, t);
   t->state = AGC_TASK_DONE;
   t->regs = NULL;
@@ -95,7 +100,6 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frame_capacity = 0;
   t->cursor = NULL;
   t->turn_cost = 0;
-  t->left_children = t->children != NULL;
   if (!t->group) vm->tasks_done++;
   while (t->children) {
     agc_task *child = t->children;
@@ -103,7 +107,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
     if (t->parent) adopt(t->parent, child);
   }
   leave_parent(t);
-  agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+  if (!t->closing) agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
   agc_end_fn end = t->end;
   t->end = NULL;
   if (end) end(vm, t);
@@ -409,22 +413,29 @@ agc_task *agc_task_group(agc_vm *vm) {
   return g;
 }
 
-agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
-  agc_resource *r = agc_owned_of(vm, handle);
-  if (!r || r->owner != vm->task || r->closing)
-    agc_fail(vm, "RUNTIME-HANDLE-NOT-OWNED", "the calling task does not own this handle, or it is closed", span + 2);
+agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                                uint32_t span) {
   uint64_t seed = agc_random_next(&vm->task->random);
-  agc_task *child = agc_task_spawn_in(vm, parent, fn, &handle, 1, span);
+  agc_task *child = agc_task_spawn_in(vm, parent, fn, args, argc, span);
   agc_random_seed(&child->random, seed);
-  agc_hand_over(r, child);
+  return child;
+}
+
+bool agc_task_owns(agc_vm *vm, agc_value handle) {
+  const agc_resource *r = agc_owned_of(vm, handle);
+  return r && r->owner == vm->task;
+}
+
+agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
+  if (!agc_task_owns(vm, handle))
+    agc_fail(vm, "RUNTIME-HANDLE-NOT-OWNED", "the calling task does not own this handle, or it is closed", span + 2);
+  agc_task *child = agc_task_spawn_seeded(vm, parent, fn, &handle, 1, span);
+  agc_hand_over(agc_owned_of(vm, handle), child);
   return child;
 }
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
-  uint64_t seed = agc_random_next(&vm->task->random);
-  agc_task *child = agc_task_spawn(vm, args[0], &args[1], 1, span);
-  agc_random_seed(&child->random, seed);
-  return agc_task_value(child);
+  return agc_task_value(agc_task_spawn_seeded(vm, vm->task, args[0], &args[1], 1, span));
 }
 
 static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -433,7 +444,7 @@ static agc_value builtin_spawn_owning(agc_vm *vm, agc_value *args, uint32_t span
 
 bool agc_task_join(agc_vm *vm, agc_task *target) {
   vm->task->awaiting = NULL;
-  if (target->state == AGC_TASK_DONE) return false;
+  if (target->state == AGC_TASK_DONE && !target->closing) return false;
   vm->task->awaiting = target;
   agc_task_enqueue(&target->waiters, &target->waiters_tail, vm->task);
   agc_task_park(vm, true);

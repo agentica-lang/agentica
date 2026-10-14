@@ -11,7 +11,7 @@
 #include "value.h"
 
 typedef void (*agc_release_fn)(void *native);
-typedef void (*agc_close_fn)(agc_vm *vm, agc_resource *r);
+typedef void (*agc_close_fn)(agc_vm *vm, agc_resource *r, agc_task *ender);
 
 typedef enum { AGC_RESOURCE_NATIVE, AGC_RESOURCE_JOB } agc_resource_kind;
 
@@ -26,7 +26,7 @@ struct agc_resource {
   agc_resource *holder;
   agc_task *next_owner;
   agc_task *waiters, *waiters_tail;
-  agc_task *owner;
+  agc_task *owner, *ender;
   agc_resource *owned_prev, *owned_next;
   agc_close_fn close;
   bool closing, pool_close, keep_detached;
@@ -182,7 +182,7 @@ struct agc_task {
   const agc_string *cursor;
   size_t cursor_index, cursor_offset;
   agc_resource *parked;
-  uint32_t park_reg;
+  uint32_t park_reg, closing;
   bool parking, retry;
   agc_stepper *stepper;
   int64_t turn_cost;
@@ -227,6 +227,7 @@ struct agc_vm {
 uint64_t agc_resource_id(agc_vm *vm);
 agc_resource *agc_register(agc_vm *vm, void *native, agc_release_fn release);
 void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close);
+void agc_disown(agc_resource *r);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 
@@ -238,7 +239,11 @@ void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char 
 agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
                             uint32_t span);
+agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                                uint32_t span);
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span);
+bool agc_task_owns(agc_vm *vm, agc_value handle);
+void agc_task_close_done(agc_vm *vm, agc_task *t);
 agc_task *agc_task_group(agc_vm *vm);
 void agc_task_observe(agc_vm *vm, agc_task *t);
 bool agc_report_unobserved(agc_vm *vm);
@@ -251,7 +256,7 @@ void agc_io_ready(agc_io_job *j);
 void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
 #define AGC_JOB_FLUSH 1u
 #define AGC_JOB_QUIET 2u
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, unsigned flags);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
 extern const agc_io_kind agc_wait_io;
 #ifdef __linux__
 void agc_io_block_stop(sigset_t *saved);

@@ -579,20 +579,15 @@ static void shut_server(agc_vm *vm, agc_http_server *hs) {
   agc_task_cancel(vm, hs->group);
 }
 
-static void close_owned(agc_vm *vm, agc_resource *r) { shut_server(vm, agc_as_http_server(vm, r->context)); }
+static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
+  (void)ender;
+  shut_server(vm, agc_as_http_server(vm, r->context));
+}
 
 static server *open_server(const agc_http_server *hs) {
   server *s = hs->state->native;
   if (!s || s->closed || !s->listener || agc_conn_closed(s->listener) || hs->group->state == AGC_TASK_DONE) return NULL;
   return s;
-}
-
-static agc_task *spawn_in_group(agc_vm *vm, const agc_http_server *hs, agc_value fn, const agc_value *arg,
-                                uint32_t span) {
-  uint64_t seed = agc_random_next(&vm->task->random);
-  agc_task *child = agc_task_spawn_in(vm, hs->group, fn, arg, 1, span);
-  agc_random_seed(&child->random, seed);
-  return child;
 }
 
 static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -614,10 +609,11 @@ static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   hs->state = agc_register(vm, s, release_server);
   hs->state->context = agc_http_server_value(hs);
   agc_own(vm, hs->state, close_owned);
+  agc_disown(lv->state);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "http_server server=%" PRIu64 " listener=%" PRIu64 " max=%zu", hs->state->id,
             lv->state->id, s->max);
   agc_value value = agc_http_server_value(hs);
-  (void)spawn_in_group(vm, hs, args[2], &value, span);
+  (void)agc_task_spawn_seeded(vm, hs->group, args[2], &value, 1, span);
   return value;
 }
 
@@ -637,14 +633,18 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
-static void connection_ended(agc_vm *vm, agc_task *t) {
-  (void)vm;
-  const agc_http_server *hs = t->end_data;
-  t->end_data = NULL;
+static void give_back(const agc_http_server *hs) {
   server *s = hs->state->native;
   if (!s) return;
   if (s->open) s->open--;
   poke(s);
+}
+
+static void connection_ended(agc_vm *vm, agc_task *t) {
+  (void)vm;
+  const agc_http_server *hs = t->end_data;
+  t->end_data = NULL;
+  give_back(hs);
 }
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -657,6 +657,7 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
     if (s && s->open) s->open--;
     return agc_void();
   }
+  if (!agc_task_owns(vm, args[1])) give_back(hs);
   agc_task *child = agc_task_spawn_owning(vm, hs->group, args[2], args[1], span);
   child->hidden = true;
   child->end_data = hs;
