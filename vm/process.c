@@ -23,7 +23,6 @@ typedef enum { STOP_NONE, STOP_TERM, STOP_KILLED } stop_state;
 typedef struct proc proc;
 typedef struct request request;
 typedef struct guard guard;
-typedef struct bound bound;
 
 struct request {
   req_kind kind;
@@ -39,11 +38,6 @@ struct guard {
   proc *first;
   size_t running;
   bool released, reaping;
-};
-
-struct bound {
-  uv_timer_t timer;
-  bool over;
 };
 
 struct proc {
@@ -106,6 +100,7 @@ static void guard_settle(guard *g) {
 
 static void unlink_child(proc *p) {
   guard *g = p->g;
+  p->g = NULL;
   p->linked = false;
   if (p->run_prev)
     p->run_prev->run_next = p->run_next;
@@ -193,49 +188,50 @@ static int shut(proc *p) {
 
 static bool in_grace(const proc *p) { return p->captured && p->running && p->stop == STOP_TERM; }
 
-static bool awaited(const proc *p, bool grace) { return p->running && !p->stop_failed && (!grace || in_grace(p)); }
+static bool to_await(const proc *p, bool grace) { return grace ? in_grace(p) : !p->stop_failed; }
 
 static bool exits_pending(const guard *g, bool grace) {
   for (const proc *p = g->first; p; p = p->run_next)
-    if (awaited(p, grace)) return true;
+    if (to_await(p, grace)) return true;
   return false;
 }
 
-static void bound_over(uv_timer_t *timer) { ((bound *)(void *)timer)->over = true; }
+static void trace_alive(const proc *p) {
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)p->process.pid);
+}
 
-static void bound_freed(uv_handle_t *handle) { free(handle); }
+static void bound_over(uv_timer_t *timer) { (void)timer; }
 
 /* The end of the run drives the loop for at most REAP_MS, so the exit
    callbacks reap the children. A child that cannot be killed is not awaited. */
 static void await_exits(guard *g, bool grace) {
   if (!exits_pending(g, grace)) return;
-  bound *b = calloc(1, sizeof(bound));
-  if (!b) agc_out_of_memory();
+  uv_timer_t bound;
   uv_update_time(g->loop);
-  uv_timer_init(g->loop, &b->timer);
-  uv_timer_start(&b->timer, bound_over, REAP_MS, 0);
-  while (!b->over && exits_pending(g, grace) && uv_run(g->loop, UV_RUN_ONCE)) {}
-  for (const proc *p = g->first; p; p = p->run_next)
-    if (awaited(p, grace)) AGC_TRACE(&p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)p->process.pid);
-  uv_close((uv_handle_t *)&b->timer, bound_freed);
+  uv_timer_init(g->loop, &bound);
+  uv_timer_start(&bound, bound_over, REAP_MS, 0);
+  while (uv_is_active((uv_handle_t *)&bound) && exits_pending(g, grace)) uv_run(g->loop, UV_RUN_ONCE);
+  if (!grace)
+    for (const proc *p = g->first; p; p = p->run_next)
+      if (to_await(p, grace)) trace_alive(p);
+  uv_close((uv_handle_t *)&bound, NULL);
   uv_run(g->loop, UV_RUN_NOWAIT);
 }
 
 /* Plain children get SIGKILL at once; captured ones SIGTERM, then SIGKILL
    when the grace wait is over, then one more wait for the exits. */
 static void close_children(guard *g) {
-  if (!g->reaping) {
-    g->reaping = true;
-    bool grace = false;
-    for (proc *p = g->first; p; p = p->run_next) {
-      if (p->running && p->captured && p->stop == STOP_NONE)
-        signal_child(p, SIGTERM);
-      else if (p->running && !p->captured && !p->closed)
-        signal_child(p, SIGKILL);
-      grace = grace || in_grace(p);
-    }
-    if (grace) await_exits(g, true);
+  if (g->reaping) return;
+  g->reaping = true;
+  bool grace = false;
+  for (proc *p = g->first; p; p = p->run_next) {
+    if (p->running && p->captured && p->stop == STOP_NONE)
+      signal_child(p, SIGTERM);
+    else if (p->running && !p->captured && !p->closed)
+      signal_child(p, SIGKILL);
+    grace = grace || in_grace(p);
   }
+  if (grace) await_exits(g, true);
   for (proc *p = g->first, *next = NULL; p; p = next) {
     next = p->run_next;
     if (p->captured && p->running && p->stop == STOP_TERM) signal_child(p, SIGKILL);
@@ -348,7 +344,7 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   unlink_request(q);
   if (q->kind == REQ_CLOSE) {
-    AGC_TRACE(&q->p->trace, AGC_TRACE_PROC, "reap pid=%d alive=1", (int)q->p->process.pid);
+    trace_alive(q->p);
     return agc_void();
   }
   if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT) shut(q->p);
@@ -623,7 +619,7 @@ static int open_pipe(uv_pipe_t *pipe, int *fd, int rc) {
   return rc;
 }
 
-static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **env, const char *cwd) {
+static int start_child(guard *g, proc *p, char **argv, char **env, const char *cwd) {
   int fds[6] = {-1, -1, -1, -1, -1, -1};
   int rc = 0;
   for (size_t k = 0; !rc && k < 3; k++) rc = uv_pipe(fds + 2 * k, 0, 0);
@@ -643,7 +639,7 @@ static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **e
     options.stdio_count = 3;
     options.stdio = stdio;
     link_child(g, p);
-    rc = uv_spawn(loop, &p->process, &options);
+    rc = uv_spawn(g->loop, &p->process, &options);
     p->handles = 1;
     p->running = !rc;
     if (rc) {
@@ -655,12 +651,12 @@ static int start_child(uv_loop_t *loop, guard *g, proc *p, char **argv, char **e
   close_fd(&fds[3]);
   close_fd(&fds[5]);
   if (!rc) {
-    uv_pipe_init(loop, &p->in, 0);
-    uv_pipe_init(loop, &p->out, 0);
-    uv_pipe_init(loop, &p->err, 0);
+    uv_pipe_init(g->loop, &p->in, 0);
+    uv_pipe_init(g->loop, &p->out, 0);
+    uv_pipe_init(g->loop, &p->err, 0);
     p->handles = 4;
     if (p->captured) {
-      uv_timer_init(loop, &p->grace);
+      uv_timer_init(g->loop, &p->grace);
       p->handles++;
     }
     rc = open_pipe(&p->err, &fds[4], open_pipe(&p->out, &fds[2], open_pipe(&p->in, &fds[1], 0)));
@@ -684,19 +680,18 @@ static char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   return path;
 }
 
-static proc *end_child(agc_vm *vm, agc_resource *r, int *err) {
+static proc *unregister_child(agc_vm *vm, agc_resource *r) {
   proc *p = r->native;
   if (!p) return NULL;
   r->native = NULL;
   agc_unregister(vm, r);
-  *err = shut(p);
   return p;
 }
 
 static void close_child(agc_vm *vm, agc_resource *r) {
-  int err = 0;
-  proc *p = end_child(vm, r, &err);
+  proc *p = unregister_child(vm, r);
   if (!p) return;
+  shut(p);
   p->users--;
   settle(p);
 }
@@ -716,7 +711,6 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
-  uv_loop_t *loop = agc_io_uv(vm);
   guard *g = guard_of(vm);
   char *path = resolve(vm, command);
   if (!path) {
@@ -738,7 +732,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   p->trace = vm->rt->trace;
   p->forward = vm->rt->err;
   p->captured = dir != NULL;
-  int rc = start_child(loop, g, p, argv, env, cwd);
+  int rc = start_child(g, p, argv, env, cwd);
   if (rc)
     AGC_TRACE(&p->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, rc);
   else
@@ -880,10 +874,10 @@ static agc_value builtin_output(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  int err = 0;
-  proc *p = end_child(vm, agc_as_process(vm, args[0])->state, &err);
+  proc *p = unregister_child(vm, agc_as_process(vm, args[0])->state);
   if (!p) return agc_void();
-  if (!err && !p->captured && p->running) {
+  int err = shut(p);
+  if (!p->captured && p->running && !p->stop_failed) {
     request *q = new_request(p, REQ_CLOSE);
     q->next = p->waits;
     p->waits = q;
