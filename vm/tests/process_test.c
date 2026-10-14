@@ -19,9 +19,8 @@ int main(void) {
   vm.rt->allow_run = true;
 
   agc_resource *spare = agc_register(&vm, NULL, NULL);
-  agc_list *rest = agc_new_list(1);
-  rest->items[0] = text("30");
-  agc_value args[3] = {text("sleep"), agc_list_value(rest), agc_int(1000)};
+  agc_value rest[] = {text("30")};
+  agc_value args[3] = {text("sleep"), agc_list_value(agc_list_from_array(rest, 1)), agc_int(1000)};
   agc_value made = agc_process_builtins[0].fn(&vm, args, 0);
   assert(agc_as_result(&vm, made)->ok);
   agc_unregister(&vm, spare);

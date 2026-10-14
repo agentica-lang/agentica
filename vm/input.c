@@ -346,9 +346,10 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
     if (r == 0) break;
   }
   size_t n = in->end - in->start < count ? in->end - in->start : count;
-  agc_list *l = agc_new_list(n);
-  for (size_t k = 0; k < n; k++) l->items[k] = agc_int(in->buf[in->start + k]);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_int(in->buf[in->start + k]));
   consume(in, in->start + n);
-  *out = l;
+  *out = agc_list_builder_finish(&b);
   return AGC_INPUT_OK;
 }

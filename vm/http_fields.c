@@ -37,8 +37,11 @@ static const char *put_value(agc_http_bytes *b, const agc_string *value) {
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
                                  size_t managed_count, const char *managed_reason, const char *skip, size_t *count) {
   size_t block = b->len;
-  for (size_t k = 0; k < headers->len; k++) {
-    const agc_struct *h = agc_as_struct(vm, headers->items[k]);
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, headers, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_struct *h = agc_as_struct(vm, item);
     if (h->n != 2) return "invalid header";
     const agc_string *name = agc_as_string(vm, h->fields[0]);
     const agc_string *value = agc_as_string(vm, h->fields[1]);
@@ -113,7 +116,8 @@ static agc_string *latin1(const uint8_t *data, size_t len) {
 
 agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f) {
   uint32_t header_type = agc_builtin_struct(vm, "Header", header_fields, 2);
-  agc_list *headers = agc_new_list(f->count);
+  agc_list_builder headers;
+  agc_list_builder_sized(&headers, f->count);
   size_t at = 0;
   for (size_t k = 0; k < f->count; k++) {
     agc_struct *h = agc_new_struct(header_type, 2);
@@ -121,9 +125,9 @@ agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f) {
     h->fields[0] = agc_string_value(agc_make_string((const char *)f->data + at, name, name));
     h->fields[1] = agc_string_value(latin1(f->data + at + name, value));
     at += name + value;
-    headers->items[k] = agc_struct_value(h);
+    agc_list_builder_push(&headers, agc_struct_value(h));
   }
-  return agc_list_value(headers);
+  return agc_list_value(agc_list_builder_finish(&headers));
 }
 
 static bool value_closes(agc_http_slice v) {
@@ -148,8 +152,11 @@ agc_http_slice agc_http_text(agc_vm *vm, agc_value v) {
 }
 
 bool agc_http_list_closes(agc_vm *vm, const agc_list *headers) {
-  for (size_t k = 0; k < headers->len; k++) {
-    const agc_struct *h = agc_as_struct(vm, headers->items[k]);
+  agc_list_cursor cursor;
+  agc_value item;
+  agc_list_cursor_begin(&cursor, headers, 0);
+  while (agc_list_cursor_next(&cursor, &item)) {
+    const agc_struct *h = agc_as_struct(vm, item);
     if (agc_http_named(agc_http_text(vm, h->fields[0]), "connection") && value_closes(agc_http_text(vm, h->fields[1])))
       return true;
   }

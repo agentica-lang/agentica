@@ -307,7 +307,7 @@ static agc_value test_http(agc_vm *vm, agc_value *args, uint32_t span) {
     client = agc_as_result(vm, made)->value;
   }
   agc_value call[8] = {client, text("https"), text("127.0.0.1"), agc_int(port), text("GET"), text("/"),
-                       agc_list_value(agc_new_list(0)), text("")};
+                       agc_list_value(agc_list_from_array(NULL, 0)), text("")};
   return agc_find_builtin((const uint8_t *)"HttpWire.exchange", 17, 8)->fn(vm, call, span);
 }
 

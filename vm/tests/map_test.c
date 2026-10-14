@@ -121,9 +121,8 @@ int main(void) {
   assert(agc_as_int(&vm, cut_keys[0]) == 99 && agc_as_int(&vm, cut_keys[1]) == -1 && agc_as_int(&vm, cut_keys[2]) == -2);
   debug_is(agc_map_value(agc_map_delete(&vm, words, text(""))), "{\"b\": 4, \"a\\\"\\n\": 3, 98: 5}");
 
-  agc_list *wrapped = agc_new_list(1);
-  wrapped->items[0] = agc_map_value(words);
-  debug_is(agc_list_value(wrapped), "[{\"b\": 4, \"\": 2, \"a\\\"\\n\": 3, 98: 5}]");
+  agc_value wrapped = agc_map_value(words);
+  debug_is(agc_list_value(agc_list_from_array(&wrapped, 1)), "[{\"b\": 4, \"\": 2, \"a\\\"\\n\": 3, 98: 5}]");
 #ifdef AGC_GC_STRESS
   const size_t depth = 1000;
 #else

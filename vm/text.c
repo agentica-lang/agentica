@@ -180,7 +180,7 @@ static const agc_variant_def *variant_def(agc_vm *vm, const agc_enum *e) {
 }
 
 static size_t item_count(agc_vm *vm, agc_value v) {
-  if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->len;
+  if (agc_is(v, AGC_T_LIST)) return agc_list_len(agc_as_list(vm, v));
   if (agc_is(v, AGC_T_MAP)) return agc_as_map(vm, v)->size;
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->n;
   if (agc_is(v, AGC_T_RESULT)) {
@@ -192,7 +192,7 @@ static size_t item_count(agc_vm *vm, agc_value v) {
 }
 
 static agc_value item_at(agc_vm *vm, agc_value v, size_t k) {
-  if (agc_is(v, AGC_T_LIST)) return agc_as_list(vm, v)->items[k];
+  if (agc_is(v, AGC_T_LIST)) return agc_list_get(agc_as_list(vm, v), k);
   if (agc_is(v, AGC_T_STRUCT)) return agc_as_struct(vm, v)->fields[k];
   if (agc_is(v, AGC_T_RESULT)) return agc_as_result(vm, v)->value;
   return agc_as_enum(vm, v)->payload[k];

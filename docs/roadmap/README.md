@@ -1,26 +1,35 @@
 # Agentica implementation roadmap
 
-This roadmap turns the core specification in [`grammar.md`](../grammar.md) into a usable interpreter. Planned syntax lives in [`docs/future/`](../future/README.md) until its phase lands. Keep every phase focused on the core in sections 4–6 until the prototype can run and diagnose the examples in sections 7–8. Enums were kept out of the initial milestone and are now implemented as a later extension.
+This roadmap turns the core specification in [`grammar.md`](../grammar.md) into
+a usable interpreter. Planned syntax lives in
+[`docs/future/`](../future/README.md) until its phase lands. Keep every phase
+focused on the core in sections 4–6 until the prototype can run and diagnose the
+examples in sections 7–8. Enums were kept out of the initial milestone and are
+now implemented as a later extension.
 
 ## Current implementation order
 
 The core interpreter, Results, JSON primitives, function values, lightweight
 tasks, BDD, TCP/TLS/HTTP, files/paths, strict Void, processes, modules and the
 Ruby-style ergonomics are implemented. The bytecode VM is the default backend:
-`agentica file.agc` compiles in-process and runs `agentica-vm`. The design
-(7b), lowering, bytecode and the VM (`docs/vm/12-testing-and-pr-plan.md` §12.2
-items 1 to 10), the 7g benchmark script, and 7h part 1 (event loop and files),
-tasks and processes are done, with small items still open in 7c
-(`tests/lower-test.rkt`), 7e (loader validation for opcodes as they land) and
-7f (the extra corpora). Ranges (8a) are done.
+`agentica file.agc` compiles in-process and runs `agentica-vm`. The design (7b),
+lowering, bytecode and the VM (`docs/vm/12-testing-and-pr-plan.md` §12.2 items 1
+to 10), the 7g benchmark script, and 7h part 1 (event loop and files), tasks and
+processes are done, with small items still open in 7c (`tests/lower-test.rkt`),
+7e (loader validation for opcodes as they land) and 7f (the extra corpora).
+Ranges (8a) are done.
 
-The VM is the only backend: 7i deleted the Racket evaluator (row 7.2). The
-table below is the one source for the order of pending work and
-its dependencies; each row names its phases and the sections that specify
-them. Historical phase numbers remain stable; this order governs pending
-work rather than their numeric order.
+The VM is the only backend: 7i deleted the Racket evaluator (row 7.2). The table
+below is the one source for the order of pending work and its dependencies; each
+row names its phases and the sections that specify them. Historical phase
+numbers remain stable; this order governs pending work rather than their numeric
+order.
 
-The owner set the order of 2026-10-14 for the rows from 7.2.3 on. Rows 7.2.4 to 7.2.6, 8 and 8.3 are the prerequisites of the bootstrap of the self-hosted front end (§35), which starts at row 7.2.7 (the freeze of the Racket front end). The rows marked deferred wait until after the bootstrap. The VM-only and C-only rows after them may run in parallel when needed and keep their relative order.
+The owner set the order of 2026-10-14 for the rows from 7.2.3 on. Rows 7.2.4 to
+7.2.6, 8 and 8.3 are the prerequisites of the bootstrap of the self-hosted front
+end (§35), which starts at row 7.2.7 (the freeze of the Racket front end). The
+rows marked deferred wait until after the bootstrap. The VM-only and C-only rows
+after them may run in parallel when needed and keep their relative order.
 
 | Order | Next work | Outcome |
 |---|---|---|
@@ -73,15 +82,18 @@ The owner set the order of 2026-10-14 for the rows from 7.2.3 on. Rows 7.2.4 to 
 | 18 | (On demand) Binary serialization (phase 11): typed `Term.encode`/`Term.decode` in CBOR; needs `Bytes`, generic structs (10c) and the JSON form of enums (10d); starts when a real program needs it | Keep a disk cache or send values between Agentica processes without losing Int keys, Float bits or enums |
 | 19 | (On demand) SIMD in the VM (`docs/future/19-simd.md` §19): AVX2 first, with run-time dispatch and a scalar fallback; only after profiling (7j or phase 12) shows time in string, JSON or copy routines | Faster string and JSON work without changing the release baseline |
 
-The self-hosted front end and a single binary ([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13, are in the order from row 7.2.7 on, after their prerequisites (rows 8, 7.2.4 to 7.2.6 and 8.3; [§35.9](../future/35-self-hosting.md#359-order)). Its steps (§35.4) are PRs, not rows of this table.
+The self-hosted front end and a single binary
+([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13, are
+in the order from row 7.2.7 on, after their prerequisites (rows 8, 7.2.4 to
+7.2.6 and 8.3; [§35.9](../future/35-self-hosting.md#359-order)). Its steps
+(§35.4) are PRs, not rows of this table.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
-(real applications and MCP), target larger general-purpose programs.
-Keep diagnostics, behavior tests, grammar, and the self-contained programming
-reference part of every phase.
-Specify new APIs in `docs/future/` before implementation; move them into the
-grammar only when they land. Detailed pending work appears after the completed
-foundations below.
+(real applications and MCP), target larger general-purpose programs. Keep
+diagnostics, behavior tests, grammar, and the self-contained programming
+reference part of every phase. Specify new APIs in `docs/future/` before
+implementation; move them into the grammar only when they land. Detailed pending
+work appears after the completed foundations below.
 
 ### Rules for the catch-up and new features
 
@@ -89,64 +101,71 @@ foundations below.
   catch-up (TCP, TLS, HTTP 20a, BDD on the VM) removed each fallback, and 7i
   deleted the evaluator.
 - New features are VM-only. They have no Racket twin.
-- After the freeze (row 7.2.7), the Racket front end takes only bug fixes and rows in the `src/builtins.rkt` table; every language change goes into the Agentica front end ([§35](../future/35-self-hosting.md)).
-- A PR that changes the VM core keeps the [VM core invariants](../vm/14-core-invariants.md#14-vm-core-invariants) (§14), or changes them first with the reason.
+- After the freeze (row 7.2.7), the Racket front end takes only bug fixes and
+  rows in the `src/builtins.rkt` table; every language change goes into the
+  Agentica front end ([§35](../future/35-self-hosting.md)).
+- A PR that changes the VM core keeps the [VM core
+  invariants](../vm/14-core-invariants.md#14-vm-core-invariants) (§14), or
+  changes them first with the reason.
 
 Historical phase sections retain their original completion signatures. The
-current language uses Void for completion and Nil for data; grammar.md and
-the programming reference contain the current signatures.
+current language uses Void for completion and Nil for data; grammar.md and the
+programming reference contain the current signatures.
 
 ### New library features: `std/` first
 
-- New library features that are pure computation over types that already
-  exist start as `std/` modules written in Agentica (`stdlib/*.agc`,
-  registered in `src/stdlib.rkt`), not as builtins. Examples: numbers to
-  bytes, bit tricks built on the `Int` builtins, text formatting, algorithms.
-  They run on the VM with no VM work, and the golden fixtures test them.
-- A function moves to a C builtin later only when a measurement shows it is
-  hot (`make bench`, the server measurement 7j, or phase 12). Its `std/` API
-  does not change, results and error strings included, so user code does not
-  change; only step counts may. The new builtin is public (no internal helper
-  builtins, `docs/vm/03-ir-and-bytecode.md` §4.5). It goes in an existing builtin module whose
-  first parameter type fits (for example `List.read_u32_be(data, offset)`),
-  never under a module named like the `std/` module's documented import
-  alias, so the import keeps working. It is documented like any other
-  builtin, and the `std/` function becomes a one-line wrapper.
+- New library features that are pure computation over types that already exist
+  start as `std/` modules written in Agentica (`stdlib/*.agc`, registered in
+  `src/stdlib.rkt`), not as builtins. Examples: numbers to bytes, bit tricks
+  built on the `Int` builtins, text formatting, algorithms. They run on the VM
+  with no VM work, and the golden fixtures test them.
+- A function moves to a C builtin later only when a measurement shows it is hot
+  (`make bench`, the server measurement 7j, or phase 12). Its `std/` API does
+  not change, results and error strings included, so user code does not change;
+  only step counts may. The new builtin is public (no internal helper builtins,
+  `docs/vm/03-ir-and-bytecode.md` §4.5). It goes in an existing builtin module
+  whose first parameter type fits (for example
+  `List.read_u32_be(data, offset)`), never under a module named like the `std/`
+  module's documented import alias, so the import keeps working. It is
+  documented like any other builtin, and the `std/` function becomes a one-line
+  wrapper.
 - Exceptions, which are builtins from day one, in C only:
-  1. Anything that touches the OS: files, stdin and stdout, processes,
-     sockets, TLS, time, signals, random bytes from the OS. A program cannot
-     make system calls.
-  2. Crypto: always through the TLS/crypto provider adapter (OpenSSL 3
-     today, `docs/future/20-crypto.md` §20), never hand-written in Agentica: a constant-time
-     compare is impossible in an interpreter, and home-made crypto is a
-     classic source of bugs.
-  3. Parsers of untrusted input that have mature libraries: JSON on yyjson
-     and HTTP on picohttpparser stay as decided.
-  4. Anything that needs its own memory layout in the runtime: `Bytes`, and
-     the insides of `Map` and `List`.
-  5. Basic operations on the core types, at the level of operators, which
-     would be loops or fragile code in Agentica: for example the `Int` bit
-     operations and `Float` bit conversions of `docs/future/23-binary-data.md` §23.
-- Library code that must be generic over the builtin type variables, or
-  that must be called as a method on a builtin type (`xs.find do ... end`),
-  cannot be a `std/` module; it goes in the compiler prelude
-  (`stdlib/prelude/*.agc`, `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica.
-  The prelude has guarded exceptions to "no internal helper
-  builtins": `__fail_arg` and `__float_fixed` (§25.6, §25.11), which the
-  loader accepts only in prelude functions. A concurrency helper that needs
-  the scheduler is a C builtin instead (`Task.await` with a timeout, §27.3).
-- One builtin module is std-only: `HttpWire` (phase 20,
-  `docs/vm/10-io-http.md` §10.7), the framing layer under
-  `std/http`. A public raw layer next to `std/http` would be a second way
-  to do HTTP, so the linker lets only modules embedded from `stdlib/`
-  call it (`std-only-modules` in `src/builtins.rkt`), and user code gets
-  `CHECK-UNKNOWN-NAME` with a help that shows the `std/http` import.
+  1. Anything that touches the OS: files, stdin and stdout, processes, sockets,
+     TLS, time, signals, random bytes from the OS. A program cannot make system
+     calls.
+  2. Crypto: always through the TLS/crypto provider adapter (OpenSSL 3 today,
+     `docs/future/20-crypto.md` §20), never hand-written in Agentica: a
+     constant-time compare is impossible in an interpreter, and home-made crypto
+     is a classic source of bugs.
+  3. Parsers of untrusted input that have mature libraries: JSON on yyjson and
+     HTTP on picohttpparser stay as decided.
+  4. Anything that needs its own memory layout in the runtime: `Bytes`, and the
+     insides of `Map` and `List`.
+  5. Basic operations on the core types, at the level of operators, which would
+     be loops or fragile code in Agentica: for example the `Int` bit operations
+     and `Float` bit conversions of `docs/future/23-binary-data.md` §23.
+- Library code that must be generic over the builtin type variables, or that
+  must be called as a method on a builtin type (`xs.find do ... end`), cannot be
+  a `std/` module; it goes in the compiler prelude (`stdlib/prelude/*.agc`,
+  `docs/future/25-ruby-typed-idioms.md` §25.6), still written in Agentica. The
+  prelude has guarded exceptions to "no internal helper builtins": `__fail_arg`
+  and `__float_fixed` (§25.6, §25.11), which the loader accepts only in prelude
+  functions. A concurrency helper that needs the scheduler is a C builtin
+  instead (`Task.await` with a timeout, §27.3).
+- One builtin module is std-only: `HttpWire` (phase 20, `docs/vm/10-io-http.md`
+  §10.7), the framing layer under `std/http`. A public raw layer next to
+  `std/http` would be a second way to do HTTP, so the linker lets only modules
+  embedded from `stdlib/` call it (`std-only-modules` in `src/builtins.rkt`),
+  and user code gets `CHECK-UNKNOWN-NAME` with a help that shows the `std/http`
+  import.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 
 ## Files
 
-This file holds what matters now: the order above and the general rules. Each open or partly open part of the plan has its own file. Phase numbers stay as they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
+This file holds what matters now: the order above and the general rules. Each
+open or partly open part of the plan has its own file. Phase numbers stay as
+they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 
 | File | Contents |
 |---|---|

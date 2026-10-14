@@ -1,4 +1,5 @@
 #include "core.h"
+#include "list_impl.h"
 
 #include <inttypes.h>
 #include <math.h>
@@ -9,10 +10,12 @@ struct agc_native {
   uint32_t span;
   bool started;
   bool more;
-  size_t index, count;
+  size_t count;
   int64_t cur, last, dir;
-  agc_value list, fn, acc;
-  agc_list *out;
+  agc_value list, fn, acc, item;
+  agc_list_cursor items;
+  agc_list_builder out;
+  agc_value *kept;
   agc_stepper *stepper;
 };
 
@@ -70,7 +73,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->flush_timeout = AGC_FLUSH_TIMEOUT_MS;
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
-  rt->args = agc_list_value(agc_new_list(0));
+  rt->args = agc_list_value(agc_list_from_array(NULL, 0));
   atomic_init(&rt->next_task_id, 1);
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
@@ -248,13 +251,15 @@ static bool key_less(agc_vm *vm, agc_value a, agc_value b) {
 }
 
 agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *keys) {
-  size_t n = items->len;
+  size_t n = agc_list_len(items);
   if (n < 2) return agc_list_value((agc_list *)items);
   uint64_t rounds = 0;
   for (size_t width = 1; width < n; width *= 2) rounds++;
   agc_charge(vm, (uint64_t)n * rounds);
   size_t *order = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
   size_t *merged = agc_alloc_atomic(agc_size_mul(n, sizeof(size_t)));
+  agc_value *sort_keys = agc_alloc(agc_size_mul(n, sizeof(agc_value)));
+  agc_list_to_array(keys, sort_keys);
   for (size_t k = 0; k < n; k++) order[k] = k;
   for (size_t width = 1; width < n; width *= 2) {
     for (size_t lo = 0; lo < n; lo += 2 * width) {
@@ -262,7 +267,7 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
       size_t hi = n - mid < width ? n : mid + width;
       size_t i = lo, j = mid, k = lo;
       while (i < mid && j < hi)
-        merged[k++] = key_less(vm, keys->items[order[j]], keys->items[order[i]]) ? order[j++] : order[i++];
+        merged[k++] = key_less(vm, sort_keys[order[j]], sort_keys[order[i]]) ? order[j++] : order[i++];
       while (i < mid) merged[k++] = order[i++];
       while (j < hi) merged[k++] = order[j++];
     }
@@ -270,9 +275,10 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
     order = merged;
     merged = swap;
   }
-  agc_list *sorted = agc_new_list(n);
-  for (size_t k = 0; k < n; k++) sorted->items[k] = items->items[order[k]];
-  return agc_list_value(sorted);
+  agc_list_builder sorted;
+  agc_list_builder_sized(&sorted, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, list_get(items, order[k]));
+  return agc_list_value(agc_list_builder_finish(&sorted));
 }
 
 static bool counting(agc_native_kind kind) {
@@ -322,14 +328,13 @@ static void resume_native(agc_vm *vm) {
     call_value(vm, t, st->fn, base + 1, &arg, 1, base, st->span);
     return;
   }
-  const agc_list *items = agc_as_list(vm, st->list);
   if (st->started) {
     agc_value got = t->regs[base];
     switch (st->kind) {
       case AGC_NATIVE_MAP:
-      case AGC_NATIVE_SORT_BY: st->out->items[st->count++] = got; break;
+      case AGC_NATIVE_SORT_BY: agc_list_builder_push(&st->out, got); break;
       case AGC_NATIVE_FILTER:
-        if (agc_as_bool(vm, got)) st->out->items[st->count++] = items->items[st->index - 1];
+        if (agc_as_bool(vm, got)) st->kept[st->count++] = st->item;
         break;
       case AGC_NATIVE_ANY:
         if (agc_as_bool(vm, got)) {
@@ -348,11 +353,11 @@ static void resume_native(agc_vm *vm) {
     }
   }
   st->started = true;
-  if (st->index < items->len) {
+  if (agc_list_cursor_next(&st->items, &st->item)) {
     agc_value args[2];
     uint32_t argc = 0;
     if (st->kind == AGC_NATIVE_REDUCE) args[argc++] = st->acc;
-    args[argc++] = items->items[st->index++];
+    args[argc++] = st->item;
     call_value(vm, t, st->fn, base + 1, args, argc, base, st->span);
     t->turn_cost++;
     apply_cost(vm);
@@ -360,15 +365,14 @@ static void resume_native(agc_vm *vm) {
   }
   agc_value result = agc_void();
   switch (st->kind) {
-    case AGC_NATIVE_MAP:
-    case AGC_NATIVE_FILTER:
-      st->out->len = st->count;
-      result = agc_list_value(st->out);
-      break;
+    case AGC_NATIVE_MAP: result = agc_list_value(agc_list_builder_finish(&st->out)); break;
+    case AGC_NATIVE_FILTER: result = agc_list_value(agc_list_from_array(st->kept, st->count)); break;
     case AGC_NATIVE_ANY: result = agc_bool(false); break;
     case AGC_NATIVE_ALL: result = agc_bool(true); break;
     case AGC_NATIVE_REDUCE: result = st->acc; break;
-    case AGC_NATIVE_SORT_BY: result = agc_sort_by_keys(vm, items, st->out); break;
+    case AGC_NATIVE_SORT_BY:
+      result = agc_sort_by_keys(vm, agc_as_list(vm, st->list), agc_list_builder_finish(&st->out));
+      break;
     default: break;
   }
   finish_native(vm, result);
@@ -416,9 +420,12 @@ static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32
     } else {
       st->fn = args[1];
     }
-    size_t len = agc_as_list(vm, st->list)->len;
+    const agc_list *items = agc_as_list(vm, st->list);
+    size_t len = agc_list_len(items);
     agc_as_fn(vm, st->fn);
-    if (kind == AGC_NATIVE_MAP || kind == AGC_NATIVE_FILTER || kind == AGC_NATIVE_SORT_BY) st->out = agc_new_list(len);
+    agc_list_cursor_begin(&st->items, items, 0);
+    if (kind == AGC_NATIVE_MAP || kind == AGC_NATIVE_SORT_BY) agc_list_builder_sized(&st->out, len);
+    if (kind == AGC_NATIVE_FILTER) st->kept = agc_alloc(agc_size_mul(len, sizeof(agc_value)));
   }
   push_native(vm, st, base);
 }
@@ -595,18 +602,14 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
         R[in.a] = agc_string_value(agc_debug(vm, R[in.b]));
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
-      case AGC_OP_LIST: {
-        agc_list *l = agc_new_list(in.c);
-        for (uint32_t k = 0; k < in.c; k++) l->items[k] = R[(uint32_t)in.b + k];
-        R[in.a] = agc_list_value(l);
-        break;
-      }
-      case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)agc_as_list(vm, R[in.b])->len); break;
+      case AGC_OP_LIST: R[in.a] = agc_list_value(agc_list_from_array(&R[in.b], in.c)); break;
+      case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)list_len(agc_as_list(vm, R[in.b]))); break;
       case AGC_OP_LIST_GET: {
         const agc_list *l = agc_as_list(vm, R[in.b]);
         x = agc_as_int(vm, R[in.c]);
-        if (x < 0 || (uint64_t)x >= l->len) index_out_of_range(vm, x, l->len, s);
-        R[in.a] = l->items[x];
+        size_t len = list_len(l);
+        if (x < 0 || (uint64_t)x >= len) index_out_of_range(vm, x, len, s);
+        R[in.a] = list_get(l, (size_t)x);
         break;
       }
       case AGC_OP_MAP: {

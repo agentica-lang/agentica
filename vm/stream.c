@@ -130,10 +130,11 @@ agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
   if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
-  agc_list *l = agc_new_list(n);
-  for (size_t k = 0; k < n; k++) l->items[k] = agc_int(b->data[b->start + k]);
+  agc_list_builder out;
+  agc_list_builder_sized(&out, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int(b->data[b->start + k]));
   agc_inbuf_take(b, n);
-  return agc_result_value(true, agc_list_value(l));
+  return agc_result_value(true, agc_list_value(agc_list_builder_finish(&out)));
 }
 
 #ifdef __linux__

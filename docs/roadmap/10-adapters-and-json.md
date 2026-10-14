@@ -1,12 +1,146 @@
 ## Phase 10: Adapters and JSON inspection
 
-Specified in [`docs/future/15-adapters-and-json-inspection.md` section 15](../future/15-adapters-and-json-inspection.md#15-adapters-and-json-inspection) (10a to 10d) and [section 17](../future/17-optional-json-fields.md#17-optional-and-nullable-json-fields) (10e). Each item lands in the evaluator and the VM in one PR, with `grammar.md`, the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e PR 5e); 10b, 10d and 10e, and the JSON part of 10c, need the VM JSON PR (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 7). 10e also needs 10b for the builtin-enum path; it does not depend on 10c or 10d. The VM check and the disk example are two separate programs; see "Done when" below.
+Specified in [`docs/future/15-adapters-and-json-inspection.md` section
+15](../future/15-adapters-and-json-inspection.md#15-adapters-and-json-inspection)
+(10a to 10d) and [section
+17](../future/17-optional-json-fields.md#17-optional-and-nullable-json-fields)
+(10e). Each item lands in the evaluator and the VM in one PR, with `grammar.md`,
+the programming skill, the site docs and tests. 10a needs `.call` on the VM (7e
+PR 5e); 10b, 10d and 10e, and the JSON part of 10c, need the VM JSON PR
+(`docs/vm/12-testing-and-pr-plan.md` §12.2 item 7). 10e also needs 10b for the
+builtin-enum path; it does not depend on 10c or 10d. The VM check and the disk
+example are two separate programs; see "Done when" below.
 
-- [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the ".put.call(...)" help. A block without parentheses (`s.run do |x| ... end`) is a call with the block as its only argument; a bare `s.run` stays the field value. Update these `grammar.md` sentences: "structs and enums have no methods, and user functions cannot be called as methods" (method section), "arbitrary user methods are not supported" (calls section), and "`f.call(21)` invokes it" (the `Fn` section), and the programming skill's `.call` line and "structs and enums have no methods ... `.call(...)` invokes a function value". Show the adapter pattern in an example. The facade and adapter disk examples on the site page and in the skill must check the name with an allow-list in the code itself (not empty, only ASCII letters, digits, `-` and `_`, else `error(...)`; the adapter's `get` and `put` return `error("bad key")`; the adapter has its own copy of the check, or lives in the facade's module, since the facade's `valid_name?` is private), as in `docs/future/15-adapters-and-json-inspection.md` §15.1, not only in prose.
-- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum `JsonValue`. Numbers, by value: an exact integer in int64 is `JsonInt(n)` (exactly when `JSON.int(j)` is `ok(n)`), any other exact integer is `JsonBigInt(text)`, a double is `JsonFloat`. `JSON.parse` makes a double exactly for a number written with a fraction or exponent, and a non-finite one is the existing error; builder and `JSON.from` values follow the same rule. `JsonObject` keys are sorted by Unicode code point, the same order as `JSON.decode` into a `Map`, so `JSON.parse` does not change. The VM follows the number rules and differential fixtures of `docs/future/15-adapters-and-json-inspection.md` §15.2. `JsonValue` is the first builtin enum: it needs a path in the checker's enum table, in the evaluator, and in `src/modules.rkt` import linking (enum patterns and constructors, like the existing `Result` exception, and the bare `JsonValue.JsonNull` `type-expression`), or linking renames or rejects it (`CHECK-IMPORT-NAME`). Test `JsonValue` used inside an imported module. `JsonValue` stays out of `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema` (`CHECK-NOT-ENCODABLE` / `CHECK-NOT-DECODABLE`). The only breaking change: `JsonValue` becomes a reserved name (say so in the changelog). Bytecode format version: see `docs/future/15-adapters-and-json-inspection.md` §15.2 (no bump unless the layout changes).
-- [ ] 10c Generic structs (`struct Box[T]`): inference at construction, substituted field types, the generic enum diagnostics; a field named `with` whose type is a type parameter is `CHECK-REDEFINED-NAME` (`docs/future/25-ruby-typed-idioms.md` §25.3); a type parameter used as a `Map` key is `CHECK-MAP-KEY-TYPE` at the declaration, tested for both a generic struct and a generic enum (`enum E[K]` with `Map[K, Int]`), since no test covers the enum case today; `data-type?` is checked after substitution. `JSON.encode` and `JSON.from` work on generic instances since encoding needs no `$defs`: structs with 10c, enum instances only once 10d lands; only `JSON.decode` and `JSON.schema` reject a generic instance anywhere in the target (`CHECK-NOT-DECODABLE`; except `JsonField[T]` as a direct struct field, §17). A bare generic target with no type arguments (`JSON.decode(text, Box)`, `JSON.schema(Option)`) is `CHECK-UNKNOWN-TYPE`, as today. Add a note to the programming skill's diagnostics reference that `CHECK-ENUM-TYPE-INFERENCE` also covers structs. Update the `grammar.md` sentences "only enum declarations may declare type parameters" and "generic structs are not supported", add `[ type_parameters ]` to the `struct_decl` rule in grammar.md, and add a type-parameter field to `struct-decl` in `src/ast.rkt`. Carry the type parameters through `src/modules.rkt` import linking (the `struct-decl` case, like `rewrite-enum-type` for enums), or a bare `T` gets the module prefix; test a generic struct declared in an imported module and used as `M.Box[Int]`.
-- [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`. `JSON.encode` and `JSON.from` work on any user enum (not `JsonValue`) whose payloads are encodable, generic instances too; decode and schema take non-generic enums only (except `JsonField[T]` as a direct struct field, §17). The tag is a one-value `enum` (`{"enum": ["Rect"]}`), not `const`. The schema is accepted by every draft; per-payload types are checked from 2020-12 (`prefixItems`): `values` has its length fixed with `minItems` and `maxItems`; `prefixItems` only when the variant has payloads; no `"items": false`; a nullary variant gets `"values": {"type": "array", "maxItems": 0}` and `values` is not in its `required`. The root gets no `$schema`, as today. `JSON.encode` text puts `tag` before `values`. If the VM JSON PR's type table has no enum entry kind, 10d adds it and bumps the bytecode format version (`docs/vm/03-ir-and-bytecode.md` §4); the JSON PR adds no placeholder.
-- [ ] 10e Optional and nullable JSON fields: the builtin generic enum `JsonField[T]` (`Absent`, `Null`, `Value(T)`) as a struct field type in JSON targets. Decode: a missing key is `Absent`, `null` is `Null`, anything else is `Value` of the decoded `T`, with today's error paths and text; only a wrong kind for the field's own value adds "or null" (`age: expected signed 64-bit Int or null`), checked at the `JsonField` level since `fail` escapes through `let/ec`. `JSON.encode` and `JSON.from`: `Absent` leaves the key out, `Null` writes `null`. `JSON.schema`: the field is not in `required` (and `required` is left out when empty, for any struct with no required field, which also drops today's `"required": []` from structs with no fields; say so in the changelog), and its property is `{"anyOf": [<T>, {"type": "null"}]}`. In a JSON builtin's type, `JsonField` is allowed only as the direct type of a struct field; a list item, a map value, `JsonField[JsonField[T]]`, an enum payload or a whole `JSON.encode`/`JSON.from` argument is the new `CHECK-JSON-FIELD-PLACE`; its message names the place (struct and field, "list item", "map value", "nested JsonField", "encode argument", and after 10d "payload of `Enum.Variant`"). `JsonField[Nil]` is rejected in every JSON builtin, since `Value(nil)` would look like `Null`: `CHECK-NOT-ENCODABLE` for encode and `JSON.from`, `CHECK-NOT-DECODABLE` for decode and schema. It is the one generic instance that decode and schema accept (no `$defs` entry); whichever of 10c, 10d and 10e lands later keeps this exception and tests it. The placement check runs first: `List[JsonField[Nil]]` in a decode target is `CHECK-JSON-FIELD-PLACE`, and a direct `JsonField[Nil]` field is then `CHECK-NOT-DECODABLE` or `CHECK-NOT-ENCODABLE`. In a generic struct (10c), a field that is `JsonField` after substitution (`Box[JsonField[Int]]`) counts as a direct field for encode and `JSON.from`. Outside JSON it is an ordinary printable enum. Reuse the 10b builtin-enum path (checker enum table, evaluator, `src/modules.rkt` linking of patterns, constructors and bare `JsonField.Absent` / `JsonField.Null`) and give it a type parameter. `JsonField` becomes a reserved type name (`CHECK-REDEFINED-NAME`; say so in the changelog); `Option` stays free. Update the `grammar.md` JSON rules and its "`Nil` is not a nullable wildcard" note, the programming skill's JSON reference and diagnostics reference, and the JSON site page (`site/content/library/text-and-data/json.md`): keep its `Point` example (it has required fields) and add a new example with a struct whose fields are all `JsonField`, showing that `required` is absent and reading it safely with `JSON.get` and a `case`. VM: a `JsonField` entry kind in the JSON PR's type table; if that table has none, 10e adds it and bumps the bytecode format version (`docs/vm/03-ir-and-bytecode.md` §4), with no placeholder in the JSON PR. Done when the `UpdateUser` example of `docs/future/17-optional-json-fields.md` §17 runs as a site example with its output, and the tests listed there pass: decode of the three states, nested path errors, a bad value type (`age: "x"` prints `age: expected signed 64-bit Int or null`, which the VM differential test compares), encode, schema (including an empty struct), round trip on declared keys in encode's form, `CHECK-JSON-FIELD-PLACE`, `JsonField[Nil]` rejected by each JSON builtin, the all-`JsonField` schema site example, use through an import, and the VM differential test.
+- [ ] 10a Call `Fn` fields without `.call`: `s.put(a, b)` on a struct field of
+  type `Fn[...]` means `s.put.call(a, b)`; `s.put` stays the field value. Today
+  this is `CHECK-UNKNOWN-METHOD`, so no valid program changes meaning; drop the
+  ".put.call(...)" help. A block without parentheses (`s.run do |x| ... end`) is
+  a call with the block as its only argument; a bare `s.run` stays the field
+  value. Update these `grammar.md` sentences: "structs and enums have no
+  methods, and user functions cannot be called as methods" (method section),
+  "arbitrary user methods are not supported" (calls section), and "`f.call(21)`
+  invokes it" (the `Fn` section), and the programming skill's `.call` line and
+  "structs and enums have no methods ... `.call(...)` invokes a function value".
+  Show the adapter pattern in an example. The facade and adapter disk examples
+  on the site page and in the skill must check the name with an allow-list in
+  the code itself (not empty, only ASCII letters, digits, `-` and `_`, else
+  `error(...)`; the adapter's `get` and `put` return `error("bad key")`; the
+  adapter has its own copy of the check, or lives in the facade's module, since
+  the facade's `valid_name?` is private), as in
+  `docs/future/15-adapters-and-json-inspection.md` §15.1, not only in prose.
+- [ ] 10b `JSON.kind(j) -> JsonValue` (also `j.kind`), with the builtin enum
+  `JsonValue`. Numbers, by value: an exact integer in int64 is `JsonInt(n)`
+  (exactly when `JSON.int(j)` is `ok(n)`), any other exact integer is
+  `JsonBigInt(text)`, a double is `JsonFloat`. `JSON.parse` makes a double
+  exactly for a number written with a fraction or exponent, and a non-finite one
+  is the existing error; builder and `JSON.from` values follow the same rule.
+  `JsonObject` keys are sorted by Unicode code point, the same order as
+  `JSON.decode` into a `Map`, so `JSON.parse` does not change. The VM follows
+  the number rules and differential fixtures of
+  `docs/future/15-adapters-and-json-inspection.md` §15.2. `JsonValue` is the
+  first builtin enum: it needs a path in the checker's enum table, in the
+  evaluator, and in `src/modules.rkt` import linking (enum patterns and
+  constructors, like the existing `Result` exception, and the bare
+  `JsonValue.JsonNull` `type-expression`), or linking renames or rejects it
+  (`CHECK-IMPORT-NAME`). Test `JsonValue` used inside an imported module.
+  `JsonValue` stays out of `JSON.encode`, `JSON.from`, `JSON.decode` and
+  `JSON.schema` (`CHECK-NOT-ENCODABLE` / `CHECK-NOT-DECODABLE`). The only
+  breaking change: `JsonValue` becomes a reserved name (say so in the
+  changelog). Bytecode format version: see
+  `docs/future/15-adapters-and-json-inspection.md` §15.2 (no bump unless the
+  layout changes).
+- [ ] 10c Generic structs (`struct Box[T]`): inference at construction,
+  substituted field types, the generic enum diagnostics; a field named `with`
+  whose type is a type parameter is `CHECK-REDEFINED-NAME`
+  (`docs/future/25-ruby-typed-idioms.md` §25.3); a type parameter used as a
+  `Map` key is `CHECK-MAP-KEY-TYPE` at the declaration, tested for both a
+  generic struct and a generic enum (`enum E[K]` with `Map[K, Int]`), since no
+  test covers the enum case today; `data-type?` is checked after substitution.
+  `JSON.encode` and `JSON.from` work on generic instances since encoding needs
+  no `$defs`: structs with 10c, enum instances only once 10d lands; only
+  `JSON.decode` and `JSON.schema` reject a generic instance anywhere in the
+  target (`CHECK-NOT-DECODABLE`; except `JsonField[T]` as a direct struct field,
+  §17). A bare generic target with no type arguments (`JSON.decode(text, Box)`,
+  `JSON.schema(Option)`) is `CHECK-UNKNOWN-TYPE`, as today. Add a note to the
+  programming skill's diagnostics reference that `CHECK-ENUM-TYPE-INFERENCE`
+  also covers structs. Update the `grammar.md` sentences "only enum declarations
+  may declare type parameters" and "generic structs are not supported", add
+  `[ type_parameters ]` to the `struct_decl` rule in grammar.md, and add a
+  type-parameter field to `struct-decl` in `src/ast.rkt`. Carry the type
+  parameters through `src/modules.rkt` import linking (the `struct-decl` case,
+  like `rewrite-enum-type` for enums), or a bare `T` gets the module prefix;
+  test a generic struct declared in an imported module and used as `M.Box[Int]`.
+- [ ] 10d JSON for enums: tagged objects (`{"tag": ..., "values": [...]}`) in
+  `JSON.encode`, `JSON.from`, `JSON.decode` and `JSON.schema`. `JSON.encode` and
+  `JSON.from` work on any user enum (not `JsonValue`) whose payloads are
+  encodable, generic instances too; decode and schema take non-generic enums
+  only (except `JsonField[T]` as a direct struct field, §17). The tag is a
+  one-value `enum` (`{"enum": ["Rect"]}`), not `const`. The schema is accepted
+  by every draft; per-payload types are checked from 2020-12 (`prefixItems`):
+  `values` has its length fixed with `minItems` and `maxItems`; `prefixItems`
+  only when the variant has payloads; no `"items": false`; a nullary variant
+  gets `"values": {"type": "array", "maxItems": 0}` and `values` is not in its
+  `required`. The root gets no `$schema`, as today. `JSON.encode` text puts
+  `tag` before `values`. If the VM JSON PR's type table has no enum entry kind,
+  10d adds it and bumps the bytecode format version
+  (`docs/vm/03-ir-and-bytecode.md` §4); the JSON PR adds no placeholder.
+- [ ] 10e Optional and nullable JSON fields: the builtin generic enum
+  `JsonField[T]` (`Absent`, `Null`, `Value(T)`) as a struct field type in JSON
+  targets. Decode: a missing key is `Absent`, `null` is `Null`, anything else is
+  `Value` of the decoded `T`, with today's error paths and text; only a wrong
+  kind for the field's own value adds "or null"
+  (`age: expected signed 64-bit Int or null`), checked at the `JsonField` level
+  since `fail` escapes through `let/ec`. `JSON.encode` and `JSON.from`: `Absent`
+  leaves the key out, `Null` writes `null`. `JSON.schema`: the field is not in
+  `required` (and `required` is left out when empty, for any struct with no
+  required field, which also drops today's `"required": []` from structs with no
+  fields; say so in the changelog), and its property is
+  `{"anyOf": [<T>, {"type": "null"}]}`. In a JSON builtin's type, `JsonField` is
+  allowed only as the direct type of a struct field; a list item, a map value,
+  `JsonField[JsonField[T]]`, an enum payload or a whole
+  `JSON.encode`/`JSON.from` argument is the new `CHECK-JSON-FIELD-PLACE`; its
+  message names the place (struct and field, "list item", "map value", "nested
+  JsonField", "encode argument", and after 10d "payload of `Enum.Variant`").
+  `JsonField[Nil]` is rejected in every JSON builtin, since `Value(nil)` would
+  look like `Null`: `CHECK-NOT-ENCODABLE` for encode and `JSON.from`,
+  `CHECK-NOT-DECODABLE` for decode and schema. It is the one generic instance
+  that decode and schema accept (no `$defs` entry); whichever of 10c, 10d and
+  10e lands later keeps this exception and tests it. The placement check runs
+  first: `List[JsonField[Nil]]` in a decode target is `CHECK-JSON-FIELD-PLACE`,
+  and a direct `JsonField[Nil]` field is then `CHECK-NOT-DECODABLE` or
+  `CHECK-NOT-ENCODABLE`. In a generic struct (10c), a field that is `JsonField`
+  after substitution (`Box[JsonField[Int]]`) counts as a direct field for encode
+  and `JSON.from`. Outside JSON it is an ordinary printable enum. Reuse the 10b
+  builtin-enum path (checker enum table, evaluator, `src/modules.rkt` linking of
+  patterns, constructors and bare `JsonField.Absent` / `JsonField.Null`) and
+  give it a type parameter. `JsonField` becomes a reserved type name
+  (`CHECK-REDEFINED-NAME`; say so in the changelog); `Option` stays free. Update
+  the `grammar.md` JSON rules and its "`Nil` is not a nullable wildcard" note,
+  the programming skill's JSON reference and diagnostics reference, and the JSON
+  site page (`site/content/library/text-and-data/json.md`): keep its `Point`
+  example (it has required fields) and add a new example with a struct whose
+  fields are all `JsonField`, showing that `required` is absent and reading it
+  safely with `JSON.get` and a `case`. VM: a `JsonField` entry kind in the JSON
+  PR's type table; if that table has none, 10e adds it and bumps the bytecode
+  format version (`docs/vm/03-ir-and-bytecode.md` §4), with no placeholder in
+  the JSON PR. Done when the `UpdateUser` example of
+  `docs/future/17-optional-json-fields.md` §17 runs as a site example with its
+  output, and the tests listed there pass: decode of the three states, nested
+  path errors, a bad value type (`age: "x"` prints
+  `age: expected signed 64-bit Int or null`, which the VM differential test
+  compares), encode, schema (including an empty struct), round trip on declared
+  keys in encode's form, `CHECK-JSON-FIELD-PLACE`, `JsonField[Nil]` rejected by
+  each JSON builtin, the all-`JsonField` schema site example, use through an
+  import, and the VM differential test.
 
-**Done when:** two programs run. The VM program has a `Storage` adapter with a read-only memory backend, used by a function that takes `Storage`, and a walker over unknown JSON; it uses no `File.*` and no `System.args`, needs the library builtins of `docs/vm/12-testing-and-pr-plan.md` §12.2 item 6b (`Map.get`, `Map.keys`), and gives the same output on both backends (VM differential check). The disk program uses the same `Storage` shape with a disk backend whose `get` and `put` check each key with an allow-list before they build a path (`error("bad key")` otherwise, tested with a key such as `../x`), in a temporary directory that the Racket test creates and passes as an argument (read with `System.args`); it runs only on the evaluator until files reach the VM (7h).
+**Done when:** two programs run. The VM program has a `Storage` adapter with a
+read-only memory backend, used by a function that takes `Storage`, and a walker
+over unknown JSON; it uses no `File.*` and no `System.args`, needs the library
+builtins of `docs/vm/12-testing-and-pr-plan.md` §12.2 item 6b (`Map.get`,
+`Map.keys`), and gives the same output on both backends (VM differential check).
+The disk program uses the same `Storage` shape with a disk backend whose `get`
+and `put` check each key with an allow-list before they build a path
+(`error("bad key")` otherwise, tested with a key such as `../x`), in a temporary
+directory that the Racket test creates and passes as an argument (read with
+`System.args`); it runs only on the evaluator until files reach the VM (7h).
 

@@ -333,7 +333,7 @@ uint64_t agc_value_units(agc_value v) {
   while (v.tag == AGC_T_RESULT) v = ((const agc_result *)v.as.p)->value;
   switch (v.tag) {
     case AGC_T_STRING: return ((const agc_string *)v.as.p)->bytes / AGC_COST_BYTES;
-    case AGC_T_LIST: return ((const agc_list *)v.as.p)->len;
+    case AGC_T_LIST: return agc_list_len(v.as.p);
     case AGC_T_MAP: return ((const agc_map *)v.as.p)->size;
     case AGC_T_JSON: return ((const agc_json *)v.as.p)->count;
     default: return 0;
@@ -370,12 +370,6 @@ agc_enum *agc_new_enum(uint32_t variant, uint32_t n) {
   e->variant = variant;
   e->n = n;
   return e;
-}
-
-agc_list *agc_new_list(size_t len) {
-  agc_list *l = agc_alloc(agc_size_add(sizeof(agc_list), agc_size_mul(len, sizeof(agc_value))));
-  l->len = len;
-  return l;
 }
 
 agc_string *agc_new_string(size_t bytes, size_t chars) {
@@ -517,10 +511,14 @@ char *agc_cstr(const agc_string *s) {
 }
 
 uint8_t *agc_byte_list(agc_vm *vm, const agc_list *values, size_t limit) {
-  if (values->len > limit) return NULL;
-  uint8_t *data = agc_alloc_atomic(values->len ? values->len : 1);
-  for (size_t k = 0; k < values->len; k++) {
-    int64_t b = agc_as_int(vm, values->items[k]);
+  size_t n = agc_list_len(values);
+  if (n > limit) return NULL;
+  uint8_t *data = agc_alloc_atomic(n ? n : 1);
+  agc_list_cursor cursor;
+  agc_list_cursor_begin(&cursor, values, 0);
+  agc_value item;
+  for (size_t k = 0; agc_list_cursor_next(&cursor, &item); k++) {
+    int64_t b = agc_as_int(vm, item);
     if (b < 0 || b > 255) return NULL;
     data[k] = (uint8_t)b;
   }
