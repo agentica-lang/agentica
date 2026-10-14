@@ -10,6 +10,7 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.
 - Extra blank or comment lines between statements are ignored.
+- `##` lines are doc comments. A `##` block on the lines directly above a `def`, `struct`, `enum`, field or variant documents it (Markdown text); the first block of a file, followed by a blank line, documents the module. A `##` after code on the same line is a plain comment. Any other `##` block is `PARSE-DETACHED-DOC`, and a doc block does not count as the blank line between declarations.
 - A module function with no arguments may drop its parentheses, builtin or through an import alias (`IO.gets!`, `IO.eof?`, `Util.reset`). `f = Util.helper` is a call; `&Util.helper` is the function value.
 - `--max-steps N` bounds execution to N expression or statement entries across all tasks (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
 

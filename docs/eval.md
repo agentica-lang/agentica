@@ -188,7 +188,7 @@ The `binary` arm on master `e24fac9` (the C VM runs every program; the evaluator
 
 ### Round 10: the 6c pilot, Agentica against typed Python (2026-10-14)
 
-The `skill` arm against the `typed-python` arm (`mypy --strict`) on all twenty tasks, 3 reps per cell, master `38fe556`, 60 runs per arm and model. Seconds are left out: to finish sooner, the runs went 4 to 6 at a time, next to other rounds, so they are not comparable. Rounds 10 and 11 together cost $3.75.
+The `skill` arm against the `typed-python` arm (`mypy --strict`) on all twenty tasks, 3 reps per cell, master `38fe556`, 60 runs per arm and model. Seconds are left out: to finish sooner, the runs went 4 to 6 at a time, next to other rounds, so they are not comparable. Rounds 9 to 11 together cost $3.75.
 
 | Model | `skill` passed | `typed-python` passed | `skill` tokens/run | `typed-python` tokens/run | `skill` cost/run | `typed-python` cost/run |
 |---|---|---|---|---|---|---|
@@ -220,6 +220,30 @@ The `binary` arm, t1 to t8, 3 reps, on master `38fe556` plus PR #198, which made
 - The new help cut tokens by a third to a half for DeepSeek and by 10 to 20% for GLM, with fewer failing runs and the same or better accuracy. The agents read `agentica --help` early and use its rules.
 - gpt-oss reads the help but still writes `;` and braces, which the help does not mention, and the lexer diagnostics for them give no hint. It then asks `agentica help while`, which only covers builtins.
 - Nemotron passed 8 of 19 before it was dropped.
+
+### Round 12: the smaller skill and the new hints (2026-10-14)
+
+The `skill` arm on all twenty tasks, 3 reps per cell, with the same prompt and tasks as round 10. It ran on master `34ab698`, which has three changes that round 10 did not have:
+
+- PR #200: hints for `;` and braces.
+- PR #201: hints for other common errors: `//` comments, single quotes, `Int` and `Float`, foreign `String` methods, `Map.new`, empty literals, a missing return, and top-level statements.
+- PR #204: the `agentica-programming` skill cut from about 5,300 to about 1,600 tokens in `SKILL.md`. The core-language detail moved to `references/language.md`.
+
+Seconds are left out, because the runs went in parallel. Round 12 cost $1.10. Rounds 9 to 12 together cost $4.85 of the $10 budget.
+
+| Model | Round 10 passed | Round 12 passed | Round 10 tokens/run | Round 12 tokens/run | Round 10 cost/run | Round 12 cost/run |
+|---|---|---|---|---|---|---|
+| DeepSeek V4.1 flash | 59/60 | 59/60 | 24,444 | 21,090 | $0.0082 | $0.0074 |
+| GLM 5.3 flash | 58/60 | 55/60 | 15,607 | 12,060 | $0.0056 | $0.0045 |
+| gpt-oss-120b | 31/60 | 30/60 | 21,980 | 17,581 | $0.0087 | $0.0065 |
+
+- Tokens per run fell 14% (DeepSeek), 23% (GLM) and 20% (gpt-oss). Cost per run fell 10%, 19% and 26%.
+- Pass rates held within noise for 3 reps. DeepSeek's one failure and all five of GLM's are logic errors on hidden cases: no syntax, check or run-time failure.
+- gpt-oss still fails half of its runs. Its 30 failures are 11 logic, 8 syntax (5 `PARSE-UNEXPECTED-TOKEN`, 2 `LEX-UNEXPECTED-CHAR`, 1 `LEX-UNMATCHED-DELIMITER`), 3 check (`CHECK-TYPE-MISMATCH`, `CHECK-REDEFINED-NAME`, `CHECK-EMPTY-MAP-TYPE`), 1 run time (`RUNTIME-INVALID-NUMBER`), and 7 runs that wrote no solution file. It failed t20 3/3 again; DeepSeek and GLM passed t20 3/3 each.
+- The gap to typed Python on cost narrows but stays. Typed Python cost $0.0053, $0.0017 and $0.0028 per run in round 10.
+- With 3 reps, these are directions, not claims.
+
+Round 12 is the last evaluation round until after the bootstrap of the self-hosted front end ([§35](future/35-self-hosting.md), roadmap row 7.2.7) and any improvements that follow it. The owner decided this on 2026-10-14. The full 6c round (roadmap row 10) waits for that too. See the [roadmap](roadmap/README.md).
 
 ### JSON tasks: smoke run (2026-10-03)
 

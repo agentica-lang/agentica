@@ -10,6 +10,11 @@ on:
       - '.github/workflows/pages.yml'
       - 'Makefile'
   workflow_dispatch:
+    inputs:
+      cancel_sha:
+        description: 'Cancel the stuck Pages deployment of this commit SHA before deploying'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ concurrency:
 jobs:
   build:
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 15
     env:
       HUGO_VERSION: 0.167.0
       HUGO_SHA256: 0163f5c3deddac1f494a1629ddc40c65d18de9d5794facd98f7f96ac2c7d8957
@@ -53,6 +59,7 @@ jobs:
   deploy:
     needs: build
     runs-on: [self-hosted, linux, docker-runner]
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
@@ -60,5 +67,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - if: inputs.cancel_sha != ''
+        env:
+          TOKEN: ${{ github.token }}
+          CANCEL_SHA: ${{ inputs.cancel_sha }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages/deployments/$CANCEL_SHA/cancel"
       - id: deployment
         uses: actions/deploy-pages@v4

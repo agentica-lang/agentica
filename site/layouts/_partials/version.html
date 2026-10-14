@@ -1,0 +1,5 @@
+{{- with site.Params.version -}}
+  {{- return . -}}
+{{- else -}}
+  {{- errorf "site.Params.version is not set: build with make site, which reads src/version.rkt" -}}
+{{- end -}}

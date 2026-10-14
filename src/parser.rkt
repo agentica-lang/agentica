@@ -64,7 +64,15 @@
 
   (let/ec return
     (define (bail code message token #:help [help #f])
-      (return (diagnostic code message (token-span token) #:help help)))
+      (if (and (eq? (token-kind token) 'DOC) (not (eq? code 'PARSE-MISSING-BLANK-LINE)))
+          (return (detached-doc token))
+          (return (diagnostic code message (token-span token) #:help help))))
+
+    (define (detached-doc token)
+      (diagnostic 'PARSE-DETACHED-DOC
+                  "a doc comment must be followed by a declaration, field or variant on the next line"
+                  (token-span token)
+                  #:help "put the doc block directly above the declaration, field or variant it documents; use # for a note that documents nothing"))
 
     (define (expect expected description [suffix? #f])
       (if (and (kind? expected)
@@ -122,19 +130,65 @@
 
     ;; Declarations --------------------------------------------------------
 
+    (define docs '())
+
+    (define (record-doc! node text)
+      (set! docs (cons (cons (node-span node) text) docs)))
+
+    (define (take-doc! starts-member?)
+      (define doc-token (advance!))
+      (define block (token-value doc-token))
+      (unless (and (eq? (doc-block-next block) 'code)
+                   (kind? 'NL)
+                   (begin (advance!) (starts-member?)))
+        (return (detached-doc doc-token)))
+      (doc-block-text block))
+
+    (define (parse-documented parse-member starts-member?)
+      (if (kind? 'DOC)
+          (let* ([text (take-doc! starts-member?)]
+                 [member (parse-member)])
+            (record-doc! member text)
+            member)
+          (parse-member)))
+
+    (define (declaration-start?)
+      (ormap kind? '(def struct enum export)))
+
+    (define (parse-declaration)
+      (cond
+        [(kind? 'export)
+         (define begin (advance!))
+         (define declaration
+           (cond [(kind? 'def) (parse-function-decl)]
+                 [(kind? 'struct) (parse-struct-decl)]
+                 [(kind? 'enum) (parse-enum-decl)]
+                 [else (bail 'PARSE-UNEXPECTED-TOKEN "export requires def, struct, or enum" (current))]))
+         (export-decl declaration (span-from begin))]
+        [(kind? 'def) (parse-function-decl)]
+        [(kind? 'struct) (parse-struct-decl)]
+        [else (parse-enum-decl)]))
+
     (define (parse-program)
       (define start (current))
+      (define module-doc #f)
       (define declarations
         (let loop ([acc '()])
           (when (and (pair? acc)
                      (not (import-decl? (car acc)))
-                     (ormap kind? '(def struct enum export import)))
+                     (ormap kind? '(def struct enum export import DOC)))
             (bail 'PARSE-MISSING-BLANK-LINE
                   "expected a blank line after the end of a declaration"
                   (current)))
           (skip-newlines!)
           (cond
             [(kind? 'EOF) (reverse acc)]
+            [(and (kind? 'DOC)
+                  (null? acc)
+                  (not module-doc)
+                  (eq? (doc-block-next (token-value (current))) 'blank))
+             (set! module-doc (doc-block-text (token-value (advance!))))
+             (loop acc)]
             [(kind? 'import)
              (define begin (advance!))
              (define path (expect 'string "an import path"))
@@ -144,17 +198,8 @@
              (define alias (expect 'type-name "a module alias"))
              (expect 'NL "a newline after import")
              (loop (cons (import-decl (token-value path) (token-lexeme alias) (span-from begin)) acc))]
-            [(kind? 'export)
-             (define begin (advance!))
-             (define declaration
-               (cond [(kind? 'def) (parse-function-decl)]
-                     [(kind? 'struct) (parse-struct-decl)]
-                     [(kind? 'enum) (parse-enum-decl)]
-                     [else (bail 'PARSE-UNEXPECTED-TOKEN "export requires def, struct, or enum" (current))]))
-             (loop (cons (export-decl declaration (span-from begin)) acc))]
-            [(kind? 'def) (loop (cons (parse-function-decl) acc))]
-            [(kind? 'struct) (loop (cons (parse-struct-decl) acc))]
-            [(kind? 'enum) (loop (cons (parse-enum-decl) acc))]
+            [(or (declaration-start?) (kind? 'DOC))
+             (loop (cons (parse-documented parse-declaration declaration-start?) acc))]
             [else
              (bail 'PARSE-TOP-LEVEL-STATEMENT
                    (format "expected a top-level declaration (def, struct, enum, or import), found ~a"
@@ -164,7 +209,7 @@
                             [(end) "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"]
                             [(else elsif) "this else has no matching if"]
                             [else "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"]))])))
-      (program declarations (span-from start)))
+      (program declarations (span-from start) (make-immutable-hash docs) module-doc))
 
     (define (parse-function-decl)
       (define start (expect 'def "def"))
@@ -235,7 +280,8 @@
           (skip-newlines!)
           (cond
             [(or (kind? 'end) (kind? 'EOF)) (reverse acc)]
-            [(kind? 'name) (loop (cons (parse-field-decl) acc))]
+            [(or (kind? 'name) (kind? 'DOC))
+             (loop (cons (parse-documented parse-field-decl (lambda () (kind? 'name))) acc))]
             [else (bail 'PARSE-UNEXPECTED-TOKEN
                         (format "expected a field name or \"end\", found ~a"
                                 (describe (current)))
@@ -250,6 +296,27 @@
       (define type (parse-type))
       (expect 'NL "a newline after the field")
       (field-decl (token-lexeme start) type (span-from start)))
+
+    (define (parse-variant-decl)
+      (define variant-start (expect 'type-name "an enum variant"))
+      (define payload-types
+        (if (kind? 'left-paren)
+            (let ()
+              (advance!)
+              (define first (parse-type))
+              (define rest
+                (let payload-loop ([items '()])
+                  (if (kind? 'comma)
+                      (begin
+                        (advance!)
+                        (payload-loop (cons (parse-type) items)))
+                      (reverse items))))
+              (expect 'right-paren ")")
+              (cons first rest))
+            '()))
+      (expect 'NL "a newline after the enum variant")
+      (enum-variant (token-lexeme variant-start) payload-types
+                    (span-from variant-start)))
 
     (define (parse-enum-decl)
       (define start (expect 'enum "enum"))
@@ -275,27 +342,8 @@
           (skip-newlines!)
           (cond
             [(or (kind? 'end) (kind? 'EOF)) (reverse acc)]
-            [(kind? 'type-name)
-             (define variant-start (advance!))
-             (define payload-types
-               (if (kind? 'left-paren)
-                   (let ()
-                     (advance!)
-                     (define first (parse-type))
-                     (define rest
-                       (let payload-loop ([items '()])
-                         (if (kind? 'comma)
-                             (begin
-                               (advance!)
-                               (payload-loop (cons (parse-type) items)))
-                             (reverse items))))
-                     (expect 'right-paren ")")
-                     (cons first rest))
-                   '()))
-             (expect 'NL "a newline after the enum variant")
-             (loop (cons (enum-variant (token-lexeme variant-start) payload-types
-                                       (span-from variant-start))
-                         acc))]
+            [(or (kind? 'type-name) (kind? 'DOC))
+             (loop (cons (parse-documented parse-variant-decl (lambda () (kind? 'type-name))) acc))]
             [else
              (bail 'PARSE-UNEXPECTED-TOKEN
                    (format "expected an enum variant or end, found ~a" (describe (current)))

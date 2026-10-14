@@ -90,6 +90,7 @@ tests/
   vm-diff-{1..8}-test.rkt # shards of vm-diff-common.rkt: tests/fixtures/vm/*.agc on dist/agentica-vm in three formats against their <name>.expected goldens (make goldens), with a --max-steps sweep
   site-examples-test.rkt # every agentica block in site/content runs or checks; a builtin change updates its site page
   stdlib-distribution-test.rkt # the relocated executable still finds std/
+  stdlib-docs-test.rkt  # every stdlib/**/*.agc has a module doc and a doc on every export (22a)
   bdd-test.rkt, bdd-integration.rkt # agentica test over the CLI (in-process main): step programs, isolation, programs under test
   unit-test-test.rkt    # agentica test on *_test.agc files (fixtures in fixtures/unit/) and the std/ unit tests in std/
   std/                  # *_test.agc unit tests of the std/ modules
@@ -203,7 +204,7 @@ Every stage follows the same shape; keep new stages consistent with it.
 
 The lexer emits one `NL` per LF/CRLF outside `()`, `[]`, and `{}`, including every blank/comment line, so extra lines between statements can leave more than one `NL` token. The grammar's `program` and `block` rules do not model this. The parser therefore skips stray `NL` at the top level and between statements. Keep that skip when adding statement forms, or valid files with comments between statements will fail to parse.
 
-Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK-LINE`, checked in `parse-program` from the NL tokens). The rule only fires when the next token starts a declaration or import, so stray text after `end` stays `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end each top-level `end` with `end\n\n`, so fragments can be joined safely.
+Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK-LINE`, checked in `parse-program` from the NL tokens). A `##` doc block is one `DOC` token followed by the `NL` of its last line, and it does not count as a blank line: the check also fires when the next token is a `DOC`. A blank line and a `#` comment line both give one `NL`, so a `DOC` token carries what follows it (`doc-block-next`) for the module-doc rule. The rule only fires when the next token starts a declaration or import, so stray text after `end` stays `PARSE-TOP-LEVEL-STATEMENT`. Inline test programs end each top-level `end` with `end\n\n`, so fragments can be joined safely.
 
 ## Error handling
 
