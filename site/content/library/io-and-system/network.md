@@ -10,6 +10,8 @@ listeners, clients and servers are handles: `IO.inspect` prints only their type 
 the program ends. Most examples here open real connections, so they are
 checked but not run.
 
+A socket, listener or server belongs to the task that opened it, and it is closed when that task ends, however it ends, so open one in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a task it starts.
+
 A timeout covers the whole call, including the wait for another task using
 the same socket. When a read or write times out, the socket is closed, and
 later calls on it fail at once with `network: socket is closed`.

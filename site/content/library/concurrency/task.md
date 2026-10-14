@@ -13,7 +13,7 @@ Tasks run functions at the same time in one program. The tour page
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and returns the `Task` handle of the new task. A file, socket, listener, process or server belongs to the task that opened it, and it is closed when that task ends, whether the task returns, crashes or is cancelled. `Task.spawn` moves nothing: when the argument is such a handle, or holds one in a struct or a list, the caller still owns it. The new task can use it, and it is closed when the caller ends. Because nothing goes to the parent, a handle that a helper task opens and returns through `Task.await` is closed when the helper ends, so open a long-lived handle in the task that keeps it. To give a handle to the new task, use `Task.spawn_owning`.
+Starts `function(argument)` in a new task and returns the `Task` handle of the new task. A file, socket, listener, process or server belongs to the task that opened it, and it is closed when that task ends, whether the task returns, crashes or is cancelled. `Task.await` of an ended task returns after the files it owned are written and closed. `Task.spawn` moves nothing: when the argument is such a handle, or holds one in a struct or a list, the caller still owns it. The new task can use it, and it is closed when the caller ends. Because nothing goes to the parent, a handle that a helper task opens and returns through `Task.await` is closed when the helper ends, so open a long-lived handle in the task that keeps it. To give a handle to the new task, use `Task.spawn_owning`.
 
 ```agentica
 def greet(name: String) -> String
@@ -36,7 +36,7 @@ hi Ana
 Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 ```
 
-Starts `function(handle)` like `Task.spawn`, and in the same call gives `handle` to the new task. The calling task must own the handle. From then on the new task owns it, so it is closed when the new task ends, even if that task crashes, and nobody else can close it in between. The caller can still use the handle while the new task runs. A server loop uses it to give each accepted connection to its own task, so a crash while serving one connection closes only that connection.
+Starts `function(handle)` like `Task.spawn`, and in the same call gives `handle` to the new task. The calling task must own the handle. From then on the new task owns it, so it is closed when the new task ends, even if that task crashes, and nobody else can close it in between. The caller can still use the handle while the new task runs. A server loop uses it to give each accepted connection to its own task, so a crash while serving one connection closes only that connection. A server handed over this way takes its listener with it, and goes on serving after the task that made it has ended.
 
 The argument must be a `FileHandle`, `Socket`, `Listener`, `Process` or `HttpServer`; any other type, such as an `Int`, a struct that holds a socket or an `HttpClient`, is `CHECK-NOT-A-HANDLE` at the argument. If the calling task does not own the handle, if it was already handed over, or if it is closed, the caller stops with `RUNTIME-HANDLE-NOT-OWNED` at the handle and no task is made.
 

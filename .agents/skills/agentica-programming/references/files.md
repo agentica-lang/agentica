@@ -36,11 +36,12 @@ is strict UTF-8. Whole-text helpers and each stream read/write are limited to
 an error for EOF before any line or invalid UTF-8. Byte values are 0..255.
 Close flushes output and is idempotent. Explicit flush and close return
 Results. A file belongs to the task that opened it and is closed, with its
-output flushed, when that task ends (return, crash or cancel), so a file
-opened in a helper task and returned through `Task.await` is closed when the
-helper ends (see `tasks.md`). `File.close` on a handle that is already
-closing (its owner task ended) returns `ok()` at once; the run still waits for
-that close's flush.
+output flushed, when that task ends (return, crash or cancel), and
+`Task.await` of that task returns after the flush, so a parent that awaits a
+helper reads everything the helper wrote. A file opened in a helper task and
+returned through `Task.await` is closed when the helper ends (see
+`tasks.md`). `File.close` on a handle that its owner's end is closing waits
+for that close and returns its result.
 
 `File.each_line` opens `path`, reads it one line at a time and calls the block
 with each line, never reading the whole file. The block returns
