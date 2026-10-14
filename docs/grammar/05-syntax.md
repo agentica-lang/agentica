@@ -5,9 +5,11 @@ This is a descriptive grammar. `{ X }` means zero or more repetitions, `[ X ]` m
 ### File and declarations
 
 ```ebnf
-program          = [ NL ], { declaration }, EOF ;
-declaration      = function_decl | struct_decl | enum_decl | import_decl
-                 | "export", ( function_decl | struct_decl | enum_decl ) ;
+program          = [ NL ], [ module_doc ], { declaration }, EOF ;
+module_doc       = DOC, NL, NL ;
+declaration      = import_decl
+                 | [ DOC, NL ], ( function_decl | struct_decl | enum_decl
+                 | "export", ( function_decl | struct_decl | enum_decl ) ) ;
 import_decl      = "import", STRING, "as", TYPE_NAME, NL ;
 
 function_decl    = "def", NAME, "(", [ parameters ], ")",
@@ -17,18 +19,27 @@ parameter        = NAME, ":", type ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
-field_decl       = NAME, ":", type, NL ;
+field_decl       = [ DOC, NL ], NAME, ":", type, NL ;
 
 enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
                    variant_decl, { variant_decl }, "end", NL ;
 type_parameters  = "[", TYPE_NAME, { ",", TYPE_NAME }, "]" ;
-variant_decl     = TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL ;
+variant_decl     = [ DOC, NL ], TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL ;
 
 qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
 
-A function, struct or enum declaration, exported or not, needs a blank line before the next declaration; a line with only a comment counts. Otherwise `PARSE-MISSING-BLANK-LINE` is reported at the next declaration. Imports may follow each other directly, but an import after a declaration also needs the blank line. Other text after a declaration's `end` is `PARSE-TOP-LEVEL-STATEMENT`.
+A function, struct or enum declaration, exported or not, needs a blank line before the next declaration; a line with only a comment counts, but a doc line does not, because it belongs to the declaration after it: the blank line goes before the doc block. Otherwise `PARSE-MISSING-BLANK-LINE` is reported at the next declaration, or at the first line of its doc block. Imports may follow each other directly, but an import after a declaration also needs the blank line. Other text after a declaration's `end` is `PARSE-TOP-LEVEL-STATEMENT`.
+
+A doc block (a `DOC` token, section 4) documents what comes on the next line: a `def`, `struct` or `enum` declaration, with or without `export`, a field inside a `struct`, or a variant inside an `enum`. The first doc block of a file is the module doc when only blank lines and ordinary `#` comment lines come before it and a blank line follows it; a `#` comment line right after it does not count as that blank line. A file has at most one module doc. Any other doc block is `PARSE-DETACHED-DOC`, reported at its first line: a block followed by a blank line (other than the module doc), by a `#` comment line, by an `import`, or by the end of the file, a block inside a function body, and a block inside `(...)`, `[...]` or `{...}`. Docs are optional and have no effect when the program runs.
+
+```ruby
+## Adds two numbers.
+def add(a: Int, b: Int) -> Int
+  return a + b
+end
+```
 
 Struct, enum and function declarations appear only at the top level. There are no user methods, classes, inheritance or nested functions; closures are blocks (§6). The parser accepts type applications such as `List[Int]`. The checker allows them only for supported builtins and declared enums, and only enums take type parameters: generic functions and generic structs are not supported.
 

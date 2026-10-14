@@ -50,7 +50,7 @@
          (struct-out binary)
          node-span)
 
-(struct program (declarations span) #:transparent)
+(struct program (declarations span docs module-doc) #:transparent)
 (struct import-decl (path alias span) #:transparent)
 (struct export-decl (declaration span) #:transparent)
 (struct function-decl (name params result body span) #:transparent)

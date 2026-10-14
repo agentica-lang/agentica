@@ -1,6 +1,11 @@
+## Runs the tests of one `*_test.agc` file for `agentica test`.
+##
+## It lists the tests in a child VM, then runs them there one at a time.
+
 import "report" as Report
 import "child" as Child
 
+## The options of a run: the VM path, the seed, the `--only` text and the timeout of each test in milliseconds.
 export struct Settings
   vm: String
   seed: Int
@@ -37,6 +42,8 @@ struct Ending
   output: String
 end
 
+## Runs the tests of the file `path` from its compiled `bytecode` and returns the result. A non-empty `front_end` is a front-end error
+## of the file, which is reported instead.
 export def run(settings: Settings, path: String, bytecode: String, front_end: String) -> Report.FileResult
   if front_end != ""
     parsed = Report.from_json(front_end)

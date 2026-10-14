@@ -1,10 +1,17 @@
+## Helpers for the child VM process of a test or a step program: its channel records and its error output.
+##
+## Used by `agentica test`.
+
 import "report" as Report
 
+## The JSON records read from a child's channel, and the message of the error that ended the reading.
 export struct Records
   items: List[Json]
   problem: String
 end
 
+## Reads the channel records of the child `p` until a read fails or the `deadline` passes (a `Time.monotonic_ms` value).
+## Lines that are not JSON are skipped.
 export def read_records(p: Process, deadline: Int) -> Records
   items: List[Json] = []
   while true
@@ -20,14 +27,17 @@ export def read_records(p: Process, deadline: Int) -> Records
   return Records(items: items, problem: "")
 end
 
+## Parses a channel line as JSON. Returns JSON null when it is not valid.
 export def record_of(line: String) -> Json
   return JSON.parse(line).unwrap_or(JSON.null())
 end
 
+## Returns the `event` text of a record, or an empty string.
 export def event_of(record: Json) -> String
   return text_of(record, "event")
 end
 
+## Returns the string at `key` in a record, or an empty string.
 export def text_of(record: Json, key: String) -> String
   found = JSON.get(record, key)
   if found.ok?
@@ -36,6 +46,7 @@ export def text_of(record: Json, key: String) -> String
   return ""
 end
 
+## Returns the integer at `key` in a record, or 1 when there is none.
 export def int_of(record: Json, key: String) -> Int
   found = JSON.get(record, key)
   if found.ok?
@@ -44,6 +55,7 @@ export def int_of(record: Json, key: String) -> Int
   return 1
 end
 
+## Returns the string at `key` as a known detail, or an unknown one.
 export def detail_of(record: Json, key: String) -> Report.Detail
   found = JSON.get(record, key)
   if found.ok? and JSON.string(found.unwrap!).ok?
@@ -52,10 +64,12 @@ export def detail_of(record: Json, key: String) -> Report.Detail
   return Report.Detail.Unknown
 end
 
+## Returns true when the error `message` says the child's channel has ended or closed.
 export def gone?(message: String) -> Bool
   return message == "process: end of input" or message == "process: channel is closed" or message.starts_with?("error writing to stream port")
 end
 
+## Returns the milliseconds left until `deadline`, at most 2000.
 export def brief(deadline: Int) -> Int
   remaining = left(deadline)
   if remaining < 2000
@@ -64,6 +78,7 @@ export def brief(deadline: Int) -> Int
   return 2000
 end
 
+## Returns the milliseconds left until `deadline`, at least 1.
 export def left(deadline: Int) -> Int
   remaining = deadline - Time.monotonic_ms()
   if remaining < 1
@@ -72,10 +87,12 @@ export def left(deadline: Int) -> Int
   return remaining
 end
 
+## Builds an `Error` for the file `path`, at line 1 and column 1.
 export def located(code: String, message: String, path: String) -> Report.Error
   return Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
 end
 
+## Returns `output` without one final newline.
 export def printed(output: String) -> String
   if output.end_with?("\n")
     return output.slice(0, output.length - 1)
@@ -83,6 +100,7 @@ export def printed(output: String) -> String
   return output
 end
 
+## Returns the last `limit` characters of `text`.
 export def tail(text: String, limit: Int) -> String
   if text.length <= limit
     return text
@@ -90,8 +108,8 @@ export def tail(text: String, limit: Int) -> String
   return text.slice(text.length - limit, limit)
 end
 
-# A child that halts writes its --json diagnostic as the last line of stderr, and a child whose task crash was never
-# observed writes the unobserved summary there; the lines of task crashes carry "task": true and are skipped.
+## Reads the diagnostic a child wrote as the last line of `stderr`. A child that halts writes its `--json` diagnostic there, and a child with an
+## unobserved task crash writes a summary, which becomes `RUNTIME-TASK-CRASHED`. Lines of task crashes are skipped. Returns an error when there is none.
 export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Error]
   lines = stderr.split("\n").filter do |line| line != "" and not vm_shape?(line, true) end
   if lines.size == 0
@@ -110,6 +128,7 @@ export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report
   return error("no diagnostic")
 end
 
+## Returns the lines of `stderr` that are not diagnostics, cut to their last 65536 characters.
 export def stderr_text(stderr: String) -> String
   kept = stderr.split("\n").filter do |line|
     line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)

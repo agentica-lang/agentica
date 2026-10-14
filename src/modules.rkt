@@ -299,4 +299,6 @@
                      #:unless (import-decl? wrapped))
             (rewrite key (unwrap wrapped))))
         (reverse order))
-       (program-span root)))))
+       (program-span root)
+       (program-docs root)
+       (program-module-doc root)))))

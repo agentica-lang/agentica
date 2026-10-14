@@ -25,6 +25,26 @@ no new line, then one
 `#` starts a comment that runs to the end of the line. Code cannot sit at the
 top of the file outside a function.
 
+A comment that starts with `##` is a doc comment. Put it on the lines directly above a `def`, `struct`, `enum`, field or variant to document it. The text is Markdown, and it does not change how the program runs.
+
+```agentica
+# An ordinary comment: nothing reads it.
+## Adds two numbers.
+def add(a: Int, b: Int) -> Int
+  return a + b
+end
+
+def main() -> Void
+  puts(add(2, 3)) # a note after code
+end
+```
+
+```output
+5
+```
+
+The first `##` block of a file, followed by a blank line, documents the whole module. Any other `##` block that is not directly above what it documents is `PARSE-DETACHED-DOC`.
+
 ## Basic types
 
 Every value has a type. The checker knows the type of every expression before

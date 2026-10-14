@@ -2,6 +2,7 @@
 
 - The file is UTF-8; core identifiers use ASCII characters.
 - A comment starts with `#` and ends at the end of the line. The newline after it is kept.
+- A line whose first non-blank characters are `##` is a doc line (see "Doc comments" below), not an ordinary comment.
 - Names of variables, functions and fields start with a lowercase letter or `_`. Type names start with an uppercase letter. Identifiers are case-sensitive.
 - Spaces, tabs and indentation have no structural meaning. CRLF is read as LF.
 - A newline separates statements, except inside `(...)`, `[...]` and `{...}`.
@@ -31,6 +32,19 @@ A trailing `?` or `!` belongs to a lowercase name, whatever follows it: `contain
 
 The pipe operator `|>` is one token (the longest match next to `|` and `||`), so block parameters `do |x|` and `||` are unchanged. It does not continue a line: a chain over several lines goes in parentheses (see section 5).
 
+### Doc comments
+
+A **doc line** is a line whose first non-blank characters are `##`. Its text is the rest of the line after `##` and one optional space. `##` alone is an empty doc line, which separates paragraphs. Only the first two `#`s are the marker: `### Heading` is a doc line whose text is `# Heading`. A `##` after code on the same line (`x = 1 ## note`) is an ordinary comment, and `##` inside a string literal or an interpolation is text.
+
+A **doc block** is one or more consecutive doc lines. A blank line or an ordinary `#` comment line ends the block. The lexer emits one `DOC` token for each block, with its lines joined by newlines as the text and the span of the whole block. The newline after the block is an `NL`, as after any other line. Inside `(...)`, `[...]` and `{...}`, where no `NL` is emitted, the `DOC` token is still emitted, and the parser rejects it (`PARSE-DETACHED-DOC`).
+
+```ebnf
+DOC_LINE   = { " " | TAB }, "##", [ " " ], { ANY_BUT_NEWLINE } ;
+DOC        = DOC_LINE, { NL, DOC_LINE } ;
+```
+
+The text is CommonMark. Section 5 says where a doc block may stand and what it documents.
+
 ### Literals
 
 ```ebnf
@@ -43,7 +57,7 @@ ESCAPE     = "\\", ( '"' | "\\" | "#" | "n" | "r" | "t" ) ;
 INTERPOLATION = "#{", expression, "}" ;
 ```
 
-`LETTER` is `A`–`Z` or `a`–`z`; `DIGIT` is `0`–`9`; `LOWER_OR_UNDERSCORE` is `a`–`z` or `_`; `UPPER` is `A`–`Z`. `STRING_CHAR` is any Unicode character except double quotes, backslash, newlines, and a `#` followed by `{`. `NL` and `EOF` are lexer tokens.
+`LETTER` is `A`–`Z` or `a`–`z`; `DIGIT` is `0`–`9`; `LOWER_OR_UNDERSCORE` is `a`–`z` or `_`; `UPPER` is `A`–`Z`. `STRING_CHAR` is any Unicode character except double quotes, backslash, newlines, and a `#` followed by `{`. `NL`, `DOC` and `EOF` are lexer tokens.
 
 The minus sign is an operator, not part of a literal. The core has no exponents, other number bases, numeric separators or multiline strings.
 

@@ -58,6 +58,7 @@ Values never change in place: a method returns a new value, so assign it (`xs = 
 - The root file needs exactly one `def main() -> Void` with no parameters. Running a program calls only that entrypoint.
 - Blocks end with `end`. Indentation is for reading only.
 - `#` starts a comment that runs to the end of the line.
+- A `##` block directly above a `def`, `struct`, `enum`, field or variant is its doc comment, in Markdown: `## Adds two numbers.` above `def add(a: Int, b: Int) -> Int`. The first `##` block of a file, followed by a blank line, documents the module. Any other `##` block is `PARSE-DETACHED-DOC`; a `##` after code on the same line is a plain comment.
 - Function calls always use parentheses, even with no arguments: `main()`, `puts("hi")`. Only a method on a builtin value may drop them, when it has no arguments other than a trailing block (`s.length`, `xs.size`, `xs.each do |x| ... end`), and so may a module function with no arguments, builtin or through an import alias (`IO.gets!`, `IO.eof?`, `Util.reset`). `f = Util.helper` is a call; `&Util.helper` is the function value.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
 - Reserved words: `def struct enum case do import export end if elsif else while for in return try true false nil and or not`.

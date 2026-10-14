@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 288,
+  "stdout": [
+    "## not a doc line",
+    "3",
+    "moved to 1,1",
+    "moved to 2,1",
+    "blocked",
+    ""
+  ],
+  "stderr": []
+}

@@ -111,6 +111,63 @@
     (check-equal? (kinds (lex-text "x\n\n# comment\ny"))
                   '(name NL NL NL name NL EOF)))
 
+  (test-case "a run of ## lines is one DOC token with its text and span"
+    (define result (lex-text "## First\n##\n##   Third\n  ### Heading\ndef"))
+    (check-equal? (kinds result) '(DOC NL def NL EOF))
+    (define doc (car result))
+    (check-equal? (doc-block-text (token-value doc)) "First\n\n  Third\n# Heading")
+    (check-equal? (doc-block-next (token-value doc)) 'code)
+    (define span (token-span doc))
+    (check-equal? (list (source-position-line (source-span-start span))
+                        (source-position-column (source-span-start span))
+                        (source-position-line (source-span-end span))
+                        (source-position-column (source-span-end span)))
+                  '(1 1 4 14))
+    (check-equal? (token-lexeme doc) "## First\n##\n##   Third\n  ### Heading")
+    (define indented (car (lex-text "  ## a\n\t## b\n")))
+    (check-equal? (doc-block-text (token-value indented)) "a\nb")
+    (check-equal? (source-position-column (source-span-start (token-span indented))) 3)
+    (check-equal? (doc-block-text (token-value (car (lex-text "##tight\n")))) "tight")
+    (check-equal? (doc-block-text (token-value (car (lex-text "###\n")))) "#"))
+
+  (test-case "a DOC token records what follows its block"
+    (define (next-of text) (doc-block-next (token-value (car (lex-text text)))))
+    (check-equal? (next-of "## a\ndef") 'code)
+    (check-equal? (next-of "## a\n  def") 'code)
+    (check-equal? (next-of "## a\n\ndef") 'blank)
+    (check-equal? (next-of "## a\n   \ndef") 'blank)
+    (check-equal? (next-of "## a\n# note\ndef") 'comment)
+    (check-equal? (next-of "## a\n  # note\ndef") 'comment)
+    (check-equal? (next-of "## a\n") 'eof)
+    (check-equal? (next-of "## a") 'eof)
+    (check-equal? (next-of "## a\r\n\r\ndef") 'blank))
+
+  (test-case "doc blocks are split by blank and comment lines, and keep one NL each"
+    (define result (lex-text "## a\n\n## b\n# c\n## d\ndef"))
+    (check-equal? (kinds result) '(DOC NL NL DOC NL NL DOC NL def NL EOF))
+    (check-equal? (map (lambda (t) (doc-block-text (token-value t)))
+                       (filter (lambda (t) (eq? (token-kind t) 'DOC)) result))
+                  '("a" "b" "d"))
+    (check-equal? (kinds (lex-text "## a\r\n## b\r\ndef")) '(DOC NL def NL EOF))
+    (check-equal? (doc-block-text (token-value (car (lex-text "## a\r\n## b\r\ndef")))) "a\nb")
+    (check-equal? (kinds (lex-text "## a")) '(DOC NL EOF)))
+
+  (test-case "## after code, and ## inside strings, stay ordinary text"
+    (check-equal? (kinds (lex-text "x = 1 ## note")) '(name assign integer NL EOF))
+    (check-equal? (kinds (lex-text "x = 1 # note\n## doc\ny = 2")) '(name assign integer NL DOC NL name assign integer NL EOF))
+    (check-equal? (kinds (lex-text "x = \"## text\"")) '(name assign string NL EOF))
+    (check-equal? (kinds (lex-text "\"## text\"")) '(string NL EOF))
+    (check-equal? (kinds (lex-text "x = \"a#{1 + 2} ## b\" ## note"))
+                  '(name assign interp-start integer plus integer interp-end NL EOF))
+    (check-equal? (kinds (lex-text "# plain\n#\n#! also plain")) '(NL NL EOF)))
+
+  (test-case "a doc line inside brackets is still a DOC token, without an NL"
+    (check-equal? (kinds (lex-text "f(1,\n## doc\n2)"))
+                  '(name left-paren integer comma DOC integer right-paren NL EOF)))
+
+  (test-case "a bare carriage return after a doc line is still a lex error"
+    (check-equal? (diagnostic-code (lex-text "## a\rb")) 'LEX-UNEXPECTED-CHAR))
+
   (test-case "strings decode only the specified escapes"
     (define result (lex-text "\"quote: \\\" slash: \\\\ newline: \\n return: \\r tab: \\t\""))
     (check-equal? (token-value (car result))

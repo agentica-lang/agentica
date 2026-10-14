@@ -1,3 +1,6 @@
+## Results of `agentica test`, and the text and JSON reports built from them.
+
+## A place in a file: the line, the column and the end column.
 export struct Span
   file: String
   line: Int
@@ -5,16 +8,20 @@ export struct Span
   end_column: Int
 end
 
+## Where a scenario came from: no example, or one `Examples` row.
 export enum Example
   NoExample
   Row(Span)
 end
 
+## An expected or actual value of an error: unknown, or known as text.
 export enum Detail
   Unknown
   Known(String)
 end
 
+## A failure: a code, a message and its place, and the expected and actual values when known.
+## `original` keeps the diagnostic object as `--json` wrote it, or JSON null for an error built from fields.
 export struct Error
   code: String
   message: String
@@ -25,24 +32,28 @@ export struct Error
   original: Json
 end
 
+## The result of a scenario or a file: `Pass`, `Fail` with an error, or `NotExecuted`.
 export enum Verdict
   Pass
   Fail(Error)
   NotExecuted
 end
 
+## The result of one step.
 export enum StepStatus
   Passed
   Failed(Error)
   NotExecuted
 end
 
+## The text, place and status of one step.
 export struct StepResult
   text: String
   location: Span
   status: StepStatus
 end
 
+## The result of one scenario: its steps, verdict, duration and output.
 export struct ScenarioResult
   name: String
   tags: List[String]
@@ -54,6 +65,7 @@ export struct ScenarioResult
   output: String
 end
 
+## The result of one feature file or test file.
 export struct FileResult
   path: String
   feature: String
@@ -71,13 +83,14 @@ struct Totals
   exit_code: Int
 end
 
+## Builds an `Error` at `span` with no expected or actual value.
 export def error_at(code: String, message: String, span: Span) -> Error
   return Error(code: code, message: message, span: span, end_line: span.line, expected: Detail.Unknown,
                actual: Detail.Unknown, original: JSON.null())
 end
 
-# Reads a diagnostic as `--json` writes it and keeps the whole object, so the report writes every key unchanged
-# (help, function, callee, labels, ...).
+## Reads a diagnostic as `--json` writes it. Keeps the whole object, so the report writes every key unchanged
+## (`help`, `callee`, `labels` and so on).
 export def from_json(text: String) -> Result[Error]
   root = try JSON.parse(text)
   range = try JSON.get(root, "range")
@@ -90,8 +103,8 @@ export def from_json(text: String) -> Result[Error]
                   original: root))
 end
 
-# For an error built from fields. An error from `from_json` is returned unchanged, since its kept object is what the
-# report writes, so the text and the JSON cannot disagree.
+## Adds `actual` to an error built from fields. An error from `from_json` is returned unchanged, since its kept object
+## is what the report writes, so the text and the JSON cannot disagree.
 export def with_actual(problem: Error, actual: String) -> Error
   if not JSON.null?(problem.original)
     return problem
@@ -100,20 +113,23 @@ export def with_actual(problem: Error, actual: String) -> Error
                expected: problem.expected, actual: Detail.Known(actual), original: problem.original)
 end
 
+## Builds a file result with no scenarios that fails with `problem`.
 export def file_error(path: String, kind: String, problem: Error) -> FileResult
   return file_failure(path, kind, problem, "")
 end
 
+## Like `file_error`, and keeps the `output` of the file.
 export def file_failure(path: String, kind: String, problem: Error, output: String) -> FileResult
   return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
-# 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error is RUNTIME-BDD-INFRA or
-# RUNTIME-BDD-USAGE, else 1.
+## Returns the exit code of a run: 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error
+## is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
 export def exit_code(files: List[FileResult]) -> Int
   return totals(files).exit_code
 end
 
+## Builds the `--json` report of `files` and the `seed` as a JSON object.
 export def json(files: List[FileResult], seed: Int) -> Json
   sums = totals(files)
   fields: Map[String, Json] = {
@@ -129,7 +145,7 @@ export def json(files: List[FileResult], seed: Int) -> Json
   return JSON.object(fields)
 end
 
-# The plain text (ai false) or the --ai text, without a final newline.
+## Builds the plain text report, or the `--ai` text when `ai` is true. It has no final newline.
 export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
   sums = totals(files)
   chunks = files.map do |file| file_text(file, ai) end

@@ -19,7 +19,8 @@ The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `'` or a backtick says strings use double quotes (a character is a one-character String). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
 | `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
-| `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one |
+| `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one; a `##` doc block counts as part of the next declaration, so the blank line goes before it |
+| `PARSE-DETACHED-DOC` | a `##` doc block that is not directly above a `def`, `struct`, `enum`, field or variant: a blank line, a `#` comment, an `import` or the end of the file follows it, or it stands in a function body or inside brackets. Move it onto the line above what it documents, or write `#`. Only the first block of a file, followed by a blank line, may stand alone (the module doc) |
 | `PARSE-TOP-LEVEL-STATEMENT` | a statement outside a function (put it in `def main() -> Void`), or an extra `end` (a stray `else` or `elsif` has no matching `if`) |
 | `PARSE-CHAINED-COMPARISON` | `a < b < c` |
 | `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |
