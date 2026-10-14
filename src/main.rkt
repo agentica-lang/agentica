@@ -120,7 +120,7 @@
         (eprintf "agentica: --seed needs an integer from 0 to 2147483647\n")
         (exit 2))
       (set! seed parsed)]
-     [("--flush-timeout") ms "wait at most MS milliseconds for file data at the end of the run"
+     [("--flush-timeout") ms "wait at most MS milliseconds for file data at the end of the run (default 30000; AGENTICA_FLUSH_TIMEOUT_MS sets it too, the flag wins)"
       (unless (regexp-match? #px"^[0-9]+$" ms)
         (eprintf "agentica: --flush-timeout needs a non-negative integer\n")
         (exit 2))

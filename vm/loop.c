@@ -701,21 +701,18 @@ static void close_files(agc_vm *vm) {
 static void flush_expired(uv_timer_t *timer) { ((agc_loop *)timer->data)->expired = true; }
 
 /* Every file close flushes its buffer in a pool job; the run waits for them,
-   at most --flush-timeout milliseconds when it is set. */
+   at most the flush limit (30 seconds, --flush-timeout or AGENTICA_FLUSH_TIMEOUT_MS). */
 static void finish_flushes(agc_vm *vm) {
   agc_loop *loop = vm->loop;
-  int64_t limit = vm->rt->flush_timeout;
   if (!flushing(vm)) return;
   loop->expired = false;
-  if (limit >= 0) {
-    uv_update_time(&loop->uv);
-    uv_timer_init(&loop->uv, &loop->deadline);
-    loop->deadline.data = loop;
-    uv_timer_start(&loop->deadline, flush_expired, (uint64_t)limit, 0);
-  }
+  uv_update_time(&loop->uv);
+  uv_timer_init(&loop->uv, &loop->deadline);
+  loop->deadline.data = loop;
+  uv_timer_start(&loop->deadline, flush_expired, (uint64_t)vm->rt->flush_timeout, 0);
   while (flushing(vm) && !loop->expired)
     if (!uv_run(&loop->uv, UV_RUN_ONCE)) break;
-  if (limit >= 0) uv_close((uv_handle_t *)&loop->deadline, NULL);
+  uv_close((uv_handle_t *)&loop->deadline, NULL);
   vm->rt->flush_expired = flushing(vm);
 }
 

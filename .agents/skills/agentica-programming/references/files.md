@@ -40,9 +40,10 @@ wait. Timing out active I/O closes that handle (later calls say the handle is
 closed); timing out while waiting for its lock leaves it open. Output is
 buffered (4096 bytes per handle) until it overflows, `File.flush`,
 `File.close` or the end of the run, so a write error may show there. At the
-end of the run the VM closes every open file and waits for the writes, with
-no limit by default; `agentica --flush-timeout MS` (non-negative, bad values
-exit 2) waits at most MS ms, then ends the run with the same exit code and
+end of the run the VM closes every open file and waits for the writes, at
+most 30000 ms; `agentica --flush-timeout MS` or the variable
+`AGENTICA_FLUSH_TIMEOUT_MS` (0 to 86400000, bad values exit 2, the flag wins,
+no way to turn the limit off) sets the wait. When time runs out the VM ends the run with the same exit code and
 one stderr line, `agentica: file data may not be written: ...`, or
 `{"flush_timeout_ms": MS, "warning": "file data may not be written"}` with
 `--json` (not a diagnostic). `SIGINT`, `SIGTERM` and `SIGHUP` take the

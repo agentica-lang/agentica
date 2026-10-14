@@ -1,7 +1,7 @@
 RACO ?= raco
 JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
-unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE
+unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 

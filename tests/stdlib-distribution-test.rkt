@@ -7,7 +7,7 @@
 (define vm-name (if (eq? (system-type 'os) 'windows) "agentica-vm.exe" "agentica-vm"))
 (define-runtime-path dist-directory "../dist")
 
-(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"AGENTICA_FLUSH_TIMEOUT_MS")])
   (environment-variables-set! (current-environment-variables) name #f))
 
 (module+ test

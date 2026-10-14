@@ -12,7 +12,7 @@
 (define wait-seconds 60)
 (define vm-file (build-path root "dist" "agentica-vm"))
 
-(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"AGENTICA_FLUSH_TIMEOUT_MS")])
   (environment-variables-set! (current-environment-variables) name #f))
 
 (define (environment no-turn-cost?)

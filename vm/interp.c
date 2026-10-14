@@ -84,7 +84,7 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
   rt->err = err;
   atomic_init(&rt->steps_left, max_steps);
   rt->in.fd = -1;
-  rt->flush_timeout = -1;
+  rt->flush_timeout = AGC_FLUSH_TIMEOUT_MS;
   rt->hash_key[0] = 0x0706050403020100ULL;
   rt->hash_key[1] = 0x0f0e0d0c0b0a0908ULL;
   rt->args = agc_list_value(agc_new_list(0));

@@ -31,17 +31,16 @@ A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its `can
 
 ### 14.4 Ending
 
-**Rule.** One exit path. Every step of it is bounded, the file flush included. Target (row 7.2.1d, second part): the file flush has a limit that is always on, 30 seconds by default, set with `--flush-timeout MS` or an environment variable (for example `AGENTICA_FLUSH_TIMEOUT_MS`), with no way to turn it off. The owner decided this on 2026-10-13. At exit, stdout and stderr count as part of the file flush. **When `main` ends, the program ends.** The steps are:
+**Rule.** One exit path. Every step of it is bounded, the file flush included. The file flush has a limit that is always on, 30 seconds by default, set with `--flush-timeout MS` or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS` (the flag wins), with no way to turn it off. The owner decided this on 2026-10-13 (row 7.2.1d, second part, done). At exit, stdout and stderr count as part of the file flush. **When `main` ends, the program ends.** The steps are:
 
 1. kill child processes (`close_children`, about 2 seconds at most, driving the loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
 3. exit.
 
-Nothing else is joined or drained: no task is awaited, no pool job other than the file flush is waited for, no socket is read to its end. `System.exit` and a crash of `main` take the same path. So does the first stop signal (SIGTERM, SIGINT, SIGHUP), flush included. A second stop signal exits at once without flushing, so a flush that cannot end (a FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM, `vm/main.c`) never makes the VM unkillable. A second signal that comes before the children are stopped waits for step 1, so children are never left behind.
+Nothing else is joined or drained: no task is awaited, no pool job other than the file flush is waited for, no socket is read to its end. `System.exit` and a crash of `main` take the same path. So does the first stop signal (SIGTERM, SIGINT, SIGHUP), flush included. A second stop signal exits at once without flushing, so a stuck flush (a FIFO nobody reads, or a test child that gets `PR_SET_PDEATHSIG`'s SIGTERM, `vm/main.c`) need not wait for the flush limit. A second signal that comes before the children are stopped waits for step 1, so children are never left behind.
 
 As built (`end_run` in `vm/main.c`, §10.2.2 "End of run" and "Stop signals"): `main`'s return, `System.exit`, a diagnostic, the step limit and the first stop signal all reach `end_run`. It kills the children, sends one non-blocking TLS `close_notify` per finished TLS session (sockets and `HttpClient` connections), flushes stdout and stderr, closes the files and waits for their flush jobs, prints the diagnostic or summary, and ends with `_exit`, or with the stop signal raised again. A second stop signal before the children are stopped is recorded and acted on right after, and an `alarm` bounds that at 3 seconds. A driven VM whose driver is gone takes the immediate path on its first signal. `agc_io_close` is only for the in-process harnesses. Children are reaped by libuv's exit callback, never by `waitpid` or a sleep, and step 1 runs the loop for the exits (§10.4 Close; row 7.2.1d, first part, done). Where this differs from the rule (targets):
 
-- The file flush has no limit unless `--flush-timeout` is given. The target is the always-on limit above (row 7.2.1d, second part).
 - The `fflush` of stdout and stderr is not bounded by the flush limit.
 
 Known exceptions, outside the exit path: the out-of-memory and GC abort handlers end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none either. Both leave children running.
