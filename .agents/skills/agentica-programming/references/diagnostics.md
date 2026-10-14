@@ -1,8 +1,6 @@
 # Diagnostics
 
-`CHECK-VOID-TYPE` rejects Void in a data type position; `CHECK-VOID-VALUE` rejects using completion as data. A failed explicit cleanup of a process is `RUNTIME-PROCESS-CLOSE` at the call span. Expected process failures return error Results.
-
-A failure prints to stderr and exits 1 (the run stops at the first error):
+A failure prints to stderr and exits 1; the run stops at the first error:
 
 ```text
 file.agc:2:14 error[CHECK-TYPE-MISMATCH]
@@ -12,7 +10,7 @@ expected Int, found String
   |              ^^^^
 ```
 
-The code prefix is the stage: `LEX-` (characters), `PARSE-` (syntax), `CHECK-` (names and types, before running), `RUNTIME-` (while running).
+The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-` (while running). With `--json`, the diagnostic that ends the run is the last stderr line; the program's own stderr comes before it. Expected process failures return error Results. Codes without a row below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (see `language.md`), and `RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call span).
 
 | Code | Meaning |
 |---|---|
