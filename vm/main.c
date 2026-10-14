@@ -293,7 +293,7 @@ static agc_value program_args(int argc, char **argv, int first) {
 static const char usage[] =
   "usage: agentica-vm [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] -- "
   "<file.agcb> [args...]\n"
-  "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins)\n";
+  "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n";
 
 static int usage_error(void) {
   fputs(usage, stderr);
@@ -322,6 +322,8 @@ static bool parse_count(const char *text, int64_t *count) {
   *count = value;
   return true;
 }
+
+static bool parse_flush(const char *text, int64_t *ms) { return parse_count(text, ms) && *ms <= AGC_FLUSH_TIMEOUT_MAX_MS; }
 
 static bool parse_steps(const char *text, int64_t *steps) { return parse_count(text, steps) && *steps > 0; }
 
@@ -426,8 +428,8 @@ static int run(int argc, char **argv) {
     }
     if (strcmp(arg, "--flush-timeout") == 0) {
       if (!once(&seen_flush, arg)) return 2;
-      if (i + 1 >= argc || !parse_count(argv[i + 1], &flush_timeout)) {
-        fputs("agentica-vm: --flush-timeout needs a non-negative integer\n", stderr);
+      if (i + 1 >= argc || !parse_flush(argv[i + 1], &flush_timeout)) {
+        fputs("agentica-vm: --flush-timeout needs an integer from 0 to 86400000\n", stderr);
         return 2;
       }
       i += 2;
@@ -452,8 +454,8 @@ static int run(int argc, char **argv) {
   const char *path = argv[i];
   const char *flush_env = getenv("AGENTICA_FLUSH_TIMEOUT_MS");
   int64_t env_timeout = 0;
-  if (flush_env && !parse_count(flush_env, &env_timeout)) {
-    fputs("agentica-vm: AGENTICA_FLUSH_TIMEOUT_MS needs a non-negative integer\n", stderr);
+  if (flush_env && !parse_flush(flush_env, &env_timeout)) {
+    fputs("agentica-vm: AGENTICA_FLUSH_TIMEOUT_MS needs an integer from 0 to 86400000\n", stderr);
     return 2;
   }
   if (flush_env && !seen_flush) flush_timeout = env_timeout;

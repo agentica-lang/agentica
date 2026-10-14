@@ -146,7 +146,7 @@
             (check-equal? (sync/timeout wait-seconds (read-line-evt out)) "ready")
             (sleep 0.3)
             (unix-kill (subprocess-pid vm) sigint)
-            (check-false (sync/timeout 0.5 vm) "the first signal flushes without a limit")
+            (check-false (sync/timeout 0.5 vm) "the first signal flushes within the flush limit")
             (unix-kill (subprocess-pid vm) sigterm)
             (check-equal? (finish vm (lambda () (close-input-port out))) (+ 128 sigterm))))))))
 

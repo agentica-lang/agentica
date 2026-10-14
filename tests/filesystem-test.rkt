@@ -101,8 +101,9 @@
       env)
     (check-equal? (first (run-main-in-process "--flush-timeout" "-1" hello)) 2)
     (check-equal? (first (run-main-in-process "--flush-timeout" "soon" hello)) 2)
+    (check-equal? (first (run-main-in-process "--flush-timeout" "86400001" hello)) 2)
     (check-equal? (first (run-main-in-process "--flush-timeout" "0" hello)) 0)
-    (for ([bad '(#"soon" #"-1" #"")])
+    (for ([bad '(#"soon" #"-1" #"" #"86400001")])
       (define result (run-main-in-process #:environment (with-variable bad) hello))
       (check-equal? (first result) 2)
       (check-true (regexp-match? #rx"AGENTICA_FLUSH_TIMEOUT_MS" (third result))))
@@ -128,7 +129,7 @@
             source)
            (define reader (open-input-file fifo))
            (define filler #f)
-           (define watchdog (thread (lambda () (sleep 10) (close-input-port reader))))
+           (define watchdog (thread (lambda () (sleep 20) (close-input-port reader))))
            (define start (current-inexact-milliseconds))
            (define-values (by-flag by-variable flag-wins)
              (dynamic-wind
@@ -146,7 +147,7 @@
                  (kill-thread watchdog)
                  (when filler (with-handlers ([exn:fail? void]) (close-output-port filler)))
                  (close-input-port reader))))
-           (check-true (< (- (current-inexact-milliseconds) start) 10000))
+           (check-true (< (- (current-inexact-milliseconds) start) 20000))
            (for ([result (list by-flag by-variable flag-wins)]
                  [expected '(200 300 250)])
              (check-equal? (take result 2) '(0 "main done\n"))

@@ -12,7 +12,7 @@
 (define python (find-executable-path "python3"))
 (define wait-seconds 30)
 
-(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"SSL_CERT_FILE" #"SSL_CERT_DIR")])
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"AGENTICA_FLUSH_TIMEOUT_MS" #"SSL_CERT_FILE" #"SSL_CERT_DIR")])
   (environment-variables-set! (current-environment-variables) name #f))
 
 (define (peers-ready?)

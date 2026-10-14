@@ -7,7 +7,7 @@
 (define-runtime-path main-file "../src/main.rkt")
 (define-runtime-path example "../examples/json-modules.agc")
 
-(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE")])
+(for ([name '(#"AGENTICA_VM_TRACE" #"AGENTICA_VM_TRACE_FILE" #"AGENTICA_FLUSH_TIMEOUT_MS")])
   (environment-variables-set! (current-environment-variables) name #f))
 
 (define (with-files files run)
