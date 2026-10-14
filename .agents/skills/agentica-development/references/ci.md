@@ -218,11 +218,13 @@ versions and the Racket bundle are in SKILL.md, "Releases".
 ## Copy-paste check (jscpd)
 
 - `make dup-check` runs jscpd over `src/*.rkt`, `vm/*.c`, `vm/*.h` and
-  `vm/tests/*.c` with `.jscpd.json`.
+  `vm/tests/*.c` with `.jscpd.json`. Its `weak` mode skips comments, so
+  similar file header comments are not clones.
 - jscpd is pinned with its whole dependency tree by
   `tools/jscpd/package-lock.json` and installed by `npm ci --ignore-scripts`
   into `tools/jscpd/node_modules`.
-- CI runs it in its own `dup-check` job and fails on any clone not in
+- CI runs it in the `test` job of pull requests and in its own `dup-check`
+  job on `master` pushes, and fails on any clone not in
   `.jscpd-baseline.json`, so new duplicated code fails CI.
 - Remove the copy instead of growing the baseline. After removing old
   clones, refresh it with `make dup-baseline` and commit the file.
