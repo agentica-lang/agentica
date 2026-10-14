@@ -12,7 +12,7 @@ Checked at `8be2ffa`:
 - Under the SysV x86-64 ABI a 16-byte struct of two eightbytes travels in two registers, in and out of a call.
 - `Int` and `Float` never allocate. `Int` is a signed 64-bit integer, and overflow is a runtime error (`docs/grammar.md`).
 - Memory is managed by the Boehm GC, which is conservative: it treats any word that looks like a pointer into the heap as one. Pointers are never tagged (`docs/vm/05-values-execution-builtins.md` §5.3).
-- The GC setup: `build/vm/gc.o` is compiled with `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`Makefile:182`), and `vm/value.c:53-56` only calls `GC_INIT` and sets the OOM, abort and warning hooks. So a pointer anywhere inside an object keeps it alive, from the heap as well as from the stack. bdwgc v8.2.12 sets `ALIGNMENT` to 8 on x86-64 (`include/private/gcconfig.h:2423`): the collector reads heap objects, the stack and the roots only at 8-byte aligned offsets. The VM does not change either setting (no `GC_set_all_interior_pointers`, no `GC_register_displacement`).
+- The GC setup: `build/vm/gc.o` is compiled with `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`Makefile:182`), and `vm/value.c:53-56` only calls `GC_INIT` and sets the OOM, abort and warning hooks. So a pointer anywhere inside an object keeps it alive, from the heap as well as from the stack. bdwgc v8.2.12 sets `ALIGNMENT` to 8 on x86-64 (`include/private/gcconfig.h:2423`): the collector reads heap objects, the stack and the roots only at 8-byte aligned offsets. The VM keeps both: `agc_init` calls `GC_set_all_interior_pointers(1)` so the system and vendored libgc match, and it calls no `GC_register_displacement`.
 
 ### 38.2 Packed struct (12 or 9 bytes): rejected
 
