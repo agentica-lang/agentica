@@ -32,6 +32,6 @@ Specified in [`docs/future/39-semantic-cli.md` section 39](../future/39-semantic
   - **Diagnostics:** `QUERY-NO-EXPRESSION` at the position, clamped to the end of the line or of the file (§39.7).
   - **Tests:** the `type-at` and position-form cases of §39.13.
   - **Docs:** as in 26b.
-- No CHANGELOG: the project adds none in the private alpha.
+- CHANGELOG: an entry under `[Unreleased]` for any user-visible change.
 
 **Done when:** an agent can list a file's declarations, find where a name is defined, list every reference to a declaration across a program (functions, types and variants even while the program does not check), and get the checked type at a position, each in text and in JSON with `version` 1; a broken root is `skipped`, not fatal; a command that needs a check gives the first diagnostic and exit 1; the `QUERY-` codes and exit codes of §39.7 hold; and the tests of §39.13 pass. LSP, rename and refactor commands, editor integration and a daemon stay out (§39.11).
