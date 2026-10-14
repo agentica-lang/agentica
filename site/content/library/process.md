@@ -148,7 +148,7 @@ ok(1)
 Process.close(p: Process) -> Void
 ```
 
-Stops the program if it still runs, and frees it. Closing twice is fine.
+Stops the program if it still runs, and frees it. Closing twice is fine. The task that closes a program started with `Process.spawn` waits until it has ended, for one second at most, and other tasks keep running meanwhile.
 
 ```agentica {mode="check"}
 def main() -> Void
