@@ -4,6 +4,7 @@
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.spawn_owning(f: Fn[A, R], handle: A) -> Task[R]
 Task.await(task: Task[R]) -> R
+Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
 Task.sleep(milliseconds: Int) -> Void
 Task.pending_count() -> Int
 Task.unobserved_crash() -> Result[String]
@@ -15,11 +16,34 @@ A runtime error in a task other than `main` is a crash and ends only that task; 
 
 A handle (file, socket, listener, process, `std/http` server) belongs to the task that opened it, and the VM closes it when that task ends in any way: it returns, crashes or is cancelled (never an `HttpClient`; a channel never moves). Nothing goes to the parent, so a handle opened in a helper task and returned through `Task.await` is closed when the helper ends: open a long-lived handle in the task that keeps it, such as `main`. Ownership decides who closes, not who may use: `Task.spawn(&f, handle)` passes the handle and the caller still owns it, and any task that holds the handle can use it until its owner closes it, so the others get the closed error once the owner has ended. `Task.spawn_owning(&f, handle)` is the one hand-off: it starts the task like `Task.spawn` and gives it a handle the caller owns, so the new task closes it when it ends; a server handed over this way takes its listener with it. `Task.await` of an ended task returns after the regular files it owned are flushed and closed (not after a flush to a FIFO or a pipe). Use it for a connection that a server loop passes to its own task; a crash in that task then closes only that connection. The argument must be a `FileHandle`, `Socket`, `Listener`, `Process` or `HttpServer` (CHECK-NOT-A-HANDLE otherwise, with a struct or list that holds a handle too). A handle the caller does not own, one already handed over, and a closed one halt the caller with RUNTIME-HANDLE-NOT-OWNED at the handle argument.
 
+`Task.await(task, timeout_ms)` waits at most `timeout_ms` milliseconds and returns `Await[R]`, a builtin enum with two variants: `Await.Done(value)` holds the task's result and `Await.TimedOut` has no payload and no parentheses. Match both, or add `_`; `Await` is a reserved name (CHECK-REDEFINED-NAME for a struct, enum, type parameter or import alias with it), and `try` does not apply to it. A timeout does not cancel the task and does not stop the caller: the task keeps running, and a later `Task.await(task)` or timed await returns its result. A task that already ended never times out. `timeout_ms` must be positive: 0 or less halts with RUNTIME-INVALID-DURATION at the argument, so there is no poll with 0 (this differs from `Channel`). Call it once with the total time you can spare, not in a loop that polls. A crash or a cancel before the timeout gives the plain-await outcome (`Await.Done(error("task crashed: ..."))` for a `Result` task, otherwise a halt); one after `Await.TimedOut` does not reach the caller. A `Task[Void]` gives `Await[Void]`: match `Await.Done(_)` (a named binding is CHECK-VOID-TYPE). For a `Result` task, `Await.Done(r)` holds the Result: match it in a second `case`. The timed form never takes part in an await cycle: a task that timed-awaits its own handle, or two tasks that timed-await each other, get `Await.TimedOut` after the timeout (no RUNTIME-TASK-AWAIT-CYCLE), and a plain `Task.await` of a task that waits with a timeout does not halt. The plain form keeps its cycle check.
+
+```ruby
+def double(inbox: Channel[Int]) -> Int
+  n = inbox.recv(10000).unwrap!
+  return n * 2
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(1)
+  task = Task.spawn(&double, inbox)
+  case Task.await(task, 20)
+    Await.Done(n) -> puts("done #{n}")
+    Await.TimedOut -> puts("still working")
+  end
+  inbox.send(21, 1000)
+  case Task.await(task, 10000)
+    Await.Done(n) -> puts("done #{n}")
+    Await.TimedOut -> puts("gave up")
+  end
+end
+```
+
 A runtime error in `main`, RUNTIME-STEP-LIMIT and System.exit in any task still end the whole run; System.exit keeps its code. Returning from the entrypoint cancels pending work; explicitly await tasks that must finish. External interruption cancels tasks and closes newly created resources while preserving caller-supplied ports. No CPU parallelism is exposed. A block can be the task function when passed through a `Fn` variable or parameter.
 
 Random: each task has its own generator, split from its parent at spawn (one parent draw per spawn), so with `--seed N` each task repeats its own values. The interleaving can still vary with timers, sleeps, file and stdin reads, and the thread pool, even on one scheduler, so `--seed` does not make a multi-task run repeatable. Do not depend on cross-task order.
 
-Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`; the VM cancels a task only when an ancestor crashes. `Task.await` on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`, and otherwise halts with RUNTIME-TASK-CANCELLED at the await. A program reaches it when a task sends its child's handle over a channel and then crashes: the child is cancelled, and an await of it in another task halts. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
+Sleep accepts nonnegative milliseconds; zero yields and negative values halt with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`, and a timed await does not cancel; the VM cancels a task only when an ancestor crashes. `Task.await` on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`, and otherwise halts with RUNTIME-TASK-CANCELLED at the await. A program reaches it when a task sends its child's handle over a channel and then crashes: the child is cancelled, and an await of it in another task halts. Tasks inherit ports, program arguments and contextual services. Cross-task output order is unspecified; coordinate ownership of reads.
 
 `pending_count` returns how many tasks of this run have not ended, not counting `main`: tasks waiting to run, the caller when it is not `main`, and tasks waiting on a sleep, an await, a channel or I/O. A returned or crashed task is not counted, even when nothing awaited it.
 

@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 179,
+  "stdout": [
+    "self: timed out",
+    "a: plain saw: timed out",
+    "b: timed out",
+    "c: timed out",
+    "d: timed out",
+    ""
+  ],
+  "stderr": []
+}

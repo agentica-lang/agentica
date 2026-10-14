@@ -1,6 +1,6 @@
 #lang racket
 
-(require racket/path "ast.rkt" "builtins.rkt" "checker.rkt"
+(require racket/path "ast.rkt" "builtins.rkt" "builtin-types.rkt" "checker.rkt"
          "diagnostic.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "stdlib.rkt")
 
 (provide link-program load-program)
@@ -206,7 +206,7 @@
                                    (format "\"~a\" is neither an import alias nor an enum of this file; import a module with import \"path\" as ~a, or declare enum ~a" alias alias alias)]
                                   [else (format "import a module with import \"path\" as ~a" alias)]))])]
           [(and (eq? kind 'type) (member name reserved-type-names)) name]
-          [(and (eq? kind 'enum) (string=? name "Result")) name]
+          [(and (eq? kind 'enum) (or (string=? name "Result") (hash-has-key? builtin-enums name))) name]
           [(and (eq? kind 'function) (builtin-ref name)) name]
           [else (identity key name)]))
       (define (rewrite key node)
@@ -216,10 +216,13 @@
           [(type-ref name args span) (type-ref (resolve key name 'type span) (walks args) span)]
           [(type-expression name span)
            (define parts (string-split name "."))
-           (if (and (= (length parts) 2)
-                    (enum-decl? (hash-ref (hash-ref locals key) (car parts) #f)))
-               (enum-constructor (identity key (car parts)) (cadr parts) '() span)
-               (type-expression (resolve key name 'type span #:variant-hint? #t) span))]
+           (cond
+             [(and (= (length parts) 2)
+                   (enum-decl? (hash-ref (hash-ref locals key) (car parts) #f)))
+              (enum-constructor (identity key (car parts)) (cadr parts) '() span)]
+             [(and (= (length parts) 2) (hash-has-key? builtin-enums (car parts)))
+              (enum-constructor (car parts) (cadr parts) '() span)]
+             [else (type-expression (resolve key name 'type span #:variant-hint? #t) span)])]
           [(function-decl name params result body span)
            (function-decl (identity key name) (walks params) (walk result) (walks body) span)]
           [(struct-decl name fields span) (struct-decl (identity key name) (walks fields) span)]
@@ -256,6 +259,8 @@
              [(and (= (length parts) 2)
                    (enum-decl? (hash-ref (hash-ref locals key) (car parts) #f)))
               (enum-constructor (identity key (car parts)) (cadr parts) (walks args) span)]
+             [(and (= (length parts) 2) (hash-has-key? builtin-enums (car parts)))
+              (enum-constructor (car parts) (cadr parts) (walks args) span)]
              [(and (= (length parts) 3)
                    (hash-has-key? alias-imports (car parts))
                    (enum-decl? (hash-ref (hash-ref exports (hash-ref alias-imports (car parts)))

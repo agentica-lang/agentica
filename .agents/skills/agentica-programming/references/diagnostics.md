@@ -64,7 +64,7 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 | `RUNTIME-JSON-ENCODE` | JSON.encode cannot represent a non-finite Float |
 | `RUNTIME-STEP-LIMIT` | execution step budget exhausted |
 | `RUNTIME-STACK-OVERFLOW` | recursion too deep |
-| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration or negative `Channel.send`/`Channel.recv` timeout (see `tasks.md`) |
+| `RUNTIME-INVALID-DURATION` | negative `Task.sleep` duration, negative `Channel.send`/`Channel.recv` timeout, or a `Task.await(task, timeout_ms)` timeout of 0 or less (see `tasks.md`) |
 | `RUNTIME-TASK-CANCELLED` | `Task.await` on a task the VM cancelled when `R` is not a `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's handle by receiving it over a channel |
 | `RUNTIME-TASK-AWAIT-CYCLE` | `Task.await` of a task that is waiting for the caller, directly or through other awaits, at the await (see `tasks.md`) |
 | `RUNTIME-HANDLE-NOT-OWNED` | `Task.spawn_owning` of a handle the calling task does not own, one already handed over, or a closed one, at the handle argument (see `tasks.md`) |

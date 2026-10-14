@@ -13,15 +13,15 @@ each phase 16 PR counts and migrates them. 17d (`File.each_line`, order row
 non-Result last expression is `CHECK-TYPE-MISMATCH` with a help that shows
 `ok()`. `try` in a block with a fixed `Result` type already worked; the case
 where `T` is inferred from the block comes with the first of 27.1 and
-`File.open` with a block (§25.9). 27.3 (`Task.await` with a timeout) is planned
-too, at order step 8.2: it is prelude code over channels, so it comes after 27.2
-and after the compiler prelude (§25.6). 27.4 (`File.each_line` and `Stream[T]`)
-is in two steps, decided by the owner on 2026-10-14: step 1 is item 17d at order
-row 7.2.1h (built), step 2 is item 17e at order step 8.2. 27.5 records what was
-decided against (generators, fibers, Agent-style shared state, public locks), so
-it is not proposed again. This section finalizes the channel proposal of
-[section 8](08-concurrency.md#8-concurrency-and-parallelism) and answers
-[section
+`File.open` with a block (§25.9). 27.3 (`Task.await` with a timeout, returning
+the builtin enum `Await[T]`) is built (roadmap 17c): the owner decided on
+2026-10-14 to build it as a C builtin now, in place of the prelude code planned
+for order step 8.2. 27.4 (`File.each_line` and `Stream[T]`) is in two steps,
+decided by the owner on 2026-10-14: step 1 is item 17d at order row 7.2.1h
+(built), step 2 is item 17e at order step 8.2. 27.5 records what was decided
+against (generators, fibers, Agent-style shared state, public locks), so it is
+not proposed again. This section finalizes the channel proposal of [section
+8](08-concurrency.md#8-concurrency-and-parallelism) and answers [section
 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
 **What is asked for:** something like Elixir's `Stream` and `Task.async_stream`,
@@ -33,8 +33,8 @@ closures"): `Task.spawn`, `Task.await` and `Task.sleep` give I/O concurrency on
 one core (the VM runs one scheduler, `docs/vm/10-io-scheduler.md` §10.2.1).
 `List` and `Range` methods are eager; `for` over a range does not build a list;
 `reduce` is the accumulator. Channels (27.2) are built; there are no lazy
-streams and no CPU parallelism. `Task.await` has no timeout, and a task cannot
-be cancelled.
+streams and no CPU parallelism. `Task.await(task, timeout_ms)` (27.3) bounds a
+wait without stopping the task, and a task cannot be cancelled by the program.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing (its Principle and its test), values stay immutable
@@ -43,16 +43,18 @@ who do best with one obvious form and an error whose help shows it.
 
 **Primitives in C, helpers in Agentica.** The concurrency primitives are a small
 set of C builtins: `Task.spawn`, `Task.await`, `Task.sleep`, `Channel` (27.2)
-and `Task.map` (27.1). Higher-level concurrency helpers, such as `Task.await`
-with a timeout (27.3) and future ones such as "the first of several tasks" or
-"all settled", are written in Agentica in the compiler prelude (§25.6) over
-those primitives, as the [std-first
+and `Task.map` (27.1). Higher-level concurrency helpers, such as future ones
+like "the first of several tasks" or "all settled", are written in Agentica in
+the compiler prelude (§25.6) over those primitives, as the [std-first
 rule](../roadmap/README.md#new-library-features-std-first) asks; they go in the
 prelude, not in `std/`, because they need the catalog's type variables. Each
 future helper still needs its own spec and must pass the one-way test.
 `Task.map` stays a C builtin because it must cancel timed-out items, which no
 primitive can do, and because it lands at order step 7.3, before the prelude
-(27.1, "Where it lives").
+(27.1, "Where it lives"). `Task.await` with a timeout (27.3) is a C builtin too,
+by the owner's decision of 2026-10-14: the timeout lives in the scheduler, as a
+timer on the job (`docs/vm/14-core-invariants.md` §14.2), and the prelude it
+would have waited for does not exist yet.
 
 **One way for each job.** After this section, the programming skill teaches
 these forms, and only these, for each job. The skill updates of 17a and 17b
@@ -65,7 +67,7 @@ own row:
 | Keep a running total, or build a value in a loop | `reduce`, or a `for` or `while` loop that reassigns a local variable |
 | Run the same I/O for each item of a list, at most N at a time, each with a timeout | `Task.map` (27.1) |
 | Long-lived workers, producer and consumer, a flow of unknown length, results in the order they end | tasks and a `Channel` (27.2) |
-| Wait for a task's result, for at most N ms | `Task.await(task, timeout_ms)` (27.3); the task keeps running after a timeout |
+| Wait for a task's result, for at most N ms | `Task.await(task, timeout_ms)` (27.3), matched as `Await.Done(v)` or `Await.TimedOut`; the task keeps running after a timeout |
 | Read a big file line by line | `File.each_line` (27.4, step 1, built) |
 | An endless sequence, or the lines of a file that a step filters, takes or folds | a `while` loop; `Stream[T]` (27.4, step 2) once 17e lands |
 | State that several tasks update | one owner task that receives messages on a channel (27.5); a shared table (§13) when a program needs it |
@@ -74,7 +76,7 @@ own row:
 |---|---|---|---|---|
 | 27.1 | `Task.map` | planned | C builtin in the VM scheduler | 17a |
 | 27.2 | `Channel[T]` | built | C builtins, a builtin opaque generic | 17b |
-| 27.3 | `Task.await(task, timeout_ms)` | planned | prelude code over `Channel` | 17c |
+| 27.3 | `Task.await(task, timeout_ms)` returning `Await[T]` | built | C builtin and a builtin generic enum | 17c |
 | 27.4 | `File.each_line` (step 1) and `Stream[T]` (step 2) | step 1 built (17d); step 2 planned (owner, 2026-10-14) | step 1 a C builtin; step 2 prelude code | 17d, 17e |
 | 27.5 | Generators, fibers, Agent-style state, public locks and threads | decided against | help hints only, added by 17a and 17b | none |
 
@@ -210,8 +212,7 @@ Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> Li
 - **No public cancel.** `Task.cancel` is not added: per-item timeouts and
   channel timeouts cover the known uses, and a cancel call would be a second way
   to stop work. Section 8 keeps it open until a program needs it. `Task.await`
-  with a timeout is planned in 27.3; it bounds the wait only and cancels
-  nothing.
+  with a timeout (27.3) bounds the wait only and cancels nothing.
 - **Limits.** `limit` is 1 to 1024; otherwise `RUNTIME-INVALID-COUNT` at the
   `limit` argument. 1024 bounds the tasks and timers of one call, and matches a
   common open-file limit (`ulimit -n`) and the `--schedulers` cap. `timeout_ms`
@@ -332,9 +333,11 @@ be anyway (no user generics).
   and so on; if the chain reaches the caller, the call halts with a new stable
   code, `RUNTIME-TASK-AWAIT-CYCLE`, at the `Task.await` span. A task that awaits
   its own handle is the shortest cycle. The walk is O(length of the chain), and
-  chains are short. A cycle through the caller of a `Task.map` is not caught (an
-  item awaits the task that called `Task.map`, which waits on its group, not in
-  an await): it ends with that item's timeout instead, which is harmless. With N
+  chains are short. The timed form of the await (27.3) takes no part: it does
+  not run the check, and a task that waits with a timeout is not a link of the
+  chain. A cycle through the caller of a `Task.map` is not caught (an item
+  awaits the task that called `Task.map`, which waits on its group, not in an
+  await): it ends with that item's timeout instead, which is harmless. With N
   schedulers, each task's "awaiting" field is written before it parks, under the
   target's lock (§10.2.3, "Park and wake protocol"), so two tasks that close a
   cycle at the same time cannot both miss it: the second to take the lock sees
@@ -380,10 +383,11 @@ with 17b). These forms get a help, through the hint table of `grammar.md` §7
   `make vm-latency`; the Commands section of `AGENTS.md` gets the target; it
   skips when `AGENTICA_VM` names another binary; it uses lower bounds that
   cannot be flaky and generous upper bounds. It holds every timing-dependent
-  case of 27.1, 27.2 and 27.3: items print `start i` and `end i`; at no point
-  are more than `limit` items between their `start` and `end`, and at some point
-  exactly `limit` are; 8 items that sleep 250 ms with `limit` 2 take at least 1
-  s; with `limit` 8 they take well under the 2 s of a serial run.
+  case of 27.1 and 27.2 (27.3's goldens and C tests do not depend on the clock):
+  items print `start i` and `end i`; at no point are more than `limit` items
+  between their `start` and `end`, and at some point exactly `limit` are; 8
+  items that sleep 250 ms with `limit` 2 take at least 1 s; with `limit` 8 they
+  take well under the 2 s of a serial run.
 - Timeout and cancellation, in `tests/vm-task-map-test.rkt`: an item that sleeps
   60 s with `timeout_ms` 200 gives `error("task: timed out")` while the other
   items give `ok`, and the run ends within a few seconds; the timed-out item's
@@ -756,6 +760,15 @@ notes. Section 8 then points here and keeps only its open questions.
 
 ### 27.3 `Task.await` with a timeout
 
+**Status: built** (roadmap 17c). The owner decided on 2026-10-14 to build it now
+as a C builtin that returns a new builtin enum, `Await[T]`. This replaced the
+earlier plan (decided on 2026-10-12): prelude code over a helper task, a
+capacity-1 channel and two prelude-only builtins (`__task_settled?` and
+`__task_wait`), returning `Result[T]`. That plan needed lambdas (15e) and the
+prelude (15f), which wait for the bootstrap, and it made a timeout an `error`
+next to the `error("task crashed: ...")` of a crashed task (§37) and a
+`Result[Result[U]]` for a task that returns a `Result`.
+
 Wait for a task's result, but not longer than `timeout_ms`.
 
 ```agentica
@@ -767,199 +780,224 @@ end
 def main() -> Void
   task = Task.spawn(&slow, 21)
   case Task.await(task, 100)
-    ok(n) -> puts(n)
-    error(message) -> puts(message)   # task: timed out
+    Await.Done(n) -> puts(n)
+    Await.TimedOut -> puts("not yet")
   end
   puts(Task.await(task))              # 42, after the rest of the 5 s
 end
 ```
 
 ```text
-Task.await(task: Task[T], timeout_ms: Int) -> Result[T]
+Task.await(task: Task[T], timeout_ms: Int) -> Await[T]
+
+enum Await[T]
+  Done(T)
+  TimedOut
+end
 ```
+
+`Await[T]` is a builtin generic enum: it behaves like a user enum declared in
+the program, and a user cannot declare one with that name.
 
 **Decisions:**
 
 - **A second arity of `Task.await`, not a new name.** The one-way test (§25
   Principle) rejects forms that only rename or re-spell an existing call. This
-  one adds behavior: the wait is bounded, and the result is a `Result` that can
-  be a timeout. Waiting forever stays `Task.await(task)`, and waiting at most N
-  ms is `Task.await(task, timeout_ms)`, so each job still has one form. The
-  builtin catalog already selects signatures by arity (`Map.get` with 2 or 3
-  arguments, `File.open` with a block in §25.9), and agents know the pattern
-  from it. A separate name (`await_timeout`, `wait`) would be two names for
-  "await", which agents would mix up.
+  one adds behavior: the wait is bounded, and the result says whether it ended
+  in time. Waiting forever stays `Task.await(task)`, and waiting at most N ms is
+  `Task.await(task, timeout_ms)`, so each job still has one form. The builtin
+  catalog already selects signatures by arity (`Map.get` with 2 or 3 arguments,
+  `File.open` with a block in §25.9), and agents know the pattern from it. A
+  separate name (`await_timeout`, `wait`) would be two names for "await", which
+  agents would mix up.
+- **A timeout is a normal outcome, so it is not an error.** The result is
+  `Await[T]`, not `Result[T]`, because a timeout is not a failure of the task:
+  the task is fine, and the answer is "not yet". A dedicated type keeps it apart
+  from a crash (`error("task crashed: ...")` when `T` is a `Result`, §37) and
+  from the `error` a task returns itself, and it avoids `Result[Result[U]]` for
+  a task that returns `Result[U]`: that task gives `Await.Done(ok(5))`,
+  `Await.Done(error("..."))` or `Await.TimedOut`, three cases that cannot be
+  mixed up. `try` does not apply to an `Await` (it is not a `Result`):
+  `try Task.await(t, 10)` is `CHECK-TYPE-MISMATCH`.
+- **Matching.** A program matches it with `case`, like a user enum:
+  `Await.Done(n) -> ...` and `Await.TimedOut -> ...`, the nullary variant
+  without parentheses. Exhaustiveness is checked as for a user enum
+  (`CHECK-NON-EXHAUSTIVE-CASE` for a missing arm, `CHECK-UNREACHABLE-CASE-ARM`
+  after a catch-all), and `Await.Done(n)` binds `n` with the task's result type.
+  `Await.Done(7)` and `Await.TimedOut` are also values that a program may write
+  (for a test double, say), with the same inference rules as a user enum
+  (`Await.TimedOut` alone needs an expected type: `CHECK-ENUM-TYPE-INFERENCE`).
+  `IO.inspect`, `to_s` and interpolation print it as an enum value:
+  `Await.Done(42)`, `Await.TimedOut`.
+- **`T = Void`.** A `Task[Void]` gives `Await[Void]`. `Done` carries no value,
+  and it is matched as `Result[Void]` is: `Await.Done(_)` discards the payload
+  (a named binding is `CHECK-VOID-TYPE`, "a Void payload must be discarded with
+  _", as `Result.Ok(_)` is), and a program cannot write the value
+  `Await.Done(...)` for `Void`. It prints as `Await.Done()`, like `ok()`.
+  `Await[Void]` cannot be written as a type annotation (`CHECK-VOID-TYPE`, as
+  for any enum), but a variable gets it by inference.
 - **A timeout does not cancel the task.** On a timeout the call returns
-  `error("task: timed out")` (the text of a `Task.map` timeout), and the target
-  keeps running. A later `Task.await(task)` or `Task.await(task, timeout_ms)` on
-  the same task is valid: `grammar.md` ("Lightweight tasks") says await returns
-  the cached result and may be repeated, and that does not change. So a program
-  can wait a bit, do other work, and wait again. Stopping the work is
-  `Task.map`'s per-item timeout; a public `Task.cancel` stays open in section 8.
-- **A finished task never times out.** The call checks whether the target has
-  already settled (ended, or been cancelled) before it waits, and again when its
-  wait times out; in both cases it returns the target's outcome, not a timeout.
-  So a small timeout on a task that is done, or that ended while the CPU was
-  busy with other tasks, still gives `ok(v)`.
+  `Await.TimedOut`, and the target keeps running. A later `Task.await(task)` or
+  `Task.await(task, timeout_ms)` on the same task is valid: `grammar.md`
+  ("Lightweight tasks") says await returns the cached result and may be
+  repeated, and that does not change. The caller is not halted, and it is not
+  affected by what happens to the target afterwards: if the target later crashes
+  or is cancelled, the caller, which already has its answer, goes on. A crash
+  that no await observed stays unobserved (the summary at the end of the run,
+  §37), and a later await observes it as it does today. So a program can wait a
+  bit, do other work, and wait again. Stopping the work is `Task.map`'s per-item
+  timeout; a public `Task.cancel` stays open in section 8.
+- **A settled task never times out.** The call checks whether the target has
+  already settled (ended, or been cancelled, and its owned files closed, §37.5)
+  before it waits, and again when its wait times out; in both cases it returns
+  the target's outcome, not a timeout. So a small timeout on a task that is
+  done, or that ended while the CPU was busy with other tasks, still gives
+  `Await.Done(v)`.
 - **`timeout_ms` must be positive**; otherwise `RUNTIME-INVALID-DURATION` at the
-  argument, as for `Task.map`. "Has it finished?" without any wait is not part
-  of this item.
-- **Errors.** If the target ends in time, the call returns `ok(v)`, or `ok()`
-  for a `Task[Void]`. A runtime diagnostic in the target ends the run, as with
-  the plain form. If the target is cancelled (or was cancelled before the call),
-  the call halts with `RUNTIME-TASK-CANCELLED` at the user's
-  `Task.await(task, timeout_ms)` call, at once, as the plain form does (27.1).
-  If the call already returned a timeout, a later cancel of the target does not
-  halt the run: the caller already has its answer, and the helper below ends
-  quietly. Awaiting a task from another execution is `RUNTIME-TASK-CONTEXT`.
+  `timeout_ms` argument, checked before anything else, also for a settled
+  target. "Has it finished?" without any wait is not part of this item.
+- **Errors.** The target's outcome is what the plain `Task.await` gives. If the
+  target ends in time, the call returns `Await.Done(v)` (`Await.Done(_)` for a
+  `Task[Void]`). If it crashed (§37) and `T` is a `Result`, the call returns
+  `Await.Done(error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE"))`; for
+  any other `T` the caller halts with `RUNTIME-TASK-CRASHED` at the call. Either
+  way the crash is now observed. If the target is cancelled (or was cancelled
+  before the call) and `T` is a `Result`, the call returns
+  `Await.Done(error("task: cancelled"))`; for any other `T` the caller halts
+  with `RUNTIME-TASK-CANCELLED` at the call, at once, also when the target is
+  cancelled while the caller waits (27.1). If the call already returned
+  `Await.TimedOut`, a later crash or cancel of the target does not touch the
+  caller.
+- **No await cycles.** The timed form never waits forever, so it takes no part
+  in the cycle check of 27.1 ("Await cycles"), and a timeout never halts the
+  caller. A task that awaits its own handle with a timeout, or two tasks that
+  await each other with timeouts, wait out the timeout and get `Await.TimedOut`.
+  A task that waits with a timeout is not a link of the chain that the plain
+  `Task.await` walks (the walk stops at it, since `await_deadline` is set while
+  the task waits), so a plain await that reaches it does not halt: if A awaits B
+  with `Task.await(b)` and B awaits A with `Task.await(a, 20)`, B times out and
+  ends, and then A gets B's result. The plain form keeps its check: a plain
+  await that would close a cycle of plain awaits halts with
+  `RUNTIME-TASK-AWAIT-CYCLE`.
 - **Effects:** `concurrency`, like the plain form.
 
-**Where it lives: the compiler prelude, over a channel.** It is generic in `T`,
-so it cannot be a `std/` module, and by the rule at the top of this section it
-is Agentica code, not C. The body, in `stdlib/prelude/task.agc`:
+**Where it lives: a C builtin in `vm/task.c`.** This is an exception to "helpers
+in Agentica" (the top of this section), and it is the owner's decision of
+2026-10-14. The reason is the one the rule gives for `Task.map`: the timeout
+lives in the scheduler, where one rule decides how a task waits (a timer on the
+job, `docs/vm/14-core-invariants.md` §14.2), and it needs the target's waiter
+list, which no Agentica code can reach without a helper task. The builtin is two
+entries of the table, `Task.await` with arity 2 and `Task.await_result` with
+arity 2 (lowering picks the second when `T` is a `Result`, as it does for arity
+1, §37.8). No opcode and no format change: the entries are appended to the
+builtin table.
 
-```text
-def await_timeout(task: Task[T], timeout_ms: Int) -> Result[T]
-  if timeout_ms <= 0
-    __fail_arg("RUNTIME-INVALID-DURATION", 1, "timeout must be positive milliseconds")
-  end
-  if !__task_settled?(task)
-    signal: Channel[Nil] = Channel.new(1)
-    waiter: Fn[Task[T], Void] = lambda do |t: Task[T]|
-      __task_wait(t)
-      _ = signal.send(nil, 0)
-    end
-    Task.spawn(waiter, task)
-    _ = signal.recv(timeout_ms)
-    if !__task_settled?(task)
-      return error("task: timed out")
-    end
-  end
-  return ok(Task.await(task))
-end
-```
+How the wait works (`docs/vm/10-io-scheduler.md` §10.2.1, "Await with a
+timeout"):
 
-- A helper task waits until the target settles and then sends `nil` into a
-  capacity-1 signal channel; the caller receives with the timeout. The value
-  itself never travels through the channel: once the target has settled, the
-  final `Task.await(task)` returns the cached result without parking, or halts
-  with `RUNTIME-TASK-CANCELLED` for a cancelled target, reported at the user's
-  call by the span rule of §25.6. The helper's `send` uses a timeout of 0 and
-  always succeeds: the channel has one slot, only this helper sends into it, and
-  nobody closes it.
-- Two prelude-only builtins, guarded like `__fail_arg` (a catalog entry with the
-  prelude-only flag, `CHECK-UNKNOWN-NAME` outside the prelude, rejected by the
-  loader outside prelude functions, left out of `agentica help`):
-  `__task_settled?(task) -> Bool`, true when the task has ended or been
-  cancelled, so that `Task.await` on it will not park; and
-  `__task_wait(task) -> Void`, which parks like `Task.await` until the task
-  settles (it runs the await-cycle check of 27.1, which cannot fire for the
-  helper, since no task holds the helper's handle), but returns nothing and
-  never halts, even for a cancelled task. They are what lets the helper end
-  quietly and the call check for a finished task; with only the public
-  `Task.await`, the helper would halt the run when a target is cancelled after
-  the caller timed out, and a finished task could still time out under CPU load.
-- **`T = Void`.** The checker checks the body with `T` opaque, so
-  `ok(Task.await(task))` passes, but for a `Task[Void]` it would pass a `Void`
-  value as an argument, which user code may not do (`CHECK-VOID-VALUE`), and
-  whose runtime form is not promised to equal `ok()`. So this is not sound as
-  one body. The catalog entry names a second body, `await_timeout_void`, the
-  same text except the last line, which is `Task.await(task)` as a statement and
-  then `return ok()`; the checker picks it when `T` is `Void`. §25.6's
-  restricted type variables do not cover this, so it is an addition of this
-  item.
-- It needs lambdas (15e) for the helper, channels (17b) and the prelude (15f).
+- The call checks `timeout_ms` (`RUNTIME-INVALID-DURATION`), takes itself off
+  the waiter list of the task it waited on, if it was woken by its timer, and
+  looks at the target. If the target is settled it returns `Await.Done`.
+  Otherwise it computes the deadline once (there is no cycle check, see "No
+  await cycles") and keeps it in the task (`await_deadline`, as a channel wait
+  keeps its deadline), joins the target's waiter list as the plain await does,
+  starts a timer job with the time left (the one wait job of the lock and
+  channel waits, `agc_wait_io`), and parks with retry.
+- Two things can wake it, and whichever comes first wins. If the target ends,
+  `finish_task` wakes the waiters as it does today; the caller re-runs,
+  `agc_io_finish` closes the timer job, and the call returns `Await.Done`. If
+  the timer fires, the scheduler wakes the caller; it re-runs, leaves the
+  target's waiter list, clears `awaiting` and the deadline, and returns
+  `Await.TimedOut`, unless the target settled meanwhile, which is checked first.
+  A woken task whose deadline has not come (a wake is only a hint, §10.2.3)
+  waits again for the time left.
+- The losing side is cleaned up by the winner, so nothing leaks and nobody wakes
+  twice: the timer is closed when the caller resumes after the target ended; the
+  waiter is removed from the target's list when the caller resumes after the
+  timer; a wake of a task that is already ready does nothing (`agc_task_wake`
+  ignores it).
+- Cancelling a caller that waits (§14.3) needs no new case in `agc_task_cancel`:
+  `unlink_task` already detaches the task's timer job (it ends at once, since a
+  timer-only job has no work) and takes the task off the target's waiter list
+  through `awaiting`. `vm/tests/task_cancel_test.c` adds the case.
+- Turn and step accounting is the plain await's: the call is one builtin call,
+  `AGC_COST_NONE`, with no cycle walk. A call on a settled target starts no
+  timer and does not touch the event loop.
 
-**What 17c adds to the prelude mechanism of §25.6**, and nothing else:
+How `Await[T]` reuses the enum machinery: no special case per site.
 
-- one catalog name, `Task.await`, with a C body for arity 1 and a prelude body
-  for arity 2 (today a name is either a builtin or a prelude function);
-- the `Void` body above;
-- the two prelude-only builtins `__task_settled?` and `__task_wait`, appended to
-  the builtin table (no format bump);
-- lambdas written in prelude files carry the prelude flag, as §25.6 already says
-  for blocks there;
-- a span for prelude-spawned tasks: a task spawned with a prelude-flagged entry
-  function (the helper's lambda) stores the span of the user's call that spawned
-  it (the outermost frame of the innermost run of prelude frames at the spawn,
-  as in the span rule), and the span rule uses that stored span when it finds no
-  user frame in the task. So a `RUNTIME-STEP-LIMIT`, a `RUNTIME-INTERNAL` or a
-  trace line inside the helper points at the user's
-  `Task.await(task, timeout_ms)` call, never at `<prelude>/task.agc`. §25.6's
-  sentence on a crafted `.agcb` with no user frame says this fallback comes
-  first;
-- the helper mark for BDD (below): a task whose entry function has the prelude
-  flag is a helper.
+- `src/builtin-types.rkt` holds a table of builtin enum declarations (`Await`,
+  type parameter `T`, `Done(T)` and `TimedOut`). The checker starts with them in
+  its table of enums, so type annotations (`Await[Int]`), constructors,
+  patterns, exhaustiveness and printing all take the user-enum paths, and the
+  name is in the checker's reserved type names: a user `struct Await`,
+  `enum Await`, an enum type parameter `Await`, or `import "..." as Await` is
+  `CHECK-REDEFINED-NAME`, as for `Range` and `Channel`. The module linker leaves
+  `Await` unmangled in every module and reads `Await.TimedOut` and
+  `Await.Done(...)` as enum constructors.
+- The catalog row of `Task.await` has a second signature (`Task[R]`, `Int`) with
+  the rule `task-await-timeout`, which gives the type `Await[R]` and checks
+  `timeout_ms` as an `Int`.
+- Lowering appends the `Await` enum to the program's enum table when the program
+  mentions it (a type, a constructor, a pattern, or an expression of that type,
+  as it does for the builtin structs such as `HttpResponse`), after the user
+  enums, so user variant numbers do not change. The C builtin finds its two
+  variants by name, `Await.Done` with one field and `Await.TimedOut` with none
+  (`agc_builtin_variant`, next to `agc_builtin_struct`), and builds the value
+  like the `ENUM` opcode does (`TimedOut` is the shared value of its variant). A
+  file that calls the builtin without that enum fails with `RUNTIME-INTERNAL`.
+  `vm/text.c` prints an enum whose only field is a `Void` as `Await.Done()`.
 
-**The helper task after a timeout.** On a timeout, the caller returns, and
-nothing reads the channel again. The helper stays parked in `__task_wait` until
-the target settles; then it sends `nil` into the unread buffer (the one slot is
-free, so the send succeeds at once) and ends, also when the target was
-cancelled. The channel is then unreachable, and the GC frees it. The helper
-cannot keep the run alive: when `main` returns, the run ends and every pending
-task is cancelled, the helper too, as today. If the target never ends, the
-helper waits until the run ends. If the caller is cancelled (a `Task.map` item
-that times out), the helper is its child, so it is cancelled with it (27.1).
+**Await cycles and the stall check.** The caller holds a timer while it waits,
+so the stall check (§10.2.1) is unchanged: every wait has a job or a live task.
+The call does not run the cycle check, and the plain check skips a task that
+waits with a timeout, so a timed await adds no way to a
+`RUNTIME-TASK-AWAIT-CYCLE`, and a plain await never halts because of one. A
+timed waiter always holds a timer, so the stall check still only guards VM bugs.
 
-**Await cycles and the stall check.** `__task_wait` runs the await-cycle check
-(27.1, "Await cycles"), but the helper cannot be part of a cycle: no program
-holds its handle, so no task can await it. While the caller waits, it is in a
-channel `recv` with a timer, not in an await, so a target that awaits the caller
-does not make a cycle: the caller times out and goes on, and the target gets the
-caller's result once the caller ends. For the same reason, a task that awaits
-its own handle with a timeout gets the timeout error, not
-`RUNTIME-TASK-AWAIT-CYCLE`: only the plain form can wait forever, so only it
-needs the check. The stall check is unchanged: the helper waits on a live task,
-and the caller holds a timer.
+**BDD.** There is no helper task, so `RUNTIME-BDD-PENDING-TASKS` and
+`Task.pending_count` are not affected: a timed-out await leaves only the target,
+which is the program's own task.
 
-**BDD.** Prelude helper tasks (the helper of this item, parked in `__task_wait`)
-do not count as pending for `RUNTIME-BDD-PENDING-TASKS`: they are internal and
-run no user code. So whether a step handler passes does not depend on whether a
-helper has ended yet: a handler whose timed await timed out passes or fails on
-its own user tasks only. A task is a helper when its entry function has the
-prelude flag (the helper's lambda has it), and the pending check skips helpers.
-After phase 21 that check is `Task.pending_count()`, which `std/bdd` calls after
-each handler (`docs/bdd.md`), so `Task.pending_count` skips helpers too. Test: a
-step that times out on a task and then awaits it plainly passes, whether the
-helper has already ended or is still queued when the handler returns (the step
-is run many times to cover both orders).
+**Costs.** One timer job for each call that parks, and none for a call on a
+settled target. A loop that calls `Task.await(task, 10)` again and again leaves
+no waiter behind: each call removes itself from the target's list. The skill
+teaches one call with the whole timeout the program can afford, not a polling
+loop, and says that a timeout does not stop the task.
 
-**Costs.** A call on a settled task spawns nothing. Otherwise each call spawns
-one helper task and makes one channel, a few steps each, on the shared
-`--max-steps` counter; when the target ends in time, the step count is fixed. A
-loop that calls `Task.await(task, 10)` again and again leaves one parked helper
-per call until the target ends. The skill teaches one call with the whole
-timeout the program can afford, not a polling loop, and says that a timeout does
-not stop the task. The function moves to C only if a measurement shows it is hot
-(the std-first rule); its catalog entry would not change.
-
-**Tests:** golden fixtures, with no timeout races: a target that has ended
-(awaited plainly first), then awaited with a timeout (`ok(v)`, with no helper
-spawned); two timed awaits on the same ended task; a `Task[Void]` (`ok()`);
-`timeout_ms` 0 and -1 (`RUNTIME-INVALID-DURATION` at the argument span, through
-`__fail_arg`); a target that never ends (it waits on a channel nobody sends to,
-with a long timeout) awaited with a 20 ms timeout (always
-`error("task: timed out")`), after which `main` returns while the helper still
-waits, and the run ends at once; the step count of a call on an ended task. In
-`tests/vm-task-map-test.rkt`, since they depend on timing: a target that ends
-within the timeout (`ok(v)`); a target that does not, then a plain `Task.await`
-on it that returns its result; a target that has already ended, awaited with a 1
-ms timeout while other tasks keep the CPU busy (`ok(v)`, never a timeout); a
-timed await on a target that is cancelled while the caller waits
-(`RUNTIME-TASK-CANCELLED` at the user's call); a timed await that timed out,
-then the target is cancelled (the run goes on); a step limit hit inside the
-helper (a `--max-steps` small enough to stop the run while the helper runs),
-reported at the user's `Task.await(task, timeout_ms)` call, not at
-`<prelude>/task.agc`. Checker tests: the arity overload (`CHECK-ARITY` with 3
-arguments; `agentica help Task.await` lists both arities), the `Void` body, and
-`__task_settled?` and `__task_wait` in user code (`CHECK-UNKNOWN-NAME`); a
-loader test that rejects them outside prelude functions. **Docs:** `grammar.md`
-("Lightweight tasks"), the programming skill (`references/tasks.md`: a timeout
-does not stop the task; one call, not a polling loop),
-`site/content/library/concurrency/task.md`, the development skill's notes (the
-prelude's task body, the split arity, the two prelude-only builtins, the spawn
-span and the helper mark), `docs/vm/03-ir-and-bytecode.md` §4.5 (the list of
-guarded prelude-only builtins).
+**Tests** (nothing depends on the clock: a target that must not finish waits on
+a channel nobody has sent to yet, and a timeout that must not fire is 10
+seconds): golden fixtures (`await-timeout`: a timeout, the caller goes on, then
+the value; a settled task with a 1 ms timeout; the catch-all arm; `IO.inspect`,
+`to_s` and interpolation; `await-timeout-void`: `Await.Done(_)` and
+`Await.Done()`; `await-timeout-crash`: a crashed `Result` task gives
+`Await.Done(error("task crashed: ..."))` and a plain crashed task halts with
+`RUNTIME-TASK-CRASHED` at the call; `await-timeout-late-crash`: a crash after a
+timeout leaves the caller running and is unobserved until the next await;
+`await-timeout-invalid`: `timeout_ms` 0 and -1 are `RUNTIME-INVALID-DURATION` at
+the argument, also for a settled target; `await-timeout-cancelled`:
+`Await.Done(error("task: cancelled"))`, a watcher halted with
+`RUNTIME-TASK-CANCELLED` while it waited, and the caller that already got a
+timeout going on; `await-timeout-cycle`: a task that awaits its own handle with
+a timeout gets `Await.TimedOut`, a plain await of a task that awaits it back
+with a timeout ends with that task's result, and two tasks that await each other
+with timeouts both time out; the plain cycles keep their own fixture,
+`task-await-cycle`). Checker tests (`tests/checker-test.rkt`): the type of the
+call, missing and unreachable arms, an unknown variant, a wrong payload type,
+`Await.Done(n)` on a `Void` payload, `try` on an `Await`, the arity and argument
+types, and `CHECK-REDEFINED-NAME` for `struct Await`, `enum Await` and a type
+parameter `Await`; `tests/modules-test.rkt` (`import ... as Await`);
+`tests/parser-test.rkt` (the help for `Await.Done()`); `tests/bytecode-test.rkt`
+(the `Result` entry is picked for arity 2, and the enum is in the program only
+when used). C tests (`vm/tests/task_cancel_test.c`): a caller cancelled while it
+waits leaves the target's list and its timer is closed; a timeout leaves the
+list and clears the deadline; a target that ends first closes the 30-second
+timer (the loop is not alive at the end of the test). **Docs:** `grammar.md`
+("Lightweight tasks" and the builtin and reserved-name lists), the programming
+skill (`references/tasks.md`: a timeout does not stop the task, one call and not
+a polling loop, how to match `Await`),
+`site/content/library/concurrency/task.md` and `tour/tasks.md`, the development
+skill's notes, `docs/vm/10-io-scheduler.md` §10.2.1.
 
 ### 27.4 Streams: `File.each_line` and `Stream[T]`
 

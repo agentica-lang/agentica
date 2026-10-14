@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`Task.await(task, timeout_ms)`** waits for a task for at most `timeout_ms` milliseconds and returns the new builtin enum `Await[T]`: `Await.Done(value)` or `Await.TimedOut`. The checker requires both variants, like a user enum. A timeout does not cancel the task, a task that has ended never times out, and `timeout_ms` of 0 or less is `RUNTIME-INVALID-DURATION` (#217).
+
+### Changed
+
+- **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter or import alias with that name is `CHECK-REDEFINED-NAME` (#217).
+
 ## [0.2.0] - 2026-10-14
 
 Every program now runs on a new C bytecode VM, the Racket evaluator is gone, and the language gained a Ruby-style surface, tasks that isolate crashes, channels, a unit test framework, and TCP, TLS and HTTP on the VM.

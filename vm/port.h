@@ -158,6 +158,8 @@ typedef struct {
   locale_t messages_locale;
 #endif
   uint64_t hash_key[2], seed;
+  uint32_t await_done, await_timed_out;
+  bool await_found;
   _Atomic int64_t steps_left;
   _Atomic uint64_t next_task_id;
   agc_trace trace;
@@ -186,7 +188,7 @@ struct agc_task {
   bool parking, retry;
   agc_stepper *stepper;
   int64_t turn_cost;
-  uint64_t lock_deadline, input_seen;
+  uint64_t lock_deadline, await_deadline, input_seen;
   agc_task_state state;
   bool cancelled, crashed, observed, left_children, group, hidden;
   agc_value result;
@@ -281,5 +283,6 @@ bool agc_drain(agc_vm *vm);
 void agc_flush(agc_vm *vm);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
+uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);
 
 #endif

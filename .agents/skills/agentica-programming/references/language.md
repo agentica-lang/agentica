@@ -32,6 +32,7 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 | `Json` | opaque JSON value; use `JSON` functions to access it |
 | `Fn[A, ..., R]` | function value (a block or `&name`); last type is the return; `Fn[Void]` takes no arguments |
 | `Task[R]` | opaque lightweight task; exactly one result type |
+| `Await[T]` | builtin enum from `Task.await(task, timeout_ms)`: `Await.Done(value)` or `Await.TimedOut`; reserved name; see `tasks.md` |
 | `Channel[T]` | opaque bounded queue between tasks (VM only); see `tasks.md` |
 | network handles | opaque `Socket`, `Listener`, `HttpClient`, `HttpServer` |
 | builtin records | `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`, `HttpServerOptions`, `FileInfo`, `ProcessOutput` |

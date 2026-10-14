@@ -669,11 +669,9 @@ call span is replaced the same way a prelude instruction's span is.
   (argument 1). It is a catalog entry in `src/builtins.rkt` with a prelude-only
   flag, so the linker keeps its name; the checker rejects it outside prelude
   modules (`CHECK-UNKNOWN-NAME`), and the loader check below stays. Prelude-only
-  entries (`__fail_arg`, `__float_fixed`, and `__task_settled?` and
-  `__task_wait` of [section
-  27.3](27-iteration-and-concurrency.md#273-taskawait-with-a-timeout)) are left
-  out of `agentica help`, `agentica help --json` and every "did you mean"
-  candidate list; a test checks all three.
+  entries (`__fail_arg` and `__float_fixed`) are left out of `agentica help`,
+  `agentica help --json` and every "did you mean" candidate list; a test checks
+  all three.
 - An overflow inside a prelude body (`sum`) is raised by the VM's own add
   instruction, so it is reported at the user's call by the first rule.
 - **No tail calls into the prelude.** A call from user code to a prelude
@@ -721,14 +719,12 @@ the format version (`docs/vm/03-ir-and-bytecode.md` §4):
 - `__fail_arg` is a builtin in the VM's builtin table, called with
   `call-builtin`, not a new opcode: that is the simplest, since a builtin can
   already read the current frames and raise a diagnostic, and the interpreter
-  loop does not change. With `__float_fixed` (25.11), and `__task_settled?` and
-  `__task_wait` (§27.3), it is one of the guarded exceptions to "no internal
-  helper builtins" (`docs/vm/03-ir-and-bytecode.md` §4.5), and the loader guards
-  them all.
+  loop does not change. With `__float_fixed` (25.11), it is one of the guarded
+  exceptions to "no internal helper builtins" (`docs/vm/03-ir-and-bytecode.md`
+  §4.5), and the loader guards both.
 - The loader (`vm/loader.c`) checks the flag (0 or 1) and rejects a file that
-  calls a prelude-only builtin (`__fail_arg`, `__float_fixed`,
-  `__task_settled?`, `__task_wait`) from a function without the prelude flag
-  (`docs/vm/08-loader-and-cli.md`).
+  calls a prelude-only builtin (`__fail_arg`, `__float_fixed`) from a function
+  without the prelude flag (`docs/vm/08-loader-and-cli.md`).
 - **Static spans.** Prelude source text is not embedded. Each prelude file gets
   one entry in the Sources section with its name (`<prelude>/list.agc`) and
   empty text, and one span on it, `1:1-1:1`; that span is each prelude
@@ -742,24 +738,22 @@ the format version (`docs/vm/03-ir-and-bytecode.md` §4):
   `s + k` of a merged step) and at the step a counting native frame charges at
   its call's span, `RUNTIME-INTERNAL`, every other runtime diagnostic
   (`agc_fail`), 14a tracing where a trace line names a place, and 14b stack
-  traces (which skip prelude frames). If the rule finds no user frame, it first
-  uses the span a task stored when it was spawned with a prelude-flagged entry
-  function (the user's call that spawned it, §27.3); only when there is no such
-  span either (a crafted `.agcb` that puts the prelude flag on `main`, or on the
-  entry of a task spawned from user code) does the VM fall back to the static
-  prelude span; a VM test loads such a file and checks that the run fails with
-  that span and does not crash. Other crafted inputs, each with a VM or loader
-  test: `__fail_arg`'s index is checked at run time, and an index past the
-  call's argument spans falls back to the call span, or to the static prelude
-  span when there is no call span; its code must start with `RUNTIME-`, or the
-  result is `RUNTIME-INTERNAL`; the loader rejects argument spans on a `CALL`
-  whose target lacks the prelude flag; and a prelude-flagged function reached
-  through `CALL_VALUE` or `TAIL_CALL` from a non-prelude frame uses the
-  call-span fallback. A test runs a prelude function with `--max-steps` small
-  enough to stop inside it and checks the span. Golden tests also cover an
-  overflow inside a `reduce`-based `sum` (the run is `sum`, the native `reduce`,
-  the prelude block: the error points at the user's `sum` call) and a step limit
-  hit inside an `Int.times` or `Range.each` loop of a prelude body.
+  traces (which skip prelude frames). If the rule finds no user frame (a crafted
+  `.agcb` that puts the prelude flag on `main`, or on the entry of a task
+  spawned from user code), the VM falls back to the static prelude span; a VM
+  test loads such a file and checks that the run fails with that span and does
+  not crash. Other crafted inputs, each with a VM or loader test: `__fail_arg`'s
+  index is checked at run time, and an index past the call's argument spans
+  falls back to the call span, or to the static prelude span when there is no
+  call span; its code must start with `RUNTIME-`, or the result is
+  `RUNTIME-INTERNAL`; the loader rejects argument spans on a `CALL` whose target
+  lacks the prelude flag; and a prelude-flagged function reached through
+  `CALL_VALUE` or `TAIL_CALL` from a non-prelude frame uses the call-span
+  fallback. A test runs a prelude function with `--max-steps` small enough to
+  stop inside it and checks the span. Golden tests also cover an overflow inside
+  a `reduce`-based `sum` (the run is `sum`, the native `reduce`, the prelude
+  block: the error points at the user's `sum` call) and a step limit hit inside
+  an `Int.times` or `Range.each` loop of a prelude body.
 
 These, with the span rule, are the only VM changes of this item: the prelude
 flag, the argument spans on prelude calls, the name-only sources, `__fail_arg`,

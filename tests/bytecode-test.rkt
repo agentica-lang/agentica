@@ -53,6 +53,23 @@
     (check-equal? (await-key "Result[Int]" "ok(n)") '("Task.await_result"))
     (check-equal? (await-key "Int" "n") '("Task.await")))
 
+  (test-case "Task.await with a timeout takes the Result entry only when R is a Result"
+    (define (await-key result-type body)
+      (define program
+        (ir->bytecode
+         (lower-text (format "def f(n: Int) -> ~a\n  return ~a\nend\n\ndef main() -> Void\n  t = Task.spawn(&f, 1)\n  IO.inspect(Task.await(t, 10))\nend\n"
+                             result-type body))))
+      (filter (lambda (name) (string-prefix? name "Task.await")) (map car (bc-program-builtins program))))
+    (check-equal? (await-key "Result[Int]" "ok(n)") '("Task.await_result"))
+    (check-equal? (await-key "Int" "n") '("Task.await")))
+
+  (test-case "the Await enum is in the program only when it is used"
+    (define (enum-names text)
+      (map ir-enum-name (ir-program-enums (lower-text text))))
+    (check-equal? (enum-names "def main() -> Void\n  puts(1)\nend\n") '())
+    (check-equal? (enum-names "def f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  _ = Task.await(Task.spawn(&f, 1), 10)\nend\n") '("Await"))
+    (check-equal? (enum-names "enum Color\n  Red\nend\n\ndef f(n: Int) -> Int\n  return n\nend\n\ndef main() -> Void\n  _ = Task.await(Task.spawn(&f, 1), 10)\nend\n") '("Color" "Await")))
+
   (test-case "adjacent steps merge into one STEP with one span each"
     (define program (ir->bytecode (lower-text "def main() -> Void\n  puts(\"hi\")\nend\n")))
     (define main (list-ref (bc-program-functions program) (bc-program-entry program)))

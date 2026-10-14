@@ -279,6 +279,42 @@
     (check-equal? (problem (string-append ch "  text = JSON.encode(Box(inbox: ch))")) '(CHECK-NOT-ENCODABLE 15 22))
     (for ([declaration '("struct Channel\n  n: Int\nend\n\n" "enum Channel\n  A\nend\n\n")])
       (check-equal? (check-code (string-append declaration (main-with ""))) 'CHECK-REDEFINED-NAME)))
+  (test-case "Task.await with a timeout returns the builtin Await enum and reserves its name"
+    (define prefix (string-append "def twice(n: Int) -> Int\n  return n * 2\nend\n\n"
+                                  "def nothing(n: Int) -> Void\n  puts(n)\nend\n\n"))
+    (define t "  t = Task.spawn(&twice, 1)\n")
+    (define v "  v = Task.spawn(&nothing, 1)\n")
+    (define (problem body)
+      (define found (check-text (string-append prefix (main-with body))))
+      (list (diagnostic-code found)
+            (source-position-line (source-span-start (diagnostic-span found)))
+            (source-position-column (source-span-start (diagnostic-span found)))))
+    (check-ok (string-append prefix (main-with (string-append t "  case Task.await(t, 10)\n    Await.Done(n) -> puts(n + 1)\n    Await.TimedOut -> puts(0)\n  end\n"
+                                                              "  r: Await[Int] = Task.await(t, 10)\n"
+                                                              "  case r\n    Await.Done(_) -> puts(1)\n    _ -> puts(2)\n  end"))))
+    (check-ok (string-append prefix (main-with (string-append v "  case Task.await(v, 10)\n    Await.Done(_) -> puts(1)\n    Await.TimedOut -> puts(2)\n  end\n"
+                                                              "  puts(\"#{Task.await(v, 10)}\")"))))
+    (define arms "    Await.Done(n) -> puts(n)\n    Await.TimedOut -> puts(0)\n")
+    (for ([entry (list (list (string-append t "  case Task.await(t, 10)\n    Await.Done(n) -> puts(n)\n  end") 'CHECK-NON-EXHAUSTIVE-CASE 11 3)
+                       (list (string-append t "  case Task.await(t, 10)\n    Await.TimedOut -> puts(0)\n  end") 'CHECK-NON-EXHAUSTIVE-CASE 11 3)
+                       (list (string-append t "  case Task.await(t, 10)\n    Await.Done(n) -> puts(n + \"x\")\n    Await.TimedOut -> puts(0)\n  end") 'CHECK-TYPE-MISMATCH 12 29)
+                       (list (string-append v "  case Task.await(v, 10)\n    Await.Done(n) -> puts(0)\n    Await.TimedOut -> puts(1)\n  end") 'CHECK-VOID-TYPE 12 5)
+                       (list (string-append t "  case Task.await(t, 10)\n    Await.Done(n) -> puts(n)\n    Await.Late -> puts(0)\n  end") 'CHECK-UNKNOWN-VARIANT 13 5)
+                       (list (string-append t "  case Task.await(t, 10)\n" arms "    _ -> puts(1)\n  end") 'CHECK-UNREACHABLE-CASE-ARM 14 5)
+                       (list (string-append t "  r: Await[String] = Task.await(t, 10)") 'CHECK-TYPE-MISMATCH 11 33)
+                       (list (string-append t "  r: Result[Int] = Task.await(t, 10)") 'CHECK-TYPE-MISMATCH 11 20)
+                       (list (string-append t "  r = Task.await(t, \"10\")") 'CHECK-TYPE-MISMATCH 11 21)
+                       (list (string-append t "  r = Task.await(t, 10, 20)") 'CHECK-ARITY 11 7)
+                       (list "  r = Task.await(3, 10)" 'CHECK-TYPE-MISMATCH 10 18)
+                       (list (string-append t "  x: Int = Task.await(t, 10)") 'CHECK-TYPE-MISMATCH 11 12)
+                       (list (string-append t "  r = Task.await(t, 10)\n  r.ok?") 'CHECK-UNKNOWN-METHOD 12 3))])
+      (check-equal? (problem (car entry)) (cdr entry) (car entry)))
+    (define tried
+      (check-text (string-append prefix "def wait(t: Task[Int]) -> Result[Int]\n  n = try Task.await(t, 10)\n  return ok(n)\nend\n\n" (main-with ""))))
+    (check-equal? (diagnostic-code tried) 'CHECK-TYPE-MISMATCH)
+    (check-equal? (span-slice tried) "Task.await(t, 10)")
+    (for ([declaration '("struct Await\n  n: Int\nend\n\n" "enum Await\n  A\nend\n\n" "enum Maybe[Await]\n  A\nend\n\n")])
+      (check-equal? (check-code (string-append declaration (main-with ""))) 'CHECK-REDEFINED-NAME)))
   (test-case "foreign generator, agent, lock and queue names show the Agentica form"
     (for ([entry '(("  e = Enumerator.new(1)" #rx"Task.spawn\\(&produce, ch\\).*ch.recv\\(timeout_ms\\)")
                    ("  f = Fiber.new(1)" #rx"Task.spawn\\(&produce, ch\\)")

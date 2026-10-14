@@ -1,0 +1,19 @@
+{
+  "exit": 1,
+  "code": "RUNTIME-TASK-CANCELLED",
+  "steps": 102,
+  "stdout": [
+    "Await.TimedOut",
+    "Await.TimedOut",
+    "error(\"task crashed: RUNTIME-DIVISION-BY-ZERO at @fixtures/vm/await-timeout-cancelled.agc:22:15: division by zero\")",
+    "error(\"task crashed: RUNTIME-TASK-CANCELLED at @fixtures/vm/await-timeout-cancelled.agc:26:8: task was cancelled\")",
+    "Await.Done(error(\"task: cancelled\"))",
+    "the caller is unaffected",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":16,\"line\":22},\"start\":{\"column\":15,\"line\":22}},\"task\":true}",
+    "{\"code\":\"RUNTIME-TASK-CANCELLED\",\"file\":\"@fixtures/vm/await-timeout-cancelled.agc\",\"message\":\"task was cancelled\",\"range\":{\"end\":{\"column\":32,\"line\":26},\"start\":{\"column\":8,\"line\":26}},\"task\":true}",
+    ""
+  ]
+}

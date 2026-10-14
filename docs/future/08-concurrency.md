@@ -37,10 +37,10 @@ output. This is not part of the task phase.
   default no. On the VM, CPU parallelism is the multicore schedulers
   (`docs/vm/10-io-multicore.md` §10.2.3, gated at roadmap order step 11), and
   `Task.map` (§27.1) is the form that would use it.
-- A timeout on `Task.await` is planned in [section
-  27.3](27-iteration-and-concurrency.md#273-taskawait-with-a-timeout):
-  `Task.await(task, timeout_ms) -> Result[T]`, prelude code over channels, which
-  does not cancel the task.
+- A timeout on `Task.await` is built ([section
+  27.3](27-iteration-and-concurrency.md#273-taskawait-with-a-timeout)):
+  `Task.await(task, timeout_ms) -> Await[T]`, a C builtin that returns
+  `Await.Done(value)` or `Await.TimedOut` and does not cancel the task.
 - A public `Task.cancel` stays open: §27 cancels only the timed-out items of
   `Task.map`, and a cancel call would be a second way to stop work. Returning
   from the entrypoint still cancels pending work.

@@ -11,7 +11,7 @@
 
 (define reserved-type-names
   (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "Channel" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "Time" "Random" "Range" "Test")
-          (map symbol->string opaque-types) (hash-keys builtin-records)))
+          (map symbol->string opaque-types) (hash-keys builtin-records) (hash-keys builtin-enums)))
 
 (define (result-type? type)
   (and (pair? type) (eq? (car type) 'Result)))
@@ -329,7 +329,7 @@
 
 (define (check program #:types [types #f])
   (define structs (hash-copy builtin-records))
-  (define enums (make-hash))
+  (define enums (make-hash (hash->list builtin-enums)))
   (define functions (make-hash))
   (define current-type-parameters '())
   (define scopes '())
@@ -817,7 +817,8 @@
         [(or (struct-type? type) (enum-type? type))
          (define key (cons (car type) (cadr type)))
          (and (for/and ([argument (in-list (cddr type))])
-                (data-type? argument seen))
+                (or (and (eq? argument 'Void) (hash-has-key? builtin-enums (cadr type)))
+                    (data-type? argument seen)))
               (or (and (member key seen) #t)
                   (let ([seen (cons key seen)])
                     (if (struct-type? type)
@@ -916,6 +917,14 @@
          (unless (and (pair? target) (eq? (car target) 'Task))
            (bail 'CHECK-TYPE-MISMATCH "Task.await requires a task" (node-span (car arguments))))
          (cadr target)]
+        [(task-await-timeout)
+         (define context
+           (and (enum-type? expected) (equal? (cadr expected) "Await") (list 'Task (caddr expected))))
+         (define target (check-expression (car arguments) context))
+         (unless (and (pair? target) (eq? (car target) 'Task))
+           (bail 'CHECK-TYPE-MISMATCH "Task.await requires a task" (node-span (car arguments))))
+         (check-expression (cadr arguments) 'Int)
+         (list 'Enum "Await" (cadr target))]
         [(channel-new)
          (check-expression (car arguments) 'Int)
          (unless expected

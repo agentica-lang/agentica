@@ -19,6 +19,7 @@ The grammar determines what can be written. The rules below determine which prog
 | `Range` | Immutable `Int` range: `a..b` includes `b`, `a...b` excludes it |
 | `Fn[A, ..., R]` | Function value; the last type is its return, the others are its parameters |
 | `Task[R]` | Opaque lightweight task with one result type |
+| `Await[T]` | Builtin enum of a timed `Task.await`: `Await.Done(value)` or `Await.TimedOut`; matched with `case` like a user enum |
 | `Channel[T]` | Opaque bounded queue of `T` values that tasks send into and receive from |
 | `Enum[T, ...]` | User-declared nominal sum type |
 | Declared struct | Nominal type with typed, immutable fields |
@@ -40,7 +41,7 @@ The first assignment introduces a variable in the current scope, and an annotati
 
 `Void` has no literal and no usable payload. It is allowed as a function's return type, as the last type of `Fn`, and as the completion type of `Result` or `Task`. Bare Void variables, parameters, fields, list elements and map values are `CHECK-VOID-TYPE`. Wrappers such as `List[Result[Void]]` are valid.
 
-A Void call may be a statement, or be returned from a Void function. Assigning, passing, constructing, operating on or inspecting a Void result is `CHECK-VOID-VALUE`, and so is `Result.unwrap!` on `Result[Void]`, `Task.await` on `Task[Void]`, or a successful `try` on `Result[Void]`. `ok()` infers `Result[Void]`, and `ok(nil)` is `Result[Nil]`. `Result.unwrap_or` cannot operate on `Result[Void]`.
+A Void call may be a statement, or be returned from a Void function. Assigning, passing, constructing, operating on or inspecting a Void result is `CHECK-VOID-VALUE`, and so is `Result.unwrap!` on `Result[Void]`, `Task.await` on `Task[Void]`, or a successful `try` on `Result[Void]`. `ok()` infers `Result[Void]`, and `ok(nil)` is `Result[Nil]`. `Result.unwrap_or` cannot operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a `Task[Void]` is not a Void value: it gives `Await[Void]`, which is matched as `Await.Done(_)` or `Await.TimedOut`.
 
 ### Functions and entry point
 
@@ -56,7 +57,7 @@ Enums are nominal sum types and may declare type parameters. Variants are qualif
 
 `case value ... end` is a statement. An arm may put one simple statement on the arrow line (`1 -> puts("one")`), and more lines of the same arm may follow. A pattern is a primitive literal, `_`, `ok(...)` or `error(...)`, or a qualified variant with one binding or `_` per payload position. Bindings are local to the arm. Nested patterns and guards are not supported.
 
-Enum values need every variant, unless there is a catch-all `_`. `Result[T]` matches as `Result.Ok(value)` and `Result.Err(message)`, or as `ok` and `error`; `Result.Ok(_)` discards the payload. Every other `case`, including one on `Bool` or `Nil`, needs `_`. A catch-all is the last arm, and duplicate or unreachable arms are rejected. The codes are `CHECK-ENUM-TYPE-INFERENCE`, `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE` and `CHECK-UNREACHABLE-CASE-ARM`.
+Enum values need every variant, unless there is a catch-all `_`. `Result[T]` matches as `Result.Ok(value)` and `Result.Err(message)`, or as `ok` and `error`; `Result.Ok(_)` discards the payload. The builtin `Await[T]` of a timed `Task.await` matches as `Await.Done(value)` and `Await.TimedOut`, with the same rules. Every other `case`, including one on `Bool` or `Nil`, needs `_`. A catch-all is the last arm, and duplicate or unreachable arms are rejected. The codes are `CHECK-ENUM-TYPE-INFERENCE`, `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE` and `CHECK-UNREACHABLE-CASE-ARM`.
 
 ```ruby
 enum Option[T]

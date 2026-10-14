@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 44,
+  "stdout": [
+    "Await.TimedOut",
+    "finished 7",
+    "done",
+    "Await.Done()",
+    "Await.Done()",
+    ""
+  ],
+  "stderr": []
+}
