@@ -100,12 +100,32 @@ typedef struct {
   size_t count, cap;
 } agc_file_ids;
 
+#define AGC_OUTPUT_BUFFER ((size_t)64 * 1024)
+
+typedef struct {
+  FILE *file;
+  agc_vm *vm;
+  int fd;
+  uint8_t *buf;
+  size_t start, len;
+  agc_poller *poller;
+  bool pooled, writing, armed, failed;
+  agc_task *waiters, *waiters_tail;
+} agc_output;
+
+typedef struct {
+  agc_output *out;
+  const uint8_t *data;
+  size_t len, done;
+  bool flush;
+} agc_output_wait;
+
 #define AGC_FLUSH_TIMEOUT_MS 30000
 #define AGC_FLUSH_TIMEOUT_MAX_MS 86400000
 
 typedef struct {
   const agc_program *program;
-  FILE *out, *err;
+  agc_output out, err;
   agc_value args;
   agc_string *cwd;
   bool no_files, no_turn_cost, allow_run, drop_uring_env, flush_expired, out_mid_line;
@@ -162,6 +182,7 @@ struct agc_task {
   agc_task *awaiting;
   agc_resource *lock_wait;
   agc_channel_wait channel;
+  agc_output_wait output;
 };
 
 struct agc_vm {
@@ -220,7 +241,8 @@ uint64_t agc_value_units(agc_value v);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);
-void agc_write(agc_vm *vm, FILE *stream, const void *data, size_t len);
+bool agc_write(agc_vm *vm, agc_output *out, const void *data, size_t len, bool newline);
+bool agc_drain(agc_vm *vm, agc_output *out);
 void agc_flush(agc_vm *vm);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);

@@ -1,0 +1,308 @@
+#lang racket
+
+(require rackunit
+         json
+         racket/runtime-path
+         "vm-diff-common.rkt")
+
+(define-runtime-path peer-file "fixtures/stdout-peer.py")
+(define python (find-executable-path "python3"))
+(define peer-limit 90)
+(define filler (make-string 1024 #\x))
+
+(define (python-ready?)
+  (cond
+    [python #t]
+    [(getenv "CI") (error 'vm-stdout "Python 3 is required in CI")]
+    [else (displayln "SKIP VM stdout tests: python3 is unavailable") #f]))
+
+(define (rows-program count)
+  (format
+   #<<AGC
+def main() -> Void
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  n = 0
+  while n < ~a
+    puts("row #{n} #{filler}")
+    n += 1
+  end
+end
+
+AGC
+   count))
+
+(define (ticker-program count)
+  (format
+   #<<AGC
+def ticker(count: Int) -> Int
+  n = 0
+  while n < count
+    Task.sleep(50)
+    IO.warn("tick")
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  t = Task.spawn(&ticker, 40)
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  n = 0
+  while n < ~a
+    puts("row #{n} #{filler}")
+    n += 1
+  end
+  Task.await(t)
+end
+
+AGC
+   count))
+
+(define two-writers-program
+  #<<AGC
+def writer(tag: String) -> Int
+  filler = "x"
+  for i in 0..12
+    filler = filler + filler
+  end
+  n = 0
+  while n < 40
+    puts("#{tag}#{n} #{filler}")
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  a = Task.spawn(&writer, "A")
+  b = Task.spawn(&writer, "B")
+  Task.await(a)
+  Task.await(b)
+end
+
+AGC
+  )
+
+(define long-print-program
+  #<<AGC
+def shorts(count: Int) -> Int
+  n = 0
+  while n < count
+    puts("short-#{n}")
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  s = Task.spawn(&shorts, 200)
+  big = "z"
+  for i in 0..17
+    big = big + big
+  end
+  puts(big)
+  puts(big)
+  Task.await(s)
+end
+
+AGC
+  )
+
+(define crashed-parent-program
+  #<<AGC
+def child(filler: String) -> Void
+  i = 0
+  while true
+    puts("C#{i} #{filler}")
+    i += 1
+  end
+end
+
+def parent(filler: String) -> Void
+  Task.spawn(&child, filler)
+  Task.sleep(300)
+  x = 1 / 0
+  puts(x)
+end
+
+def main() -> Void
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  Task.await(Task.spawn(&parent, filler))
+end
+
+AGC
+  )
+
+(define (run-case work name program #:peer [peer-arguments '()] #:vm [vm-arguments '()])
+  (define source (build-path work (string-append name ".agc")))
+  (define bytecode (build-path work (string-append name ".agcb")))
+  (define out-file (build-path work (string-append name ".out")))
+  (define err-file (build-path work (string-append name ".err")))
+  (display-to-file program source #:exists 'replace)
+  (compile-file source bytecode)
+  (define result
+    (apply run-process python #:timeout peer-limit
+           (path->string peer-file)
+           "--stdout-file" (path->string out-file)
+           "--stderr-file" (path->string err-file)
+           (append peer-arguments
+                   (list "--" (path->string vm-file))
+                   vm-arguments
+                   (list "--" (path->string bytecode)))))
+  (check-equal? (first result) 0 (format "~a: the peer ends: ~a" name (third result)))
+  (define summary (string->jsexpr (second result)))
+  (values summary (file->bytes out-file) (file->string err-file)))
+
+(define (output-lines data)
+  (define text (bytes->string/latin-1 data))
+  (define lines (string-split text "\n" #:trim? #f))
+  (check-true (or (string=? text "") (string-suffix? text "\n")) "the output ends with a whole line")
+  (if (null? lines) lines (drop-right lines 1)))
+
+(define (row-total count)
+  (for/sum ([n (in-range count)]) (add1 (string-length (format "row ~a ~a" n filler)))))
+
+(define (check-rows lines count)
+  (check-equal? (length lines) count)
+  (for ([line (in-list lines)] [n (in-naturals)])
+    (unless (string=? line (format "row ~a ~a" n filler))
+      (fail (format "row ~a is not whole or not in order" n)))))
+
+(define live-child-program
+  #<<AGC
+def main() -> Void
+  child = Result.unwrap!(Process.spawn("/bin/sh", ["-c", "cat"], 5000))
+  puts("child started")
+  IO.inspect(Process.read_line(child, 100))
+  puts("done")
+end
+
+AGC
+  )
+
+(define (run-to-file work name program)
+  (define source (build-path work (string-append name ".agc")))
+  (define bytecode (build-path work (string-append name ".agcb")))
+  (define out-file (build-path work (string-append name ".out")))
+  (display-to-file program source #:exists 'replace)
+  (compile-file source bytecode)
+  (define out (open-output-file out-file #:exists 'truncate))
+  (define start (current-inexact-milliseconds))
+  (define-values (process in-port ignored err)
+    (subprocess out #f #f vm-file "--allow-run" "--flush-timeout" "20000" "--" (path->string bytecode)))
+  (close-output-port ignored)
+  (define errors (port->string err))
+  (define finished (sync/timeout peer-limit process))
+  (unless finished (subprocess-kill process #t))
+  (subprocess-wait process)
+  (close-output-port out)
+  (close-input-port err)
+  (values (if finished (subprocess-status process) 'timeout)
+          (- (current-inexact-milliseconds) start)
+          (file->string out-file)
+          errors))
+
+(module+ test
+  (when (and (python-ready?) (vm-built? "VM stdout tests"))
+    (define work (make-temporary-directory "agentica-vm-stdout~a"))
+    (dynamic-wind
+      void
+      (lambda ()
+        (test-case "a pipe nobody reads does not stop a timer task, and the run ends once the reader drains"
+          (define-values (summary out err)
+            (run-case work "ticker" (ticker-program 400) #:peer '("--delay" "1.0" "--chunk" "16384" "--pause" "0.001")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-true (>= (hash-ref summary 'ticks_before_read) 5) "the ticker ran while stdout was stuck")
+          (check-rows (output-lines out) 400)
+          (check-equal? (length (regexp-match* #rx"tick" err)) 40))
+
+        (test-case "two tasks printing long lines into a slow pipe never interleave, and each keeps its order"
+          (define-values (summary out err)
+            (run-case work "writers" two-writers-program #:peer '("--delay" "0.3" "--chunk" "16384" "--pause" "0.002")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (define lines (output-lines out))
+          (check-equal? (length lines) 80)
+          (define next (make-hash '(("A" . 0) ("B" . 0))))
+          (for ([line (in-list lines)])
+            (define m (regexp-match #px"^([AB])([0-9]+) x{8192}$" line))
+            (unless m (fail "a line is not whole"))
+            (check-equal? (string->number (third m)) (hash-ref next (second m)) "the order of one task")
+            (hash-update! next (second m) add1)))
+
+        (test-case "a print longer than the buffer holds the stream until it is all copied"
+          (define-values (summary out err)
+            (run-case work "long" long-print-program #:peer '("--delay" "0.3" "--chunk" "16384" "--pause" "0.002")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (define lines (output-lines out))
+          (check-equal? (length lines) 202)
+          (define big (make-string 262144 #\z))
+          (check-equal? (length (filter (lambda (line) (string=? line big)) lines)) 2)
+          (define shorts (filter (lambda (line) (not (string=? line big))) lines))
+          (check-equal? shorts (for/list ([n (in-range 200)]) (format "short-~a" n))))
+
+        (test-case "the end of the run drains standard output within the flush limit"
+          (define-values (summary out err)
+            (run-case work "drain" (rows-program 100) #:peer '("--delay" "1.0") #:vm '("--json")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-true (>= (hash-ref summary 'exit) (hash-ref summary 'read_start)) "the run waited for the reader")
+          (check-rows (output-lines out) 100)
+          (check-equal? err ""))
+
+        (test-case "a reader that never reads ends the run after the flush timeout with the warning"
+          (define-values (summary out err)
+            (run-case work "stuck" (rows-program 100)
+                      #:peer '("--read-after-exit") #:vm '("--json" "--flush-timeout" "500")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-true (<= 0.4 (hash-ref summary 'exit) 20) "the run waits for the flush limit")
+          (check-regexp-match #rx"\"flush_timeout_ms\":500" err)
+          (check-true (< 0 (bytes-length out) (row-total 100)) "the data that fits the pipe arrives"))
+
+        (test-case "a stuck stderr that is the stdout pipe drops the warning and keeps the exit code"
+          (define-values (summary out err)
+            (run-case work "merged" (rows-program 100)
+                      #:peer '("--read-after-exit" "--merge") #:vm '("--json" "--flush-timeout" "500")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-true (<= 0.4 (hash-ref summary 'exit) 20) "the run waits for the flush limit")
+          (check-true (< 0 (bytes-length out) (row-total 100)))
+          (check-equal? err ""))
+
+        (test-case "a stdout that cannot be reopened keeps the blocking write"
+          (define-values (summary out err)
+            (run-case work "socket" (ticker-program 800) #:peer '("--socket" "--delay" "1.0")))
+          (check-equal? (hash-ref summary 'status) 0)
+          (check-equal? (hash-ref summary 'ticks_before_read) 0 "a blocking write stops the whole VM")
+          (check-rows (output-lines out) 800))
+
+        (test-case "a regular file written by the pool is drained while a child is stopped at the end of the run"
+          (define-values (status elapsed out err) (run-to-file work "live-child" live-child-program))
+          (check-equal? status 0)
+          (check-true (< elapsed 10000) "the run does not wait for the flush limit")
+          (check-equal? err "")
+          (check-regexp-match #rx"^child started\n.*\ndone\n$" out))
+
+        (test-case "a reader that goes away fails the print, not the VM"
+          (define-values (summary out err)
+            (run-case work "gone" (rows-program 400) #:peer '("--close-after" "100000") #:vm '("--json")))
+          (check-equal? (hash-ref summary 'status) 1)
+          (check-regexp-match #rx"\"code\":\"RUNTIME-INTERNAL\"" err))
+
+        (test-case "a crashed parent cancels a child waiting to print, and nothing partial is written"
+          (define-values (summary out err)
+            (run-case work "crash" crashed-parent-program #:peer '("--delay" "1.0") #:vm '("--json")))
+          (check-equal? (hash-ref summary 'status) 1)
+          (check-regexp-match #rx"\"code\":\"RUNTIME-DIVISION-BY-ZERO\"" err)
+          (define lines (output-lines out))
+          (check-true (> (length lines) 50) "the child filled the buffers before it was cancelled")
+          (for ([line (in-list lines)] [n (in-naturals)])
+            (unless (string=? line (format "C~a ~a" n filler))
+              (fail (format "line ~a is partial or out of order" n))))))
+      (lambda () (delete-directory/files work)))))

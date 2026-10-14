@@ -173,7 +173,9 @@ static void flush_files(agc_vm *vm) {
     return;
   }
   const agc_outcome *o = &vm->rt->outcome;
-  agc_print_flush_failed(stderr, o->code, o->message, o->message_len, vm->rt->style);
+  agc_notice notice;
+  agc_print_flush_failed(agc_notice_begin(&vm->rt->err, &notice), o->code, o->message, o->message_len, vm->rt->style);
+  agc_notice_end(&notice, true);
 }
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
@@ -187,7 +189,12 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
   flush_stream(stderr);
   flush_files(vm);
   agc_files_close(vm);
-  if (vm->rt->flush_expired) agc_print_flush_timeout(stderr, vm->rt->flush_timeout, vm->rt->style);
+  stdout_ok = stdout_ok && !vm->rt->out.failed;
+  if (vm->rt->flush_expired) {
+    agc_notice notice;
+    agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
+    agc_notice_end(&notice, true);
+  }
   if (outcome.kind != AGC_FAILED && !agc_io_stop_signal() && (!stdout_ok || !flush_stream(stdout))) {
     outcome.kind = AGC_FAILED;
     outcome.code = "RUNTIME-INTERNAL";
@@ -197,7 +204,9 @@ static int end_run(agc_vm *vm, agc_outcome outcome) {
   }
   int code = 0;
   if (outcome.kind == AGC_FAILED) {
-    agc_print_diagnostic(stderr, vm->rt->program, &outcome, vm->rt->style, false);
+    agc_notice notice;
+    agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, &outcome, vm->rt->style, false);
+    agc_notice_end(&notice, true);
     code = 1;
   } else if (outcome.kind == AGC_EXITED && outcome.exit_code >= 1 && outcome.exit_code <= 255) {
     code = (int)outcome.exit_code;
@@ -499,6 +508,8 @@ static int run(int argc, char **argv) {
   if (reserved) agc_files_forget(&vm->rt->inherited, 0);
   agc_input_open(vm, reserved ? reserve_stdin() : 0, isatty(1));
   vm->rt->in.reserved = reserved;
+  if (!reserved) agc_output_open(vm, &vm->rt->out, 1);
+  agc_output_open(vm, &vm->rt->err, 2);
   agc_io_watch_stop(vm, seen_driver ? driver : 0);
   return end_run(vm, agc_vm_run(vm));
 }

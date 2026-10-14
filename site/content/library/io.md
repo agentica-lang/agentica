@@ -10,6 +10,8 @@ output line by line.
 
 On Linux, a read from standard input waits without stopping other tasks. On other systems a read blocks the whole program until input arrives.
 
+On Linux, writing to standard output or standard error also waits without stopping other tasks. Each stream keeps up to 64 KiB of output; when a pipe is full, the tasks that print wait their turn, in order, and the other tasks keep running. A print has no timeout, and the text of one print is never split by another print. Output on one stream keeps the order of the calls, but there is no order between standard output and standard error when both go to the same place. At the end of the run the program waits, within the flush limit, until the output has been written. On other systems, and when standard output is a socket, a write blocks the whole program until the reader takes it.
+
 ## puts
 
 ```text
@@ -235,7 +237,7 @@ ok("hi")
 IO.flush() -> Void
 ```
 
-Sends buffered standard output now.
+Sends buffered standard output now. On Linux the task waits until the output has reached the pipe or file, so it can wait when the reader is slow.
 
 ```agentica
 def main() -> Void

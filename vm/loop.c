@@ -685,7 +685,7 @@ static bool flushing(const agc_vm *vm) {
     const job *j = job_at(vm, k);
     if (j && j->flush && !j->work_done) return true;
   }
-  return false;
+  return agc_output_busy(vm);
 }
 
 static void close_files(agc_vm *vm) {
@@ -710,8 +710,15 @@ static void finish_flushes(agc_vm *vm) {
   uv_timer_init(&loop->uv, &loop->deadline);
   loop->deadline.data = loop;
   uv_timer_start(&loop->deadline, flush_expired, (uint64_t)vm->rt->flush_timeout, 0);
-  while (flushing(vm) && !loop->expired)
-    if (!uv_run(&loop->uv, UV_RUN_ONCE)) break;
+  for (;;) {
+    drain(vm);
+    if (!flushing(vm) || loop->expired) break;
+    uv_run(&loop->uv, UV_RUN_ONCE);
+    if (!uv_loop_alive(&loop->uv)) {
+      drain(vm);
+      break;
+    }
+  }
   uv_close((uv_handle_t *)&loop->deadline, NULL);
   vm->rt->flush_expired = flushing(vm);
 }
@@ -732,6 +739,7 @@ static bool close_all(agc_vm *vm) {
     close_timer(j);
   }
   agc_input_close(vm);
+  agc_output_close(vm);
   release_handles(vm);
   if (!vm->loop) return true;
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);

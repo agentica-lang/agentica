@@ -8,6 +8,13 @@ typedef struct {
   const size_t *count;
 } agc_builtin_table;
 
+typedef struct {
+  agc_output *out;
+  FILE *file;
+  char *text;
+  size_t len;
+} agc_notice;
+
 extern const agc_builtin agc_core_builtins[];
 extern const size_t agc_core_builtin_count;
 extern const agc_builtin agc_task_builtins[];
@@ -60,6 +67,13 @@ agc_input_status agc_input_peek(agc_vm *vm, int *byte);
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
 agc_input_status agc_input_all(agc_vm *vm, agc_string **text);
 agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out);
+
+void agc_output_open(agc_vm *vm, agc_output *out, int fd);
+void agc_output_leave(agc_vm *vm, agc_task *t);
+bool agc_output_busy(const agc_vm *vm);
+void agc_output_close(agc_vm *vm);
+FILE *agc_notice_begin(agc_output *out, agc_notice *n);
+void agc_notice_end(agc_notice *n, bool final);
 
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);

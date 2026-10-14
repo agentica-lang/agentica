@@ -118,10 +118,9 @@ static agc_value position(uint32_t line, uint32_t column) {
 static void write_record(agc_vm *vm, agc_json_member *m, size_t n) {
   m[n++] = member("token", json_text(vm->task->test_run->token));
   const agc_string *text = agc_json_encode(vm, agc_json_object(m, n), 0);
-  if (vm->rt->out_mid_line) agc_write(vm, vm->rt->out, "\n", 1);
-  agc_write(vm, vm->rt->out, marker, sizeof marker - 1);
-  agc_write(vm, vm->rt->out, text->data, text->bytes);
-  agc_write(vm, vm->rt->out, "\n", 1);
+  if (vm->rt->out_mid_line) agc_write(vm, &vm->rt->out, NULL, 0, true);
+  agc_write(vm, &vm->rt->out, marker, sizeof marker - 1, false);
+  agc_write(vm, &vm->rt->out, text->data, text->bytes, true);
 }
 
 static void write_event(agc_vm *vm, const char *event) {
@@ -254,7 +253,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     run_mode mode = mode_of(vm);
     if (mode == MODE_NONE) {
       static const char usage[] = "run this file with agentica test\n";
-      agc_write(vm, vm->rt->err, usage, sizeof usage - 1);
+      if (!agc_write(vm, &vm->rt->err, usage, sizeof usage - 1, false)) return agc_void();
       agc_exit(vm, 2);
     }
     r = agc_alloc(sizeof(agc_test_run));

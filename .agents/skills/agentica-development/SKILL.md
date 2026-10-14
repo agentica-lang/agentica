@@ -53,6 +53,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); see references/vm.md
   value.h port.h core.h services.h  # shared types and the agc_ API, one header per layer (references/vm.md, "Which layer")
   value.c text.c map.c loader.c interp.c builtins.c builtin_tables.c numbers.c random.c json.c json_value.c diag.c main.c  # values+memory, text/debug forms, persistent HAMT maps, loader validation, loop, core builtins, the list of every builtin table, Float/Time/Random, xoshiro256** generator, the JSON parser and builtins, the Json value (nodes, encoder, builders), diagnostics (plain, --ai, --json), CLI
   loop.c files.c  # libuv event loop and resource registry; File, Dir and Path builtins (Linux)
+  input.c output.c  # stdin reader; stdout and stderr: a 64 KiB buffer and a FIFO of waiting writers per stream, written by the loop (Linux)
   process.c       # Process builtins on libuv pipes, behind the VM's --allow-run (Linux)
   tcp.c stream.c  # TCP and TLS builtins on libuv TCP handles (Linux); input buffer, write path and lock helper shared with process.c
   tls.h tls_openssl.c  # TLS adapter: our types in tls.h, the only file that includes OpenSSL (memory BIOs)
@@ -88,6 +89,7 @@ tests/
   vm-http-test.rkt      # std/http against independent peers: the client against Python servers (fixtures/http-peer.py), the server against Python raw sockets, http.client and Node http (fixtures/http-server-peer.py, .js)
   vm-stop-test.rkt      # the exit path under stop signals (fixtures/stop-peer.py): children, flush, second signal, dead driver, full stdout, Ctrl-C through the CLI
   vm-channel-test.rkt   # a socket handed to a worker over a Channel, against a Python TCP peer (fixtures/channel-peer.py)
+  vm-stdout-test.rkt    # stdout and stderr on the loop (fixtures/stdout-peer.py): a stuck pipe with a timer running, no interleaving, long prints, end-of-run drain and flush timeout, the blocking fallback, a gone reader, a crashed parent
   bdd/                  # feature specs and step handlers run by make test-bdd
   eval/                 # agent evaluation runner (not part of make test)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")

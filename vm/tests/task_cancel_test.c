@@ -9,18 +9,19 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 13
+#define MAX_FNS 14
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_DROP, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_HTTP, B_UNTIL, B_CLOSE, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_DROP, B_PRINT, B_DRAIN, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_DROP, F_RECV };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_HTTP, F_SHORT, F_POOL, F_DROP, F_RECV, F_PRINT };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -64,6 +65,10 @@ static int gate[2] = {-1, -1};
 static int idle[2] = {-1, -1};
 static int cancel_calls;
 static _Atomic bool on_loop;
+static int out_pipe[2] = {-1, -1};
+static size_t junk_len, got_len;
+static uint8_t block[16384];
+static uint8_t got[1 << 20];
 
 static agc_value ext_done(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -314,6 +319,31 @@ static agc_value test_close(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+static agc_value test_print(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  int64_t tag = agc_as_int(vm, args[0]);
+  size_t n = tag == 2 ? 1024 : sizeof block;
+  memset(block, tag == 0 ? 'a' : tag == 1 ? 'b' : 'c', n);
+  agc_write(vm, &vm->rt->out, block, n, false);
+  return agc_void();
+}
+
+static agc_value test_drain(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)vm;
+  (void)args;
+  (void)span;
+  for (;;) {
+    ssize_t n = read(out_pipe[0], got + got_len, sizeof got - got_len);
+    if (n <= 0) break;
+    got_len += (size_t)n;
+  }
+  if (got_len >= junk_len + AGC_OUTPUT_BUFFER + 1024) {
+    tries = 0;
+    return agc_void();
+  }
+  return nap_again(vm);
+}
+
 static const agc_builtin test_builtins[] = {
   {"Test.mark", 1, test_mark, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.cancel", 1, test_cancel, AGC_NATIVE_NONE, AGC_COST_NONE},
@@ -330,6 +360,8 @@ static const agc_builtin test_builtins[] = {
   {"Test.gate", 1, test_gate, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.settled", 1, test_settled, AGC_NATIVE_NONE, AGC_COST_NONE},
   {"Test.drop_self", 1, test_drop, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.print", 1, test_print, AGC_NATIVE_NONE, AGC_COST_NONE},
+  {"Test.drain", 1, test_drain, AGC_NATIVE_NONE, AGC_COST_NONE},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -424,6 +456,9 @@ static void build_tasks(prog *p) {
   emit(p, F_RECV, AGC_OP_CALL_BUILTIN, 1, B_CH_RECV, 1);
   call_int(p, F_RECV, B_MARK, 1);
   emit(p, F_RECV, AGC_OP_RETURN, 1, 0, 1);
+
+  call_reg(p, F_PRINT, B_PRINT, 0, 1);
+  finish_fn(p, F_PRINT);
 }
 
 static void new_prog(prog *p) {
@@ -478,6 +513,7 @@ static void reset(void) {
 
 static agc_outcome run(agc_vm *vm, prog *p) {
   agc_vm_init(vm, &p->program, stdout, quiet, INT64_MAX);
+  if (out_pipe[1] >= 0) agc_output_open(vm, &vm->rt->out, out_pipe[1]);
   handle = agc_register(vm, &released, release_count);
   return agc_vm_run(vm);
 }
@@ -740,6 +776,57 @@ static void test_channel_waiters(void) {
   run_done(&p, check_channel);
 }
 
+static void check_output(agc_vm *vm, int64_t n) {
+  agc_output *o = &vm->rt->out;
+  agc_task *first = reg_task(vm, 0), *second = reg_task(vm, 2);
+  if (n == 1) {
+    assert(o->len == AGC_OUTPUT_BUFFER && o->waiters == first && first->wait_next == second);
+    assert(first->output.out == o && second->output.out == o && o->waiters_tail == second);
+  } else if (n == 2) {
+    assert(cancelled(first) && !first->output.out && first->output.done == 0);
+    assert(o->len == AGC_OUTPUT_BUFFER && o->waiters == second && !second->wait_next && o->waiters_tail == second);
+    assert(second->state == AGC_TASK_PARKED);
+  } else {
+    assert(second->state == AGC_TASK_DONE && !second->cancelled && !o->len && !o->waiters);
+    assert(got_len == junk_len + AGC_OUTPUT_BUFFER + 1024);
+    for (size_t k = 0; k < got_len; k++) {
+      uint8_t want = k < junk_len ? 'j' : k < junk_len + AGC_OUTPUT_BUFFER ? 'a' : 'c';
+      assert(got[k] == want);
+    }
+  }
+}
+
+static void test_output_waiter(void) {
+  assert(pipe(out_pipe) == 0);
+  assert(fcntl(out_pipe[0], F_SETFL, O_NONBLOCK) == 0);
+  assert(fcntl(out_pipe[1], F_SETFL, O_NONBLOCK) == 0);
+  uint8_t junk[1024];
+  memset(junk, 'j', sizeof junk);
+  junk_len = 0;
+  got_len = 0;
+  for (;;) {
+    ssize_t n = write(out_pipe[1], junk, sizeof junk);
+    if (n < 0) break;
+    junk_len += (size_t)n;
+  }
+  prog p;
+  new_prog(&p);
+  for (int k = 0; k < 4; k++) call_int(&p, F_MAIN, B_PRINT, 0);
+  spawn(&p, F_MAIN, 0, F_PRINT, 1);
+  spawn(&p, F_MAIN, 2, F_PRINT, 2);
+  call_int(&p, F_MAIN, B_SLEEP, 0);
+  call_int(&p, F_MAIN, B_CHECK, 1);
+  call_reg(&p, F_MAIN, B_CANCEL, 0, 1);
+  call_int(&p, F_MAIN, B_CHECK, 2);
+  call_int(&p, F_MAIN, B_DRAIN, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 2, 1);
+  call_int(&p, F_MAIN, B_CHECK, 3);
+  run_done(&p, check_output);
+  close(out_pipe[0]);
+  close(out_pipe[1]);
+  out_pipe[0] = out_pipe[1] = -1;
+}
+
 static void check_pool(agc_vm *vm, int64_t n) {
   (void)n;
   accept_all();
@@ -853,6 +940,8 @@ int main(void) {
   test_children_move();
   test_timer_fired_then_cancel();
   test_channel_waiters();
+  signal(SIGPIPE, SIG_IGN);
+  test_output_waiter();
   test_pool();
   assert(pipe(gate) == 0);
   test_cancel_pool_phase();
