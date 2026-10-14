@@ -26,7 +26,7 @@ Specified in [`docs/future/37-task-crash-isolation.md` section 37](../future/37-
     - `site/content/library/concurrency/task.md`;
     - `docs/vm/10-io-scheduler.md` §10.2.1 ("As built", "Cancellation");
     - the development skill (`references/vm.md`).
-  - No CHANGELOG: the project adds none in the private alpha.
+  - CHANGELOG: an entry under `[Unreleased]` for any user-visible change.
   - **Done.** As built:
     - `agc_vm_run` runs each turn under its own `setjmp` (`vm->turn`, used while `vm->in_turn`); a crash in a task other than `main` goes through `crash` in `vm/task.c`, in the order of §37.8. The second await entry is `Task.await_result`, picked by `src/lower.rkt` when the checker's type of the call is a `Result`.
     - Owners: `agc_own` records the task that made a file (`vm/files.c`), a socket or listener (`own` in `vm/tcp.c`) or a process (`vm/process.c`) and its close: an `OP_CLOSE` job with no task (`agc_io_detached`), pending while a job holds the file (`close_pending` in `vm/loop.c` runs it after that job's `done` or `expired`, also for a detached job); `disown`; `close_child`. A closing handle wakes its lock waiters, and `agc_handle_wait` lets them through to the closed error. Servers have no close yet: `close_server` comes with 20c.

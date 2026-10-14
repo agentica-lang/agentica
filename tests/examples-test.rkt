@@ -344,7 +344,7 @@
       (lambda () (delete-file file))))
 
   (test-case "CLI --version prints the version and exits 0"
-    (check-equal? (cli "--version") (list 0 "0.1.0\n" "")))
+    (check-equal? (cli "--version") (list 0 "0.2.0\n" "")))
 
   (test-case "CLI --seed repeats Random and rejects bad seeds"
     (define program (make-temporary-file "agentica~a.agc"))
