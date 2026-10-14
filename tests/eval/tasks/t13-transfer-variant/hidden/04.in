@@ -1,0 +1,11 @@
+
+  deposit   50  
+transfer x bob
+transfer 0 bob
+transfer -5 bob
+transfer 5 bob extra
+transfer
+Transfer 5 bob
+transfer 5 bob
+  transfer 45 dave  
+transfer 1 dave

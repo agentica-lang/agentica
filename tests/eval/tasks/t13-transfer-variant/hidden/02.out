@@ -1,0 +1,13 @@
+inflow: deposit 100 -> 100
+transfer: transfer 30 to bob -> 70
+fee: fee 5 (wire) -> 65
+rejected: transfer 500 to ann (insufficient funds)
+invalid: transfer 5
+outflow: withdraw 10 -> 55
+rejected: transfer 65 to carol (insufficient funds)
+balance: 55
+inflow: 100
+outflow: 10
+fees: 5
+transferred: 30
+rejected: 2

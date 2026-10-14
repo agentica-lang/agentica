@@ -1,0 +1,6 @@
+line 4: expected 3 fields, got 2
+line 5: bad salary "abc"
+line 6: negative salary
+eng: 2 rows, total 220, average 110, top bob
+ops: 1 rows, total 30, average 30, top hal
+rejected: 3

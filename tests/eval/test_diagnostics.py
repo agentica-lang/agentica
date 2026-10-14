@@ -74,6 +74,18 @@ class DiagnosticsTests(unittest.TestCase):
 
         self.assertEqual((stats, runs, calls), ({}, 0, 0))
 
+    def test_run_names_split_into_task_and_arm(self) -> None:
+        for name, task, arm in (
+            ("t1-stats-binary-1", "t1-stats", "binary"),
+            ("t9-inventory-orders-typed-python-12", "t9-inventory-orders", "typed-python"),
+            ("t9-inventory-orders-python-2", "t9-inventory-orders", "python"),
+            ("t20-big-log-skill-3", "t20-big-log", "skill"),
+        ):
+            with self.subTest(name=name):
+                found = diagnostics.RUN_NAME.match(name)
+                self.assertIsNotNone(found)
+                self.assertEqual((found["task"], found["arm"]), (task, arm))
+
 
 if __name__ == "__main__":
     unittest.main()

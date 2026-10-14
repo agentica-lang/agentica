@@ -1,0 +1,17 @@
+broken: error: bad response
+badjson: error: bad response
+partial: error: bad response
+drop: error: no response
+tea: 250
+drop: error: no response
+tea: 500
+orders: 7, failed: 5
+--- requests
+POST /quote [application/json] {"item":"broken","quantity":1}
+POST /quote [application/json] {"item":"badjson","quantity":1}
+POST /quote [application/json] {"item":"partial","quantity":2}
+POST /quote [application/json] {"item":"drop","quantity":1}
+POST /quote [application/json] {"item":"tea","quantity":1}
+POST /quote [application/json] {"item":"drop","quantity":2}
+POST /quote [application/json] {"item":"tea","quantity":2}
+--- exit 0

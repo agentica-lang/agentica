@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -18,14 +19,18 @@ ROOT = Path(__file__).resolve().parents[2]
 EVAL = ROOT / "tests" / "eval"
 TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
-ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py"}
+ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py"}
+TYPED_ARMS = {"typed-python"}
+REFERENCE_ARMS = ["binary", "python", "typed-python"]
+CHECKER = ["mypy", "--strict", "--cache-dir=/dev/null"]
+CHECK_TIMEOUT = 90
 NET_WORDS = ("curl", "wget", "git clone", "github.com")
 CASE_TIMEOUT = 10
 WRITE_LOCK = threading.Lock()
 WORKSPACE = Path("/workspace")
 SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
 ROOTFS_PATH = f"/workspace/bin:{SYSTEM_PATH}"
-SAFE_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONUTF8": "1"}
+SAFE_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONUTF8": "1", "TMPDIR": "/tmp"}
 DEFAULT_IMAGE = "agentica-eval:local"
 
 
@@ -58,14 +63,23 @@ def clone_rootfs(template: Path, destination: Path) -> Path:
     return destination
 
 
+def start_file(task: str, arm: str) -> Path:
+    ext = ARMS[arm]
+    typed = TASKS / task / f"start.typed.{ext}"
+    if arm in TYPED_ARMS and typed.exists():
+        return typed
+    return TASKS / task / f"start.{ext}"
+
+
 def prepare(work: Path, task: str, arm: str) -> None:
     ext = ARMS[arm]
     work.mkdir(parents=True, exist_ok=True)
     shutil.copy(TASKS / task / "task.md", work / "task.md")
-    start = TASKS / task / f"start.{ext}"
+    start = start_file(task, arm)
     if start.exists():
-        shutil.copy(start, work / start.name)
-    shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
+        shutil.copy(start, work / f"start.{ext}")
+    if ext == "agc":
+        shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
     if arm == "skill":
         (work / "skills").mkdir()
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
@@ -94,6 +108,10 @@ def prompt(work: Path, arm: str) -> str:
         else:
             lines.append("The language is described in docs/grammar.md, and example programs are in examples/. "
                          "Use `agentica help NAME` for builtin signatures.")
+    elif arm in TYPED_ARMS:
+        lines.append("Write a complete Python 3 program to solution.py, with type annotations on every function. "
+                     "Run programs with `python3`. The type checker is `mypy --strict solution.py`, on your PATH: "
+                     "the solution must pass it, so do not silence it with `# type: ignore` or by weakening its options.")
     else:
         lines.append("Write a complete Python 3 program to solution.py. Run programs with `python3`.")
     lines.append("Work only inside the current directory. Test your program before you finish, then reply with one sentence.")
@@ -163,14 +181,30 @@ def remove_container(name: str) -> None:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
 
 
-def validate_docker(image: str) -> None:
+def build_image(image: str) -> None:
+    subprocess.run(["docker", "build", "--tag", image, "--file", str(EVAL / "Dockerfile"), str(EVAL)], check=True)
+
+
+def checker_version(image: str) -> str | None:
+    with tempfile.TemporaryDirectory(prefix="agentica-checker-probe-") as directory:
+        name = f"agentica-probe-{uuid.uuid4().hex}"
+        command = docker_prefix(Path(directory), image, name, network=False, pass_env=[])
+        try:
+            done = subprocess.run(command + [CHECKER[0], "--version"], env=grader_environment(),
+                                  capture_output=True, text=True, timeout=60)
+        finally:
+            remove_container(name)
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+def validate_docker(image: str, typed: bool = False) -> str | None:
     if not shutil.which("docker"):
         raise SystemExit("docker is required for evaluation; alternatively select --sandbox firejail")
     found = subprocess.run(["docker", "image", "inspect", image], capture_output=True)
     if found.returncode:
         if image != DEFAULT_IMAGE:
             raise SystemExit(f"Docker image not found: {image}")
-        subprocess.run(["docker", "build", "--tag", image, "--file", str(EVAL / "Dockerfile"), str(EVAL)], check=True)
+        build_image(image)
     with tempfile.TemporaryDirectory(prefix="agentica-docker-probe-") as directory:
         name = f"agentica-probe-{uuid.uuid4().hex}"
         command = docker_prefix(Path(directory), image, name, network=False, pass_env=[])
@@ -181,6 +215,15 @@ def validate_docker(image: str) -> None:
             raise SystemExit(f"Docker preflight failed: {exc.stderr}") from exc
         finally:
             remove_container(name)
+    if not typed:
+        return None
+    version = checker_version(image)
+    if version is None and image == DEFAULT_IMAGE:
+        build_image(image)
+        version = checker_version(image)
+    if version is None:
+        raise SystemExit(f"{CHECKER[0]} is missing from the Docker image {image}; the typed-python arm needs it")
+    return version
 
 
 def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) -> dict[str, str]:
@@ -190,7 +233,7 @@ def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) 
     for name in pass_env:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
             raise SystemExit(f"invalid environment variable name: {name}")
-        if name in {"HOME", "PATH", "LANG", "LC_ALL", "PYTHONUTF8"}:
+        if name in {"HOME", "PATH", *SAFE_ENV}:
             raise SystemExit(f"cannot pass reserved environment variable: {name}")
         if name not in os.environ:
             raise SystemExit(f"environment variable is not set: {name}")
@@ -218,7 +261,7 @@ def rootfs_has_executable(rootfs: Path, name: str) -> bool:
     return False
 
 
-def validate_sandbox(rootfs: Path, agent: str) -> None:
+def validate_sandbox(rootfs: Path, agent: str, typed: bool = False) -> None:
     if not rootfs.is_dir():
         raise SystemExit(f"chroot root filesystem not found: {rootfs}")
     if not shutil.which("firejail"):
@@ -232,6 +275,8 @@ def validate_sandbox(rootfs: Path, agent: str) -> None:
         raise SystemExit(f"{agent} executable not found in chroot system PATH ({SYSTEM_PATH})")
     if not rootfs_has_executable(rootfs, "python3"):
         raise SystemExit(f"python3 executable not found in chroot system PATH ({SYSTEM_PATH})")
+    if typed and not rootfs_has_executable(rootfs, CHECKER[0]):
+        raise SystemExit(f"{CHECKER[0]} executable not found in chroot system PATH ({SYSTEM_PATH})")
     smoke = jail_prefix(rootfs, network=False) + ["python3", "-I", "-c", "pass"]
     try:
         result = subprocess.run(
@@ -294,10 +339,21 @@ def run_agent(
             remove_container(container)
 
 
+def is_check_command(command: str) -> bool:
+    return bool(re.search(r"\bmypy\b|\bagentica\s+check\b", command))
+
+
+def command_failed(command: str, text: str) -> bool:
+    if "error[" in text or "Traceback" in text or "SyntaxError" in text:
+        return True
+    return bool(re.search(r"\bmypy\b", command)) and ": error:" in text
+
+
 def pi_metrics(out: str) -> dict[str, int | float]:
     m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "cost": 0.0, "turns": 0,
-         "interpreter_runs": 0, "failing_runs": 0, "outside_reads": 0, "net_commands": 0}
-    pending = {}
+         "interpreter_runs": 0, "failing_runs": 0, "check_runs": 0, "check_failures": 0,
+         "outside_reads": 0, "net_commands": 0}
+    pending: dict[str, str] = {}
     for line in out.splitlines():
         if not line.startswith("{"):
             continue
@@ -320,13 +376,17 @@ def pi_metrics(out: str) -> dict[str, int | float]:
             command = event.get("args", {}).get("command", "")
             if any(word in command for word in NET_WORDS):
                 m["net_commands"] += 1
-            if event.get("toolName") == "bash" and ("agentica" in command or "python" in command):
+            if event.get("toolName") == "bash" and ("agentica" in command or "python" in command or "mypy" in command):
                 m["interpreter_runs"] += 1
-                pending[event["toolCallId"]] = True
-        elif kind == "tool_execution_end" and pending.pop(event.get("toolCallId"), False):
-            text = json.dumps(event.get("result", {}))
-            if "error[" in text or "Traceback" in text or "SyntaxError" in text:
+                if is_check_command(command):
+                    m["check_runs"] += 1
+                pending[event["toolCallId"]] = command
+        elif kind == "tool_execution_end" and event.get("toolCallId") in pending:
+            command = pending.pop(event["toolCallId"])
+            if command_failed(command, json.dumps(event.get("result", {}))):
                 m["failing_runs"] += 1
+                if is_check_command(command):
+                    m["check_failures"] += 1
     return m
 
 
@@ -341,6 +401,64 @@ def claude_metrics(out: str) -> dict[str, int | float]:
             "turns": data.get("num_turns", 0)}
 
 
+def hidden_driver(task: str) -> str | None:
+    driver = TASKS / task / "hidden" / "driver.py"
+    return driver.read_text(encoding="utf-8") if driver.is_file() else None
+
+
+def case_timeout(task: str) -> int:
+    limit = TASKS / task / "hidden" / "timeout"
+    return int(limit.read_text(encoding="utf-8").strip()) if limit.is_file() else CASE_TIMEOUT
+
+
+def case_command(ext: str, driver: str | None) -> list[str]:
+    if ext == "agc":
+        command = ["/workspace/bin/agentica", "solution.agc"]
+    else:
+        command = ["python3", "-I", "solution.py"]
+    if driver is None:
+        return command
+    return ["python3", "-I", "-c", driver, command[0], *command[1:-1], f"/workspace/{command[-1]}"]
+
+
+def contained_run(args: argparse.Namespace, grade_root: Path, work: Path, command: list[str],
+                  stdin: str, timeout: int) -> tuple[str | None, str, int | None]:
+    container = f"agentica-grade-{uuid.uuid4().hex}"
+    try:
+        prefix = (docker_prefix(work, args.image, container, network=False, pass_env=[])
+                  if args.sandbox == "docker" else jail_prefix(grade_root, network=False))
+        done = subprocess.run(prefix + command, cwd=work, env=grader_environment(), input=stdin,
+                              capture_output=True, text=True, errors="replace", timeout=timeout)
+        return done.stdout, done.stderr, done.returncode
+    except subprocess.TimeoutExpired:
+        return None, "timeout", None
+    finally:
+        if args.sandbox == "docker":
+            remove_container(container)
+
+
+def classify_check(output: str) -> tuple[str, str]:
+    found = re.search(r"^.*: error: .*?(?:\s+\[([a-z0-9-]+)\])?$", output, re.MULTILINE)
+    code = found.group(1) if found and found.group(1) else "mypy"
+    if code == "syntax":
+        return "syntax", "SyntaxError"
+    return "check", code
+
+
+Contained = Callable[[list[str], str, int], tuple[str | None, str, int | None]]
+
+
+def type_check(contained: Contained, total: int) -> dict | None:
+    out, err, returncode = contained(CHECKER + ["solution.py"], "", CHECK_TIMEOUT)
+    if returncode == 0:
+        return None
+    if out is None:
+        return {"status": "fail", "passed": 0, "total": total, "failure": "timeout", "code": None, "check_errors": 0}
+    kind, code = classify_check(out + err)
+    return {"status": "fail", "passed": 0, "total": total, "failure": kind, "code": code,
+            "check_errors": len(re.findall(r": error: ", out))}
+
+
 def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch: Path, name: str) -> dict:
     ext = ARMS[arm]
     cases = sorted((TASKS / task / "hidden").glob("*.in"))
@@ -353,31 +471,31 @@ def grade(solution: Path, task: str, arm: str, args: argparse.Namespace, scratch
     shutil.copyfile(solution, work / solution.name)
     if ext == "agc":
         shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
-        cmd = ["/workspace/bin/agentica", "solution.agc"]
-    else:
-        cmd = ["python3", "-I", "solution.py"]
-    env = grader_environment()
+
+    def contained(command: list[str], stdin: str, timeout: int) -> tuple[str | None, str, int | None]:
+        return contained_run(args, grade_root, work, command, stdin, timeout)
+
+    extra: dict[str, int] = {}
+    if arm in TYPED_ARMS:
+        found = type_check(contained, len(cases))
+        if found is not None:
+            return found
+        text = solution.read_text(encoding="utf-8", errors="replace")
+        extra = {"check_errors": 0, "type_ignores": len(re.findall(r"#\s*type:\s*ignore", text))}
+    command = case_command(ext, hidden_driver(task))
+    timeout = case_timeout(task)
     passed, failure, code = 0, None, None
     for case in cases:
-        container = f"agentica-grade-{uuid.uuid4().hex}"
         expected = case.with_suffix(".out").read_text(encoding="utf-8").rstrip("\n")
-        try:
-            jailed = (docker_prefix(work, args.image, container, network=False, pass_env=[])
-                      if args.sandbox == "docker" else jail_prefix(grade_root, network=False)) + cmd
-            done = subprocess.run(jailed, cwd=work, env=env, input=case.read_text(encoding="utf-8"), capture_output=True, text=True, timeout=CASE_TIMEOUT)
-            actual, err, returncode = done.stdout.rstrip("\n"), done.stderr, done.returncode
-        except subprocess.TimeoutExpired:
-            actual, err, returncode = None, "timeout", None
-        finally:
-            if args.sandbox == "docker":
-                remove_container(container)
+        out, err, returncode = contained(command, case.read_text(encoding="utf-8"), timeout)
+        actual = None if out is None else out.rstrip("\n")
         if actual == expected and returncode == 0:
             passed += 1
             continue
         if failure is None:
             failure, code = classify(err, ext)
     return {"status": "pass" if passed == len(cases) else "fail", "passed": passed, "total": len(cases),
-            "failure": failure, "code": code}
+            "failure": failure, "code": code, **extra}
 
 
 def classify(err: str, ext: str) -> tuple[str, str | None]:
@@ -427,12 +545,32 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
         print(f"{name}: {row['status']} {row['passed']}/{row['total']} {seconds}s", flush=True)
 
 
+def read_rows(results: Path) -> list[dict]:
+    return [json.loads(line) for line in (results / "results.jsonl").read_text(encoding="utf-8").splitlines()]
+
+
+def git_output(*command: str) -> str:
+    try:
+        return subprocess.run(["git", *command], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def run_info(args: argparse.Namespace, checker: str | None) -> dict:
+    return {"commit": git_output("rev-parse", "HEAD"), "dirty": bool(git_output("status", "--porcelain")),
+            "skill_commit": git_output("log", "-1", "--format=%H", "--", ".agents/skills/agentica-programming"),
+            "agent": args.agent, "model": args.model or "default", "arms": args.arms, "tasks": args.tasks,
+            "reps": args.reps, "timeout": args.timeout, "sandbox": args.sandbox, "image": args.image,
+            "checker": checker, "pass_env": args.pass_env, "agent_network": True}
+
+
 def summarize(results: Path) -> None:
-    rows = [json.loads(line) for line in (results / "results.jsonl").read_text(encoding="utf-8").splitlines()]
+    rows = read_rows(results)
     groups = {}
     for row in rows:
         groups.setdefault((row["task"], row["arm"]), []).append(row)
-    out = ["| task | arm | runs | pass | cases | tokens | seconds | failing runs | failures |", "|---|---|---|---|---|---|---|---|---|"]
+    out = ["| task | arm | runs | pass | cases | tokens | seconds | failing runs | check runs | failures |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
     for (task, arm), rs in sorted(groups.items()):
         n = len(rs)
         mean = lambda key: round(sum(r.get(key, 0) for r in rs) / n, 1)
@@ -440,18 +578,18 @@ def summarize(results: Path) -> None:
         passes = sum(r["status"] == "pass" for r in rs)
         cases = round(sum(r["passed"] / r["total"] for r in rs) / n * 100)
         kinds = ", ".join(sorted({f"{r['failure']}:{r['code']}" if r["code"] else str(r["failure"]) for r in rs if r["failure"]})) or "-"
-        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {mean('seconds')} | {mean('failing_runs')} | {kinds} |")
+        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {mean('seconds')} | {mean('failing_runs')} | {mean('check_runs')} | {kinds} |")
     text = "\n".join(out) + "\n"
     (results / "summary.md").write_text(text, encoding="utf-8")
     print(text)
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--agent", choices=["pi", "claude", "reference"], default="pi")
     parser.add_argument("--model")
     parser.add_argument("--tasks", nargs="*", default=sorted(p.name for p in TASKS.iterdir() if p.is_dir()))
-    parser.add_argument("--arms", nargs="*", default=list(ARMS))
+    parser.add_argument("--arms", nargs="*", help=f"default: {' '.join(ARMS)}")
     parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--jobs", type=int, default=1, help="runs in parallel")
@@ -465,18 +603,27 @@ def main() -> None:
                         help="firejail runs the host-built agentica-vm on the chroot's glibc")
     parser.add_argument("--image", default=DEFAULT_IMAGE, help="Docker image; the default is built when missing")
     parser.add_argument("--summarize", metavar="RESULTS_DIR")
+    parser.add_argument("--check-references", action="store_true",
+                        help="grade every reference solution (no model, no credentials) and exit 1 if one fails; "
+                             f"arms default to {' '.join(REFERENCE_ARMS)}")
     args = parser.parse_args()
     if args.summarize:
         summarize(Path(args.summarize))
-        return
+        return 0
+    if args.check_references:
+        args.agent = "reference"
+        args.pass_env = []
+    args.arms = args.arms or (REFERENCE_ARMS if args.check_references else list(ARMS))
+    typed = any(arm in TYPED_ARMS for arm in args.arms)
     child_environment(args.pass_env, in_chroot=True, workspace=WORKSPACE)
+    checker = None
     if args.sandbox == "docker":
-        validate_docker(args.image)
+        checker = validate_docker(args.image, typed)
     else:
         if args.chroot_root is None:
             raise SystemExit("--sandbox firejail requires --chroot-root")
         args.chroot_root = args.chroot_root.resolve()
-        validate_sandbox(args.chroot_root, args.agent)
+        validate_sandbox(args.chroot_root, args.agent, typed)
     if not args.no_build:
         build()
     if not all((ROOT / "dist" / "runtime" / "bin" / name).is_file() for name in ("agentica", "agentica-vm")):
@@ -484,6 +631,7 @@ def main() -> None:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
+    (results / "run.json").write_text(json.dumps(run_info(args, checker), indent=2) + "\n", encoding="utf-8")
     jobs = [(task, arm, rep) for task in args.tasks for arm in args.arms for rep in range(1, args.reps + 1)]
     with tempfile.TemporaryDirectory(prefix="agentica-eval-") as scratch_dir:
         scratch = Path(scratch_dir)
@@ -492,6 +640,11 @@ def main() -> None:
                 future.result()
     summarize(results)
     print(f"results: {results}")
+    failed = [row for row in read_rows(results) if row["status"] != "pass"]
+    if args.agent == "reference" and failed:
+        print("reference solutions that failed: " + ", ".join(f"{row['task']}/{row['arm']}" for row in failed))
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

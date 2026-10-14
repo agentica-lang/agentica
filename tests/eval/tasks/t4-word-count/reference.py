@@ -1,6 +1,6 @@
 import sys
 
-counts = {}
+counts: dict[str, int] = {}
 for line in sys.stdin.read().split("\n"):
     line = line.strip()
     if not line:

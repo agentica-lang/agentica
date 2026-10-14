@@ -1,0 +1,7 @@
+deposit 100
+transfer 30 bob
+fee 5 wire
+transfer 500 ann
+transfer 5
+withdraw 10
+transfer 65 carol

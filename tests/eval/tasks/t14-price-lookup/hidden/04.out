@@ -1,0 +1,13 @@
+added a: 7
+added b: 3
+added c: 3
+added d: 9
+cheapest: b (3)
+cheapest: c (3)
+cheapest: a (7)
+error: no known items
+error: no known items
+cheapest: a (7)
+error: bad command
+cheapest: d (9)
+unknown: 9

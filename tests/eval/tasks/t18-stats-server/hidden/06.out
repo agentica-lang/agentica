@@ -1,0 +1,7 @@
+POST /stats -> 400 application/json {"error":"invalid json"}
+GET /double/abc -> 400 application/json {"error":"not an integer"}
+POST /stats -> 200 application/json {"count":1,"max":1,"min":1,"sum":1}
+GET /nope -> 404 application/json {"error":"not found"}
+GET /health -> 200 application/json {"status":"ok"}
+POST /health -> 405 application/json {"error":"method not allowed"} allow=GET
+GET /double/2 -> 200 application/json {"double":4,"n":2}

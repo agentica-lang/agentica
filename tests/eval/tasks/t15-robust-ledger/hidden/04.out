@@ -1,0 +1,11 @@
+line 1: bad amount
+line 2: bad amount
+line 3: bad amount
+line 4: bad amount
+line 5: bad amount
+line 10: amount out of range
+line 12: amount out of range
+line 13: expected 2 fields
+cash: 12
+total: 12
+rejected: 8

@@ -1,0 +1,10 @@
+price tea 4
+quote cofee
+quote tea
+cost brew tea 2 coffee 1
+cheapest coffee tea cocoa
+price cocoa 6
+price coffee 5
+cost brew tea 2 coffee 1
+cheapest coffee tea cocoa
+report

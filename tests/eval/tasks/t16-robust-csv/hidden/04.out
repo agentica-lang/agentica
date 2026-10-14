@@ -1,0 +1,10 @@
+line 2: bad salary "1.5"
+line 3: bad salary "12x"
+line 4: bad salary "-"
+line 5: bad salary "+"
+line 6: bad salary "--3"
+line 7: bad salary "3-"
+line 11: bad salary ""8""
+line 12: bad salary "1 2"
+b: 4 rows, total 14, average 3, top a
+rejected: 8

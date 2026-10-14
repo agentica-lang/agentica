@@ -1,0 +1,10 @@
+deposit 100
+withdraw 30
+fee 5 wire
+withdraw 500
+foo
+deposit -3
+deposit 0
+fee 2
+withdraw 65
+withdraw 1

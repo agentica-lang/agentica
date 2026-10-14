@@ -1,0 +1,7 @@
+GET /health
+GET /hello
+GET /hello?name=Ana
+POST /stats {"values":[3,-1,10,4]}
+GET /double/21
+GET /double/-4
+GET /nope

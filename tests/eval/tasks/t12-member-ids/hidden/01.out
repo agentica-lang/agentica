@@ -1,0 +1,22 @@
+member M-007: ana
+member M-12: bob
+book B-003: Dune (2)
+book B-10: Emma Woods (1)
+book B-9: Zen (1)
+ana borrowed Dune
+bob borrowed Dune
+ana borrowed Emma Woods
+error: no copies left
+error: already borrowed
+ana borrowed Zen
+ana:
+  B-003 Dune
+  B-10 Emma Woods
+  B-9 Zen
+bob:
+  B-003 Dune
+ana returned Dune
+error: not borrowed
+B-003 Dune: 1/2
+B-10 Emma Woods: 0/1
+B-9 Zen: 0/1

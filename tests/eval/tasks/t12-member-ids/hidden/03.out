@@ -1,0 +1,24 @@
+member M-1: ana
+member M-2: bob
+book B-1: Dune (1)
+error: invalid member id 1
+error: invalid book id 1
+error: bad command
+error: bad command
+error: invalid member id b-1
+error: unknown member M-9
+error: unknown book B-9
+error: invalid book id b-9
+ana borrowed Dune
+error: not borrowed
+error: unknown book B-9
+error: unknown member M-9
+error: invalid member id 2
+error: invalid book id 1
+ana returned Dune
+error: not borrowed
+error: invalid member id 1
+error: unknown member M-9
+ana has no loans
+error: bad command
+error: bad command

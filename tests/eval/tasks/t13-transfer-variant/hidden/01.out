@@ -1,0 +1,16 @@
+inflow: deposit 100 -> 100
+outflow: withdraw 30 -> 70
+fee: fee 5 (wire) -> 65
+rejected: withdraw 500 (insufficient funds)
+invalid: foo
+invalid: deposit -3
+invalid: deposit 0
+invalid: fee 2
+outflow: withdraw 65 -> 0
+rejected: withdraw 1 (insufficient funds)
+balance: 0
+inflow: 100
+outflow: 95
+fees: 5
+transferred: 0
+rejected: 2

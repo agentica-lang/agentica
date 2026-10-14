@@ -1,0 +1,7 @@
+POST /stats not json
+GET /double/abc
+POST /stats {"values":[1]}
+GET /nope
+GET /health
+POST /health
+GET /double/2

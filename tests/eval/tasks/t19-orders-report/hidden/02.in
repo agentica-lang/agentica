@@ -1,0 +1,15 @@
+order_id,customer,sku,quantity,unit_cents
+1,ana,tea,2,250
+2,bob,coffee,1,400
+3,ana,milk,3,120
+
+4,bob,tea,x,250
+5,cy,tea,0,250
+6,cy,tea,1
+7, dee , cocoa , 2 , 380
+8,,tea,1,100
+9,eli,,1,100
+,fay,tea,1,100
+10,gus,tea,1,-5
+11,hal,tea,1,0
+12,ida,tea,1,100,extra
