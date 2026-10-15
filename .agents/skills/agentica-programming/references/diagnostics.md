@@ -32,7 +32,7 @@ Each line is a function and the place it runs: the error for the first, the call
 |---|---|
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `'` or a backtick says strings use double quotes (a character is a one-character String). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
 | `LEX-INVALID-NUMBER` | a `_` in a number literal that is not between two digits: `1_`, `1__0`, `1_.5`, `1._5`. Write `1_000` or `0.000_5`; the `_` is only visual |
-| `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#` |
+| `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#`. `value.with()` and `value.with(31)` say to name each field to change, as in `value.with(age: 31)` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |
 | `PARSE-MISSING-BLANK-LINE` | no blank line between the `end` of a declaration and the next one; a `##` doc block counts as part of the next declaration, so the blank line goes before it |
 | `PARSE-DETACHED-DOC` | a `##` doc block that is not directly above a `def`, `struct`, `enum`, field or variant: a blank line, a `#` comment, an `import` or the end of the file follows it, or it stands in a function body or inside brackets. Move it onto the line above what it documents, or write `#`. Only the first block of a file, followed by a blank line, may stand alone (the module doc) |
@@ -42,8 +42,8 @@ Each line is a function and the place it runs: the error for the first, the call
 | `PARSE-INVALID-ASSIGNMENT-TARGET` | assignment to an index or field |
 | `PARSE-PIPE-TARGET` | the right side of `\|>` is not a call written with parentheses (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`); wrap the pipe in parentheses and use `.` on the result. The call may follow `try` and take a trailing block. `a + 1 \|> f()` is `f(a + 1)`; put a multi-line chain in parentheses, one `\|>` per line |
 | `CHECK-TYPE-MISMATCH` | a value, operand, condition, argument, or return has the wrong type; also printing or interpolating a value without `to_s` (a function, task or handle). Int with Float: `n.to_f`, `x.to_i!`; String with a number: `s.to_i!`, `n.to_s`; `<` on Strings: only numbers are ordered |
-| `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist (`continue` says `next`; `Map.new` says `m: Map[String, Int] = {}`) |
-| `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING` | duplicate declaration, shadowing, annotation on an existing name |
+| `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD` | a name, type, or field that does not exist (`continue` says `next`; `Map.new` says `m: Map[String, Int] = {}`); also a field that `value.with(...)` names but the struct lacks |
+| `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING` | duplicate declaration, shadowing, annotation on an existing name; an `Fn` field named `with` (`value.with(...)` is the struct update, so rename the field) |
 | `CHECK-ARITY` | wrong number of arguments |
 | `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD` | struct construction fields |
 | `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE` | an empty `[]` or `{}`, respectively, with no expected type: annotate it, `m: Map[String, Int] = {}` |
@@ -57,7 +57,7 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`, `CHECK-UNREACHABLE-CASE-ARM` | a pattern that does not fit the value, a `case` missing variants or `_`, an arm already covered |
 | `CHECK-MAP-KEY-TYPE` | a map key that is not `Int` or `String` |
 | `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE` | a `Set` element type that is not `Int` or `String`; `Set.new([])` with no expected type: annotate it, `s: Set[Int] = Set.new([])` |
-| `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path (including a path with `.agc` or another extension), cycle, or unknown/private imported name; for a misspelled name the help suggests the closest export (`did you mean "name"?`) |
+| `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME` | Missing/unreadable import, invalid path (including a path with `.agc` or another extension), cycle, or unknown/private imported name; for a misspelled name the help suggests the closest export (`did you mean "name"?`); a struct that its module keeps private cannot be constructed or updated with `.with` from another module |
 | `CHECK-DECL-ORDER` | a declaration out of the file order (imports, `struct`/`enum`, `export def`, `def`): a type after a function, a private `def` before an `export def`, an `import` after a declaration; move it to its group |
 | `CHECK-MODULE-CONTEXT` | Raw import/export declarations need module resolution before checking |
 | `CHECK-NOT-DECODABLE` | JSON.decode/schema target is not a struct or contains unsupported field types |
@@ -65,7 +65,7 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-IMMUTABLE-ASSIGNMENT` | assignment to a `for` variable |
 | `CHECK-INT-RANGE` | an integer literal that does not fit in `Int` |
 | `CHECK-PIPE-METHOD` | `x \|> String.trim()`: a builtin that has a method form for the left value is written with `.` (`x.trim`); the help shows the method form, with a piped left side in parentheses |
-| `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct. Common foreign names get the real one: `s.chars` says `s.split("")`, `s.matches?` says `contains?`, `to_string` says `to_s` |
+| `CHECK-UNKNOWN-METHOD` | method not defined for the receiver's type, or a method call on a struct, or `.with(...)` on a value that is not a struct. Common foreign names get the real one: `s.chars` says `s.split("")`, `s.matches?` says `contains?`, `to_string` says `to_s` |
 | `CHECK-UNUSED-VALUE` | result of a builtin without effects is ignored (`xs.push(1)` alone) |
 | `CHECK-BLOCK-TYPE` | a block parameter has no type from the call; annotate it (`do |x: Int|`) |
 | `CHECK-BLOCK-TARGET` | a block is passed to a function whose last parameter is not a `Fn` |
