@@ -19,10 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Stack traces in `agentica test`.** A test whose task crashes with a runtime error now shows the call stack under its diagnostic in the text report (`  stack, innermost first:`, or ` | stack ...` with `--ai`) and has `stack`, `stack_omitted` and `spawned_at` in its `--json` error, as a halt outside a test already had. The same stack lines show for a BDD scenario whose step crashed (#235).
+- Function names and file paths in a stack line are cut to 256 bytes (at a character boundary, ending with `...`) in the plain, `--ai` and `--json` formats, so a hostile `.agcb` with a huge name cannot make the stack print it 20 times (#235).
 - **Breaking:** `Await` is a reserved name. A user struct, enum, type parameter or import alias with that name is `CHECK-REDEFINED-NAME` (#217).
 - **Faster lists:** `push` and `set` on lists are now near constant time, and building a list with n pushes is O(n); a loop of 160,000 pushes took about a minute and now takes 0.1 s. Indexing costs at most 4 loads up to a million items instead of one. `List.repeat` shares one block of items, so a million items cost almost nothing. Output, diagnostics and `--max-steps` counts do not change. `push`, `set` and a `concat` with 32 items or fewer no longer cost turn units, so a task that loops on them yields later, and the order of output between tasks that run at the same time may shift (#221).
 - **Faster list bulk operations:** on a million items, `sort` takes 17 ms for a list in order or strictly descending and 100 ms for a scattered one (190 and 320 ms before), because it reads the keys once and compares them as numbers; `String.split(text, "")` takes 9 ms (85 ms before) because one-character ASCII pieces are shared Strings; `take`, `drop` from a multiple of 32 and `concat` reuse the leaves of the source list instead of copying every item; and `join`, `map` and `Range.to_a` read and write a list without a call per item. Results and diagnostics are unchanged.
 - **Numeric lists use half the memory:** a list whose items are all `Int`, or all `Float`, keeps 8 bytes per item and no tag, so a million items take 8 MB instead of 16 MB, and the collector does not scan them. `sort` of such a list is about 30% faster (a million scattered `Int`s: 100 ms before, 71 ms now), `take`, `drop` and `concat` about 3 times faster, and building and pushing a little faster. Lists of other types, output, diagnostics, `--max-steps` counts and the bytecode format do not change (#NNN).
+
+### Fixed
+
+- When the `agentica test` runner itself crashes, the `RUNTIME-BDD-INFRA` message names the error (its code and message) instead of the last stack frame (#235).
 
 ## [0.2.0] - 2026-10-14
 

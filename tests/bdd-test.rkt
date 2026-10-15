@@ -210,6 +210,26 @@
            (check-equal? (hash-ref report 'failed) 1))
          (lambda () (file-or-directory-permissions locked #o700))))))
 
+  (test-case "a crashed runner is reported with the error, not the last stack frame"
+    (with-suite
+     `(("a.feature" . "Feature: A\nScenario: a\nThen 1 is fine\n")
+       ("vm.sh" . ,(string-append
+                    "#!/bin/sh\n"
+                    "echo 'runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]' >&2\n"
+                    "echo 'index 5 is outside a list of length 3' >&2\n"
+                    "echo '  = stack, innermost first:' >&2\n"
+                    "echo '    main at runner.agc:11:8' >&2\n"
+                    "exit 3\n")))
+     (lambda (directory)
+       (file-or-directory-permissions (in directory "vm.sh") #o700)
+       (define environment (environment-variables-copy (current-environment-variables)))
+       (environment-variables-set! environment #"AGENTICA_VM" (string->bytes/utf-8 (in directory "vm.sh")))
+       (match-define (list status output _) (agentica-test #:environment environment "--json" (in directory "a.feature")))
+       (check-equal? status 2)
+       (define error (hash-ref (car (hash-ref (string->jsexpr output) 'files)) 'error))
+       (check-equal? (hash-ref error 'code) "RUNTIME-BDD-INFRA")
+       (check-regexp-match #rx"RUNTIME-INDEX-OUT-OF-RANGE" (hash-ref error 'message)))))
+
   (test-case "usage errors exit 2, an empty directory exits 1 and missing pieces are infrastructure errors"
     (with-suite
      `(("a.feature" . "Feature: A\nScenario: a\nThen 1 is fine\n"))

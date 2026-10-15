@@ -255,6 +255,10 @@ static void crash(agc_vm *vm, agc_task *t) {
   t->crash_code = o->code;
   t->crash_message = agc_utf8_decode((const uint8_t *)o->message, o->message_len, "\xEF\xBF\xBD", false);
   t->crash_span = o->span;
+  if (o->stack.shown) {
+    t->crash_stack = agc_alloc(sizeof *t->crash_stack);
+    *t->crash_stack = o->stack;
+  }
   t->crashed = true;
   vm->crash_count++;
   agc_task **quiet = quiet_slot(vm, t);

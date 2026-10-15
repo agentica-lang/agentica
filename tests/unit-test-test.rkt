@@ -54,6 +54,9 @@
     (check-equal? (list (field compared 'expected) (field compared 'actual)) '("\"c\"" "\"a\\\"b\""))
     (check-equal? (start-line (hash-ref compared 'error)) 19)
     (check-equal? (start-line (hash-ref (fourth results) 'error)) 2)
+    (check-equal? (map (lambda (frame) (hash-ref frame 'function)) (hash-ref (hash-ref (fourth results) 'error) 'stack))
+                  '("divide" "block"))
+    (check-false (hash-has-key? (hash-ref compared 'error) 'stack))
     (check-equal? (hash-ref compared 'output) "first line\n\u001eagentica-bdd {\"event\":\"pass\"}")
     (check-equal? (map (lambda (item) (hash-ref item 'output)) (list (first results) (third results) (fourth results)))
                   '("" "" ""))
@@ -62,8 +65,10 @@
     (match-define (list _ plain _) (agentica-test (fixture "outcomes_test.agc")))
     (check-true (string-contains? plain ":19:7 [RUNTIME-TEST-ASSERTION] values are not equal; expected \"c\"; actual \"a\\\"b\"\n  first line\n"))
     (check-false (string-contains? plain "quiet when passing"))
+    (check-true (string-contains? plain "[RUNTIME-DIVISION-BY-ZERO] division by zero\n  stack, innermost first:\n    divide at "))
     (match-define (list _ ai _) (agentica-test "--ai" (fixture "outcomes_test.agc")))
-    (check-true (string-contains? ai "actual \"a\\\"b\" | output \"first line\\n\\u001Eagentica-bdd ")))
+    (check-true (string-contains? ai "actual \"a\\\"b\" | output \"first line\\n\\u001Eagentica-bdd "))
+    (check-regexp-match #rx"\\[RUNTIME-DIVISION-BY-ZERO\\] division by zero \\| stack divide at [^;]*:2:13; block at " ai))
 
   (test-case "an exit or a timeout ends the file's run, and bad names are a file error"
     (match-define (list status report) (json-test (fixture "stops_test.agc") (fixture "names_test.agc")))

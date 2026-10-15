@@ -162,13 +162,14 @@ static agc_string *list_lines(agc_vm *vm, const agc_list *tests) {
   return all;
 }
 
-static agc_string *fail_line(agc_vm *vm, const char *code, agc_string *message, uint32_t span, const agc_test_note *n) {
+static agc_string *fail_line(agc_vm *vm, const char *code, agc_string *message, uint32_t span, const agc_test_note *n,
+                             const agc_stack *stack) {
   const agc_program *p = vm->rt->program;
   const agc_span *at = &p->spans[span];
   agc_json_member *range = members(2);
   range[0] = member("end", position(at->end_line, at->end_column));
   range[1] = member("start", position(at->start_line, at->start_column));
-  agc_json_member *m = members(7);
+  agc_json_member *m = members(10);
   size_t count = 0;
   m[count++] = member("code", json_text(lit(code)));
   m[count++] = member("event", json_text(lit("fail")));
@@ -177,6 +178,7 @@ static agc_string *fail_line(agc_vm *vm, const char *code, agc_string *message, 
   m[count++] = member("range", agc_json_object(range, 2));
   if (n && n->expected) m[count++] = member("expected", json_text(n->expected));
   if (n && n->actual) m[count++] = member("actual", json_text(n->actual));
+  if (stack) count += agc_stack_members(p, stack, m + count);
   return record_line(vm, m, count);
 }
 
@@ -225,17 +227,17 @@ static agc_string *report(agc_vm *vm, agc_task *t, const agc_test_case *c) {
   agc_task *crashed = unobserved_of(vm, t);
   agc_string *record;
   if (t->crashed) {
-    record = fail_line(vm, t->crash_code, t->crash_message, t->crash_span, NULL);
+    record = fail_line(vm, t->crash_code, t->crash_message, t->crash_span, NULL, t->crash_stack);
   } else if (t->note) {
-    record = fail_line(vm, "RUNTIME-TEST-ASSERTION", t->note->message, t->note->span, t->note);
+    record = fail_line(vm, "RUNTIME-TEST-ASSERTION", t->note->message, t->note->span, t->note, NULL);
   } else if (!agc_as_result(vm, t->result)->ok) {
     record = fail_line(vm, "RUNTIME-TEST-ERROR", agc_as_string(vm, agc_as_result(vm, t->result)->value), c->span,
-                       NULL);
+                       NULL, NULL);
   } else if (t->left_children) {
     record = fail_line(vm, "RUNTIME-TEST-PENDING-TASKS", lit("the test returned while its tasks were still running"),
-                       c->span, NULL);
+                       c->span, NULL, NULL);
   } else if (crashed) {
-    record = fail_line(vm, "RUNTIME-TASK-CRASHED", crashed->crash, c->span, NULL);
+    record = fail_line(vm, "RUNTIME-TASK-CRASHED", crashed->crash, c->span, NULL, NULL);
   } else {
     record = event_line(vm, "pass");
   }
@@ -254,7 +256,7 @@ static void next_test(agc_vm *vm, agc_test_run *r, const agc_list *tests, uint32
     r->line = NULL;
     return;
   }
-  r->record = fail_line(vm, "RUNTIME-BDD-INFRA", agc_around("invalid test index ", line, ""), span, NULL);
+  r->record = fail_line(vm, "RUNTIME-BDD-INFRA", agc_around("invalid test index ", line, ""), span, NULL, NULL);
   r->after = AFTER_EXIT;
 }
 
@@ -312,7 +314,7 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
       if (status == AGC_INPUT_WAIT) return agc_void();
       if (status == AGC_INPUT_FAILED) {
         if (!agc_parent_open(vm)) agc_exit(vm, 1);
-        r->record = fail_line(vm, "RUNTIME-BDD-INFRA", lit("invalid test index"), span, NULL);
+        r->record = fail_line(vm, "RUNTIME-BDD-INFRA", lit("invalid test index"), span, NULL, NULL);
         r->after = AFTER_EXIT;
         continue;
       }

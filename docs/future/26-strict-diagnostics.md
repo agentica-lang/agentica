@@ -655,8 +655,8 @@ for channels, [section
 with their golden fixtures, checker tests, `tests/vm-task-map-test.rkt` and site
 pages; the programs of HTTP streaming and `TlsContext` (order step 7.4); and the
 `std/` modules of order row 7.2.4 (`std/binary`, phase 13) and of order step 7.5
-(`std/log`, 14c), with their site pages and tests; they matter to 26.1, 26.2 and
-26.4.
+(`std/logger`, 14c), with their site pages and tests; they matter to 26.1, 26.2
+and 26.4.
 
 | Where | 26.1 imports | 26.2 variables | 26.3 unreachable | 26.4 results |
 |---|---|---|---|---|
