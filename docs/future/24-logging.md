@@ -52,7 +52,9 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
 - `error` is a reserved name: a module cannot declare `def error`
   (`CHECK-REDEFINED-NAME`), so a log module cannot have `Logger.error`. A wrong
   imported name (`Logger.error` when the module has no `error`) is
-  `CHECK-IMPORT-NAME` with no "did you mean" help.
+  `CHECK-IMPORT-NAME`. The specific help names `Logger.err`; D9 added a generic
+  "did you mean" help for the other wrong names, so `Logger.warnin` suggests
+  `warning`.
 - `JSON.encode` of a `Map[String, String]` keeps the map's order and escapes
   `"`, `\` and control characters; non-ASCII text stays as it is. `JSON.encode`
   of a `String` gives the quoted, escaped text.
@@ -426,8 +428,8 @@ lists the same items:
   (a message fix, which row 7.2.7 allows).
 
 Not data: a new checker rule, tag or construction rule, and new syntax. The "did
-you mean" help for `CHECK-IMPORT-NAME` is not part of this PR. It is a separate
-small PR (D9) that only changes message text, which the freeze allows.
+you mean" help for `CHECK-IMPORT-NAME` was not part of this PR. It landed as a
+separate small PR (D9) that only changes message text, which the freeze allows.
 
 **The stdlib registry and the VM table.** The ten native functions of
 `LogRegistry` are:
@@ -542,8 +544,12 @@ state them as the plan.
   `--log-level` flag can come later.
 - **D8 The freeze.** The data list in "The freeze" above. `std/logger` may land
   before, during or after row 7.2.7.
-- **D9 "Did you mean" help.** A separate small PR, not part of 14c, that only
-  changes the message text of `CHECK-IMPORT-NAME`, which the freeze allows.
+- **D9 "Did you mean" help.** Landed as a separate small PR, not part of 14c.
+  It only changes the message text of `CHECK-IMPORT-NAME`, which the freeze
+  allows: when `M.name` is not an export of `M`, the help suggests the closest
+  export with `did-you-mean` from `src/builtins.rkt`. The specific helps
+  (`std/http`, `Logger.error`) win, a private name is never suggested, and with
+  no close export the help stays empty.
 - **D10 The `task` field.** In the event and in JSON lines, not in the text
   form.
 

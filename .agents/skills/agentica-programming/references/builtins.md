@@ -26,6 +26,7 @@ System.exit(code: Int) -> Void
 System.env(name: String) -> Result[String]   # error if unset or the name is empty, has = or NUL; ok("") if set empty
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
 Time.monotonic_ms() -> Int              # never goes backward; use it for durations
+Time.monotonic_ns() -> Int              # same clock in nanoseconds; same origin as monotonic_ms
 Random.int(min: Int, max: Int) -> Int   # uniform, both ends inclusive; min > max halts (RUNTIME-INVALID-RANGE)
 Random.float() -> Float                 # 0.0 up to, not including, 1.0
 ```

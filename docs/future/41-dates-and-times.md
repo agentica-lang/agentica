@@ -3,7 +3,7 @@
 **Status:** designed, not scheduled. The owner's scope of 2026-10-14 is in this
 section, and the roadmap order table does not place it. Its types are checker
 changes, so they come after the Agentica front end (41.13), as the owner decided
-on 2026-10-15. `Time.monotonic_ns` (41.10) is independent and may land earlier.
+on 2026-10-15. `Time.monotonic_ns` (41.10) is independent and has landed.
 It is VM-only and adds no grammar syntax: new builtin types and new functions of
 the existing `Time` module. Every name here is a proposal for the owner to
 review.
@@ -341,7 +341,7 @@ end
   `Time.now()`, or a difference of two `DateTime` values. The wall clock can
   jump, so the difference can be negative or wrong. `Time.ms_between` is for
   calendar differences (days until a due date), not for how long code runs.
-- The proposal adds `Time.monotonic_ns() -> Int`: nanoseconds from an arbitrary
+- `Time.monotonic_ns() -> Int` (landed): nanoseconds from an arbitrary
   origin that never goes backward. It reads the same clock as
   `Time.monotonic_ms`, with the same code: `clock_gettime(CLOCK_MONOTONIC)` on
   POSIX and `QueryPerformanceCounter` on Windows. On Windows it splits the
@@ -357,18 +357,19 @@ end
   The implementation PR can compare the two if the owner prefers libuv.
 - This is exception 1 of the std-first rule (the OS clock), so it is a C
   builtin. It is a new row of `src/builtins.rkt`, which the freeze allows
-  (41.13), and it is independent of the types, so it can land at any time.
+  (41.13), and it is independent of the types, so it landed first (#248).
 - Tests: a golden fixture `time-monotonic-ns.agc` checks that two readings do
   not go back, that `Task.sleep(20)` takes at least 15000000 ns, and that
   `Time.monotonic_ns() / 1000000` lies between two `Time.monotonic_ms()`
   readings taken around it, which checks the unit and the shared clock. The
   independent counterpart is `tests/fixtures/monotonic-peer.py` (Python,
-  standard library): it runs the program on Linux, where both read
-  `CLOCK_MONOTONIC`, and checks that its reading lies between two
-  `time.monotonic_ns()` readings taken around the run. The margin is 5 ms: the
-  loop calls `uv_update_time` before it starts a timer (`vm/loop.c`), so a timer
-  fires early by under 1 ms of truncation, plus any lag of libuv's coarse clock,
-  and 5 ms covers that.
+  standard library): it runs a program that reads the clock before and after
+  `Task.sleep(20)` on Linux, where both read `CLOCK_MONOTONIC`, and checks that
+  both readings lie between two `time.monotonic_ns()` readings taken around the
+  run, with strict bounds and no margin. The sleep floor has a margin of 5 ms:
+  the loop calls `uv_update_time` before it starts a timer (`vm/loop.c`), so a
+  timer fires early by under 1 ms of truncation, plus any lag of libuv's coarse
+  clock, and 5 ms covers that.
 - No `elapsed` helper. The helper would be `Time.monotonic_ms() - start` with a
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
@@ -399,20 +400,20 @@ The parts land under different rules:
 |---|---|---|
 | Types, reserved names, the construction rule and its code | `compiler/` (the Agentica front end) | A checker change in the Agentica front end (§35), decided by the owner on 2026-10-15. Not a table row. |
 | `Time.*` functions (41.3 to 41.7) | `compiler/` (the Agentica catalog, §35.4), `vm/dates.c` | With the types, in the Agentica front end (§35): most of the functions return the new types, so their catalog rows wait for it. |
-| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin catalog, if §35 step 4 is done), `vm/numbers.c` | Independent of the types, so it may land at any time. After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
+| `Time.monotonic_ns` (41.10) | `src/builtins.rkt`, `src/lower.rkt` (or the Agentica builtin catalog, if §35 step 4 is done), `vm/numbers.c` | Independent of the types, so it landed first (#248). After row 7.2.7 the freeze allows its table row and its `vm-builtins` name. |
 
 Most of the functions return the new types, so they cannot land before the
 types. The owner decided on 2026-10-15 that the types come after the Agentica
 front end (§35), where the same rules are written in Agentica, so the `Time.*`
-functions wait for it too. `Time.monotonic_ns` is the only part that may land
-earlier. The order table is not changed by this section; the roadmap's
+functions wait for it too. `Time.monotonic_ns` is the only part that landed
+earlier (#248). The order table is not changed by this section; the roadmap's
 "Designed, not scheduled" paragraph says where the types wait.
 
 ### 41.14 Files and docs of the implementation PR
 
 The two parts land in two PRs (41.10 and 41.13).
 
-The monotonic clock (41.10), which may land first:
+The monotonic clock (41.10), which landed first (#248):
 
 - `src/builtins.rkt`: one row next to the `Time` rows. `src/lower.rkt`: its
   `vm-builtins` name, or, if §35 step 4 is done, the Agentica builtin catalog

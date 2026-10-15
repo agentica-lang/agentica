@@ -199,7 +199,7 @@
                       "Float.from_int" "Float.to_int" "Float.to_int!"
                       "Int.bit_and" "Int.bit_or" "Int.bit_xor" "Int.bit_not" "Int.shift_left" "Int.shift_right"
                       "Int.shift_right_unsigned" "Float.to_bits" "Float.from_bits" "Float.to_bits32" "Float.from_bits32"
-                      "Time.now_ms" "Time.monotonic_ms"
+                      "Time.now_ms" "Time.monotonic_ms" "Time.monotonic_ns"
                       "Random.int" "Random.float"
                       "JSON.parse" "JSON.encode" "JSON.from" "JSON.object" "JSON.array" "JSON.null" "JSON.null?"
                       "JSON.get" "JSON.at" "JSON.string" "JSON.int" "JSON.float" "JSON.bool" "JSON.list"

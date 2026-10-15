@@ -21,10 +21,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `Map.has_key?`, `keys`, `size`, `put`, `get` at arities 2 and 3,
    `delete`, `values`), every `String.*` builtin, and `Float.from_int`,
    `Float.to_int`, `Float.to_int!`, `Time.now_ms`, `Time.monotonic_ms`,
-   `Random.int` and `Random.float`, and every `JSON.*` builtin (the type
-   argument of `JSON.decode` and `JSON.schema` lowers to a String constant
-   with the struct's linked name; a struct without JSON field types, such
-   as `Header` or a struct that contains one, is `LOWER-UNSUPPORTED`), and
+   `Time.monotonic_ns`, `Random.int` and `Random.float`, and every `JSON.*`
+   builtin (the type argument of `JSON.decode` and `JSON.schema` lowers to a
+   String constant with the struct's linked name; a struct without JSON field
+   types, such as `Header` or a struct that contains one, is
+   `LOWER-UNSUPPORTED`), and
    every `File.*`, `Dir.*` and `Path.*` builtin (with `FileHandle` in
    `value-types` and `FileInfo` appended to the struct table when a checked
    type mentions it), every `Process.*` builtin, and every `TCP.*` builtin
