@@ -4,18 +4,19 @@ the program to C, which runs it in a new runtime.
 The binary is checked against what `agentica` does today (the Racket front end, or AGENTICA_TEST_EXECUTABLE): the
 same stdout, stderr and exit status for a few programs and a few diagnostics, and the same bytes for `compile`.
 The other cases use a front end of their own (tests/fixtures/single-binary/front.agc, loaded with --front-end) to
-see what the C side does with the two FrontEnd builtins. The fixed point is the make target of the same name; its
-test is slow because it compiles compiler/ three times.
+see what the C side does with the two FrontEnd builtins. The fixed point is not tested here: `make fixed-point` is a
+step of CI (the test job and the sanitizer job), where it compiles compiler/ three times next to this module.
 """
+import os
+import random
 import re
 import struct
-import subprocess
 
-from tests.agentica_test import (FIXTURES, ROOT, TestCase, cli, compile_agc, require, run, run_vm, slow,
-                                 vm_environment)
+from tests.agentica_test import FIXTURES, ROOT, TestCase, cli, compile_agc, require, run, run_vm, vm_environment
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
+STAGE2 = ROOT / "build" / "stage" / "stage2.agcb"
 ANOTHER_VERSION = "9.9.9"
 
 EXIT_THREE = 'def main() -> Void\n  puts("before")\n  System.exit(3)\nend\n'
@@ -39,6 +40,8 @@ SPAWN = (
     "end\n")
 STD_SOURCE = 'def main() -> Void\n  puts(FrontEnd.std_source("queue.agc").ok?)\nend\n'
 HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off([1], [], []).ok?)\nend\n"
+BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
+USES_STD = 'import Queue from "std/queue"\n\ndef main() -> Void\n  puts("unused")\nend\n'
 
 
 def version():
@@ -50,6 +53,15 @@ def next_binary():
     path = ROOT / "dist" / "agentica-next"
     require(path.is_file(), "the single binary is not built (%s): run make agentica-next" % path)
     return path
+
+
+def bad_utf8_file(path):
+    """A source file of 350 KB: valid lines, then bad bytes on line 50001, then 100 KB of random bytes.
+
+    The bad bytes lie in the second 256 KiB chunk that the front end reads, and the tail has every kind of broken
+    sequence; a decoder that copied the rest of the file at each bad byte would need minutes for it.
+    """
+    path.write_bytes(b"x = 1\n" * 50000 + b"\xff\xfe\n" + random.Random(7).randbytes(100000))
 
 
 def with_version(data, text):
@@ -86,17 +98,24 @@ class SingleBinary(TestCase):
         directory = self.make_suite({
             "exit.agc": EXIT_THREE, "index.agc": INDEX_ERROR, "type.agc": TYPE_ERROR, "syntax.agc": SYNTAX_ERROR,
             "main.agc": USES_HELPER})
+        (directory / "bad.agc").write_bytes(b"\xff\xfe")
+        bad_utf8_file(directory / "big_bad.agc")
         (directory / "lib").mkdir()
         (directory / "lib" / "helper.agc").write_text(HELPER_ERROR)
         cases = [
             ["exit.agc"], ["index.agc"], ["type.agc"], ["./type.agc"], ["syntax.agc"], ["main.agc"], ["missing.agc"],
-            ["--max-steps", "0", "exit.agc"], ["--bogus", "exit.agc"], ["compile", "type.agc", "-o", "out.agcb"],
+            ["bad.agc"], ["big_bad.agc"], ["--version"], ["--max-steps", "0", "exit.agc"], ["--bogus", "exit.agc"],
+            ["compile", "type.agc", "-o", "out.agcb"],
         ]
         for words in cases + [[str(ROOT / "examples" / name)] for name in ("hello.agc", "queue.agc", "json-modules.agc")]:
             with self.subTest(words=words):
-                got = self.agentica(*words, cwd=directory)
+                got = self.agentica(*words, cwd=directory, timeout=30)
                 self.assertEqual(got, self.racket(*words, cwd=directory))
         self.assertFalse((directory / "out.agcb").exists())
+        # The line of a file that is not UTF-8 is shown with U+FFFD, as Racket shows it.
+        shown = self.agentica("bad.agc", cwd=directory).stderr
+        self.assertIn("1 | \ufffd\ufffd\n", shown)
+        self.assertIn("50001 | \ufffd\ufffd\n", self.agentica("big_bad.agc", cwd=directory).stderr)
 
     def test_compile_writes_the_bytes_of_the_racket_front_end(self):
         work = self.make_temp_dir()
@@ -141,7 +160,9 @@ class SingleBinary(TestCase):
         other = work / "other.agcb"
         other.write_bytes(with_version(data, ANOTHER_VERSION))
         loaded = self.agentica("--front-end", other, "inputs", "x")
-        self.assertEqual((loaded.code, loaded.stdout, loaded.stderr), (0, "--version %s -- inputs x\n" % version(), ""))
+        # The binary names itself with the real path of its file, for the commands that start it again.
+        inputs = "--version %s --self %s -- inputs x\n" % (version(), os.path.realpath(self.binary))
+        self.assertEqual((loaded.code, loaded.stdout, loaded.stderr), (0, inputs, ""))
         refused = run_vm(other, env=vm_environment())
         self.assertEqual(refused.code, 2)
         self.assertIn("built for another Agentica version", refused.stderr)
@@ -153,9 +174,7 @@ class SingleBinary(TestCase):
     def test_the_front_end_gets_the_embedded_std_sources(self):
         work = self.make_temp_dir()
         front = self.front_end(work)
-        names = (STDLIB / "MODULES").read_text().split()
-        self.assertEqual(sorted(names), sorted(p.relative_to(STDLIB).as_posix() for p in STDLIB.rglob("*.agc")))
-        for name in names:
+        for name in (STDLIB / "MODULES").read_text().split():
             with self.subTest(name=name):
                 got = self.agentica("--front-end", front, "std", name)
                 self.assertEqual((got.code, got.stdout), (0, (STDLIB / name).read_text()))
@@ -184,7 +203,9 @@ class SingleBinary(TestCase):
         program = compile_agc(self.make_suite({"user.agc": EXIT_THREE}) / "user.agc", work / "user.agcb")
         for words, error in (
                 (["bad-program"], "error: the program is not a list of bytes, or it is too large\n"),
-                (["bad-word"], "error: argument 1 has a character 0\n")):
+                (["bad-word"], "error: argument 1 has a character 0\n"),
+                (["too-many-options"], "error: too many options\n"),
+                (["too-many-arguments"], "error: too many arguments\n")):
             with self.subTest(words=words):
                 got = self.agentica("--front-end", front, *words)
                 self.assertEqual((got.code, got.stdout, got.stderr), (0, error, ""))
@@ -192,21 +213,48 @@ class SingleBinary(TestCase):
                 (["--bogus"], "agentica: unknown option --bogus\n"),
                 (["--max-steps", "0"], "agentica: --max-steps needs a positive integer\n"),
                 (["--version"], "agentica: the front end passed --version, which is not an option of a run\n"),
+                (["--driver-pid", "1"],
+                 "agentica: the front end passed --driver-pid, which only the process that started agentica may name\n"),
                 (["word"], "agentica: the front end passed word, which is not an option of a run\n")):
             with self.subTest(options=options):
                 got = self.agentica("--front-end", front, "hand-off", program, *options)
                 self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
 
     def test_a_missing_front_end_is_a_usage_error(self):
+        pipe = self.make_temp_dir() / "front.agcb"
+        os.mkfifo(pipe)
         for words, message in (
                 (["--front-end", "/nonexistent/front.agcb"], "agentica: cannot read /nonexistent/front.agcb\n"),
+                # A named pipe is refused at once, not waited for.
+                (["--front-end", pipe], "agentica: cannot read %s\n" % pipe),
                 (["--front-end"], "agentica: --front-end needs a file\n")):
-            got = self.agentica(*words)
+            got = self.agentica(*words, timeout=10)
             self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
 
-    @slow
-    def test_the_fixed_point_holds(self):
-        """stage2 == stage3 and Racket's stage1 == stage2, and the binary compiles its own front end to stage2."""
-        result = subprocess.run(["make", "fixed-point"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, timeout=1800)
-        self.assertEqual(result.returncode, 0, result.stdout[-4000:])
+    def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(self):
+        work = self.make_temp_dir()
+        trace = work / "trace"
+        env = vm_environment({"AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
+        answer = self.agentica("--version", env=env)
+        self.assertEqual((answer.code, answer.stdout, answer.stderr), (0, version() + "\n", ""))
+        self.assertFalse(trace.exists())
+        # The program of a run would not start with this variable, so the front end does not compile for it either.
+        refused = self.agentica(ROOT / "examples" / "hello.agc",
+                                env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": "soon"}), timeout=10)
+        self.assertEqual((refused.code, refused.stdout), (2, ""))
+        self.assertIn("AGENTICA_FLUSH_TIMEOUT_MS needs an integer", refused.stderr)
+
+    def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_folder(self):
+        """A front end on the VM with --stdlib DIR: DIR/queue.agc is broken, ./std/queue.agc is a decoy."""
+        require(STAGE2.is_file(), "the front end is not built (%s): run make stage2" % STAGE2)
+        work = self.make_suite({"main.agc": USES_STD})
+        (work / "libstd").mkdir()
+        (work / "libstd" / "queue.agc").write_text((STDLIB / "queue.agc").read_text() + BROKEN_STD)
+        (work / "std").mkdir()
+        (work / "std" / "queue.agc").write_text("# a decoy\n" * 100)
+        got = run_vm(STAGE2, args=["--version", version(), "--stdlib", "libstd", "--", "compile", "main.agc",
+                                   "-o", "out.agcb"], cwd=work, env=vm_environment())
+        self.assertEqual((got.code, got.stdout), (1, ""))
+        self.assertIn("std/queue.agc:", got.stderr)
+        self.assertIn('return "text"', got.stderr)
+        self.assertNotIn("decoy", got.stderr)

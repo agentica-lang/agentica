@@ -7,9 +7,12 @@
 #                        hands the program in FILE to the VM with the options and the arguments
 #   bad-program          hands over a "program" with a byte that is not one
 #   bad-word             hands over a program with an argument that has a character 0
+#   too-many-options     hands over more options than the driver takes
+#   too-many-arguments   hands over more arguments than the driver takes
 
 def main() -> Void
-  words = System.args().drop(3)
+  # The binary puts `--version V --self PATH --` before the words.
+  words = System.args().drop(5)
   if words.size == 0
     System.exit(2)
   elsif words[0] == "inputs"
@@ -22,6 +25,10 @@ def main() -> Void
     shown_void(FrontEnd.hand_off([1, 300], [], []))
   elsif words[0] == "bad-word"
     shown_void(FrontEnd.hand_off([1], [], ["a#{String.from_code(0)}b"]))
+  elsif words[0] == "too-many-options"
+    shown_void(FrontEnd.hand_off([1], List.repeat("--allow-run", 65), []))
+  elsif words[0] == "too-many-arguments"
+    shown_void(FrontEnd.hand_off([1], [], List.repeat("a", 1048576).push("a")))
   end
 end
 
