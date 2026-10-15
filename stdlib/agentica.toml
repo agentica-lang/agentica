@@ -1,0 +1,3 @@
+# Style rules for every .agc file under this folder (docs/future/45-packages.md, 45.5).
+[style]
+max_line_width = 119
