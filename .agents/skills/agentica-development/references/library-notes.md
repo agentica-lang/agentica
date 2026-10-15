@@ -65,7 +65,7 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
   `python3 tests/fixtures/bits-vectors.py` writes (standard library only; it
   checks `struct` against its own exact `Fraction` rounding). CI does not run
   the script: run it by hand and commit both files when the vectors change.
-  `tests/vm-bits-test.rkt` checks the spans of the errors.
+  `tests/test_vm_bits.py` checks the spans of the errors.
 
 - `std/binary` (`stdlib/binary.agc`, 13b) is Agentica on the 13a builtins, with
   no C. A reader is `window` (offset range, no overflow for any offset), a

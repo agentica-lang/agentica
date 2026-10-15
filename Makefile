@@ -5,7 +5,7 @@ unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/vm-diff-*-test.rkt))
 EXE_INPUTS := $(wildcard src/*.rkt stdlib/*.agc stdlib/*/*.agc)
 
-.PHONY: build build-tests test test-slow test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: build build-tests test test-slow test-rkt test-py test-exe test-ci test-distribution exe clean test-bdd smoke goldens bench eval-references version vm vm-test vm-latency vm-fuzz vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 version:
 	@racket -e '(require "src/version.rkt") (display version)'
@@ -13,16 +13,48 @@ version:
 build:
 	$(RACO) make src/main.rkt
 
+# Two frameworks side by side while the tests move from rackunit to Python unittest (docs/future/35-self-hosting.md):
+# a .rkt file in TESTS goes to raco test, a tests/test_<area>.py file to unittest, and a directory (the default,
+# tests/) to both. A test lives in one framework only.
 # All tests, in parallel:      make test
-# A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt"
+# A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt tests/test_vm_bits.py"
 # More or fewer workers:       make test JOBS=8
-test: build vm
-	$(RACO) test -j $(JOBS) $(TESTS)
+PYTHON ?= python3
+RKT_TESTS = $(filter-out %.py,$(TESTS))
+PY_TESTS = $(sort $(foreach t,$(TESTS),$(if $(filter %/,$(t)),$(wildcard $(t)test_*.py),$(filter %.py,$(t)))))
+# tests/test_x.py -> tests.test_x (run from the repository root, so tests/agentica_test.py imports as tests.agentica_test)
+PY_MODULE = $(subst /,.,$(patsubst %.py,%,$(1)))
+RKT_FLAGS ?=
 
-# The slow tier: the (module+ slow ...) cases of the test files. CI runs it after make test; a local run does not.
-# A file without a slow submodule is skipped.
+# -k: the unittest run still happens when the rackunit run fails, so one run shows every failure
+test: build vm
+	@$(MAKE) --no-print-directory -k test-rkt test-py
+
+# The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
+# (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
+# A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
 test-slow: build vm
-	$(RACO) test --submodule slow --no-run-if-absent -j $(JOBS) $(TESTS)
+	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
+
+test-rkt:
+	@test -z "$(RKT_TESTS)" || $(RACO) test $(RKT_FLAGS) -j $(JOBS) $(RKT_TESTS)
+
+# One unittest process per module, run by make itself: -j gives the workers, -O keeps each module's output together,
+# -k runs the other modules after a failure. A failing module shows its unittest report and a make error line.
+# CI (CI is set) fails when Python is missing; a local run reports a skip, like the Racket tests do for their peers.
+test-py:
+	@if [ -n "$(PY_TESTS)" ]; then \
+	  if ! command -v $(PYTHON) >/dev/null 2>&1; then \
+	    test -z "$$CI" || { echo "$(PYTHON) is required in CI" >&2; exit 1; }; \
+	    echo "SKIP the Python tests: $(PYTHON) is unavailable"; exit 0; \
+	  fi; \
+	  $(MAKE) --no-print-directory -k -O -j$(JOBS) $(addprefix py-test/,$(PY_TESTS)) \
+	    || { echo "The Python tests failed" >&2; exit 1; }; \
+	fi
+
+py-test/%: FORCE
+	@echo "unittest $*"
+	@$(PYTHON) -m unittest $(call PY_MODULE,$*)
 
 dist/agentica: $(EXE_INPUTS) | build vm
 	mkdir -p dist

@@ -32,7 +32,7 @@ that phase asks for: no placeholder modules or empty nodes for later phases.
 
 ```sh
 make vm                                   # build dist/agentica-vm (git submodule update --init first)
-make test TESTS="tests/lexer-test.rkt"    # only the tests the change touches
+make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"  # only the tests the change touches (.rkt: rackunit, .py: unittest)
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
 make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
@@ -43,9 +43,10 @@ make site                                 # before merging a site change
 
 Run the stage tests the change touches (`make test TESTS=...`, which builds the
 VM first) and run the affected example with `racket src/main.rkt`. Two tiers:
-put fast cases in `(module+ test ...)` and slow ones (live corpus, generated
-inputs, stress) in `(module+ slow ...)`. Locally run only the fast tier; CI
-runs the slow tier with `make test-slow` after `make test`. CI runs everything
+put fast cases in `(module+ test ...)` (rackunit) or in a `tests/test_<area>.py`
+module (unittest, `references/ci.md`) and slow ones (live corpus, generated
+inputs, stress) in `(module+ slow ...)` or marked `@slow`. Locally run only the
+fast tier; CI runs the slow tier with `make test-slow` after `make test`. CI runs everything
 else (`references/ci.md`, "What CI runs").
 
 ## Stage contract
@@ -70,7 +71,7 @@ else (`references/ci.md`, "What CI runs").
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`; `references/vm.md` and `references/vm-c.md` for the rules) |
 | pipeline stage | `src/<stage>.rkt`, wired in `src/main.rkt`, `tests/<stage>-test.rkt` |
 | `std/` module | `stdlib/<name>.agc`, registered in `src/stdlib.rkt`, a doc on the module and every export, comments as `references/library-notes.md` says |
-| test | `tests/<stage>-test.rkt` (rackunit); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
+| test | `tests/<stage>-test.rkt` (rackunit) while the stage needs the Racket front end, otherwise `tests/test_<area>.py` (unittest, `tests/agentica_test.py` helpers); VM behavior: a fixture in `tests/fixtures/vm/` with its `.expected` |
 | language rule | `docs/grammar/`, the site page, and the programming skill (`.agents/skills/agentica-programming/`) |
 
 ## VM rules in short
