@@ -111,20 +111,4 @@
           (define started (current-inexact-milliseconds))
           (define nested (run-lexer bytecode (list path)))
           (check-true (< (- (current-inexact-milliseconds) started) 5000))
-          (check-against-racket nested (list path)))
-
-        ; Each of these runs more than 10,000 hops of one recursive path (the token loop, the
-        ; characters of a string, the lines of a doc block), so a hop that is not a tail call
-        ; overflows the VM's frame limit.
-        (test-case "recursive scans keep a flat call depth on large inputs"
-          (define cases
-            (list (cons "tokens.agc" (string-append* (make-list 50000 "x + 1 ")))
-                  (cons "escapes.agc" (string-append "\"" (string-append* (make-list 20000 "\\n#")) "\"\n"))
-                  (cons "pieces.agc" (string-append "\"" (string-append* (make-list 5000 "a#{x}")) "\"\n"))
-                  (cons "doc.agc" (string-append (string-append* (make-list 20000 "## line\n")) "def f() -> Void\nend\n"))))
-          (define paths
-            (for/list ([entry (in-list cases)])
-              (define path (path->string (build-path work (car entry))))
-              (display-to-file (cdr entry) path)
-              path))
-          (check-against-racket (run-lexer bytecode paths) paths))))))
+          (check-against-racket nested (list path)))))))

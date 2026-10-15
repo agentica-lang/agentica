@@ -35,8 +35,7 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   `references/modules.md`, `site/content/tour/modules.md`.
 - [x] 15c Struct update `value.with(field: x)` (§25.3), **built early** on the
   owner's decision of 2026-10-15, before the bootstrap (it relaxes the freeze of
-  row 7.2.7), so that `compiler/` can be written as pure functions and
-  `step(state)` loops. Both parsers (a `struct-update` node, `Update` in
+  row 7.2.7), because `compiler/` uses immutable struct updates. Both parsers (a `struct-update` node, `Update` in
   `compiler/ast.agc`), the checker (`CHECK-UNKNOWN-METHOD` for a receiver that
   is not a struct, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`,
   `CHECK-TYPE-MISMATCH`, and `CHECK-IMPORT-NAME` for a struct that its module

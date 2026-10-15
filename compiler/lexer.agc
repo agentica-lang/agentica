@@ -3,19 +3,27 @@ import "source" as Source
 import "token" as Tokens
 import "unicode" as Unicode
 
+# An open bracket (`(`, `[`, `{`), an interpolation (`#`) or a block (`kw`), and
+# where it opened.
 struct Frame
   kind: String
   start: Source.Position
 end
 
+# One piece of a string literal: from the opening quote (or the `}` that ends
+# an interpolation) to the closing quote or the next `#{`. `start` is where the
+# whole literal began, for the "unterminated" span.
 struct StringPiece
   kind: String
   value: String
   token_end: Int
   next: Int
   opens: Bool
+  start: Source.Position
 end
 
+# A scanned `##` block: where it stops, the line state there, its text and what
+# follows it.
 struct DocScan
   stop: Int
   line: Int
@@ -24,7 +32,7 @@ struct DocScan
   next: String
 end
 
-# The kinds of character that start a token; the lexer dispatches on them.
+# The kind of a character at the start of a token; `lex` dispatches on it.
 enum CharClass
   Blank
   Newline
@@ -54,37 +62,104 @@ struct Input
   string_stops: Set[Int]
 end
 
-# Where the scan is. Each `scan_*` function returns the next `step` with an
-# updated copy (`state.with(...)`); the old state is never changed. The hot
-# paths call `Source.position` and `state.with` in place instead of through a
-# helper: one more call per token made the lexer about 3% slower.
-struct State
-  index: Int
-  line: Int
-  line_start: Int
-  tokens: List[Tokens.Token]
-  delimiters: List[Frame]
-  open_strings: Int
-end
-
-# One string literal in progress: where it began, whether it is the first
-# piece (no `}` before it), the start of the text not yet copied, and the
-# pieces already decoded (escapes split the copy).
-struct StringScan
-  start: Source.Position
-  first: Bool
-  segment: Int
-  parts: List[String]
-end
-
 ## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
 export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
-  codes = text.split("").map do |character| String.code(character) end
-  input = new_input(text, codes)
-  return step(input, State(index: 0, line: 1, line_start: 0, tokens: [], delimiters: [], open_strings: 0))
+  input = new_input(text)
+  codes = input.codes
+  size = input.size
+  tokens: List[Tokens.Token] = []
+  delimiters: List[Frame] = []
+  open_strings = 0
+  index = 0
+  line = 1
+  line_start = 0
+  while index < size
+    code = codes[index]
+    kind = input.classes.get(code, CharClass.Other)
+    # A `}` that closes an interpolation continues the string, not a map.
+    if code == 125 and in_interpolation?(delimiters)
+      kind = CharClass.Quote
+    end
+    case kind
+      CharClass.Blank -> index = skip_blanks(codes, size, index)
+      CharClass.Newline ->
+        start = Source.position(index, line, line_start)
+        case after_newline(input, delimiters, open_strings, index, code, start)
+          Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+          Diag.Outcome.Done(next) ->
+            if statement_level?(delimiters)
+              tokens = tokens.push(token(text, "NL", Tokens.Value.NoValue, start, Source.position(next, line + 1, next)))
+            end
+            index = next
+            line += 1
+            line_start = next
+        end
+      CharClass.Hash ->
+        if at(codes, size, index + 1) == 35 and only_blanks?(codes, line_start, index)
+          scan = scan_doc(input, index, line, line_start)
+          tokens = tokens.push(doc_token(input, scan, index, line, line_start))
+          index = scan.stop
+          line = scan.line
+          line_start = scan.line_start
+        else
+          index = skip_until(codes, size, index, input.line_ends)
+        end
+      CharClass.NameStart ->
+        word = scan_name(input, index, code, line, line_start)
+        delimiters = track_block(input.block_openers, delimiters, word.kind, word.span.start)
+        tokens = tokens.push(word)
+        index = word.span.stop.offset
+      CharClass.Digit ->
+        case scan_number(input, index, line, line_start)
+          Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+          Diag.Outcome.Done(number) ->
+            tokens = tokens.push(number)
+            index = number.span.stop.offset
+        end
+      CharClass.Quote ->
+        case scan_string(input, delimiters, index, code, line, line_start)
+          Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+          Diag.Outcome.Done(piece) ->
+            if code == 125
+              delimiters = pop(delimiters)
+              open_strings -= 1
+            end
+            tokens = tokens.push(piece_token(input, piece, index, line, line_start))
+            if piece.opens
+              delimiters = delimiters.push(Frame(kind: "#", start: piece.start))
+              open_strings += 1
+            end
+            index = piece.next
+        end
+      CharClass.Opening ->
+        opening = scan_opening(input, index, line, line_start)
+        delimiters = delimiters.push(Frame(kind: opening.lexeme, start: opening.span.start))
+        tokens = tokens.push(opening)
+        index = opening.span.stop.offset
+      CharClass.Closing ->
+        case scan_closing(input, delimiters, index, code, line, line_start)
+          Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+          Diag.Outcome.Done(closing) ->
+            delimiters = pop(delimiters)
+            tokens = tokens.push(closing)
+            index = closing.span.stop.offset
+        end
+      CharClass.Other ->
+        case scan_operator(input, index, code, line, line_start)
+          Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+          Diag.Outcome.Done(operator) ->
+            tokens = tokens.push(operator)
+            index = operator.span.stop.offset
+        end
+    end
+  end
+  return finish(input, tokens, delimiters, Source.position(index, line, line_start))
 end
 
-def new_input(text: String, codes: List[Int]) -> Input
+# The text as character codes (positions count characters, as in Racket) with
+# its lookup tables.
+def new_input(text: String) -> Input
+  codes = text.split("").map do |character| String.code(character) end
   letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
   return Input(
     text: text,
@@ -101,104 +176,50 @@ def new_input(text: String, codes: List[Int]) -> Input
   )
 end
 
-# The main loop. Every hop is a direct `return f(...)`, so the VM replaces the
-# frame (a tail call) and the depth stays flat on any input size.
-def step(input: Input, state: State) -> Diag.Outcome[List[Tokens.Token]]
-  if state.index == input.size
-    return finish(input, state)
-  end
-  code = input.codes[state.index]
-  case input.classes.get(code, CharClass.Other)
-    CharClass.Blank -> return step(input, state.with(index: skip_blanks(input.codes, input.size, state.index)))
-    CharClass.Newline -> return scan_newline(input, state, code)
-    CharClass.Hash -> return scan_hash(input, state)
-    CharClass.NameStart -> return scan_name(input, state, code)
-    CharClass.Digit -> return scan_number(input, state)
-    CharClass.Quote -> return scan_string_token(input, state, code)
-    CharClass.Opening -> return scan_opening(input, state)
-    CharClass.Closing -> return scan_closing(input, state, code)
-    CharClass.Other -> return scan_operator(input, state, code)
-  end
-end
-
 # The end of the text: a last NL at statement level, then EOF, unless a
 # delimiter is still open.
-def finish(input: Input, state: State) -> Diag.Outcome[List[Tokens.Token]]
-  here = Source.position(state.index, state.line, state.line_start)
-  tokens = state.tokens
-  if statement_level?(state.delimiters) and !ends_with_newline?(tokens)
-    tokens = tokens.push(token(input.text, "NL", Tokens.Value.NoValue, here, here))
+def finish(input: Input, tokens: List[Tokens.Token], delimiters: List[Frame], here: Source.Position) -> Diag.Outcome[List[Tokens.Token]]
+  closed = tokens
+  if statement_level?(delimiters) and !ends_with_newline?(tokens)
+    closed = closed.push(token(input.text, "NL", Tokens.Value.NoValue, here, here))
   end
-  opening = innermost(state.delimiters, false)
+  opening = innermost(delimiters, false)
   if opening >= 0
-    return Diag.Outcome.Failed(unclosed(state.delimiters[opening], here))
+    return Diag.Outcome.Failed(unclosed(delimiters[opening], here))
   end
-  return Diag.Outcome.Done(tokens.push(token(input.text, "EOF", Tokens.Value.NoValue, here, here)))
+  return Diag.Outcome.Done(closed.push(token(input.text, "EOF", Tokens.Value.NoValue, here, here)))
 end
 
-def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
-  if frame.kind == "#"
-    return unterminated(frame.start, here)
-  end
-  help = Diag.Help.NoHelp
-  if frame.kind == "{"
-    help = Diag.Help.Hint("add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no braces and end with \"end\"")
-  end
-  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help)
-end
-
-# A NL token is only made at statement level; inside brackets a line break is
-# blank space. A CR must come with its LF.
-def scan_newline(input: Input, state: State, code: Int) -> Diag.Outcome[List[Tokens.Token]]
-  start = Source.position(state.index, state.line, state.line_start)
-  if code == 13 and at(input.codes, input.size, state.index + 1) != 10
+# Checks the line break at `index` and returns the offset after it. A CR must
+# come with its LF, and a line break cannot sit inside a string interpolation.
+def after_newline(input: Input, delimiters: List[Frame], open_strings: Int, index: Int, code: Int, start: Source.Position) -> Diag.Outcome[Int]
+  if code == 13 and at(input.codes, input.size, index + 1) != 10
     return Diag.Outcome.Failed(Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp))
   end
-  if state.open_strings > 0
-    return Diag.Outcome.Failed(unterminated(state.delimiters[innermost(state.delimiters, true)].start, start))
+  if open_strings > 0
+    return Diag.Outcome.Failed(unterminated(delimiters[innermost(delimiters, true)].start, start))
   end
-  next = state.index + 1
   if code == 13
-    next += 1
+    return Diag.Outcome.Done(index + 2)
   end
-  if statement_level?(state.delimiters)
-    stop = Source.position(next, state.line + 1, next)
-    tok = token(input.text, "NL", Tokens.Value.NoValue, start, stop)
-    return step(input, state.with(index: next, line: state.line + 1, line_start: next, tokens: state.tokens.push(tok)))
-  end
-  return step(input, state.with(index: next, line: state.line + 1, line_start: next))
+  return Diag.Outcome.Done(index + 1)
 end
 
-# `##` alone on its line starts a doc block; any other `#` is a comment.
-def scan_hash(input: Input, state: State) -> Diag.Outcome[List[Tokens.Token]]
-  codes = input.codes
-  size = input.size
-  if at(codes, size, state.index + 1) == 35 and only_blanks?(codes, state.line_start, state.index)
-    return scan_doc_token(input, state)
-  end
-  return step(input, state.with(index: skip_until(codes, size, state.index, input.line_ends)))
-end
-
-def scan_doc_token(input: Input, state: State) -> Diag.Outcome[List[Tokens.Token]]
-  start = Source.position(state.index, state.line, state.line_start)
-  scan = scan_doc(input, state.index, state.line, state.line_start, [])
+# The DOC token of a scanned `##` block; its span ends where the block ends.
+def doc_token(input: Input, scan: DocScan, first: Int, line: Int, line_start: Int) -> Tokens.Token
   block = Tokens.DocBlock(text: scan.text, next: scan.next)
+  start = Source.position(first, line, line_start)
   stop = Source.position(scan.stop, scan.line, scan.line_start)
-  tok = token(input.text, "DOC", Tokens.Value.Doc(block), start, stop)
-  return step(input, state.with(index: scan.stop, line: scan.line, line_start: scan.line_start, tokens: state.tokens.push(tok)))
+  return token(input.text, "DOC", Tokens.Value.Doc(block), start, stop)
 end
 
-def scan_name(input: Input, state: State, code: Int) -> Diag.Outcome[List[Tokens.Token]]
-  codes = input.codes
-  size = input.size
-  first = state.index
-  index = name_suffix(codes, size, code, skip_in(codes, size, first + 1, input.name_codes))
+# A name or keyword starting at `first`. A keyword's kind is its own text, a
+# name's is "name" or "type-name".
+def scan_name(input: Input, first: Int, code: Int, line: Int, line_start: Int) -> Tokens.Token
+  index = name_suffix(input.codes, input.size, code, skip_in(input.codes, input.size, first + 1, input.name_codes))
   lexeme = input.text.slice(first, index - first)
-  kind = word_kind(input.keywords, lexeme, code)
-  start = Source.position(first, state.line, state.line_start)
-  delimiters = track_block(input.block_openers, state.delimiters, kind, start)
-  tok = Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, Source.position(index, state.line, state.line_start)))
-  return step(input, state.with(index: index, tokens: state.tokens.push(tok), delimiters: delimiters))
+  span = Source.Span(start: Source.position(first, line, line_start), stop: Source.position(index, line, line_start))
+  return Tokens.Token(kind: word_kind(input.keywords, lexeme, code), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span)
 end
 
 # A name may end in `?` or `!`, except `!=` is the operator, and a type name
@@ -236,91 +257,113 @@ def track_block(openers: Set[String], delimiters: List[Frame], kind: String, sta
   return delimiters
 end
 
-def scan_number(input: Input, state: State) -> Diag.Outcome[List[Tokens.Token]]
+# An integer or float starting at `first`. A `_` must sit between two digits.
+def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
   codes = input.codes
   size = input.size
-  first = state.index
   index = skip_in(codes, size, first, input.number_codes)
   is_float = at(codes, size, index) == 46 and input.number_codes.include?(at(codes, size, index + 1))
   if is_float
     index = skip_in(codes, size, index + 1, input.number_codes)
   end
-  start = Source.position(first, state.line, state.line_start)
-  stop = Source.position(index, state.line, state.line_start)
+  start = Source.position(first, line, line_start)
+  stop = Source.position(index, line, line_start)
   if invalid_separator?(codes, first, index)
     return Diag.Outcome.Failed(Diag.fail("LEX-INVALID-NUMBER", "a \"_\" in a number must sit between two digits", span(start, stop), Diag.Help.Hint("write digit groups like 1_000 or 0.000_5; remove the extra \"_\"")))
   end
   digits = input.text.slice(first, index - first).replace("_", "")
   if is_float
-    return step(input, state.with(index: index, tokens: state.tokens.push(token(input.text, "float", Tokens.Value.Real(digits.to_f!), start, stop))))
+    return Diag.Outcome.Done(token(input.text, "float", Tokens.Value.Real(digits.to_f!), start, stop))
   end
-  return step(input, state.with(index: index, tokens: state.tokens.push(token(input.text, "integer", integer_value(digits), start, stop))))
+  return Diag.Outcome.Done(token(input.text, "integer", integer_value(digits), start, stop))
 end
 
-# A string piece starts at `"` or, after an interpolation, at its closing `}`.
-def scan_string_token(input: Input, state: State, code: Int) -> Diag.Outcome[List[Tokens.Token]]
-  start = Source.position(state.index, state.line, state.line_start)
-  if code == 125
-    frame = state.delimiters[state.delimiters.size - 1]
-    inner = state.with(delimiters: pop(state.delimiters), open_strings: state.open_strings - 1)
-    return string_piece(input, inner, StringScan(start: frame.start, first: false, segment: state.index + 1, parts: []), start)
+# Scans one piece of a string literal. It starts after the opening `"`, or
+# after the `}` that ends an interpolation (then the top frame is the `#`
+# frame that holds the literal's start). The loop jumps from one special
+# character to the next, so plain text costs one table lookup per character;
+# only an escape, a `#` or the end of the piece needs a decision.
+def scan_string(input: Input, delimiters: List[Frame], at_index: Int, code: Int, line: Int, line_start: Int) -> Diag.Outcome[StringPiece]
+  codes = input.codes
+  size = input.size
+  first = code == 34
+  string_start = Source.position(at_index, line, line_start)
+  if !first
+    string_start = delimiters[delimiters.size - 1].start
   end
-  return string_piece(input, state, StringScan(start: start, first: true, segment: state.index + 1, parts: []), start)
-end
-
-def string_piece(input: Input, state: State, scan: StringScan, start: Source.Position) -> Diag.Outcome[List[Tokens.Token]]
-  case scan_string(input, state, scan, scan.segment)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(piece) ->
-      tok = token(input.text, piece.kind, Tokens.Value.Text(piece.value), start, Source.position(piece.token_end, state.line, state.line_start))
-      if piece.opens
-        frame = Frame(kind: "#", start: scan.start)
-        return step(input, state.with(index: piece.next, tokens: state.tokens.push(tok), delimiters: state.delimiters.push(frame), open_strings: state.open_strings + 1))
+  parts: List[String] = []
+  index = at_index + 1
+  segment = index
+  while true
+    index = skip_until(codes, size, index, input.string_stops)
+    if index == size or newline?(codes[index])
+      return Diag.Outcome.Failed(unterminated(string_start, Source.position(index, line, line_start)))
+    end
+    if codes[index] == 34
+      kind = "interp-end"
+      if first
+        kind = "string"
       end
-      return step(input, state.with(index: piece.next, tokens: state.tokens.push(tok)))
+      value = parts.push(input.text.slice(segment, index - segment)).join("")
+      return Diag.Outcome.Done(StringPiece(kind: kind, value: value, token_end: index + 1, next: index + 1, opens: false, start: string_start))
+    elsif codes[index] == 35 and at(codes, size, index + 1) == 123
+      kind = "interp-middle"
+      if first
+        kind = "interp-start"
+      end
+      value = parts.push(input.text.slice(segment, index - segment)).join("")
+      return Diag.Outcome.Done(StringPiece(kind: kind, value: value, token_end: index, next: index + 2, opens: true, start: string_start))
+    elsif codes[index] == 92
+      decoded = ""
+      if index + 1 < size
+        decoded = decoded_escape(codes[index + 1])
+      end
+      if decoded == ""
+        return Diag.Outcome.Failed(bad_escape(input, index, line, line_start))
+      end
+      parts = parts.push(input.text.slice(segment, index - segment)).push(decoded)
+      index += 2
+      segment = index
+    else
+      index += 1
+    end
   end
+  return Diag.Outcome.Failed(unterminated(string_start, Source.position(index, line, line_start)))
 end
 
-def scan_operator(input: Input, state: State, code: Int) -> Diag.Outcome[List[Tokens.Token]]
-  start = Source.position(state.index, state.line, state.line_start)
-  lexeme = operator_lexeme(input, state.index, code)
+# The diagnostic for the `\` at `index`: it ends the text, or the next
+# character is not an escape. An escaped line break ends on the next line.
+def bad_escape(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Diagnostic
+  escape_start = Source.position(index, line, line_start)
+  if index + 1 == input.size
+    return Diag.fail("LEX-INVALID-ESCAPE", "incomplete string escape", span(escape_start, Source.position(index + 1, line, line_start)), Diag.Help.NoHelp)
+  end
+  stop = Source.position(index + 2, line, line_start)
+  if input.codes[index + 1] == 10
+    stop = Source.Position(offset: index + 2, line: line + 1, column: 1)
+  end
+  return Diag.fail("LEX-INVALID-ESCAPE", "unsupported escape \\" + input.text.slice(index + 1, 1), span(escape_start, stop), Diag.Help.NoHelp)
+end
+
+# The token of a string piece. A string cannot span lines, so the line is the
+# one the piece started on.
+def piece_token(input: Input, piece: StringPiece, first: Int, line: Int, line_start: Int) -> Tokens.Token
+  start = Source.position(first, line, line_start)
+  stop = Source.position(piece.token_end, line, line_start)
+  return token(input.text, piece.kind, Tokens.Value.Text(piece.value), start, stop)
+end
+
+# An operator or punctuation token that is not a bracket; other characters
+# are `LEX-UNEXPECTED-CHAR`.
+def scan_operator(input: Input, index: Int, code: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
+  start = Source.position(index, line, line_start)
+  lexeme = operator_lexeme(input, index, code)
   kind = input.operators.get(lexeme, "")
   if kind == ""
-    return Diag.Outcome.Failed(unexpected_character(code, lexeme, start, Source.position(state.index + 1, state.line, state.line_start)))
+    return Diag.Outcome.Failed(unexpected_character(code, lexeme, start, Source.position(index + 1, line, line_start)))
   end
-  stop = Source.position(state.index + lexeme.length, state.line, state.line_start)
-  tok = Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop))
-  return step(input, state.with(index: stop.offset, tokens: state.tokens.push(tok)))
-end
-
-# `(`, `[` and `{` are always one character; each opens a frame that its
-# closing character must match.
-def scan_opening(input: Input, state: State) -> Diag.Outcome[List[Tokens.Token]]
-  lexeme = input.text.slice(state.index, 1)
-  start = Source.position(state.index, state.line, state.line_start)
-  stop = Source.position(state.index + 1, state.line, state.line_start)
-  tok = Tokens.Token(kind: input.operators.get(lexeme, ""), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop))
-  return step(input, state.with(index: stop.offset, tokens: state.tokens.push(tok), delimiters: state.delimiters.push(Frame(kind: lexeme, start: start))))
-end
-
-# `}` also ends an interpolation, which is a string piece, not a delimiter.
-def scan_closing(input: Input, state: State, code: Int) -> Diag.Outcome[List[Tokens.Token]]
-  delimiters = state.delimiters
-  if code == 125 and in_interpolation?(delimiters)
-    return scan_string_token(input, state, code)
-  end
-  lexeme = input.text.slice(state.index, 1)
-  start = Source.position(state.index, state.line, state.line_start)
-  stop = Source.position(state.index + 1, state.line, state.line_start)
-  if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != expected_opener(code)
-    help = Diag.Help.NoHelp
-    if code == 125 and statement_level?(delimiters)
-      help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
-    end
-    return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
-  end
-  tok = Tokens.Token(kind: input.operators.get(lexeme, ""), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop))
-  return step(input, state.with(index: stop.offset, tokens: state.tokens.push(tok), delimiters: pop(delimiters)))
+  stop = Source.position(index + lexeme.length, line, line_start)
+  return Diag.Outcome.Done(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
 end
 
 # The longest operator at `index`: `...`, then two characters, then one.
@@ -337,12 +380,102 @@ def operator_lexeme(input: Input, index: Int, code: Int) -> String
   return input.text.slice(index, 1)
 end
 
+# `(`, `[` and `{` are always one character; the caller opens a frame that the
+# matching closing character must find on top.
+def scan_opening(input: Input, index: Int, line: Int, line_start: Int) -> Tokens.Token
+  lexeme = input.text.slice(index, 1)
+  span = Source.Span(start: Source.position(index, line, line_start), stop: Source.position(index + 1, line, line_start))
+  return Tokens.Token(kind: input.operators.get(lexeme, ""), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span)
+end
+
+# `)`, `]` or `}` must close the frame on top; otherwise `LEX-UNMATCHED-DELIMITER`.
+# (A `}` that ends an interpolation never gets here: it is a string piece.)
+def scan_closing(input: Input, delimiters: List[Frame], index: Int, code: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
+  lexeme = input.text.slice(index, 1)
+  start = Source.position(index, line, line_start)
+  stop = Source.position(index + 1, line, line_start)
+  if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != expected_opener(code)
+    help = Diag.Help.NoHelp
+    if code == 125 and statement_level?(delimiters)
+      help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
+    end
+    return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
+  end
+  return Diag.Outcome.Done(Tokens.Token(kind: input.operators.get(lexeme, ""), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
+end
+
+# A `##` doc block starting at `from`: one line per `##`, and the block goes on
+# while the next line (after blanks) starts with `##` again. `next` tells the
+# parser what follows the block (blank line, comment, code or end of file).
+def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
+  codes = input.codes
+  size = input.size
+  lines: List[String] = []
+  index = from
+  current_line = line
+  current_start = line_start
+  collecting = true
+  while collecting
+    index += 2
+    if index < size and codes[index] == 32
+      index += 1
+    end
+    text_start = index
+    index = skip_until(codes, size, index, input.line_ends)
+    lines = lines.push(input.text.slice(text_start, index - text_start))
+    following = next_line_start(codes, size, index)
+    if following >= 0 and doc_marker?(codes, size, skip_blanks(codes, size, following))
+      current_line += 1
+      current_start = following
+      index = skip_blanks(codes, size, following)
+    else
+      collecting = false
+    end
+  end
+  return DocScan(stop: index, line: current_line, line_start: current_start, text: lines.join("\n"), next: line_after_doc(codes, size, index))
+end
+
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool
   return tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
 end
 
 def in_interpolation?(delimiters: List[Frame]) -> Bool
   return delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"
+end
+
+def statement_level?(delimiters: List[Frame]) -> Bool
+  return delimiters.size == 0 or delimiters[delimiters.size - 1].kind == "kw"
+end
+
+def innermost(delimiters: List[Frame], wanted_string: Bool) -> Int
+  index = delimiters.size - 1
+  while index >= 0
+    interpolation = delimiters[index].kind == "#"
+    if wanted_string
+      if interpolation
+        return index
+      end
+    elsif delimiters[index].kind != "kw"
+      return index
+    end
+    index -= 1
+  end
+  return -1
+end
+
+def pop(delimiters: List[Frame]) -> List[Frame]
+  return delimiters.take(delimiters.size - 1)
+end
+
+def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
+  if frame.kind == "#"
+    return unterminated(frame.start, here)
+  end
+  help = Diag.Help.NoHelp
+  if frame.kind == "{"
+    help = Diag.Help.Hint("add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no braces and end with \"end\"")
+  end
+  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help)
 end
 
 def code_set(characters: String) -> Set[Int]
@@ -495,27 +628,6 @@ def line_after_doc(codes: List[Int], size: Int, index: Int) -> String
   return "code"
 end
 
-# One `##` line per call; a following `##` line (after blanks) continues the
-# block. `from` is the offset of the `##`.
-def scan_doc(input: Input, from: Int, line: Int, line_start: Int, lines: List[String]) -> DocScan
-  codes = input.codes
-  size = input.size
-  index = from + 2
-  if index < size and codes[index] == 32
-    index += 1
-  end
-  stop = skip_until(codes, size, index, input.line_ends)
-  collected = lines.push(input.text.slice(index, stop - index))
-  following = next_line_start(codes, size, stop)
-  if following >= 0
-    marker = skip_blanks(codes, size, following)
-    if doc_marker?(codes, size, marker)
-      return scan_doc(input, marker, line + 1, following, collected)
-    end
-  end
-  return DocScan(stop: stop, line: line, line_start: line_start, text: collected.join("\n"), next: line_after_doc(codes, size, stop))
-end
-
 def span(start: Source.Position, stop: Source.Position) -> Source.Span
   return Source.Span(start: start, stop: stop)
 end
@@ -538,55 +650,6 @@ def decoded_escape(code: Int) -> String
     116 -> return "\t"
     _ -> return ""
   end
-end
-
-# Scans from `from` to the end of one piece: the closing quote, or the `#{` of
-# an interpolation. Plain characters are skipped in one run; only an escape,
-# a `#` or the end of the piece needs a decision.
-def scan_string(input: Input, state: State, scan: StringScan, from: Int) -> Diag.Outcome[StringPiece]
-  codes = input.codes
-  index = skip_until(codes, input.size, from, input.string_stops)
-  if index == input.size or newline?(codes[index])
-    return Diag.Outcome.Failed(unterminated(scan.start, Source.position(index, state.line, state.line_start)))
-  end
-  code = codes[index]
-  if code == 34
-    kind = "interp-end"
-    if scan.first
-      kind = "string"
-    end
-    value = scan.parts.push(input.text.slice(scan.segment, index - scan.segment)).join("")
-    return Diag.Outcome.Done(StringPiece(kind: kind, value: value, token_end: index + 1, next: index + 1, opens: false))
-  elsif code == 35
-    if at(codes, input.size, index + 1) == 123
-      kind = "interp-middle"
-      if scan.first
-        kind = "interp-start"
-      end
-      value = scan.parts.push(input.text.slice(scan.segment, index - scan.segment)).join("")
-      return Diag.Outcome.Done(StringPiece(kind: kind, value: value, token_end: index, next: index + 2, opens: true))
-    end
-    return scan_string(input, state, scan, index + 1)
-  end
-  return scan_escape(input, state, scan, index)
-end
-
-# The `\` at `index`: copy the text before it, then the decoded character.
-def scan_escape(input: Input, state: State, scan: StringScan, index: Int) -> Diag.Outcome[StringPiece]
-  escape_start = Source.position(index, state.line, state.line_start)
-  if index + 1 == input.size
-    return Diag.Outcome.Failed(Diag.fail("LEX-INVALID-ESCAPE", "incomplete string escape", span(escape_start, Source.position(index + 1, state.line, state.line_start)), Diag.Help.NoHelp))
-  end
-  decoded = decoded_escape(input.codes[index + 1])
-  if decoded == ""
-    stop = Source.position(index + 2, state.line, state.line_start)
-    if input.codes[index + 1] == 10
-      stop = Source.Position(offset: index + 2, line: state.line + 1, column: 1)
-    end
-    return Diag.Outcome.Failed(Diag.fail("LEX-INVALID-ESCAPE", "unsupported escape \\" + input.text.slice(index + 1, 1), span(escape_start, stop), Diag.Help.NoHelp))
-  end
-  parts = scan.parts.push(input.text.slice(scan.segment, index - scan.segment)).push(decoded)
-  return scan_string(input, state, scan.with(segment: index + 2, parts: parts), index + 2)
 end
 
 def invalid_separator?(codes: List[Int], from: Int, stop: Int) -> Bool
@@ -620,30 +683,6 @@ def integer_value(digits: String) -> Tokens.Value
     return Tokens.Value.Whole(parsed.unwrap!)
   end
   return Tokens.Value.Huge(strip_zeros(digits))
-end
-
-def statement_level?(delimiters: List[Frame]) -> Bool
-  return delimiters.size == 0 or delimiters[delimiters.size - 1].kind == "kw"
-end
-
-def innermost(delimiters: List[Frame], wanted_string: Bool) -> Int
-  index = delimiters.size - 1
-  while index >= 0
-    interpolation = delimiters[index].kind == "#"
-    if wanted_string
-      if interpolation
-        return index
-      end
-    elsif delimiters[index].kind != "kw"
-      return index
-    end
-    index -= 1
-  end
-  return -1
-end
-
-def pop(delimiters: List[Frame]) -> List[Frame]
-  return delimiters.take(delimiters.size - 1)
 end
 
 def unexpected_character(code: Int, character: String, start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
