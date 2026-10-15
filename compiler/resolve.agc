@@ -82,7 +82,6 @@ export def constant_identity(cx: Context, name: String) -> String
   return ""
 end
 
-## The name in the linked program of a declaration of the file.
 ## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not
 ## exist.
 export def unknown_constant?(cx: Context, name: String) -> Bool
@@ -118,6 +117,7 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
   return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)
 end
 
+## The name in the linked program of a declaration of the file.
 export def identity(cx: Context, name: String) -> String
   return cx.me.prefix + name
 end

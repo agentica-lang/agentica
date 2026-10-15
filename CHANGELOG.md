@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`CONFIG.with()` help.** `.with()` with no fields, on a constant, now says that `with` needs the fields to change (for a struct) or that it copies structs (for any other type), instead of listing the type's methods or giving no help.
 - **Breaking:** invalid UTF-8 in a source file is now an error. The front end reports `LEX-INVALID-UTF8` at the first byte of the first sequence that does not decode (overlong forms, surrogates, code points above U+10FFFF and truncated sequences count), in the root file or in an imported file. The Racket front end used to replace such bytes with U+FFFD and go on. A source file has no size limit in either front end, so a file over 1 MiB compiles.
 - **`FileInfo` has three more fields**, after `modified_seconds`: `mode` (the permission bits with setuid, setgid and sticky, so `rw-------` is 384), `user_id` and `group_id`. `File.stat` fills them, and `IO.inspect` of a `FileInfo` shows them. The error for a bad `File.open` mode now lists `create_private` (#288).
 - **Breaking:** child processes no longer get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE`. Every `Process.spawn*` drops both names from the environment it passes on (§28.5, done early so that the BDD driver port keeps the runner clear of them), so a program that passed them to a child on purpose must set them again with another name; `System.env` still shows them to the program (#288).

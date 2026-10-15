@@ -350,7 +350,8 @@ def output_text(output: String, ai: Bool) -> String
   elsif ai
     return " | output #{output.inspect}"
   end
-  return "\n" + output.split("\n").map do |line| "  #{line}" end.join("\n")
+  indented = output.split("\n").map do |line| "  #{line}" end.join("\n")
+  return "\n#{indented}"
 end
 
 def summary(problem: Error, ai: Bool) -> String
@@ -371,7 +372,8 @@ def stack_text(problem: Error, ai: Bool) -> String
   elsif ai
     return " | stack #{lines.join("; ")}"
   end
-  return "\n  stack, innermost first:\n" + lines.map do |line| "    #{line}" end.join("\n")
+  frames = lines.map do |line| "    #{line}" end.join("\n")
+  return "\n  stack, innermost first:\n#{frames}"
 end
 
 def stack_lines(root: Json) -> List[String]
