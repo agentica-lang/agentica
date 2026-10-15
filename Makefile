@@ -3,18 +3,17 @@ JOBS ?= $(shell nproc 2>/dev/null || echo 4)
 TESTS ?= tests/
 unexport AGENTICA_VM_TRACE AGENTICA_VM_TRACE_FILE AGENTICA_FLUSH_TIMEOUT_MS
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
-EXE_INPUTS := $(wildcard src/*.rkt stdlib/MODULES stdlib/*.agc stdlib/*/*.agc) VERSION
-BDD_DRIVER_INPUTS := $(wildcard compiler/*.agc src/*.rkt)
-CLI_INPUTS := $(BDD_DRIVER_INPUTS) VERSION
 
-# The single binary (docs/future/35-self-hosting.md, 35.6) is built beside dist/agentica-vm; Linux only for now. The tests
-# that need it (the whole suite, or tests/test_single_binary.py) build it first.
-ifeq ($(shell uname -s),Linux)
-AGC_NEXT := dist/agentica-next
-endif
-NEXT_TESTS := tests tests/test_single_binary.py
+# `make` builds the product, dist/agentica: the VM with the front end inside (docs/future/35-self-hosting.md, 35.3 and
+# 35.6). It needs no Racket: the bootstrap below starts from bootstrap/stage0.agcb. Linux only for now (the front end and
+# the std/ sources are linked in with .incbin).
+.DEFAULT_GOAL := all
 
-.PHONY: build build-tests bdd-driver cli test test-slow test-rkt test-py test-cli test-exe test-ci test-distribution exe clean test-bdd smoke goldens frontend-freeze frontend-snapshot bench eval-references version vm vm-test vm-latency vm-fuzz stage1 stage2 stage3 fixed-point agentica-next vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica build build-tests test test-slow test-rkt test-py test-cli test-distribution clean test-bdd smoke goldens frontend-freeze frontend-snapshot bench eval-references version vm-test vm-latency vm-fuzz stage1 stage2 stage3 stage0 fixed-point racket-fixed-point vm-gc-stress vm-trace-off vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-unicode vm-unicode-check vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+
+all: dist/agentica
+
+agentica: dist/agentica
 
 # A recipe that fails leaves no half-written target for the next make to take as up to date. The stages below also remove
 # their output before they write it, so a compiler that exits 0 without writing cannot pass for the previous file.
@@ -41,7 +40,6 @@ TESTS_NORM = $(patsubst %/,%,$(patsubst ./%,%,$(TESTS)))
 PY_FILES = $(filter %.py,$(TESTS_NORM))
 # Modules that only run when named (make vm-latency): a directory in TESTS does not pick them up
 PY_ALONE = tests/test_vm_latency.py
-NEXT_PREREQ = $(if $(filter $(NEXT_TESTS),$(TESTS_NORM)),$(AGC_NEXT))
 PY_TESTS = $(sort $(PY_FILES) $(filter-out $(PY_ALONE),$(foreach t,$(filter-out %.py,$(TESTS_NORM)),$(wildcard $(t)/test_*.py))))
 # A .py path outside tests/test_<area>.py would build a wrong module name below
 PY_BAD = $(filter-out tests/test_%.py,$(PY_FILES)) $(foreach f,$(filter tests/test_%.py,$(PY_FILES)),$(if $(findstring /,$(f:tests/%=%)),$(f)))
@@ -52,14 +50,14 @@ RKT_FLAGS ?=
 
 # -k: the unittest run still happens when the rackunit run fails, so one run shows every failure.
 # AGENTICA_TEST_SLOW= keeps a stray flag in the environment from turning this into a slow run.
-test: build vm bdd-driver cli $(NEXT_PREREQ)
+test: build dist/agentica
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py AGENTICA_TEST_SLOW=
 
 # The slow tier: the (module+ slow ...) cases of the .rkt files and the @slow cases of the .py files
 # (tests/agentica_test.py, AGENTICA_TEST_SLOW=1). CI runs it after make test; a local run does not.
 # A .rkt file without a slow submodule is skipped; with the flag a .py file runs only its @slow cases.
-test-slow: build vm bdd-driver cli $(NEXT_PREREQ)
+test-slow: build dist/agentica
 	@: $(PY_CHECK)
 	@$(MAKE) --no-print-directory -k test-rkt test-py RKT_FLAGS="--submodule slow --no-run-if-absent" AGENTICA_TEST_SLOW=1
 
@@ -98,55 +96,29 @@ py-test/%: FORCE
 	  exit $$status; \
 	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
 
-# The BDD driver of `agentica test` (compiler/bdd.agc), compiled once here by the Racket front end and run by the VM; it
-# sits next to the VM and the executable (docs/future/35-self-hosting.md, step 7b). Racket compiles `compiler/` to the
-# same bytes every time, so the file only changes with its inputs.
-dist/agentica-bdd-driver.agcb: $(BDD_DRIVER_INPUTS) | build
-	mkdir -p dist
-	racket src/main.rkt compile compiler/bdd.agc -o $@
-
-bdd-driver: dist/agentica-bdd-driver.agcb
-
-# The command line in Agentica (compiler/cli_main.agc, docs/future/35-self-hosting.md, step 8a): not the default yet.
-# tests/agentica-agcb runs it on the VM like the `agentica` command; make test-cli runs the CLI tests through it.
-dist/agentica-cli.agcb: $(CLI_INPUTS) | build
-	mkdir -p dist
-	racket src/main.rkt compile compiler/cli_main.agc -o $@
-
-cli: dist/agentica-cli.agcb
-
-# The tests that run the product command line, run on the Agentica one (the same exit codes, stdout and stderr): as an
-# ordinary program on the VM (tests/agentica-agcb), and as the single binary, which cannot start `agentica test` yet.
+# The tests that run the product command line, on dist/agentica alone (make test runs them too, with the rest): the
+# options, the diagnostics, the programs, `agentica test`, `agentica run`.
 CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
-  tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py
-test-cli: build vm bdd-driver cli $(AGC_NEXT)
-	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/tests/agentica-agcb" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
-	$(if $(AGC_NEXT),AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(AGC_NEXT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=)
-
-dist/agentica: $(EXE_INPUTS) | build vm bdd-driver
-	mkdir -p dist
-	$(RACO) exe -o dist/agentica src/main.rkt
-
-exe: dist/agentica
+  tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
+test-cli: dist/agentica
+	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/dist/agentica" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
-# dist/agentica is timed only when present; rebuild it with make exe first, or pass --runners vm,python
-bench: build vm
+bench: dist/agentica
 	python3 benchmarks/run.py $(BENCH_ARGS)
 
 eval-references:
 	python3 tests/eval/run.py --check-references --jobs 8
 
 # Task wake latency next to busy tasks (docs/vm/10-io-scheduler.md 10.2.1), alone so it has the CPU to itself
-vm-latency: build vm
+vm-latency: dist/agentica
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
 
-test-bdd: exe
+test-bdd: dist/agentica
 	dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 
-# Example smoke runs on racket src/main.rkt and dist/agentica, in parallel (tests/smoke.sh).
-# dist/agentica is rebuilt when a file in src/ or stdlib/ is newer than it.
-smoke: build vm dist/agentica
+# Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
+smoke: dist/agentica
 	tests/smoke.sh
 
 # ci.yml, sweep.yml and the release tests run their checks as the targets below, so the same command works locally.
@@ -155,21 +127,13 @@ smoke: build vm dist/agentica
 build-tests: build
 	$(RACO) make -j $(JOBS) tests/*.rkt
 
-# The process and module tests on the built executable (tests/test-ci.sh exe)
-test-exe: build vm dist/agentica
-	tests/test-ci.sh exe
-
-# make test with JOBS=6 and test-exe running beside it (tests/test-ci.sh)
-test-ci: build vm dist/agentica
-	+MAKE='$(MAKE)' tests/test-ci.sh
-
-# The built executable, copied away from the checkout with the VM beside it, still imports its std/ modules
+# The built binary, copied away from the checkout, still imports its std/ modules
 test-distribution: dist/agentica
 	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/dist/agentica $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 # Without FIXTURES it also rewrites the front-end goldens of tests/fixtures/frontend/ from the Racket stages
-goldens: build vm
+goldens: build dist/agentica
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.test_vm_stack
 	test -n "$(FIXTURES)" || racket tests/frontend-lexer-common.rkt
@@ -183,7 +147,7 @@ goldens: build vm
 # the Racket stages (docs/future/35-self-hosting.md 35.10, phase 3). Slow (about five minutes); one stage or some:
 #   make frontend-freeze FREEZE_STAGES="lexer parser"
 FREEZE_STAGES ?= lexer parser modules check lower bytecode catalog
-frontend-freeze: build vm
+frontend-freeze: build dist/agentica
 	for stage in $(FREEZE_STAGES); do racket tests/frontend-$$stage-freeze.rkt || exit 1; done
 
 # Takes the snapshot of examples/, stdlib/, tests/fixtures/, compiler/, the cases of tests/checker-test.rkt and the site
@@ -193,7 +157,7 @@ frontend-snapshot: build
 	racket tests/frontend-freeze-corpus.rkt
 
 # make vm-golden-check FIXTURES="name ..." runs the golden check of CI on only those fixtures
-vm-golden-check: build vm
+vm-golden-check: dist/agentica
 	AGENTICA_FIXTURES="$(FIXTURES)" $(PYTHON) -m tests.vm_diff_support check
 
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
@@ -227,22 +191,22 @@ site-serve: site-sass
 	hugo server --source site
 
 # The C VM (docs/vm/11-build-ci-supply-chain.md section 11). On Linux libgc and OpenSSL are the system ones by default.
-# make vm                 dist/agentica-vm
+# make                    dist/agentica, the binary (the bootstrap below builds it)
 # make vm-test            C tests in vm/tests/, run in parallel
-# make vm SANITIZE=1      clang with ASan and UBSan, no libgc
+# make SANITIZE=1         clang with ASan and UBSan, no libgc: the same binary, built in that mode
 # Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
-# make vm TRACE=0         compile out the AGENTICA_VM_TRACE trace points
+# make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-unicode         regenerate vm/unicode_data.c from Racket
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
-# make vm AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
+# make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
 #                         non-Linux hosts do); pass it to every make command or export it. The Linux default AGENTICA_GC=system links the system
 #                         libgc 8.2 or newer found by pkg-config (Debian: libgc-dev pkg-config) and checks it before any vm/*.c compile.
-# make vm AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
+# make AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
 #                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
@@ -262,7 +226,6 @@ VM_PIC := -fPIE
 VM_PIE := -pie
 VM_HARDEN_LDFLAGS := $(VM_PIE) -Wl,-z,relro,-z,now
 VM_LIBS := -lpthread -lm
-VM_ENTRY :=
 ifeq ($(OS),Windows_NT)
 ifeq ($(origin CC),default)
 CC := gcc
@@ -272,7 +235,6 @@ VM_PIC :=
 VM_PIE :=
 VM_HARDEN_LDFLAGS := -Wl,--dynamicbase,--nxcompat,--high-entropy-va
 VM_LIBS :=
-VM_ENTRY := -municode
 else ifeq ($(shell uname -s),Darwin)
 VM_PIE :=
 VM_HARDEN_LDFLAGS :=
@@ -511,69 +473,107 @@ $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
 VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)
 
-dist/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_OBJ)/launch.o $(VM_LINK_LIBS) $(VM_STAMP)
-	@mkdir -p dist
-	$(VM_LINK) $(VM_ENTRY)
-
-vm: dist/agentica-vm$(EXE)
-
-# The single binary and its bootstrap (docs/future/35-self-hosting.md, 35.3 and 35.6; docs/vm/08-loader-and-cli.md).
-# The front end is compiler/front_end.agc. Each stage is the .agcb of the front end, in build/stage/:
-#   stage1  compiled by the Racket compiler (src/)
-#   stage2  compiled by stage1, run on dist/agentica-vm with the std/ sources from stdlib/
-#   stage3  compiled by stage2 in the same way
-# The fixed point is stage2 == stage3, byte for byte, and stage1 == stage2 (Racket and the Agentica compiler agree, while
-# Racket exists). stage2 is the front end that dist/agentica-next carries; the binary then compiles it once more with its
-# embedded std/ sources, and that must be stage2 as well.
-# make fixed-point        build the stages and the binary, and check all of the above
-# make agentica-next      dist/agentica-next only (it needs stage1 and stage2)
+# The binary and its bootstrap (docs/future/35-self-hosting.md, 35.3 and 35.6; docs/vm/08-loader-and-cli.md). The front end is
+# compiler/front_end.agc, a program that the binary carries as data. Each stage is its .agcb, in build/stage/. The seed is
+# bootstrap/stage0.agcb, a stage2 that was checked in (make stage0 refreshes it):
+#   first binary  linked with stage0 and the std/ sources of this checkout (build/vm/<mode>/bootstrap/agentica)
+#   stage1  compiled by the first binary
+#   stage2  compiled by the first binary with stage1 as its front end (--front-end)
+#   stage3  compiled by the first binary with stage2 as its front end; it must be stage2, byte for byte
+#   dist/agentica  linked with stage2: the product
+# make fixed-point        the above, then dist/agentica compiles the front end once more; that must be stage2 as well
+# make stage0             refresh bootstrap/stage0.agcb from stage2, after the fixed point holds (references/ci.md)
+# make racket-fixed-point while Racket exists: its compile of compiler/ must be stage2 too
+# The stages are the same bytes in every mode (release, SANITIZE=1, ...): a mode builds its own first binary, and runs the stages
+# again only when one of their inputs changed. The GC stress build is the exception: it links the stage2 that the release mode
+# built, because compiling under it would collect every 64 allocations.
 STAGE_DIR := build/stage
 FRONT_END_SRC := compiler/front_end.agc
 STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
 STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
-# The VM runs a stage as: PROGRAM --version V --stdlib DIR -- WORDS (compiler/front_end_inputs.agc)
-STAGE_RUN = dist/agentica-vm$(EXE) -- $< --version $(AGC_VERSION) --stdlib stdlib -- compile $(FRONT_END_SRC) -o $@
+STAGE0 := bootstrap/stage0.agcb
+BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
+# The compiler that makes stage1: the first binary. make stage0 STAGE1_COMPILER=... names another one when stage0 cannot
+# compile the current compiler/ (a binary built from the parent commit, or "racket src/main.rkt" while Racket exists).
+STAGE1_COMPILER ?= $(BOOT)
+STAGE1_NEEDS := $(if $(filter $(BOOT),$(STAGE1_COMPILER)),$(BOOT))
 
-$(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(wildcard src/*.rkt) | build
+ifeq ($(GC_STRESS),1)
+$(STAGE_DIR)/stage2.agcb:
+	@echo "$@ is missing: the GC stress build links the front end of the release build; run make first" >&2; exit 1
+else
+$(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
 	@mkdir -p $(STAGE_DIR)
 	rm -f $@
-	racket src/main.rkt compile $(FRONT_END_SRC) -o $@
+	$(STAGE1_COMPILER) compile $(FRONT_END_SRC) -o $@ || { \
+	  echo "$(STAGE1_COMPILER) cannot compile $(FRONT_END_SRC). If it is $(STAGE0), then $(STAGE0) is too old for this change" >&2; \
+	  echo "(or the VM no longer loads it): refresh it with make stage0 STAGE1_COMPILER=..., as references/ci.md says" >&2; exit 1; }
 
-$(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) dist/agentica-vm$(EXE)
+$(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
-	$(STAGE_RUN)
+	$(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
 
-$(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) dist/agentica-vm$(EXE)
+$(STAGE_DIR)/stage3.agcb: $(STAGE_DIR)/stage2.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
-	$(STAGE_RUN)
+	$(BOOT) --front-end $< compile $(FRONT_END_SRC) -o $@
+	cmp $(STAGE_DIR)/stage2.agcb $@ || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
+endif
 
 stage1: $(STAGE_DIR)/stage1.agcb
 stage2: $(STAGE_DIR)/stage2.agcb
 stage3: $(STAGE_DIR)/stage3.agcb
 
-# The std/ sources and the front end go into the binary through a generated assembly file with .incbin (not through ccache,
+# The front end and the std/ sources go into the binary through a generated assembly file with .incbin (not through ccache,
 # which cannot see the files that .incbin reads). Linux and ELF only.
 $(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(STD_FILES)
 	@mkdir -p $(VM_BUILD)
 	sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES > $@
 
+$(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES)
+	@mkdir -p $(VM_BUILD)/bootstrap
+	sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
+
 $(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(STD_FILES)
 	@mkdir -p $(VM_OBJ)
 	$(VM_CC) -x assembler -c $< -o $@
 
-dist/agentica-next: $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o $(VM_OBJ)/embedded.o $(VM_LINK_LIBS) $(VM_STAMP)
+$(VM_OBJ)/embedded-stage0.o: $(VM_BUILD)/bootstrap/embedded.s $(VM_OBJ_STAMP) $(STAGE0) $(STD_FILES)
+	@mkdir -p $(VM_OBJ)
+	$(VM_CC) -x assembler -c $< -o $@
+
+AGENTICA_OBJS = $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o $(VM_LINK_LIBS) $(VM_STAMP)
+
+$(BOOT): $(AGENTICA_OBJS) $(VM_OBJ)/embedded-stage0.o
+	@mkdir -p $(dir $@)
+	$(VM_LINK)
+
+# stage3 is only checked, not linked: order-only, so a stage3 that was rebuilt to the same bytes relinks nothing.
+dist/agentica$(EXE): $(AGENTICA_OBJS) $(VM_OBJ)/embedded.o | $(STAGE_DIR)/stage3.agcb
 	@mkdir -p dist
 	$(VM_LINK)
 
-agentica-next: dist/agentica-next
+# The same binary in the build folder of the mode, for a mode that must not replace dist/agentica (make vm-gc-stress).
+$(VM_BUILD)/agentica$(EXE): $(AGENTICA_OBJS) $(VM_OBJ)/embedded.o
+	$(VM_LINK)
 
-fixed-point: $(STAGE_DIR)/stage1.agcb $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage3.agcb dist/agentica-next
-	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage3.agcb || { echo "fixed point: stage2 and stage3 differ" >&2; exit 1; }
-	cmp $(STAGE_DIR)/stage1.agcb $(STAGE_DIR)/stage2.agcb || { echo "fixed point: Racket's stage1 and stage2 differ" >&2; exit 1; }
+fixed-point: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 	rm -f $(STAGE_DIR)/stage4.agcb
-	dist/agentica-next compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
-	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica-next compiles another front end" >&2; exit 1; }
+	dist/agentica$(EXE) compile $(FRONT_END_SRC) -o $(STAGE_DIR)/stage4.agcb
+	cmp $(STAGE_DIR)/stage2.agcb $(STAGE_DIR)/stage4.agcb || { echo "fixed point: dist/agentica compiles another front end" >&2; exit 1; }
+
+# While Racket exists, its stage1 must be stage2 as well: the two front ends emit the same bytes (a slow, optional check).
+$(STAGE_DIR)/stage1-racket.agcb: $(STAGE_INPUTS) $(wildcard src/*.rkt) | build
+	@mkdir -p $(STAGE_DIR)
+	rm -f $@
+	racket src/main.rkt compile $(FRONT_END_SRC) -o $@
+
+racket-fixed-point: $(STAGE_DIR)/stage1-racket.agcb $(STAGE_DIR)/stage2.agcb
+	cmp $(STAGE_DIR)/stage1-racket.agcb $(STAGE_DIR)/stage2.agcb || { echo "Racket's stage1 and stage2 differ" >&2; exit 1; }
+
+# A new stage0 is the stage2 of a checkout where the fixed point holds. The next make rebuilds everything from it.
+stage0: $(STAGE_DIR)/stage3.agcb
+	cp $(STAGE_DIR)/stage2.agcb $(STAGE0)
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 .SECONDARY: $(patsubst vm/tests/%.c,$(VM_OBJ)/tests/%.o,$(wildcard vm/tests/*_test.c))
@@ -587,61 +587,60 @@ vm-test: $(VM_TESTS)
 $(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
-# The corpus is every fixture compiled by the CLI, JOBS at a time
+# The corpus is every fixture compiled by the binary, JOBS at a time
 FUZZ_CORPUS = printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
-  'racket src/main.rkt compile "$$1" -o "$(VM_BUILD)/corpus/$$(basename "$$1" .agc).agcb"' sh {}
+  'dist/agentica$(EXE) compile "$$1" -o "$(VM_BUILD)/corpus/$$(basename "$$1" .agc).agcb"' sh {}
 
-vm-fuzz: build $(VM_BUILD)/agentica-vm-fuzz$(EXE)
+# The fuzzer links the VM objects and no front end: it is an internal artifact of build/, never shipped.
+vm-fuzz: dist/agentica$(EXE) $(VM_BUILD)/agentica-vm-fuzz$(EXE)
 	@mkdir -p $(VM_BUILD)/corpus
 	$(FUZZ_CORPUS)
 	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
 
-$(VM_BUILD)/agentica-vm$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/main.o $(VM_OBJ)/launch.o $(VM_LINK_LIBS) $(VM_STAMP)
-	$(VM_LINK) $(VM_ENTRY)
-
-vm-gc-stress: build
-	$(MAKE) build/vm/gcstress/agentica-vm$(EXE) vm-test GC_STRESS=1 SANITIZE=0
-	AGENTICA_VM_BINARY=build/vm/gcstress/agentica-vm$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
+# The golden tests compile with dist/agentica and run on the GC stress binary (AGENTICA_VM_BINARY): the front end does not
+# run under the stress. The binary links the stage2 that dist/agentica was built from.
+vm-gc-stress: dist/agentica$(EXE)
+	$(MAKE) build/vm/gcstress/agentica$(EXE) vm-test GC_STRESS=1 SANITIZE=0
+	AGENTICA_VM_BINARY=build/vm/gcstress/agentica$(EXE) AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=$${AGENTICA_SWEEP:-sampled} \
 	  $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # Build the VM and its C tests with the trace points compiled out, and check that --version says so
 vm-trace-off:
-	$(MAKE) -j$(JOBS) vm vm-test TRACE=0
-	dist/agentica-vm$(EXE) --version | grep -q 'trace off'
+	$(MAKE) -j$(JOBS) dist/agentica$(EXE) vm-test TRACE=0
+	dist/agentica$(EXE) run --version | grep -q 'trace off'
 
-# The golden tests (tests/test_vm_diff_*.py) run on the VM that is built (AGENTICA_VM_BINARY names another one); the CLI
-# that compiles the fixtures is Racket's, built here.
-vm-diff-build: build vm
+# The golden tests (tests/test_vm_diff_*.py) compile with dist/agentica and run on it too (`agentica run`;
+# AGENTICA_VM_BINARY names another binary to run on).
+vm-diff-build: dist/agentica$(EXE)
 
-# vm-diff-test and vm-sanitize-* do not depend on vm on purpose: they test the VM that an earlier step built.
-vm-diff-test: build
+# vm-diff-test and vm-sanitize-* do not depend on dist/agentica on purpose: they test the binary that an earlier step built.
+vm-diff-test:
 	@$(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
 # The golden tests with the full --max-steps sweep (weekly in CI)
 sweep-full: vm-diff-build
 	AGENTICA_REQUIRE_VM=1 AGENTICA_SWEEP=full $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS)"
 
-# The unittest modules that run against the built VM (make test-py runs them; the ASan job runs them on the sanitizer VM).
-# tests/test_single_binary.py needs dist/agentica-next, which make agentica-next (or make fixed-point) builds first; without it
-# the module skips locally and fails in CI.
+# The unittest modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
+# binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
 VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_channel.py tests/test_vm_trace.py
 SANITIZE_JOBS ?= 4
 
-vm-sanitize-build: build
+vm-sanitize-build: dist/agentica$(EXE)
 
 vm-sanitize-test: vm-sanitize-build
 	@$(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(SANITIZE_JOBS)
 
 # Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's
 vendored-check:
-	$(MAKE) -j$(JOBS) build/vm/release/agentica-vm AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored
-	@if readelf -d build/vm/release/agentica-vm | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then echo "the vendored VM links OpenSSL or libgc dynamically" >&2; exit 1; fi
+	$(MAKE) -j$(JOBS) build/vm/release/agentica AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored
+	@if readelf -d build/vm/release/agentica | grep -qE 'NEEDED.*lib(ssl|crypto|gc)[.]'; then echo "the vendored binary links OpenSSL or libgc dynamically" >&2; exit 1; fi
 	@ossl=$$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $$2; sep = "." }' vm/third_party/openssl/VERSION.dat); \
-	  build/vm/release/agentica-vm --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored VM does not report OpenSSL $$ossl" >&2; exit 1; }
+	  build/vm/release/agentica run --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored binary does not report OpenSSL $$ossl" >&2; exit 1; }
 
 # vendored-check, then the TLS and HTTP tests on that binary
 vendored-test: vendored-check build
-	AGENTICA_VM_BINARY=build/vm/release/agentica-vm $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
+	AGENTICA_VM_BINARY=build/vm/release/agentica $(MAKE) --no-print-directory test-py JOBS=2 TESTS="tests/test_vm_tls.py tests/test_vm_http.py"
 
 vm-unicode:
 	racket vm/tools/gen-unicode.rkt vm/unicode_data.c
@@ -678,7 +677,7 @@ vm-lint-sanitize:
 vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
 
-vm-layers: vm
+vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o
 	for h in vm/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
 	sh vm/tools/check-layers.sh $(VM_OBJ)
 	sh vm/tools/check-layers-test.sh $(VM_OBJ) $(VM_CC) $(VM_CFLAGS)

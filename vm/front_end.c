@@ -2,9 +2,9 @@
  * The FrontEnd builtins (agc_front_end_builtins): the two calls that only the
  * front end of the single binary may make. hand_off gives the compiled
  * program to the driver and ends the front end's run; std_source reads a std/
- * source that the binary carries. A user program, or a front end that runs on
- * agentica-vm, has no agc_front_end in its runtime and fails with
- * RUNTIME-FRONT-END-ONLY. Service layer.
+ * source that the binary carries. A user program, or a front end that is run as
+ * an ordinary program with `agentica run`, has no agc_front_end in its runtime
+ * and fails with RUNTIME-FRONT-END-ONLY. Service layer.
  * Design: docs/vm/08-loader-and-cli.md and docs/future/35-self-hosting.md §35.5.
  */
 #include "services.h"

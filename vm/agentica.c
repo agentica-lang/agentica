@@ -1,15 +1,23 @@
 /*
- * The single binary (dist/agentica-next, docs/future/35-self-hosting.md §35.6).
- * It runs its front end, a compiled program carried in the binary, in a first
- * runtime. The front end compiles in memory and hands the program over
- * (FrontEnd.hand_off); this file retires that runtime and runs the program in
- * a second one, so the options and the heap are the program's alone.
+ * The agentica binary (dist/agentica, docs/future/35-self-hosting.md §35.6),
+ * the only program of the product. It does one of two things.
+ *
+ * `agentica run [OPTIONS] -- FILE.agcb [ARGS...]` runs a compiled program: the
+ * VM with its flags, and nothing else. No front end starts.
+ *
+ * Anything else is the command line of the front end, a compiled program
+ * carried in the binary, which runs in a first runtime. The front end
+ * compiles in memory and hands the program over (FrontEnd.hand_off); this
+ * file retires that runtime and runs the program in a second one, so the
+ * options and the heap are the program's alone.
  * `--front-end FILE.agcb` (build-only) loads another front end in place of the carried one.
  * Design: docs/vm/08-loader-and-cli.md.
  */
 #include "core.h"
 #include "embedded.h"
 #include "launch.h"
+#include "services.h"
+#include "tls.h"
 
 #include <fcntl.h>
 #include <limits.h>
@@ -19,6 +27,13 @@
 #include <unistd.h>
 
 static const char name[] = "agentica";
+static const char run_name[] = "agentica run";
+
+static const char usage[] =
+  "usage: agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] "
+  "[--source-root DIR] -- <file.agcb> [args...]\n"
+  "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
+  "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n";
 
 /* The std/ sources of the binary, from the index that make wrote. */
 static agc_std_source *std_sources(size_t *count) {
@@ -42,15 +57,23 @@ static const char *self_path(const char *argv0, char *buffer, size_t size) {
   return buffer;
 }
 
-/* O_NONBLOCK keeps the open of a named pipe from waiting for a writer; the S_ISREG test then refuses it. */
-static uint8_t *read_front_end(const char *path, size_t *len) {
-  int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+/* A regular file of at most AGC_MAX_FILE_BYTES. O_NONBLOCK keeps the open of a named pipe from waiting for a writer;
+ * the S_ISREG test then refuses it. A program that a driver started this process for (--driver-pid) is read from a
+ * private file only (this user's, one link, no group or other bits, not reached through a link in the last place of
+ * the path) and is removed once read, which is how the driver passes it without leaving it behind if it is killed. */
+static uint8_t *read_file(const char *path, bool driven, size_t *len) {
+  int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | (driven ? O_NOFOLLOW : 0));
   if (fd < 0) return NULL;
   struct stat info;
   if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
-      (uint64_t)info.st_size > AGC_MAX_FILE_BYTES) {
+      (uint64_t)info.st_size > AGC_MAX_FILE_BYTES ||
+      (driven && (info.st_uid != geteuid() || info.st_nlink != 1 || (info.st_mode & 077) != 0))) {
     close(fd);
     return NULL;
+  }
+  if (driven) {
+    struct stat now;
+    if (lstat(path, &now) == 0 && now.st_dev == info.st_dev && now.st_ino == info.st_ino) unlink(path);
   }
   *len = (size_t)info.st_size;
   return agc_launch_read(fd, *len);
@@ -58,12 +81,18 @@ static uint8_t *read_front_end(const char *path, size_t *len) {
 
 /* The first run. It leaves this function only when the front end handed a program over and its run ended cleanly;
  * every other end (a usage error, a problem in the user's file, a crash of the front end, a stop signal) is the
- * end of the process, with the status the front end gave. What it allocated is garbage once it returns. */
+ * end of the process. The status is the one the front end gave, except for a crash: a runtime error in the front end
+ * is a bug of the compiler or of `agentica test`'s driver, not a problem in the user's program (status 1), and a
+ * driver that crashed must not look like a test run that failed, so it is status 2, like a front end started wrongly.
+ * What it allocated is garbage once it returns.
+ *
+ * The front end may start processes (--allow-run): `agentica test` starts the runner and the programs under test from
+ * here. That is no loophole for the user's program, which never runs in this runtime: the front end only compiles it. */
 static void run_front_end(agc_launch *launch, const char *self, const char *replacement, int count, char **words,
                           agc_front_end *fe) {
   size_t len = (size_t)agc_embedded_index[1];
   const uint8_t *bytes = agc_embedded_data + agc_embedded_index[0];
-  if (replacement && !(bytes = read_front_end(replacement, &len))) {
+  if (replacement && !(bytes = read_file(replacement, false, &len))) {
     fprintf(stderr, "%s: cannot read %s\n", name, replacement);
     exit(2);
   }
@@ -85,9 +114,12 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
   fe->std = std_sources(&fe->std_count);
   agc_launch_options options;
   agc_launch_defaults(&options);
+  options.allow_run = true;
   agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(count + 5, arguments, 0), fe);
   agc_outcome outcome = agc_vm_run(vm);
+  bool crashed = outcome.kind == AGC_FAILED;
   int status = agc_launch_settle(vm, &outcome);
+  if (crashed) status = 2;
   if (!fe->handed || outcome.kind != AGC_EXITED || status != 0 || agc_io_stop_signal()) agc_launch_exit(status);
   /* A job that is still running would keep the front end's loop alive next to the program's: the program must not share
    * a process with anything of the compiler, so this is the end of the run. */
@@ -98,8 +130,8 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
 }
 
 /* The second run: the program that the front end handed over, with the options it passed on. It returns only to
- * report a start that failed. The options are those of agentica-vm for a run (--ai, --json, --allow-run,
- * --max-steps, --seed, --flush-timeout, --source-root), each once. The front end is trusted with them, but
+ * report a start that failed. The options are those of `agentica run` (--ai, --json, --allow-run, --max-steps,
+ * --seed, --flush-timeout, --source-root), each once. The front end is trusted with them, but
  * --driver-pid is not one: it names the process that started this one, which only that process can say, so the
  * front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and _ARGUMENTS), so they fit
  * an int. */
@@ -135,19 +167,79 @@ static int run_program(agc_launch *launch, const agc_front_end *fe) {
   agc_launch_end(vm, agc_vm_run(vm));
 }
 
+static void print_version(void) {
+  unsigned gc = agc_gc_version();
+  const char *uv = agc_uv_version();
+  const char *ssl = agc_tls_version();
+  const char *trace = AGC_TRACE_BUILD ? "" : ", trace off";
+  if (gc)
+    printf("agentica %s (libgc %u.%u.%u, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, gc >> 16, (gc >> 8) & 0xFF, gc & 0xFF,
+           agc_json_version(), uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
+  else
+    printf("agentica %s (sanitizer build, no libgc, yyjson %s%s%s%s%s%s)\n", AGC_VERSION, agc_json_version(),
+           uv ? ", libuv " : "", uv ? uv : "", ssl ? ", OpenSSL " : "", ssl ? ssl : "", trace);
+}
+
+/* `agentica run`: argv[2] and on are the options, then `--` (or the first word that is not an option), the file and
+ * the program's arguments. The steps and their order are those of a run of the front end's program, with the options
+ * typed here instead of handed over: a start that fails is status 2. */
+static int run_command(agc_launch *launch, int argc, char **argv) {
+  agc_launch_options options;
+  int i = 2;
+  agc_launch_status status = agc_launch_parse(run_name, argc, argv, &i, &options);
+  if (status == AGC_LAUNCH_VERSION) {
+    print_version();
+    return fflush(stdout) == 0 ? 0 : 1;
+  }
+  if (status == AGC_LAUNCH_BAD) return 2;
+  if (i >= argc) {
+    fputs(usage, stderr);
+    return 2;
+  }
+  const char *path = argv[i];
+  if (!agc_launch_flush_env(run_name, &options)) return 2;
+  if (options.seen_driver && !agc_launch_bind(options.driver)) {
+    fprintf(stderr, "%s: --driver-pid does not match the parent process\n", run_name);
+    return 2;
+  }
+  agc_launch_trace(launch);
+  size_t len = 0;
+  uint8_t *data = read_file(path, options.seen_driver, &len);
+  if (!data) {
+    fprintf(stderr, "%s: cannot read %s\n", run_name, path);
+    return 2;
+  }
+  agc_program *program = NULL;
+  char error[160];
+  if (!agc_load_traced(data, len, &program, error, sizeof error, &launch->trace)) {
+    fprintf(stderr, "%s: invalid bytecode: %s\n", run_name, error);
+    return 2;
+  }
+  if (!agc_program_set_source_root(program, options.source_root, options.source_root_chars)) {
+    fprintf(stderr, "%s: --source-root is too long for this program\n", run_name);
+    return 2;
+  }
+  agc_vm *vm = agc_launch_vm(launch, program, &options, agc_launch_args(argc, argv, i + 1), NULL);
+  agc_launch_end(vm, agc_vm_run(vm));
+}
+
 int main(int argc, char **argv) {
-  /* Answered here, before anything is opened: no front end runs and no trace file is created. */
+  /* Answered here, before the allocator starts or anything is opened: no front end runs and no trace file is
+   * created. A closed pipe on the standard output must not end the process with a signal. */
+  agc_launch_ignore_sigpipe();
   if (argc == 2 && strcmp(argv[1], "--version") == 0) {
     puts(AGC_VERSION);
     return fflush(stdout) == 0 ? 0 : 1;
   }
   agc_launch launch;
   agc_launch_init(&launch);
-  agc_launch_trace(&launch);
-  /* The environment is checked before the front end spends its time compiling; run_program applies the value. */
+  if (argc > 1 && strcmp(argv[1], "run") == 0) return run_command(&launch, argc, argv);
+  /* The environment is checked before the trace file is opened and before the front end spends its time compiling;
+   * run_program applies the value. */
   agc_launch_options environment;
   agc_launch_defaults(&environment);
   if (!agc_launch_flush_env(name, &environment)) return 2;
+  agc_launch_trace(&launch);
   int first = 1;
   const char *replacement = NULL;
   if (argc > 1 && strcmp(argv[1], "--front-end") == 0) {

@@ -4,8 +4,9 @@
 # The files are named relative to the directory the assembler runs in (the repository root). The index uses only
 # differences between labels of one section, which the assembler turns into constants, so the binary needs no relocations
 # for it. The layout is the one that vm/embedded.h describes.
-# Each .incbin is preceded by a comment with the SHA-256 of the file: a cache keyed on the text of this file (zig cc's
-# object cache, ccache) sees a new key when the front end or a std/ source changes, which it cannot see through .incbin.
+# Each .incbin is preceded by a comment with the SHA-256 of the file: a compiler cache that keys on the text of this file
+# (the object cache of zig cc, which the release builds with) sees a new key when the front end or a std/ source changes,
+# which it cannot see through .incbin. The Makefile does not send this file through ccache, so it needs none of that.
 set -eu
 front_end="${1:?usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE}"
 stdlib="${2:?}"
