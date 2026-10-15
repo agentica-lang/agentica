@@ -215,7 +215,9 @@ waits. Channels are planned in phase 17
 ([`docs/future/27-iteration-and-concurrency.md`
 §27.2](../future/27-iteration-and-concurrency.md#272-channels));
 `Process.poll_line` remains proposed in [`docs/future/08-concurrency.md` section
-8](../future/08-concurrency.md#8-concurrency-and-parallelism). UUID, Base64 and
-a Ruby-style `Regex` remain later utilities unless a real application
-establishes an earlier need.
+8](../future/08-concurrency.md#8-concurrency-and-parallelism). UUID and Base64
+remain later utilities unless a real application establishes an earlier need.
+A Ruby-style `Regex` is designed in
+[§48](../future/48-regex.md#48-regular-expressions), and it waits until after
+the bootstrap (roadmap row 7.10, phase 29).
 
