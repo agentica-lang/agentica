@@ -19,12 +19,13 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#ifdef __linux__
 #define PATH_SIZE 4096
 
 /* What the interposed calls do; all zero passes every call through. */
 typedef struct {
   char base[PATH_SIZE];
-  bool swap_armed, lie, stick;
+  bool swap_armed, lie, stick, vanish_rmdir, vanish_open;
   int swaps, interrupts;
 } traps;
 
@@ -43,7 +44,16 @@ static void swap_in_link(int dir_fd, const char *name) {
   trap.swaps++;
 }
 
-/* Both openat and __openat_2 are needed: with -O2 -D_FORTIFY_SOURCE=2 the call in tree.c goes to __openat_2. */
+/* Both openat and __openat_2 are defined: gcc's tree.c calls openat, and a fortified clang build (-O2
+   -D_FORTIFY_SOURCE=2, as the release build) calls __openat_2, which in glibc's headers calls openat again.
+   Both go through this one function, which makes the system call itself, so neither can call the other. */
+static int trapped_openat(int dir_fd, const char *name, int flags, unsigned int mode) {
+  if (dir_fd != AT_FDCWD && trap.swap_armed && strcmp(name, "swap") == 0) swap_in_link(dir_fd, name);
+  if (dir_fd != AT_FDCWD && trap.vanish_open && strcmp(name, "gone") == 0)
+    assert(syscall(SYS_unlinkat, dir_fd, name, AT_REMOVEDIR) == 0);
+  return (int)syscall(SYS_openat, dir_fd, name, flags, mode);
+}
+
 int openat(int dir_fd, const char *name, int flags, ...) {
   unsigned int mode = 0;
   if (flags & (O_CREAT | O_TMPFILE)) {
@@ -52,13 +62,12 @@ int openat(int dir_fd, const char *name, int flags, ...) {
     mode = va_arg(args, unsigned int);
     va_end(args);
   }
-  if (trap.swap_armed && dir_fd != AT_FDCWD && strcmp(name, "swap") == 0) swap_in_link(dir_fd, name);
-  return (int)syscall(SYS_openat, dir_fd, name, flags, mode);
+  return trapped_openat(dir_fd, name, flags, mode);
 }
 
 // glibc's own name for the checked openat.
 int __openat_2(int dir_fd, const char *name, int flags) { // NOLINT(readability-identifier-naming)
-  return openat(dir_fd, name, flags);
+  return trapped_openat(dir_fd, name, flags, 0);
 }
 
 int unlinkat(int dir_fd, const char *name, int flags) {
@@ -70,6 +79,8 @@ int unlinkat(int dir_fd, const char *name, int flags) {
     errno = EPERM;
     return -1;
   }
+  if (trap.vanish_rmdir && (flags & AT_REMOVEDIR) && strcmp(name, "gone") == 0)
+    assert(syscall(SYS_unlinkat, dir_fd, name, AT_REMOVEDIR) == 0);
   if (trap.interrupts > 0 && strcmp(name, "flaky") == 0) {
     trap.interrupts--;
     errno = EINTR;
@@ -333,6 +344,22 @@ static void test_an_interrupted_call_is_repeated(const char *base) {
   assert(!exists(base, "slow"));
 }
 
+/* A subdirectory that someone else removes while the walk is inside the tree is gone, which is what the walk wants:
+   neither the final rmdir of it nor its open is an error, and the rest of the tree goes. */
+static void test_a_subdirectory_that_vanishes_is_not_an_error(const char *base) {
+  for (int phase = 0; phase < 2; phase++) {
+    make_dir(base, "vanish");
+    make_dir(base, "vanish/gone");
+    make_file(base, "vanish/aa");
+    make_file(base, "vanish/zz");
+    trap.vanish_rmdir = phase == 0;
+    trap.vanish_open = phase == 1;
+    assert(remove_tree_at(base, "vanish", NULL) == 0);
+    trap.vanish_rmdir = trap.vanish_open = false;
+    assert(!exists(base, "vanish"));
+  }
+}
+
 /* Runs a case and checks that it left no descriptor open, whether it ended in success or in an error. */
 static void run_case(void (*test)(const char *), const char *base) {
   int before = open_fds();
@@ -363,8 +390,15 @@ int main(void) {
   run_case(test_a_directory_without_write_permission_stops_the_walk, base);
   run_case(test_a_file_system_that_lies_ends_the_walk, base);
   run_case(test_an_interrupted_call_is_repeated, base);
+  run_case(test_a_subdirectory_that_vanishes_is_not_an_error, base);
   assert(chdir(home) == 0);
   assert(agc_remove_tree(base, NULL) == 0);
   puts("tree tests passed");
   return 0;
 }
+#else
+int main(void) {
+  puts("tree tests skipped");
+  return 0;
+}
+#endif

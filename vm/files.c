@@ -1,9 +1,9 @@
 /*
  * The File, Dir and Path builtins (Linux only): the argument checks, host
  * paths, and file handles with their read and write buffers, including the
- * owner-only creates, lstat, the handle lock, the removals and the
- * no-replace rename. Work runs on the
- * libuv pool. Service layer. Design: docs/vm/02-reference-behavior.md §2.8.
+ * owner-only creates, lstat, the handle lock, the removals and the no-replace
+ * rename. Work runs on the libuv pool. Service layer. Design:
+ * docs/vm/02-reference-behavior.md §2.8.
  */
 /* glibc declares renameat2 and RENAME_NOREPLACE only for _GNU_SOURCE. */
 #define _GNU_SOURCE
@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/magic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
