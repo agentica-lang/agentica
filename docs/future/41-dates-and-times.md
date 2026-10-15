@@ -274,10 +274,10 @@ Not in v1: `add_months` and `add_years` (41.16).
   `60` is rejected by `naive`, `datetime` and `parse`. Leap seconds need a table
   of dates, which is as much work as the zone data of 41.16.
 - Precision is milliseconds. `Time.now_ms` and `Time.monotonic_ms` are in
-  milliseconds, and so is `std/log`. Nanoseconds would not fit an Int over the
-  whole range: the latest value is about 2.5e20 ns since 1970, and an Int holds
-  9.2e18, so Unix nanoseconds overflow after the year 2262. Microseconds would
-  fit, but no clock or caller reads them, so they add a field for nothing.
+  milliseconds, and so is `std/logger`. Nanoseconds would not fit an Int over
+  the whole range: the latest value is about 2.5e20 ns since 1970, and an Int
+  holds 9.2e18, so Unix nanoseconds overflow after the year 2262. Microseconds
+  would fit, but no clock or caller reads them, so they add a field for nothing.
 - Offsets are fixed. There is no daylight saving time, so every day of a fixed
   offset is 86400000 ms.
 
@@ -342,9 +342,9 @@ end
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
 
-### 41.11 Relation to `std/log` (§24)
+### 41.11 Relation to `std/logger` (§24)
 
-`Log.time_text(ms)` becomes `Time.format(Time.from_unix_ms(ms).unwrap!)`: the
+`Logger.time_text(ms)` becomes `Time.format(Time.from_unix_ms(ms).unwrap!)`: the
 log's text and the `Time` formatter are one code path, and the log time is one
 native call instead of the integer arithmetic §24.2 describes. A value outside
 years 1 to 9999 halts, as any `!` form does. The log's own time always comes

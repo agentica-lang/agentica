@@ -9,13 +9,16 @@ code):
   make the rest of 7h faster to debug.
 - 14b, **stack traces on runtime errors** (24.3): after 7i, as roadmap row
   7.2.5, before the freeze of the Racket front end (row 7.2.7).
-- 14c, **`std/log`** with the `--log-*` flags (24.2): after 7i and after default
-  parameter values (15a, [section
-  25.1](25-ruby-typed-idioms.md#251-default-parameter-values)), which are
-  roadmap row 7.5a, deferred until after the bootstrap (row 7.2.7).
+- 14c, **`std/logger`** (24.2): an Elixir-style logger in Agentica, after 7i.
+  It needs no default parameter values (row 7.5a, which stays after the
+  bootstrap) and no command-line flags. Its handler table is the first global
+  state of the language, held by the VM runtime and limited to that registry
+  (24.2). Its registration and its builtin rows are data under the freeze (row
+  7.2.7).
 
-No grammar change. 14c adds three `System` builtins and a `std/` module; 14b
-changes only what the VM prints for a runtime diagnostic.
+No grammar change. 14c adds a `std/` module and a std-only builtin module of
+seven functions (`LogRegistry`); 14b changes only what the VM prints for a
+runtime diagnostic.
 
 ### 24.1 Today
 
@@ -59,205 +62,398 @@ Checked on the VM (`racket src/main.rkt --vm`, at `2e6da77`):
   (`docs/vm/10-io-multicore.md` §10.2.3). Debugging the scheduler, I/O jobs, the
   GC, processes or the loader means adding `fprintf` by hand.
 
-### 24.2 `std/log`
+### 24.2 `std/logger`
+
+An Elixir-style logger, written in Agentica as `stdlib/logger.agc`. It has a
+fixed set of levels, one global level, handlers that are attached and detached
+while the program runs (each with its own level), a formatter for each output
+form, and fields on each call. Nothing here is built yet: the examples are
+planned syntax. They are checked against a stand-in module that has the same
+signatures, and they run on the VM once `std/logger` lands.
 
 ```agentica
-import "std/log" as Log
+import "std/logger" as Logger
 
 def expensive_dump() -> String
   return "..."
 end
 
 def main() -> Void
-  Log.info("server started")
-  Log.info("request done", {"path": "/items", "status": "200"})
-  Log.debug("not shown at the default level")
-  if Log.debug?()
-    Log.debug("state: #{expensive_dump()}")
+  Logger.set_level(Logger.Level.Debug)
+  Logger.detach("console")
+  Logger.attach("console", Logger.Level.Info, &Logger.stderr_json)
+  Logger.attach("audit", Logger.Level.Warning) do |event|
+    IO.warn("audit: #{event.message}")
   end
-  Log.err("cannot open the cache")
+
+  Logger.info_meta("request done", {"path": "/items", "status": "200"})
+  Logger.debug("not shown at the console level")
+  if Logger.enabled?(Logger.Level.Debug)
+    Logger.debug_meta("state", {"dump": expensive_dump()})
+  end
+  Logger.err("cannot open the cache")
 end
 ```
 
-With `agentica --log-time none app.agc`, stderr gets:
+Its stderr, with the time values shown as examples:
 
 ```text
-INFO server started
-INFO request done path=/items status=200
-ERROR cannot open the cache
+{"time":"2026-10-12T10:15:02.345Z","level":"info","msg":"request done","fields":{"path":"/items","status":"200"},"task":1}
+{"time":"2026-10-12T10:15:02.346Z","level":"error","msg":"cannot open the cache","fields":{},"task":1}
+audit: cannot open the cache
 ```
 
-and with `--log-format json --log-time none`:
+**API (planned):**
 
 ```text
-{"level":"info","msg":"server started"}
-{"level":"info","msg":"request done","fields":{"path":"/items","status":"200"}}
-{"level":"error","msg":"cannot open the cache"}
+Logger.debug(message: String) -> Void
+Logger.debug_meta(message: String, fields: Map[String, String]) -> Void
+Logger.info(message: String) -> Void
+Logger.info_meta(message: String, fields: Map[String, String]) -> Void
+Logger.warning(message: String) -> Void
+Logger.warning_meta(message: String, fields: Map[String, String]) -> Void
+Logger.err(message: String) -> Void
+Logger.err_meta(message: String, fields: Map[String, String]) -> Void
+Logger.log(level: Level, message: String) -> Void
+Logger.log_meta(level: Level, message: String, fields: Map[String, String]) -> Void
+Logger.enabled?(level: Level) -> Bool
+Logger.level() -> Level
+Logger.set_level(level: Level) -> Void
+Logger.attach(name: String, level: Level, handler: Fn[Event, Void]) -> Result[Void]
+Logger.detach(name: String) -> Result[Void]
+Logger.handlers() -> List[String]
+Logger.stderr_text(event: Event) -> Void
+Logger.stderr_json(event: Event) -> Void
+Logger.format_text(event: Event) -> String
+Logger.format_json(event: Event) -> String
+Logger.time_text(ms: Int) -> String
+
+export enum Level                     # debug < info < warning < error
+export struct Event                   # what a handler receives
+  level: Level
+  message: String
+  fields: Map[String, String]
+  time_ms: Int                        # Time.now_ms() when the event is made
+  task: Int                           # the VM task number (main is 1)
+end
 ```
 
-**API:**
+**Levels.** There are four, in this order: `debug`, `info`, `warning` and
+`error`. Elixir has eight. The other four (notice, critical, alert, emergency)
+only add names, and every variant is a `case` arm that user code must list or
+cover with `_`, so a level added later would break matches. The function for the
+last level is `err`, because `error` is a reserved name: a module that declares
+`def error` is `CHECK-REDEFINED-NAME` (24.1). The output still says `error`.
+`warning` is Elixir's name. `IO.warn` keeps its own name.
 
-```text
-Log.debug(message: String, fields: Map[String, String] = {}) -> Void
-Log.info(message: String, fields: Map[String, String] = {}) -> Void
-Log.warn(message: String, fields: Map[String, String] = {}) -> Void
-Log.err(message: String, fields: Map[String, String] = {}) -> Void
-Log.debug?() -> Bool
-Log.time_text(ms: Int) -> String
+**Two thresholds.** The global level (`set_level`, `info` by default) is checked
+first, by every call. Each handler has its own level and gets an event only when
+the event is at or above it. With the global level at `debug` and a console
+handler at `info`, a `debug` call writes nothing to the console.
+
+**Handlers.** A handler has type `Fn[Event, Void]`. It is a named function
+(`&Logger.stderr_json`) or a block given to `attach`, which follows the call as
+the block rule requires. Handlers run in attach order, synchronously, in the
+task that makes the event. A line is written by the time its log call returns,
+so nothing waits in a queue and nothing is lost when a task crashes or `main`
+returns. Attach and detach take effect for the next event. An event takes its
+list of handlers when it is made, so a handler that detaches another does not
+change the list of the event in progress. `attach` with a name in use, and
+`detach` with a name not in use, return `error(...)`; they do not halt.
+
+**Failures.** A handler's runtime error is the error of the task that made the
+event: that task crashes, or the run ends when the task is `main`, as for any
+runtime error. The registry does not catch it (D4). A handler that logs calls
+itself, and recurses until `RUNTIME-STACK-OVERFLOW`; v1 has no guard against it
+(D5).
+
+**Decided: the handler table is the first global state of the language.** Values
+never change, and the language has no module state or global variables
+(`references/modules.md` of the programming skill), so the handler table and the
+global level are kept by the VM runtime, next to the task counter (`vm->rt`),
+not by any Agentica value. This is the first global mutable state in the
+language, and it is limited to this registry. No other module, value or builtin
+gets it. `vm/` keeps its own rule that no `static` or global variable lives
+there, so the table is a field of the runtime (`docs/vm/10-io-multicore.md`).
+Its rules:
+
+- Seven native builtins in a std-only module, `LogRegistry`, read and write the
+  table (below). None of them calls a handler. `Logger.log_meta` reads the
+  handler list and calls each handler itself, in the logging task.
+- One scheduler runs today, so a table call does not interleave with another.
+  When multicore lands (row 11, gated), the table needs a lock, the same lock as
+  the stderr buffer. That PR owns the change.
+- The table holds function values, so the GC must keep them alive. The runtime
+  reaches them the way it reaches the other values it keeps.
+- The table belongs to one run. A child from `Process.spawn` is a separate VM
+  with its own table.
+
+**Alternatives for the global state.**
+
+- A logger built only from a task and a `Channel`, which every caller reaches.
+  **Rejected.** Every task would need the channel as an argument, or the channel
+  would need a global name, which is the state this design adds anyway. Lines
+  still in the channel are lost when the logger task crashes and when `main`
+  returns without awaiting it (checked on the VM for this section). Each call
+  costs a channel send and a task switch, and a full channel holds every
+  producer behind a slow handler. Attach and detach would become request
+  messages with replies.
+- A logger value passed to every function that logs. **Rejected.** Each function
+  and each task argument gets a parameter, agents forget to pass it, and two
+  loggers in one run can disagree about the level.
+- Configuration at start-up only, from `--log-*` flags (the earlier draft of
+  this section). **Rejected for v1.** It needs no state, but a program cannot
+  add a handler function, and the flags need a change to `src/main.rkt` under
+  the freeze.
+
+**Async handlers (planned, never the default).** A handler that is slow, such as
+one that writes a file or calls the network, can hand each event to a task that
+owns that work. The handler is a block that sends into a `Channel`. `main`
+starts the writer with `Task.spawn_owning`, so the writer owns the channel and
+closes it when it ends. Any task that holds the channel can still send to it
+until the owner closes it, so the handler may run in any task. The run ends in
+this order: detach the handler, close the channel, await the writer. Returning
+from `main` ends the run, and pending tasks never run again
+(`docs/grammar/06c-tasks-and-tests.md`), so without the await the queued lines
+are lost. A full channel makes the send wait up to its timeout, and then the
+send returns an error that the handler decides about. The example drops the
+event. If the writer crashes first, its owned channel closes by itself, later
+sends return an error at once, and `Task.await(writer)` returns that error for a
+`Result` task.
+
+```agentica
+import "std/logger" as Logger
+
+def write_events(events: Channel[Logger.Event]) -> Result[Void]
+  while true
+    case events.recv(1000)
+      ok(event) ->
+        try File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
+      error(_) ->
+        if events.closed?
+          break
+        end
+    end
+  end
+  return ok()
+end
+
+def main() -> Void
+  events: Channel[Logger.Event] = Channel.new(64)
+  writer = Task.spawn_owning(&write_events, events)
+  Logger.attach("file", Logger.Level.Info) do |event|
+    events.send(event, 1000)
+  end
+  Logger.info("server started")
+  Logger.detach("file")
+  events.close
+  done = Task.await(writer)
+  if !done.ok?
+    IO.warn(done.message)
+  end
+end
 ```
 
-- **Levels** are `debug`, `info`, `warn` and `error`, in that order. A line is
-  written when its level is at or above the run's level. The default level is
-  `info`.
-- **Names.** `error` is reserved (24.1), so the error function is `err`; the
-  level is still called `error` in the output and in `--log-level`. Fields are
-  an optional second parameter with the default `{}` ([section
-  25.1](25-ruby-typed-idioms.md#251-default-parameter-values), 15a, which lands
-  before 14c), so there is one function per level and no separate `_with` form.
-  The 14c PR also adds a "did you mean" help to `CHECK-IMPORT-NAME`, made from
-  the module's exported names, so `Log.error(...)` suggests `Log.err`.
-- **Fields** are `Map[String, String]`. A map literal is short
-  (`{"path": p, "status": "#{code}"}`), the text format needs strings anyway,
-  and the map keeps its order, so the output order is the order the program
-  wrote. `Json` was the other option: it keeps numbers as numbers in JSON lines,
-  but every value needs `JSON.from`, and the text format has to turn it back
-  into text. Numbers are strings in JSON lines; tools that need a number convert
-  it.
-- **`Log.debug?()`** says whether debug lines are on. Only `debug` has one: it
-  is the level that is off by default and where building the message costs most.
-- **`Log.time_text(ms)`** turns milliseconds since the Unix epoch into the text
-  the log uses (`2026-10-12T10:15:02.345Z`). It is exported because programs
-  need it too, and so that tests can check it with fixed inputs. With §41
-  it is `Time.format(Time.from_unix_ms(ms).unwrap!)`, a native call.
+A channel adds one send and one task switch to every event, so a handler takes
+this path only when its work is slow.
 
-**How the level and format are set.** Three flags of the run, read through three
-small builtins:
+**Calls and names.** Default parameter values stay after the bootstrap (row
+7.5a), and there is no overloading. A second `def info` is
+`CHECK-REDEFINED-NAME`, and an overload would complicate checking and the
+messages of errors. Agentica follows Ruby, which has defaults and not
+overloading. So v1 has two functions per level: `info(msg)` and `info_meta(msg,
+fields)`, and the same pair for `debug`, `warning` and `err`. When row 7.5a
+lands, the API becomes `info(msg, fields = {})`. That is a breaking change,
+which the owner accepts, because the language has no outside users. The `_meta`
+functions then go away.
 
-```text
---log-level debug|info|warn|error|off    (default info)
---log-format text|json                   (default text)
---log-time wall|none                     (default wall)
+**Metadata.** Left out of v1 (owner decision D1 below). Elixir's
+`Logger.metadata/1` is per process: the context that every later call of the
+process carries. Agentica has no task-local storage, so v1 passes `fields` on
+each call. A later minimal form would be one `Map[String, String]` slot in each
+task (`agc_task`), set by a builtin, read when an event is made, and merged in
+front of the call's fields. A spawned task would start empty, as Elixir metadata
+is not inherited. The VM would need that slot, which the GC traces with the
+task.
 
-System.log_level() -> String     # "debug", "info", "warn", "error" or "off"
-System.log_format() -> String    # "text" or "json"
-System.log_time?() -> Bool       # false under --log-time none
-```
+**Configuration.** Handlers and levels are set from code, at the start of
+`main`, as in the example. The run's command line does not change, so there are
+no `--log-*` flags. A later optional `--log-level` flag would be a `System`
+builtin that sets the global level at start-up. It is future work and not in v1
+(D7).
 
-- `agentica` takes the flags before the file and passes them to the VM, as it
-  does `--seed`; `agentica-vm` takes them too. A bad value exits 2
-  (`agentica: --log-level needs debug, info, warn, error or off`), and a flag
-  given twice exits 2, like the other options (`docs/vm/08-loader-and-cli.md`
-  §9). `agentica test` passes them to the programs under test, as it does
-  `--seed`. A child started with `Process.spawn` does not get them; the parent
-  passes them in the child's arguments when it wants to.
-- The settings are read once at start-up into the runtime, and never change
-  during the run. A builtin that reads them is like `System.args`: it reads the
-  run's command line, so there is no mutable state anywhere, and every task and
-  every module sees the same settings. Each log call costs one builtin call to
-  read the level.
-- They are builtins under exception 1 of the roadmap rule "New library features:
-  `std/` first" (they read the run's command line, which a program cannot do
-  itself). They go in `System`, never in a builtin module named `Log`, since
-  `Log` is the documented import alias of `std/log`. Everything else (filtering,
-  the time text, the formats, escaping) is Agentica code in `stdlib/log.agc`.
-- **Why flags.** Every other setting of a run is a flag (`--seed`,
-  `--max-steps`, `--allow-run`), and a flag is visible in the command an agent
-  runs and in `agentica --help`. An environment variable is not visible in the
-  command, and it leaks into every child program; `System.env` (row 7.2.6) reads
-  one for a program that needs it, but the log configuration stays a flag. A
-  logger value that the program builds (`Log.new(level, format)`) and passes
-  around was the third option: it needs no builtin, but it adds a parameter to
-  every function that logs and to every task argument, agents forget to pass it,
-  and the level still has to come from somewhere outside the program. A program
-  that wants its own filter (per part of the program) can still wrap `std/log`
-  in its own functions.
+**Default console handler.** The first call of any `Logger` function installs
+`console`: `stderr_text` at level `info`, as if the program had attached it. It
+is an ordinary handler, so `detach("console")` removes it. The registry reports
+its level as `-1` until this install happens, and each entry point checks that
+first, so only the first call pays for the install (D3).
 
-**Formats.** Both write one line per call to stderr.
+**Built-in handlers and formatters.**
+
+- `stderr_text(event)` writes `format_text(event)`, and `stderr_json(event)`
+  writes `format_json(event)`. Each makes one `IO.warn` call, so each line is
+  one write (24.1: `IO.warn` copies the text and the newline together).
+- `format_text` and `format_json` are pure functions from `Event` to `String`. A
+  custom formatter has that shape, and a custom handler calls it. There is no
+  formatter registry: a handler is the formatter and the sink together.
+- No built-in file handler (D6). A block that appends one line per event does
+  the job: `File.append_text(path, Logger.format_json(event) + "\n", 1000)`. It
+  opens and closes the file for every line. A built-in file handler would keep a
+  `FileHandle` in the table, and a handle belongs to the task that opened it and
+  is closed when that task ends (`docs/grammar/06c-tasks-and-tests.md`).
+  Rotation is not planned (24.5).
+
+**Formats.** Both write one line per event.
 
 - **Text:** `TIME LEVEL MESSAGE key=value ...`, for example
   `2026-10-12T10:15:02.345Z INFO request done path=/items status=200`. The time
-  is UTC in ISO 8601 with milliseconds, from `Time.now_ms()`; `Log.time_text`
-  turns the number into that text with `Time.format` (§41), so the log and the
-  `Time` functions share one formatter. The level is in capitals.
-  The message is written as it is, unless it is empty, starts or ends with a
-  space, or contains `=`, `"`, `\` or a control character (DEL included): then
-  it is written in its JSON form (quoted and escaped). So a message with a
-  newline still takes one line, and a message never looks like a field. A field
-  is `key=value`; the key and the value are written as they are unless they are
-  empty or contain a space, `=`, `"`, `\` or a control character, and then in
-  their JSON form. "As it is" is tested with `JSON.encode(s) == "\"#{s}\""` (the
-  encoder escapes `"`, `\`, control characters and DEL) plus checks for empty,
-  spaces and `=`, a few builtin calls per part, so there is no loop over
-  characters in Agentica. Fields come in map order. With these rules every text
-  line can be read back: the message is a JSON string or ends before the first
-  ` key=` (a bare message has no `=`, and a bare key has no space).
+  is UTC in ISO 8601 with milliseconds. The level is in capitals: `DEBUG`,
+  `INFO`, `WARNING` or `ERROR`. The task is not shown in text, since a flat
+  `task=` would clash with a user field of that name. The message is written as
+  it is, unless it is empty, starts or ends with a space, or contains `=`, `"`,
+  `\` or a control character (DEL included). Then it is written in its JSON
+  form, quoted and escaped. So a message with a newline still takes one line,
+  and a message never looks like a field. A key or value is quoted the same way
+  when it is empty or contains a space, `=`, `"`, `\` or a control character.
+  The test "as it is" is `JSON.encode(s) == "\"#{s}\""`, plus checks for empty
+  text, spaces and `=`. Fields come in map order. Every text line can be read
+  back: the message is a JSON string or ends before the first ` key=`.
 - **JSON lines:** one object per line, with `time` (the same text), `level`
-  (lower case), `msg`, and `fields` (an object, left out when there are no
-  fields). The fields are nested, so a field called `level` or `msg` never
-  clashes with the fixed keys. The line is built with `JSON.object` and
-  `JSON.from` and written with `JSON.encode`, so all escaping is the JSON
-  encoder's.
-- **`--log-time none`** leaves the time out in both formats. Tests use it, so
-  their expected stderr never changes. It is also useful in production when a
-  supervisor (journald, a container runtime) already adds its own time. A fixed
-  fake clock under a test flag was the other option; it was not chosen because
-  it would also change what `Time.now_ms` returns to the program, and `none` is
-  simpler.
+  (`debug`, `info`, `warning` or `error`), `msg`, `fields` (always present, `{}`
+  when there are none; the earlier draft left it out), and `task` (a number).
+  The fields are nested, so a field named `level`, `msg`, `time` or `task` never
+  clashes with a fixed key. The line is built with `JSON.object` and
+  `JSON.from`, and written with `JSON.encode`, so all escaping belongs to the
+  JSON encoder.
 
-**One line, one write.** `std/log` builds the whole line and calls `IO.warn`
-once. Since row 7.2.1f `IO.warn` on the VM copies the text and the newline
-together into the stderr buffer (24.1), so the 14c PR needs no change there, and
-lines from different tasks never mix inside a line, also with several schedulers
-(the buffer has a short lock then, `docs/vm/10-io-multicore.md`). The loop
-writes the buffer in order with `write(2)` calls. A line shorter than `PIPE_BUF`
-(4096 bytes on Linux; POSIX makes such a write to a pipe atomic) stays whole
-against another process that shares the VM's stderr when the loop writes it in
-one call; a longer line, or a write cut short by a full pipe, may still mix with
-another process's output. It does not cover a `Process.spawn` child's stderr:
-the VM forwards it in chunks as they arrive, not by line (`src/process.rkt` does
-the same), so a log line of the parent can still land in the middle of a child's
-line.
+**Time text.** `Logger.time_text(ms)` turns milliseconds since the Unix epoch
+into the text above (`2026-10-12T10:15:02.345Z`). It is exported so that
+programs and tests can use it. Until §41 lands it is integer arithmetic on the
+calendar, written in Agentica. With §41 it is
+`Time.format(Time.from_unix_ms(ms).unwrap!)`, one native call, and the log and
+the `Time` functions share one formatter.
 
-**Cost of a debug line that is off.** Agentica has no lazy arguments, so in
-`Log.debug("state: #{dump()}")` the message is built before the call, and then
-`Log.debug` reads the level and returns: about ten steps plus the cost of the
-message. This is accepted. When the message is costly, the program writes
-`if Log.debug?() ... end`. A block form (`Log.debug_lazy do "..." end`) was not
-chosen: a block that captures variables makes a closure on every call, even when
-debug is off, and it would be a second way to do the same thing. Log calls are
-normal Agentica code, so they count against `--max-steps`.
+**Cost of a disabled call.** Each level function compares the threshold before
+it calls the shared code. A disabled `debug` call is then one user call, one
+builtin read (`LogRegistry.level()`), and one Int comparison. The rank of each
+level is a constant in the module. Agentica has no lazy arguments, so the
+message and any fields map are built before the call. A costly one goes inside
+`if Logger.enabled?(Logger.Level.Debug)`, as in the example. Plan for the PR,
+not measured here: a benchmark in `benchmarks/` with 1,000,000 disabled `debug`
+calls, against an empty loop and against a loop that calls an empty user
+function. The PR description records the times. The target is a disabled call no
+more than an empty user call plus one builtin call. Log calls are normal code,
+so they count against `--max-steps`.
 
-**Tests**, with fixed expected output on the VM (exit code, stdout, stderr,
-diagnostic code):
+**The freeze (row 7.2.7).** The Racket parts are three data edits. One line in
+`src/stdlib.rkt` registers `std/logger`. Seven rows in `src/builtins.rkt`
+declare `LogRegistry`, and `LogRegistry` joins `std-only-modules` beside
+`HttpWire`, so user code cannot call it (`CHECK-UNKNOWN-NAME`, with a help that
+names the `std/logger` import). The names go in `vm-builtins` in
+`src/lower.rkt`. The `vm-builtins` list is data after the freeze, as the owner
+accepted on 2026-10-14, and the `stdlib.rkt` line is the same kind of data: a
+source file, not syntax or a checker rule (D8). The table cannot name the event
+type, so the registry functions take a type variable `A` for the handler's
+argument. Only `stdlib/logger.agc` calls them, and it always uses `Event`. The
+std-only rule keeps other callers out, and the table does not check this.
 
-- Fixtures run with `--log-time none` and compare stderr exactly: each level
-  against each `--log-level`, `off`, both formats, messages and fields that need
-  quoting (space, `=`, `"`, `\`, newline, empty, non-ASCII), no fields, field
-  order, a field named `level`.
-- Lines from several tasks (`Task.spawn`, each logging in a loop) are each
-  whole. In text, every stderr line must match, as a whole,
-  `LEVEL SP MESSAGE (SP KEY "=" VALUE)*` (with `--log-time none`), where `LEVEL`
-  is `DEBUG`, `INFO`, `WARN` or `ERROR`, `SP` is one space, `MESSAGE` is a JSON
-  string or one or more characters that are not `=`, `"`, `\` or control
-  characters and do not start or end with a space, and `KEY` and `VALUE` are
-  each a JSON string or one or more characters that are not space, `=`, `"`, `\`
-  or control characters; every JSON string must decode with `string->jsexpr`,
-  and the decoded message, keys and values must equal what the task logged. In
-  json, every line must decode to an object with exactly the keys `level`, `msg`
-  and, when there are fields, `fields`, with the logged values.
-- `--log-time wall`: every line starts with a time that matches the format and
-  lies between `Time.now_ms()` read before and after it.
-- `Log.time_text` against vectors from a checked-in Python script (standard
-  library `datetime` only, as in §23.7): the epoch, leap days, 2000-02-29,
-  2100-03-01, the end of a year, a negative time, and large values.
-- Bad flag values and repeated flags exit 2.
+The `CHECK-IMPORT-NAME` "did you mean" help is a checker message, not data, so
+it is not part of this PR (D9).
 
-**Docs in the 14c PR:** `grammar.md` (the `System` builtins and the flags; the
-advice "logs go to stderr with `IO.warn`" points to `std/log`), the programming
-skill (a `references/log.md` file and its row in the "When to read a reference"
-table; the stdio advice in `SKILL.md`),
-`site/content/library/io-and-system/log.md` with runnable examples
-(`--log-time none`), and `docs/vm/08-loader-and-cli.md` §9 for the flags.
+**The stdlib registry and the VM table.** The seven native functions of
+`LogRegistry` are:
+
+```text
+LogRegistry.level() -> Int                         # -1 until the default is installed
+LogRegistry.set_level(rank: Int) -> Void
+LogRegistry.attach(name: String, rank: Int, handler: Fn[A, Void]) -> Result[Void]
+LogRegistry.detach(name: String) -> Result[Void]
+LogRegistry.names() -> List[String]                # in attach order
+LogRegistry.handlers(rank: Int) -> List[Fn[A, Void]]   # handlers at or below rank, in order
+LogRegistry.task_id() -> Int                       # the running task's number
+```
+
+`handlers(rank)` returns the handlers whose own level is at or below the event's
+rank. The VM adds one table for them in `vm/builtin_tables.c`, with an extern in
+`vm/services.h`, as every library does, and the functions live in one C file.
+Their storage is the runtime field of the decision above.
+
+**Implementation (where the code goes).**
+
+- `stdlib/logger.agc`: the enum, the struct, the level functions, `log`,
+  `log_meta`, `enabled?`, the formatters, `time_text`, the default install and
+  the two built-in handlers. Every export has a `##` doc
+  (`tests/stdlib-docs-test.rkt`).
+- `vm/builtin_tables.c`, `vm/services.h` and one new C file for the seven
+  functions and the runtime field.
+- `src/stdlib.rkt`, `src/builtins.rkt` and `src/lower.rkt`: the data above.
+- Tests: `tests/vm-logger-test.rkt`, goldens under
+  `tests/fixtures/vm/logger-*.agc`, and a Python peer,
+  `tests/fixtures/logger-peer.py`.
+- Docs in the PR: `references/logger.md` of the programming skill with its row
+  in the "When to read a reference" table;
+  `site/content/library/io-and-system/logger.md` with runnable examples; the VM
+  notes on the runtime field; the development skill's notes; and the CHANGELOG
+  entry (the PR that builds it, not this one).
+
+**Tests**, with fixed expected output on the VM (exit code, stdout, stderr, and
+the diagnostic code):
+
+- Goldens compare stderr exactly. They cover each level against each global
+  level and each handler level, both formats, and messages and fields that need
+  quoting (space, `=`, `"`, `\`, newline, empty, non-ASCII, DEL), field order,
+  and a field named `level`, `msg`, `time` or `task`. The formatter tests build
+  `Event` values with fixed `time_ms`, so no clock is involved.
+- Tasks: `main` attaches a handler, workers log in loops, `main` detaches, and
+  the workers log again with no output. A task whose handler halts crashes
+  alone, and `main` goes on. Lines from several tasks are each whole, and their
+  `task` values match the spawn order.
+- The async example runs end to end: the file holds every event in order, and it
+  is complete when `main` returns, because `main` awaits the writer.
+- A run with no setup prints one line on stderr whose time matches the format (a
+  regular expression, not an exact line).
+- The Python peer (standard library `json` and `datetime` only) decodes every
+  JSON line, checks that the keys are exactly `time`, `level`, `msg`, `fields`
+  and `task`, and checks that the values equal what the task logged.
+- `Logger.time_text` against vectors from `datetime`: the epoch, leap days,
+  2000-02-29, 2100-03-01, a year end, a negative time, and large values.
+- Hermetic: no network, and the async example writes to a path that the test
+  passes in.
+
+**Decisions for the owner.** Decided on 2026-10-15 and written above: the
+handler table as the first global state (its limits and rules), async handlers
+as an option and never the default, the channel-only logger rejected, and
+default parameter values after the bootstrap with two functions per level. The
+open choices, with my recommendation first:
+
+- **D1 Metadata per task.** Recommended: leave it out of v1. Alternative: a task
+  slot now, one builtin and no inheritance at spawn.
+- **D2 Levels.** Recommended: the four above. Alternative: Elixir's eight, which
+  adds names that user `case` arms must cover.
+- **D3 Default console handler.** Recommended: installed by the first call. The
+  alternative is no default, so the program must attach one.
+- **D4 Handler errors.** Recommended: no catch. A handler's error is the error
+  of the logging task, so a crash shows where it happened. The alternative
+  catches the error and detaches the handler, which needs `Fn[Event,
+  Result[Void]]`.
+- **D5 Re-entrancy.** Recommended: no guard in v1. A handler that logs recurses
+  until `RUNTIME-STACK-OVERFLOW`. The alternative is a per-task guard, which
+  needs the slot of D1.
+- **D6 File output.** Recommended: the block recipe, with no built-in file
+  handler. The alternative is a built-in handler, which keeps its handle in the
+  main task.
+- **D7 Flags.** Recommended: no `--log-*` flags in v1, configuration in code,
+  and the optional `--log-level` flag later. This replaces the flags of the
+  earlier draft of this section.
+- **D8 The freeze.** Recommended: accept that the `src/stdlib.rkt` line, the
+  `LogRegistry` rows and the `vm-builtins` names are data after row 7.2.7, so
+  `std/logger` may land before, during or after the freeze. The alternative is
+  to land it before the freeze only.
+- **D9 "Did you mean" help.** Recommended: a separate small PR before row 7.2.7,
+  since it is a message and not a rule. The alternative is the Agentica checker
+  after the bootstrap (§35).
+- **D10 The `task` field.** Recommended: in the event and in JSON lines, not in
+  the text form. The alternative is to leave it out.
 
 ### 24.3 Stack traces on runtime errors
 
@@ -580,9 +776,11 @@ and its trace points: a hook sits at a trace point and shares its one test
 
 ### 24.5 Not planned
 
-- Log files, rotation, syslog, sampling, per-module levels, `Json` field values,
-  and log configuration through environment variables.
-- Lazy log arguments or a block form (24.2).
+- Built-in log files and rotation (a block that appends each event does the
+  job, 24.2), syslog, sampling, per-module levels, `Json` field values, and log
+  configuration through environment variables.
+- Lazy log arguments. A block given to `attach` is a handler, not a lazy
+  message (24.2).
 - A flag to turn stack traces off, and a stack of the parent task at spawn time.
 - VM tracing as a language feature, or trace lines on stdout.
 - Totals or counters in the tracer: those are metrics (§28).
