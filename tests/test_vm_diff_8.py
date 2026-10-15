@@ -541,10 +541,14 @@ class StandardInput(CliCase):
         self.assertEqual(json.loads(last)["message"], "cannot read standard input")
 
     def test_agentica_vm_names_nothing_any_more(self):
-        """The variable that named the VM is gone: a value that names no file changes nothing, for a run, for `agentica
-        run` and for the tests."""
+        """The variable that named the VM is gone: a value that names no file changes nothing, for a run and for
+        `agentica run`. (`agentica test` starts its runner as `agentica run` on itself, and tests/test_bdd.py runs it.)"""
         calls = self.fixture("calls.agc")
+        compiled = self.make_temp_dir() / "calls.agcb"
+        self.assertEqual(self.agentica("compile", calls, "-o", str(compiled))[0], 0)
         for value in (str(self.temp / "no-vm"), "", "/bin/false"):
             self.assertEqual(self.agentica(calls, env={"AGENTICA_VM": value}), self.agentica(calls), value)
             self.assertEqual(self.agentica("--json", self.fixture("division-by-zero.agc"), env={"AGENTICA_VM": value}),
                              self.agentica("--json", self.fixture("division-by-zero.agc")), value)
+            self.assertEqual(self.agentica("run", "--", str(compiled), env={"AGENTICA_VM": value}),
+                             self.agentica("run", "--", str(compiled)), value)

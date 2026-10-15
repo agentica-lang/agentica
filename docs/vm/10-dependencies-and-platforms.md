@@ -1,15 +1,20 @@
 ## 10. Dependencies and platforms
 
-The VM runs on Linux, macOS and Windows, always in the "C" locale. The Windows
-specifics are binary-mode stdio (`_setmode`), UTF-8 arguments from `wmain`,
-`rand_s` for the seed and the hash key, and `QueryPerformanceCounter` for the
-monotonic clock (`vm/numbers.c`). Console rendering is outside the contract.
+The VM runs on Linux, always in the "C" locale. The product, the single binary
+`dist/agentica`, is Linux and ELF only since step 8d-2: it embeds the front end
+and the `std/` sources with `.incbin` in ELF assembly (08). macOS and Windows
+are paused. The manual workflow `platforms.yml` only builds and runs the C
+tests there (`make vm-test`), and the Windows code of the old `vm/main.c`
+(binary-mode stdio with `_setmode`, UTF-8 arguments from `wmain`) went with
+that file. What stays for them is `rand_s` for the seed and the hash key
+(`vm/launch.c`) and `QueryPerformanceCounter` for the monotonic clock
+(`vm/numbers.c`). Console rendering is outside the contract.
 
 | Dependency | Choice |
 |---|---|
 | C compiler | C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile. |
 | libc | Dynamic. A static glibc breaks NSS, and macOS forbids a static libc. |
-| Boehm GC | Vendored submodule `vm/third_party/bdwgc`, tag v8.2.12. With `AGENTICA_GC=vendored` (the release, the GC-stress build, and the default off Linux) `make vm` compiles its single-file amalgamation (`extra/gc.c`) and links it statically. The Linux default, `system`, links the distro's libgc 8.2.0 or newer dynamically (`pkg-config bdw-gc`, Debian: `libgc-dev`), as OpenSSL does (11). |
+| Boehm GC | Vendored submodule `vm/third_party/bdwgc`, tag v8.2.12. With `AGENTICA_GC=vendored` (the release, the GC-stress build, and the default off Linux) `make` compiles its single-file amalgamation (`extra/gc.c`) and links it statically. The Linux default, `system`, links the distro's libgc 8.2.0 or newer dynamically (`pkg-config bdw-gc`, Debian: `libgc-dev`), as OpenSSL does (11). |
 | yyjson | Vendored submodule `vm/third_party/yyjson` (MIT), tag 0.13.0. Only the reader is built, with the writer, file API, JSON Pointer and extensions disabled. The reader does not recurse and is fuzzed on OSS-Fuzz. It allocates with `malloc` and holds no GC pointers. In the `AGC_NO_GC` build (sanitizer and fuzz), `vm/json.c` routes its allocations through `agc_alloc_atomic`, so its documents count toward the fuzzer's 256 MB limit (11, Fuzzing). In the GC build the document is freed right after its copy into GC nodes (2.6). The encoder is our own (2.4), since yyjson formats floats and escapes differently. |
 | libuv | Vendored submodule `vm/third_party/libuv` (MIT, with BSD-2-Clause and ISC parts in its `LICENSE-extra`), tag v1.53.0. Its Linux sources are built per build mode into `$(VM_BUILD)/uv/` and linked statically with `-ldl -lrt`. Linux only for now: macOS and Windows builds leave it out and have no file builtins. |
 | picohttpparser | Vendored submodule `vm/third_party/picohttpparser` (dual MIT or Perl; we take MIT), tag v1.4. It parses and validates request and response heads behind our adapter (10.6). `phr_decode_chunked` is not used, since it knows no limits. It is built at the baseline, without `-msse4.2`. Its SSE4.2 path is a SIMD candidate (`docs/future/19-simd.md` §19). |

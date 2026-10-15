@@ -18,16 +18,17 @@ phases (46.7) and the open questions (46.8).
 The VM has one stop path. A program cannot take part in it.
 
 - **The handler.** `vm/loop.c` installs one `sigaction` handler for SIGINT,
-  SIGTERM and SIGHUP. `agc_io_watch_stop` does this, and `run()` in `vm/main.c`
-  calls it. The handler skips a signal that the VM started as ignored. It sets
-  atomics and wakes the loop with `uv_async_send`. It never runs program code.
+  SIGTERM and SIGHUP. `agc_io_watch_stop` does this, and `agc_launch_vm` in
+  `vm/launch.c` calls it. The handler skips a signal that the VM started as
+  ignored. It sets atomics and wakes the loop with `uv_async_send`. It never
+  runs program code.
 - **The first signal.** The handler stores it in `stop.signal`. The scheduler
   checks it between turns (`check_stop` in `vm/task.c`). The run then ends as an
-  exit with code 128 + signal (`agc_stop` in `vm/interp.c`). `end_run` in
-  `vm/main.c` kills the children, flushes the output and the files, and raises
-  the signal again with its default action. So the process dies by that signal.
-  See `docs/vm/14-core-invariants.md` §14.4 and `docs/vm/10-io-scheduler.md`
-  §10.2.2, "Stop signals".
+  exit with code 128 + signal (`agc_stop` in `vm/interp.c`). `agc_launch_settle`
+  in `vm/launch.c` kills the children, flushes the output and the files, and
+  raises the signal again with its default action. So the process dies by that
+  signal. See `docs/vm/14-core-invariants.md` §14.4 and
+  `docs/vm/10-io-scheduler.md` §10.2.2, "Stop signals".
 - **The second signal.** While the children are still being stopped, a second
   signal is only recorded. The VM ends as soon as the children are stopped. A
   3-second `alarm` (`STOP_GRACE_SECONDS` in `vm/loop.c`) bounds that wait. So a
@@ -223,10 +224,11 @@ and to keep Quit as the force path (46.8, question 3).
 Quit is never delivered. It always takes the stop path. The children stop, the
 output and files are flushed as on any stop, and the process exits with status
 131 by calling `_exit(131)`. It does not raise the signal again. So it leaves no
-core dump, and a parent sees exit status 131, not death by a signal. `end_run`
-in `vm/main.c` and `stop_at_once` in `vm/loop.c` special-case Quit this way.
-`_exit` is async-signal-safe, so the handler may call it. A second Quit during
-that end takes the second-signal path, and it also exits with 131.
+core dump, and a parent sees exit status 131, not death by a signal.
+`agc_launch_settle` in `vm/launch.c` and `stop_at_once` in `vm/loop.c`
+special-case Quit this way. `_exit` is async-signal-safe, so the handler may
+call it. A second Quit during that end takes the second-signal path, and it also
+exits with 131.
 
 Today the VM does not handle Quit. Its default action dumps core and leaves the
 children running. So Quit joins the stop set in 46a. A program that ignores
@@ -379,8 +381,8 @@ The recommendation (46.8, question 5) is to gate `System.signal` and
 
 #### 46.3.10 Tests and children
 
-- A driven VM sets `PR_SET_PDEATHSIG` to SIGTERM (`bind_to_driver` in
-  `vm/main.c`). When the driver dies, the VM gets SIGTERM. That signal is an
+- A driven VM sets `PR_SET_PDEATHSIG` to SIGTERM (`agc_launch_bind` in
+  `vm/launch.c`). When the driver dies, the VM gets SIGTERM. That signal is an
   orphan signal, so the rule of 46.3.2 sends it down the default path. The VM
   kills its children and exits. The program does not get to clean up in that
   case, because no driver is left to wait for.

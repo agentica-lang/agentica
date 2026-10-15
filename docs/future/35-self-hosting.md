@@ -233,8 +233,12 @@ compile. Not on every compiler change. Each case takes two steps:
   from a compiler that uses it. Then a later PR removes the old form.
 - **New `.agcb` format.** The old stage0 on the old VM compiles the new compiler
   (whose writer emits the new format). Then that compiler compiles itself, which
-  gives the new stage0 in the new format. `make stage0` does both steps in a
-  temporary worktree of the parent commit.
+  gives the new stage0 in the new format. Nothing automates this: `make stage0`
+  only copies stage2 over `bootstrap/stage0.agcb` (it makes no worktree), and
+  `STAGE1_COMPILER=...` lets the stage1 recipe use another binary, for example
+  the `dist/agentica` of the parent commit, built in a second worktree. The new
+  VM cannot load a program in the old format, so the PR that changes the format
+  works out the exact commands and lists them in its description.
 
 A refresh PR shows the source diff that made stage0 change, and CI checks the
 fixed point from the committed stage0.
@@ -570,7 +574,10 @@ Notes:
     `frontend-freeze` and `frontend-snapshot` targets, the Racket jobs and
     steps of CI (`build-tests`, `racket-fixed-point`, the Racket cache), and
     the oracle role of `src/main.rkt`. The deletion of `src/*.rkt` follows the
-    conditions of 35.3.
+    conditions of 35.3. `examples/process-tool.agc` spawns `racket --version`
+    as its example of an outside tool, and `tests/test_examples.py` expects
+    that output, so `make test-cli` still finds `racket` on the `PATH` (it
+    does not compile anything); 8d-3 picks another tool.
 - No language change lands in a stage while its port is open (35.7).
 - **Reading source files. Done** (decided by the owner on 2026-10-15). The two
   front ends used to read differently: Racket's `file->string` replaced invalid
@@ -724,28 +731,29 @@ Other choices of the port:
   CLI. `agentica run` runs a compiled `.agcb` with the VM flags (step 8d-2).
   The separate `agentica-vm` and the `AGENTICA_VM` override are gone; this is a
   breaking change for scripts that call `agentica-vm`, listed in the changelog.
-- **Embedding.** One assembly file, built by the same compiler as the VM
-  (`zig cc` in the release), uses `.incbin` to put two things into read-only
-  data: the compiled front end (`stage2`, built from `stage0` at build time,
-  35.3), and every `stdlib/` source with an index of path, offset and length.
-  The list of `std/` modules moves from `src/stdlib.rkt` to a plain file that
-  the Makefile reads. The `std/` modules stay as source, because the front end
-  compiles imports from source, and `agentica doc` (row 22b, after the
-  bootstrap) prints them (§32.5). **Built in 8b:** `stdlib/MODULES` is the list
-  (one path relative to `stdlib/` per line); `src/stdlib.rkt` reads it when it
-  is compiled, and a test checks that it names every `stdlib/**/*.agc`.
-  `vm/tools/gen-embedded.sh` writes `build/vm/<mode>/embedded.s` from it and
-  from `build/stage/stage2.agcb`. The index holds only differences of labels
-  inside one section, which the assembler turns into constants, so it needs no
+- **Embedding.** One assembly file, built by the same compiler as the VM (`zig
+  cc` in the release), uses `.incbin` to put two things into read-only data: the
+  compiled front end (`stage2`, built from `stage0` at build time, 35.3), and
+  every `stdlib/` source with an index of path, offset and length. The list of
+  `std/` modules moves from `src/stdlib.rkt` to a plain file that the Makefile
+  reads. The `std/` modules stay as source, because the front end compiles
+  imports from source, and `agentica doc` (row 22b, after the bootstrap) prints
+  them (§32.5). **Built in 8b:** `stdlib/MODULES` is the list (one path relative
+  to `stdlib/` per line); `src/stdlib.rkt` reads it when it is compiled, and a
+  test checks that it names every `stdlib/**/*.agc`. `vm/tools/gen-embedded.sh`
+  writes `build/vm/<mode>/embedded.s` from it and from
+  `build/stage/stage2.agcb`. The index holds only differences of labels inside
+  one section, which the assembler turns into constants, so it needs no
   relocation (the layout is in `vm/embedded.h`). `make` does not send the
-  assembly through `ccache`, which cannot see the files that `.incbin` reads;
-  a change of `stage2` or of a `stdlib/` file relinks the binary through the
-  make dependencies. Each `.incbin` has a comment with the SHA-256 of its file
-  in the generated text, so a cache keyed on that text (the `zig cc` object
-  cache of the release) sees a changed front end. It is tried with gcc and clang here. `release.yml`
-  builds it with the release toolchain (`zig cc`, glibc 2.28) by running `make
-  fixed-point`, checks the glibc symbol versions and the static libraries, runs
-  the golden tests and the examples with it, and ships it alone (8d-2).
+  assembly through `ccache`, which cannot see the files that `.incbin` reads; a
+  change of `stage2` or of a `stdlib/` file relinks the binary through the make
+  dependencies. Each `.incbin` has a comment with the SHA-256 of its file in the
+  generated text, so a cache keyed on that text (the `zig cc` object cache of
+  the release) sees a changed front end. It is tried with gcc and clang here.
+  `release.yml` builds it with the release toolchain (`zig cc`, glibc 2.28) by
+  running `make fixed-point`, checks the glibc symbol versions and the static
+  libraries, runs the golden tests and the examples with it, and ships it alone
+  (8d-2).
 - **Linking.** As the release does today (the development skill's
   `references/ci.md`, "Release"): a pinned `zig cc` against glibc 2.28, checked
   with `objdump -T`, with Boehm GC, libuv, OpenSSL, yyjson and picohttpparser
@@ -1281,8 +1289,9 @@ Considered and rejected:
 `agentica run` directly when it checks the VM alone, and runs the stage programs
 of `compiler/` while they exist. The product CLI was `racket src/main.rkt` until
 step 8, and is the single binary now (Racket stays as an oracle until 8d-3). A
-test compares the output with a golden or a peer: tokens, AST text, linked text, diagnostics (code and span, never
-message text), `.agcb` bytes, CLI exit codes, stdout and stderr.
+test compares the output with a golden or a peer: tokens, AST text, linked text,
+diagnostics (code and span, never message text), `.agcb` bytes, CLI exit codes,
+stdout and stderr.
 
 - `tests/agentica_test.py` is the shared helper. It holds the binary and CLI
   paths, the environment variables that exist today (`AGENTICA_VM_BINARY`,
@@ -1419,15 +1428,14 @@ in rackunit until phase 3.
   comparisons. 8d deletes these files with the rest.
   **Status: 8d-2 is done** (the switch). The Python tests run the binary:
   `cli()` is `dist/agentica` (or `AGENTICA_TEST_EXECUTABLE`), `vm_command()` is
-  `dist/agentica run` (or the binary that `AGENTICA_VM_BINARY` names, for the
-  GC stress, the vendored link and the sanitizers), and `racket_cli()` is the
-  Racket oracle for the few tests that compare with it
-  (`tests/test_cli_parity.py`, the Racket parts of
-  `tests/test_single_binary.py`). `cli_runs_tests()` and every skip that used
-  it are gone: `tests/test_bdd.py`, `test_process.py` and `test_modules.py` run
-  `agentica test` on the binary. The cases of `test_bdd.py` that need a fake
-  runner run the front end as an ordinary program with a script as the binary
-  it starts. New cases: `agentica run` with VM flags, a front end that stops
-  with an error exits 2, a closed pipe on `--version`, a failing stdin read in
-  the binary, and that `AGENTICA_VM` changes nothing. 8d-3 removes the rackunit
-  files.
+  `dist/agentica run` (or the binary that `AGENTICA_VM_BINARY` names, for the GC
+  stress, the vendored link and the sanitizers). The Racket oracle is used only
+  by `tests/test_cli_parity.py`, so `tests/test_single_binary.py` and the other
+  modules of the sanitizer job need no Racket. `cli_runs_tests()` and every skip
+  that used it are gone: `tests/test_bdd.py`, `test_process.py` and
+  `test_modules.py` run `agentica test` on the binary. The cases of
+  `test_bdd.py` that need a fake runner run the front end as an ordinary program
+  with a script as the binary it starts. New cases: `agentica run` with VM
+  flags, a front end that stops with an error exits 2, a closed pipe on
+  `--version`, a failing stdin read in the binary, and that `AGENTICA_VM`
+  changes nothing. 8d-3 removes the rackunit files.

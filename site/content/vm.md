@@ -42,7 +42,7 @@ The Unicode tables for case mapping and for printing text are not a submodule: t
 
 ## Platforms
 
-Agentica runs on Linux. The release archive is for Linux x86-64 with glibc 2.28 or newer, Required CI runs on Linux only; a manual workflow builds and tests the VM on macOS and Windows. Those builds leave out libuv and OpenSSL, so files, processes, the network, the HTTP client and `Task.sleep` with more than 0 ms are missing there (they fail with `RUNTIME-INTERNAL`), and the `agentica` command is tested on Linux only.
+Agentica runs on Linux. The release archive is for Linux x86-64 with glibc 2.28 or newer, and required CI runs on Linux only. The `agentica` binary is Linux only: it carries the front end and the `std/` sources through an ELF assembly file, so it does not build on macOS or Windows. Those platforms are paused. A manual workflow still builds the C part of the VM there and runs its C tests, without libuv and OpenSSL.
 
 ## Learn more
 

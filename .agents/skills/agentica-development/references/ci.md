@@ -47,15 +47,21 @@ comment), then a step that calls it. Targets that are not obvious:
   compiler and say so in the PR: `make stage0 STAGE1_COMPILER="path/to/agentica"`
   (a binary built from the parent commit in a second worktree, or
   `STAGE1_COMPILER="racket src/main.rkt"` while Racket exists); the later
-  stages still run on the new first binary. `make` fails with a message when
+  stages still run on the new first binary. A new bytecode format is harder:
+  the new VM cannot load a program in the old format, so the old VM must run
+  the new compiler once by hand. `make` does not automate that; the PR that
+  changes the format writes the commands. `make` fails with a message when
   stage0 is too old, never with a silent difference. A stage0 is a 3.7 MB
   blob: refresh it only when needed, so the history stays small.
 - `cli` is gone (it built `dist/agentica-cli.agcb` for `tests/agentica-agcb`),
   and so are `bdd-driver` (`dist/agentica-bdd-driver.agcb`; the driver is part
-  of the front end), `exe` and `vm`. `test-cli` runs the tests of the product
-  command line (`CLI_TESTS`) on `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`),
-  and `tests/test_cli_parity.py` (run by `make test`) compares the binary with
-  the Racket oracle.
+  of the front end), `exe` and `vm` (the four names stay in the Makefile as
+  targets that stop with a message, because `make vm` would otherwise find the
+  `vm/` folder and do nothing). `test-cli` runs the tests of the product
+  command line (`CLI_TESTS`) on `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`;
+  none of them compiles Racket, so the sanitizer job can run the same modules),
+  and `tests/test_cli_parity.py` (run by `make test`, with `build`) compares
+  the binary with the Racket oracle.
 - `test` and `test-slow` run two frameworks side by side while the tests move
   from rackunit to Python `unittest` (a test lives in one only; design in
   `docs/future/35-self-hosting.md` §35.10). `TESTS` is a list of `.rkt` files

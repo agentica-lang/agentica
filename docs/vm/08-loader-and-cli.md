@@ -84,14 +84,16 @@ byte of a file with a type table, an Updates section or Globals.
 
 - `agentica compile file.agc -o file.agcb` runs the front end and writes
   bytecode.
-- `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]`
-  runs a compiled program (until step 8d-2 this was the separate `agentica-vm`
+- `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS]
+  [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb [args...]` runs a
+  compiled program (until step 8d-2 this was the separate `agentica-vm`
   program). `run` is read only as the first word of the command line; C answers
-  it before any front end starts. The option parser is hand written. It stops at the first non-option and honors
-  `--`. Callers always pass `--` before the file, so an option after the file is
-  a program argument. Option errors (a repeated option, an unknown switch, a
-  missing or bad value, a bad `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and
-  `--json` may both appear, and the last one wins.
+  it before any front end starts. The option parser is hand written. It stops at
+  the first non-option and honors `--`. Callers always pass `--` before the
+  file, so an option after the file is a program argument. Option errors (a
+  repeated option, an unknown switch, a missing or bad value, a bad
+  `AGENTICA_FLUSH_TIMEOUT_MS`) exit 2. `--ai` and `--json` may both appear, and
+  the last one wins.
 - `--source-root DIR` (once; DIR must be valid UTF-8 and not `--`, and "" does
   nothing; a bad DIR exits 2) puts `DIR/` before every source name of the
   program that is relative and does not start with `std/`, once, right after
@@ -145,13 +147,21 @@ byte of a file with a type table, an Updates section or Globals.
   deleted after loading, but only if the path still names the file it opened
   (same device and inode). The driver also deletes the file when the VM never
   ran, or failed before loading.
-- On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the driver), the driver waits
-  up to 2 seconds, since Ctrl-C also reaches the VM and a second `SIGTERM` would
-  skip the file flush (10.2.2). Then it sends `SIGTERM`, waits up to 2 more
-  seconds, and only then sends `SIGKILL`. A VM whose driver died ends on its
-  first stop signal, without the file flush, after it kills its children. (Up
-  to 8d-2 the Racket driver did this for every ordinary run; now a run is the
-  process of the binary, and only the BDD driver starts children this way.)
+- On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the process that runs
+  `agentica test`), the run ends on the first signal and `agc_launch_settle`
+  (`vm/launch.c`) calls `agc_processes_stop` (`vm/process.c`) before anything
+  else (14.4). A child that the driver started with `Process.spawn_captured`
+  (the runner and the programs under test) gets `SIGTERM`, and `SIGKILL` if it
+  is still running after a grace of 1 second (`GRACE_MS`), and then the stop
+  waits at most 1 more second (`REAP_MS`) for the exits. A plain child gets
+  `SIGKILL` at once. Ctrl-C also reaches the children, which end on that first
+  signal without the file flush after they kill their own children; the driver
+  sends no second signal of its own, so the flush of the driver is not cut
+  short (10.2.2). Last, the process flushes and raises the signal again with
+  its default action, so the shell sees it. (Up to 8d-2 the Racket driver
+  waited 2 seconds, sent `SIGTERM`, waited 2 more and sent `SIGKILL`, for every
+  ordinary run; now a run is the process of the binary, and only the BDD
+  driver starts children.)
 - A failed read of the standard input of an `agentica` run is the program's own
   error: it reads the real descriptor (`RUNTIME-INTERNAL`, `cannot read
   standard input`, exit 1). The front end's runtime has no standard input.
@@ -178,18 +188,18 @@ byte of a file with a type table, an Updates section or Globals.
   must call `subprocess` from the main thread.
 - On Linux, `main` first ignores `SIGPIPE`, so a closed pipe on the standard
   output ends a write with an error and not the process (before the early
-  `--version` answer too), and opens `/dev/null` onto any of descriptors 0, 1 and 2
-  that is closed or in the wrong direction. So libuv never gets a low descriptor
-  and trips its assertion, and reads and writes on that stream still fail with
-  `EBADF`.
+  `--version` answer too), and opens `/dev/null` onto any of descriptors 0, 1
+  and 2 that is closed or in the wrong direction. So libuv never gets a low
+  descriptor and trips its assertion, and reads and writes on that stream still
+  fail with `EBADF`.
 
 **The single binary (as built in 8b, the product since 8d-2).** `make` links
 `dist/agentica`: the VM objects, `vm/agentica.c` as its `main`, and the front
 end with the `std/` sources as data (`vm/embedded.h`, written by
 `vm/tools/gen-embedded.sh`). It is the only program of the product
-(docs/future/35-self-hosting.md, 35.3 and 35.6). `make` links a first copy
-with `bootstrap/stage0.agcb` in place of the front end (build/vm/<mode>/bootstrap/agentica,
-never shipped) to compile the stages.
+(docs/future/35-self-hosting.md, 35.3 and 35.6). `make` links a first copy with
+`bootstrap/stage0.agcb` in place of the front end
+(build/vm/<mode>/bootstrap/agentica, never shipped) to compile the stages.
 
 - **`agentica run`.** When the first word is `run`, `vm/agentica.c` parses the
   VM options (`agc_launch_parse`, messages named `agentica run`), reads the
@@ -240,10 +250,10 @@ never shipped) to compile the stages.
   fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and must
   be a regular file of at most 256 MiB, so a named pipe is refused at once.
 - **Shared by the two runs.** `vm/launch.c` holds what both do: the option
-  parser (`agc_launch_parse`; its messages start with the program name, `agentica`
-  or `agentica run`), seeds, the trace file, the creation of a runtime, the
-  `SIGPIPE` setting (`agc_launch_ignore_sigpipe`) and the one exit path
-  (`agc_launch_settle`, `agc_launch_exit`). `agc_io_init` runs once per
+  parser (`agc_launch_parse`; its messages start with the program name,
+  `agentica` or `agentica run`), seeds, the trace file, the creation of a
+  runtime, the `SIGPIPE` setting (`agc_launch_ignore_sigpipe`) and the one exit
+  path (`agc_launch_settle`, `agc_launch_exit`). `agc_io_init` runs once per
   process, so its result is kept in `agc_launch` for both runtimes.
 - **The guarded builtins.** `FrontEnd.hand_off(program: List[Int], options:
   List[String], arguments: List[String]) -> Result[Void]` and

@@ -1,9 +1,9 @@
 """The single binary dist/agentica (35.3 and 35.6): the front end it carries compiles in memory and hands the program
 to C, which runs it in a new runtime; `agentica run` runs a compiled file with the VM flags.
 
-The binary is checked against the Racket front end (the development oracle until Racket is deleted): the same stdout,
-stderr and exit status for a few programs and a few diagnostics, and the same bytes for `compile`. The other cases use
-a front end of their own (tests/fixtures/single-binary/front.agc, loaded with --front-end) to see what the C side does
+The binary does not need Racket here, so the sanitizer job can run this module on its own build: the comparison with
+the Racket front end (the development oracle until Racket is deleted) is in tests/test_cli_parity.py. The cases use a
+front end of their own (tests/fixtures/single-binary/front.agc, loaded with --front-end) to see what the C side does
 with the two FrontEnd builtins. The fixed point is not tested here: `make fixed-point` is a step of CI (the test job
 and the sanitizer job), where it compiles compiler/ three times next to this module.
 """
@@ -13,20 +13,15 @@ import re
 import struct
 import subprocess
 
-from tests.agentica_test import (FIXTURES, ROOT, TestCase, binary, compile_agc, racket_cli, require, run, run_vm,
-                                 scaled, vm_environment)
+from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TestCase, binary, compile_agc, require, run, run_vm, scaled,
+                                 vm_environment)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
-STAGE2 = ROOT / "build" / "stage" / "stage2.agcb"
 ANOTHER_VERSION = "9.9.9"
 
 EXIT_THREE = 'def main() -> Void\n  puts("before")\n  System.exit(3)\nend\n'
-INDEX_ERROR = "def main() -> Void\n  xs = [1, 2]\n  puts(xs[5])\nend\n"
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
-SYNTAX_ERROR = "def main() -> Void\n  puts(1\nend\n"
-HELPER_ERROR = 'export def f() -> Int\n  return "x"\nend\n'
-USES_HELPER = 'import {f} from "./lib/helper"\n\ndef main() -> Void\n  puts(f())\nend\n'
 LOOP = "def main() -> Void\n  i = 0\n  while true\n    i += 1\n  end\nend\n"
 RANDOM = "def main() -> Void\n  puts(Random.int(0, 1000000))\nend\n"
 STDIN_AND_ARGS = (
@@ -77,10 +72,6 @@ class SingleBinary(TestCase):
         options.setdefault("env", vm_environment())
         return run([self.binary, *words], **options)
 
-    def racket(self, *words, **options):
-        options.setdefault("env", vm_environment())
-        return run(racket_cli() + list(words), **options)
-
     def front_end(self, work):
         """The test front end, compiled once for the case, with the header version of the current build."""
         return compile_agc(FRONT, work / "front.agcb")
@@ -91,36 +82,20 @@ class SingleBinary(TestCase):
         self.assertEqual((result.code, result.stdout, result.stderr),
                          (3, 'args ["one", "two words"]\nline ok("typed")\n', ""))
 
-    def test_has_the_results_of_the_racket_front_end(self):
-        directory = self.make_suite({
-            "exit.agc": EXIT_THREE, "index.agc": INDEX_ERROR, "type.agc": TYPE_ERROR, "syntax.agc": SYNTAX_ERROR,
-            "main.agc": USES_HELPER})
+    def test_the_exit_status_and_the_problems_of_a_source_file(self):
+        """The shapes of a result: the status of the program, a diagnostic with status 1, a file that is not UTF-8.
+
+        tests/test_cli_parity.py compares every command, option and diagnostic form with the Racket front end."""
+        directory = self.make_suite({"exit.agc": EXIT_THREE, "type.agc": TYPE_ERROR})
         (directory / "bad.agc").write_bytes(b"\xff\xfe")
         bad_utf8_file(directory / "big_bad.agc")
-        (directory / "lib").mkdir()
-        (directory / "lib" / "helper.agc").write_text(HELPER_ERROR)
-        cases = [
-            ["exit.agc"], ["index.agc"], ["type.agc"], ["./type.agc"], ["syntax.agc"], ["main.agc"], ["missing.agc"],
-            ["bad.agc"], ["big_bad.agc"], ["--version"], ["--max-steps", "0", "exit.agc"], ["--bogus", "exit.agc"],
-            ["compile", "type.agc", "-o", "out.agcb"],
-            # The usage errors of step 8a: a missing option value, a repeated flag, a long --seed, the usage text.
-            ["--max-steps"], ["--seed"], ["--seed", "1", "--seed", "2", "exit.agc"], ["--allow-run", "--allow-run"],
-            ["--seed", "00000000001", "exit.agc"], ["--seed", "2147483648", "exit.agc"], [], ["compile"],
-            ["compile", "type.agc"], ["-h"],
-            # The commands and the forms of a diagnostic that step 8a added.
-            ["check", "exit.agc"], ["check", "type.agc"], ["--ai", "check", "type.agc"],
-            ["--json", "check", "type.agc"], ["--json", "main.agc"], ["--ai", "index.agc"], ["help", "String.split"],
-            ["--json", "help", "String.split"],
-        ]
-        examples = [[str(ROOT / "examples" / name)] for name in ("hello.agc", "queue.agc", "json-modules.agc")]
-        for words in cases + examples:
-            with self.subTest(words=words):
-                got = self.agentica(*words, cwd=directory, timeout=scaled(30))
-                self.assertEqual(got, self.racket(*words, cwd=directory))
-        self.assertFalse((directory / "out.agcb").exists())
+        self.assertEqual(self.agentica("exit.agc", cwd=directory)[:3], (3, "before\n", ""))
+        typed = self.agentica("type.agc", cwd=directory)
+        self.assertEqual((typed.code, typed.stdout), (1, ""))
+        self.assertIn("CHECK-TYPE-MISMATCH", typed.stderr)
+        self.assertEqual(self.agentica("missing.agc", cwd=directory).code, 2)
         # The line of a file that is not UTF-8 is shown with U+FFFD, as Racket shows it.
-        shown = self.agentica("bad.agc", cwd=directory).stderr
-        self.assertIn("1 | \ufffd\ufffd\n", shown)
+        self.assertIn("1 | \ufffd\ufffd\n", self.agentica("bad.agc", cwd=directory).stderr)
         self.assertIn("50001 | \ufffd\ufffd\n", self.agentica("big_bad.agc", cwd=directory).stderr)
 
     def test_the_output_and_the_errors_of_a_program_keep_their_order_in_one_stream(self):
@@ -128,9 +103,7 @@ class SingleBinary(TestCase):
         directory = self.make_suite({"mixed.agc": INTERLEAVED})
         merged = ["sh", "-c", 'exec "$@" 2>&1', "sh"]
         got = run(merged + [str(self.binary), "mixed.agc"], cwd=directory, env=vm_environment())
-        expected = run(merged + racket_cli() + ["mixed.agc"], cwd=directory, env=vm_environment())
         self.assertEqual((got.code, got.stdout), (0, "".join("out %d\nerr %d\n" % (i, i) for i in range(6))))
-        self.assertEqual(got, expected)
 
     def test_a_front_end_that_stops_with_an_error_ends_with_status_2_not_the_status_of_a_failed_run(self):
         """The driver of `agentica test` is part of the front end: when it crashes, the status is 2, as for a usage
@@ -158,14 +131,13 @@ class SingleBinary(TestCase):
             os.close(writer)
         self.assertEqual(process.returncode, 1, process.stderr)
 
-    def test_compile_writes_the_bytes_of_the_racket_front_end(self):
+    def test_compile_writes_what_the_vm_loads(self):
+        """What compile writes is what the VM loads: the same output as running the file in one step. The bytes are the
+        Racket front end's bytes (tests/test_cli_parity.py)."""
         work = self.make_temp_dir()
         source = ROOT / "examples" / "json-modules.agc"
         self.assertEqual(self.agentica("compile", source, "-o", work / "next.agcb").code, 0)
-        self.assertEqual(self.racket("compile", source, "-o", work / "racket.agcb").code, 0)
         data = (work / "next.agcb").read_bytes()
-        self.assertEqual(data, (work / "racket.agcb").read_bytes())
-        # What compile writes is what the VM loads: the same output as running the file in one step.
         self.assertEqual(run_vm(work / "next.agcb", env=vm_environment()), self.agentica(source))
         self.assertIn(version().encode(), data[:32])
 
@@ -199,6 +171,12 @@ class SingleBinary(TestCase):
                 got = self.agentica("run", *words)
                 self.assertEqual((got.code, got.stdout), (2, ""))
                 self.assertTrue(got.stderr.startswith(message.rstrip("\n")), got.stderr)
+        # The usual mistake, a source file: the loader's reason, then the way to run it.
+        source = self.make_suite({"main.agc": EXIT_THREE}) / "main.agc"
+        mistaken = self.agentica("run", "--", source)
+        self.assertEqual((mistaken.code, mistaken.stdout), (2, ""))
+        self.assertIn("invalid bytecode: bad magic", mistaken.stderr)
+        self.assertIn("to run a source file, use agentica %s" % source, mistaken.stderr)
         # `run` must be the first word: after an option it is a source file name, and the front end says so.
         late = self.agentica("--json", "run", "x.agcb")
         self.assertEqual((late.code, late.stdout), (2, ""))
@@ -206,7 +184,9 @@ class SingleBinary(TestCase):
         # The long version line is the VM's (the libraries it links); `agentica --version` is the version alone.
         long = self.agentica("run", "--version")
         self.assertEqual(long.code, 0)
-        self.assertRegex(long.stdout, r"^agentica %s \(libgc .*yyjson .*libuv .*OpenSSL " % re.escape(version()))
+        # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)".
+        self.assertRegex(long.stdout, r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*OpenSSL "
+                                      % re.escape(version()))
         self.assertEqual(self.agentica("--version").stdout, version() + "\n")
 
     def test_a_program_cannot_call_the_front_end_builtins(self):

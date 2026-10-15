@@ -281,13 +281,6 @@ def front_end_command(self_path, *words):
             "--self", self_path, "--", *words]
 
 
-def racket_cli():
-    """The Racket front end, `racket src/main.rkt`, for the tests that use it as an oracle until Racket is deleted: a
-    skip when Racket is missing locally, a failure in CI."""
-    tool("racket")
-    return ["racket", str(ROOT / "src" / "main.rkt")]
-
-
 def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=None, stderr_to=None):
     """Run a command and return Result(code, stdout, stderr), both streams as text.
 

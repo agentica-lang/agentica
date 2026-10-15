@@ -2,8 +2,8 @@
 
 Each case writes a few modules into a temporary folder and runs the root program with `--json`, or runs a CLI command
 that shows how imports resolve. The linker's and the checker's diagnostics for the same programs stay in
-modules-test.rkt until the Racket front end goes. With AGENTICA_TEST_EXECUTABLE set to a built executable these cases
-run on it (make test-exe).
+modules-test.rkt until the Racket front end goes. The cases run on dist/agentica, or on the executable that
+AGENTICA_TEST_EXECUTABLE names.
 """
 import json
 import os

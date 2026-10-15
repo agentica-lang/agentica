@@ -381,17 +381,16 @@ with 17b). These forms get a help, through the hint table of `grammar.md` §7
 - A Racket timing test, `tests/vm-task-map-test.rkt`, planned like
   `tests/test_vm_latency.py`: it is listed in `test-omit-paths` in
   `tests/info.rkt` (the latency test itself is now a Python module that
-  `PY_ALONE` in the Makefile keeps out of directory runs), so
-  `make test`'s parallel batch skips it; a
-  `make vm-task-map` target runs it alone; the CI `test` job runs it right after
-  `make vm-latency`; the Commands section of `AGENTS.md` gets the target; it
-  skips when `AGENTICA_VM_BINARY` names another binary; it uses lower bounds that
-  cannot be flaky and generous upper bounds. It holds every timing-dependent
-  case of 27.1 and 27.2 (27.3's goldens and C tests do not depend on the clock):
-  items print `start i` and `end i`; at no point are more than `limit` items
-  between their `start` and `end`, and at some point exactly `limit` are; 8
-  items that sleep 250 ms with `limit` 2 take at least 1 s; with `limit` 8 they
-  take well under the 2 s of a serial run.
+  `PY_ALONE` in the Makefile keeps out of directory runs), so `make test`'s
+  parallel batch skips it; a `make vm-task-map` target runs it alone; the CI
+  `test` job runs it right after `make vm-latency`; the Commands section of
+  `AGENTS.md` gets the target; it skips when `AGENTICA_VM_BINARY` names another
+  binary; it uses lower bounds that cannot be flaky and generous upper bounds.
+  It holds every timing-dependent case of 27.1 and 27.2 (27.3's goldens and C
+  tests do not depend on the clock): items print `start i` and `end i`; at no
+  point are more than `limit` items between their `start` and `end`, and at some
+  point exactly `limit` are; 8 items that sleep 250 ms with `limit` 2 take at
+  least 1 s; with `limit` 8 they take well under the 2 s of a serial run.
 - Timeout and cancellation, in `tests/vm-task-map-test.rkt`: an item that sleeps
   60 s with `timeout_ms` 200 gives `error("task: timed out")` while the other
   items give `ok`, and the run ends within a few seconds; the timed-out item's

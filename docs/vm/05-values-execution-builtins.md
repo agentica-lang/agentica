@@ -188,8 +188,8 @@ files, processes, TCP, TLS and HTTP (client and server) are Linux only for now
   charges no steps, so `--max-steps` does not bound a single read; only memory
   does (13). `IO.flush` fails like a write. Output uses C stdio. On Windows the
   three streams are in binary mode.
-- A VM run without `vm/agentica.c` (the C tests and the fuzzer) has an empty stdin
-  and no arguments.
+- A VM run without `vm/agentica.c` (the C tests and the fuzzer) has an empty
+  stdin and no arguments.
 
 ### 7.4 Random
 

@@ -31,7 +31,8 @@ becomes a resource field that `process.c` sets (V3).
 Line numbers in this section are from the tree after the moves of §15.7 item 1
 (master at d99f273 plus PR 1), except what V1 to V5 of §15.6 say about the code
 before it moved; the header split moved no line of a `.c` file except the
-`#include` lines of `agentica.c`, `launch.c`, `builtin_tables.c`, `fuzz.c` and `fuzz_main.c`.
+`#include` lines of `agentica.c`, `launch.c`, `builtin_tables.c`, `fuzz.c` and
+`fuzz_main.c`.
 
 ### 15.1 Layers
 

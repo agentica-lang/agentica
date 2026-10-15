@@ -318,8 +318,8 @@ every 7th item 1.0 to 0.91, a cursor scan 1.57 to 1.49, a builder run of a
 million pushes 4.6 to 4.4 or 5.2.
 
 The `benchmarks/run.py` programs (`--runs 3 --size 2 --runners vm`, the master
-binary built apart from master, three invocations per binary alternating, median of the
-three medians), seconds:
+binary built apart from master, three invocations per binary alternating, median
+of the three medians), seconds:
 
 | Program | Master | This VM | Ratio | CPython | Master MB | This VM MB |
 |---|---:|---:|---:|---:|---:|---:|
@@ -430,7 +430,7 @@ rounds run interleaved under `taskset`, and a round starts only when the machine
 is idle.
 
 ```sh
-make vm
+make
 python3 benchmarks/http_bench.py                                          # 40000 requests per run, 8 and 64 connections, 3 rounds
 python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```

@@ -4,7 +4,8 @@ The design of the C bytecode VM, which runs every program. The language does not
 change: `docs/grammar/` (index `docs/grammar.md`) stays the contract. The VM is
 the only backend. The Racket evaluator was deleted in roadmap 7i. The VM's
 codename is Aurora, but only in these docs: the binary (`agentica`), the
-`AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep their names.
+`AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep their
+names.
 
 The section numbers stay as they were, so a reference such as `§10.4` still
 finds its place. The table below gives the file for each number. The checklist

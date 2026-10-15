@@ -62,12 +62,13 @@
   detection is off, and `allocator_may_return_null=1` lets a huge request reach
   the out-of-memory exit (6.3). `make vm-test SANITIZE=1` and
   `make vm-fuzz SANITIZE=1` use the same flags.
-- `make vm-gc-stress` builds `build/vm/gcstress/agentica` (the binary, linked with
-  the stage2 of the release build; it does not run the fixed point) with `GC_STRESS=1`
-  (`-DGC_DEBUG -DAGC_GC_STRESS`, gcc). `agc_alloc` and `agc_alloc_atomic` call
-  `GC_gcollect()` every 64 allocations. It runs `make vm-test` and the
-  differential shards on that binary (`AGENTICA_VM_BINARY` points the tests at
-  it). Valgrind is not used: conservative scanning reports many false errors.
+- `make vm-gc-stress` builds `build/vm/gcstress/agentica` (the binary, linked
+  with the stage2 of the release build; it does not run the fixed point) with
+  `GC_STRESS=1` (`-DGC_DEBUG -DAGC_GC_STRESS`, gcc). `agc_alloc` and
+  `agc_alloc_atomic` call `GC_gcollect()` every 64 allocations. It runs `make
+  vm-test` and the differential shards on that binary (`AGENTICA_VM_BINARY`
+  points the tests at it). Valgrind is not used: conservative scanning reports
+  many false errors.
 - `make vm-lint` runs clang-tidy over `vm/*.c` and `vm/tests/*.c` in the
   release, sanitizer and GC-stress configurations.
 

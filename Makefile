@@ -15,6 +15,11 @@ all: dist/agentica
 
 agentica: dist/agentica
 
+# Targets that step 8d-2 removed. They fail on purpose: without a rule, `make vm` would find the vm/ folder and say nothing to do.
+.PHONY: vm exe cli bdd-driver
+vm exe cli bdd-driver:
+	@echo "make $@ is gone: the product is one binary, dist/agentica (the VM with the front end); run make" >&2; exit 1
+
 # A recipe that fails leaves no half-written target for the next make to take as up to date. The stages below also remove
 # their output before they write it, so a compiler that exits 0 without writing cannot pass for the previous file.
 .DELETE_ON_ERROR:
@@ -97,11 +102,11 @@ py-test/%: FORCE
 	else $(PYTHON) -m unittest $(call PY_MODULE,$*); fi
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
-# diagnostics, the programs, `agentica test`, `agentica run`. test_single_binary.py compares with the Racket oracle, which
-# needs `build`: without it every run of racket src/main.rkt compiles the front end again. Step 8d-3 drops that.
+# diagnostics, the programs, `agentica test`, `agentica run`. None of them needs Racket: the comparison with the Racket
+# oracle is tests/test_cli_parity.py, which make test runs and which needs `build` (compiled Racket).
 CLI_TESTS ?= tests/test_examples.py tests/test_filesystem.py tests/test_process.py tests/test_source_paths.py \
   tests/test_source_utf8.py tests/test_bdd.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
-test-cli: build dist/agentica
+test-cli: dist/agentica
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/dist/agentica" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
@@ -492,6 +497,7 @@ STAGE_DIR := build/stage
 FRONT_END_SRC := compiler/front_end.agc
 STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
+# compiler/agentica.toml is not an input: it holds style rules for tools/agc-format.rkt and the style test, and compile never reads it.
 STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
 STAGE0 := bootstrap/stage0.agcb
 BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
@@ -508,8 +514,9 @@ $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
 	@mkdir -p $(STAGE_DIR)
 	rm -f $@
 	$(STAGE1_COMPILER) compile $(FRONT_END_SRC) -o $@ || { \
-	  echo "$(STAGE1_COMPILER) cannot compile $(FRONT_END_SRC). If it is $(STAGE0), then $(STAGE0) is too old for this change" >&2; \
-	  echo "(or the VM no longer loads it): refresh it with make stage0 STAGE1_COMPILER=..., as references/ci.md says" >&2; exit 1; }
+	  echo "STAGE1_COMPILER ($(STAGE1_COMPILER)) cannot compile $(FRONT_END_SRC)." >&2; \
+	  echo "If it is the first binary, linked from $(STAGE0), then $(STAGE0) may be too old for this change (or the VM no longer loads it):" >&2; \
+	  echo "run make stage0 STAGE1_COMPILER=<a binary that can compile compiler/>, as references/ci.md says" >&2; exit 1; }
 
 $(STAGE_DIR)/stage2.agcb: $(STAGE_DIR)/stage1.agcb $(STAGE_INPUTS) $(BOOT)
 	rm -f $@
