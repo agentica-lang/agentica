@@ -370,17 +370,17 @@ Notes:
     `--json`) move to Agentica, with the plain version file. It runs as an
     ordinary `.agcb` and is compared with the Racket CLI (exit codes, stdout,
     stderr). Not the default yet.
-  - **8b, the single binary. Done.** The `.incbin` embedding of `stage2` and of
-    the `std/` sources (35.6), the two builtins that hand the compiled program
-    to C and read the embedded `std/` sources (35.5), the build-only
-    `--front-end FILE` flag, and the `make` stages `stage1`, `stage2` and
-    `stage3`, with the fixed-point check in CI (35.3). It builds the binary
+  - **8b, the single binary. Done** (PR #298). The `.incbin` embedding of
+    `stage2` and of the `std/` sources (35.6), the two builtins that hand the
+    compiled program to C and read the embedded `std/` sources (35.5), the
+    build-only `--front-end FILE` flag, and the `make` stages `stage1`, `stage2`
+    and `stage3`, with the fixed-point check in CI (35.3). It builds the binary
     (`dist/agentica-next`) beside today's files, not as the default. It runs in
     parallel with 8a: it first fixed the entry point and the two builtins (the
-    contract is in 35.3), and 8a plugs into them. What 8a and 8d still do:
-    8a replaces `compiler/front_end_cli.agc` with the full CLI and the
-    diagnostic forms, and moves the version to a plain file that the Makefile
-    reads (today `AGC_VERSION` still comes from `src/version.rkt`). 8d makes
+    contract is in 35.3), and 8a plugs into them. What 8a and 8d still do: 8a
+    replaces `compiler/front_end_cli.agc` with the full CLI and the diagnostic
+    forms, and moves the version to a plain file that the Makefile reads (today
+    `AGC_VERSION` still comes from `src/version.rkt`). 8d makes
     `dist/agentica-next` the `agentica` of the archive, adds the subcommand that
     runs a compiled `.agcb` with the VM flags (the binary has none yet), and
     switches the bootstrap to `stage0` (35.3).
