@@ -15,7 +15,7 @@ typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
 typedef struct {
   uint64_t key;
-  size_t index;
+  uint64_t item;
 } sort_entry;
 
 struct agc_native {
@@ -275,14 +275,14 @@ static bool entry_less(sort_kind kind, const sort_entry *x, const sort_entry *y)
   return order < 0 || (order == 0 && a->bytes < b->bytes);
 }
 
-static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort_kind kind) {
+static sort_entry *sort_entries(agc_vm *vm, const agc_list *keys, size_t n, sort_kind kind, bool carry) {
   size_t bytes = agc_size_mul(n, sizeof(sort_entry));
   sort_entry *entries = kind == SORT_TEXT ? agc_alloc(bytes) : agc_alloc_atomic(bytes);
   agc_list_cursor cursor;
   agc_value key;
   agc_list_cursor_begin(&cursor, keys, 0);
   for (size_t k = 0; agc_list_cursor_next(&cursor, &key); k++) {
-    entries[k].index = k;
+    entries[k].item = carry ? agc_value_word(key) : k;
     if (kind == SORT_INT)
       entries[k].key = int_order(agc_as_int(vm, key));
     else if (kind == SORT_FLOAT)
@@ -329,7 +329,8 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   agc_charge(vm, (uint64_t)n * rounds);
   agc_value first = agc_list_get(keys, 0);
   sort_kind kind = agc_is(first, AGC_T_STRING) ? SORT_TEXT : agc_is(first, AGC_T_FLOAT) ? SORT_FLOAT : SORT_INT;
-  sort_entry *entries = sort_entries(vm, keys, n, kind);
+  bool carry = items == keys && agc_list_kind(items);
+  sort_entry *entries = sort_entries(vm, keys, n, kind, carry);
   int direction = sort_direction(kind, entries, n);
   if (direction > 0) return agc_list_value((agc_list *)items);
   if (direction < 0) return agc_list_value(agc_list_reverse(items));
@@ -338,7 +339,12 @@ agc_value agc_sort_by_keys(agc_vm *vm, const agc_list *items, const agc_list *ke
   const sort_entry *order = sort_merge(kind, entries, scratch, n);
   agc_list_builder sorted;
   agc_list_builder_sized(&sorted, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, list_get(items, order[k].index));
+  if (carry) {
+    uint32_t tag = agc_list_kind(items);
+    for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, agc_word_value(tag, order[k].item));
+  } else {
+    for (size_t k = 0; k < n; k++) agc_list_builder_push(&sorted, list_get(items, order[k].item));
+  }
   return agc_list_value(agc_list_builder_finish(&sorted));
 }
 

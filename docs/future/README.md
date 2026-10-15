@@ -52,8 +52,8 @@ runtime error in a task other than `main` ends only that task: its awaiters get
 an error `Result`, its descendants are cancelled and the handles it owns are
 closed. Section 38 (value representation) records why `agc_value` is 16 bytes,
 the smaller layouts that were weighed, and the direction if it ever changes:
-unboxed storage from the static types (unboxed `List[Int]` and `List[Float]` are
-step 3 of 8d; the rest is a note). Section 39 (semantic CLI for agents) plans
+unboxed storage from the static types (unboxed `List[Int]` and `List[Float]`,
+step 3 of 8d, are built; the rest is a note). Section 39 (semantic CLI for agents) plans
 `agentica outline`, `symbol`, `refs` and `type-at`: questions about checked code
 answered as text or versioned JSON, with `QUERY-` codes; front end and CLI only,
 no LSP, no language change. Section 40 (native code and FFI) is an idea outside

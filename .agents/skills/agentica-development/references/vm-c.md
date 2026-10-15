@@ -40,7 +40,7 @@ Read before writing or reviewing C in `vm/`.
   follows. Use short `/* */` block comments. Never narrate obvious code and
   never leave commented-out code. Tool markers (`// NOLINT(...)`,
   `/* fall through */`) are not comments in this sense.
-- Only `value.c` reads the value union. Immediates write the full word.
+- Only `value.c` reads the value union, except the two inline word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list leaves use for the 8-byte payload of an Int or Float. Immediates write the full word.
 
 `make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
 skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
@@ -61,8 +61,9 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
 
 **Boehm GC.**
 - Allocate only through `agc_alloc` (objects that hold `agc_value`s) and
-  `agc_alloc_atomic` (strings, byte buffers; not zeroed under Boehm, so never
-  expose an unfilled tail), or `load_alloc` in the loader. They switch to
+  `agc_alloc_atomic` (strings, byte buffers, the leaf blocks of Int and Float
+  lists; not zeroed under Boehm, so never expose an unfilled tail), or
+  `load_alloc` in the loader. They switch to
   `calloc` under `AGC_NO_GC` and route out-of-memory to the handler. Only
   `value.c` calls `GC_*` or includes `gc.h`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant

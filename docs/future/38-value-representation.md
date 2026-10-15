@@ -1,10 +1,11 @@
 ## 38. Value representation
 
-**Status:** item 1 of §38.6 (unboxed `List[Int]` and `List[Float]`) is
-scheduled as step 3 of roadmap item 8d, before the freeze of the Racket front
-end (order row 7.2.7). The rest is a note, no change planned: revisit it with
-the benchmarks (roadmap order rows 9 and 14). An implementation note with no
-language change.
+**Status:** item 1 of §38.6 (unboxed `List[Int]` and `List[Float]`) is built,
+as step 3 of roadmap item 8d
+([§17.12](../vm/17-lists.md#1712-unboxed-numeric-leaves)). The VM picks the kind
+of a list from its values, so the checker's types did not have to reach it. The
+rest is a note, no change planned: revisit it with the benchmarks (roadmap order
+rows 9 and 14). An implementation note with no language change.
 
 The owner asked whether `agc_value` could be smaller than 16 bytes. This note
 records why it is 16 bytes, the alternatives, and the direction to take if
@@ -94,9 +95,11 @@ The checker already knows the type of every value, so most tags are redundant.
 Lowering gets the types today (`check #:types`). In order of payoff:
 
 1. **Unboxed `List[Int]` and `List[Float]`**: 8 bytes per item and no tag, in an
-   atomic object that the GC does not scan. It is step 3 of 8d, after the
-   persistent vector of steps 1 and 2, whose leaves can be typed arrays. It
-   also enables the vector sort of §19 item 4.
+   atomic object that the GC does not scan. Built as step 3 of 8d, after the
+   persistent vector of steps 1 and 2, whose leaves are typed arrays now. It
+   differs from this sketch in one point: the list code decides the kind from
+   the values it stores, instead of the checker passing the element type
+   (§17.12). It also enables the vector sort of §19 item 4.
 2. **Typed registers in the JIT** (roadmap 7m, §22): Int and Float stay in
    machine registers with no tag.
 3. **Compact struct fields**: a struct type knows its field types, so an Int,
