@@ -1,6 +1,6 @@
 ---
 name: agentica-development
-description: "Develops the Agentica interpreter: the Racket front end (lexer, parser, module linker, checker, lowering, bytecode) and the C11 bytecode VM that runs every program (vm/ with the Boehm GC, the runtime libraries, loader safety, golden tests). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, the Racket and C gotchas of this repo, and the VM build, CI, release, documentation site, benchmarks and copy-paste check. Use when working in the agentica repository on src/, vm/, tests/, site/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
+description: "Develops the Agentica interpreter: the Racket front end (lexer, parser, module linker, checker, lowering, bytecode) and the C11 bytecode VM that runs every program (vm/ with the Boehm GC, the runtime libraries, loader safety, golden tests). Covers where code goes, how to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests, the Racket and C gotchas of this repo, and the VM build, CI, release, documentation site, benchmarks and copy-paste check. Use when working in the agentica repository on src/, compiler/, vm/, tests/, site/, the Makefile or CI. Don't use for writing Agentica programs (agentica-programming), for the grammar or roadmap documents alone, or for other Racket or C projects."
 ---
 
 # Agentica development
@@ -8,6 +8,8 @@ description: "Develops the Agentica interpreter: the Racket front end (lexer, pa
 A Racket front end compiles Agentica to bytecode for a C VM. The short repo
 tree is in `AGENTS.md`. This file says how to work and which reference to
 read; load only the references your change needs.
+
+By default `src/` is frozen (roadmap row 7.2.7): bug fixes and builtin-table rows only; language changes go into `compiler/` (`references/frontend.md`). They may be relaxed when following them costs more than it saves; the PR says which rule it relaxes and why.
 
 Read the active phase in `docs/roadmap/` before adding code. Build only what
 that phase asks for: no placeholder modules or empty nodes for later phases.
@@ -33,7 +35,7 @@ make vm                                   # build dist/agentica-vm (git submodul
 make test TESTS="tests/lexer-test.rkt"    # only the tests the change touches
 racket src/main.rkt examples/hello.agc    # run a program; `check file.agc` only checks
 make vm-test                              # the C tests; one: make build/vm/release/<name>-test
-make goldens                              # rewrite VM goldens after an intended change; review the diff
+make goldens                              # rewrite VM and front-end goldens after an intended change; review the diff
 make vm-golden-check FIXTURES="a b"       # CI golden check of only those fixtures; make goldens FIXTURES="a b" rewrites only them
 make dup-check                            # jscpd: a new copy fails CI; share a helper instead
 make site                                 # before merging a site change
@@ -55,9 +57,9 @@ CI runs everything else (`references/ci.md`, "What CI runs").
 
 | Add | Location |
 | --- | --- |
-| keyword, operator, literal form | `src/lexer.rkt` tables (`references/frontend.md`) |
-| AST node | `src/ast.rkt` struct + `provide`; built in `src/parser.rkt` |
-| syntax form | `src/parser.rkt`: `parse-statement`, `parse-primary` or `parse-program` |
+| keyword, operator, literal form | `compiler/lexer.agc` tables, with a golden case (`references/frontend.md`); `src/lexer.rkt` only for a bug fix, in the same PR |
+| AST node | by default waits for the parser port (35.4 step 2); then `compiler/` |
+| syntax form | by default waits for the parser port; `src/parser.rkt` only for a bug fix |
 | diagnostic code | where the problem is found; prefix `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-` (`references/stages.md` lists them) |
 | builtin | `src/builtins.rkt` metadata, checker rule, `vm-builtins` in `src/lower.rkt`, C in `vm/`, a golden (`references/vm-builtins.md`) |
 | VM form or opcode | `src/lower.rkt`, `opcodes` in `src/bytecode.rkt` = `agc_opcode` in `vm/value.h` (same order), `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`) |
@@ -83,7 +85,7 @@ CI runs everything else (`references/ci.md`, "What CI runs").
 | Read | When |
 |---|---|
 | `references/repo-map.md` | finding which file in `src/`, `vm/`, `tests/` or `stdlib/` owns something |
-| `references/frontend.md` | editing `src/*.rkt`: recipes (keyword, AST node, syntax, diagnostic, stage, tests), Racket gotchas, stray `NL` tokens, reading a failure |
+| `references/frontend.md` | editing `src/*.rkt` or `compiler/`: the freeze, the Agentica lexer and its goldens, recipes (keyword, AST node, syntax, diagnostic, stage, tests), Racket gotchas, stray `NL` tokens, reading a failure |
 | `references/stages.md` | the token kinds, the diagnostic code list, the AST nodes, a module's public API (`source`, `lexer`, `parser`, `modules`, `checker`, `lower`, `bytecode`, `builtins`, `main`) |
 | `references/language-notes.md` | changing a core language rule: Result and `try`, collections, ranges, file modules, methods, interpolation, blocks, hints, enums, function values |
 | `references/library-notes.md` | changing a library area: stdio, JSON, tasks, TCP/TLS/HTTP, files and paths, processes |

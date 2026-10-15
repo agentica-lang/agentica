@@ -1,0 +1,1 @@
+ERROR LEX-UNEXPECTED-CHAR 12:1:13-13:1:14 "unexpected character \"'\"" "strings use double quotes: \"abc\"; there is no char type, a character is a one-character String such as \"+\""

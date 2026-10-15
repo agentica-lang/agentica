@@ -1,0 +1,25 @@
+def f()
+  if x
+    while y
+      for a in b
+        case c
+          1 -> d
+        end
+      end
+    end
+  elsif z
+  else
+  end
+end
+struct S
+  a: Int
+end
+enum E
+  A
+  B(Int)
+end
+xs.each do |x|
+  x
+end
+end
+end
