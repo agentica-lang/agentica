@@ -75,6 +75,21 @@ comment), then a step that calls it. Targets that are not obvious:
   into a slow run. Fast cases go in `(module+ test ...)` or are unmarked, slow
   ones (live corpus, generated inputs, stress) in `(module+ slow ...)` or
   marked `@slow`; local runs use only the fast tier.
+- Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE` (a
+  float, default 1; `ci.yml` and `sweep.yml` set 4 for the slow runners):
+  one test (`tests/agentica_test.py`: SIGALRM per test like pytest-timeout,
+  120 s, 900 s for `@slow`; `@timeout(seconds)` overrides it for a method or
+  a class; `faulthandler` kills the module 30 s later if the signal cannot
+  run); one test module or rackunit file (the `MODULE_LIMIT` of the Makefile:
+  `timeout -k 10` around `unittest`, `raco test --timeout`; 600 s, 1800 s for
+  `make test-slow`); the job `timeout-minutes` of the workflow, which must
+  stay larger than the module limit times the scale. Deadlines that a correct
+  run must beat take `scaled(seconds)` (or `ms` in
+  `tests/test_bdd_integration.py`, `run-process` in the Racket tests); a
+  deadline that a test expects to fire, or a bound that measures the product
+  (`LIMIT_MS` of `tests/test_vm_latency.py`, the 200 ms step deadline of the
+  cleanup case), stays unscaled. Step deadlines stay under the 30 s scenario
+  deadline of `agentica test`, which has no flag.
 - `build` (`raco make src/main.rkt`) and `vm` run before `make test` and
   `make smoke`, and `make test` then starts its Racket test workers in parallel.
 - `build-tests` compiles every test module; `test-ci` runs `make test

@@ -13,14 +13,14 @@ import re
 import threading
 import time
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, TestCase, cli, compile_agc, output_lines, run,
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, TestCase, cli, compile_agc, output_lines, run, scaled,
                                  vm_binary, vm_environment)
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
 FIFO_PEER = FIXTURES / "fifo-peer.py"
 OS_PEER = FIXTURES / "os-peer.py"
-VM_WAIT_SECONDS = 10
+VM_WAIT_SECONDS = scaled(10)
 
 # Path.real or System.env of every argument after the mode, one line each.
 OS_PROGRAM = r"""def line(r: Result[String]) -> String
@@ -182,13 +182,13 @@ end
 
         def start(*arguments, variable=None):
             # Each run ends in well under a second when the limit works; 6 s fails a broken limit before the watchdog.
-            return run(cli() + [*arguments], timeout=6, env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable}))
+            return run(cli() + [*arguments], timeout=scaled(6), env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable}))
 
         began = time.monotonic()
         by_flag = start("--json", "--flush-timeout", "200", source, fifo)
         by_variable = start("--json", source, fifo, variable="300")
         flag_wins = start("--json", "--flush-timeout", "250", source, fifo, variable="60000")
-        self.assertLess(time.monotonic() - began, 20)
+        self.assertLess(time.monotonic() - began, scaled(20))
         for result, expected in zip((by_flag, by_variable, flag_wins), (200, 300, 250)):
             self.assertEqual((result.code, result.stdout), (0, "main done\n"), result.stderr)
             self.assertEqual(json.loads(result.stderr)["flush_timeout_ms"], expected)
@@ -207,8 +207,8 @@ def main() -> Void
 end
 """, encoding="utf-8")
         began = time.monotonic()
-        result = run(cli() + ["--flush-timeout", "200", source, fifo], timeout=10, env=vm_environment())
-        self.assertLess(time.monotonic() - began, 10)
+        result = run(cli() + ["--flush-timeout", "200", source, fifo], timeout=scaled(10), env=vm_environment())
+        self.assertLess(time.monotonic() - began, scaled(10))
         self.assertEqual((result.code, result.stdout), (0, "ok()\nawaited\n"), result.stderr)
 
     def test_fifo_calls_wait_on_the_loop_timed_out_reads_and_parked_tasks_hold_no_pool_thread_at_exit(self):

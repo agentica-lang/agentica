@@ -15,8 +15,9 @@ permissions:
 jobs:
   sweep:
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
+      AGENTICA_TEST_TIMEOUT_SCALE: '4'
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: full
       AGENTICA_GC: vendored

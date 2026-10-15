@@ -8,7 +8,7 @@ and a client. The certificates are the ones in fixtures/tls. Everything is on
 import json
 import re
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, run, run_vm, start_vm, tool,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, check_lines, run, run_vm, scaled, start_vm, tool,
                                  vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
@@ -324,12 +324,12 @@ class VmTls(TestCase):
     def test_server_serves_node_clients_tls_13_and_12_and_python_and_fails_an_untrusting_clients_accept(self):
         vm = self.adopt(start_vm(self.compile_text(SERVER_PROGRAM, "server"), CERTS))
         port = vm.next_line()
-        nodes = run([self.node, NODE_PEER, "clients", port], timeout=30)
+        nodes = run([self.node, NODE_PEER, "clients", port], timeout=scaled(30))
         self.assertEqual(nodes.code, 0, nodes.stderr)
         self.assertEqual(nodes.stdout, "clients ok\nuntrusting UNABLE_TO_VERIFY_LEAF_SIGNATURE\n")
         self.assertEqual(vm.next_line(), "served")
         self.assertTrue(vm.next_line().startswith("port->ssl-ports: accept failed ("))
-        python = run([PYTHON, PYTHON_PEER, "client", port], timeout=30)
+        python = run([PYTHON, PYTHON_PEER, "client", port], timeout=scaled(30))
         self.assertEqual(python.code, 0, python.stderr)
         self.assertEqual(python.stdout, "hello python TLSv1.3\n")
         self.assertEqual(vm.next_line(), "done")

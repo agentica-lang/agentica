@@ -11,11 +11,11 @@ import signal
 import threading
 import time
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, cli, process_alive, start_vm, vm_binary,
+from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, cli, process_alive, scaled, start_vm, vm_binary,
                                  vm_environment, wait_until)
 
 PEER = FIXTURES / "stop-peer.py"
-WAIT_SECONDS = 10
+WAIT_SECONDS = scaled(10)
 
 STUCK_FLUSH = """\
 def main() -> Void
@@ -194,7 +194,7 @@ class VmStop(TestCase):
         start = time.monotonic()
         os.kill(vm.process.pid, signal.SIGTERM)
         self.assertEqual(vm.wait(WAIT_SECONDS), -signal.SIGTERM)
-        self.assertLess(time.monotonic() - start, 5, "the run does not wait for the reader")
+        self.assertLess(time.monotonic() - start, min(scaled(5), 25), "the run does not wait for the reader")
 
     def test_ctrl_c_through_the_cli_stops_a_child_that_ignores_the_signals_and_writes_the_file(self):
         path = self.make_temp_dir() / "out.txt"

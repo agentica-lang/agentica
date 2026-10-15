@@ -15,8 +15,8 @@ import threading
 import time
 import unittest
 
-from tests.agentica_test import (
-    RUN_TIMEOUT, TESTS, Child, cli, process_alive, vm_binary, vm_environment, wait_until)
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, cli, process_alive, scaled, vm_binary, vm_environment,
+                                 wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, SHARD_COUNT, Fixture, VmCase, check_text_format,
     decode, exit_status, execute, fixture_programs, last_limit, outcome, read_expected, read_expected_steps,
@@ -34,7 +34,7 @@ def words(text):
 
 
 def gone(pid):
-    return wait_until(lambda: not process_alive(pid), 5)
+    return wait_until(lambda: not process_alive(pid), scaled(5))
 
 
 def kill_alive(pids):
@@ -206,7 +206,7 @@ class Extras(VmCase):
         self.assertEqual(outcome(result)[:3], (
             0, "error(\"filesystem: operation timed out\")\nerror(\"filesystem: file handle is closed\")\nok()\ndone\n",
             ""))
-        self.assertLess(time.monotonic() - started, 20)
+        self.assertLess(time.monotonic() - started, scaled(20))
 
     @unittest.skipUnless(LINUX, "Linux only")
     def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_against_the_working_directory(self):

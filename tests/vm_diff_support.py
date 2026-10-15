@@ -23,8 +23,8 @@ import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tests.agentica_test import (
-    FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, TestCase, _kill_and_collect, compile_agc, vm_binary, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, TestCase, _kill_and_collect, compile_agc, scaled,
+                                 vm_binary, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
@@ -521,7 +521,7 @@ def sweep_limits(total, expected_steps):
 def _head_sha():
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True,
-                              timeout=10).stdout.strip()
+                              timeout=scaled(10)).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
 
