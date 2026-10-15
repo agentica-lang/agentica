@@ -1,6 +1,6 @@
 ## 4. Lexical conventions
 
-- The file is UTF-8; core identifiers use ASCII characters.
+- The file is UTF-8; core identifiers use ASCII characters. A source file has no size limit. Bytes that are not valid UTF-8 (a stray continuation byte, an overlong form, a surrogate, a code point above U+10FFFF, a sequence cut short, also at the end of the file) are `LEX-INVALID-UTF8`, in the file that has them, whether it is the root file or an imported one. The span is one character long and starts at the first byte of the first sequence that does not decode, at the line and column of the characters before it. The text is never repaired with replacement characters.
 - A comment starts with `#` and ends at the end of the line. The newline after it is kept.
 - A line whose first non-blank characters are `##` is a doc line (see "Doc comments" below), not an ordinary comment.
 - Names of variables, functions and fields start with a lowercase letter or `_`. Type names start with an uppercase letter. Identifiers are case-sensitive.

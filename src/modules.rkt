@@ -1,7 +1,7 @@
 #lang racket
 
 (require racket/path "ast.rkt" "builtins.rkt" "builtin-types.rkt" "checker.rkt"
-         "diagnostic.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "stdlib.rkt")
+         "diagnostic.rkt" "lexer.rkt" "parser.rkt" "source.rkt" "source-file.rkt" "stdlib.rkt")
 
 (provide link-program load-program)
 
@@ -52,7 +52,9 @@
 (define (load-program path #:files [files #f])
   (with-handlers ([exn:fail? (lambda (failure)
                              (diagnostic 'CHECK-IMPORT-IO (exn-message failure) (file-span path)))])
-    (define tokens (lex (source (path->string (path->complete-path path)) (file->string path))))
+    (define name (path->string (path->complete-path path)))
+    (define text (read-source-file path name))
+    (define tokens (if (diagnostic? text) text (lex (source name text))))
     (define parsed (if (diagnostic? tokens) tokens (parse tokens)))
     (if (diagnostic? parsed) parsed (link-program parsed path #:files files))))
 
@@ -146,7 +148,8 @@
            (resolve-import key (string-append parent path) span)]
           [else (canonical (build-path (path-only key) path))]))
       (define (module-source key)
-        (if (string? key) (hash-ref stdlib-sources key) (file->string key)))
+        ;; An embedded module is trusted; a file on disk is a string or a LEX-INVALID-UTF8 diagnostic.
+        (if (string? key) (hash-ref stdlib-sources key) (read-source-file key (path->string key))))
       (define (module-name key)
         (if (string? key) key (path->string key)))
       (define trees (make-hash))
@@ -276,7 +279,8 @@
               [else
                (define tokens
                  (with-handlers ([exn:fail? (lambda (_) (bail 'CHECK-IMPORT-IO "cannot read import" span))])
-                   (lex (source (module-name target) (module-source target)))))
+                   (let ([text (module-source target)])
+                     (if (diagnostic? text) text (lex (source (module-name target) text))))))
                (when (diagnostic? tokens) (failed tokens))
                (define parsed (parse tokens))
                (when (diagnostic? parsed) (failed parsed))
