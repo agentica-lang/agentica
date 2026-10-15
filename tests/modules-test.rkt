@@ -604,7 +604,7 @@
      '(CHECK-DECL-ORDER "lib.agc" 4 1)))
 
   (test-case "embedded std modules follow the rule, so importing them never trips it"
-    (for ([name '("std/http" "std/logger" "std/binary" "std/queue")])
+    (for ([name '("std/http" "std/logger" "std/binary" "std/toml" "std/queue")])
       (with-files
        (list (cons "root.agc" (format "import M from ~s\ndef main() -> Void\nend\n\n" name)))
        (lambda (directory)

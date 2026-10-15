@@ -1,0 +1,20 @@
+offset_z = 1979-05-27T07:32:00Z
+offset_lower = 1979-05-27t07:32:00z
+offset_plus = 1979-05-27T00:32:00+07:00
+offset_minus = 1979-05-27T00:32:00.999999-07:00
+offset_space = 1979-05-27 07:32:00Z
+local_dt = 1979-05-27T07:32:00
+local_dt_frac = 1979-05-27T07:32:00.5
+local_dt_space = 1979-05-27 07:32:00.123456
+local_date = 1979-05-27
+local_time = 07:32:00
+local_time_frac = 00:32:00.999999
+leap_day = 2024-02-29
+century_leap = 2000-02-29
+first = 0001-01-01
+last = 9999-12-31T23:59:59Z
+midnight = 00:00:00
+in_array = [1979-05-27, 07:32:00, 1979-05-27T07:32:00Z]
+in_inline = { when = 1979-05-27T07:32:00Z }
+date_then_comment = 1979-05-27 # a comment
+date_not_a_string = "1979-05-27T07:32:00Z"

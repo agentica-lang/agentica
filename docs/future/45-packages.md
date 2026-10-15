@@ -138,18 +138,18 @@ because the manager needs it and any program can use it.
 
   ```ruby
   export enum Value
-    Text(String)
-    Integer(Int)
-    Real(Float)
-    Boolean(Bool)
-    Datetime(String)
+    Str(String)
+    Int(Int)
+    Float(Float)
+    Bool(Bool)
+    DateTime(String)
     Array(List[Value])
     Table(Map[String, Value])
   end
   ```
 
   A recursive enum such as `Array(List[Value])` passes the checker today.
-- **Datetimes (open question 11).** Recommended: `Datetime(String)` keeps the
+- **Datetimes (open question 11).** Recommended: `DateTime(String)` keeps the
   text exactly as written. A datetime and a string differ in TOML, and the
   encoder must write a datetime unquoted. Keeping the text makes the round trip
   exact. When §41 adds its date types, this variant splits into four, one for
@@ -158,9 +158,12 @@ because the manager needs it and any program can use it.
   what was expected. Lines and columns count from 1, and a column counts
   characters. A `Result` error holds only a `String`
   ([`06-semantics.md`](../grammar/06-semantics.md)), so the position is in the
-  text. The module never halts. A nesting deeper than 1,000 levels is an error,
-  the same limit as `PARSE-TOO-DEEP`, and 45-0 confirms it against the VM's
-  call depth. The manager reads a manifest with `File.read_text`, so a manifest
+  text. The module never halts. Arrays and inline tables nest at most 256
+  levels, and a key has at most 256 parts; a deeper input is an error at the
+  opening bracket or the key. 45-0 chose 256 (not the 1,000 of
+  `PARSE-TOO-DEEP`) because the reader, the encoder and `to_json` recurse in
+  proportion to the depth, and 256 levels stay far under the VM's call limit
+  of 10,000. The manager reads a manifest with `File.read_text`, so a manifest
   is subject to its 1 MiB limit. The manager turns the position into the
   diagnostic of 45.9.
 - **Encoder.** `Toml.encode(value) -> Result[String]` writes a whole document,
@@ -433,9 +436,10 @@ binaries with hashes in the lock. A build step would break "no code at install"
 
 **`std/toml` (phase 45-0).**
 
-- **Goldens.** `tests/fixtures/toml/` holds input files and the expected text of
-  each parsed value, in one stable text form. Each input has a golden. A set of
-  bad inputs has golden errors, with their line and column.
+- **Goldens.** The vendored toml-test files (`tests/fixtures/toml-test/`,
+  below) hold each valid input with its expected value. `tests/fixtures/toml/`
+  holds our own inputs. A set of bad inputs has golden errors, with their line
+  and column, in `tests/test_std_toml.py`.
 - **Independent peer.** Python's standard `tomllib` (3.11 or later) parses the
   same inputs. A small printer in the test writes its dict in the same text
   form, and the two must match.
@@ -449,9 +453,10 @@ binaries with hashes in the lock. A build step would break "no code at install"
 - **Runner.** CI runs `python3`, which is the runner's version (`ci.yml`). 45-0
   checks that it is 3.11 or later in CI and fails there if it is not. It does
   not skip.
-- **Optional slow tier.** The official toml-test corpus (toml-lang/toml-test)
-  can run as `@slow` cases, with `make test-slow`, if its license allows
-  vendoring. This design did not check the license (45.14 question 12).
+- **The toml-test corpus.** The license of toml-lang/toml-test is MIT, which
+  allows vendoring. 45-0 vendors its TOML 1.0.0 files (about 100 KB) under
+  `tests/fixtures/toml-test/` with the license, in the fast tier: every valid
+  input must give the expected value and every invalid one an error.
 
 **The manager (45a to 45d).**
 
@@ -620,7 +625,7 @@ One line each, as possible later work:
 11. **Datetimes.**
     - Option A: an RFC 3339 string in `Text`. A datetime and a string look the
       same, so a round trip writes the datetime in quotes and changes the file.
-    - Option B: `Datetime(String)`, which keeps the text as written.
+    - Option B: `DateTime(String)`, which keeps the text as written.
     - **Recommendation:** B. The text is exact, and §41 can add a conversion
       later without a change to the value.
 
@@ -629,5 +634,5 @@ One line each, as possible later work:
       file, as `@slow` cases.
     - Option B: do not vendor it. Fetch it by hand from a pinned commit when
       needed.
-    - **Recommendation:** A, only if its license allows vendoring. This design
-      did not check the license, so 45-0 checks it first. Otherwise B.
+    - **Decided (45-0):** A. The license is MIT, so the files are vendored.
+      They are small, so they run in the fast tier, not as `@slow` cases.
