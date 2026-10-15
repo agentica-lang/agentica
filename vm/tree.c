@@ -4,29 +4,14 @@
  * O_DIRECTORY) and each entry is deleted with unlinkat on its parent's
  * descriptor, so a link in the tree, or one swapped in while the walk runs, is
  * removed as a link and what it names is never touched. A mount point inside
- * the tree is crossed, as rm -rf, Python's rmtree and Racket's
- * delete-directory/files do. agc_tree_refused and agc_remove_tree are for
- * Path.remove in files.c; they run on a pool thread and use no VM state.
- * Service layer. Design: docs/vm/02-reference-behavior.md §2.8.
+ * the tree is crossed, as rm -rf does. No VM state; Path.remove in files.c runs
+ * it on a pool thread. Service layer. Design: docs/vm/02-reference-behavior.md.
  */
 #include "services.h"
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* A pure predicate, apart from the walk, so a test can try every name that must never be removed without
-   removing anything. The last component (trailing slashes ignored) has to name the tree itself: "/" and "" have
-   none, "." and ".." name a directory by where it is, and ".." is a way to climb out of the tree. */
-bool agc_tree_refused(const char *path) {
-  size_t len = strlen(path);
-  while (len > 0 && path[len - 1] == '/') len--;
-  size_t start = len;
-  while (start > 0 && path[start - 1] != '/') start--;
-  size_t last = len - start;
-  if (last == 0) return true;
-  return (last == 1 && path[start] == '.') || (last == 2 && path[start] == '.' && path[start + 1] == '.');
-}
 
 #ifdef __linux__
 #include <dirent.h>
@@ -210,3 +195,16 @@ int agc_remove_tree(const char *path, char **failed) {
   return ENOSYS;
 }
 #endif
+
+/* A pure function, kept apart from the walk, so a test can try every name that must never be removed without
+   removing anything. The last component (trailing slashes ignored) has to name the tree itself: "/" and "" have
+   none, "." and ".." name a directory by where it is, and ".." is a way to climb out of the tree. */
+bool agc_tree_refused(const char *path) {
+  size_t len = strlen(path);
+  while (len > 0 && path[len - 1] == '/') len--;
+  size_t start = len;
+  while (start > 0 && path[start - 1] != '/') start--;
+  size_t last = len - start;
+  if (last == 0) return true;
+  return (last == 1 && path[start] == '.') || (last == 2 && path[start] == '.' && path[start + 1] == '.');
+}

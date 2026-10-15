@@ -43,7 +43,7 @@ static void swap_in_link(int dir_fd, const char *name) {
   trap.swaps++;
 }
 
-/* Both are needed: with -O2 -D_FORTIFY_SOURCE=2 the call in tree.c goes to __openat_2. */
+/* Both openat and __openat_2 are needed: with -O2 -D_FORTIFY_SOURCE=2 the call in tree.c goes to __openat_2. */
 int openat(int dir_fd, const char *name, int flags, ...) {
   unsigned int mode = 0;
   if (flags & (O_CREAT | O_TMPFILE)) {
@@ -56,7 +56,10 @@ int openat(int dir_fd, const char *name, int flags, ...) {
   return (int)syscall(SYS_openat, dir_fd, name, flags, mode);
 }
 
-int __openat_2(int dir_fd, const char *name, int flags) { return openat(dir_fd, name, flags); }
+// glibc's own name for the checked openat.
+int __openat_2(int dir_fd, const char *name, int flags) { // NOLINT(readability-identifier-naming)
+  return openat(dir_fd, name, flags);
+}
 
 int unlinkat(int dir_fd, const char *name, int flags) {
   if (trap.lie && flags == 0 && strcmp(name, "liar") == 0) {
