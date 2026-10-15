@@ -29,7 +29,8 @@ jobs:
       - run: cc --version
       - run: make vm vm-test
       - run: make build
-      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
+      - run: make vm-diff-test JOBS=4
+      - run: raco test tests/bytecode-test.rkt
 
   vm-windows:
     if: inputs.os != 'macos'
@@ -56,4 +57,5 @@ jobs:
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
       - run: make vm vm-test
       - run: make build
-      - run: raco test -j 4 tests/vm-diff-*-test.rkt tests/bytecode-test.rkt
+      - run: make vm-diff-test JOBS=4
+      - run: raco test tests/bytecode-test.rkt
