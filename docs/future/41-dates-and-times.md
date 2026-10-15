@@ -363,12 +363,13 @@ end
   `Time.monotonic_ns() / 1000000` lies between two `Time.monotonic_ms()`
   readings taken around it, which checks the unit and the shared clock. The
   independent counterpart is `tests/fixtures/monotonic-peer.py` (Python,
-  standard library): it runs the program on Linux, where both read
-  `CLOCK_MONOTONIC`, and checks that its reading lies between two
-  `time.monotonic_ns()` readings taken around the run. The margin is 5 ms: the
-  loop calls `uv_update_time` before it starts a timer (`vm/loop.c`), so a timer
-  fires early by under 1 ms of truncation, plus any lag of libuv's coarse clock,
-  and 5 ms covers that.
+  standard library): it runs a program that reads the clock before and after
+  `Task.sleep(20)` on Linux, where both read `CLOCK_MONOTONIC`, and checks that
+  both readings lie between two `time.monotonic_ns()` readings taken around the
+  run, with strict bounds and no margin. The sleep floor has a margin of 5 ms:
+  the loop calls `uv_update_time` before it starts a timer (`vm/loop.c`), so a
+  timer fires early by under 1 ms of truncation, plus any lag of libuv's coarse
+  clock, and 5 ms covers that.
 - No `elapsed` helper. The helper would be `Time.monotonic_ms() - start` with a
   name, and it would hide which clock it reads. The existing code
   (`stdlib/test/runner.agc`) writes the subtraction, and it stays that way.
