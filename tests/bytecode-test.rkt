@@ -165,14 +165,19 @@
                     (string-replace (string-upcase (symbol->string op)) "-" "_"))))
 
   (test-case "JSON field types are written only for programs that use them, up to 1024 nested levels"
-    (define (nested n) (string-append (string-append* (make-list n "List[")) "Int" (make-string n #\])))
+    (define (nested n) (for/fold ([type 'Int]) ([_ (in-range n)]) (list 'List type)))
     (define (program n use?)
-      (format "struct Deep\n  xs: ~a\nend\n\ndef main() -> Void\n  ~a\nend\n"
-              (nested n) (if use? "puts(JSON.schema(Deep))" "puts(1)")))
-    (check-pred bc-program? (ir->bytecode (lower-text (program 1024 #t))))
-    (define deep (ir->bytecode (lower-text (program 1025 #t))))
+      (define ir (lower-text (format "struct Deep\n  xs: List[Int]\nend\n\ndef main() -> Void\n  ~a\nend\n"
+                                     (if use? "puts(JSON.schema(Deep))" "puts(1)"))))
+      (struct-copy ir-program ir
+                   [structs (for/list ([entry (in-list (ir-program-structs ir))])
+                              (if (and use? (equal? (ir-struct-name entry) "Deep"))
+                                  (struct-copy ir-struct entry [types (list (nested n))])
+                                  entry))]))
+    (check-pred bc-program? (ir->bytecode (program 1024 #t)))
+    (define deep (ir->bytecode (program 1025 #t)))
     (check-equal? (and (diagnostic? deep) (diagnostic-code deep)) 'BYTECODE-LIMIT)
-    (define plain (ir->bytecode (lower-text (program 1025 #f))))
+    (define plain (ir->bytecode (program 1025 #f)))
     (check-equal? (vector-length (bc-program-types plain)) 0))
 
   (test-case "compile exits 1 on a diagnostic and 2 on an unwritable output"
