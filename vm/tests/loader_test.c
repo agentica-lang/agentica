@@ -573,55 +573,116 @@ static void globals_tests(void) {
   assert(run_spec(pair_spec(read_set, 5, helper_code, 2, 2, 0), stdout).kind == AGC_DONE);
 }
 
-/* --source-root: relative names that are not under std/ go under the root; std/, absolute and empty-root cases stay. */
-static void source_root_tests(void) {
-  static const char *const names[] = {"main.agc", "std/queue.agc", "stdx.agc", "/abs/x.agc", "./std/helper.agc"};
-  static const struct {
-    const char *root;
-    const char *expected[5];
-  } cases[] = {
-    {"", {"main.agc", "std/queue.agc", "stdx.agc", "/abs/x.agc", "./std/helper.agc"}},
-    {"a", {"a/main.agc", "std/queue.agc", "a/stdx.agc", "/abs/x.agc", "a/std/helper.agc"}},
-    {"a/", {"a/main.agc", "std/queue.agc", "a/stdx.agc", "/abs/x.agc", "a/std/helper.agc"}},
-    {"/", {"/main.agc", "std/queue.agc", "/stdx.agc", "/abs/x.agc", "/std/helper.agc"}},
-    {"\xC3\xA9", {"\xC3\xA9/main.agc", "std/queue.agc", "\xC3\xA9/stdx.agc", "/abs/x.agc", "\xC3\xA9/std/helper.agc"}},
-  };
-  for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
-    agc_program p;
-    memset(&p, 0, sizeof p);
-    agc_source sources[5];
-    memset(sources, 0, sizeof sources);
-    for (size_t k = 0; k < 5; k++) {
-      size_t n = strlen(names[k]);
-      sources[k].name = agc_make_string(names[k], n, n);
-    }
-    p.sources = sources;
-    p.source_count = 5;
-    size_t root_chars;
-    assert(agc_utf8_chars((const uint8_t *)cases[c].root, strlen(cases[c].root), &root_chars));
-    assert(agc_program_set_source_root(&p, cases[c].root, root_chars));
-    for (size_t k = 0; k < 5; k++) {
-      const agc_string *name = sources[k].name;
-      size_t n = strlen(cases[c].expected[k]);
-      assert(name->bytes == n && memcmp(name->data, cases[c].expected[k], n) == 0);
-      size_t chars;
-      assert(agc_utf8_chars((const uint8_t *)name->data, name->bytes, &chars) && name->chars == chars);
-    }
-  }
-  /* A root that repeated over the sources passes the cap is refused, and no name changes. */
-  size_t big = ((size_t)1 << 26) / 3 + 1;
-  char *root = malloc(big + 1);
-  memset(root, 'r', big);
-  root[big] = '\0';
+/* Runs agc_program_set_source_root over a program that stores `names`; the joined names go to `joined`. */
+static bool join_names(agc_string *const *names, size_t count, const char *root, agc_string **joined) {
   agc_program p;
   memset(&p, 0, sizeof p);
-  agc_source sources[3];
-  for (size_t k = 0; k < 3; k++) sources[k].name = agc_make_string("m.agc", 5, 5);
+  agc_source sources[8];
+  assert(count <= sizeof sources / sizeof sources[0]);
+  memset(sources, 0, sizeof sources);
+  for (size_t k = 0; k < count; k++) sources[k].name = names[k];
   p.sources = sources;
-  p.source_count = 3;
-  assert(!agc_program_set_source_root(&p, root, big));
-  assert(sources[0].name->bytes == 5);
+  p.source_count = (uint32_t)count;
+  size_t root_chars;
+  assert(agc_utf8_chars((const uint8_t *)root, strlen(root), &root_chars));
+  bool ok = agc_program_set_source_root(&p, root, root_chars);
+  for (size_t k = 0; k < count; k++) joined[k] = sources[k].name;
+  return ok;
+}
+
+static bool is_name(const agc_string *name, const char *expected) {
+  size_t chars;
+  return name->bytes == strlen(expected) && memcmp(name->data, expected, name->bytes) == 0 &&
+         agc_utf8_chars((const uint8_t *)name->data, name->bytes, &chars) && name->chars == chars;
+}
+
+/* "rrr...r" of `bytes` bytes, with a "/" as its last byte when `slash` is set. */
+static char *long_root(size_t bytes, bool slash) {
+  char *root = malloc(bytes + 1);
+  assert(root);
+  memset(root, 'r', bytes);
+  if (slash) root[bytes - 1] = '/';
+  root[bytes] = '\0';
+  return root;
+}
+
+/* The bytes that the root adds, root + "/" per joined name, may be SOURCE_ROOT_BUDGET (64 MiB) and not more. Two
+ * names of `half` bytes each reach the cap exactly, so a root of half - 1 bytes plus its "/" is on it. */
+static void source_root_budget_tests(void) {
+  size_t half = (size_t)1 << 25;
+  agc_string *two[] = {agc_make_string("m.agc", 5, 5), agc_make_string("n.agc", 5, 5)};
+  agc_string *joined[2];
+  static const struct {
+    int delta; /* root bytes = half + delta */
+    bool slash;
+    bool passes;
+  } cases[] = {
+    {-1, false, true},  /* half - 1 bytes + "/" per name: exactly the cap */
+    {0, false, false},  /* one byte over: the "/" is counted */
+    {0, true, true},    /* half bytes ending in "/": no extra "/", exactly the cap */
+    {1, true, false},   /* one byte over, ending in "/" */
+  };
+  for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+    size_t bytes = half + (size_t)(cases[c].delta);
+    char *root = long_root(bytes, cases[c].slash);
+    bool ok = join_names(two, 2, root, joined);
+    assert(ok == cases[c].passes);
+    if (ok) {
+      /* One "/" between the root and the name, whether the root ended in one or not. */
+      size_t expected = bytes + (cases[c].slash ? 0 : 1) + 5;
+      assert(joined[0]->bytes == expected && joined[1]->bytes == expected);
+      assert(memcmp(joined[0]->data, root, bytes) == 0 && joined[0]->data[expected - 6] == '/');
+      assert(memcmp(joined[0]->data + expected - 5, "m.agc", 5) == 0);
+    } else {
+      assert(joined[0] == two[0] && joined[1] == two[1]);
+    }
+    free(root);
+  }
+  /* std/ and absolute names add nothing, so they are not in the count: one joined name on the cap passes. */
+  agc_string *mixed[] = {agc_make_string("std/a.agc", 9, 9), agc_make_string("m.agc", 5, 5),
+                               agc_make_string("std/b.agc", 9, 9), agc_make_string("/abs.agc", 8, 8)};
+  agc_string *mixed_joined[4];
+  char *root = long_root((size_t)1 << 26, true);
+  assert(join_names(mixed, 4, root, mixed_joined));
+  assert(mixed_joined[0] == mixed[0] && mixed_joined[2] == mixed[2] && mixed_joined[3] == mixed[3]);
+  assert(mixed_joined[1]->bytes == ((size_t)1 << 26) + 5);
   free(root);
+}
+
+/* --source-root: relative names that are not under std/ go under the root; std/, absolute and empty-root cases stay.
+ * The last three names are the edges of the "./" rule: a lone ".", "./" and the empty name. */
+static void source_root_tests(void) {
+  enum { NAMES = 8 };
+  static const char *const names[NAMES] = {"main.agc", "std/queue.agc", "stdx.agc", "/abs/x.agc", "./std/helper.agc",
+                                           ".", "./", ""};
+  static const struct {
+    const char *root;
+    const char *expected[NAMES];
+  } cases[] = {
+    {"", {"main.agc", "std/queue.agc", "stdx.agc", "/abs/x.agc", "./std/helper.agc", ".", "./", ""}},
+    {"a", {"a/main.agc", "std/queue.agc", "a/stdx.agc", "/abs/x.agc", "a/std/helper.agc", "a/.", "a/", "a/"}},
+    {"a/", {"a/main.agc", "std/queue.agc", "a/stdx.agc", "/abs/x.agc", "a/std/helper.agc", "a/.", "a/", "a/"}},
+    {"/", {"/main.agc", "std/queue.agc", "/stdx.agc", "/abs/x.agc", "/std/helper.agc", "/.", "/", "/"}},
+    {"\xC3\xA9", {"\xC3\xA9/main.agc", "std/queue.agc", "\xC3\xA9/stdx.agc", "/abs/x.agc",
+                  "\xC3\xA9/std/helper.agc", "\xC3\xA9/.", "\xC3\xA9/", "\xC3\xA9/"}},
+  };
+  for (size_t c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+    agc_string *stored[NAMES];
+    agc_string *joined[NAMES];
+    for (size_t k = 0; k < NAMES; k++) stored[k] = agc_make_string(names[k], strlen(names[k]), strlen(names[k]));
+    assert(join_names(stored, NAMES, cases[c].root, joined));
+    for (size_t k = 0; k < NAMES; k++) assert(is_name(joined[k], cases[c].expected[k]));
+  }
+  /* The "./" test reads the length, not the memory behind it: a one-byte "." whose next byte is "/" stays ".". */
+  agc_string *dot = agc_new_string(2, 2);
+  memcpy(dot->data, "./", 2);
+  dot->bytes = 1;
+  dot->chars = 1;
+  agc_string *lone[] = {dot};
+  agc_string *lone_joined[1];
+  assert(join_names(lone, 1, "a", lone_joined));
+  assert(is_name(lone_joined[0], "a/."));
+  source_root_budget_tests();
 }
 
 int main(void) {
