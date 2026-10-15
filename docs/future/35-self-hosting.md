@@ -180,7 +180,8 @@ and 2 work there.
 
 Replacing rackunit is decided: Python `unittest`, standard library only, in
 phases that run beside steps 4 to 8
-([§35.10](#3510-tests-move-to-python-unittest)). Phase 3 is the step-8 PR.
+([§35.10](#3510-tests-move-to-python-unittest)). Phase 3 is 8c and 8d of
+step 8 (35.4).
 
 ### 35.4 Stages to port
 
@@ -270,9 +271,10 @@ Notes:
   VM, as it runs the BDD runner today, and passes it the VM's path. So
   `agentica test` always works. Releases before step 8 ship today's archive (the
   Racket front end and `agentica-vm`). The first release after step 8 is the
-  single binary. A release is cut right before the step-8 PR merges, as a fixed
+  single binary. A release is cut right after step 7b merges, as a fixed
   starting point before the self-hosted front end becomes the default (owner
-  decision, 2026-10-15). It is the last release with the Racket front end.
+  decision, 2026-10-15). It is the last release with the Racket front end, and
+  step 8 (split below) comes after it.
 - **Step 8 in detail.** The diagnostic forms (`format-diagnostic`, the `--ai`
   text, `diagnostic->jsexpr`) move to Agentica; `vm/diag.c` already prints the
   same forms for runtime errors. The version moves from `src/version.rkt` to a
@@ -281,6 +283,33 @@ Notes:
   normal run has no child, and the BDD driver starts children of the same binary
   with `Process.spawn_captured`, whose close already sends `SIGTERM`, then
   `SIGKILL`.
+- **Step 8 is four PRs**, decided by the owner on 2026-10-15. One PR would be
+  too large to review, and it would block on any failure of the release build.
+  The release cut comes first, right after step 7b merges, with Racket still the
+  default and the Agentica BDD driver in place. The four PRs:
+  - **8a, the CLI driver.** The driver and the diagnostic forms (plain, `--ai`,
+    `--json`) move to Agentica, with the plain version file. It runs as an
+    ordinary `.agcb` and is compared with the Racket CLI (exit codes, stdout,
+    stderr). Not the default yet.
+  - **8b, the single binary.** The `.incbin` embedding of `stage2` and of the
+    `std/` sources (35.6), the two builtins that hand the compiled program to C
+    and read the embedded `std/` sources (35.5), the build-only
+    `--front-end FILE` flag, and the `make` stages `stage1`, `stage2` and
+    `stage3`, with the fixed-point check in CI (35.3). It builds the binary
+    beside today's files, not as the default. It runs in parallel with 8a: it
+    first fixes the entry point and the two builtins, and 8a plugs into them.
+  - **8c, tests only.** The first half of phase 3 (35.10): every live comparison
+    with the Racket stages is frozen into a golden. It may run in parallel with
+    8a and 8b.
+  - **8d, the switch.** The single binary becomes the default and the only file
+    in the release archive. `agentica-vm` and `AGENTICA_VM` go away (a breaking
+    change, listed in the changelog), `src/vm-launch.rkt` is deleted,
+    `bootstrap/stage0.agcb` is checked in and CI checks the fixed point from it,
+    and the rackunit files with their make targets and CI steps are removed
+    (the second half of phase 3).
+  - No release with both front ends in between: it would keep two front ends
+    alive longer (risk 1 of 35.7), and the private alpha has no external users
+    who need it.
 - No language change lands in a stage while its port is open (35.7).
 - **Reading source files. Done** (decided by the owner on 2026-10-15). The two
   front ends used to read differently: Racket's `file->string` replaced invalid
@@ -957,17 +986,17 @@ in rackunit until phase 3.
   Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
   live comparisons with the Racket stages stay in rackunit until phase 3. A file
   with both kinds is split, and each case keeps one framework.
-- **Phase 3,** with the step-8 PR. Before that PR, every live comparison (corpus
+- **Phase 3,** with step 8: 8c and 8d. Before 8d, every live comparison (corpus
   files, generated inputs, the large inputs of the slow tier) is frozen into a
   golden, so no coverage is lost. Generated inputs are checked in as fixture
   files or, when they are too big for that, a seeded stdlib script writes them
-  and the golden records their SHA-256. The PR then removes the rackunit files,
+  and the golden records their SHA-256. Then 8d removes the rackunit files,
   every make target that only runs rackunit, and the CI steps that use those
   targets. Other `raco` calls stay until the deletion PR (`raco exe` for
   `dist/agentica`, `raco make`, `raco distribute`), because the build still uses
   Racket. The test suite no longer needs Racket. The fixed-point check of
   [§35.3](#353-bootstrap), stage2 and stage3 equal byte for byte, runs in CI
-  from the committed `stage0`. The release cut before the step-8 PR, which
+  from the committed `stage0`. The release cut after step 7b, which
   [§35.4](#354-stages-to-port) defines, is taken from the commit before this
   phase, so that release still has the rackunit live comparisons. The deletion
   of `src/*.rkt` and of the `raco distribute` steps follows the conditions of
