@@ -181,7 +181,8 @@ Regex.named(m: Regex.Match, name: String) -> Result[Regex.Group]
   longest run of digits, so `$10` is group 10 and `$1x` is group 1 followed by
   `x`; `${1}x` ends the number early. `${name}` is a named group and `$$` is a
   dollar sign. Other `$` forms and missing groups (`no group 10`) are errors. In
-  an Agentica string `"$2, $1"` needs no backslash.
+  an Agentica string `"$2, $1"` needs no backslash. The site page warns that
+  `"#{name}"` interpolates a variable, while `"${name}"` is template text.
 - `split` splits at each match that consumes at least one character, and keeps
   empty parts. Skipping zero-length matches is a deliberate third rule. Python's
   `re.split` splits at them (`re.split(r"x*", "axbc")` gives
@@ -407,7 +408,8 @@ Each item has its own PR, with its own tests and docs, as phase 27 does.
   limits; goldens, peer, ReDoS test and benchmark. Docs: the site page
   `site/content/library/text-and-data/regex.md`, the programming skill (the "no
   regex" line of `SKILL.md`, a `references/regex.md` and its row), and a
-  `CHANGELOG.md` entry under `[Unreleased]`.
+  `CHANGELOG.md` entry under `[Unreleased]`. The page carries the warning of
+  48.5 about `"#{name}"` and `"${name}"`.
 - **48b: the regex literal (48.6).** The lexer rule, the scanners, the node,
   `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering. `compiler/`
   only, after the bootstrap. Tests: lexer goldens for each case of 48.6, a
