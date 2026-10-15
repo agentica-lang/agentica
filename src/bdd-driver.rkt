@@ -171,6 +171,9 @@
   (define lines (string-split text "\n"))
   (if (null? lines) "no diagnostic" (pick lines)))
 
+(define (first-two-lines lines)
+  (string-join (take lines (min 2 (length lines))) " "))
+
 (define (compile-steps path directory)
   (cond
     [(not path) (compile-text (path->string (build-path directory "steps.agc")) default-steps)]
@@ -305,5 +308,5 @@
          (values status out)
          (infrastructure-report
           (format "the BDD runner failed with exit code ~a: ~a" status
-                  (message-line err last))
+                  (message-line err first-two-lines))
           (path->string vm) style seed))]))
