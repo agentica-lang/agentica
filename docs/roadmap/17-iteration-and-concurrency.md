@@ -67,7 +67,7 @@ two items: 17d (`File.each_line`, row 7.2.1h) and 17e (`Stream[T]`, order step
   program cannot reach it before channels. Appended builtin, no format bump.
   Hints for `Task.async_stream`, `Task.async`, `Parallel.map` and `Thread.new`.
   Tests: the checker tests, golden fixtures and C tests of §27.1,
-  `tests/vm-task-map-test.rkt`, planned like `tests/vm-latency-test.rkt` (in
+  `tests/vm-task-map-test.rkt`, planned like `tests/test_vm_latency.py` (in
   `test-omit-paths` of `tests/info.rkt`, its own `make vm-task-map` target, a CI
   step in the `test` job after `make vm-latency`, a line in the Commands section
   of `AGENTS.md`), which holds every timing-dependent case of phase 17, since

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.." || exit 1
 exe_tests() {
-  AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/process-test.rkt tests/modules-test.rkt
+  # test-py has no prerequisites: a second `make test` here would rebuild beside the main one and race on build/ files.
+  local status=0
+  AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" "${MAKE:-make}" --no-print-directory test-py \
+    TESTS=tests/test_process.py JOBS=2 AGENTICA_TEST_SLOW= || status=1
+  AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test tests/modules-test.rkt || status=1
+  return "$status"
 }
 if [ "${1:-}" = exe ]; then
   exe_tests

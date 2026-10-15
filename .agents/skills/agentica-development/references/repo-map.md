@@ -142,15 +142,15 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   frontend-catalog-test.rkt  # the generated compiler/builtins_data.agc, the Rule enum, and Racket against Agentica on the catalog (references/frontend.md)
   frontend-check-common.rkt  # the checker text form (types, resolutions, diagnostic notes) printed from src/checker.rkt, and its goldens (references/frontend.md)
   frontend-check-test.rkt  # fast: generated tables, goldens, every CHECK- code and rule; slow: both checkers on the corpus, mutants, deep trees, a large program
-  process-test.rkt  # Process builtins on the VM, every way a run ends (references/vm-net.md)
-  filesystem-test.rkt  # File and Path programs on the VM (references/vm-io.md)
+  test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
+  test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)
   cli-in-process.rkt  # helper: runs src/main.rkt in process for CLI tests
-  info.rkt        # the Racket package info: lists the tests the runner omits
+  info.rkt        # the Racket package info: the tests the runner omits (none now; test_vm_latency.py is kept out by PY_ALONE in the Makefile)
   vm-diff-common.rkt  # the golden harness: fixtures, sidecars, sweeps (references/vm-build.md)
   vm-diff-{1..8}-test.rkt  # shards of the golden tests (references/vm-build.md)
-  vm-latency-test.rkt  # the latency check (references/vm-tasks.md)
+  test_vm_latency.py  # unittest: the latency check, run alone by make vm-latency (references/vm-tasks.md)
   test_vm_style.py  # unittest: types at the top, no static prototypes, header size (references/vm-c.md)
-  vm-trace-test.rkt  # traced runs keep exit code, stdout and stderr (references/vm-builtins.md)
+  test_vm_trace.py  # unittest: traced runs keep exit code, stdout and stderr (references/vm-builtins.md)
   test_vm_tcp.py  # unittest: the VM TCP builtins against Node peers (references/vm-tests.md)
   test_vm_http.py  # unittest: std/http against independent peers (references/vm-tests.md)
   test_vm_logger.py  # unittest: std/logger: the default line, the async example, the Python peer (references/library-notes.md)
@@ -165,12 +165,12 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   test_vm_monotonic.py  # unittest: Time.monotonic_ns against Python's clock
   test_vm_bits.py  # unittest: spans of the Int and Float bit builtin errors (references/library-notes.md)
   agentica_test.py  # unittest helpers: paths, VM and CLI, run with timeout, temp dirs, @slow (references/ci.md)
-  std-binary-test.rkt  # std/binary on the VM (references/library-notes.md)
+  test_std_binary.py  # unittest: std/binary on the VM (references/library-notes.md)
   site-examples-test.rkt  # agentica blocks in site/content run or check; fast: three pages, slow: all (references/site.md)
   stdlib-distribution-test.rkt  # the relocated executable still finds std/ (references/ci.md)
   stdlib-docs-test.rkt  # every stdlib module has a module doc and export docs (references/stages.md)
-  bdd-test.rkt  # agentica test over the CLI: step programs, isolation (references/bdd.md)
-  bdd-integration.rkt  # programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
+  test_bdd.py  # unittest: agentica test over the CLI: step programs, isolation (references/bdd.md)
+  test_bdd_integration.py  # unittest: programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
   unit-test-test.rkt  # agentica test on *_test.agc files; slow: stderr flood, endless print, flooding listing (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules
   fixtures/       # golden fixtures and independent Node.js and Python peers
