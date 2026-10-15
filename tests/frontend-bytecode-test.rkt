@@ -224,8 +224,8 @@
 ; The scenario names of the Agentica fixture: the strings of its SCENARIOS constant (or SLOW_SCENARIOS).
 (define (scenario-names constant)
   (define text (file->string limits-fixture))
-  (define at (car (regexp-match-positions (regexp (format "~a = \\[" constant)) text)))
-  (define end (car (regexp-match-positions #rx"\n\\]" text (cdr at))))
+  (define at (car (regexp-match-positions (regexp (format "(?m:^~a = \\[)" constant)) text)))
+  (define end (car (regexp-match-positions #rx"\\]" text (cdr at))))
   (map cadr (regexp-match* #rx"\"([^\"]+)\"" (substring text (cdr at) (car end)) #:match-select values)))
 
 (module+ test
