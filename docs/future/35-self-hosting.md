@@ -618,8 +618,9 @@ in rackunit until phase 3.
   instead, with the same output. A test that calls a front-end module directly
   waits for phase 2. Done: the small VM runtime tests (PR #264, 2026-10-15:
   monotonic clock, logger, test protocol, channel, child channel and the C
-  style check, 13 cases). `tests/vm-stack-test.rkt` stays, because
-  `make goldens` writes its sidecars.
+  style check, 13 cases), then the network tests (PR #266: TCP, HTTP and TLS,
+  19 cases). `tests/vm-stack-test.rkt` stays, because `make goldens` writes
+  its sidecars.
 - **Phase 2:** the golden parts of the front-end tests move to `unittest`: the
   Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
   live comparisons with the Racket stages stay in rackunit until phase 3. A file

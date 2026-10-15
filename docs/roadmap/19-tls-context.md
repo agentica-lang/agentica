@@ -33,8 +33,8 @@ one PR with its own tests and docs.
   `docs/vm/05-values-execution-builtins.md` §5.3; `RUNTIME-INTERNAL` under the
   fuzzer's `no_files`; context creation is a thread-pool job. Migrate every TLS
   and HTTPS program, fixture and test (`tls-*` and `http-*` golden fixtures,
-  `tests/vm-tls-test.rkt`, `tests/vm-http-test.rkt`, examples, the site, the
-  skill). Add `tests/vm-tls-test.rkt` to the `vm-sanitizers` path list of
+  `tests/test_vm_tls.py`, `tests/test_vm_http.py`, examples, the site, the
+  skill). Add `tests/test_vm_tls.py` to the `vm-sanitizers` path list of
   `.github/workflows/ci.yml` if the TLS catch-up PR has not. Tests: the golden
   fixtures, Python `ssl` peers, the C test of a dropped context with a live
   socket, and the checker hints of §29.8. Docs: `docs/grammar.md`,
@@ -48,7 +48,7 @@ one PR with its own tests and docs.
   `host == ""`, else `RUNTIME-TLS-CONTEXT-ROLE`); the plain socket is closed for
   the program on success and failure; unread input before the handshake, or a
   TLS socket, is an `error`. Tests: a golden fixture with both sides in one
-  program, and Python peers for each side in `tests/vm-tls-test.rkt`. Docs:
+  program, and Python peers for each side in `tests/test_vm_tls.py`. Docs:
   `docs/grammar.md`, `references/network.md`,
   `site/content/library/io-and-system/network.md`, `docs/vm/10-io-tls.md` §10.3,
   CHANGELOG ("Added").

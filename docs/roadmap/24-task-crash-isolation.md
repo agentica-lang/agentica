@@ -281,8 +281,8 @@ dropped (see "Done").
       task is cancelled without a crash and closes its handle, and where an
       awaiter of a task with a close in flight is cancelled before the close
       finishes, then a late await waits for it; a Node peer case in
-      `tests/vm-tcp-test.rkt` (a crashed task's and a returned task's
-      connections close); `tests/vm-tcp-test.rkt` and `tests/vm-tls-test.rkt`
+      `tests/test_vm_tcp.py` (a crashed task's and a returned task's
+      connections close); `tests/test_vm_tcp.py` and `tests/test_vm_tls.py`
       servers use `Task.spawn_owning`, and the TLS limits and exit programs keep
       their handles in the task that uses them.
 
