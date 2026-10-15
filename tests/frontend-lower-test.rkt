@@ -6,7 +6,7 @@
 (require rackunit
          racket/runtime-path
          "frontend-lower-common.rkt"
-         (only-in "frontend-lexer-common.rkt" call-with-bytecode)
+         "frontend-corpus-common.rkt"
          "vm-diff-common.rkt"
          "../src/bytecode.rkt"
          "../src/lower.rkt")
@@ -33,12 +33,7 @@
   (define-values (status out err) (run-lowering bytecode paths #:flags flags))
   (check-equal? status 0 err)
   (check-equal? err "")
-  (parse-texts out))
-
-(define (parse-texts out)
-  (for/hash ([piece (in-list (cdr (regexp-split #rx"(?m:^== )" out)))])
-    (define newline-at (let loop ([at 0]) (if (char=? (string-ref piece at) #\newline) at (loop (add1 at)))))
-    (values (substring piece 0 newline-at) (substring piece (add1 newline-at)))))
+  (output-sections out))
 
 (define (golden input) (file->string (lower-golden input)))
 
@@ -150,7 +145,7 @@
           ; levels. With 5,000 frames used up before it starts, every case still lowers.
           (define-values (status out err) (run-lowering bytecode paths #:flags '("--burn=5000")))
           (check-equal? err "")
-          (check-equal? (parse-texts out) outputs)
+          (check-equal? (output-sections out) outputs)
           ; The control: with 8,000 frames used up the deepest cases must overflow, so the flag measures something.
           (define overflow
             (let-values ([(status out err) (run-lowering bytecode (list (car (take-right paths 3))) #:flags '("--burn=8000"))])

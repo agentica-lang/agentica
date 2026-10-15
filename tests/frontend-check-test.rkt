@@ -3,7 +3,7 @@
 (require rackunit
          racket/runtime-path
          "frontend-check-common.rkt"
-         (only-in "frontend-lexer-common.rkt" call-with-bytecode)
+         "frontend-corpus-common.rkt"
          "vm-diff-common.rkt"
          "../src/builtins.rkt"
          "../tools/gen-builtins-data.rkt"
@@ -20,16 +20,10 @@
 
 ; Runs compiler/check.agc once over the paths and gives the text of each by its path.
 (define (run-checker bytecode paths #:timeout [timeout 600])
-  (define result
-    (parameterize ([current-directory root])
-      (apply run-process vm-file #:timeout timeout "--" (path->string bytecode)
-             (string-append "--stdlib=" (path->string stdlib-folder))
-             (map (lambda (path) (if (path? path) (path->string path) path)) paths))))
-  (check-equal? (first result) 0 (third result))
-  (check-equal? (third result) "")
-  (for/hash ([piece (in-list (cdr (regexp-split #rx"(?m:^== )" (second result))))])
-    (define newline-at (let loop ([at 0]) (if (char=? (string-ref piece at) #\newline) at (loop (add1 at)))))
-    (values (substring piece 0 newline-at) (substring piece (add1 newline-at)))))
+  (run-stage-sections bytecode
+                      (cons (string-append "--stdlib=" (path->string stdlib-folder))
+                            (map (lambda (path) (if (path? path) (path->string path) path)) paths))
+                      #:timeout timeout))
 
 (define (golden input) (file->string (check-golden input)))
 

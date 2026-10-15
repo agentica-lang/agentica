@@ -3,7 +3,7 @@
 (require rackunit
          racket/runtime-path
          "frontend-modules-common.rkt"
-         (only-in "frontend-lexer-common.rkt" call-with-bytecode)
+         "frontend-corpus-common.rkt"
          "vm-diff-common.rkt"
          "../src/stdlib.rkt")
 
@@ -11,9 +11,6 @@
 (define-runtime-path entry "../compiler/link.agc")
 
 (define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
-
-(define (relative-path path)
-  (path->string (find-relative-path (simplify-path root) (simplify-path path))))
 
 ; Runs compiler/link.agc once over the specs, each a (list env root-path) with the root path relative to the
 ; repository or absolute, and gives the text of each root by its path. mode is "" for the program text or
@@ -24,14 +21,7 @@
             (if (string=? mode "") '() (list mode))
             (append* (for/list ([spec (in-list specs)])
                        (append (env-arguments (first spec)) (list (second spec)))))))
-  (define result
-    (parameterize ([current-directory root])
-      (apply run-process vm-file #:timeout run-timeout "--" (path->string bytecode) arguments)))
-  (check-equal? (first result) 0 (third result))
-  (check-equal? (third result) "")
-  (for/hash ([piece (in-list (cdr (regexp-split #rx"(?m:^== )" (second result))))])
-    (define newline-at (let loop ([at 0]) (if (char=? (string-ref piece at) #\newline) at (loop (add1 at)))))
-    (values (substring piece 0 newline-at) (substring piece (add1 newline-at)))))
+  (run-stage-sections bytecode arguments))
 
 (define (golden input)
   (file->string (module-golden input)))
@@ -49,13 +39,7 @@
                   path)))
 
 (define (files-under directories)
-  (define base (simplify-path root))
-  (sort (for*/list ([directory (in-list directories)]
-                    [file (in-directory (build-path base directory))]
-                    #:when (and (path-has-extension? file #".agc")
-                                (not (string-contains? (path->string file) "frontend/modules/"))))
-          (relative-path file))
-        string<?))
+  (agc-files-under directories #:keep? (lambda (file) (not (string-contains? (path->string file) "frontend/modules/")))))
 
 ; The files of a link as (name first next), from the `--ids` text.
 (define (id-ranges text)
