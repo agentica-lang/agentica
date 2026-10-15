@@ -1,8 +1,8 @@
 ## 46. Signals
 
 **Status:** Scheduled on 2026-10-15 in [phase 27](../roadmap/27-signals.md),
-after the bootstrap of §35 (step 8). 46a and 46b may come earlier when a
-code slot is idle. Nothing is implemented yet.
+after the bootstrap of §35 (step 8). 46a and 46b may come earlier when no
+other VM PR is waiting. Nothing is implemented yet.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
 container entrypoint should stop its child, run cleanup and exit with the right
@@ -923,8 +923,9 @@ are the default-path cases.
   for the core rule, and a reference file for the detail), and a `CHANGELOG.md`
   entry under `## [Unreleased]`. The entry is marked `**Breaking:**`, since
   `Signal` becomes a reserved builtin name, and it notes the USR1, USR2 and QUIT
-  change. The compiler catalog is regenerated in the same PR with `racket
-  tools/gen-builtins-data.rkt`, and `tests/frontend-catalog-test.rkt` checks it.
+  change. The compiler catalog is regenerated in the same PR (before the
+  bootstrap: `racket tools/gen-builtins-data.rkt`, checked by
+  tests/frontend-catalog-test.rkt; after it, with the generator of that time).
 - **46b: sending.** The builtins `Process.signal`, `Process.spawn_group`,
   `Process.signal_group` and `System.signal`, with the pidfd probe and
   `--allow-run`. The group close and the end-of-run group kill for group
@@ -933,7 +934,7 @@ are the default-path cases.
   (`site/content/library/io-and-system/process.md`),
   `.agents/skills/agentica-programming/references/processes.md` with its row in
   `SKILL.md` if needed, `docs/vm/10-io-processes.md` §10.4, and a
-  `CHANGELOG.md` entry. The catalog is regenerated in the same PR.
+  `CHANGELOG.md` entry. The catalog is regenerated in the same PR, as in 46a.
 - **46c: the driver.** The driver forwards a break at once to a VM in its own
   process group (46.8, question 7). It needs a test with terminal input first.
   Until then, containers use `agentica compile` and `agentica-vm` directly
@@ -944,7 +945,8 @@ are the default-path cases.
 - **Separate changes, outside §46:** `Path.remove`, `File.copy` that keeps the
   mode, a kind check that does not follow links, and `System.hostname`. Reaping
   orphans as PID 1 is also separate (46.8, question 10). The BDD driver
-  work of §35 step 7 adds some of these; see its PR.
+  work of §35 step 7 (its first part adds OS builtins) may add some of these.
+  Check master before starting, and do not add one twice.
 
 The bootstrap question. The compiler catalog exists (§35 step 4, PR #258).
 `compiler/builtins_data.agc` is generated from `src/builtins.rkt` and
@@ -952,9 +954,11 @@ The bootstrap question. The compiler catalog exists (§35 step 4, PR #258).
 `tests/frontend-catalog-test.rkt` fails when it is stale. So each 46a and 46b PR
 changes the builtin data and regenerates the catalog in the same PR. Row 7.2.7
 allows the table rows and the `vm-builtins` names. The naming choice of 46.3.1
-is the case that needs care, since option (A) needs a front-end change. 46a and
-46b can land before the bootstrap if the owner schedules them. 46c depends on
-nothing else. 46d is Agentica code and can come after the bootstrap.
+is the case that needs care, since option (A) needs a front-end change. The
+sentences above describe landing before the bootstrap. 46a and 46b may land
+before the bootstrap when no other VM PR is waiting. 46c changes the driver,
+which §35 step 8 ports, so it waits for that port. 46d is Agentica code and
+comes after 46b by the owner's order.
 
 ### 46.8 Open questions
 
@@ -1069,5 +1073,6 @@ Each question has options and a recommendation.
     checked with a spike in 46a. The fixture rename and the `**Breaking:**`
     entry happen under either option.
 
-    **Decided (2026-10-15):** the recommendation is the default. The 46a PR
-    makes the final choice between (A) and (B), as 46.3.1 and 46.7 say.
+    **Decided (2026-10-15):** (B) is the starting point, not a final choice.
+    The 46a PR makes the final choice between (A) and (B), as 46.3.1 and 46.7
+    say.
