@@ -1553,9 +1553,15 @@
                              (let ([field (assoc name (hash-ref structs (cadr target)))])
                                (and field (pair? (cdr field)) (eq? (car (cdr field)) 'Fn))))
                         (format "~a is a function field; call it with .~a.call(...)" name name)]
+                       [(and (struct-type? target) (equal? name "with"))
+                        ;; No did-you-mean here: a field close to "with" is not a typo of it.
+                        (format "with needs the fields to change, as in .with(field: value); fields: ~a"
+                                (string-join (map car (hash-ref structs (cadr target))) ", "))]
                        [(struct-type? target)
                         (format "structs have no methods; ~a"
                                 (field-help name (hash-ref structs (cadr target))))]
+                       [(equal? name "with")
+                        "with copies a struct with some fields changed; the value before .with must be a struct"]
                        [kind (or (foreign-method-help kind name)
                                  (did-you-mean name (receiver-method-names kind target))
                                  (format "~a methods: ~a" (type->string target)

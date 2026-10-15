@@ -55,10 +55,16 @@ export def near(name: String, candidates: List[String], shared: List[String]) ->
   end
 end
 
+## The field names alone, as "fields: a, b".
+export def field_list(fields: List[Model.Named]) -> String
+  names = fields.map do |field: Model.Named| field.name end
+  return "fields: #{names.join(", ")}"
+end
+
 ## The help of a missing or unknown field: a guess if one is close, then the field names.
 export def field_help(name: String, fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
-  all = "fields: #{names.join(", ")}"
+  all = field_list(fields)
   guess = near(name, names, [])
   if guess == ""
     return all

@@ -136,6 +136,9 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 ## Comments
 
 - `compiler/*.agc`: a `#` comment where the code is complex or copies a Racket behavior on purpose (name the behavior, such as the span or NL rule). Each exported `def`, `struct` and `enum` you add or touch gets a `##` doc block, as in `stdlib/queue.agc` (`compiler/` has none yet; do not add docs to code you do not touch); the file's first doc block, followed by a blank line, is its module doc (`docs/grammar/05-syntax.md`). A `#` comment goes inside the body or above the `##` block, never between the block and its `def` (that is `PARSE-DETACHED-DOC`).
-- Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines (a generated file comes out of its tool at that width: `tools/agc-format.rkt`).
-- Wrap a long string with interpolation and a few sentence-sized pieces, never one piece per line.
 - `src/*.rkt` and `tests/*.rkt`: a `;` comment for the non-obvious why, such as a Racket quirk, a freeze exception or a golden that must not change. Never narrate the code.
+
+## Code style
+
+- Lines in `compiler/*.agc` are at most 119 characters, comments included (`compiler/agentica.toml`, `[style]`), checked by `tests/test_style_line_width.py`. Break a call or list one item per line with a trailing comma, wrap a long expression in parentheses, and flow a doc block over several `##` lines (a generated file comes out of its tool at that width: `tools/agc-format.rkt`).
+- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into a few sentence-sized pieces joined with `+`, never one piece per line.

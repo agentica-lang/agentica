@@ -67,6 +67,7 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
   if note.ok?
     extra = note.unwrap!
   end
+  # "##{...}" writes a literal "#" and then the node number relative to the base, such as: Foo #3 1:1-1:4
   return "#{at.indent}#{label}#{kind} ##{id - at.base} #{Text.span_text(span)}#{attrs}#{extra}"
 end
 
@@ -149,7 +150,9 @@ end
 
 def visible_attr(visible: Ast.Optional[List[String]]) -> String
   case visible
-    Ast.Optional.Present(names) -> return " visible=" + list_text(names.map do |name| Text.quote(name) end)
+    Ast.Optional.Present(names) ->
+      quoted = names.map do |name| Text.quote(name) end
+      return " visible=#{list_text(quoted)}"
     Ast.Optional.Absent -> return ""
   end
 end
