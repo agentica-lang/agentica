@@ -87,9 +87,9 @@ phase 13).
   Node/Python peers.
 - Tests: rackunit and Python `unittest` during the migration to unittest
   (a test lives in one framework only; new tests go to unittest unless they
-  need the Racket front end as an oracle). Racket, Node and Python test code and peers (curl included)
-  use the standard library only, with no third-party libraries or test
-  frameworks. The VM's C dependencies are the submodules in `vm/third_party`;
+  need the Racket front end as an oracle). Racket, Node and Python test code
+  and peers (curl included) use the standard library only, with no third-party
+  libraries or test frameworks. The VM's C dependencies are the submodules in `vm/third_party`;
   the only dev-tool dependency is the pinned jscpd in `tools/jscpd`.
 - Network and process tests are hermetic: localhost, port 0, no external
   services, everything cleaned up. TCP/HTTP interop uses an independent
