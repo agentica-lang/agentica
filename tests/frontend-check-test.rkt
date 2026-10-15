@@ -18,6 +18,9 @@
 
 (define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
 
+; Read by the writers of the frozen comparisons (tests/frontend-check-freeze.rkt and the ones after it).
+(provide checker-case-programs mutated-programs deep-cases generated-program)
+
 ; Runs compiler/check.agc once over the paths and gives the text of each by its path.
 (define (run-checker bytecode paths #:timeout [timeout 600])
   (run-stage-sections bytecode

@@ -1001,3 +1001,17 @@ in rackunit until phase 3.
   phase, so that release still has the rackunit live comparisons. The deletion
   of `src/*.rkt` and of the `raco distribute` steps follows the conditions of
   [§35.3](#353-bootstrap).
+  **Status: 8c is done** (2026-10-15). Every live comparison is frozen under
+  `tests/fixtures/frontend/frozen/` (`make frontend-freeze` writes it from the
+  Racket stages while they exist) and `tests/test_frontend_<stage>.py` compares
+  the Agentica stage with it: the fast cases are the fast-tier live
+  comparisons, the rest are `@slow`. The corpus is a snapshot taken at the
+  freeze, the inputs of the seeded Racket generators are checked in, and the
+  inputs that are a formula (too big to check in) are rebuilt by the Python
+  tests, which check the SHA-256 of each input. Agentica has no seeded random
+  generator, so the scripts that write inputs are Python, standard library
+  only. The rackunit files stay until 8d. What 8d needs first: phase 2, the
+  Agentica output against the goldens of `tests/fixtures/frontend/<stage>/`, is
+  still in the rackunit fast tiers, and so are a few checks that need the Racket
+  source (the generated tables, the Unicode table, `VM_BUILTINS`, the `Rule`
+  enum, the coverage of the `CHECK-` codes).

@@ -158,6 +158,8 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   frontend-lower-test.rkt  # fast: VM_BUILTINS, goldens, opcode coverage, Agentica lowering on them and on examples/; slow: tests/fixtures/vm, checker-test programs, std/ and compiler/, deep trees at the limit, a generated program
   frontend-bytecode-test.rkt  # fast: the .agcb bytes of the Agentica writer against the Racket writer on the lowering fixtures, examples/, fixtures/frontend/bytecode/ and the synthetic programs of fixtures/frontend/limits/; slow: tests/fixtures/vm, std/ and compiler/, deep trees, a generated program
   frontend-check-test.rkt  # fast: generated tables, goldens, every CHECK- code and rule; slow: both checkers on the corpus, mutants, deep trees, a large program
+  frontend-freeze-common.rkt, frontend-freeze-corpus.rkt, frontend-<stage>-freeze.rkt  # the Racket writers of the frozen comparisons (`make frontend-freeze`, `make frontend-snapshot`; references/frontend.md)
+  test_frontend_<lexer|parser|modules|check|lower|bytecode>.py  # unittest: the Agentica stages against tests/fixtures/frontend/frozen/ (references/frontend.md); frontend_support.py and frontend_cases.py are their helpers
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)

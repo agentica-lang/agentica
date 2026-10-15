@@ -12,6 +12,9 @@
 (define-runtime-path entry "../compiler/lex.agc")
 (define-runtime-path unicode-table "../compiler/unicode_table.agc")
 
+; The generated inputs and the nesting check are read by the writer of the frozen comparisons (tests/frontend-lexer-freeze.rkt).
+(provide generated-cases)
+
 (define (read-text path)
   (file->string (build-path root path)))
 

@@ -13,6 +13,9 @@
 
 (define nesting-limit 1000)
 
+; Read by the writer of the frozen comparisons (tests/frontend-parser-freeze.rkt).
+(provide generated-cases nesting-shapes nesting-limit function-body repeat)
+
 (define (read-text path)
   (file->string (build-path root path)))
 

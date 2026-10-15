@@ -12,6 +12,9 @@
 
 (define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
 
+; Read by the writer of the frozen comparisons (tests/frontend-modules-freeze.rkt).
+(provide big-comment invalid-utf8-cases expected-position read-size mutated-fixtures site-programs deep-cases nested-chains)
+
 ; Runs compiler/link.agc once over the specs, each a (list env root-path) with the root path relative to the
 ; repository or absolute, and gives the text of each root by its path. mode is "" for the program text or
 ; "--ids" for the id ranges of the files.

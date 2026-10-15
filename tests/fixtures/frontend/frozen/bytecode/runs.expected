@@ -1,0 +1,8 @@
+== basics
+exit 0
+stdout "1..5 1...5 5\n-7\n"
+stderr ""
+== unicode
+exit 0
+stdout "héllo wörld, a string long enough to be a chunk of its own: ñññññññññññññññññññññ\nß¡Hola! €5 → ∑ 日本語 😀 𝔘𝔫𝔦\ná é í ó ú ñ ü\n0.0 -0.0 0.1 3.141592653589793 1234567.125 1e-27\n"
+stderr ""

@@ -1,0 +1,18 @@
+globals-ok ok 118 836746140
+globals-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many module constants for the VM
+structs-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many structs for the VM
+variants-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many enum variants for the VM
+fields-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many fields in one struct for the VM
+payload-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many payload items in one variant for the VM
+registers-ok ok 195 640154508
+registers-over ERROR BYTECODE-LIMIT 30:1-30:5 file=b.agc the program has too many registers in one function for the VM
+types-deep-ok ok 5266 155097378
+types-deep-over ERROR BYTECODE-LIMIT 1:1-1:5 file=a.agc the program has too many nested List and Map levels in a JSON field type for the VM
+steps-merged ok 1311035 773447173
+labels ok 291 333059442
+unknown-op ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
+missing-label ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
+operand-range ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
+operand-wide ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc
+operand-count ok 229 433014685
+operand-short ERROR BYTECODE-INTERNAL 1:1-1:5 file=a.agc

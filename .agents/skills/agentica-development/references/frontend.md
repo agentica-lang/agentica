@@ -38,6 +38,8 @@ The bytecode writer (step 6) is `bytecode_writer.agc` (`Writer.write(root_dir, p
 racket src/main.rkt compiler/lex.agc file.agc              # the Agentica lexer's text form of a file
 raco test tests/frontend-lexer-test.rkt                    # Racket printer and Agentica lexer against every golden
 make goldens                                               # also rewrites the front-end goldens from the Racket stages (make goldens FIXTURES=... skips them)
+make frontend-freeze                                       # rewrites the frozen Racket outputs of tests/fixtures/frontend/frozen/ (slow; FREEZE_STAGES="lexer parser" for some)
+make test TESTS="tests/test_frontend_lexer.py"             # the frozen comparisons of a stage (fast tier; make test-slow runs the corpus, mutants and large inputs)
 racket tests/frontend-lexer-common.rkt                     # rewrites only the lexer goldens
 racket src/main.rkt compiler/parse.agc file.agc            # the Agentica parser's text form of a file
 raco test tests/frontend-parser-test.rkt                   # fast tier: Racket printer and Agentica parser against every golden
@@ -61,6 +63,16 @@ racket tools/gen-lexer-unicode.rkt                         # rewrites compiler/u
 ```
 
 To add a case, put `NAME.input` in the folder and run `racket tests/frontend-lexer-common.rkt` (or `frontend-parser-common.rkt`). A change to a ported stage reruns the test for that stage; review the golden diff.
+
+### Frozen comparisons (step 8c)
+
+The slow tiers of `tests/frontend-*-test.rkt` compare the Agentica stages with the live Racket stages ("while Racket exists"). Step 8c froze every one of those comparisons, plus the fast-tier ones against the Racket writer and the id counts of the linker, so the Python tests keep them after the Racket stages are gone (`docs/future/35-self-hosting.md` 35.10, phase 3). `tests/test_frontend_<lexer|parser|modules|check|lower|bytecode>.py` compile the stage of `compiler/` with the product CLI, run it on the VM and compare with `tests/fixtures/frontend/frozen/`; the fast cases are the ones the rackunit fast tier compared live (bytes of the examples, id ranges, invalid UTF-8, the limit scenarios, node-id numbering), the rest are `@slow`. `tests/frontend_support.py` is the helper (`StageTestCase`, `assert_manifest`, `tree_listing`) and `tests/frontend_cases.py` holds the inputs that are a formula and are shared by two modules.
+
+- `frozen/corpus/*.json` is the snapshot of the inputs: the `.agc` files of `examples/`, `stdlib/`, `tests/fixtures/` (without `frontend/modules/`) and `compiler/` at the freeze, the programs of the cases of `tests/checker-test.rkt` and the programs in the code blocks of the site. It is a fixed set: it does not follow those folders, so a new `stdlib/` file is not in it, and the `std/` modules the stages find are the snapshot's `stdlib/`.
+- Inputs from a seeded Racket generator (`lexer/generated.json`, `parser/generated.json`, `check/mutated.json`, `modules/mutated.json`) are checked in, because Python cannot draw the same numbers. Inputs that are a formula (nesting shapes, chains of 3,000 files, a file over 1 MiB, programs of 300 and 1,000 functions) are rebuilt by the Python test; the manifest records the SHA-256 of each input, and a rebuild that differs fails as "not the input the Racket writer used", which is a test bug.
+- A manifest `frozen/<stage>/<set>.sha256` has one line per input: the SHA-256 of the Racket output, its size, the SHA-256 of the input, the key. The outputs of the corpus are megabytes, so they are hashed; a mismatch prints the start of the Agentica output. A small output is kept as text (`*.expected`). A `.agcb` is the line the runner prints and the SHA-256 of the file (`no file` for a failure). The id ranges of the linker are frozen as the sorted `name node-count` lines (`sizes_text`).
+- `make frontend-freeze` rewrites all of it from the Racket stages (about five minutes; `make frontend-freeze FREEZE_STAGES="lexer parser"` for some). It needs Racket, so it goes away with the Racket stages; after that a changed output is reviewed and the golden is rewritten from the Agentica stage by hand. `make frontend-snapshot` takes the snapshot again; do it once to make a freeze, not when those folders change. Each writer is `tests/frontend-<stage>-freeze.rkt` (shared code in `frontend-freeze-common.rkt`) and reuses the generators of the rackunit test it freezes, which export them for that.
+- Not frozen, because they do not compare with Racket: the golden checks of `tests/fixtures/frontend/<stage>/` (rackunit fast tier, phase 2 of 35.10 moves them), and the Racket-only checks (generated tables, the Unicode table, the `Rule` enum, `VM_BUILTINS`, coverage of the CHECK- codes).
 
 ## Common tasks
 

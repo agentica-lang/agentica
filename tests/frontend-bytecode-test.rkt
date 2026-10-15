@@ -25,6 +25,9 @@
 (define-runtime-path version-file "../src/version.rkt")
 (define-runtime-path limits-fixture "fixtures/frontend/limits/limits.agc")
 
+; Read by the writer of the frozen comparisons (tests/frontend-bytecode-freeze.rkt).
+(provide racket-compile compiled-bytes compiled-line racket-limits-line scenario-names)
+
 ; What the Racket front end gives for a file: its program (and the bytes) or the ERROR line of the text form of
 ; lowering (tests/frontend-lower-common.rkt), which is what the Agentica runner prints for a failure before the
 ; writer. A diagnostic of the writer itself is a test error: no program of the corpus reaches one.
