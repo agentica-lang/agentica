@@ -1746,6 +1746,7 @@
       (define entry (and (call? resolved) (builtin-ref (call-name resolved))))
       (when (and (not (eq? type 'Void))
                  (or (typed-target? resolved)
+                     (struct-update? value)
                      (and (not (eq? resolved value)) (or (interpolation? resolved) (inspection? resolved)))
                      (and entry
                           (null? (builtin-effects entry))
@@ -1757,10 +1758,11 @@
               (node-span value)
               #:help (let ([target (cond [(method-call? value) (method-call-target value)]
                                          [(field-access? value) (field-access-target value)]
+                                         [(struct-update? value) (struct-update-target value)]
                                          [(and (call? value) (pair? (call-args value))) (car (call-args value))]
                                          [else #f])])
                        (if (and (name-ref? target)
-                                (or (typed-target? resolved) (keeps-first-type? entry)))
+                                (or (typed-target? resolved) (struct-update? value) (keeps-first-type? entry)))
                            (format "values are immutable, so this call changes nothing; assign the result, for example ~a = ..."
                                    (name-ref-name target))
                            "values are immutable, so this call changes nothing; assign or use the result")))))

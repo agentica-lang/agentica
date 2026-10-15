@@ -571,6 +571,11 @@
       (check-equal? (diagnostic-code found) 'CHECK-UNKNOWN-METHOD)
       (check-equal? (span-slice found) "r.with(age: 1)")
       (check-regexp-match #rx"copies a struct" (diagnostic-help found)))
+    ;; A bare update changes nothing (values are immutable), like a bare xs.push(4).
+    (define unused (check-text (in-main "  ana = make()\n  ana.with(age: 1)")))
+    (check-equal? (diagnostic-code unused) 'CHECK-UNUSED-VALUE)
+    (check-equal? (span-slice unused) "ana.with(age: 1)")
+    (check-regexp-match #rx"for example ana = " (diagnostic-help unused))
     ;; The receiver is checked before the values: its own error comes first.
     (check-equal? (check-code (in-main "  x = missing.with(age: nope)")) 'CHECK-UNKNOWN-NAME)
     (define unknown-value (check-text (in-main "  ana = make()\n  x = ana.with(age: nope)")))

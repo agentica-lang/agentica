@@ -331,6 +331,12 @@
      (lambda (directory)
        (define problem (checked (build-path directory "root.agc")))
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)))
+    ;; A builtin record of std/http is updated without importing a module that declares it (the form that phase 19 teaches).
+    (with-files
+     '(("root.agc" . "import \"std/http\" as Http\n\ndef main() -> Void\n  o = Http.client_options()\n  p = o.with(timeout_ms: 5000, ca_file: \"ca.pem\")\n  puts(p.timeout_ms)\n  puts(o.timeout_ms)\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "5000\n30000\n")))
     ;; Alias.with(...) is a call of the module's function named with, not an update.
     (with-files
      '(("lib.agc" . "export def with(n: Int) -> Int\n  return n + 1\nend\n\n")
