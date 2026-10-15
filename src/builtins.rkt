@@ -131,6 +131,8 @@
                     ("System.exit" ((code Int)) Void #f "System.exit" (process) "End the run with an exit code.")
                     ("System.env" ((name String)) (Result String) #f "System.env" (process) "Read an environment variable; an unset variable or an invalid name returns an error, and an empty value returns ok.")
                     ("System.pid" () Int #f "System.pid" (process) "Return the process id of this program; VM only.")
+                    ("FrontEnd.hand_off" ((program (List Int)) (options (List String)) (arguments (List String))) (Result Void) #f "FrontEnd.hand_off" (process) "Front end only: hand the compiled program, the VM options and the program arguments to the VM, which ends this run and runs the program in a new one; it returns an error only when an argument cannot be passed on (a byte outside 0 to 255, or a character 0 in a word). Any other program fails with RUNTIME-FRONT-END-ONLY.")
+                    ("FrontEnd.std_source" ((path String)) (Result String) #f "FrontEnd.std_source" (process) "Front end only: the text of an embedded std/ source, by its path in stdlib/ such as queue.agc or bdd/gherkin.agc; an unknown path is an error. Any other program fails with RUNTIME-FRONT-END-ONLY.")
                     ("Map.has_key?" ((map (Map K V)) (key K)) Bool map-has "Map.has_key?" () "Check whether a key exists.")
                     ("Map.keys" ((map (Map K V))) (List K) map-keys "Map.keys" () "Return keys in insertion order.")
                     ("Map.size" ((map (Map K V))) Int map-size "Map.size" () "Count map entries.")

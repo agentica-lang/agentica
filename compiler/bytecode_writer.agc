@@ -13,7 +13,7 @@ import Failure from "bytecode_failure"
 import Function from "bytecode_function"
 import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
-import {FORMAT_VERSION, MAX_U16, VERSION} from "bytecode_tables"
+import {FORMAT_VERSION, MAX_U16} from "bytecode_tables"
 import JsonTypes from "bytecode_types"
 import Problems from "check_failure"
 import Paths from "import_path"
@@ -27,15 +27,20 @@ export enum Written
 end
 
 ## Writes the program. root_dir is the folder of the root file, which the stored names of the sources are relative to.
-export def write(root_dir: String, program: Ir.Program) -> Written
-  result = build(root_dir, program)
+## version is the Agentica version that the header names; the VM loads the file only when it is its own, so an empty
+## one is BYTECODE-INTERNAL.
+export def write(root_dir: String, program: Ir.Program, version: String) -> Written
+  if version == ""
+    return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty")))
+  end
+  result = build(root_dir, program, version)
   if result.ok?
     return Written.Done(result.unwrap!)
   end
   return Written.Failed(Problems.unpack(result.message))
 end
 
-def build(root_dir: String, program: Ir.Program) -> Result[List[Int]]
+def build(root_dir: String, program: Ir.Program, version: String) -> Result[List[Int]]
   try check_limits(program)
   struct_index: Map[String, Int] = {}
   at = 0
@@ -53,7 +58,7 @@ def build(root_dir: String, program: Ir.Program) -> Result[List[Int]]
     tables = encoded.tables
     functions = Bytes.add_all(functions, encoded.parts)
   end
-  out = header()
+  out = header(version)
   out = sources(out, root_dir, program)
   out = pool_section(out, tables.spans)
   out = pool_section(out, tables.constants)
@@ -104,10 +109,10 @@ def check_limits(program: Ir.Program) -> Result[Void]
 end
 
 # The magic, the format version and the Agentica version.
-def header() -> List[List[Int]]
+def header(version: String) -> List[List[Int]]
   out = Bytes.add(Bytes.start(), [65, 71, 67, 66])
   out = Bytes.add(out, Bytes.u32(FORMAT_VERSION))
-  return Bytes.add(out, Bytes.string(VERSION))
+  return Bytes.add(out, Bytes.string(version))
 end
 
 # The count of a table of entries, then its entries.

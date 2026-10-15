@@ -21,6 +21,12 @@ TABLES = ROOT / "compiler" / "bytecode_tables.agc"
 # The format version of the .agcb file and its header: the magic and the version as a 32-bit little-endian number.
 FORMAT_VERSION = 5
 
+# The Agentica version of the header is an input of the writer (the front end gets it from its caller, 35.3), so the
+# runs below pass it with --version=V. The released version still lives in src/version.rkt; step 8a moves it to a plain
+# file. The frozen manifests hash the file without it.
+VERSION = re.search(r'\(define version "([^"]+)"\)',
+                    (ROOT / "src" / "version.rkt").read_text(encoding="utf-8")).group(1)
+
 
 def lower_fixture_paths(files):
     """The lowering fixtures: a NAME.agc file or a folder NAME with a root.agc."""
@@ -60,7 +66,7 @@ class BytecodeFrozenTest(StageTestCase):
         a fresh folder, so a file of an earlier call is never taken for the output of a failure.
         """
         outputs = self.make_temp_dir()
-        arguments = ["--stdlib=%s" % self.stdlib]
+        arguments = ["--stdlib=%s" % self.stdlib, "--version=%s" % VERSION]
         targets = {}
         for n, path in enumerate(paths):
             targets[path] = outputs / ("%d.agcb" % n)
@@ -124,17 +130,17 @@ class BytecodeFrozenTest(StageTestCase):
         text = TABLES.read_text(encoding="utf-8")
         self.assertEqual(re.search(r"^export FORMAT_VERSION = (.+)$", text, flags=re.MULTILINE).group(1),
                          str(FORMAT_VERSION))
-        # The released version still lives in src/version.rkt; step 8a moves it to a plain file.
-        version = re.search(r'\(define version "([^"]+)"\)', (ROOT / "src" / "version.rkt").read_text(encoding="utf-8"))
-        self.assertEqual(re.search(r"^export VERSION = (.+)$", text, flags=re.MULTILINE).group(1),
-                         json.dumps(version.group(1)))
+        # There is no VERSION constant: the header carries the version that the caller passed in.
+        self.assertIsNone(re.search(r"^export VERSION\b", text, flags=re.MULTILINE))
         self.compile_paths(["examples/hello.agc"], self.corpus_dir("examples", "fixtures"))
-        header = self.files["examples/hello.agc"].read_bytes()[:8]
-        self.assertEqual(header, b"AGCB" + FORMAT_VERSION.to_bytes(4, "little"))
+        data = self.files["examples/hello.agc"].read_bytes()
+        self.assertEqual(data[:8], b"AGCB" + FORMAT_VERSION.to_bytes(4, "little"))
+        length = int.from_bytes(data[8:12], "little")
+        self.assertEqual(data[12:12 + length].decode("utf-8"), VERSION)
 
     def test_the_writer_reaches_the_limits_and_the_internal_errors_as_the_racket_writer_does(self):
         bytecode = compile_agc(LIMITS_FIXTURE, self.stage_dir / "limits.agcb")
-        result = run_vm(bytecode, cwd=ROOT, env=vm_environment(), timeout=300)
+        result = run_vm(bytecode, args=["--version=%s" % VERSION], cwd=ROOT, env=vm_environment(), timeout=300)
         self.assertEqual(result.code, 0, result.stderr)
         self.assertGreater(len(scenario_names("SCENARIOS")), 15)
         self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits.expected")
@@ -195,7 +201,8 @@ class BytecodeFrozenTest(StageTestCase):
     @slow
     def test_the_writer_matches_the_racket_writer_on_the_large_limit_scenarios(self):
         bytecode = compile_agc(LIMITS_FIXTURE, self.stage_dir / "limits.agcb")
-        result = run_vm(bytecode, args=["slow"], cwd=ROOT, env=vm_environment(), timeout=1800)
+        result = run_vm(bytecode, args=["slow", "--version=%s" % VERSION], cwd=ROOT, env=vm_environment(),
+                        timeout=1800)
         self.assertEqual(result.code, 0, result.stderr)
         self.assertEqual(len(scenario_names("SLOW_SCENARIOS")), 4)
         self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits-slow.expected")

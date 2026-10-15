@@ -1,6 +1,7 @@
 /*
  * The loop registry: slots after removals, a completed job, a timed-out job,
- * and agc_io_close, which frees the loop or refuses while a job is stuck.
+ * and agc_io_close, which frees the loop or refuses while a job is stuck. Also the stop-signal watch across
+ * two VMs of one process, as the single binary runs them.
  */
 #include "../core.h"
 
@@ -102,6 +103,19 @@ int main(void) {
   pause_ms(2100);
   assert(agc_io_close(&vm));
   assert(vm.loop == NULL);
+  /* The single binary runs two VMs in one process, one after the other: the second watches the stop signals with a
+     wake handle of its own once the first is closed, and both closes settle. */
+  agc_vm second;
+  agc_vm_init(&second, NULL, stdout, stderr, INT64_MAX);
+  agc_io_watch_stop(&vm, 0);
+  assert(agc_io_close(&vm));
+  assert(vm.loop == NULL);
+  agc_io_watch_stop(&second, 0);
+  assert(agc_io_close(&second));
+  assert(second.loop == NULL);
+  agc_io_watch_stop(&vm, 0);
+  assert(agc_io_close(&vm));
+  assert(agc_io_stop_signal() == 0);
 #endif
   puts("loop tests passed");
   return 0;

@@ -68,7 +68,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     - and `finish_flushes` waits for all of them with `uv_run` ONCE until the
       flush-limit deadline timer (
       - 30000 ms, `--flush-timeout` or `AGENTICA_FLUSH_TIMEOUT_MS`)
-    - setting `rt->flush_expired` for `vm/main.c`'s warning line),
+    - setting `rt->flush_expired` for the warning line of `vm/launch.c`),
       `agc_handle_leave` (
       - a cancelled lock waiter leaves the FIFO
       - a cancelled `next_owner` passes the lock on)
@@ -79,7 +79,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         closed error)
     - the one exit path (
       - `docs/vm/10-io-scheduler.md` §10.2.2 "End of run"
-      - `end_run` in `vm/main.c`: `agc_processes_stop` kills the children,
+      - `agc_launch_settle` in `vm/launch.c` (then `agc_launch_exit`): `agc_processes_stop` kills the children,
         `agc_io_children_stopped` acts on a second signal recorded meanwhile,
         `agc_io_goodbye` calls each resource's `goodbye` hook (TCP: one TLS
         `close_notify` by `uv_try_write`), stdout and stderr flush (retried on
@@ -263,7 +263,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     a print that holds the stream
   - the diagnostic of a failed run is queued as a kept notice after the blocking
     streams are flushed and before the end-of-run wait (`announce_outcome` in
-    `vm/main.c`), and final notices (the flush warnings, the flush-timeout
+    `vm/launch.c`), and final notices (the flush warnings, the flush-timeout
     warning, a write-error diagnostic) are written after it with non-blocking
     writes, and the rest a stuck pipe will not take is dropped
 
@@ -311,7 +311,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - Stdout and stderr: `vm/output.c` writes them, with one exception: `vm/process.c` forwards the stderr of a child process (`Process.spawn`) to `err.file` with a blocking `fwrite` in its read callback. That text is not in the buffer or in the order of the calls, and it can block the loop when stderr is stuck. `agc_vm_init` leaves
   both on the blocking `FILE *` it was given (`base` is null), so the C tests and
-  the fuzzer never depend on the loop; `vm/main.c` calls `agc_output_open`
+  the fuzzer never depend on the loop; `agc_launch_vm` (`vm/launch.c`) calls `agc_output_open`
   after `agc_input_open`. Never `fwrite` to `vm->rt->out.file` or
   `err.file` from builtin code: use `agc_write`, which parks the task and
   expects to be run again, so a builtin must work out its text before the
@@ -320,7 +320,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   VM itself prints goes through `agc_notice_begin` and `agc_notice_end`.
 - Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves
   the input closed (`fd = -1`, always EOF) and `System.args` empty, and
-  `vm/main.c` opens fd 0 and fills `vm->rt->args`, so the C tests and the
+  `agc_launch_vm` opens fd 0 (not for the front end of the single binary, which reads nothing) and fills `vm->rt->args`, so the C tests and the
   fuzzer never block on stdin. Stdin text decodes each invalid byte to
   U+FFFD (Racket ports); arguments decode each invalid byte to `?` and an
   incomplete sequence at the end to one `?` (Racket in a UTF-8 locale,

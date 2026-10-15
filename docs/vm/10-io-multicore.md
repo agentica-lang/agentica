@@ -129,7 +129,7 @@ needs it.
   survive a park. The blocking fallbacks (§14.1) keep a lock across the write:
   under it, a short write or `ferror` is retried, and once the outcome is set,
   writes are dropped (checked under the stream lock). The final diagnostic of
-  `vm/main.c` is exempt. Only the order in which output from different tasks
+  `vm/launch.c` is exempt. Only the order in which output from different tasks
   interleaves is not repeatable.
 - **The I/O thread blocks in its loop.** With nothing to do it blocks in
   `uv_run(UV_RUN_ONCE)`. The inbox's `uv_async_t` is ref'd while schedulers run,
@@ -188,13 +188,14 @@ needs it.
     handle), since a signal handler gets no context (10.2.2, Stop signals).
     Already moved out of globals: the `ready` flag of `agc_init` (Boehm's
     `GC_is_init_called` answers instead); the GC-stress counter (`_Atomic`); the
-    SipHash keys (`hash_key` in `agc_vm`, set from OS entropy by `vm/main.c`
+    SipHash keys (`hash_key` in `agc_vm`, set from OS entropy by `vm/launch.c`
     before the run); the OS error locale (`messages_locale` in `agc_vm`, made
     once at start-up and freed on exit); and
     `setenv("UV_USE_IO_URING", "0", 0)`, which moved to start-up (`agc_io_init`,
     before any loop exists) because `setenv` is not thread-safe. `agc_io_init`
-    returns whether it set the variable, and `vm/main.c` keeps that in the
-    runtime (`drop_uring_env`) for `Process.spawn` (10.4).
+    returns whether it set the variable, and `vm/launch.c` keeps that in the
+    runtime (`drop_uring_env`) for `Process.spawn` (10.4). It runs once per
+    process, also in the single binary, whose two runtimes share the result.
 - **Values are immutable**, so tasks on different schedulers share them without
   locks or copies (§16.7). Any in-place mutation inside the VM (caches, updates
   in place when a value is known to be unique, the faster lists of roadmap 8d)

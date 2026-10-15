@@ -73,13 +73,17 @@ export def run(options: Opts.Options) -> Report.Ending
 end
 
 # The run in its directory. The std/ sources are written first, and the runner compiled before anything else: its
-# failure is a bug of the installation.
+# failure is a bug of the installation. The programs name the Agentica version of the VM that will run them.
 def inside(directory: String, options: Opts.Options, temporary: String) -> Report.Ending
   installed = install_std_sources(directory)
   if !installed.ok?
     return Report.infrastructure(installed.message, temporary, options)
   end
-  settings = Env.settings("#{directory}/std", Env.process_env())
+  version = Runner.vm_version(options.vm)
+  if !version.ok?
+    return Report.infrastructure(version.message, options.vm, options)
+  end
+  settings = Env.settings("#{directory}/std", Env.process_env()).with(version: version.unwrap!)
   case compile_runner(directory, settings)
     Compile.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"

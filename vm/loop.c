@@ -776,6 +776,19 @@ void agc_io_flush_files(agc_vm *vm) {
   finish_flushes(vm);
 }
 
+/* The stop state outlives a loop when one process runs two VMs one after the other (the single binary's front end,
+ * then the program): the next VM installs its own wake handle. The handler runs on this thread only (the pool
+ * threads have the stop signals blocked, see queue_work), so blocking them here keeps it from sending to a handle
+ * that is being closed. */
+static void unwatch_stop(agc_loop *loop) {
+  if (stop.wake != &loop->wake) return;
+  sigset_t saved;
+  agc_io_block_stop(&saved);
+  stop.wake = NULL;
+  pthread_sigmask(SIG_SETMASK, &saved, NULL);
+  uv_close((uv_handle_t *)&loop->wake, NULL);
+}
+
 static bool close_all(agc_vm *vm) {
   agc_io_flush_files(vm);
   for (size_t k = registry_count(vm); k-- > 0;) {
@@ -789,6 +802,7 @@ static bool close_all(agc_vm *vm) {
   agc_output_close(vm);
   release_handles(vm);
   if (!vm->loop) return true;
+  unwatch_stop(vm->loop);
   uv_run(&vm->loop->uv, UV_RUN_NOWAIT);
   for (job *j = vm->loop->ready; j; j = j->ready_next) j->queued = false;
   vm->loop->ready = vm->loop->ready_tail = NULL;

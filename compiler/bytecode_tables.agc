@@ -1,6 +1,7 @@
-## The constants of src/bytecode.rkt: the format version, the limits of the format, the Agentica version the header
-## names, and the opcode numbers with the groups of opcodes that share an operand layout. A test compares OPCODES with
-## `opcodes` of src/bytecode.rkt and VERSION with src/version.rkt.
+## The constants of src/bytecode.rkt: the format version, the limits of the format, and the opcode numbers with the
+## groups of opcodes that share an operand layout. A test compares OPCODES with `opcodes` of src/bytecode.rkt. The
+## Agentica version of the header is not here: it is an input of the front end (the version of Settings in
+## link_env.agc, docs/future/35-self-hosting.md, 35.3).
 
 ## The largest value of a u16 operand, and of every count the VM reads as a u16.
 export MAX_U16 = 65535
@@ -10,9 +11,6 @@ export FORMAT_VERSION = 5
 
 ## The deepest nesting of List and Map in a JSON field type the loader accepts.
 export MAX_TYPE_DEPTH = 1024
-
-## The Agentica version the header names (src/version.rkt); the VM accepts only its own.
-export VERSION = "0.3.0"
 
 ## The number of each opcode, in the order of `opcodes` in src/bytecode.rkt and `agc_opcode` in vm/value.h.
 export OPCODES = {

@@ -81,6 +81,7 @@
     (parameterize ([current-directory root])
       (apply run-process vm-file #:timeout timeout "--" (path->string bytecode)
              (string-append "--stdlib=" (path->string stdlib-folder))
+             (string-append "--version=" (dynamic-require version-file 'version))
              (append (env-arguments default-env)
                      (append-map (lambda (path output) (list path "-o" output)) paths outputs)))))
   (check-equal? (first result) 0 (third result))
@@ -248,7 +249,6 @@
 
   (test-case "the Agentica header constants are those of the Racket writer"
     (check-equal? (agentica-constant "FORMAT_VERSION") "5")
-    (check-equal? (agentica-constant "VERSION") (format "~s" (dynamic-require version-file 'version)))
     (define data (write-bytecode (car programs)))
     (check-equal? (subbytes data 0 8) (bytes-append #"AGCB" (integer->integer-bytes 5 4 #f #f))))
 
@@ -259,7 +259,8 @@
        (test-case "the Agentica writer reaches the limits and the internal errors as the Racket writer does"
          (define result
            (parameterize ([current-directory root])
-             (run-process vm-file #:timeout 300 "--" (path->string bytecode))))
+             (run-process vm-file #:timeout 300 "--" (path->string bytecode)
+                          (string-append "--version=" (dynamic-require version-file 'version)))))
          (check-equal? (first result) 0 (third result))
          (define names (scenario-names "SCENARIOS"))
          (check-true (> (length names) 15))
@@ -327,7 +328,8 @@
        (test-case "the Agentica writer matches the Racket writer on the large limit scenarios"
          (define result
            (parameterize ([current-directory root])
-             (run-process vm-file #:timeout 1800 "--" (path->string bytecode) "slow")))
+             (run-process vm-file #:timeout 1800 "--" (path->string bytecode) "slow"
+                          (string-append "--version=" (dynamic-require version-file 'version)))))
          (check-equal? (first result) 0 (third result))
          (define names (scenario-names "SLOW_SCENARIOS"))
          (check-equal? (length names) 4)

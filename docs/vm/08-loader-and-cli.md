@@ -10,7 +10,10 @@ branch.
   and size sums use `uint64_t`. The loader has a memory budget of 4 times the
   file length plus 1 MiB, and every allocation is charged to it first.
 - **Header**: magic, format version and Agentica version match exactly. The file
-  ends right after the entry.
+  ends right after the entry. The one exception to the exact Agentica version
+  is the front end that the single binary loads itself (the carried one, or
+  the file of `--front-end`): its Agentica version may differ, and every other
+  check applies to it. See "The single binary" in section 9.
 - **Strings**: valid UTF-8 with no surrogates. Character counts are computed.
 - **Spans**: the source exists, `start <= end`, and each line is within the
   source's line count and each column within the line's length plus 1.
@@ -182,6 +185,79 @@ byte of a file with a type table, an Updates section or Globals.
   that is closed or in the wrong direction. So libuv never gets a low descriptor
   and trips its assertion, and reads and writes on that stream still fail with
   `EBADF`.
+
+**The single binary (as built in 8b).** `make agentica-next` links
+`dist/agentica-next`: the VM objects, `vm/agentica.c` as its `main`, and the
+front end with the `std/` sources as data (`vm/embedded.h`, written by
+`vm/tools/gen-embedded.sh`). It sits beside `agentica-vm`, which is unchanged,
+and is not the default (docs/future/35-self-hosting.md, 35.3 and 35.6).
+
+- **Two runs in one process.** `agentica [--front-end FILE.agcb] WORDS...`
+  loads the front end (the carried one, or `FILE`; `--front-end` must be the
+  first word and is not in any help) and runs it in a first runtime with the
+  arguments `--version V --self PATH -- WORDS...`, where `V` is `AGC_VERSION`
+  and `PATH` is the target of `/proc/self/exe` (`argv[0]` without it). A lone
+  `agentica --version` is answered by C before anything else is opened, so it
+  starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS`
+  is checked before the front end runs, as `agentica-vm` checks it at its start.
+  The front end
+  has no step limit, no `--allow-run`, no standard input (a read gives EOF, so
+  the program keeps the real one) and no channel to a parent process. If it
+  calls `FrontEnd.hand_off` and its run ends with status 0, C retires that
+  runtime: the same steps as the end of any run (`agc_launch_settle`: children
+  stopped, output and files flushed), then the event loop is closed and the
+  heap is collected once. Any other end of the front end (a usage error, a
+  problem in the user's file, a crash, a stop signal) is the end of the
+  process, with the status the front end gave. The program is then loaded from
+  the bytes it handed over, with the full version check, and runs in a new
+  runtime with the options it was given. A bad option or bytecode is exit 2
+  with `agentica: ...`. The stop signal handlers and the wake handle of the
+  loop are set again for the second runtime (`unwatch_stop` in `vm/loop.c`
+  releases the first one). If the event loop of the front end cannot be closed
+  (an operation of its is still running), the run ends with status 1 and
+  `agentica: internal error: the front end left an operation running`, because
+  the program must not share a process with anything of the compiler.
+- **What a front end may hand over, and trust.** The front end that C loads is
+  fully trusted: it runs with the user's rights, can read files and, through
+  the options it hands over, give the program `--allow-run`. That is why
+  `--front-end FILE` is for the build and the tests only, is not in the help,
+  and has the same standing as the binary itself. The options it may pass are
+  exactly `--ai`, `--json`, `--allow-run`, `--max-steps N`, `--seed N`,
+  `--flush-timeout MS` and `--source-root DIR`, each once, and nothing else; no
+  positional word, no `--version`. `--driver-pid` is refused (exit 2): it says
+  which process started this one, and only that process can say so. The hand-off
+  takes at most 64 option words and 1,048,576 argument words
+  (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the counts
+  fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and must
+  be a regular file of at most 256 MiB, so a named pipe is refused at once.
+- **Shared with `agentica-vm`.** `vm/launch.c` holds what both programs do:
+  the option parser (`agc_launch_parse`; its messages start with the
+  program name), seeds, the trace file, the creation of a runtime, and the one
+  exit path (`agc_launch_settle`, `agc_launch_exit`). `vm/main.c` keeps its
+  Windows input handling and its usage text. `agc_io_init` runs once per
+  process, so its result is kept in `agc_launch` for both runtimes.
+- **The guarded builtins.** `FrontEnd.hand_off(program: List[Int], options:
+  List[String], arguments: List[String]) -> Result[Void]` and
+  `FrontEnd.std_source(path: String) -> Result[String]` (`vm/front_end.c`, in
+  the table list after `Test`). The driver sets `rt->front_end` (an
+  `agc_front_end`) only for the front end it loads itself. Without it, in a user
+  program or in a front end run by `agentica-vm`, both fail with
+  `RUNTIME-FRONT-END-ONLY` at the call. `hand_off` copies the bytes (at most
+  256 MiB, each 0 to 255) and the words (no character 0) into GC memory,
+  records them in the `agc_front_end`, and ends the run with `agc_exit(vm, 0)`;
+  it returns an error for a bad byte or word and never for an option, which the
+  driver reads after the run. `std_source` returns the text of the embedded
+  file at that path in `stdlib/` (`queue.agc`, `bdd/gherkin.agc`), or an error.
+- **The loader.** `agc_load_front_end` is `agc_load_traced` without the check of
+  the Agentica version in the header (the format version and every other check
+  stay). Only `vm/agentica.c` calls it, for the front end; the program that the
+  front end hands over goes through `agc_load_traced`, so it is checked like a
+  file given to `agentica-vm`.
+- **The embedded data.** `agc_embedded_data` holds the front end, then for each
+  `std/` source its NUL-terminated path and its text. `agc_embedded_index` has
+  `[offset, length]` of the front end, the count `N`, and `N` triples
+  `[path offset, text offset, text length]`. Both are `.rodata`, built from
+  `.incbin` and label differences, so there are no relocations.
 
 **VM tracing (as built).** The rules are in `docs/future/24-logging.md` §24.4.
 This note lists what the code chose.
