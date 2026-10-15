@@ -1,0 +1,12 @@
+program #6 0:1:1-79:6:1
+  module "root.agc"
+    declaration: function-decl #5 34:3:1-79:6:1 name="main"
+      result: type-ref #1 48:3:15-52:3:19 name="Void"
+      body: expr-stmt #4 55:4:3-75:5:1
+        value: call #3 55:4:3-74:4:22 name="puts" piped=false
+          arg: call #2 60:4:8-73:4:21 name="@2::name" piped=false
+  module "../shared/x.agc"
+    declaration: function-decl #3 7:1:8-45:4:1 name="@2::name"
+      result: type-ref #0 21:1:22-27:1:28 name="String"
+      body: return-stmt #2 30:2:3-41:3:1
+        value: literal #1 37:2:10-40:2:13 value=string:"x"

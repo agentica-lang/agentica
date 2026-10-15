@@ -5,12 +5,13 @@
          "frontend-corpus-common.rkt"
          "frontend-lexer-common.rkt"
          "vm-diff-common.rkt"
-         "../src/source-file.rkt"
-         "../tools/gen-lexer-unicode.rkt")
+         "../src/source-file.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/lex.agc")
-(define-runtime-path unicode-table "../compiler/unicode_table.agc")
+
+; The generated inputs and the nesting check are read by the writer of the frozen comparisons (tests/frontend-lexer-freeze.rkt).
+(provide generated-cases)
 
 (define (read-text path)
   (file->string (build-path root path)))
@@ -60,33 +61,15 @@
 (module+ test
   (define inputs (lexer-inputs))
 
-  (test-case "every input has a golden and no golden is left over"
-    (define expected (sort (map (lambda (input) (path->string (file-name-from-path (golden-file input)))) inputs) string<?))
-    (define found
-      (sort (for/list ([file (in-list (directory-list (path-only (golden-file (car inputs)))))]
-                       #:when (path-has-extension? file #".tokens"))
-              (path->string file))
-            string<?))
-    (check-equal? found expected))
-
   (test-case "the Racket lexer matches its goldens"
     (for ([input (in-list inputs)])
       (check-equal? (string-append (lexer-text (read-text (lexer-input-path input))) "\n")
                     (golden input)
                     (lexer-input-name input))))
 
-  (test-case "the Unicode table of the Agentica lexer is Racket's char-graphic? table"
-    (unless (equal? (file->string unicode-table) (unicode-source))
-      (fail "compiler/unicode_table.agc is out of date: run racket tools/gen-lexer-unicode.rkt")))
-
   (when (vm-built? "frontend lexer tests")
     (with-bytecode
       (lambda (work bytecode)
-        (define outputs (run-lexer bytecode (map lexer-input-path inputs)))
-        (test-case "the Agentica lexer matches the goldens on the VM"
-          (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (lexer-input-path input) #f) (golden input) (lexer-input-name input))))
-
         ; The file is read by compiler/source_file.agc before the lexer sees it (the linker test covers the details).
         (test-case "a file with invalid UTF-8 is LEX-INVALID-UTF8 at the first bad byte, as in Racket"
           (define path (path->string (build-path work "invalid.agc")))

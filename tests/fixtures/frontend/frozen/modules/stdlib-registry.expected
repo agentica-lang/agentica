@@ -1,0 +1,12 @@
+std/bdd.agc
+std/bdd/gherkin.agc
+std/bdd/match.agc
+std/binary.agc
+std/http.agc
+std/logger.agc
+std/queue.agc
+std/test/child.agc
+std/test/report.agc
+std/test/runner.agc
+std/test/units.agc
+std/toml.agc
