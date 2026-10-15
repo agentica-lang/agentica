@@ -41,3 +41,36 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
 - Void completes a function without data. Only return/Fn-result/Result/Task completion positions accept it; reject inferred Void values except statements and forwarded Void returns. Nil remains data and requires explicit returns. Main and side-effect callbacks return Void. Result[Void] success uses ok(). Migrate fixtures by meaning, preserving Nil and false data cases.
 - --allow-run defaults off and reaches the VM. `agentica test --allow-run` passes it to step handlers and programs under test. The end of a run kills and reaps directly spawned children. Expected operations return Results.
 - tests/process-test.rkt uses independent Node standard-library children, CLI capability checks, binary/full-duplex streams, nonzero exits, deadline policies and PID cleanup. Node is required in CI; local absence visibly skips. CI also exercises the compiled executable and examples/process-tool.agc with --allow-run.
+
+## Int and Float bits, std/binary (phases 13a, 13b)
+
+- Int and Float bit builtins (`vm/numbers.c`, 13a): shifts and masks run on
+  `uint64_t` and `int_from_bits` turns the result back into an `int64_t` without
+  implementation-defined casts; a count of 64 or more is decided before the
+  shift (`shift_left` and `shift_right_unsigned` give 0, `shift_right` gives 0
+  or -1), a negative count is `RUNTIME-INVALID-COUNT` at argument 1 (`span +
+  2`). `Float.to_bits` and `from_bits` return the canonical NaN
+  `0x7FF8000000000000` for any NaN; `to_bits32` decides the binary32 overflow
+  (`>= 2^128 - 2^103`) before the `(float)` cast, so the cast never sees an
+  out-of-range value, and gives `0x7FC00000` for NaN. The vectors of
+  `bits-vectors.agc` are the file `tests/fixtures/vm/bits-vectors.stdin`, which
+  `python3 tests/fixtures/bits-vectors.py` writes (standard library only; it
+  checks `struct` against its own exact `Fraction` rounding). CI does not run
+  the script: run it by hand and commit both files when the vectors change.
+  `tests/vm-bits-test.rkt` checks the spans of the errors.
+
+- `std/binary` (`stdlib/binary.agc`, 13b) is Agentica on the 13a builtins, with
+  no C. A reader is `window` (offset range, no overflow for any offset), a
+  `load8/16/32/64_{be,le}` that indexes the items, ORs them with `bit_or` and
+  tests the result once (`bytes_ok`), and walks the bytes (`first_bad_byte`)
+  only to name the first bad one; `extend` sign-extends with `shift_left` then
+  `shift_right`. A writer is `fits` plus a list literal from `bytesN_{be,le}`.
+  `concat` splits in halves (`join_parts`), so it recurses about log2 k deep.
+  The goldens are `std-binary` (round trips both ways, error order and messages,
+  `concat`, frames) and `std-binary-vectors`, which checks
+  `tests/fixtures/vm/std-binary-vectors.stdin` that `python3
+  tests/fixtures/std-binary-vectors.py` writes (standard library only; it loads
+  `bits-vectors.py` for the float helpers and checks `struct` against the 13a
+  exact f32 rounding). CI does not run the script: run it by hand and commit
+  both files when the vectors change. `tests/std-binary-test.rkt` checks the
+  fixed output.

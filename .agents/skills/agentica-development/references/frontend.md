@@ -4,7 +4,7 @@ Step lists for common front-end changes (keyword, AST node, syntax, diagnostic, 
 
 ## The freeze and the Agentica front end
 
-Roadmap row 7.2.7 froze the Racket front end. By default, from then on `src/` takes no new syntax and no new checker rules. Its only changes are bug fixes and new rows in the `src/builtins.rkt` table with the matching name in the `vm-builtins` list of `src/lower.rkt`. Every later language change goes into `compiler/` (`docs/future/35-self-hosting.md`), and the recipes below that add a keyword, a node or a syntax form describe the change to make there once its stage is ported. A bug fix in a ported stage changes `src/` and `compiler/` in the same PR, with a golden case for it. They may be relaxed when following them costs more than it saves; the PR says which rule it relaxes and why.
+Roadmap row 7.2.7 froze the Racket front end. By default, from then on `src/` takes no new syntax and no new checker rules. Its only changes are bug fixes and the data that row 7.2.7 lists: builtin table rows in `src/builtins.rkt` with their `vm-builtins` names in `src/lower.rkt`, builtin record and enum entries, registry lines, std-only and reserved names, and message texts. Every later language change goes into `compiler/` (`docs/future/35-self-hosting.md`), and the recipes below that add a keyword, a node or a syntax form describe the change to make there once its stage is ported. A bug fix in a ported stage changes `src/` and `compiler/` in the same PR, with a golden case for it. They may be relaxed when following them costs more than it saves; the PR says which rule it relaxes and why.
 
 `compiler/` holds the Agentica front end, one stage per PR in the order of 35.4. So far it has the lexer: `source.agc`, `token.agc` and `diagnostic.agc` (the data of `src/source.rkt`, `token.rkt`, `diagnostic.rkt`), `lexer.agc` (`src/lexer.rkt`), `unicode.agc` with the generated `unicode_table.agc` (Racket's `char-graphic?` for the text of `LEX-UNEXPECTED-CHAR`), and the entry `lex.agc` with `lex_text.agc`. Code follows 35.5: build lists with `push` and strings with `join`, and use loops, not recursion over the input. Positions and offsets count characters, as in Racket.
 
@@ -29,7 +29,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 1. Add it to the `keywords` hash (reserved words) or the operator hash in `src/lexer.rkt`.
 2. If the parser must act on it, add the kind to the relevant `case`/`memq` in `src/parser.rkt`.
 3. Add a test in `tests/lexer-test.rkt` (kinds) and, when it affects syntax, `tests/parser-test.rkt`.
-4. Run `raco test tests/`.
+4. Run `make test TESTS="tests/<stage>-test.rkt"`.
 
 ### Add an AST node
 
@@ -43,7 +43,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 2. Add the AST node if no existing node fits.
 3. Write a parse function and call it from the right place: `parse-statement` for statements, `parse-primary` for expressions, `parse-program` for declarations.
 4. Add one valid test and one rejection test asserting the diagnostic code.
-5. Run `raco test tests/` and the smoke test.
+5. Run `make test TESTS="tests/<stage>-test.rkt"` and the affected example.
 
 ### Add a diagnostic code
 
@@ -56,7 +56,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 1. Create `src/<stage>.rkt` with one entry point and a `provide`.
 2. Require the previous stage's data modules only; do not reach back into the CLI.
 3. Wire it into `src/main.rkt` after the previous stage, behind a `diagnostic?` guard.
-4. Add `tests/<stage>-test.rkt`. `raco test tests/` discovers it automatically; CI needs no change.
+4. Add `tests/<stage>-test.rkt`. `make test` discovers it automatically; CI needs no change.
 
 ### Add tests
 
@@ -86,7 +86,7 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 ## Error handling
 
-- `raco test tests/` failure: read the failing `test-case` name and the message from the `parse-ok`/`parse-code` helper. A `parse-ok` failure prints the diagnostic the stage returned.
+- `make test TESTS="tests/<stage>-test.rkt"` failure: read the failing `test-case` name and the message from the `parse-ok`/`parse-code` helper. A `parse-ok` failure prints the diagnostic the stage returned.
 - Smoke test exits 1: `main.rkt` printed `file:line:column error[CODE]`, the message, and a source excerpt with a caret on stderr. That is a stage diagnostic, not a crash.
 - A Racket traceback instead of a diagnostic means a stage raised or indexed out of range. Find the token or index and turn it into a `bail`/`fail`; the roadmap requires Agentica diagnostics, never host tracebacks.
 - A stage unexpectedly returns a diagnostic: check the first-error rule and that `main.rkt` guards with `diagnostic?` before passing data to the next stage.

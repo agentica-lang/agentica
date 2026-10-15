@@ -393,8 +393,9 @@ it starts from (as in §15.6) and updates §15 where the tree has moved.
    header and each header compiled on its own; update the places that name
    `agc.h` (§15.4); add `vm/tools/check-layers.sh`, `make vm-layers`, its
    negative self-test and the CI step (§15.5); tick row 7.2.1b and add the
-   layers to the development skill (`references/vm.md`: the file table and a
-   "which layer" note; `references/ci.md`: the new check).
+   layers to the development skill (`references/vm.md`: the "which layer" note;
+   the file tables of `references/vm-core.md`, `vm-io.md`, `vm-net.md` and
+   `vm-tasks.md`; `references/ci.md`: the new check).
 
 Order (the owner, 2026-10-13): after the architecture note (§16, row 7.2.1c),
 and before the asynchronous process close and the flush limit (row 7.2.1d),

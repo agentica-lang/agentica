@@ -2,6 +2,8 @@
 
 Read before adding or changing a builtin implemented in C, or a trace point.
 
+Read first: `references/vm.md` and `references/vm-c.md`.
+
 ## Add a C builtin
 
 1. `src/lower.rkt`: let the call through the builtin check (today only the
@@ -36,31 +38,9 @@ Read before adding or changing a builtin implemented in C, or a trace point.
    import `"puts"`.
 2. `vm/builtins.c`: add the entry under that key and arity.
 3. Add a fixture to `tests/fixtures/vm/` for the happy path and for each
-   runtime code or span the builtin can raise; add a loader assert if the
-   import rules change. A fixture `name.agc` reads `name.stdin` (raw bytes;
-   `.gitattributes` marks them binary so CRLF survives) as its stdin,
-   `name.channel` (lines for the child channel, see below) and
-   `name.args` (a Racket list of strings, read with `file->value`) as its
-   program arguments when they exist; the golden test feeds both to the
-   VM, also in the `--max-steps` sweep.
-   An `.args` entry `@tmp` becomes a fresh empty directory per run, and that path is turned back into `@tmp`
-   in the output before the comparison; file fixtures (`files-*`) use it
-   and long timeouts, and never touch paths outside it.
-   A `name.env` file (a Racket list of `("NAME" . "value")` string pairs, read
-   with `file->value`) adds those variables to the environment of every VM run
-   of the fixture (`system-env.env`); a program reads only the names it lists
-   and never prints the whole environment.
-   A `name.channel` file makes the golden run go through `tests/fixtures/channel-run.py`
-   (Python 3, needed in CI): the wrapper opens a socket pair, hands one end to
-   the VM as fd 3 with `AGENTICA_CHANNEL=3`, sends the first line of the file
-   and one more after each line the VM sends back, closes its sending side
-   after the last, and writes everything to its stdout in the order the child
-   produced it: the child's stdout as it is, each channel line as
-   `channel> ` and the line. Stdout is drained before each channel line is
-   shown, which is why the order is fixed. The `test-*` fixtures use it;
-   the plain golden reads of `agentica test` modes (`--agentica-test run`) need
-   a `.channel` file, and a fixture without one is the no-channel case
-   (`test-no-channel`).
+   runtime code or span the builtin can raise; add a loader assert if the import
+   rules change. The fixture sidecars (`.stdin`, `.args`, `.env` and `.channel`)
+   are described under the golden harness in `references/vm-build.md`.
 4. A blocking builtin (7h) checks its arguments, fills a `malloc`'d
    request (no GC pointers; strings through `agc_cstr` or a `malloc`'d
    copy), and calls `agc_io_start` with an `agc_io_kind`: `work` runs in

@@ -4,7 +4,8 @@ Specified in [`docs/future/33-digit-separators.md` section
 33](../future/33-digit-separators.md#33-digit-separators). Phase 23 is front end
 only: the lexer and the docs. The token value does not change, so the AST, the
 checker, lowering and the VM stay as they are. It comes after 7i (§33.5), right
-after phase 22 (22a, 22b), at order step 7.2a. It has one PR.
+after part 22a of phase 22 (22b waits for the bootstrap), at order step 7.2a. It
+has one PR.
 
 - [x] **23a: `_` between digits in number literals (§33.2, §33.3).**
   - **Lexer** (`src/lexer.rkt`): read digits and `_` in both parts of a number,

@@ -5,12 +5,15 @@ the `AGENTICA_VM*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
 their names.
 
 `docs/vm/` is the contract: reference behavior, IR, bytecode format, value
-layout, loader rules, libraries and the PR plan. Its "Status" note says which
-subset runs today. This file is the index of the VM guide: the pipeline, the layers, the
-rules every change keeps, and which file to read next. When this guide and
-`docs/vm/` disagree, `docs/vm/` wins. The VM is the only backend and the
-reference: roadmap 7i deleted the Racket evaluator. Notes below that compare
-with "the evaluator" record why a rule was copied from it.
+layout, loader rules, libraries and the PR plan. `docs/vm/README.md` gives the
+file for each section, and `docs/roadmap/07-vm.md` lists what is built. This
+file is the index of the VM guide: the pipeline, the layers, the rules every
+change keeps, and which file to read next. When this guide and `docs/vm/`
+disagree, `docs/vm/` wins. The VM is the only backend and the reference: roadmap
+7i deleted the Racket evaluator. Notes below that compare with "the evaluator"
+record why a rule was copied from it.
+
+Every C edit also reads `references/vm-c.md`.
 
 ## Pipeline and files
 
@@ -69,12 +72,12 @@ instructions. A file that loads may still compute wrong values or end with
 
 | Read | When |
 |---|---|
-| `vm-c.md` | writing or reviewing any C in `vm/`: C style, failure and exit, Boehm GC rules |
-| `vm-core.md` | values, lists, maps, strings, text forms, the interpreter, builtins tables, the loader, JSON, diagnostics, tracing |
-| `vm-io.md` | the libuv loop and registry, stdin, stdout and stderr, `File`, `Dir`, `Path` |
-| `vm-tasks.md` | the scheduler, task cancellation, `Channel`, the `Test` builtins, the latency test |
-| `vm-net.md` | processes, the child channel, streams, TCP, TLS (OpenSSL), the HTTP client and server |
-| `vm-lowering.md` | `src/lower.rkt`, `src/bytecode.rkt`, a new form or opcode, linked programs, closures, ranges, Results, tail calls |
-| `vm-builtins.md` | adding or changing a C builtin (`vm-builtins` in `src/lower.rkt`, the tables) or a trace point |
-| `vm-build.md` | make targets, the golden harness (`tests/vm-diff-common.rkt`, `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv, picohttpparser, OpenSSL), sanitizers, fuzzing, portability |
-| `vm-tests.md` | which C test (`vm/tests/`) or Racket peer test (`tests/vm-*-test.rkt`) covers a file, and the sweep cost rule |
+| `references/vm-c.md` | writing or reviewing any C in `vm/`: C style, failure and exit, Boehm GC rules |
+| `references/vm-core.md` | values, lists, maps, strings, text forms, the interpreter, builtins tables, the loader, JSON, diagnostics, tracing |
+| `references/vm-io.md` | the libuv loop and registry, stdin, stdout and stderr, `File`, `Dir`, `Path` |
+| `references/vm-tasks.md` | the scheduler, task cancellation, `Channel`, the `Test` builtins, the latency test |
+| `references/vm-net.md` | processes, the child channel, streams, TCP, TLS (OpenSSL), the HTTP client and server |
+| `references/vm-lowering.md` | `src/lower.rkt`, `src/bytecode.rkt`, a new form or opcode, linked programs, closures, ranges, Results, tail calls |
+| `references/vm-builtins.md` | adding or changing a C builtin (`vm-builtins` in `src/lower.rkt`, the tables) or a trace point |
+| `references/vm-build.md` | make targets, the golden harness (`tests/vm-diff-common.rkt`, `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv, picohttpparser, OpenSSL), sanitizers, fuzzing, portability |
+| `references/vm-tests.md` | which C test (`vm/tests/`) or Racket peer test (`tests/vm-*-test.rkt`) covers a file, and the sweep cost rule |

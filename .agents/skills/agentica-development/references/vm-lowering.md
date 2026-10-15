@@ -2,6 +2,8 @@
 
 Read before changing `src/lower.rkt`, `src/bytecode.rkt` or adding an opcode.
 
+Read first: `references/vm.md` and `references/vm-c.md`.
+
 ## Widen the subset (new form or opcode)
 
 1. Read the matching rules in `docs/vm/02-reference-behavior.md` §2 (reference behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
@@ -22,12 +24,15 @@ Read before changing `src/lower.rkt`, `src/bytecode.rkt` or adding an opcode.
    indexes, jump targets, spans). A new file section checks its counts
    against the bytes left and allocates through `load_alloc`, which charges
    the load memory budget. Add one assert per new rule to
-   `vm/tests/loader_test.c`.
-5. `vm/interp.c`: implement it with checked accessors only.
+   `vm/tests/loader_test.c`; `references/vm-core.md` covers the loader.
+5. `vm/interp.c`: implement it with checked accessors only (the interpreter
+   is in `references/vm-core.md`).
 6. Add a fixture to `tests/fixtures/vm/` for each new runtime code or span;
    the diff test sweeps `--max-steps` over it.
-7. Update the "Status" note and any rule that changed in `docs/vm/`, tick
-   the roadmap items, and keep this guide current.
+7. Update any rule that changed in `docs/vm/`, tick the roadmap items in
+   `docs/roadmap/07-vm.md`, and keep the guide that owns the change current:
+   this file for lowering and bytecode, `references/vm-core.md` for the loader
+   and the interpreter, `references/vm.md` for the rules every change keeps.
 
 ## Linked programs
 
