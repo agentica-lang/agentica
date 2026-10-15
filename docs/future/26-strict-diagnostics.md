@@ -173,13 +173,13 @@ not in each program that uses it.
   with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real
   mistake is the call. `resolve` sends a two-part function name whose first
   part is not an alias to the checker unchanged, so the checker can report it
-  with its stable code (the comment at `src/modules.rkt:169`). So while rewriting,
-  `resolve` also records, per file, the two-part function names whose first part
-  is not an alias of that file and that are not builtins (`builtin-ref`;
-  `IO.inspect` and `String.length` are valid calls of that shape). When a file
-  has any, the unused-import check skips that file, and the checker reports the
-  call as `CHECK-UNKNOWN-NAME`, as today, with its "did you mean" help over
-  functions and builtins.
+  with its stable code (the comment at `src/modules.rkt:169`). So while
+  rewriting, `resolve` also records, per file, the two-part function names whose
+  first part is not an alias of that file and that are not builtins
+  (`builtin-ref`; `IO.inspect` and `String.length` are valid calls of that
+  shape). When a file has any, the unused-import check skips that file, and
+  the checker reports the call as `CHECK-UNKNOWN-NAME`, as today, with its
+  "did you mean" help over functions and builtins.
 - **An alias used without its member.** An import alias is never a name on its
   own: the linker already forbids an alias that collides with a declaration of
   the file or a builtin type name (`src/modules.rkt:128`), so a one-part type or

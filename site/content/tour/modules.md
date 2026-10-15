@@ -108,7 +108,7 @@ banned: spam
 
 ## Import names
 
-`import Alias from "path"` is the same as `import Alias from "path"`. To skip the alias, list the exported names you want in braces and use them bare:
+`import Alias from "path"` gives the file the alias `Alias`. To skip the alias, list the exported names you want in braces and use them bare:
 
 ```agentica
 import {Square, area} from "shapes"

@@ -231,11 +231,11 @@ the server).
   `src/http-server.rkt`, the `http-producer` checker rule and the one-argument
   `HTTP.client` overload; `HTTP` left `reserved-type-names`, a test checks that
   `import HTTP from "std/http"` links, and an `HTTP.` call without the import
-  gets `CHECK-UNKNOWN-NAME` with a help that shows it; `examples/http_get.agc` uses
-  `std/http`, `examples/http_server.agc` was removed until 20c;
+  gets `CHECK-UNKNOWN-NAME` with a help that shows it; `examples/http_get.agc`
+  uses `std/http`, `examples/http_server.agc` was removed until 20c;
   `tests/http-test.rkt` went (its client cases are goldens and
   `tests/test_vm_http.py` cases; its server cases return with 20c's tests); the
-  20a fixtures and tests import `std/http` as `HTTP`; `docs/grammar.md`, the
+  20a fixtures and tests import `HTTP` from `std/http`; `docs/grammar.md`, the
   site, both skills, `README.md`, `AGENTS.md` and `docs/vm/` were updated. The
   server hints, the performance check and the 7h tick moved to 20c.
 - [ ] 20e **Streamed downloads** (§30.11), order step 7.4, after 17b.
