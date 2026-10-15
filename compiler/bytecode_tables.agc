@@ -36,3 +36,12 @@ export SINGLE_OPS = Set.new(["return"])
 
 ## The opcodes written as their first operand and a 32-bit index split into two u16 (low half first).
 export WIDE_OPS = Set.new(["call", "tail-call", "closure", "global", "global-set"])
+
+## The fewest operands an instruction of these opcodes must have for the writer to read them; the other opcodes are
+## written with the operands they have.
+export NEEDS = {
+  "const": 1, "jump": 1, "return": 1, "jump-if-false": 2, "jump-if-true": 2, "call-builtin": 2, "struct-with": 3,
+  "move": 2, "neg-i": 2, "neg-f": 2, "not": 2, "to-text": 2, "inspect": 2, "list-len": 2, "try": 2, "is-ok": 2,
+  "result-value": 2, "range-bounds": 2, "call-value": 2, "call": 2, "tail-call": 2, "closure": 2, "global": 2,
+  "global-set": 2,
+}

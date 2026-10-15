@@ -8,7 +8,7 @@ import Bytes from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
-import {MAX_U16, OPCODES, PAIR_OPS, SINGLE_OPS, WIDE_OPS} from "bytecode_tables"
+import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, WIDE_OPS} from "bytecode_tables"
 import Ir from "ir"
 
 ## What the writer has interned so far: the entries of the constant, struct update, builtin and span sections.
@@ -63,6 +63,10 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
     c = 0
     index = 0
     wide = false
+    generic = false
+    if NEEDS.has_key?(op) and args.size < NEEDS[op]
+      return error(Failure.internal(program, op + " has " + args.size.to_s + " operands, not " + NEEDS[op].to_s))
+    end
     if op == "const"
       a = args[0]
       wide = true
@@ -123,13 +127,12 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
       b = args[1]
     elsif SINGLE_OPS.include?(op)
       a = args[0]
-    else
-      if args.size != 3
-        return error(Failure.internal(program, op + " has " + args.size.to_s + " operands instead of 3"))
-      end
+    elsif args.size == 3
       a = args[0]
       b = args[1]
       c = args[2]
+    else
+      generic = true
     end
     if wide
       if index < 0
@@ -138,10 +141,22 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
       b = index % 65536
       c = index / 65536
     end
-    if a < 0 or a > MAX_U16 or b < 0 or b > MAX_U16 or c < 0 or c > MAX_U16
-      return error(Failure.internal(program, "an operand of " + op + " does not fit in 16 bits"))
+    if generic
+      # Any other number of operands is written as given, as src/bytecode.rkt does; the loader rejects it.
+      words = [OPCODES[op], 0]
+      for arg in args
+        if arg < 0 or arg > MAX_U16
+          return error(Failure.internal(program, "an operand of " + op + " does not fit in 16 bits"))
+        end
+        words = words.concat(Bytes.u16(arg))
+      end
+      code = code.concat(words)
+    else
+      if a < 0 or a > MAX_U16 or b < 0 or b > MAX_U16 or c < 0 or c > MAX_U16
+        return error(Failure.internal(program, "an operand of " + op + " does not fit in 16 bits"))
+      end
+      code = code.concat([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
     end
-    code = code.concat([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
     interned = Spans.intern(spans, run_instrs(body, at, run))
     spans = interned.pool
     refs = refs.concat(Bytes.u32(interned.id))

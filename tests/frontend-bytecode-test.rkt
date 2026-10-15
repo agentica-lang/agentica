@@ -15,13 +15,15 @@
          "../src/checker.rkt"
          "../src/diagnostic.rkt"
          "../src/modules.rkt"
-         "../src/lower.rkt")
+         "../src/lower.rkt"
+         "../src/source.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/bytecode.agc")
 (define-runtime-path tables "../compiler/bytecode_tables.agc")
 (define-runtime-path extra-fixtures "fixtures/frontend/bytecode")
 (define-runtime-path version-file "../src/version.rkt")
+(define-runtime-path limits-fixture "fixtures/frontend/limits/limits.agc")
 
 ; What the Racket front end gives for a file: its program (and the bytes) or the ERROR line of the text form of
 ; lowering (tests/frontend-lower-common.rkt), which is what the Agentica runner prints for a failure before the
@@ -118,6 +120,106 @@
 (define (agentica-constant name)
   (cadr (regexp-match (pregexp (format "(?m:^export ~a = ([^\n]+))" name)) (file->string tables))))
 
+
+; The programs of tests/fixtures/frontend/limits/limits.agc, built for the Racket writer: lowered programs no source
+; file gives, which reach the limits of the format and the BYTECODE-INTERNAL paths. Each name has the program of the
+; Agentica fixture of that name and prints the same line (the size and a checksum of the bytes, or the code and place
+; of the problem, with the message of a BYTECODE-LIMIT).
+(define first-file (source "a.agc" "one\n"))
+(define second-file (source "b.agc" "é\n"))
+
+(define (span-at file line)
+  (source-span file (source-position 0 line 1) (source-position 0 line 5)))
+
+(define (instr op args file line) (ir-instr op args (list (span-at file line))))
+
+(define (function slots body) (ir-function "f" 0 0 slots body (span-at second-file 30)))
+
+(define (program structs enums functions globals)
+  (ir-program (list first-file second-file) structs enums functions 0 globals (span-at first-file 1)))
+
+(define (with-body slots body) (program '() '() (list (function slots body)) 0))
+
+(define (structs-named count)
+  (for/list ([index (in-range count)]) (ir-struct (format "S~a" index) '() #f)))
+
+(define (decodable name types) (ir-struct name '("f") types))
+
+(define (deep levels) (for/fold ([type 'Int]) ([_ (in-range levels)]) (list 'List type)))
+
+(define (updates count)
+  (append (for/list ([index (in-range count)]) (instr 'struct-with (list 0 1 index (list 0)) second-file 31))
+          (list (instr 'return '(0) second-file 32))))
+
+(define (limits-scenario name)
+  (match name
+    ["globals-ok" (program '() '() '() 65535)]
+    ["globals-over" (program '() '() '() 65536)]
+    ["structs-ok" (program (structs-named 65535) '() '() 0)]
+    ["structs-over" (program (structs-named 65536) '() '() 0)]
+    ["variants-over"
+     (program '() (list (ir-enum "E" (for/list ([index (in-range 65536)]) (cons (format "V~a" index) 0)))) '() 0)]
+    ["fields-over" (program (list (ir-struct "Big" (make-list 65536 "x") #f)) '() '() 0)]
+    ["payload-over" (program '() (list (ir-enum "E" (list (cons "V" 65536)))) '() 0)]
+    ["registers-ok" (with-body 65535 (list (instr 'return '(0) second-file 31)))]
+    ["registers-over" (with-body 65536 (list (instr 'return '(0) second-file 31)))]
+    ["types-over"
+     (program (append (structs-named 65534)
+                      (list (decodable "J" (append '(Int Float Bool String)
+                                                   (for/list ([index (in-range 65534)]) (list 'Struct (format "S~a" index)))
+                                                   (list '(Struct "J"))))))
+              '() '() 0)]
+    ["types-deep-ok" (program (list (decodable "J" (list (deep 1024)))) '() '() 0)]
+    ["types-deep-over" (program (list (decodable "J" (list (deep 1025)))) '() '() 0)]
+    ["updates-ok" (with-body 2 (updates 65535))]
+    ["updates-over" (with-body 2 (updates 65536))]
+    ["steps-merged"
+     (with-body 2 (append (list (ir-label 7))
+                          (for/list ([index (in-range 65537)]) (instr 'step '() second-file (+ 31 (modulo index 3))))
+                          (list (ir-label 8)
+                                (instr 'step '() second-file 40)
+                                (instr 'jump '(7) second-file 41)
+                                (instr 'jump-if-false '(0 8) second-file 41)
+                                (instr 'return '(0) second-file 42))))]
+    ["labels"
+     (with-body 2 (list (instr 'step '() second-file 31) (instr 'jump '(3) second-file 32) (ir-label 2) (ir-label 3)
+                        (instr 'jump-if-true '(1 2) first-file 33) (instr 'return '(1) second-file 34)))]
+    ["unknown-op" (with-body 2 (list (instr 'teleport '(0 0 0) second-file 31)))]
+    ["missing-label" (with-body 2 (list (instr 'jump '(9) second-file 31)))]
+    ["operand-range" (with-body 2 (list (instr 'move '(0 70000) second-file 31)))]
+    ["operand-wide" (with-body 2 (list (instr 'call '(0 4294967296) second-file 31)))]
+    ["operand-count"
+     (with-body 2 (list (instr 'add-i '(0 1) second-file 31) (instr 'list '(0 1 2 3 4) second-file 32)))]
+    ["operand-short" (with-body 2 (list (instr 'move '(0) second-file 31)))]))
+
+(define (checksum data)
+  (for/fold ([total 0]) ([byte (in-bytes data)]) (modulo (+ (* total 31) byte) 1000000007)))
+
+(define (racket-limits-line name)
+  (define ir (limits-scenario name))
+  (define result
+    (with-handlers ([exn:fail? (lambda (failure) (error 'frontend-bytecode "~a: ~a" name (exn-message failure)))])
+      (let ([code (ir->bytecode ir)]) (if (diagnostic? code) code (write-bytecode code)))))
+  (cond
+    [(bytes? result) (format "~a ok ~a ~a" name (bytes-length result) (checksum result))]
+    [else
+     (define span (diagnostic-span result))
+     (define line
+       (format "~a ERROR ~a ~a:~a-~a:~a file=~a" name (diagnostic-code result)
+               (source-position-line (source-span-start span)) (source-position-column (source-span-start span))
+               (source-position-line (source-span-end span)) (source-position-column (source-span-end span))
+               (source-name (source-span-source span))))
+     (if (eq? (diagnostic-code result) 'BYTECODE-LIMIT)
+         (string-append line " " (diagnostic-message result))
+         line)]))
+
+; The scenario names of the Agentica fixture: the strings of its SCENARIOS constant.
+(define (scenario-names)
+  (define text (file->string limits-fixture))
+  (define at (car (regexp-match-positions #rx"SCENARIOS = \\[" text)))
+  (define end (car (regexp-match-positions #rx"\n\\]" text (cdr at))))
+  (map cadr (regexp-match* #rx"\"([^\"]+)\"" (substring text (cdr at) (car end)) #:match-select values)))
+
 (module+ test
   (define paths (append (bytecode-paths) (agc-files-in "examples")))
   (define programs (filter values (map (lambda (path) (compiled-program (racket-compile path))) paths)))
@@ -163,6 +265,18 @@
                 "a string with a multi-byte character"))
 
   (when (vm-built? "frontend bytecode tests")
+    (call-with-bytecode
+     compile-file limits-fixture
+     (lambda (work bytecode)
+       (test-case "the Agentica writer reaches the limits and the internal errors as the Racket writer does"
+         (define result
+           (parameterize ([current-directory root])
+             (run-process vm-file #:timeout 300 "--" (path->string bytecode))))
+         (check-equal? (first result) 0 (third result))
+         (define names (scenario-names))
+         (check-true (> (length names) 20))
+         (check-equal? (string-split (second result) "\n") (map racket-limits-line names)))))
+
     (with-bytecode
       (lambda (work bytecode)
         (define results (agentica-compile bytecode work paths))
