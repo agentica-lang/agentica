@@ -8,7 +8,7 @@ for tool in rg nm; do command -v "$tool" >/dev/null || { bad "$tool is not insta
 obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
 core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c channel.c loop.c input.c output.c random.c loader.c builtins.c diag.c trace.c"
-services="strings.c numbers.c json.c json_typed.c files.c stream.c duplex.c process.c tcp.c http_fields.c http_client.c http_server.c testing.c"
+services="strings.c numbers.c json.c json_typed.c files.c stream.c duplex.c process.c tcp.c http_fields.c http_client.c http_server.c logger.c testing.c"
 adapters="tls_openssl.c http_pico.c http_body.c"
 driver="main.c builtin_tables.c fuzz.c fuzz_main.c"
 headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h"

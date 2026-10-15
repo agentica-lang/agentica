@@ -70,6 +70,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
   http_fields.c   # their implementation (references/vm-net.md)
   http_client.c   # HttpWire client builtins (references/vm-net.md)
   http_server.c   # HttpWire server builtins (references/vm-net.md)
+  logger.c        # LogRegistry builtins over vm->rt->log, the std/logger registry (references/library-notes.md)
   task.c          # scheduler, task cancellation, Task builtins (references/vm-tasks.md)
   channel.c       # Channel builtins (references/vm-tasks.md)
   testing.c       # Test builtins for unit tests (references/vm-tasks.md)
@@ -122,6 +123,7 @@ tests/            # rackunit files; the lists of references/vm-tests.md say whic
   vm-trace-test.rkt  # traced runs keep exit code, stdout and stderr (references/vm-builtins.md)
   vm-tcp-test.rkt  # the VM TCP builtins against Node peers (references/vm-tests.md)
   vm-http-test.rkt  # std/http against independent peers (references/vm-tests.md)
+  vm-logger-test.rkt  # std/logger: the default line, the async example, the Python peer (references/library-notes.md)
   vm-stop-test.rkt  # the exit path under stop signals (references/vm-tests.md)
   vm-channel-test.rkt  # a socket handed to a worker over a Channel (references/vm-tests.md)
   vm-stdout-test.rkt  # stdout and stderr on the loop (references/vm-tests.md)
@@ -143,7 +145,7 @@ tests/            # rackunit files; the lists of references/vm-tests.md say whic
   bdd/            # feature specs and step handlers run by make test-bdd (references/bdd.md)
   eval/           # agent evaluation runner, not part of make test (references/bench-eval.md)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
-  queue.agc http.agc binary.agc    # std/queue, std/http, std/binary
+  queue.agc http.agc binary.agc logger.agc    # std/queue, std/http, std/binary, std/logger
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-channel record helpers, shared by unit tests and BDD

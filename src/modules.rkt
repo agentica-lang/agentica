@@ -5,6 +5,12 @@
 
 (provide link-program load-program)
 
+(define std-only-imports
+  (hash "HttpWire" '("std/http" . "HTTP") "LogRegistry" '("std/logger" . "Logger")))
+
+(define (std-only-import module)
+  (hash-ref std-only-imports module))
+
 (define (file-span path)
   (source-span (source (path->string (path->complete-path path)) "")
                (source-position 0 1 1) (source-position 0 1 1)))
@@ -192,7 +198,9 @@
               (identity target member)]
              [(and (std-only-name? name) (not (string? key)))
               (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span
-                    #:help (format "~a is internal to std/http; use import \"std/http\" as HTTP" alias))]
+                    #:help (let ([import (std-only-import alias)])
+                             (format "~a is internal to ~a; use import \"~a\" as ~a"
+                                     alias (car import) (car import) (cdr import))))]
              ;; Unknown calls belong to the checker, including misspelled
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]
