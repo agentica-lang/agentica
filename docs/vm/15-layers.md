@@ -38,7 +38,7 @@ before it moved; the header split moved no line of a `.c` file except the
 | Layer | Files | May use |
 |---|---|---|
 | **Core** | `value.c`, `map.c`, `list.c`, `equal.c`, `text.c`, `unicode_data.c`, `json_value.c` (§15.6 V1), `interp.c`, `task.c`, `channel.c`, `loop.c`, `input.c`, `output.c`, `random.c`, `loader.c`, `builtins.c`, `diag.c`, `trace.c` | `value.h`, `port.h`, `core.h`, `trace.h`, Boehm GC, libuv |
-| **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
+| **Services** | `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`, `stream.c`, `duplex.c`, `process.c`, `tcp.c`, `http_fields.c`, `http_client.c`, `http_server.c`, `logger.c`, `testing.c` | `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter headers, libuv, yyjson (`json.c` only) |
 | **Adapters** | `tls_openssl.c` (`tls.h`), `http_pico.c` and `http_body.c` (`http_parse.h`) | their own header, their library, and from `value.h` only the memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`, `agc_size_mul`, `agc_out_of_memory`) |
 | **Driver** (not a layer: it wires them) | `main.c`, `builtin_tables.c` (§15.6 V2), `fuzz.c`, `fuzz_main.c` | everything |
 

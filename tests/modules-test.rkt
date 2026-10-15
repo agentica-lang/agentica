@@ -406,6 +406,30 @@
              (check-regexp-match (caddr entry) (diagnostic-help problem))
              (check-false (diagnostic-help problem)))))))
 
+  (test-case "LogRegistry is internal to std/logger, its types are reserved, and Logger has no error"
+    (with-files
+     '(("root.agc" . "def main() -> Void\n  x = LogRegistry.level()\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-UNKNOWN-NAME)
+       (check-regexp-match #rx"import \"std/logger\" as Logger" (diagnostic-help problem))
+       (check-false (regexp-match? #rx"std/http" (diagnostic-help problem)))))
+    (for ([declaration '("struct LogEvent\n  n: Int\nend\n\n" "enum LogLevel\n  Loud\nend\n\n" "struct LogRegistry\n  n: Int\nend\n\n")])
+      (with-files
+       (list (cons "root.agc" (string-append declaration "def main() -> Void\nend\n\n")))
+       (lambda (directory)
+         (check-equal? (diagnostic-code (checked (build-path directory "root.agc"))) 'CHECK-REDEFINED-NAME declaration))))
+    (with-files
+     '(("root.agc" . "import \"std/logger\" as Logger\ndef main() -> Void\n  Logger.error(\"x\")\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-regexp-match #rx"Logger\\.err" (diagnostic-help problem))))
+    (with-files
+     '(("root.agc" . "import \"std/logger\" as Logger\ndef main() -> Void\n  Logger.err(\"x\")\n  level: LogLevel = Logger.level()\n  event = LogEvent(level: level, message: \"m\", fields: {}, time_ms: 0, task: 1)\n  Logger.stderr_text(event)\nend\n\n"))
+     (lambda (directory)
+       (check-false (diagnostic? (checked (build-path directory "root.agc")))))))
+
   (test-case "HttpWire is internal to std/http: user files, relative imports and pkg modules cannot call it"
     (define call "export def go() -> Void\n  HttpWire.client(1, 1, 1, 1, \"\")\nend\n\n")
     (for ([entry `(("root.agc" "import \"pkg/wire\" as Wire\ndef main() -> Void\n  HttpWire.close_client(HttpWire.client(1, 1, 1, 1, \"\"))\nend\n\n")

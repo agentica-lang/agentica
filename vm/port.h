@@ -166,6 +166,19 @@ struct agc_output {
   agc_task *waiters, *waiters_tail;
 };
 
+#define AGC_LOG_NO_HANDLER 4
+
+typedef struct {
+  agc_value name, handler;
+  int64_t rank;
+} agc_log_handler;
+
+typedef struct {
+  int64_t level, lowest;
+  agc_log_handler *items;
+  size_t count, cap;
+} agc_log_registry;
+
 #define AGC_ASCII_CHARS 128
 #define AGC_FLUSH_TIMEOUT_MS 30000
 #define AGC_FLUSH_TIMEOUT_MAX_MS 86400000
@@ -187,6 +200,7 @@ typedef struct {
   bool await_found;
   _Atomic int64_t steps_left;
   _Atomic uint64_t next_task_id;
+  agc_log_registry log;
   agc_trace trace;
   agc_outcome outcome;
   agc_input in;

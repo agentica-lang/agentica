@@ -181,9 +181,13 @@
               (define declaration (hash-ref (hash-ref exports target) member #f))
               (unless declaration
                 (bail 'CHECK-IMPORT-NAME "unknown or private imported name" span
-                      #:help (and (equal? target "std/http.agc")
-                                  (memv (string->symbol member) '(respond begin write write_bytes finish))
-                                  "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))")))
+                      #:help (cond
+                               [(and (equal? target "std/http.agc")
+                                     (memv (string->symbol member) '(respond begin write write_bytes finish)))
+                                "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))"]
+                               [(and (equal? target "std/logger.agc") (equal? member "error"))
+                                "the function for the error level is Logger.err; error is a reserved name"]
+                               [else #f])))
               (unless (case kind
                         [(type) (or (struct-decl? declaration) (enum-decl? declaration))]
                         [(enum) (enum-decl? declaration)]
@@ -192,7 +196,9 @@
               (identity target member)]
              [(and (std-only-name? name) (not (string? key)))
               (bail 'CHECK-UNKNOWN-NAME (format "unknown function \"~a\"" name) span
-                    #:help (format "~a is internal to std/http; use import \"std/http\" as HTTP" alias))]
+                    #:help (let ([import (hash-ref std-only-imports alias)])
+                             (format "~a is internal to ~a; use import \"~a\" as ~a"
+                                     alias (car import) (car import) (cdr import))))]
              ;; Unknown calls belong to the checker, including misspelled
              ;; builtin module functions. Keep their stable diagnostic code.
              [(eq? kind 'function) name]

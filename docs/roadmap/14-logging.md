@@ -39,13 +39,13 @@ builtins too (§24.2, "Types").
   `tests/vm-stack-test.rkt` with the exact stderr of the fixtures
   `tests/fixtures/vm/stack-trace-*.agc` in the three formats (`make goldens`
   rewrites them), and the 32 goldens with a task crash line now hold its stack.
-- [ ] 14c `std/logger` (`docs/future/24-logging.md` §24.2): `stdlib/logger.agc`
+- [x] 14c `std/logger` (`docs/future/24-logging.md` §24.2): `stdlib/logger.agc`
   (the levels `debug`, `info`, `warning` and `err`, one function and one `_meta`
   function per level, `log` and `log_meta`, `enabled?`, `level`, `set_level`,
   `attach`, `detach`, `handlers`, the built-in handlers `stderr_text` and
   `stderr_json`, the formatters, the default `console` handler and `time_text`);
   the builtin record `LogEvent` and the builtin enum `LogLevel` in
-  `src/builtin-types.rkt`; the std-only registry `LogRegistry` (nine native
+  `src/builtin-types.rkt`; the std-only registry `LogRegistry` (ten native
   functions on the VM runtime, rows in `src/builtins.rkt`, names in
   `vm-builtins` and `std-only-modules`, and its reserved name in
   `src/checker.rkt`); one line in `src/stdlib.rkt`; and the std-only help in
@@ -63,7 +63,12 @@ builtins too (§24.2, "Types").
   during or after row 7.2.7. The registry exception and the freeze are the
   owner's decisions of §24.2. Its two-line change in `src/lower.rkt` for the
   enum field of `LogEvent` relaxes that list for those lines, and the PR says so
-  and why (§24.2, "Decided").
+  and why (§24.2, "Decided"). Done: `vm/logger.c` (the ten `LogRegistry`
+  builtins over `vm->rt->log`), `stdlib/logger.agc`, goldens
+  `tests/fixtures/vm/logger-*.agc`, `tests/std/logger_test.agc` for the
+  registry, `tests/vm-logger-test.rkt` with the Python peer
+  `tests/fixtures/logger-peer.py`, and the benchmark
+  `benchmarks/programs/logger-disabled.agc`.
 
 **Done when:** a VM developer can trace the scheduler, I/O, processes and TLS
 without editing C; a runtime error shows its call stack; and the site page's

@@ -22,6 +22,20 @@ URLs are `http://` or `https://`. A request that sets `Host`, `Content-Length`, 
 
 `server_options()` gives 30 s request and idle timeouts, 128 connections and 1 MiB bodies. `request_timeout_ms` bounds the first byte of a connection's first request, then the rest of each request, then the response write; `idle_timeout_ms` bounds the wait for a later request. Connections beyond `max_connections` wait in the backlog. A request rejected before the handler runs gets an empty answer and a close (400, 413, 417, 431, 501 or 505). `close_server` closes the listener, ends every connection, cancels the handlers and the tasks they spawned, and is idempotent. Return from `main` ends the run, whatever the server is doing.
 
+### Logging (`std/logger`)
+
+`std/logger` is imported with `import "std/logger" as Logger`. It calls the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their names are reserved in every program (`CHECK-REDEFINED-NAME`).
+
+There are four levels, `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. Each level has two functions: `Logger.debug(message)` and `Logger.debug_meta(message, fields)`, and the same for `info`, `warning` and `err` (the function for the last level is `err` because `error` is reserved; the output says `error`). `Logger.log(level, message)` and `Logger.log_meta(level, message, fields)` take the level as a value. Fields are a `Map[String, String]`.
+
+The global level (`Logger.set_level`, `info` by default) is checked first, by every call. Each handler has its own level and gets an event only when the event is at or above it. `Logger.enabled?(level)` is true only if the level is at or above the global level and some attached handler accepts it, so a costly message goes inside `if Logger.enabled?(LogLevel.Debug)`.
+
+A handler is a function `Fn[LogEvent, Void]` (`&Logger.stderr_json`) or a block, attached under a name with `Logger.attach(name, level, handler)` and removed with `Logger.detach(name)`; both return `error(...)` for a name in use or not in use. `Logger.handlers()` lists the names in attach order. Handlers run in attach order, synchronously, in the task that logs; an event keeps the handlers it started with, and a handler error is the error of that task.
+
+The first call of any `Logger` function attaches a handler named `console` (`Logger.stderr_text`, level `info`). `Logger.detach("console")` removes it. The handlers and the global level are held by the VM and belong to one run; this registry is the language's only global state.
+
+`Logger.stderr_text` and `Logger.stderr_json` write `Logger.format_text(event)` and `Logger.format_json(event)` to stderr with one `IO.warn` call. The text form is `TIME LEVEL MESSAGE key=value ...` with the time in UTC (`2026-10-12T10:15:02.345Z`); a message, key or value that is empty, has `=`, a quote, a backslash or a control character, or (for a key or value) a space, is written as a JSON string. The JSON form is one object per line with the keys `time`, `level` (`debug`, `info`, `warning`, `error`), `msg`, `fields` and `task`. `Logger.time_text(ms)` formats milliseconds since the Unix epoch as that time text.
+
 ### Files and paths
 
 `File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle is opaque, belongs to one evaluation, and closes when it ends. The host user's permissions apply; there is no filesystem permission flag. File operations accept regular files and symlinks to them, and also FIFOs, pipes and devices that can wait, whose calls wait on the event loop; they reject directories, a missing path for a read, and a path that reopens a pipe the VM made for itself. Signatures are in [`library/io-and-system/files.md`](../../site/content/library/io-and-system/files.md).

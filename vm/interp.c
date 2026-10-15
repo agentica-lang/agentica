@@ -97,6 +97,8 @@ void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, i
     rt->chars[c] = agc_string_value(agc_make_string(&ch, 1, 1));
   }
   atomic_init(&rt->next_task_id, 1);
+  rt->log.level = -1;
+  rt->log.lowest = AGC_LOG_NO_HANDLER;
   agc_trace_parse(&rt->trace, NULL, 2);
   vm->rt = rt;
   vm->main = vm->task = agc_new_task(vm);
