@@ -19,7 +19,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    value type widens it.
 3. New opcode: append it to `opcodes` in `src/bytecode.rkt` and to
    `agc_opcode` in `vm/value.h` at the same position (a test compares them).
-   No opcodes for later PRs.
+   No opcodes for later PRs. 44a1 relaxed this once, for `GLOBAL` and
+   `GLOBAL_SET`, which the lowering of 44a2 emits: the loader and interpreter
+   part needed its own `vm-c-critic` review. A PR that does the same says so
+   and names the PR that uses the opcodes.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
    indexes, jump targets, spans). A new file section checks its counts
    against the bytes left and allocates through `load_alloc`, which charges
@@ -51,6 +54,16 @@ functions up by name.
 
 ## Gotchas
 
+- Module constants (format version 5, `docs/future/44-module-constants.md`
+  §44.8): the Globals section is only a `u32` slot count (at most 65,535; the
+  writer writes 0 until 44a2 lowers constants). `GLOBAL a bx` reads slot `bx`
+  into `R[a]` and `GLOBAL_SET a bx` writes it. The loader allows `GLOBAL_SET`
+  only in the entry function, and only in a function with no backward jump, and
+  when the count is above zero it rejects any `CALL`, `TAIL_CALL` or `CLOSURE`
+  of the entry (with a count of 0 the entry is `main`, which a program may
+  call). So a lowering that emits them must put every `GLOBAL_SET` in straight
+  line code of the entry (`<start>`), which ends with a tail call of `main`,
+  and must never call `<start>` or take `&<start>`.
 - Typed JSON: `user-tables` in `src/lower.rkt` gives each `ir-struct` its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and `src/bytecode.rkt` interns them into the
