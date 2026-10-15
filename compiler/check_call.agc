@@ -1,4 +1,6 @@
-## Calls and constructions (src/checker.rkt: check-call, check-plain-call, check-pipe-method!, check-enum-constructor, check-construct, check-struct-construct, check-named-fields!, check-struct-update): a call of a builtin or of a function of the program, an enum variant, a struct construction and a struct update.
+## Calls and constructions (src/checker.rkt: check-call, check-plain-call, check-pipe-method!, check-enum-constructor,
+## check-construct, check-struct-construct, check-named-fields!, check-struct-update): a call of a builtin or of a
+## function of the program, an enum variant, a struct construction and a struct update.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -23,7 +25,8 @@ struct Fields
   seen: Set[String]
 end
 
-## Checks a call written by name: a builtin (and, for a piped call, that its method form is not the better one) or a function of the program.
+## Checks a call written by name: a builtin (and, for a piped call, that its method form is not the better one) or a
+## function of the program.
 export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = cx.catalog.entries.get(node.name)
   if !entry.ok?
@@ -36,20 +39,64 @@ export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Ty
   return ok(out)
 end
 
-## Checks Enum.Variant(args): the arguments against the payload types, with the enum's type arguments taken from the expected type or from the arguments. named is the arguments written with names, which a variant does not take.
-export def check_enum_constructor(cx: State.Cx, st: State.St, enum_name: String, variant_name: String, args: List[Ast.Expr], named: Int, span: Source.Span, expected: T.Type) -> Result[State.Out]
+## Checks Enum.Variant(args): the arguments against the payload types, with the enum's type arguments taken from the
+## expected type or from the arguments. named is the arguments written with names, which a variant does not take.
+export def check_enum_constructor(
+  cx: State.Cx,
+  st: State.St,
+  enum_name: String,
+  variant_name: String,
+  args: List[Ast.Expr],
+  named: Int,
+  span: Source.Span,
+  expected: T.Type,
+) -> Result[State.Out]
   definition = cx.enums.get(enum_name)
   if !definition.ok?
-    return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-TYPE", "unknown enum \"" + enum_name + "\"", span, unknown_enum_help(enum_name)))
+    return error(
+      State.fail_maybe(
+        cx,
+        st,
+        "CHECK-UNKNOWN-TYPE",
+        "unknown enum \"" + enum_name + "\"",
+        span,
+        unknown_enum_help(enum_name),
+      ),
+    )
   end
   found = definition.unwrap!
   payload = variant_payload(found, variant_name)
   if !payload.ok?
-    return error(State.fail(cx, st, "CHECK-UNKNOWN-VARIANT", "enum \"" + T.display_name(enum_name) + "\" has no variant \"" + variant_name + "\"", span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-UNKNOWN-VARIANT",
+        "enum \"" + T.display_name(enum_name) + "\" has no variant \"" + variant_name + "\"",
+        span,
+      ),
+    )
   end
   count = args.size + named
   if count != payload.unwrap!.size
-    return error(State.fail(cx, st, "CHECK-ARITY", "variant " + T.display_name(enum_name) + "." + variant_name + " expects " + payload.unwrap!.size.to_s + " argument(s), found " + count.to_s, span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-ARITY",
+        (
+          "variant " +
+          T.display_name(enum_name) +
+          "." +
+          variant_name +
+          " expects " +
+          payload.unwrap!.size.to_s +
+          " argument(s), found " +
+          count.to_s
+        ),
+        span,
+      ),
+    )
   end
   if named > 0
     return error(State.fail(cx, st, "CHECK-ENUM-POSITIONAL-ARGS", "enum variants use positional arguments", span))
@@ -59,7 +106,8 @@ export def check_enum_constructor(cx: State.Cx, st: State.St, enum_name: String,
   return finish_constructor(cx, inferred.st, found, variant_name, inferred.substitutions, span, expected)
 end
 
-## Checks Type(name: value, ...): a struct, or Enum.Variant(name: value) written as a construction, which a variant does not take.
+## Checks Type(name: value, ...): a struct, or Enum.Variant(name: value) written as a construction, which a variant
+## does not take.
 export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
   parts = node.type_name.split(".")
   if parts.size == 2 and cx.enums.has_key?(parts[0])
@@ -68,15 +116,35 @@ export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
   return check_struct_construct(cx, st, node)
 end
 
-## Checks target.with(name: value, ...): the target is a struct, every name is one of its fields, given once, with a value of the field's type. A struct that its module keeps private cannot be updated from another module (CHECK-IMPORT-NAME).
+## Checks target.with(name: value, ...): the target is a struct, every name is one of its fields, given once, with a
+## value of the field's type. A struct that its module keeps private cannot be updated from another module
+## (CHECK-IMPORT-NAME).
 export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdate) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if !T.is(target.type, "Struct")
-    return error(State.fail_help(cx, target.st, "CHECK-UNKNOWN-METHOD", T.to_text(target.type) + " has no method \"with\"", node.span, "with copies a struct with some fields changed; the value before .with must be a struct"))
+    return error(
+      State.fail_help(
+        cx,
+        target.st,
+        "CHECK-UNKNOWN-METHOD",
+        T.to_text(target.type) + " has no method \"with\"",
+        node.span,
+        "with copies a struct with some fields changed; the value before .with must be a struct",
+      ),
+    )
   end
   name = T.name(target.type)
   if !updatable?(cx, node.visible, name)
-    return error(State.fail_help(cx, target.st, "CHECK-IMPORT-NAME", "\"" + T.display_name(name) + "\" is private to its module, so a value of it cannot be updated here", node.span, "export the struct from its module, or add a function there that makes the change"))
+    return error(
+      State.fail_help(
+        cx,
+        target.st,
+        "CHECK-IMPORT-NAME",
+        "\"" + T.display_name(name) + "\" is private to its module, so a value of it cannot be updated here",
+        node.span,
+        "export the struct from its module, or add a function there that makes the change",
+      ),
+    )
   end
   fields = try check_named_fields(cx, target.st, name, cx.structs[name], node.args)
   return ok(State.Out(st: fields.st, type: target.type))
@@ -149,7 +217,16 @@ def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.B
   if method == ""
     return ok(true)
   end
-  return error(State.fail_help(cx, st, "CHECK-PIPE-METHOD", "\"" + entry.name + "\" has a method form for " + kind + ", so it is not piped", node.span, pipe_help(cx, node, method)))
+  return error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-PIPE-METHOD",
+      "\"" + entry.name + "\" has a method form for " + kind + ", so it is not piped",
+      node.span,
+      pipe_help(cx, node, method),
+    ),
+  )
 end
 
 # The method form of a piped call: receiver.method(arguments) do ... end.
@@ -195,7 +272,16 @@ end
 def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State.Out]
   entry = cx.functions.get(node.name)
   if !entry.ok?
-    return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown function \"" + T.display_name(node.name) + "\"", node.span, unknown_function_help(cx, node.name)))
+    return error(
+      State.fail_maybe(
+        cx,
+        st,
+        "CHECK-UNKNOWN-NAME",
+        "unknown function \"" + T.display_name(node.name) + "\"",
+        node.span,
+        unknown_function_help(cx, node.name),
+      ),
+    )
   end
   signature = entry.unwrap!
   if node.args.size != signature.params.size
@@ -224,7 +310,10 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   if help != ""
     return help
   elsif name.starts_with?("Agent.")
-    return "return values from tasks and combine them with reduce, or keep the state in one task that receives on a Channel"
+    return (
+      "return values from tasks and combine them with reduce, or keep the state in one task that receives on a " +
+      "Channel"
+    )
   elsif name.starts_with?("BDD.")
     return "import BDD from \"std/bdd\""
   elsif name.starts_with?("HTTP.")
@@ -264,8 +353,15 @@ def expected_substitutions(definition: Model.EnumDef, expected: T.Type) -> Map[S
   return found
 end
 
-# Each argument against its payload type with the type variables filled in as far as they are known; an empty collection cannot say what a variable is.
-def infer_arguments(cx: State.Cx, st: State.St, payload: List[T.Type], args: List[Ast.Expr], substitutions: Map[String, T.Type]) -> Result[Inferred]
+# Each argument against its payload type with the type variables filled in as far as they are known; an empty
+# collection cannot say what a variable is.
+def infer_arguments(
+  cx: State.Cx,
+  st: State.St,
+  payload: List[T.Type],
+  args: List[Ast.Expr],
+  substitutions: Map[String, T.Type],
+) -> Result[Inferred]
   current = st
   found = substitutions
   index = 0
@@ -273,7 +369,15 @@ def infer_arguments(cx: State.Cx, st: State.St, payload: List[T.Type], args: Lis
     template = payload[index]
     context = Types.substitute(template, found)
     if Types.has_variables?(context) and empty_collection?(args[index])
-      return error(State.fail(cx, current, "CHECK-ENUM-TYPE-INFERENCE", "cannot infer enum type arguments from an empty collection payload", Ast.expr_span(args[index])))
+      return error(
+        State.fail(
+          cx,
+          current,
+          "CHECK-ENUM-TYPE-INFERENCE",
+          "cannot infer enum type arguments from an empty collection payload",
+          Ast.expr_span(args[index]),
+        ),
+      )
     end
     wanted = context
     if Types.has_variables?(context)
@@ -296,10 +400,33 @@ def empty_collection?(node: Ast.Expr) -> Bool
 end
 
 # The enum type with its arguments, once every type parameter has been found.
-def finish_constructor(cx: State.Cx, st: State.St, definition: Model.EnumDef, variant_name: String, substitutions: Map[String, T.Type], span: Source.Span, expected: T.Type) -> Result[State.Out]
+def finish_constructor(
+  cx: State.Cx,
+  st: State.St,
+  definition: Model.EnumDef,
+  variant_name: String,
+  substitutions: Map[String, T.Type],
+  span: Source.Span,
+  expected: T.Type,
+) -> Result[State.Out]
   unresolved = definition.parameters.filter do |parameter: String| !substitutions.has_key?(parameter) end
   if unresolved.size > 0
-    return error(State.fail(cx, st, "CHECK-ENUM-TYPE-INFERENCE", "cannot infer enum type parameter(s) " + unresolved.join(", ") + " for " + T.display_name(definition.name) + "." + variant_name, span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-ENUM-TYPE-INFERENCE",
+        (
+          "cannot infer enum type parameter(s) " +
+          unresolved.join(", ") +
+          " for " +
+          T.display_name(definition.name) +
+          "." +
+          variant_name
+        ),
+        span,
+      ),
+    )
   end
   args = definition.parameters.map do |parameter: String| substitutions[parameter] end
   type = try State.ensure(cx, st, T.Type.Enum(definition.name, args), expected, span)
@@ -310,28 +437,64 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
   name = node.type_name
   fields = cx.structs.get(name)
   if !fields.ok?
-    return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-TYPE", "\"" + T.display_name(name) + "\" is not a declared struct", node.span, Help.near(name, cx.structs.keys, [])))
+    return error(
+      State.fail_maybe(
+        cx,
+        st,
+        "CHECK-UNKNOWN-TYPE",
+        "\"" + T.display_name(name) + "\" is not a declared struct",
+        node.span,
+        Help.near(name, cx.structs.keys, []),
+      ),
+    )
   end
   checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args)
   for field in fields.unwrap!
     if !checked.seen.include?(field.name)
-      return error(State.fail_help(cx, checked.st, "CHECK-MISSING-FIELD", "constructor \"" + T.display_name(name) + "\" is missing field \"" + field.name + "\"", node.span, "add \"" + field.name + ": ...\" with a value of type " + T.to_text(field.type)))
+      return error(
+        State.fail_help(
+          cx,
+          checked.st,
+          "CHECK-MISSING-FIELD",
+          "constructor \"" + T.display_name(name) + "\" is missing field \"" + field.name + "\"",
+          node.span,
+          "add \"" + field.name + ": ...\" with a value of type " + T.to_text(field.type),
+        ),
+      )
     end
   end
   return ok(State.Out(st: checked.st, type: T.Type.Struct(name)))
 end
 
-# The `name: value` pairs of a construction or an update: each name is a field of the struct, given once, with a value of the field's type. The values are checked in source order, which is also the order they run in.
-def check_named_fields(cx: State.Cx, st: State.St, name: String, fields: List[Model.Named], args: List[Ast.NamedArg]) -> Result[Fields]
+# The `name: value` pairs of a construction or an update: each name is a field of the struct, given once, with a value
+# of the field's type. The values are checked in source order, which is also the order they run in.
+def check_named_fields(
+  cx: State.Cx,
+  st: State.St,
+  name: String,
+  fields: List[Model.Named],
+  args: List[Ast.NamedArg],
+) -> Result[Fields]
   current = st
   seen: Set[String] = Set.new([])
   for arg in args
     field = find_field(fields, arg.name)
     if !field.ok?
-      return error(State.fail_help(cx, current, "CHECK-UNKNOWN-FIELD", "\"" + T.display_name(name) + "\" has no field \"" + arg.name + "\"", arg.span, Help.field_help(arg.name, fields)))
+      return error(
+        State.fail_help(
+          cx,
+          current,
+          "CHECK-UNKNOWN-FIELD",
+          "\"" + T.display_name(name) + "\" has no field \"" + arg.name + "\"",
+          arg.span,
+          Help.field_help(arg.name, fields),
+        ),
+      )
     end
     if seen.include?(arg.name)
-      return error(State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"" + arg.name + "\" is given twice", arg.span))
+      return error(
+        State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"" + arg.name + "\" is given twice", arg.span),
+      )
     end
     seen = seen.add(arg.name)
     out = try State.expr(cx, current, arg.value, field.unwrap!.type)
@@ -340,10 +503,12 @@ def check_named_fields(cx: State.Cx, st: State.St, name: String, fields: List[Mo
   return ok(Fields(st: current, seen: seen))
 end
 
-# A builtin record can always be updated; a struct of the program only when the file may build it. Absent: the program is not linked, every struct is visible.
+# A builtin record can always be updated; a struct of the program only when the file may build it. Absent: the program
+# is not linked, every struct is visible.
 def updatable?(cx: State.Cx, visible: Ast.Optional[List[String]], name: String) -> Bool
   case visible
-    Ast.Optional.Present(names) -> return cx.catalog.records.has_key?(name) or names.any? do |item: String| item == name end
+    Ast.Optional.Present(names) ->
+      return cx.catalog.records.has_key?(name) or names.any? do |item: String| item == name end
     Ast.Optional.Absent -> return true
   end
 end

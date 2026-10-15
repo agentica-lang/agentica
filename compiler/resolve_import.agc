@@ -1,4 +1,6 @@
-## Finds the module an import names: a std/ module in the stdlib/ folder, a pkg/ library in the search roots, or a file next to the importing one. This is resolve-import of src/modules.rkt. A module is known by its key: the canonical path of a file, or std/NAME.agc for a standard module.
+## Finds the module an import names: a std/ module in the stdlib/ folder, a pkg/ library in the search roots, or a file
+## next to the importing one. This is resolve-import of src/modules.rkt. A module is known by its key: the canonical
+## path of a file, or std/NAME.agc for a standard module.
 
 import Diag from "diagnostic"
 import Paths from "import_path"
@@ -18,8 +20,16 @@ export def source_path(settings: Env.Settings, key: String) -> String
   return key
 end
 
-## The key of the module that the import path file (already ending in .agc) names, found from the module with key. root_dir is the folder of the root file, where agc_libs/ is searched first. A failure is CHECK-IMPORT-PATH or CHECK-IMPORT-IO at site.
-export def resolve_import(settings: Env.Settings, root_dir: String, key: String, file: String, site: Failure.Site) -> Result[String]
+## The key of the module that the import path file (already ending in .agc) names, found from the module with key.
+## root_dir is the folder of the root file, where agc_libs/ is searched first. A failure is CHECK-IMPORT-PATH or
+## CHECK-IMPORT-IO at site.
+export def resolve_import(
+  settings: Env.Settings,
+  root_dir: String,
+  key: String,
+  file: String,
+  site: Failure.Site,
+) -> Result[String]
   if file.starts_with?("std/")
     return standard(settings, file, site)
   elsif file.starts_with?("pkg/")
@@ -67,7 +77,8 @@ def library(settings: Env.Settings, root_dir: String, file: String, site: Failur
   return error(io_failure(site, "cannot find library module"))
 end
 
-# The search roots of pkg/: agc_libs/ next to the root file, AGENTICA_PATH, the user data folder, then the system folders. Every AGENTICA_PATH entry must be absolute, whether or not it is used.
+# The search roots of pkg/: agc_libs/ next to the root file, AGENTICA_PATH, the user data folder, then the system
+# folders. Every AGENTICA_PATH entry must be absolute, whether or not it is used.
 def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) -> Result[List[String]]
   configured: List[String] = []
   for entry in settings.env.agentica_path.split(":")
@@ -75,7 +86,9 @@ def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) 
       next
     end
     if !entry.starts_with?("/")
-      return error(Failure.fail_at(site, "CHECK-IMPORT-PATH", "AGENTICA_PATH roots must be absolute", Diag.Help.NoHelp))
+      return error(
+        Failure.fail_at(site, "CHECK-IMPORT-PATH", "AGENTICA_PATH roots must be absolute", Diag.Help.NoHelp),
+      )
     end
     configured = configured.push(entry)
   end
@@ -83,7 +96,8 @@ def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) 
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
 end
 
-# XDG_DATA_HOME when it is absolute, else ~/.local/share. An unset HOME leaves the user root out (Racket asks the system for the home folder there).
+# XDG_DATA_HOME when it is absolute, else ~/.local/share. An unset HOME leaves the user root out (Racket asks the
+# system for the home folder there).
 def user_roots(env: Env.Env) -> List[String]
   if env.xdg_data_home.starts_with?("/")
     return [Paths.join(env.xdg_data_home, "agentica/lib")]
@@ -123,7 +137,9 @@ def inside?(base: List[String], target: List[String]) -> Bool
   return true
 end
 
-# The file next to the importing one. Racket's normalize-path accepts a missing last part and refuses a missing folder (CHECK-IMPORT-IO "cannot resolve import"); a missing file is found by the read ("cannot read import"), which this reports at once.
+# The file next to the importing one. Racket's normalize-path accepts a missing last part and refuses a missing folder
+# (CHECK-IMPORT-IO "cannot resolve import"); a missing file is found by the read ("cannot read import"), which this
+# reports at once.
 def relative(key: String, file: String, site: Failure.Site) -> Result[String]
   if file.starts_with?("/") or file.contains?(String.from_code(0))
     return error(io_failure(site, "cannot resolve import"))

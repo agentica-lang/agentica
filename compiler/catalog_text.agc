@@ -1,4 +1,5 @@
-## The text form of the builtin catalog, for tests. See catalog_text. tests/frontend-catalog-common.rkt prints the same text from src/builtins.rkt.
+## The text form of the builtin catalog, for tests. See catalog_text. tests/frontend-catalog-common.rkt prints the same
+## text from src/builtins.rkt.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -7,7 +8,11 @@ import Suggest from "suggest"
 import Text from "text"
 import Types from "types"
 
-## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help among the public builtin names), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME` (is NAME inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the primitive and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a linked name).
+## The whole catalog, one line per fact, then the answer to each probe. A probe is `near:WORD` (the did-you-mean help
+## among the public builtin names), `ref:NAME/ARITY` (the form of NAME with that many arguments), `std:NAME` (is NAME
+## inside a std-only module) `type:WORD` (the help for an unknown type: the record and enum names, and the primitive
+## and handle type names), `sig:NAME` (the signature of every form of NAME) or `disp:NAME` (display_name of a linked
+## name).
 export def catalog_text(probes: List[String]) -> String
   catalog = Builtins.catalog()
   lines: List[String] = []
@@ -31,10 +36,23 @@ def builtin_lines(entry: Model.Builtin) -> List[String]
 end
 
 def form_line(form: Model.Builtin) -> String
-  return Builtins.form_signature(form) + " shape=" + shape_text(form) + " rule=" + rule_name(form.rule) + " impl=" + Text.quote(form.implementation) + " effects=" + quoted_list(form.effects) + " desc=" + Text.quote(form.description)
+  return (
+    Builtins.form_signature(form) +
+    " shape=" +
+    shape_text(form) +
+    " rule=" +
+    rule_name(form.rule) +
+    " impl=" +
+    Text.quote(form.implementation) +
+    " effects=" +
+    quoted_list(form.effects) +
+    " desc=" +
+    Text.quote(form.description)
+  )
 end
 
-# The parameter and result types with their variants written out, because to_text prints Struct("X"), Enum("X", []) and Var("X") alike.
+# The parameter and result types with their variants written out, because to_text prints Struct("X"), Enum("X", []) and
+# Var("X") alike.
 def shape_text(form: Model.Builtin) -> String
   parameters = form.parameters.map do |parameter: Model.Named| Types.debug_text(parameter.type) end
   return "(" + parameters.join(", ") + ") -> " + Types.debug_text(form.result)
@@ -54,7 +72,9 @@ def enum_lines(catalog: Builtins.Catalog) -> List[String]
   for name in catalog.enums.keys.sort
     definition = catalog.enums[name]
     variants = definition.variants.map do |variant: Model.Variant| variant_text(variant) end
-    lines = lines.push("enum " + name + " parameters=" + quoted_list(definition.parameters) + " variants=" + variants.join(" | "))
+    lines = lines.push(
+      "enum " + name + " parameters=" + quoted_list(definition.parameters) + " variants=" + variants.join(" | "),
+    )
   end
   return lines
 end
@@ -64,7 +84,14 @@ def name_lines(catalog: Builtins.Catalog) -> List[String]
   for name in catalog.std_only.keys.sort
     std_only = std_only.push(name + "=" + catalog.std_only[name].std_path + " as " + catalog.std_only[name].alias)
   end
-  return ["public " + quoted_list(catalog.public_names), "bare " + quoted_list(catalog.bare_names.to_a.sort), "opaque " + quoted_list(catalog.opaque.to_a.sort), "handles " + quoted_list(catalog.handles.to_a.sort), "reserved " + quoted_list(catalog.reserved.to_a.sort), "std-only " + std_only.join(", ")]
+  return [
+    "public " + quoted_list(catalog.public_names),
+    "bare " + quoted_list(catalog.bare_names.to_a.sort),
+    "opaque " + quoted_list(catalog.opaque.to_a.sort),
+    "handles " + quoted_list(catalog.handles.to_a.sort),
+    "reserved " + quoted_list(catalog.reserved.to_a.sort),
+    "std-only " + std_only.join(", "),
+  ]
 end
 
 def probe_line(catalog: Builtins.Catalog, probe: String) -> String
@@ -86,7 +113,23 @@ def probe_line(catalog: Builtins.Catalog, probe: String) -> String
 end
 
 def type_help(catalog: Builtins.Catalog, word: String) -> Ast.Optional[String]
-  shared = ["Int", "Float", "Bool", "String", "Nil", "Void", "List", "Map", "Set", "Result", "Json", "Fn", "Task", "Channel", "Range"].concat(catalog.opaque.to_a)
+  shared = [
+    "Int",
+    "Float",
+    "Bool",
+    "String",
+    "Nil",
+    "Void",
+    "List",
+    "Map",
+    "Set",
+    "Result",
+    "Json",
+    "Fn",
+    "Task",
+    "Channel",
+    "Range",
+  ].concat(catalog.opaque.to_a)
   return Suggest.did_you_mean_among(word, catalog.records.keys.concat(catalog.enums.keys), shared)
 end
 

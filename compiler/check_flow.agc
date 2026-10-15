@@ -1,4 +1,6 @@
-## What the statements of a body return (src/checker.rkt: block-returns?, missing-return-help, captured-assignment-help): whether every path ends in a return, and the help texts that depend only on the shape of the code.
+## What the statements of a body return (src/checker.rkt: block-returns?, missing-return-help,
+## captured-assignment-help): whether every path ends in a return, and the help texts that depend only on the shape of
+## the code.
 
 import Ast from "ast"
 import State from "check_state"
@@ -20,7 +22,11 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
     Ast.Stmt.If(node) -> return if_help(node, type_name)
     Ast.Stmt.While(node) -> return loop_help(type_name)
     Ast.Stmt.For(node) -> return loop_help(type_name)
-    Ast.Stmt.Case(node) -> return "every arm of the last \"case\" must end with return, or return " + type_name + " after it"
+    Ast.Stmt.Case(node) -> return (
+      "every arm of the last \"case\" must end with return, or return " +
+      type_name +
+      " after it"
+    )
     _ -> return ""
   end
 end
@@ -42,9 +48,27 @@ export def captured_help(name: String, capture: State.Capture) -> String
     Ast.Optional.Absent -> path = path
   end
   if path != "" and path.length <= 40
-    return "blocks capture values; use a for loop, which can assign \"" + name + "\": for " + element + " in " + path + " ... end"
+    return (
+      "blocks capture values; use a for loop, which can assign \"" +
+      name +
+      "\": for " +
+      element +
+      " in " +
+      path +
+      " ... end"
+    )
   end
-  return "blocks capture values; use a for loop, which can assign \"" + name + "\": for " + element + " in xs ... end, or build it with xs.reduce(" + name + ") do |acc, " + element + "| ... end"
+  return (
+    "blocks capture values; use a for loop, which can assign \"" +
+    name +
+    "\": for " +
+    element +
+    " in xs ... end, or build it with xs.reduce(" +
+    name +
+    ") do |acc, " +
+    element +
+    "| ... end"
+  )
 end
 
 def returns?(statement: Ast.Stmt) -> Bool
@@ -59,7 +83,8 @@ end
 # An if returns on every path when it has an else and every branch returns.
 def if_returns?(node: Ast.IfStmt) -> Bool
   case node.else_body
-    Ast.Optional.Present(body) -> return block_returns?(body) and node.branches.all? do |branch: Ast.IfBranch| block_returns?(branch.body) end
+    Ast.Optional.Present(body) ->
+      return block_returns?(body) and node.branches.all? do |branch: Ast.IfBranch| block_returns?(branch.body) end
     Ast.Optional.Absent -> return false
   end
 end
@@ -91,8 +116,16 @@ end
 
 def if_help(node: Ast.IfStmt, type_name: String) -> String
   case node.else_body
-    Ast.Optional.Present(body) -> return "every branch of the last \"if\" must end with return, or return " + type_name + " after it"
-    Ast.Optional.Absent -> return "the last \"if\" has no \"else\"; add an \"else\" that returns " + type_name + ", or return after it"
+    Ast.Optional.Present(body) -> return (
+      "every branch of the last \"if\" must end with return, or return " +
+      type_name +
+      " after it"
+    )
+    Ast.Optional.Absent -> return (
+      "the last \"if\" has no \"else\"; add an \"else\" that returns " +
+      type_name +
+      ", or return after it"
+    )
   end
 end
 

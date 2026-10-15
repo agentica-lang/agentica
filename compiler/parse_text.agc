@@ -13,14 +13,19 @@ export struct Printed
   next_id: Int
 end
 
-## Where a line is printed: its indent, the number subtracted from every node id, and the text added at the end of the line of a node, by the node's id (the checker's text form adds the type of each expression this way). A file of a linked program prints ids that start at 0 inside the file, so the text does not depend on which files came before it.
+## Where a line is printed: its indent, the number subtracted from every node id, and the text added at the end of the
+## line of a node, by the node's id (the checker's text form adds the type of each expression this way). A file of a
+## linked program prints ids that start at 0 inside the file, so the text does not depend on which files came before
+## it.
 export struct Margin
   indent: String
   base: Int
   notes: Map[Int, String]
 end
 
-## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints the same text from the Racket tree.
+## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node
+## per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints
+## the same text from the Racket tree.
 export def parse_text(text: String) -> String
   return parse_text_from(text, 0)
 end
@@ -37,7 +42,10 @@ export def print_from(text: String, first_id: Int) -> Printed
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, first_id)
         Diag.Outcome.Failed(problem) -> return Printed(text: Text.diagnostic_line(problem), next_id: first_id)
-        Diag.Outcome.Done(program) -> return Printed(text: print_program(program).join("\n"), next_id: Ast.next_free_id(program))
+        Diag.Outcome.Done(program) -> return Printed(
+          text: print_program(program).join("\n"),
+          next_id: Ast.next_free_id(program),
+        )
       end
   end
 end
@@ -47,7 +55,8 @@ export def deeper(at: Margin) -> Margin
   return at.with(indent: at.indent + "  ")
 end
 
-## The first line of a node: the indent, the role if there is one (the root has none), the kind, the id relative to the margin, the span and the attributes.
+## The first line of a node: the indent, the role if there is one (the root has none), the kind, the id relative to the
+## margin, the span and the attributes.
 export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Span, attrs: String) -> String
   label = ""
   if role != ""
@@ -95,12 +104,23 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       if node.exported
         exported = " exported=true"
       end
-      lines = out.push(head(at, role, "const-decl", node.id, node.span, name_attr(node.name) + exported + doc_attr(node.doc)))
+      lines = out.push(
+        head(at, role, "const-decl", node.id, node.span, name_attr(node.name) + exported + doc_attr(node.doc)),
+      )
       lines = print_optional_type(lines, child, "type", node.type)
       return print_expr(lines, child, "value", node.value)
     Ast.Decl.Enum(node) ->
       parameters = node.type_parameters.map do |name| Text.quote(name) end
-      lines = out.push(head(at, role, "enum-decl", node.id, node.span, name_attr(node.name) + " type-parameters=" + list_text(parameters) + doc_attr(node.doc)))
+      lines = out.push(
+        head(
+          at,
+          role,
+          "enum-decl",
+          node.id,
+          node.span,
+          name_attr(node.name) + " type-parameters=" + list_text(parameters) + doc_attr(node.doc),
+        ),
+      )
       for variant in node.variants
         lines = print_variant(lines, child, variant)
       end
@@ -209,7 +229,16 @@ def op_attrs(op: String, op_span: Source.Span) -> String
   return " op=" + op + " op-span=" + Text.span_text(op_span)
 end
 
-def print_call_like(out: List[String], at: Margin, role: String, kind: String, id: Int, span: Source.Span, attrs: String, args: List[Ast.Expr]) -> List[String]
+def print_call_like(
+  out: List[String],
+  at: Margin,
+  role: String,
+  kind: String,
+  id: Int,
+  span: Source.Span,
+  attrs: String,
+  args: List[Ast.Expr],
+) -> List[String]
   lines = out.push(head(at, role, kind, id, span, attrs))
   return print_exprs(lines, deeper(at), "arg", args)
 end
@@ -217,14 +246,38 @@ end
 def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> List[String]
   child = deeper(at)
   case expr
-    Ast.Expr.Literal(node) -> return out.push(head(at, role, "literal", node.id, node.span, " value=" + value_text(node.value)))
+    Ast.Expr.Literal(node) -> return out.push(
+      head(at, role, "literal", node.id, node.span, " value=" + value_text(node.value)),
+    )
     Ast.Expr.Name(node) -> return out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
-    Ast.Expr.TypeName(node) -> return out.push(head(at, role, "type-expression", node.id, node.span, name_attr(node.name)))
+    Ast.Expr.TypeName(node) -> return out.push(
+      head(at, role, "type-expression", node.id, node.span, name_attr(node.name)),
+    )
     Ast.Expr.ConstRef(node) -> return out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
-    Ast.Expr.FunctionRef(node) -> return out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))
-    Ast.Expr.Call(node) -> return print_call_like(out, at, role, "call", node.id, node.span, name_attr(node.name) + " piped=" + node.piped.to_s, node.args)
+    Ast.Expr.FunctionRef(node) -> return out.push(
+      head(at, role, "function-ref", node.id, node.span, name_attr(node.name)),
+    )
+    Ast.Expr.Call(node) -> return print_call_like(
+      out,
+      at,
+      role,
+      "call",
+      node.id,
+      node.span,
+      name_attr(node.name) + " piped=" + node.piped.to_s,
+      node.args,
+    )
     Ast.Expr.EnumConstructor(node) ->
-      lines = print_call_like(out, at, role, "enum-constructor", node.id, node.span, " enum=" + Text.quote(node.enum_name) + " variant=" + Text.quote(node.variant_name), node.args)
+      lines = print_call_like(
+        out,
+        at,
+        role,
+        "enum-constructor",
+        node.id,
+        node.span,
+        " enum=" + Text.quote(node.enum_name) + " variant=" + Text.quote(node.variant_name),
+        node.args,
+      )
       return print_named_args(lines, child, node.named)
     Ast.Expr.Invoke(node) ->
       lines = out.push(head(at, role, "invoke", node.id, node.span, ""))
@@ -294,10 +347,28 @@ end
 def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Pattern) -> List[String]
   case pattern
     Ast.Pattern.Wildcard(node) -> return out.push(head(at, role, "wildcard-pattern", node.id, node.span, ""))
-    Ast.Pattern.Literal(node) -> return out.push(head(at, role, "literal-pattern", node.id, node.span, " value=" + value_text(node.value)))
+    Ast.Pattern.Literal(node) -> return out.push(
+      head(at, role, "literal-pattern", node.id, node.span, " value=" + value_text(node.value)),
+    )
     Ast.Pattern.Variant(node) ->
       names = node.bindings.map do |binding| binding_text(binding) end
-      return out.push(head(at, role, "variant-pattern", node.id, node.span, " enum=" + Text.quote(node.enum_name) + " variant=" + Text.quote(node.variant_name) + " bindings=" + list_text(names)))
+      return out.push(
+        head(
+          at,
+          role,
+          "variant-pattern",
+          node.id,
+          node.span,
+          (
+            " enum=" +
+            Text.quote(node.enum_name) +
+            " variant=" +
+            Text.quote(node.variant_name) +
+            " bindings=" +
+            list_text(names)
+          ),
+        ),
+      )
   end
 end
 
@@ -377,19 +448,31 @@ def print_field(out: List[String], at: Margin, field: Ast.FieldDecl) -> List[Str
 end
 
 def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> List[String]
-  lines = out.push(head(at, "variant", "enum-variant", variant.id, variant.span, name_attr(variant.name) + doc_attr(variant.doc)))
+  lines = out.push(
+    head(at, "variant", "enum-variant", variant.id, variant.span, name_attr(variant.name) + doc_attr(variant.doc)),
+  )
   return print_types(lines, deeper(at), "payload", variant.payload_types)
 end
 
 def print_program(program: Ast.Program) -> List[String]
-  lines: List[String] = [head(Margin(indent: "", base: 0, notes: {}), "", "program", program.id, program.span, text_attr(" module-doc=", program.module_doc))]
+  lines: List[String] = [
+    head(
+      Margin(indent: "", base: 0, notes: {}),
+      "",
+      "program",
+      program.id,
+      program.span,
+      text_attr(" module-doc=", program.module_doc),
+    ),
+  ]
   for decl in program.declarations
     lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
   end
   return lines
 end
 
-# ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a rename.
+# ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a
+# rename.
 def import_attrs(node: Ast.ImportDecl) -> String
   case node.alias
     Ast.Optional.Present(alias) -> return " path=" + Text.quote(node.path) + " alias=" + Text.quote(alias)

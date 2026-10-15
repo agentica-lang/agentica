@@ -1,4 +1,7 @@
-## The state of the checker (src/checker.rkt has it as mutable variables inside `check`): what is fixed for the run (Cx), what changes while the tree is walked (St), and the small operations on them that every part of the checker uses. A check function takes Cx and St and returns the new St with its result (Out for an expression), or fails with a packed Problem (check_failure.agc), so `try` stops at the first diagnostic.
+## The state of the checker (src/checker.rkt has it as mutable variables inside `check`): what is fixed for the run
+## (Cx), what changes while the tree is walked (St), and the small operations on them that every part of the checker
+## uses. A check function takes Cx and St and returns the new St with its result (Out for an expression), or fails with
+## a packed Problem (check_failure.agc), so `try` stops at the first diagnostic.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -9,27 +12,32 @@ import Diag from "diagnostic"
 import Source from "source"
 import Types from "types"
 
-## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
+## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was
+## introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
 export struct Binding
   type: Types.Type
   immutable: Bool
   level: Int
 end
 
-## The result type of the function or block being checked. Infer is a block whose result is not known yet: the first return or the last expression gives it.
+## The result type of the function or block being checked. Infer is a block whose result is not known yet: the first
+## return or the last expression gives it.
 export enum Slot
   Infer
   Known(Types.Type)
 end
 
-## The block being checked and the scope depth at its start, for CHECK-CAPTURED-ASSIGNMENT. each_receiver is the list of a List.each call, which the help text names.
+## The block being checked and the scope depth at its start, for CHECK-CAPTURED-ASSIGNMENT. each_receiver is the list
+## of a List.each call, which the help text names.
 export struct Capture
   boundary: Int
   params: List[Ast.BlockParam]
   each_receiver: Ast.Optional[Ast.Expr]
 end
 
-## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s on a String), it is printed (Text, to_s) or inspected (Inspect), or it is the first argument of the builtin Call. Each holds the type of the receiver. src/ keeps this as the `resolved` field of the node.
+## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s
+## on a String), it is printed (Text, to_s) or inspected (Inspect), or it is the first argument of the builtin Call.
+## Each holds the type of the receiver. src/ keeps this as the `resolved` field of the node.
 export enum Resolved
   Self(Types.Type)
   Text(Types.Type)
@@ -43,7 +51,12 @@ export struct Signature
   result: Types.Type
 end
 
-## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's; functions the program's; constants the type of each module constant by linked name, which grows as the initializers are checked in order. type_params are the type parameters in scope (only while the variants of a generic enum are registered). file is the file of the declaration being checked, texts the source of every file by name. expression checks an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one that imports it.
+## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;
+## functions the program's; constants the type of each module constant by linked name, which grows as the initializers
+## are checked in order. type_params are the type parameters in scope (only while the variants of a generic enum are
+## registered). file is the file of the declaration being checked, texts the source of every file by name. expression
+## checks an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its
+## own function here), because a module cannot import one that imports it.
 export struct Cx
   catalog: Builtins.Catalog
   help: Help.Tables
@@ -57,7 +70,12 @@ export struct Cx
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
 end
 
-## What changes while a function is checked: the type of each node in a list indexed by id (set once the run starts, with one slot per node id of the program) and the resolution of the nodes that have one in a Map, the names in scope, how many scopes are open, the result type, the loop depth, the block being checked, the nodes of the range chain being checked, the signature of the function (for the diagnostics) and the nesting depth (CHECK-TOO-DEEP). The names in scope are one persistent Map: a scope is a snapshot of it, so closing a scope puts the snapshot back and nothing is ever deleted.
+## What changes while a function is checked: the type of each node in a list indexed by id (set once the run starts,
+## with one slot per node id of the program) and the resolution of the nodes that have one in a Map, the names in
+## scope, how many scopes are open, the result type, the loop depth, the block being checked, the nodes of the range
+## chain being checked, the signature of the function (for the diagnostics) and the nesting depth (CHECK-TOO-DEEP). The
+## names in scope are one persistent Map: a scope is a snapshot of it, so closing a scope puts the snapshot back and
+## nothing is ever deleted.
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -71,7 +89,8 @@ export struct St
   nest: Int
 end
 
-## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many arguments, and the type the context expects (Unknown when none).
+## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
+## arguments, and the type the context expects (Unknown when none).
 export struct Site
   node: Ast.Call
   args: List[Ast.Expr]
@@ -85,14 +104,26 @@ export struct Out
   type: Types.Type
 end
 
-## The deepest nesting of expressions and statements the checker accepts (CHECK-TOO-DEEP beyond it). src/checker.rkt has the same limit and counts the same way.
+## The deepest nesting of expressions and statements the checker accepts (CHECK-TOO-DEEP beyond it). src/checker.rkt
+## has the same limit and counts the same way.
 export def nesting_limit() -> Int
   return 1000
 end
 
 ## The state at the start of a function: no names, no types.
 export def fresh() -> St
-  return St(types: [], resolved: {}, vars: {}, depth: 0, result: Slot.Known(Types.Type.Void), loops: 0, capture: Ast.Optional.Absent, range_chain: [], signature: "", nest: 0)
+  return St(
+    types: [],
+    resolved: {},
+    vars: {},
+    depth: 0,
+    result: Slot.Known(Types.Type.Void),
+    loops: 0,
+    capture: Ast.Optional.Absent,
+    range_chain: [],
+    signature: "",
+    nest: 0,
+  )
 end
 
 ## The failure of a diagnostic with a help text.
@@ -121,7 +152,14 @@ end
 
 ## The failure of a type mismatch: "expected T, found U" with the types as notes and the conversion help.
 export def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, span: Source.Span) -> String
-  base = Failure.problem(cx.file, st.signature, "CHECK-TYPE-MISMATCH", "expected " + Types.to_text(expected) + ", found " + Types.to_text(actual), span, hint_of(Help.conversion(expected, actual)))
+  base = Failure.problem(
+    cx.file,
+    st.signature,
+    "CHECK-TYPE-MISMATCH",
+    "expected " + Types.to_text(expected) + ", found " + Types.to_text(actual),
+    span,
+    hint_of(Help.conversion(expected, actual)),
+  )
   return Failure.pack(base.with(expected: Types.to_text(expected), actual: Types.to_text(actual)))
 end
 
@@ -173,15 +211,34 @@ export def leave(st: St, before: St) -> St
   return st.with(vars: before.vars, depth: before.depth)
 end
 
-## Introduces a name (a parameter, a binding, a pattern variable, a for variable) in the scope: no builtin constructor or function name, and no shadowing.
+## Introduces a name (a parameter, a binding, a pattern variable, a for variable) in the scope: no builtin constructor
+## or function name, and no shadowing.
 export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Source.Span, immutable: Bool) -> Result[St]
   try reserve_local(cx, st, name, span)
   existing = st.vars.get(name)
   if existing.ok?
     if existing.unwrap!.immutable
-      return error(fail_help(cx, st, "CHECK-SHADOWED-NAME", "\"" + name + "\" is already visible; Agentica does not allow shadowing", span, "choose another name"))
+      return error(
+        fail_help(
+          cx,
+          st,
+          "CHECK-SHADOWED-NAME",
+          "\"" + name + "\" is already visible; Agentica does not allow shadowing",
+          span,
+          "choose another name",
+        ),
+      )
     end
-    return error(fail_help(cx, st, "CHECK-SHADOWED-NAME", "\"" + name + "\" is already visible; Agentica does not allow shadowing", span, "assign to it with \"" + name + " = value\" instead of introducing it again, or choose another name"))
+    return error(
+      fail_help(
+        cx,
+        st,
+        "CHECK-SHADOWED-NAME",
+        "\"" + name + "\" is already visible; Agentica does not allow shadowing",
+        span,
+        "assign to it with \"" + name + " = value\" instead of introducing it again, or choose another name",
+      ),
+    )
   end
   return ok(st.with(vars: st.vars.put(name, Binding(type: type, immutable: immutable, level: st.depth))))
 end
@@ -198,12 +255,22 @@ end
 export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Result[Bool]
   try reserve_constructor(cx, st, name, span)
   if name == "puts" or name == "print" or name == "gets" or name == "gets!"
-    return error(fail_help(cx, st, "CHECK-REDEFINED-NAME", "\"" + name + "\" is a builtin function", span, "choose another name, such as line or text"))
+    return error(
+      fail_help(
+        cx,
+        st,
+        "CHECK-REDEFINED-NAME",
+        "\"" + name + "\" is a builtin function",
+        span,
+        "choose another name, such as line or text",
+      ),
+    )
   end
   return ok(true)
 end
 
-## The names a program may use as a value or a call, for the did-you-mean help: names in scope, functions, public builtins.
+## The names a program may use as a value or a call, for the did-you-mean help: names in scope, functions, public
+## builtins.
 export def visible_names(cx: Cx, st: St) -> List[String]
   return st.vars.keys.concat(cx.functions.keys).concat(cx.catalog.public_names)
 end

@@ -5,20 +5,28 @@ import Diag from "diagnostic"
 import Types from "types"
 import Declarations from "declarations"
 
-## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
+## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may
+## differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
 export def did_you_mean(name: String, candidates: List[String]) -> Ast.Optional[String]
   return did_you_mean_among(name, candidates, [])
 end
 
-## did_you_mean for the names of a linked program (src/builtins.rkt, did-you-mean). A linked name starts with "@N::", the prefix of its file; only the candidates of the same file are offered, and without their prefix. shared are extra candidates that have no prefix, such as the builtin names.
-export def did_you_mean_among(full_name: String, candidates: List[String], shared: List[String]) -> Ast.Optional[String]
+## did_you_mean for the names of a linked program (src/builtins.rkt, did-you-mean). A linked name starts with "@N::",
+## the prefix of its file; only the candidates of the same file are offered, and without their prefix. shared are extra
+## candidates that have no prefix, such as the builtin names.
+export def did_you_mean_among(
+  full_name: String,
+  candidates: List[String],
+  shared: List[String],
+) -> Ast.Optional[String]
   case closest_among(full_name, candidates, shared)
     Ast.Optional.Present(name) -> return Ast.Optional.Present("did you mean \"" + name + "\"?")
     Ast.Optional.Absent -> return Ast.Optional.Absent
   end
 end
 
-## The name nearest to full_name among the candidates of its file and the shared ones, or Absent when none is close (src/builtins.rkt, closest-name).
+## The name nearest to full_name among the candidates of its file and the shared ones, or Absent when none is close
+## (src/builtins.rkt, closest-name).
 export def closest_among(full_name: String, candidates: List[String], shared: List[String]) -> Ast.Optional[String]
   prefix = file_prefix(full_name)
   name = Types.display_name(full_name)
@@ -35,11 +43,20 @@ export def closest_among(full_name: String, candidates: List[String], shared: Li
   return nearest(name, pool.concat(shared).sort, limit)
 end
 
-## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed texts for the removed std/http functions and std/logger error, or the did-you-mean over the exports (a private name is never suggested). Through an alias (Mod.nme) a constant is suggested as the import that reads it.
-export def unknown_import_help(key: String, exports: Map[String, Declarations.Kind], member: String, via_alias: Bool) -> Diag.Help
+## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed texts for the removed
+## std/http functions and std/logger error, or the did-you-mean over the exports (a private name is never suggested).
+## Through an alias (Mod.nme) a constant is suggested as the import that reads it.
+export def unknown_import_help(
+  key: String,
+  exports: Map[String, Declarations.Kind],
+  member: String,
+  via_alias: Bool,
+) -> Diag.Help
   removed = ["respond", "begin", "write", "write_bytes", "finish"].any? do |name| name == member end
   if key == "std/http.agc" and removed
-    return Diag.Help.Hint("a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))")
+    return Diag.Help.Hint(
+      "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))",
+    )
   elsif key == "std/logger.agc" and member == "error"
     return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")
   end
@@ -66,7 +83,8 @@ export def edit_distance(a: String, b: String) -> Int
   return last_row(a.split(""), right, 1, first)
 end
 
-# The candidates are sorted, so the first one at the smallest distance is the smaller name of a tie. A candidate whose length differs by more than the limit cannot be near, which skips most of the table.
+# The candidates are sorted, so the first one at the smallest distance is the smaller name of a tie. A candidate whose
+# length differs by more than the limit cannot be near, which skips most of the table.
 def nearest(name: String, ordered: List[String], limit: Int) -> Ast.Optional[String]
   best = ""
   best_distance = limit + 1

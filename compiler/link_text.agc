@@ -7,7 +7,12 @@ import Linker from "linker"
 import ParseText from "parse_text"
 import Text from "text"
 
-## The text form of linking the file at path: the linked program, or the ERROR line of the first failure. The first line is `program #id span`, the root's module doc as ` module-doc="..."`. Each file that declares something follows as `module "path"`, with its declarations (without export, names linked) one level deeper, in the node text form of parse_text with ids that start at 0 inside the file. The path is relative to the folder of the root file, or absolute outside it, or std/NAME.agc. A failure is the lexer's ERROR line with ` file="path"` added. tests/frontend-modules-common.rkt prints the same text from the Racket program.
+## The text form of linking the file at path: the linked program, or the ERROR line of the first failure. The first
+## line is `program #id span`, the root's module doc as ` module-doc="..."`. Each file that declares something follows
+## as `module "path"`, with its declarations (without export, names linked) one level deeper, in the node text form of
+## parse_text with ids that start at 0 inside the file. The path is relative to the folder of the root file, or
+## absolute outside it, or std/NAME.agc. A failure is the lexer's ERROR line with ` file="path"` added.
+## tests/frontend-modules-common.rkt prints the same text from the Racket program.
 export def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) -> return program_lines(linked, {}).join("\n")
@@ -15,11 +20,18 @@ export def link_text(path: String, settings: Env.Settings) -> String
   end
 end
 
-## The ids of the files of a link, one line per file in the order they were read, including the files that declare nothing: `module "path" first=N next=N` (the file's nodes are numbered N up to, not including, the next). A failure prints as link_text does.
+## The ids of the files of a link, one line per file in the order they were read, including the files that declare
+## nothing: `module "path" first=N next=N` (the file's nodes are numbered N up to, not including, the next). A failure
+## prints as link_text does.
 export def ids_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) ->
-      lines = linked.modules.map do |module| "module " + Text.quote(display(linked.root_dir, module.file)) + " first=" + module.first_id.to_s + " next=" + module.next_id.to_s end
+      lines = linked.modules.map do |module|
+        (
+          "module " + Text.quote(display(linked.root_dir, module.file)) + " first=" + module.first_id.to_s +
+          " next=" + module.next_id.to_s
+        )
+      end
       return lines.join("\n")
     Linker.Linking.Failed(failure) -> return failure_text(root_dir_of(path), failure)
   end
@@ -51,7 +63,16 @@ end
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
 export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List[String]
   root = linked.root
-  lines: List[String] = [ParseText.head(ParseText.Margin(indent: "", base: 0, notes: notes), "", "program", root.id, root.span, ParseText.text_attr(" module-doc=", root.module_doc))]
+  lines: List[String] = [
+    ParseText.head(
+      ParseText.Margin(indent: "", base: 0, notes: notes),
+      "",
+      "program",
+      root.id,
+      root.span,
+      ParseText.text_attr(" module-doc=", root.module_doc),
+    ),
+  ]
   for module in linked.modules
     if module.declarations.size > 0
       lines = module_lines(lines, linked.root_dir, module, notes)
@@ -60,7 +81,12 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
   return lines
 end
 
-def module_lines(out: List[String], root_dir: String, module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
+def module_lines(
+  out: List[String],
+  root_dir: String,
+  module: Linker.LinkedModule,
+  notes: Map[Int, String],
+) -> List[String]
   lines = out.push("  module " + Text.quote(display(root_dir, module.file)))
   at = ParseText.Margin(indent: "    ", base: module.first_id, notes: notes)
   for decl in module.declarations

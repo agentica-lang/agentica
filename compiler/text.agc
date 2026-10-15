@@ -31,7 +31,16 @@ end
 
 ## The ERROR line of a diagnostic: code, span, message and help (- when there is none).
 export def diagnostic_line(problem: Diag.Diagnostic) -> String
-  return "ERROR " + problem.code + " " + span_text(problem.span) + " " + quote(problem.message) + " " + help_text(problem.help)
+  return (
+    "ERROR " +
+    problem.code +
+    " " +
+    span_text(problem.span) +
+    " " +
+    quote(problem.message) +
+    " " +
+    help_text(problem.help)
+  )
 end
 
 def escaped(code: Int) -> String

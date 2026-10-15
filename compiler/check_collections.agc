@@ -1,4 +1,5 @@
-## The checking rules of the Map, Set, Task and Channel builtins (src/checker.rkt, check-builtin-call: task-spawn ... set-subset). A rule takes the call (State.Site) and returns the new state with the type of the call.
+## The checking rules of the Map, Set, Task and Channel builtins (src/checker.rkt, check-builtin-call: task-spawn ...
+## set-subset). A rule takes the call (State.Site) and returns the new state with the type of the call.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -22,15 +23,33 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
   end
 end
 
-# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets. The owning form also hands over a handle or channel.
+# Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets. The owning form also hands
+# over a handle or channel.
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   if !T.is(callback.type, "Fn") or T.params(callback.type).size != 1
-    return error(State.fail(cx, callback.st, "CHECK-TYPE-MISMATCH", site.selected.name + " requires a function with one parameter", Ast.expr_span(site.args[0])))
+    return error(
+      State.fail(
+        cx,
+        callback.st,
+        "CHECK-TYPE-MISMATCH",
+        site.selected.name + " requires a function with one parameter",
+        Ast.expr_span(site.args[0]),
+      ),
+    )
   end
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
   if owning and !handle?(cx, handed.type) and !T.is(handed.type, "Channel")
-    return error(State.fail_help(cx, handed.st, "CHECK-NOT-A-HANDLE", "Task.spawn_owning gives a handle to the new task, but the argument is " + T.to_text(handed.type), Ast.expr_span(site.args[1]), "pass a FileHandle, Socket, Listener, Process, HttpServer or Channel; Task.spawn passes any other value"))
+    return error(
+      State.fail_help(
+        cx,
+        handed.st,
+        "CHECK-NOT-A-HANDLE",
+        "Task.spawn_owning gives a handle to the new task, but the argument is " + T.to_text(handed.type),
+        Ast.expr_span(site.args[1]),
+        "pass a FileHandle, Socket, Listener, Process, HttpServer or Channel; Task.spawn passes any other value",
+      ),
+    )
   end
   return ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
 end
@@ -42,7 +61,9 @@ end
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try State.expr(cx, st, site.args[0], T.task_of(site.expected))
   if !T.is(target.type, "Task")
-    return error(State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])))
+    return error(
+      State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
+    )
   end
   return ok(State.Out(st: target.st, type: T.item(target.type)))
 end
@@ -55,7 +76,9 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
   end
   target = try State.expr(cx, st, site.args[0], context)
   if !T.is(target.type, "Task")
-    return error(State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])))
+    return error(
+      State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
+    )
   end
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
@@ -66,7 +89,16 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
   capacity = try State.expr(cx, st, site.args[0], T.Type.Int)
   span = site.node.span
   if T.unknown?(site.expected)
-    return error(State.fail_help(cx, capacity.st, "CHECK-EXPECTED-TYPE", "a channel needs an expected type", span, "annotate the variable, for example ch: Channel[Int] = Channel.new(8)"))
+    return error(
+      State.fail_help(
+        cx,
+        capacity.st,
+        "CHECK-EXPECTED-TYPE",
+        "a channel needs an expected type",
+        span,
+        "annotate the variable, for example ch: Channel[Int] = Channel.new(8)",
+      ),
+    )
   end
   if !T.is(site.expected, "Channel")
     return error(State.mismatch(cx, capacity.st, site.expected, T.Type.Channel(T.Type.Var("T")), span))
@@ -118,7 +150,8 @@ def check_map_has(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
   return ok(State.Out(st: key.st, type: T.Type.Bool))
 end
 
-# Map.get gives a Result; with a default it gives the value. The value type of the map may come from the expected type, or from the default when the map is the literal {}.
+# Map.get gives a Result; with a default it gives the value. The value type of the map may come from the expected type,
+# or from the default when the map is the literal {}.
 def check_map_get(cx: State.Cx, st: State.St, site: State.Site, with_default: Bool) -> Result[State.Out]
   value_context = T.only_result_item(site.expected)
   if with_default
@@ -191,12 +224,32 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
     if !T.unknown?(site.expected)
       return error(State.mismatch(cx, st, site.expected, T.Type.Set(T.Type.Var("T")), span))
     end
-    return error(State.fail_help(cx, st, "CHECK-EMPTY-SET-TYPE", "an empty set needs an expected type, for example \"Set[Int]\"", span, "annotate the variable: seen: Set[Int] = Set.new([]); a parameter, a field or a function result also gives the type"))
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-EMPTY-SET-TYPE",
+        "an empty set needs an expected type, for example \"Set[Int]\"",
+        span,
+        (
+          "annotate the variable: seen: Set[Int] = Set.new([]); a parameter, a field or a function result also " +
+          "gives the type"
+        ),
+      ),
+    )
   end
   list = try Args.list_argument(cx, st, site, context)
   element = T.item(list.type)
   if !CheckTypes.key_type?(element)
-    return error(State.fail(cx, list.st, "CHECK-SET-ELEMENT-TYPE", "a Set element must be Int or String, found " + T.to_text(element), Ast.expr_span(items)))
+    return error(
+      State.fail(
+        cx,
+        list.st,
+        "CHECK-SET-ELEMENT-TYPE",
+        "a Set element must be Int or String, found " + T.to_text(element),
+        Ast.expr_span(items),
+      ),
+    )
   end
   return ok(State.Out(st: list.st, type: T.Type.Set(element)))
 end
