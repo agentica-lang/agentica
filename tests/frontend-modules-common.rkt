@@ -35,8 +35,9 @@
 (define default-env (hash "AGENTICA_PATH" "" "XDG_DATA_HOME" "/nonexistent-agentica-xdg"))
 
 (define (env-arguments env)
-  (list (string-append "--agentica-path=" (hash-ref env "AGENTICA_PATH"))
-        (string-append "--xdg-data-home=" (hash-ref env "XDG_DATA_HOME"))))
+  (append (list (string-append "--agentica-path=" (hash-ref env "AGENTICA_PATH"))
+                (string-append "--xdg-data-home=" (hash-ref env "XDG_DATA_HOME")))
+          (if (hash-has-key? env "HOME") (list (string-append "--home=" (hash-ref env "HOME"))) '())))
 
 (define (with-env env thunk)
   (define copy (environment-variables-copy (current-environment-variables)))

@@ -143,7 +143,30 @@
           (define path (path->string (build-path work "missing.agc")))
           (define output (hash-ref (run-linker bytecode (list (list default-env path))) path))
           (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 " output)
-          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 " (link-text path)))))))
+          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 " (link-text path)))
+
+        ; Racket reads such a file with replacement characters and goes on; File.read_text is strict (a
+        ; documented difference, docs/future/35-self-hosting.md 35.9), so only the Agentica side is asserted.
+        (test-case "an import with invalid UTF-8 is CHECK-IMPORT-IO, \"cannot read import\" (Agentica only)"
+          (define root (write-file (build-path work "utf8" "root.agc") "import \"./bad\" as Bad\n\ndef main() -> Void\nend\n"))
+          (call-with-output-file (build-path work "utf8" "bad.agc") #:exists 'truncate/replace
+            (lambda (out) (write-bytes (bytes 255 254 10) out)))
+          (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
+          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO [^ ]+ \"cannot read import\"" output))
+
+        ; Racket's find-system-path ignores a replaced environment, so the HOME-based user root cannot be
+        ; compared with Racket in a hermetic way: the Agentica linker is given --home and no usable
+        ; XDG_DATA_HOME (relative values are ignored) and the library is found under ~/.local/share/agentica/lib.
+        (test-case "the user library root falls back to HOME/.local/share/agentica/lib"
+          (define home (build-path work "home"))
+          (write-file (build-path home ".local" "share" "agentica" "lib" "homelib.agc") "export def answer() -> Int\n  return 42\nend\n")
+          (define root
+            (write-file (build-path work "home-root" "root.agc")
+                        "import \"pkg/homelib\" as Homelib\n\ndef main() -> Void\n  puts(Homelib.answer().to_s)\nend\n"))
+          (define env (hash "AGENTICA_PATH" "" "XDG_DATA_HOME" "relative/data" "HOME" (path->string home)))
+          (define output (hash-ref (run-linker bytecode (list (list env root))) root))
+          (check-false (regexp-match? #rx"^ERROR" output) output)
+          (check-regexp-match #rx"module \"[^\"]*homelib.agc\"" output))))))
 
 (module+ slow
   (when (vm-built? "frontend modules tests")
@@ -227,6 +250,17 @@
                 (check-equal? output (string-append racket "\n") (car entry))
                 (check-id-ranges (path->string (path-only (second spec))) (id-ranges output) (car entry)))))
 
+        (test-case "a source file over 1 MiB is CHECK-IMPORT-IO in Agentica (File.read_text limit), and links in Racket"
+          (define filler (string-append* (make-list 30000 "# padding padding padding padding padding\n")))
+          (check-true (> (string-length filler) 1048576))
+          (define root
+            (write-file (build-path work "big" "root.agc")
+                        (string-append "import \"./big\" as Big\n\ndef main() -> Void\nend\n")))
+          (write-file (build-path work "big" "big.agc") (string-append filler "export def one() -> Int\n  return 1\nend\n"))
+          (define output (hash-ref (run-linker bytecode (list (list default-env root))) root))
+          (check-regexp-match #rx"^ERROR CHECK-IMPORT-IO [^ ]+ \"cannot read import\"" output)
+          (check-false (regexp-match? #rx"^ERROR" (link-text root))))
+
         (test-case "a file of 2000 declarations links in linear time"
           (define path
             (write-file (build-path work "flat.agc")
@@ -305,6 +339,7 @@
    (cons "nested-chains-ok" (bad-then (string-append "x + (x + (x + (x" (repeat " + x" 400) ")))")))
    (cons "nested-chains-bad" (bad-then (string-append "x + (x + (x + (Nope.Thing" (repeat " + x" 400) ")))")))
    (cons "nested-chains-deep-ok" (bad-then (nested-chains 8 900)))
+   (cons "nested-chains-limit-ok" (bad-then (nested-chains 11 900)))
    (cons "nested-chains-deep-bad" (bad-then (string-append "Nope.Thing + (" (nested-chains 7 900) ")" (repeat " + x" 900))))
    (cons "calls-bad" (bad-then (string-append (repeat "f(" 900) "Nope.Thing" (repeat ")" 900))))
    (cons "lists-bad" (bad-then (string-append (repeat "[" 990) "Nope.Thing" (repeat "]" 990))))
