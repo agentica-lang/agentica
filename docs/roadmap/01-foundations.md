@@ -28,7 +28,7 @@ dropped):
 | 2. AST and parser | Tokens to a program (every node carries a span) or the first `PARSE-` diagnostic. `ast.rkt` holds nodes only, `parser.rkt` holds the rules; no checker or placeholder nodes for later phases | `src/`, `tests/parser-test.rkt`, grammar §5 |
 | 3. Name resolution and type checking | Program to a checked program or the first `CHECK-` diagnostic: types, scopes, calls, returns, structs, lists, `Void`/`Nil` rules | `src/checker.rkt`, `tests/checker-test.rkt`, grammar §6, §7 |
 | 4. Core evaluator | The checked program run to a value or one `RUNTIME-` diagnostic; it trusted the checker and did not re-check types. Replaced by the bytecode VM in phase 7 | grammar §6, §7; `docs/vm/` |
-| 5. CLI and diagnostic quality | Every diagnostic names file, position, stable code, a concrete message and the source line with a caret (`diagnostic.rkt`); the CLI prints the first diagnostic to stderr and exits 1; a missing file or bad usage is one plain message and exit 2; `--dump` prints the checked tree. Every grammar example is a test (`tests/examples-test.rkt`) | `src/main.rkt`, `src/diagnostic.rkt`, grammar §7, §8 |
+| 5. CLI and diagnostic quality | Every diagnostic names file, position, stable code, a concrete message and the source line with a caret (`diagnostic.rkt`); the CLI prints the first diagnostic to stderr and exits 1; a missing file or bad usage is one plain message and exit 2; `--dump` prints the checked tree. Every grammar example is a test (`tests/test_examples.py`) | `src/main.rkt`, `src/diagnostic.rkt`, grammar §7, §8 |
 
 Rules from these phases that stay: each stage takes the previous stage's output
 and returns data or exactly one diagnostic, stops at the first error, never

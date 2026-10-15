@@ -1,6 +1,7 @@
 ## Reads Gherkin feature files for `agentica test`.
 ##
-## It supports `Feature`, `Background`, `Scenario`, `Scenario Outline` with `Examples`, tags, Doc Strings and Data Tables, in English only.
+## It supports `Feature`, `Background`, `Scenario`, `Scenario Outline` with `Examples`, tags, Doc Strings and Data
+## Tables, in English only.
 
 import Report from "std/test/report"
 
@@ -24,7 +25,8 @@ export enum Argument
   DataTable(List[List[String]])
 end
 
-## One step of a scenario: its kind (`Given`, `When` or `Then`), the text after the keyword, its argument and its place.
+## One step of a scenario: its kind (`Given`, `When` or `Then`), the text after the keyword, its argument and its
+## place.
 export struct Step
   kind: String
   text: String
@@ -32,7 +34,8 @@ export struct Step
   span: Report.Span
 end
 
-## One scenario, with the `Background` steps first, the tags of the feature, of the scenario and of its `Examples` block, and the example row it came from.
+## One scenario, with the `Background` steps first, the tags of the feature, of the scenario and of its `Examples`
+## block, and the example row it came from.
 export struct Scenario
   name: String
   steps: List[Step]
@@ -176,7 +179,14 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         if has_current
           drafts = drafts.push(current)
         end
-        current = Draft(name: name, outline: heading == "Scenario Outline", steps: [], examples: [], tags: pending, span: where)
+        current = Draft(
+          name: name,
+          outline: heading == "Scenario Outline",
+          steps: [],
+          examples: [],
+          tags: pending,
+          span: where,
+        )
         has_current = true
         pending = []
         mode = "scenario"
@@ -198,7 +208,12 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         return fail("PARSE-GHERKIN-STEP", "And or But needs a preceding step", where)
       end
       previous = kind
-      step = Step(kind: kind, text: drop_blanks(rest_of(line, action.length)), argument: Argument.NoArgument, span: where)
+      step = Step(
+        kind: kind,
+        text: drop_blanks(rest_of(line, action.length)),
+        argument: Argument.NoArgument,
+        span: where,
+      )
       if mode == "background"
         background = background.push(step)
       else
@@ -242,7 +257,12 @@ export def parse(file: String, text: String) -> Outcome[Feature]
     elsif unsupported?(line)
       return fail("PARSE-GHERKIN-UNSUPPORTED", "unsupported or invalid Gherkin syntax", where)
     else
-      if not has_title or active_steps(mode, background, current, has_current).size > 0 or pending.size > 0 or mode == "examples"
+      if (
+        not has_title or
+        active_steps(mode, background, current, has_current).size > 0 or
+        pending.size > 0 or
+        mode == "examples"
+      )
         return fail("PARSE-GHERKIN-STEP", "unexpected text after steps", where)
       end
       cursor += 1
@@ -280,7 +300,9 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         scenarios = scenarios.push(expanded.unwrap!)
       end
     else
-      scenarios = scenarios.push(Scenario(name: draft.name, steps: steps, tags: tags, span: draft.span, example: Report.Example.NoExample))
+      scenarios = scenarios.push(
+        Scenario(name: draft.name, steps: steps, tags: tags, span: draft.span, example: Report.Example.NoExample),
+      )
     end
   end
   return Outcome.Done(Feature(name: title, scenarios: scenarios, tags: feature_tags, span: title_span))
@@ -338,7 +360,14 @@ def heading_keyword(line: String) -> String
     return ""
   end
   word = line.slice(0, colon.unwrap!)
-  if word == "Feature" or word == "Background" or word == "Scenario Outline" or word == "Scenario" or word == "Example" or word == "Examples"
+  if (
+    word == "Feature" or
+    word == "Background" or
+    word == "Scenario Outline" or
+    word == "Scenario" or
+    word == "Example" or
+    word == "Examples"
+  )
     return word
   end
   return ""
@@ -346,7 +375,10 @@ end
 
 def step_keyword(line: String) -> String
   word = line.replace("\t", " ").split(" ")[0]
-  if word.length < line.length and (word == "Given" or word == "When" or word == "Then" or word == "And" or word == "But")
+  if (
+    word.length < line.length and
+    (word == "Given" or word == "When" or word == "Then" or word == "And" or word == "But")
+  )
     return word
   end
   return ""
@@ -405,11 +437,25 @@ def bind(headers: List[String], cells: List[String]) -> Map[String, String]
 end
 
 def with_steps(draft: Draft, steps: List[Step]) -> Draft
-  return Draft(name: draft.name, outline: draft.outline, steps: steps, examples: draft.examples, tags: draft.tags, span: draft.span)
+  return Draft(
+    name: draft.name,
+    outline: draft.outline,
+    steps: steps,
+    examples: draft.examples,
+    tags: draft.tags,
+    span: draft.span,
+  )
 end
 
 def with_examples(draft: Draft, rows: List[ExampleRow]) -> Draft
-  return Draft(name: draft.name, outline: draft.outline, steps: draft.steps, examples: rows, tags: draft.tags, span: draft.span)
+  return Draft(
+    name: draft.name,
+    outline: draft.outline,
+    steps: draft.steps,
+    examples: rows,
+    tags: draft.tags,
+    span: draft.span,
+  )
 end
 
 def active_steps(mode: String, background: List[Step], current: Draft, has_current: Bool) -> List[Step]
@@ -533,7 +579,15 @@ def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: Example
     argument = try substitute_argument(step.argument, row.bindings)
     expanded = expanded.push(Step(kind: step.kind, text: text, argument: argument, span: step.span))
   end
-  return ok(Scenario(name: name, steps: expanded, tags: tags.concat(row.tags), span: draft.span, example: Report.Example.Row(row.span)))
+  return ok(
+    Scenario(
+      name: name,
+      steps: expanded,
+      tags: tags.concat(row.tags),
+      span: draft.span,
+      example: Report.Example.Row(row.span),
+    ),
+  )
 end
 
 def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Result[Argument]

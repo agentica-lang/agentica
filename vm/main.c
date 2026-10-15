@@ -505,7 +505,7 @@ static int run(int argc, char **argv) {
     return 2;
   }
   if (!agc_program_set_source_root(program, source_root, source_root_chars)) {
-    fputs("agentica-vm: invalid bytecode: file needs too much memory\n", stderr);
+    fputs("agentica-vm: --source-root is too long for this program\n", stderr);
     return 2;
   }
 

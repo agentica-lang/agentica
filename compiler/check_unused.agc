@@ -1,11 +1,13 @@
-## CHECK-UNUSED-VALUE (src/checker.rkt: check-unused-value!): a value that is dropped, and could only have been used for itself, is an error.
+## CHECK-UNUSED-VALUE (src/checker.rkt: check-unused-value!): a value that is dropped, and could only have been used
+## for itself, is an error.
 
 import Ast from "ast"
 import Model from "builtin_model"
 import State from "check_state"
 import T from "types"
 
-## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a data value, a .with. Anything else, and any Void value, is fine.
+## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a
+## data value, a .with. Anything else, and any Void value, is fine.
 export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
   if T.is(type, "Void")
     return ok(true)
@@ -14,7 +16,16 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
   name = call_name(value, resolved)
   entry = cx.catalog.entries.get(name)
   if unused_result?(value, resolved, entry)
-    return error(State.fail_help(cx, st, "CHECK-UNUSED-VALUE", "the result of " + unused_subject(name) + " is not used", Ast.expr_span(value), unused_help(value, resolved, entry)))
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-UNUSED-VALUE",
+        "the result of " + unused_subject(name) + " is not used",
+        Ast.expr_span(value),
+        unused_help(value, resolved, entry),
+      ),
+    )
   end
   return ok(true)
 end
@@ -58,7 +69,8 @@ def plain_call_name(value: Ast.Expr) -> String
   end
 end
 
-# True when dropping the value loses something: a method that resolved to the receiver, to_s or inspect, a struct update, or a call of a pure builtin.
+# True when dropping the value loses something: a method that resolved to the receiver, to_s or inspect, a struct
+# update, or a call of a pure builtin.
 def unused_result?(value: Ast.Expr, resolved: Ast.Optional[State.Resolved], entry: Result[Model.Builtin]) -> Bool
   if struct_update?(value) or yields_value?(resolved)
     return true
@@ -112,7 +124,8 @@ def unused_help(value: Ast.Expr, resolved: Ast.Optional[State.Resolved], entry: 
   return "values are immutable, so this call changes nothing; assign or use the result"
 end
 
-# The name a value is a call on, when the receiver is a plain name: xs in xs.push(1), xs.with(...) or List.append(xs, 1).
+# The name a value is a call on, when the receiver is a plain name: xs in xs.push(1), xs.with(...) or List.append(xs,
+# 1).
 def receiver_name(value: Ast.Expr) -> String
   case value
     Ast.Expr.MethodCall(node) -> return name_of(node.target)

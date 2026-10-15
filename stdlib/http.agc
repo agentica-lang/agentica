@@ -1,7 +1,8 @@
 ## An HTTP/1.1 client and server.
 ##
-## Import it with `import HTTP from "std/http"`. Every call is whole: it returns after the whole response arrived, and the body is a `String`.
-## Status codes such as 404 or 500 are normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
+## Import it with `import HTTP from "std/http"`. Every call is whole: it returns after the whole response arrived, and
+## the body is a `String`. Status codes such as 404 or 500 are normal responses. A bad URL, a refused connection, a
+## timeout or a body over the limit is an `error` result.
 
 struct Target
   scheme: String
@@ -18,14 +19,27 @@ end
 
 ## Returns the default client options: 30 s timeouts, up to 4 connections, 1 MiB bodies and the system CA certificates.
 export def client_options() -> HttpClientOptions
-  return HttpClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 4, max_body_bytes: 1048576, ca_file: "")
+  return HttpClientOptions(
+    timeout_ms: 30000,
+    idle_timeout_ms: 30000,
+    max_connections: 4,
+    max_body_bytes: 1048576,
+    ca_file: "",
+  )
 end
 
-## Creates a client that keeps connections open and reuses them. Every number in `options` must be positive, `max_connections` at most 65536
-## and `max_body_bytes` at most 64 MiB, or the result is an error. Close the client with `close_client`.
+## Creates a client that keeps connections open and reuses them. Every number in `options` must be positive,
+## `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or the result is an error. Close the client
+## with `close_client`.
 export def client(options: HttpClientOptions) -> Result[HttpClient]
   try check_options(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
-  return HttpWire.client(options.timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes, options.ca_file)
+  return HttpWire.client(
+    options.timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+    options.ca_file,
+  )
 end
 
 ## Closes the client and its connections. A call still in flight fails.
@@ -44,8 +58,15 @@ export def post(pool: HttpClient, url: String, headers: List[Header], body: Stri
 end
 
 ## Sends a request with any `method`. `url` must start with `http://` or `https://`.
-## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or `Connection`.
-export def request(pool: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
+## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
+## `Connection`.
+export def request(
+  pool: HttpClient,
+  method: String,
+  url: String,
+  headers: List[Header],
+  body: String,
+) -> Result[HttpResponse]
   where = try parse_url(url)
   return HttpWire.exchange(pool, where.scheme, where.host, where.port, method, where.target, headers, body)
 end
@@ -62,22 +83,51 @@ export def header_values(headers: List[Header], name: String) -> List[String]
   return found
 end
 
-## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB bodies.
+## Returns the default server options: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
+## bodies.
 export def server_options() -> HttpServerOptions
-  return HttpServerOptions(request_timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: 128, max_body_bytes: 1048576)
+  return HttpServerOptions(
+    request_timeout_ms: 30000,
+    idle_timeout_ms: 30000,
+    max_connections: 128,
+    max_body_bytes: 1048576,
+  )
 end
 
-## Starts an HTTP server on `host` and `port` and returns at once; it serves in the background. `handler` takes the whole request and returns the whole response.
-## Port 0 picks a free port, which `local_port` returns. The server closes when the task that called `listen` ends.
-export def listen(host: String, port: Int, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+## Starts an HTTP server on `host` and `port` and returns at once; it serves in the background. `handler` takes the
+## whole request and returns the whole response. Port 0 picks a free port, which `local_port` returns. The server
+## closes when the task that called `listen` ends.
+export def listen(
+  host: String,
+  port: Int,
+  handler: Fn[HttpRequest, Result[HttpResponse]],
+  options: HttpServerOptions,
+) -> Result[HttpServer]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+  )
   listener = try TCP.listen(host, port)
   return ok(start(listener, handler, options))
 end
 
 ## Like `listen`, but over TLS, with the PEM certificate in `cert_file` and the key in `key_file`.
-export def listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: Fn[HttpRequest, Result[HttpResponse]], options: HttpServerOptions) -> Result[HttpServer]
-  try check_options(options.request_timeout_ms, options.idle_timeout_ms, options.max_connections, options.max_body_bytes)
+export def listen_tls(
+  host: String,
+  port: Int,
+  cert_file: String,
+  key_file: String,
+  handler: Fn[HttpRequest, Result[HttpResponse]],
+  options: HttpServerOptions,
+) -> Result[HttpServer]
+  try check_options(
+    options.request_timeout_ms,
+    options.idle_timeout_ms,
+    options.max_connections,
+    options.max_body_bytes,
+  )
   listener = try TLS.listen(host, port, cert_file, key_file)
   return ok(start(listener, handler, options))
 end
@@ -258,5 +308,10 @@ def answer(socket: Socket, request: HttpRequest, service: Service) -> Bool
 end
 
 def failed(socket: Socket, request: HttpRequest, timeout: Int) -> Void
-  HttpWire.write_response(socket, request, HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: ""), timeout)
+  HttpWire.write_response(
+    socket,
+    request,
+    HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: ""),
+    timeout,
+  )
 end

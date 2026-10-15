@@ -1,4 +1,5 @@
-## The module linker: loads the root file and its imports (modules.agc) and rewrites them into one program (rewrite.agc). This is link-program and load-program of src/modules.rkt.
+## The module linker: loads the root file and its imports (modules.agc) and rewrites them into one program
+## (rewrite.agc). This is link-program and load-program of src/modules.rkt.
 
 import Ast from "ast"
 import Declarations from "declarations"
@@ -9,7 +10,10 @@ import Modules from "modules"
 import Resolve from "resolve"
 import Rewrite from "rewrite"
 
-## One file of the linked program: its stored name (Paths.stored_name of the canonical key: the path from the root folder, which the bytecode keeps), its source text (for the help of the checker), its declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and exports count too, so the declarations leave gaps).
+## One file of the linked program: its stored name (Paths.stored_name of the canonical key: the path from the root
+## folder, which the bytecode keeps), its source text (for the help of the checker), its declarations with linked names
+## and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and
+## exports count too, so the declarations leave gaps).
 export struct LinkedModule
   key: String
   file: String
@@ -21,7 +25,11 @@ export struct LinkedModule
   declarations: List[Ast.Decl]
 end
 
-## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with the root first, each file before the files its imports read, and ids, the number of node ids the checker must make room for: the ids of the parser, and as many again when a file declares a constant, because the linker gives the receiver of a rewritten NAME.method(...) the id of the call plus the number of ids of the program (Rewrite.rewrite_constant_member).
+## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
+## the root first, each file before the files its imports read, and ids, the number of node ids the checker must make
+## room for: the ids of the parser, and as many again when a file declares a constant, because the linker gives the
+## receiver of a rewritten NAME.method(...) the id of the call plus the number of ids of the program
+## (Rewrite.rewrite_constant_member).
 export struct Linked
   root: Ast.Program
   root_dir: String
@@ -44,13 +52,19 @@ export def link_file(path: String, settings: Env.Settings) -> Linking
   return Linking.Failed(Failure.unpack_failure(linked.message))
 end
 
-## The program in the form the checker reads: the declarations of every file in one list, with the id, span and module doc of the root.
+## The program in the form the checker reads: the declarations of every file in one list, with the id, span and module
+## doc of the root.
 export def program(linked: Linked) -> Ast.Program
   declarations: List[Ast.Decl] = []
   for module in linked.modules
     declarations = declarations.concat(module.declarations)
   end
-  return Ast.Program(id: linked.root.id, declarations: declarations, module_doc: linked.root.module_doc, span: linked.root.span)
+  return Ast.Program(
+    id: linked.root.id,
+    declarations: declarations,
+    module_doc: linked.root.module_doc,
+    span: linked.root.span,
+  )
 end
 
 def finish(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
@@ -81,14 +95,33 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
   ids = parser_ids(loaded)
   for key in loaded.order
     module = loaded.modules[key]
-    cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module, visible: visible_structs(module, loaded.modules), ids: ids)
+    cx = Resolve.Context(
+      settings: settings,
+      modules: loaded.modules,
+      me: module,
+      visible: visible_structs(module, loaded.modules),
+      ids: ids,
+    )
     declarations = try Rewrite.rewrite_declarations(cx)
-    out = out.push(LinkedModule(key: key, file: module.file, name: Paths.stored_name(loaded.root_dir, key), prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), text: module.text, declarations: declarations))
+    out = out.push(
+      LinkedModule(
+        key: key,
+        file: module.file,
+        name: Paths.stored_name(loaded.root_dir, key),
+        prefix: module.prefix,
+        first_id: module.first_id,
+        next_id: Ast.next_free_id(module.program),
+        text: module.text,
+        declarations: declarations,
+      ),
+    )
   end
   return ok(out)
 end
 
-# A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the `visible` predicate of src/modules.rkt as data). A file imported by name counts as imported, with all its exported structs: an alias import of it would allow them too.
+# A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the
+# `visible` predicate of src/modules.rkt as data). A file imported by name counts as imported, with all its exported
+# structs: an alias import of it would allow them too.
 def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]) -> List[String]
   names = structs_of(module.prefix, module.names)
   for target in module.aliases.values

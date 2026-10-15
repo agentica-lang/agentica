@@ -1,4 +1,5 @@
-## What the linker reads from outside the program being linked: the environment variables that place pkg/ libraries, the std/ sources folder, and the builtin catalog with its name tables.
+## What the linker reads from outside the program being linked: the environment variables that place pkg/ libraries,
+## the std/ sources folder, and the builtin catalog with its name tables.
 
 import Builtins from "builtins"
 
@@ -9,7 +10,8 @@ export struct Env
   home: String
 end
 
-## The inputs of one link: where the std/ sources are (a stdlib/ folder), the environment, and the builtin catalog (reserved type names, bare builtins, builtin enums and std-only modules).
+## The inputs of one link: where the std/ sources are (a stdlib/ folder), the environment, and the builtin catalog
+## (reserved type names, bare builtins, builtin enums and std-only modules).
 export struct Settings
   stdlib: String
   env: Env
@@ -18,7 +20,11 @@ end
 
 ## The environment of this process.
 export def process_env() -> Env
-  return Env(agentica_path: variable("AGENTICA_PATH"), xdg_data_home: variable("XDG_DATA_HOME"), home: variable("HOME"))
+  return Env(
+    agentica_path: variable("AGENTICA_PATH"),
+    xdg_data_home: variable("XDG_DATA_HOME"),
+    home: variable("HOME"),
+  )
 end
 
 ## Settings for a stdlib/ folder and an environment.

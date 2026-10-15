@@ -1,4 +1,7 @@
-## The first argument of a builtin call that must be a collection, a channel or a Result (src/checker.rkt: map-argument, set-argument, list-argument, channel-argument, result-argument inside check-builtin-call). Each checks argument 0 against the context given and returns the new state with its type, or CHECK-TYPE-MISMATCH naming the type it should have been.
+## The first argument of a builtin call that must be a collection, a channel or a Result (src/checker.rkt:
+## map-argument, set-argument, list-argument, channel-argument, result-argument inside check-builtin-call). Each checks
+## argument 0 against the context given and returns the new state with its type, or CHECK-TYPE-MISMATCH naming the type
+## it should have been.
 
 import Ast from "ast"
 import State from "check_state"
@@ -46,7 +49,14 @@ export def empty_map?(node: Ast.Expr) -> Bool
 end
 
 # Argument 0, which must have the variant named by word; shape is the type the message says it should have.
-def shaped(cx: State.Cx, st: State.St, site: State.Site, context: T.Type, word: String, shape: T.Type) -> Result[State.Out]
+def shaped(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  context: T.Type,
+  word: String,
+  shape: T.Type,
+) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], context)
   if !T.is(out.type, word)
     return error(State.mismatch(cx, out.st, shape, out.type, Ast.expr_span(site.args[0])))

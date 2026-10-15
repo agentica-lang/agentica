@@ -1,6 +1,7 @@
 ## The runner of `agentica test`.
 ##
-## `agentica test` compiles a small program that calls `main`. It reads its configuration, runs the feature files and test files, and prints the report.
+## `agentica test` compiles a small program that calls `main`. It reads its configuration, runs the feature files and
+## test files, and prints the report.
 
 import Gherkin from "std/bdd/gherkin"
 import Match from "std/bdd/match"
@@ -51,8 +52,8 @@ struct Run
   verdict: Report.Verdict
 end
 
-## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and prints the report.
-## Exits with a non-zero code when something failed.
+## Reads the configuration file named by the one command-line argument, runs every feature and test file in it, and
+## prints the report. Exits with a non-zero code when something failed.
 export def main() -> Void
   args = System.args()
   if args.size != 1
@@ -117,7 +118,11 @@ def matched(config: Config, files: List[Report.FileResult]) -> List[Report.FileR
   if config.only == "" or files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
     return files
   end
-  problem = Child.located("CHECK-BDD-EMPTY", "no test or scenario name contains #{config.only.inspect}", config.empty_path)
+  problem = Child.located(
+    "CHECK-BDD-EMPTY",
+    "no test or scenario name contains #{config.only.inspect}",
+    config.empty_path,
+  )
   return files.push(Report.file_error(config.empty_path, "", problem))
 end
 
@@ -143,18 +148,37 @@ def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Re
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
   if entry.kind == "tests"
-    settings = Units.Settings(vm: config.vm, seed: config.seed, only: config.only, timeout_ms: config.test_timeout_ms, source_root: entry.source_root)
+    settings = Units.Settings(
+      vm: config.vm,
+      seed: config.seed,
+      only: config.only,
+      timeout_ms: config.test_timeout_ms,
+      source_root: entry.source_root,
+    )
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
   return run_file(config, patterns, entry.path)
 end
 
 def seeded(config: Config, seed: Int) -> Config
-  return Config(vm: config.vm, steps_bytecode: config.steps_bytecode, steps_source: config.steps_source, steps_root: config.steps_root,
-                steps_error: config.steps_error, steps_given: config.steps_given, agentica: config.agentica, count: config.count,
-                empty_path: config.empty_path, empty_message: config.empty_message, style: config.style,
-                allow_run: config.allow_run, seeded: true, seed: seed, only: config.only,
-                test_timeout_ms: config.test_timeout_ms)
+  return Config(
+    vm: config.vm,
+    steps_bytecode: config.steps_bytecode,
+    steps_source: config.steps_source,
+    steps_root: config.steps_root,
+    steps_error: config.steps_error,
+    steps_given: config.steps_given,
+    agentica: config.agentica,
+    count: config.count,
+    empty_path: config.empty_path,
+    empty_message: config.empty_message,
+    style: config.style,
+    allow_run: config.allow_run,
+    seeded: true,
+    seed: seed,
+    only: config.only,
+    test_timeout_ms: config.test_timeout_ms,
+  )
 end
 
 # The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
@@ -174,7 +198,9 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   output = Process.output(p, Child.left(deadline))
   Process.close(p)
   if read.problem == "network: operation timed out" or not output.ok?
-    return Listing.Broken(Report.error_at("RUNTIME-BDD-TIMEOUT", "the step program did not list its steps within 30 seconds", where))
+    return Listing.Broken(
+      Report.error_at("RUNTIME-BDD-TIMEOUT", "the step program did not list its steps within 30 seconds", where),
+    )
   end
   if output.unwrap!.truncated
     return Listing.Broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "step program output exceeds 1 MiB", where))
@@ -191,7 +217,9 @@ def list_steps(config: Config, where: Report.Span) -> Listing
     end
     return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
-  texts = records.filter do |record| Child.event_of(record) == "step" end.map do |record| Child.text_of(record, "pattern") end
+  texts = records.filter do |record|
+    Child.event_of(record) == "step"
+  end.map do |record| Child.text_of(record, "pattern") end
   case Match.compile(texts, where)
     Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
     Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))
@@ -218,7 +246,12 @@ def run_file(config: Config, patterns: List[Match.Pattern], path: String) -> Rep
 end
 
 # Every step is resolved before the child starts; the first unresolved one fails and the others are not executed.
-def run_scenario(config: Config, patterns: List[Match.Pattern], base: String, item: Gherkin.Scenario) -> Report.ScenarioResult
+def run_scenario(
+  config: Config,
+  patterns: List[Match.Pattern],
+  base: String,
+  item: Gherkin.Scenario,
+) -> Report.ScenarioResult
   started = Time.monotonic_ms()
   found = item.steps.map do |step| resolved_of(Match.resolve(patterns, step)) end
   failing = (0...found.size).to_a.filter do |i| found[i].index < 0 end
@@ -243,11 +276,20 @@ def run_scenario(config: Config, patterns: List[Match.Pattern], base: String, it
     end
     Report.StepResult(text: item.steps[i].text, location: item.steps[i].span, status: status)
   end
-  return Report.ScenarioResult(name: item.name, tags: item.tags, location: item.span, example: item.example,
-                               duration_ms: Time.monotonic_ms() - started, steps: steps, verdict: run.verdict, output: "")
+  return Report.ScenarioResult(
+    name: item.name,
+    tags: item.tags,
+    location: item.span,
+    example: item.example,
+    duration_ms: Time.monotonic_ms() - started,
+    steps: steps,
+    verdict: run.verdict,
+    output: "",
+  )
 end
 
-# One child VM per scenario: the settings line, then one line per step on the child's channel, each answered by records on it.
+# One child VM per scenario: the settings line, then one line per step on the child's channel, each answered by records
+# on it.
 def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[Match.Resolved],
               patterns: List[Match.Pattern], started: Int) -> Run
   count = item.steps.size
@@ -295,7 +337,10 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
       Report.Verdict.Fail(_) -> run = Run(failed_at: count, verdict: ending)
       Report.Verdict.Pass ->
         if total == 0
-          run = Run(failed_at: count, verdict: failure("RUNTIME-BDD-NO-ASSERTION", "scenario performed no BDD assertions", item.span))
+          run = Run(
+            failed_at: count,
+            verdict: failure("RUNTIME-BDD-NO-ASSERTION", "scenario performed no BDD assertions", item.span),
+          )
         end
       Report.Verdict.NotExecuted -> run = Run(failed_at: count, verdict: ending)
     end
@@ -346,16 +391,25 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
     elsif event == "fail" or event == "end"
       printed = Process.read_available(p, Child.left(deadline))
       if not printed.ok?
-        return StepEnd(verdict: Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)), asserts: asserts)
+        return StepEnd(
+          verdict: Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)),
+          asserts: asserts,
+        )
       end
       if event == "fail"
         return StepEnd(verdict: Report.Verdict.Fail(record_error(record, span)), asserts: asserts)
       end
       if JSON.int(JSON.get(record, "index").unwrap_or(JSON.null())).unwrap_or(-1) != index
-        return StepEnd(verdict: failure("RUNTIME-BDD-INFRA", "the step program broke the BDD record protocol", span), asserts: asserts)
+        return StepEnd(
+          verdict: failure("RUNTIME-BDD-INFRA", "the step program broke the BDD record protocol", span),
+          asserts: asserts,
+        )
       end
       if then_step and asserts == 0
-        return StepEnd(verdict: failure("RUNTIME-BDD-NO-ASSERTION", "Then must perform a BDD assertion", span), asserts: asserts)
+        return StepEnd(
+          verdict: failure("RUNTIME-BDD-NO-ASSERTION", "Then must perform a BDD assertion", span),
+          asserts: asserts,
+        )
       end
       return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
     end
@@ -363,7 +417,8 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
   return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
 end
 
-# After the last step the runner closes the channel and the child exits 0 when it reads the end; anything else fails the scenario.
+# After the last step the runner closes the channel and the child exits 0 when it reads the end; anything else fails
+# the scenario.
 def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
   line = Process.channel_read_line(p, Child.left(deadline))
   while line.ok?
@@ -405,7 +460,11 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
     return crash.unwrap!
   end
   code = Process.wait(p, Child.left(deadline))
-  return Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
+  return Report.error_at(
+    "RUNTIME-BDD-PREMATURE-EXIT",
+    "step exited prematurely (exit code #{code.unwrap_or(-1)})",
+    span,
+  )
 end
 
 def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
@@ -416,8 +475,15 @@ def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
 end
 
 def record_error(record: Json, span: Report.Span) -> Report.Error
-  return Report.Error(code: Child.text_of(record, "code"), message: Child.text_of(record, "message"), span: span, end_line: span.line,
-                      expected: Child.detail_of(record, "expected"), actual: Child.detail_of(record, "actual"), original: JSON.null())
+  return Report.Error(
+    code: Child.text_of(record, "code"),
+    message: Child.text_of(record, "message"),
+    span: span,
+    end_line: span.line,
+    expected: Child.detail_of(record, "expected"),
+    actual: Child.detail_of(record, "actual"),
+    original: JSON.null(),
+  )
 end
 
 def resolved_of(outcome: Gherkin.Outcome[Match.Resolved]) -> Match.Resolved
@@ -430,13 +496,29 @@ end
 def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Error
   case Match.resolve(patterns, step)
     Gherkin.Outcome.Failed(problem) -> return Report.with_actual(from_diagnostic(problem), step.text.inspect)
-    Gherkin.Outcome.Done(_) -> return Report.error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
+    Gherkin.Outcome.Done(_) -> return Report.error_at(
+      "RUNTIME-BDD-INFRA",
+      "the step resolved on the second try",
+      step.span,
+    )
   end
 end
 
 def vm_args(config: Config, steps: Int, mode: String) -> List[String]
-  return ["--allow-run", "--json", "--max-steps", steps.to_s, "--seed", config.seed.to_s, "--source-root", config.steps_root,
-          "--", config.steps_bytecode, "--agentica-bdd", mode]
+  return [
+    "--allow-run",
+    "--json",
+    "--max-steps",
+    steps.to_s,
+    "--seed",
+    config.seed.to_s,
+    "--source-root",
+    config.steps_root,
+    "--",
+    config.steps_bytecode,
+    "--agentica-bdd",
+    mode,
+  ]
 end
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict

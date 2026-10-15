@@ -1,4 +1,5 @@
-## The checking rules of the List builtins (src/checker.rkt, check-builtin-call: list-size ... list-repeat). A rule takes the call (State.Site) and returns the new state with the type of the call.
+## The checking rules of the List builtins (src/checker.rkt, check-builtin-call: list-size ... list-repeat). A rule
+## takes the call (State.Site) and returns the new state with the type of the call.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -33,7 +34,15 @@ def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
   target = try Args.list_argument(cx, st, site, T.only_list(site.expected))
   element = T.item(target.type)
   if !T.is(element, "Int") and !T.is(element, "Float") and !T.is(element, "String")
-    return error(State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "List.sort needs List[Int], List[Float] or List[String], found " + T.to_text(target.type), Ast.expr_span(site.args[0])))
+    return error(
+      State.fail(
+        cx,
+        target.st,
+        "CHECK-TYPE-MISMATCH",
+        "List.sort needs List[Int], List[Float] or List[String], found " + T.to_text(target.type),
+        Ast.expr_span(site.args[0]),
+      ),
+    )
   end
   return ok(target)
 end
@@ -50,7 +59,14 @@ end
 def sort_by_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.BlockLit) -> Result[State.Out]
   annotated = try annotated_parameter(cx, st, block, 0)
   target = try Args.list_argument(cx, st, site, T.list_of(annotated))
-  key = try Stmt.check_block_body(cx, target.st, block, Ast.Optional.Present([T.item(target.type)]), T.Type.Unknown, Ast.Optional.Absent)
+  key = try Stmt.check_block_body(
+    cx,
+    target.st,
+    block,
+    Ast.Optional.Present([T.item(target.type)]),
+    T.Type.Unknown,
+    Ast.Optional.Absent,
+  )
   try check_sort_key(cx, key.st, key.type, block.span)
   return ok(State.Out(st: key.st, type: target.type))
 end
@@ -142,7 +158,8 @@ def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, index: 
   end
 end
 
-# List.map, filter, reduce, each, any? and all?: the callback is a block (which gets the element type) or a function value.
+# List.map, filter, reduce, each, any? and all?: the callback is a block (which gets the element type) or a function
+# value.
 def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   callback = site.args[site.args.size - 1]
   checked = State.Out(st: st, type: T.Type.Unknown)
@@ -155,13 +172,22 @@ def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mode
     arity = 2
   end
   if !T.is(checked.type, "Fn") or T.params(checked.type).size != arity
-    return error(State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "wrong collection callback type", Ast.expr_span(callback)))
+    return error(
+      State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "wrong collection callback type", Ast.expr_span(callback)),
+    )
   end
   return callback_result(cx, checked.st, site, rule, callback, checked.type)
 end
 
-# The callback of a block: the list gives the element type, and the rule gives the parameters and result the block must have.
-def block_callback(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule, block: Ast.BlockLit) -> Result[State.Out]
+# The callback of a block: the list gives the element type, and the rule gives the parameters and result the block must
+# have.
+def block_callback(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  rule: Model.Rule,
+  block: Ast.BlockLit,
+) -> Result[State.Out]
   position = 0
   if reduces?(rule)
     position = 1
@@ -179,13 +205,26 @@ def block_callback(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rul
   return Stmt.check_block_body(cx, list.st, block, Ast.Optional.Present([element]), block_result(rule), receiver)
 end
 
-def reduce_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.BlockLit, element: T.Type) -> Result[State.Out]
+def reduce_block(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  block: Ast.BlockLit,
+  element: T.Type,
+) -> Result[State.Out]
   start = site.expected
   if T.unknown?(start)
     start = try annotated_parameter(cx, st, block, 0)
   end
   accumulator = try State.expr(cx, st, site.args[1], start)
-  return Stmt.check_block_body(cx, accumulator.st, block, Ast.Optional.Present([accumulator.type, element]), accumulator.type, Ast.Optional.Absent)
+  return Stmt.check_block_body(
+    cx,
+    accumulator.st,
+    block,
+    Ast.Optional.Present([accumulator.type, element]),
+    accumulator.type,
+    Ast.Optional.Absent,
+  )
 end
 
 # The result a block of the rule must give: Bool for filter, any? and all?, Void for each, none known for map.
@@ -213,8 +252,16 @@ def each?(rule: Model.Rule) -> Bool
   end
 end
 
-# The type of the call once the callback is checked: the list is checked against the element type of a function value, then the result follows from the rule.
-def callback_result(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule, callback: Ast.Expr, type: T.Type) -> Result[State.Out]
+# The type of the call once the callback is checked: the list is checked against the element type of a function value,
+# then the result follows from the rule.
+def callback_result(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  rule: Model.Rule,
+  callback: Ast.Expr,
+  type: T.Type,
+) -> Result[State.Out]
   span = Ast.expr_span(callback)
   params = T.params(type)
   result = T.result(type)
@@ -233,7 +280,14 @@ def callback_result(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Ru
   return plain_result(cx, current, rule, span, element, result)
 end
 
-def reduce_result(cx: State.Cx, st: State.St, site: State.Site, callback: Ast.Expr, accumulator: T.Type, result: T.Type) -> Result[State.Out]
+def reduce_result(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  callback: Ast.Expr,
+  accumulator: T.Type,
+  result: T.Type,
+) -> Result[State.Out]
   span = Ast.expr_span(callback)
   if !T.same(accumulator, result)
     return error(State.mismatch(cx, st, accumulator, result, span))
@@ -246,7 +300,14 @@ def reduce_result(cx: State.Cx, st: State.St, site: State.Site, callback: Ast.Ex
   return ok(State.Out(st: current, type: result))
 end
 
-def plain_result(cx: State.Cx, st: State.St, rule: Model.Rule, span: Source.Span, element: T.Type, result: T.Type) -> Result[State.Out]
+def plain_result(
+  cx: State.Cx,
+  st: State.St,
+  rule: Model.Rule,
+  span: Source.Span,
+  element: T.Type,
+  result: T.Type,
+) -> Result[State.Out]
   case rule
     Model.Rule.ListFilter ->
       try require_type(cx, st, T.Type.Bool, result, span)

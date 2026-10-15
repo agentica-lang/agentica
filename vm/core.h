@@ -36,6 +36,12 @@ bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *erro
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
                      const agc_trace *trace);
 
+/* Puts "root/" before every source name of a freshly loaded program that is relative and does not start with "std/"
+ * (those are the embedded standard modules). A leading "./" of a joined name is dropped, not only in "./std/NAME.agc":
+ * the root "r" turns "./x.agc" into "r/x.agc". No "/" is added when the root already ends in one, and an empty root
+ * changes nothing. The root must be valid UTF-8 and root_chars its exact character count. Call it once, right after
+ * the load and before the program runs: a second call would join the root again. It returns false, and changes no
+ * name, when the bytes it would add pass SOURCE_ROOT_BUDGET (64 MiB) in loader.c. */
 bool agc_program_set_source_root(agc_program *program, const char *root, size_t root_chars);
 
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);

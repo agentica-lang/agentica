@@ -15,6 +15,10 @@
 #error "AGC_VERSION must be defined"
 #endif
 
+/* Total bytes that the root may add to the source names. The loader's own budget covers the names as stored; a long
+ * root repeated over thousands of sources is not in it, so it gets its own cap. */
+#define SOURCE_ROOT_BUDGET ((size_t)1 << 26)
+
 typedef struct {
   const uint8_t *data;
   size_t len, pos;
@@ -608,10 +612,6 @@ bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, cha
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size) {
   return agc_load_traced(data, len, program, error, error_size, NULL);
 }
-
-/* Total bytes that the root may add to the source names. The loader's own budget covers the names as stored; a long
- * root repeated over thousands of sources is not in it, so it gets its own cap. */
-#define SOURCE_ROOT_BUDGET ((size_t)1 << 26)
 
 /* A relative name that is not under std/ (those are the embedded standard modules, which have no folder). */
 static bool takes_root(const agc_string *name) {

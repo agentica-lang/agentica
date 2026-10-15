@@ -87,7 +87,9 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
           Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
           Diag.Outcome.Done(next) ->
             if statement_level?(delimiters)
-              tokens = tokens.push(token(text, "NL", Tokens.Value.NoValue, start, Source.position(next, line + 1, next)))
+              tokens = tokens.push(
+                token(text, "NL", Tokens.Value.NoValue, start, Source.position(next, line + 1, next)),
+              )
             end
             index = next
             line += 1
@@ -175,7 +177,12 @@ end
 
 # The end of the text: a last NL at statement level, then EOF, unless a
 # delimiter is still open.
-def finish(input: Input, tokens: List[Tokens.Token], delimiters: List[Frame], here: Source.Position) -> Diag.Outcome[List[Tokens.Token]]
+def finish(
+  input: Input,
+  tokens: List[Tokens.Token],
+  delimiters: List[Frame],
+  here: Source.Position,
+) -> Diag.Outcome[List[Tokens.Token]]
   closed = tokens
   if statement_level?(delimiters) and !ends_with_newline?(tokens)
     closed = closed.push(token(input.text, "NL", Tokens.Value.NoValue, here, here))
@@ -190,9 +197,17 @@ end
 # Checks the line break at `index` and returns the offset after it. A CR must
 # come with its LF, and a line break cannot sit inside a string interpolation
 # (any `#` frame on the stack: only string pieces push or pop them).
-def after_newline(input: Input, delimiters: List[Frame], index: Int, code: Int, start: Source.Position) -> Diag.Outcome[Int]
+def after_newline(
+  input: Input,
+  delimiters: List[Frame],
+  index: Int,
+  code: Int,
+  start: Source.Position,
+) -> Diag.Outcome[Int]
   if code == 13 and at(input.codes, input.size, index + 1) != 10
-    return Diag.Outcome.Failed(Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp))
+    return Diag.Outcome.Failed(
+      Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(start, start), Diag.Help.NoHelp),
+    )
   end
   inside = innermost(delimiters, true)
   if inside >= 0
@@ -218,7 +233,12 @@ def scan_name(input: Input, first: Int, code: Int, line: Int, line_start: Int) -
   index = name_suffix(input.codes, input.size, code, skip_in(input.codes, input.size, first + 1, input.name_codes))
   lexeme = input.text.slice(first, index - first)
   span = Source.Span(start: Source.position(first, line, line_start), stop: Source.position(index, line, line_start))
-  return Tokens.Token(kind: word_kind(input.keywords, lexeme, code), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span)
+  return Tokens.Token(
+    kind: word_kind(input.keywords, lexeme, code),
+    lexeme: lexeme,
+    value: Tokens.Value.Text(lexeme),
+    span: span,
+  )
 end
 
 # A name may end in `?` or `!`, except `!=` is the operator, and a type name
@@ -268,7 +288,14 @@ def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Ou
   start = Source.position(first, line, line_start)
   stop = Source.position(index, line, line_start)
   if invalid_separator?(codes, first, index)
-    return Diag.Outcome.Failed(Diag.fail("LEX-INVALID-NUMBER", "a \"_\" in a number must sit between two digits", span(start, stop), Diag.Help.Hint("write digit groups like 1_000 or 0.000_5; remove the extra \"_\"")))
+    return Diag.Outcome.Failed(
+      Diag.fail(
+        "LEX-INVALID-NUMBER",
+        "a \"_\" in a number must sit between two digits",
+        span(start, stop),
+        Diag.Help.Hint("write digit groups like 1_000 or 0.000_5; remove the extra \"_\""),
+      ),
+    )
   end
   digits = input.text.slice(first, index - first).replace("_", "")
   if is_float
@@ -282,7 +309,14 @@ end
 # frame that holds the literal's start). The loop jumps from one special
 # character to the next, so plain text costs one table lookup per character;
 # only an escape, a `#` or the end of the piece needs a decision.
-def scan_string(input: Input, delimiters: List[Frame], at_index: Int, code: Int, line: Int, line_start: Int) -> Diag.Outcome[StringPiece]
+def scan_string(
+  input: Input,
+  delimiters: List[Frame],
+  at_index: Int,
+  code: Int,
+  line: Int,
+  line_start: Int,
+) -> Diag.Outcome[StringPiece]
   codes = input.codes
   size = input.size
   first = code == 34
@@ -304,14 +338,25 @@ def scan_string(input: Input, delimiters: List[Frame], at_index: Int, code: Int,
         kind = "string"
       end
       value = parts.push(input.text.slice(segment, index - segment)).join("")
-      return Diag.Outcome.Done(StringPiece(kind: kind, value: value, token_end: index + 1, next: index + 1, opens: false, start: string_start))
+      return Diag.Outcome.Done(
+        StringPiece(
+          kind: kind,
+          value: value,
+          token_end: index + 1,
+          next: index + 1,
+          opens: false,
+          start: string_start,
+        ),
+      )
     elsif codes[index] == 35 and at(codes, size, index + 1) == 123
       kind = "interp-middle"
       if first
         kind = "interp-start"
       end
       value = parts.push(input.text.slice(segment, index - segment)).join("")
-      return Diag.Outcome.Done(StringPiece(kind: kind, value: value, token_end: index, next: index + 2, opens: true, start: string_start))
+      return Diag.Outcome.Done(
+        StringPiece(kind: kind, value: value, token_end: index, next: index + 2, opens: true, start: string_start),
+      )
     elsif codes[index] == 92
       decoded = ""
       if index + 1 < size
@@ -335,13 +380,23 @@ end
 def bad_escape(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Diagnostic
   escape_start = Source.position(index, line, line_start)
   if index + 1 == input.size
-    return Diag.fail("LEX-INVALID-ESCAPE", "incomplete string escape", span(escape_start, Source.position(index + 1, line, line_start)), Diag.Help.NoHelp)
+    return Diag.fail(
+      "LEX-INVALID-ESCAPE",
+      "incomplete string escape",
+      span(escape_start, Source.position(index + 1, line, line_start)),
+      Diag.Help.NoHelp,
+    )
   end
   stop = Source.position(index + 2, line, line_start)
   if input.codes[index + 1] == 10
     stop = Source.Position(offset: index + 2, line: line + 1, column: 1)
   end
-  return Diag.fail("LEX-INVALID-ESCAPE", "unsupported escape \\" + input.text.slice(index + 1, 1), span(escape_start, stop), Diag.Help.NoHelp)
+  return Diag.fail(
+    "LEX-INVALID-ESCAPE",
+    "unsupported escape \\" + input.text.slice(index + 1, 1),
+    span(escape_start, stop),
+    Diag.Help.NoHelp,
+  )
 end
 
 # The token of a string piece. A string cannot span lines, so the line is the
@@ -362,7 +417,9 @@ def scan_operator(input: Input, index: Int, code: Int, line: Int, line_start: In
     return Diag.Outcome.Failed(unexpected_character(code, lexeme, start, Source.position(index + 1, line, line_start)))
   end
   stop = Source.position(index + lexeme.length, line, line_start)
-  return Diag.Outcome.Done(Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
+  return Diag.Outcome.Done(
+    Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)),
+  )
 end
 
 # The longest operator at `index`: `...`, then two characters, then one.
@@ -383,13 +440,28 @@ end
 # matching closing character must find on top.
 def scan_opening(input: Input, index: Int, line: Int, line_start: Int) -> Tokens.Token
   lexeme = input.text.slice(index, 1)
-  span = Source.Span(start: Source.position(index, line, line_start), stop: Source.position(index + 1, line, line_start))
-  return Tokens.Token(kind: input.operators.get(lexeme, ""), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span)
+  span = Source.Span(
+    start: Source.position(index, line, line_start),
+    stop: Source.position(index + 1, line, line_start),
+  )
+  return Tokens.Token(
+    kind: input.operators.get(lexeme, ""),
+    lexeme: lexeme,
+    value: Tokens.Value.Text(lexeme),
+    span: span,
+  )
 end
 
 # `)`, `]` or `}` must close the frame on top; otherwise `LEX-UNMATCHED-DELIMITER`.
 # (A `}` that ends an interpolation never gets here: it is a string piece.)
-def scan_closing(input: Input, delimiters: List[Frame], index: Int, code: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
+def scan_closing(
+  input: Input,
+  delimiters: List[Frame],
+  index: Int,
+  code: Int,
+  line: Int,
+  line_start: Int,
+) -> Diag.Outcome[Tokens.Token]
   lexeme = input.text.slice(index, 1)
   start = Source.position(index, line, line_start)
   stop = Source.position(index + 1, line, line_start)
@@ -398,9 +470,18 @@ def scan_closing(input: Input, delimiters: List[Frame], index: Int, code: Int, l
     if code == 125 and statement_level?(delimiters)
       help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
     end
-    return Diag.Outcome.Failed(Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help))
+    return Diag.Outcome.Failed(
+      Diag.fail("LEX-UNMATCHED-DELIMITER", "unmatched " + lexeme + " delimiter", span(start, stop), help),
+    )
   end
-  return Diag.Outcome.Done(Tokens.Token(kind: input.operators.get(lexeme, ""), lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: span(start, stop)))
+  return Diag.Outcome.Done(
+    Tokens.Token(
+      kind: input.operators.get(lexeme, ""),
+      lexeme: lexeme,
+      value: Tokens.Value.Text(lexeme),
+      span: span(start, stop),
+    ),
+  )
 end
 
 # A `##` doc block starting at `from`: one line per `##`, and the block goes on
@@ -431,7 +512,13 @@ def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
       collecting = false
     end
   end
-  return DocScan(stop: index, line: current_line, line_start: current_start, text: lines.join("\n"), next: line_after_doc(codes, size, index))
+  return DocScan(
+    stop: index,
+    line: current_line,
+    line_start: current_start,
+    text: lines.join("\n"),
+    next: line_after_doc(codes, size, index),
+  )
 end
 
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool
@@ -472,7 +559,12 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   end
   help = Diag.Help.NoHelp
   if frame.kind == "{"
-    help = Diag.Help.Hint("add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no braces and end with \"end\"")
+    help = Diag.Help.Hint(
+      (
+        "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: blocks have no " +
+        "braces and end with \"end\""
+      ),
+    )
   end
   return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed " + frame.kind + " delimiter", span(frame.start, here), help)
 end
@@ -631,8 +723,19 @@ def span(start: Source.Position, stop: Source.Position) -> Source.Span
   return Source.Span(start: start, stop: stop)
 end
 
-def token(text: String, kind: String, value: Tokens.Value, start: Source.Position, stop: Source.Position) -> Tokens.Token
-  return Tokens.Token(kind: kind, lexeme: text.slice(start.offset, stop.offset - start.offset), value: value, span: span(start, stop))
+def token(
+  text: String,
+  kind: String,
+  value: Tokens.Value,
+  start: Source.Position,
+  stop: Source.Position,
+) -> Tokens.Token
+  return Tokens.Token(
+    kind: kind,
+    lexeme: text.slice(start.offset, stop.offset - start.offset),
+    value: value,
+    span: span(start, stop),
+  )
 end
 
 def unterminated(start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
@@ -684,7 +787,12 @@ def integer_value(digits: String) -> Tokens.Value
   return Tokens.Value.Huge(strip_zeros(digits))
 end
 
-def unexpected_character(code: Int, character: String, start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
+def unexpected_character(
+  code: Int,
+  character: String,
+  start: Source.Position,
+  stop: Source.Position,
+) -> Diag.Diagnostic
   message = "unexpected character " + Unicode.written(code)
   if Unicode.graphic?(code)
     message = "unexpected character \"" + character + "\""
@@ -693,7 +801,9 @@ def unexpected_character(code: Int, character: String, start: Source.Position, s
   if code == 59
     help = Diag.Help.Hint("Agentica has no semicolons; end the statement with a newline")
   elsif code == 39 or code == 96
-    help = Diag.Help.Hint("strings use double quotes: \"abc\"; there is no char type, a character is a one-character String such as \"+\"")
+    help = Diag.Help.Hint(
+      "strings use double quotes: \"abc\"; there is no char type, a character is a one-character String such as \"+\"",
+    )
   end
   return Diag.fail("LEX-UNEXPECTED-CHAR", message, span(start, stop), help)
 end

@@ -6,6 +6,7 @@ runtime trace prints the stored name, and the CLI puts the entry's folder (as
 seen from the working directory) before it with `agentica-vm --source-root`.
 """
 import shutil
+import struct
 
 from tests.agentica_test import TestCase, cli, compile_agc, run, run_vm, vm_binary, vm_environment
 
@@ -70,6 +71,28 @@ PKG_HELPER = """export def name() -> String
   return "helper"
 end
 """
+
+HELLO = """def main() -> Void
+  puts("hi")
+end
+"""
+
+
+def pad_source_names(data, extra):
+    """The bytes of an .agcb with `extra` more sources that have an empty name and an empty text.
+
+    They go after the real ones, so every span still points at its source. Only the Sources section is read, with
+    the layout of docs/vm/03-ir-and-bytecode.md 4.6: magic, u32 format, str version, u32 count, (str, str) entries.
+    """
+    def skip_string(pos):
+        return pos + 4 + struct.unpack_from("<I", data, pos)[0]
+
+    pos = skip_string(8)
+    (count,) = struct.unpack_from("<I", data, pos)
+    end = pos + 4
+    for _ in range(count):
+        end = skip_string(skip_string(end))
+    return data[:pos] + struct.pack("<I", count + extra) + data[pos + 4:end] + bytes(8 * extra) + data[end:]
 
 
 class SourcePathsTest(TestCase):
@@ -203,3 +226,19 @@ class SourcePathsTest(TestCase):
         # The CLI does the same from the working directory.
         result = run(cli() + ["app/main.agc"], cwd=first)
         self.assertTrue(result.stderr.startswith("app/std/helper.agc:"), result.stderr)
+
+    def test_a_source_root_past_the_cap_is_refused(self):
+        base = self.project({"app/main.agc": HELLO})
+        data = compile_agc(base / "app" / "main.agc", base / "out.agcb").read_bytes()
+        # 700 empty names, none under std/ or absolute, each get the root: 700 * 100001 bytes pass the 64 MiB cap.
+        padded = base / "padded.agcb"
+        padded.write_bytes(pad_source_names(data, 700))
+        env = vm_environment()
+        plain = run_vm(padded, env=env)
+        self.assertEqual((plain.code, plain.stdout), (0, "hi\n"), plain.stderr)
+        short = run_vm(padded, "--source-root", "app", env=env)
+        self.assertEqual((short.code, short.stdout), (0, "hi\n"), short.stderr)
+        refused = run_vm(padded, "--source-root", "r" * 100000, env=env)
+        self.assertEqual(refused.code, 2)
+        self.assertEqual(refused.stdout, "")
+        self.assertEqual(refused.stderr, "agentica-vm: --source-root is too long for this program\n")
