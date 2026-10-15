@@ -608,8 +608,9 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
       case AGC_OP_MOVE: R[in.a] = R[in.b]; break;
       case AGC_OP_CONST: R[in.a] = p->constants[bx]; break;
       case AGC_OP_GLOBAL: {
-        /* The loader checked bx against global_count. A zeroed slot has tag AGC_T_VOID, which no constant has
-           (docs/future/44-module-constants.md §44.5), so it means "never set": only a hand-made file reads one. */
+        /* The loader checked bx against global_count. A zeroed slot has tag AGC_T_VOID, and no module constant
+           has type Void (docs/future/44-module-constants.md §44.5), so it means "never set": only a hand-made
+           file reads one (or a slot it unset with GLOBAL_SET of a Void). */
         agc_value g = p->globals[bx];
         if (g.tag == AGC_T_VOID) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: global read before it was set", s);
         R[in.a] = g;
@@ -617,8 +618,9 @@ agc_turn_result agc_run_turn(agc_vm *vm) {
       }
       case AGC_OP_GLOBAL_SET:
         /* The one write to a loaded program. The loader allows it only in the entry function, which has no
-           backward jump and cannot be called, so it runs once per slot, in the main task, before main. Later
-           readers, on this thread or any other, see a table that is never written again (agc_program.globals). */
+           backward jump and cannot be called, so each GLOBAL_SET runs at most once, in the main task, before
+           main. Later readers, on this thread or any other, see a table that is never written again
+           (agc_program.globals). */
         p->globals[bx] = R[in.a];
         break;
       case AGC_OP_STEP:

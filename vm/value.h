@@ -284,15 +284,18 @@ typedef struct {
   agc_function *functions;
   /* The Globals slots (module constants, docs/future/44-module-constants.md
      §44.8): global_count values in zeroed memory, so an unset slot has tag
-     AGC_T_VOID. The only part of a loaded program that a run writes. The
-     loader allows GLOBAL_SET only in the entry function, which can never run
-     twice and has no backward jump, so each write happens once, in straight
-     line, before main. After the entry tail-calls main the table is read-only
-     and needs no lock. A hand-made entry could spawn a task before its last
-     write, which only a multicore scheduler would turn into a race:
-     docs/vm/10-io-multicore.md §10.2.3 says what that build must do. The
+     AGC_T_VOID. No module constant has type Void (44.5), so tag 0 means "never
+     set"; a hand-made CONST of a Void and a GLOBAL_SET can unset a slot again.
+     The only part of a loaded program that a run writes. The loader allows
+     GLOBAL_SET only in the entry function, which has no backward jump and, in
+     a file with slots, cannot be called, so each GLOBAL_SET runs at most once,
+     in straight line, before main. After the entry tail-calls main the table
+     is read-only and needs no lock. A hand-made entry could spawn a task
+     before its last write, which only a multicore scheduler would turn into a
+     race: docs/vm/10-io-multicore.md §10.2.3 says what that build must do. The
      table lives inside the program, allocated by the loader, so the collector
-     scans it as it scans constants. */
+     scans it as it scans constants. A loaded program is run once; the slots
+     keep their values after the run. */
   agc_value *globals;
 } agc_program;
 

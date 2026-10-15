@@ -19,7 +19,7 @@ enforces it.
 
 | Component | What it is |
 |---|---|
-| **Runtime** | `agc_runtime`: the program, the arguments, the settings. Shared by every thread and read-only after start-up, except the atomics and locks that §10.2.3 lists (`steps_left`, `outcome`, one lock per output stream). |
+| **Runtime** | `agc_runtime`: the program, the arguments, the settings. Shared by every thread and read-only after start-up, except the atomics and locks that §10.2.3 lists (`steps_left`, `outcome`, one lock per output stream) and the Globals table of the program, which the entry writes before `main` (§16.7). |
 | **Schedulers** | N threads that run the interpreter. A scheduler takes a ready task from the global run queue, runs one turn (§10.2.1), and then parks it, ends it or puts it back. It never calls libuv, except `uv_async_send` on the inbox's handle. |
 | **Global run queue** | The FIFO of ready tasks. Many producers, N consumers (§16.3). |
 | **I/O thread** | The main thread after start-up. It runs the only libuv loop. It has an inbox of requests from the schedulers (§16.4). |

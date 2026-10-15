@@ -91,7 +91,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `CALL_BUILTIN`, between callbacks and after `CONCAT`, `TO_TEXT`, `INSPECT`,
     `EQ`, `NE`, `SAME`, `MAP`, `MAP_GET` (`agc_charge`, `agc_charge_bytes`;
     skipped with `AGENTICA_VM_TEST_NO_TURN_COST=1`)
-  - `GLOBAL` and `GLOBAL_SET` read and write `agc_program.globals`, the one part of a loaded program that a run writes: only the entry writes it, once, before `main`, so after that it is read-only and a scheduler on another thread needs no lock (`docs/vm/10-io-multicore.md` §10.2.3, "The Globals table"). A zeroed slot has tag `AGC_T_VOID`, which means "never set": `GLOBAL` of one is `RUNTIME-INTERNAL`. A program that is run twice (a test) keeps the slots of the first run, so tests that read an unset slot load a fresh program
+  - `GLOBAL` and `GLOBAL_SET` read and write `agc_program.globals`, the one part of a loaded program that a run writes: only the entry writes it, each `GLOBAL_SET` runs at most once, before `main`, so after that it is read-only and a scheduler on another thread needs no lock (`docs/vm/10-io-multicore.md` §10.2.3, "The Globals table"). A zeroed slot has tag `AGC_T_VOID`, which means "never set": `GLOBAL` of one is `RUNTIME-INTERNAL`. A loaded program is run once and its slots keep their values after the run; a program run twice in one process (a test) would see the first run's slots, so tests that read an unset slot load a fresh program, and if a program is ever run twice for real the table moves into `agc_runtime`
   - frames, registers, call depth, `TAIL_CALL` frame replacement, `TRY` (returns
     an error like `RETURN`; one that would empty the call stack is
     `RUNTIME-INTERNAL`), Int rules, `CLOSURE`/`CALL_VALUE`, and the resumable
