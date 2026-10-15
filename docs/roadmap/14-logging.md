@@ -51,8 +51,8 @@ builtins too (§24.2, "Types").
   `src/checker.rkt`); one line in `src/stdlib.rkt`; and the std-only help in
   `src/modules.rkt`, which names `std/logger` for `LogRegistry`. Each line is
   one `IO.warn` call (24.1). No flags, no grammar change, and no change to
-  `CHECK-IMPORT-NAME` in this PR (the "did you mean" help is its own PR, §24.2,
-  "The freeze"). Tests: goldens with exact stderr (levels, handler levels,
+  `CHECK-IMPORT-NAME` in this PR (the "did you mean" help landed as its own PR,
+  D9, §24.2, "The freeze"). Tests: goldens with exact stderr (levels, handler levels,
   quoting, field order), attach and detach across tasks, a handler that halts
   crashes only its task, the async handler example end to end, a Python peer for
   the JSON lines, and `Logger.time_text` against Python `datetime` vectors.

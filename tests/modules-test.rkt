@@ -406,6 +406,39 @@
              (check-regexp-match (caddr entry) (diagnostic-help problem))
              (check-false (diagnostic-help problem)))))))
 
+  (test-case "a wrong imported name suggests the closest export, never a private name"
+    (for ([entry '(("  x = M.publc()\n" #rx"\"public\"")
+                   ("  x = M.Publik(a: 1)\n" #rx"\"Publik\"|\"Public\"")
+                   ("  x: M.Publc = nil\n" #rx"\"Public\"")
+                   ;; `hidden` and `Secret` exist but are private; `faraway` is not close to anything.
+                   ("  x = M.hiden()\n" #f)
+                   ("  x = M.Secret(value: 1)\n" #f)
+                   ("  x = M.faraway()\n" #f))])
+      (with-files
+       (list (cons "module.agc" "struct Secret\n  value: Int\nend\n\ndef hidden() -> Void\nend\n\nexport def public() -> Void\nend\n\nexport struct Public\n  a: Int\nend\n\n")
+             (cons "root.agc" (string-append "import \"module\" as M\ndef main() -> Void\n" (car entry) "end\n\n")))
+       (lambda (directory)
+         (define problem (checked (build-path directory "root.agc")))
+         (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME (car entry))
+         (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 3)
+         (if (cadr entry)
+             (check-regexp-match (cadr entry) (diagnostic-help problem))
+             (check-false (diagnostic-help problem)))))))
+
+  (test-case "the std/http and std/logger helps win over the generic suggestion, which works on std modules"
+    (with-files
+     '(("root.agc" . "import \"std/http\" as HTTP\ndef main() -> Void\n  x = HTTP.gett(\"u\")\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-regexp-match #rx"\"get\"" (diagnostic-help problem))))
+    (with-files
+     '(("root.agc" . "import \"std/logger\" as Logger\ndef main() -> Void\n  Logger.warnin(\"x\")\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-regexp-match #rx"\"warning\"" (diagnostic-help problem)))))
+
   (test-case "LogRegistry is internal to std/logger, its types are reserved, and Logger has no error"
     (with-files
      '(("root.agc" . "def main() -> Void\n  x = LogRegistry.level()\nend\n\n"))
