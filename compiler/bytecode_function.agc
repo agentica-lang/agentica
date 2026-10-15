@@ -26,8 +26,8 @@ export struct Encoded
   parts: List[List[Int]]
 end
 
-## The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
-## as the opcode and three u16 operands, or, when generic, as the operands it has.
+# The operands an instruction is written with, and the tables after naming what it needs. The instruction is written
+# as the opcode and three u16 operands, or, when generic, as the operands it has.
 struct Operands
   tables: Tables
   a: Int
@@ -77,7 +77,8 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
 end
 
 # The operands of one instruction, which is a written run of `run` instructions when it is a `step`. The tables gain
-# the entry the instruction names, if it has one. The cases are in the order src/bytecode.rkt tries them.
+# the entry the instruction names, if it has one. The first case that matches wins, so const and the jumps come
+# before WIDE_OPS, as in the chain this replaced.
 def operands(
   program: Ir.Program, function: Ir.Function, labels: Map[Int, Int], tables: Tables, instr: Ir.Instr, run: Int
 ) -> Result[Operands]
