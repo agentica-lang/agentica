@@ -9,7 +9,7 @@ are a formula are rebuilt here; the manifests hold their hashes.
 import re
 import time
 
-from tests.agentica_test import ROOT, slow
+from tests.agentica_test import ROOT, scaled, slow, timeout
 from tests.frontend_cases import check_deep_cases, check_generated_program
 from tests.frontend_support import FROZEN, StageTestCase, fixture_roots, load_corpus, load_json, write_files
 
@@ -71,6 +71,7 @@ class CheckFrozenTest(StageTestCase):
         self.assertEqual(sorted(set(rules.values()) - covered), [])
 
     @slow
+    @timeout(1800)
     def test_the_programs_of_the_cases_of_the_racket_checker_tests(self):
         programs = load_json("corpus/checker-programs.json")
         self.assertGreater(len(programs), 400)
@@ -78,6 +79,7 @@ class CheckFrozenTest(StageTestCase):
         self.assert_manifest(self.run_cases(cases), "check/programs.sha256", cases)
 
     @slow
+    @timeout(1800)
     def test_1500_mutated_programs(self):
         cases = {"m%d" % n: text for n, text in enumerate(load_json("check/mutated.json"))}
         outputs = self.run_cases(cases, folder="mutated")
@@ -86,6 +88,7 @@ class CheckFrozenTest(StageTestCase):
         self.assertGreater(checked, 150, "%d of 1500 mutants reach the checker" % checked)
 
     @slow
+    @timeout(1800)
     def test_examples_and_the_vm_fixtures(self):
         # The programs import files of the subfolders, so the whole corpus is written.
         files = load_corpus("examples", "fixtures")
@@ -95,6 +98,7 @@ class CheckFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "check/corpus.sha256", files)
 
     @slow
+    @timeout(1800)
     def test_every_std_module_and_the_compiler(self):
         stdlib = load_corpus("stdlib")
         wrappers = {}
@@ -110,6 +114,7 @@ class CheckFrozenTest(StageTestCase):
         self.assert_manifest(outputs, "check/std-compiler.sha256", cases)
 
     @slow
+    @timeout(1800)
     def test_trees_around_the_nesting_limit_give_the_same_types_or_the_same_too_deep(self):
         cases = {"deep-" + name: text for name, text in check_deep_cases().items()}
         outputs = self.run_cases(cases, folder="deep")
@@ -120,9 +125,10 @@ class CheckFrozenTest(StageTestCase):
         self.assertFalse(outputs["deep-chain-900"].startswith("ERROR"))
 
     @slow
+    @timeout(1800)
     def test_a_generated_program_of_1000_functions_checks_in_the_same_time_class_as_the_link(self):
         cases = {"generated": check_generated_program(1000)}
         started = time.monotonic()
         outputs = self.run_cases(cases, folder="generated")
-        self.assertLess(time.monotonic() - started, 120)
+        self.assertLess(time.monotonic() - started, scaled(120))
         self.assert_manifest(outputs, "check/generated.sha256", cases)

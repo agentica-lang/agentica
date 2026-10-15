@@ -10,7 +10,7 @@ rebuilt here; the manifests hold their hashes.
 import json
 import re
 
-from tests.agentica_test import FIXTURES, ROOT, compile_agc, run_vm, slow, vm_environment
+from tests.agentica_test import FIXTURES, ROOT, compile_agc, run_vm, scaled, slow, timeout, vm_environment
 from tests.frontend_cases import lower_deep_cases, lower_generated_program, wide_span_programs
 from tests.frontend_support import FROZEN, StageTestCase, load_corpus, sections, sha256, write_files
 from tests.test_frontend_check import direct_files
@@ -58,7 +58,7 @@ class BytecodeFrozenTest(StageTestCase):
     ENTRY = "bytecode.agc"
     STDLIB = True
 
-    def compile_paths(self, paths, directory, timeout=1800):
+    def compile_paths(self, paths, directory, timeout=scaled(1800)):
         """Compile each path (relative to `directory`) to a file of its own.
 
         Gives {path: what the Racket writer froze for it}: the size and the hash of the file it wrote without the version
@@ -140,7 +140,7 @@ class BytecodeFrozenTest(StageTestCase):
 
     def test_the_writer_reaches_the_limits_and_the_internal_errors_as_the_racket_writer_does(self):
         bytecode = compile_agc(LIMITS_FIXTURE, self.stage_dir / "limits.agcb")
-        result = run_vm(bytecode, args=["--version=%s" % VERSION], cwd=ROOT, env=vm_environment(), timeout=300)
+        result = run_vm(bytecode, args=["--version=%s" % VERSION], cwd=ROOT, env=vm_environment(), timeout=scaled(300))
         self.assertEqual(result.code, 0, result.stderr)
         self.assertGreater(len(scenario_names("SCENARIOS")), 15)
         self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits.expected")
@@ -178,6 +178,7 @@ class BytecodeFrozenTest(StageTestCase):
         self.assert_golden(found, FROZEN / "bytecode" / "runs.expected")
 
     @slow
+    @timeout(3600)
     def test_the_vm_fixtures(self):
         files = load_corpus("fixtures")
         paths = direct_files(files, "tests/fixtures/vm")
@@ -186,6 +187,7 @@ class BytecodeFrozenTest(StageTestCase):
         self.assert_manifest(results, "bytecode/vm.sha256", files)
 
     @slow
+    @timeout(3600)
     def test_every_std_module_and_the_compiler(self):
         wrappers = {}
         for path in load_corpus("stdlib"):
@@ -201,16 +203,18 @@ class BytecodeFrozenTest(StageTestCase):
         self.assert_manifest(results, "bytecode/std-compiler.sha256", dict(wrappers, **files))
 
     @slow
+    @timeout(3600)
     def test_trees_at_the_nesting_limit_and_a_generated_program_are_written_with_equal_bytes(self):
         cases = {"generated": lower_generated_program(300)}
         cases.update({"deep-" + name: text for name, text in lower_deep_cases().items()})
         self.assert_manifest(self.compile_cases(cases, "deep"), "bytecode/deep.sha256", cases)
 
     @slow
+    @timeout(3600)
     def test_the_writer_matches_the_racket_writer_on_the_large_limit_scenarios(self):
         bytecode = compile_agc(LIMITS_FIXTURE, self.stage_dir / "limits.agcb")
         result = run_vm(bytecode, args=["slow", "--version=%s" % VERSION], cwd=ROOT, env=vm_environment(),
-                        timeout=1800)
+                        timeout=scaled(1800))
         self.assertEqual(result.code, 0, result.stderr)
         self.assertEqual(len(scenario_names("SLOW_SCENARIOS")), 4)
         self.assert_golden(result.stdout, FROZEN / "bytecode" / "limits-slow.expected")

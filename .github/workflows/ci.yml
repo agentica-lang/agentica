@@ -33,11 +33,16 @@ concurrency:
 permissions:
   contents: read
 
+# The runners can be slow (a capped CPU frequency): every deadline of the tests is multiplied by this, and so are the
+# per-module limits of the Makefile (references/ci.md in the development skill has the three layers).
+env:
+  AGENTICA_TEST_TIMEOUT_SCALE: '4'
+
 jobs:
   warm-cache:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - id: racket
@@ -67,7 +72,7 @@ jobs:
   warm-unicode:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - id: racket
@@ -96,7 +101,7 @@ jobs:
   warm-third-party:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       AGENTICA_GC: vendored
     steps:
@@ -119,7 +124,7 @@ jobs:
   dup-check:
     if: github.event_name == 'push'
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -132,7 +137,7 @@ jobs:
   test:
     if: github.event_name != 'push'
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 45
+    timeout-minutes: 150
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
@@ -241,7 +246,7 @@ jobs:
     needs: test
     if: ${{ !cancelled() && github.event_name != 'push' && needs.test.outputs.vm != 'false' }}
     runs-on: [self-hosted, linux, docker-runner]
-    timeout-minutes: 75
+    timeout-minutes: 150
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled

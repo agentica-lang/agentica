@@ -18,7 +18,7 @@ import tempfile
 from collections import namedtuple
 from pathlib import Path
 
-from tests.agentica_test import FIXTURES, ROOT, TestCase, compile_agc, run_vm, vm_environment
+from tests.agentica_test import FIXTURES, ROOT, TestCase, compile_agc, run_vm, scaled, vm_environment
 
 FROZEN = FIXTURES / "frontend" / "frozen"
 
@@ -35,7 +35,7 @@ def refreezing():
 HERMETIC_ENVIRONMENT = vm_environment({"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"})
 
 # The default limit of one stage run over a corpus; a case that is big or slow passes its own.
-STAGE_TIMEOUT = 600
+STAGE_TIMEOUT = scaled(600)
 
 Entry = namedtuple("Entry", "output_sha size input_sha key")
 

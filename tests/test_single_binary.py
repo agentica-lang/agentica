@@ -12,7 +12,8 @@ import random
 import re
 import struct
 
-from tests.agentica_test import FIXTURES, ROOT, TestCase, cli, compile_agc, require, run, run_vm, vm_environment
+from tests.agentica_test import (FIXTURES, ROOT, TestCase, cli, compile_agc, require, run, run_vm, scaled,
+                                 vm_environment)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
@@ -109,7 +110,7 @@ class SingleBinary(TestCase):
         ]
         for words in cases + [[str(ROOT / "examples" / name)] for name in ("hello.agc", "queue.agc", "json-modules.agc")]:
             with self.subTest(words=words):
-                got = self.agentica(*words, cwd=directory, timeout=30)
+                got = self.agentica(*words, cwd=directory, timeout=scaled(30))
                 self.assertEqual(got, self.racket(*words, cwd=directory))
         self.assertFalse((directory / "out.agcb").exists())
         # The line of a file that is not UTF-8 is shown with U+FFFD, as Racket shows it.
@@ -228,7 +229,7 @@ class SingleBinary(TestCase):
                 # A named pipe is refused at once, not waited for.
                 (["--front-end", pipe], "agentica: cannot read %s\n" % pipe),
                 (["--front-end"], "agentica: --front-end needs a file\n")):
-            got = self.agentica(*words, timeout=10)
+            got = self.agentica(*words, timeout=scaled(10))
             self.assertEqual((got.code, got.stdout, got.stderr), (2, "", message))
 
     def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(self):
@@ -240,7 +241,7 @@ class SingleBinary(TestCase):
         self.assertFalse(trace.exists())
         # The program of a run would not start with this variable, so the front end does not compile for it either.
         refused = self.agentica(ROOT / "examples" / "hello.agc",
-                                env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": "soon"}), timeout=10)
+                                env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": "soon"}), timeout=scaled(10))
         self.assertEqual((refused.code, refused.stdout), (2, ""))
         self.assertIn("AGENTICA_FLUSH_TIMEOUT_MS needs an integer", refused.stderr)
 

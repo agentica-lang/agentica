@@ -14,10 +14,10 @@ import subprocess
 import sys
 import unittest
 
-from tests.agentica_test import FIXTURES, TestCase, vm_binary, vm_environment
+from tests.agentica_test import FIXTURES, TestCase, scaled, vm_binary, vm_environment
 
 VM_FIXTURES = FIXTURES / "vm"
-WAIT_SECONDS = 60
+WAIT_SECONDS = scaled(60)
 
 TRACE_LINE = re.compile(
     rb'^agc-trace \+[0-9]+\.[0-9]{6} (sched|io|proc|tls|loader|gc) [a-z_]+'

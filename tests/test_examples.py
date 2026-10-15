@@ -11,11 +11,11 @@ import os
 import select
 import time
 
-from tests.agentica_test import ROOT, Child, TestCase, cli, run, slow, vm_environment
+from tests.agentica_test import ROOT, Child, TestCase, cli, run, scaled, slow, vm_environment
 
 EXAMPLES = ROOT / "examples"
 STEP_BUDGET = "5000000"
-WAIT_SECONDS = 20
+WAIT_SECONDS = scaled(20)
 
 
 def compact(value):
