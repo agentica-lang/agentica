@@ -113,6 +113,12 @@ Designed, not scheduled: packages (§45,
 table. Its first step, the TOML parser `std/toml` (45-0), is a std module and
 may land before the bootstrap. The manager waits for step 8 of §35.4.
 
+Designed, not scheduled: signals ([§46](../future/46-signals.md)). It has no
+row in this table. It may land before the bootstrap if the owner schedules
+it: its VM parts (46a and 46b) are C code and builtin table rows, which row
+7.2.7 allows. They need no new syntax, and the compiler catalog gets the same
+rows.
+
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
 diagnostics, behavior tests, grammar, and the self-contained programming
