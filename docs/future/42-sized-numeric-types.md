@@ -520,8 +520,9 @@ With (C), the operations are:
   new type-table kinds (`AGC_TYPE_*` in `vm/value.h`), and the loader rejects an
   unknown kind (`load_types` in `vm/loader.c`). A `Float32` literal needs a new
   constant kind that holds its decimal text (§42.5): the binary64 constant kind
-  would round twice. So the format goes to version 5 (version 4 is the struct
-  update `with` of 15c; version 6 if §41 lands first, 41.18). The writer of the
+  would round twice. So the format goes to version 6 (version 4 is the struct
+  update `with` of 15c, version 5 is the module constants of §44; version 7 if
+  §41 lands first, 41.18). The writer of the
   Agentica compiler emits that version, and the steps of §35.3 ("New `.agcb`
   format") apply: the old `stage0` compiles the new compiler, which then
   compiles itself. The Racket writer is not changed, since it is frozen.
