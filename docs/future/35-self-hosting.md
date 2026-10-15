@@ -801,7 +801,7 @@ for the 290 of `src/bytecode.rkt`. Notes:
   1,040 of the 10,000 frames. Measured: starting the writer 8,950 frames deeper
   still writes the 1,024-level type, and 9,000 overflows with 995 frames of
   `type_id` on the stack.
-- Speed (measured under load, load average above 2): a generated program of
+- Speed (load average about 1.7): a generated program of
   1,500 functions (230,000 instructions, 8.2 MB of output) takes 17 s in the
   Agentica pipeline, 2.3 s of it lowering and 9 s the writer, against 10 s for
   the whole Racket `compile`. 6 s of the writer is the span table: one
