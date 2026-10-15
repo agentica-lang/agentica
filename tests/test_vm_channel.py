@@ -65,18 +65,33 @@ class VmChannel(TestCase):
         source.write_text(PROGRAM)
         bytecode = compile_agc(source, work / "pool.agcb")
         # The VM runs beside the peer, so it is a child process that is read line by line.
-        # Its own session lets cleanup kill it and anything it spawned, even after a failure.
+        # Its own session lets stop() kill it and anything it spawned; try/finally rather than addCleanup,
+        # because cleanups do not run on KeyboardInterrupt and the VM would outlive the test run.
         vm = subprocess.Popen([str(vm_binary()), "--", str(bytecode)], stdin=subprocess.DEVNULL,
                               stdout=subprocess.PIPE, text=True, start_new_session=True)
-        self.addCleanup(self.stop, vm)
+        try:
+            self.check_pool(vm)
+        finally:
+            self.stop(vm)
+
+    def check_pool(self, vm):
         output = queue.Queue()
-        threading.Thread(target=lambda: [output.put(line) for line in vm.stdout], daemon=True).start()
+
+        def read_lines():
+            for line in vm.stdout:
+                output.put(line)
+            output.put(None)  # end of output: a VM that died at start must not make next_line wait
+
+        threading.Thread(target=read_lines, daemon=True).start()
 
         def next_line():
             try:
-                return output.get(timeout=WAIT_SECONDS).rstrip("\n")
+                line = output.get(timeout=WAIT_SECONDS)
             except queue.Empty:
                 raise AssertionError("no line within %s s" % WAIT_SECONDS)
+            if line is None:
+                raise AssertionError("VM exited: %r" % vm.poll())
+            return line.rstrip("\n")
 
         port = int(next_line())
         self.assertGreater(port, 0)

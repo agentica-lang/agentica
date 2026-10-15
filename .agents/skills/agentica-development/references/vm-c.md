@@ -5,7 +5,7 @@ Read before writing or reviewing C in `vm/`.
 Read first: `references/vm.md` (the trust model and the layers).
 
 **C style.** C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
-`tests/vm-style-test.rkt` check the rules marked *checked*.
+`tests/test_vm_style.py` check the rules marked *checked*.
 
 - File order: includes, macros, every `struct`/`typedef`/`enum`/`union`
   definition, static data, functions. No type definition between functions
@@ -34,7 +34,7 @@ Read first: `references/vm.md` (the trust model and the layers).
   `*/` lines do not count): what the file is, its main functions or builtin
   family, its layer, and where its design lives in `docs/vm/`, as `vm/main.c`
   does. A C test's header is 1 to 4 lines on what it tests. A legal header may
-  come before it. *Checked* by `tests/vm-style-test.rkt` (3 to 8 lines of text
+  come before it. *Checked* by `tests/test_vm_style.py` (3 to 8 lines of text
   for a source file, 1 to 4 for a C test, the generated file skipped).
 - Comments are welcome where the C is complex or not obvious, and they say
   why, not what: an invariant, a subtle ownership or lifetime rule, GC

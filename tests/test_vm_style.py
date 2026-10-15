@@ -92,7 +92,9 @@ def top_level_headers(text):
                     j += 1
             i, line_start = j, True
             continue
-        line_start = False
+        # Whitespace keeps line_start, so an indented directive is still skipped like the Racket scanner does.
+        if not c.isspace():
+            line_start = False
         if c == "/" and at(i + 1) == "/":
             while i < n and at(i) != "\n":
                 i += 1
@@ -114,7 +116,6 @@ def top_level_headers(text):
             if depth == 0:
                 header += " "
             i += 1
-            line_start = False
         elif depth == 0:
             if c == ";":
                 if re.match(r"\s*(typedef\b|((_Noreturn|inline)\s+)*static\b)", header):
@@ -185,7 +186,9 @@ class VmStyle(TestCase):
             "static const int k[] = {1};\n"
             "static struct p *h(void) { return 0; }\n"
             "struct late {\n  int b;\n};\n"
-            "typedef struct late late_t;\n")
+            "typedef struct late late_t;\n"
+            "  #define B {\n")
+        # The last line is an indented directive: its brace opens nothing.
         self.assertEqual([line for line, _ in headers], [4, 5, 6, 7, 8, 10, 14, 15, 16, 19])
         self.assertEqual([header_kind(h) for _, h in headers],
                          ["prototype", "data", "data", "type", "data", "function", "data", "function",

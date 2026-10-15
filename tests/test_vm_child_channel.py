@@ -37,7 +37,7 @@ class ChildChannel(TestCase):
                          lines('first: error("network: operation timed out")',
                                'second: error("process: channel is closed")',
                                'send: error("process: channel is closed")'))
-        self.assertTrue(part("idle", "waited"))
+        self.assertIs(part("idle", "waited"), True)
         bare = lines('read: error("process: no parent channel")',
                      'send: error("process: no parent channel")',
                      'zero: error("network: timeout must be positive milliseconds")')
@@ -54,7 +54,7 @@ class ChildChannel(TestCase):
         for kind in ("file", "device", "writeonly", "fifo"):
             self.assertEqual(pinned[kind]["exit"], 0, kind)
         self.assertEqual(pinned["file"]["head"], refused)
-        self.assertTrue(pinned["file"]["target"].endswith("/plain.txt"))
+        self.assertIs(pinned["file"]["target"].endswith("/plain.txt"), True)
         self.assertEqual(pinned["file"]["content"], "")
         self.assertEqual(pinned["writeonly"]["head"], refused)
         self.assertEqual(pinned["device"]["head"], refused)
