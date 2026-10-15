@@ -539,6 +539,11 @@
      (order-problem '(("root.agc" . "def helper() -> Void\nend\n\nexport struct Late\nend\n\n")))
      '(CHECK-DECL-ORDER "root.agc" 4 1)))
 
+  (test-case "a private enum after a function is out of order, at the enum"
+    (check-equal?
+     (order-problem '(("root.agc" . "def main() -> Void\nend\n\nenum Late\n  A\nend\n\n")))
+     '(CHECK-DECL-ORDER "root.agc" 4 1)))
+
   (test-case "an import after a declaration is out of order"
     (check-equal?
      (order-problem '(("lib.agc" . "export def go() -> Void\nend\n\n")
