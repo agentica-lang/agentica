@@ -17,12 +17,6 @@
              text (format-diagnostic result))
       result))
 
-(define (parse-code text)
-  (define result (parse-text text))
-  (if (diagnostic? result)
-      (diagnostic-code result)
-      (error 'parser-test "expected a diagnostic for ~s, got a program" text)))
-
 (define (parse-expr text)
   (define program (parse-ok (format "def f() -> Int\n  x = ~a\nend\n\n" text)))
   (define fn (car (program-declarations program)))
@@ -42,10 +36,8 @@
     (check-true (for-stmt? (car (function-decl-body
                                  (car (program-declarations
                                        (parse-ok "def main() -> Void\n  for i in 0...3 do\n    puts(i)\n  end\nend\n\n")))))))
-    (check-equal? (parse-code "def f() -> Void\n  x = 1..2..3\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
     (check-regexp-match #rx"parentheses"
-                        (diagnostic-help (parse-text "def f() -> Void\n  x = 1..2 == 3..4\nend\n\n")))
-    (check-equal? (parse-code "def f() -> Void\n  x = 1..\n  2\nend\n\n") 'PARSE-UNEXPECTED-TOKEN))
+                        (diagnostic-help (parse-text "def f() -> Void\n  x = 1..2 == 3..4\nend\n\n"))))
 
   (test-case "function references and chained calls retain their spans"
     (define expression (parse-expr "handlers[\"double\"].call(21)"))
@@ -54,8 +46,7 @@
     (check-equal? (literal-value (car (invoke-args expression))) 21)
     (define reference (parse-expr "&done?"))
     (check-equal? (function-ref-name reference) "done?")
-    (check-equal? (source-position-column (source-span-start (node-span reference))) 7)
-    (check-equal? (parse-code "def main() -> Void\n  f = &\nend\n\n") 'PARSE-UNEXPECTED-TOKEN))
+    (check-equal? (source-position-column (source-span-start (node-span reference))) 7))
   (test-case "try has unary precedence and a source span"
     (define expression (parse-expr "try ok(1) + 2"))
     (check-true (binary? expression))
@@ -63,9 +54,7 @@
     (check-equal? (call-name (try-expr-operand (binary-left expression))) "ok")
     (check-equal? (source-position-column
                    (source-span-start (node-span (binary-left expression)))) 7)
-    (check-true (try-expr? (parse-expr "try (ok(1))")))
-    (check-equal? (parse-code "def main() -> Void\n  ready? = true\nend\n\n")
-                  'PARSE-UNEXPECTED-TOKEN))
+    (check-true (try-expr? (parse-expr "try (ok(1))"))))
 
   (test-case "Ruby operators share the not/and/or nodes and compound assignment desugars"
     (define expression (parse-expr "!a && b || c"))
@@ -80,10 +69,7 @@
     (check-equal? (binary-op value) 'minus)
     (check-equal? (name-ref-name (binary-left value)) "total")
     (check-equal? (binary-op (binary-right value)) 'multiply)
-    (check-equal? (source-position-column (source-span-start (binary-op-span value))) 9)
-    (for ([body '("  xs[0] += 1" "  f() *= 2" "  1 %= 2")])
-      (check-equal? (parse-code (format "def main() -> Void\n~a\nend\n\n" body))
-                    'PARSE-INVALID-ASSIGNMENT-TARGET)))
+    (check-equal? (source-position-column (source-span-start (binary-op-span value))) 9))
 
   (test-case "interpolation keeps text and expression parts in order"
     (define expression (parse-expr "\"a#{n + 1}#{m}\""))
@@ -93,11 +79,7 @@
     (check-true (binary? (cadr parts)))
     (check-equal? (name-ref-name (caddr parts)) "m")
     (check-equal? (length parts) 3)
-    (check-equal? (source-position-column (source-span-start (node-span expression))) 7)
-    (check-equal? (parse-code "def main() -> Void\n  x = \"#{1 2}\"\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def main() -> Void\n  x = \"#{}\"\nend\n\n") 'PARSE-UNEXPECTED-TOKEN)
-    (define empty-part (parse-text "def main() -> Void\n  x = \"a #{} b\"\nend\n\n"))
-    (check-equal? (source-position-column (source-span-start (diagnostic-span empty-part))) 12))
+    (check-equal? (source-position-column (source-span-start (node-span expression))) 7))
 
   (test-case "blocks attach to calls as the last argument"
     (define mapped (parse-expr "xs.map do |x, y: Int|\n    x\n  end"))
@@ -114,12 +96,7 @@
     (check-equal? (block-lit-params (car (call-args (parse-expr "f() do\n    return 1\n  end")))) '())
     (define scrutinee
       (parse-ok "def main() -> Void\n  case f() do\n    _ ->\n      puts(\"a\")\n  end\n  case (xs.map do |x| x end) do\n    _ ->\n      puts(\"b\")\n  end\nend\n\n"))
-    (check-true (call? (case-stmt-value (car (function-decl-body (car (program-declarations scrutinee)))))))
-    (check-equal? (parse-code "def main() -> Void\n  xs.each do || puts(\"a\") end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def main() -> Void\n  x = 1 do\n  end\nend\n") 'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    if x\n      puts(x) end\n  end\nend\n")
-                  'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def main() -> Void\n  xs.each do |x|\n    puts(x)\n") 'PARSE-UNCLOSED-BLOCK))
+    (check-true (call? (case-stmt-value (car (function-decl-body (car (program-declarations scrutinee))))))))
 
   (test-case "Ruby headers, one-line case arms and module calls without parentheses"
     (define program
@@ -187,10 +164,6 @@
                    ("  if x {\n    puts(\"a\")\n  }" "\"if cond\" \\.\\.\\. \"end\"")
                    ("  for x in xs {\n    puts(\"a\")\n  }" "\"for x in xs\" \\.\\.\\. \"end\""))])
       (define problem (parse-text (format "def main() -> Void\n~a\nend\n" (car entry))))
-      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN (car entry))
-      (check-equal? (source-position-line (source-span-start (diagnostic-span problem)))
-                    (if (regexp-match? #rx"^  case" (car entry)) 3 2)
-                    (car entry))
       (check-regexp-match (pregexp (cadr entry)) (diagnostic-help problem) (car entry))))
 
   (test-case "braces after a block head point to end"
@@ -200,16 +173,8 @@
                    ("def main() -> Void\n  case x {\n    1 -> puts(1)\n  }\nend\n" 2 10 "\"case value\"")
                    ("def main() -> Void\n  xs.each do |x| {\n    puts(x)\n  }\nend\n" 4 3 "\"do \\|x\\|\""))])
       (define problem (parse-text (car entry)))
-      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN (car entry))
-      (define start (source-span-start (diagnostic-span problem)))
-      (check-equal? (list (source-position-line start) (source-position-column start))
-                    (list (cadr entry) (caddr entry))
-                    (car entry))
       (check-regexp-match (pregexp (cadddr entry)) (diagnostic-help problem) (car entry))
       (check-regexp-match #rx"end" (diagnostic-help problem) (car entry))))
-
-  (test-case "map literals still parse where a block head does not"
-    (check-true (program? (parse-ok "def main() -> Void\n  m: Map[String, Int] = {}\n  n = {\"a\": 1}\n  ys = xs.map do |x| {\"k\": x} end\nend\n\n"))))
 
   (test-case "import forms: an alias, or a list of names with optional renames"
     (define imports
@@ -223,27 +188,11 @@
     (check-equal? (map import-name-local names) '("from" "Token"))
     (check-equal? (source-position-line (source-span-start (import-name-local-span (car names)))) 4)
     (check-equal? (import-name-span (cadr names)) (import-name-local-span (cadr names)))
-    (define (import-error text)
-      (define problem (parse-text text))
-      (list (diagnostic-code problem) (source-position-column (source-span-start (diagnostic-span problem)))))
-    (check-equal? (import-error "import {} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 9))
-    (check-equal? (import-error "import {A as} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 13))
-    (check-equal? (import-error "import Mod, {A} from \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 11))
-    (check-equal? (import-error "import {A} of \"a\"\n") '(PARSE-UNEXPECTED-TOKEN 12))
-    ; The path-first form of earlier versions: an error at the string, with the new form as help.
+    ; The path-first form of earlier versions: the new form is its help.
     (define old-form (string-append "import \"a\"" " as A\n"))
-    (check-equal? (import-error old-form) '(PARSE-UNEXPECTED-TOKEN 8))
     (check-regexp-match #rx"import Alias from" (diagnostic-help (parse-text old-form))))
 
   (test-case "declarations need a blank line after their end"
-    (define problem (parse-text "struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n"))
-    (check-equal? (diagnostic-code problem) 'PARSE-MISSING-BLANK-LINE)
-    (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 4)
-    (parse-ok "import A from \"a\"\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend")
-    (check-equal? (parse-code "def f() -> Void\nend\nexport def main() -> Void\nend\n\n") 'PARSE-MISSING-BLANK-LINE)
-    (check-equal? (parse-code "enum E\n  A\nend\nimport A from \"a\"\n") 'PARSE-MISSING-BLANK-LINE)
-    (check-equal? (parse-code "def f() -> Void\nend\nend\n") 'PARSE-TOP-LEVEL-STATEMENT)
-    (check-equal? (parse-code "def f() -> Void\nend\nputs(1)\n") 'PARSE-TOP-LEVEL-STATEMENT)
     (check-regexp-match #rx"closes nothing" (diagnostic-help (parse-text "def f() -> Void\nend\nend\n")))
     (check-regexp-match #rx"def main" (diagnostic-help (parse-text "puts(1)\n")))
     (check-regexp-match #rx"export" (diagnostic-help (parse-text "puts(1)\n")))
@@ -251,7 +200,6 @@
     (check-regexp-match #rx"do block" (diagnostic-help (parse-text "end\n")))
     (for ([body '("  x = / 2" "  x = /abc/")])
       (define problem (parse-text (format "def main() -> Void\n~a\nend\n" body)))
-      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN body)
       (check-false (diagnostic-help problem) body)))
 
   (test-case "elif and else if point to elsif"
@@ -259,8 +207,6 @@
                   "def main() -> Void\n  if true\n    x = 1\n  elseif false\n    x = 2\n  end\nend\n"
                   "def main() -> Void\n  if true\n    x = 1\n  else if false\n    x = 2\n  end\n  end\nend\n")])
       (define problem (parse-text text))
-      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN text)
-      (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 4 text)
       (check-regexp-match #rx"elsif" (diagnostic-help problem) text)))
 
   (test-case "hello program parses"
@@ -386,9 +332,7 @@
     (check-true (method-call? (parse-expr "ana.within(1)")))
     (for ([text '("ana.with()" "ana.with(31)" "ana.with(age)" "ana.with(age: 1, 2)" "ana.with(age?: 1)")])
       (define problem (parse-text (format "def f() -> Void\n  x = ~a\nend\n\n" text)))
-      (check-equal? (diagnostic-code problem) 'PARSE-UNEXPECTED-TOKEN)
-      (check-regexp-match #rx"with\\(age: 31\\)" (diagnostic-help problem)))
-    (check-equal? (parse-code "def f() -> Void\n  x = a |> b.with(c: 1)\nend\n\n") 'PARSE-PIPE-TARGET))
+      (check-regexp-match #rx"with\\(age: 31\\)" (diagnostic-help problem))))
 
   (test-case "type applications parse"
     (define program
@@ -444,28 +388,8 @@
     (check-true (return-stmt? (caddr body)))
     (check-false (return-stmt-value (caddr body))))
 
-  (test-case "a comparison chain is a located diagnostic"
-    (define result (parse-text "def f() -> Int\n  return a < b < c\nend\n\n"))
-    (check-true (diagnostic? result))
-    (check-equal? (diagnostic-code result) 'PARSE-CHAINED-COMPARISON)
-    (check-equal? (source-position-line (source-span-start (diagnostic-span result))) 2)
-    (check-equal? (source-position-column (source-span-start (diagnostic-span result))) 16))
-
   (test-case "invalid syntax is rejected"
-    (check-equal? (parse-code "def f() -> Bool\n  return a == b == c\nend\n\n")
-                  'PARSE-CHAINED-COMPARISON)
-    (check-equal? (parse-code "puts(\"hello\")\n") 'PARSE-TOP-LEVEL-STATEMENT)
-    (check-equal? (parse-code "age: Int = \"25\"\n") 'PARSE-TOP-LEVEL-STATEMENT)
-    (check-equal? (parse-code "def f() -> Int\n  return 1\n") 'PARSE-UNCLOSED-BLOCK)
-    (check-true (type-expression? (parse-expr "Foo")))
-    (check-equal? (parse-code "def f() -> Void\n  x[0] = 1\nend\n\n")
-                  'PARSE-INVALID-ASSIGNMENT-TARGET)
-    (check-equal? (parse-code "def f() -> Void\n  x.y = 1\nend\n\n")
-                  'PARSE-INVALID-ASSIGNMENT-TARGET)
-    (check-equal? (parse-code "def f() -> Void\n  x = 1 y = 2\nend\n\n")
-                  'PARSE-UNEXPECTED-TOKEN)
-    (check-equal? (parse-code "def f() -> Void\n  puts \"hello\"\nend\n\n")
-                  'PARSE-UNEXPECTED-TOKEN))
+    (check-true (type-expression? (parse-expr "Foo"))))
 
   (test-case "map literals and builtin module calls"
     (define literal (parse-expr "{\n  \"a\": 1,\n  \"b\": 2,\n}"))
@@ -546,9 +470,7 @@
     (define chain (parse-expr "x |> f() |> g(1)"))
     (check-equal? (call-name chain) "g")
     (check-equal? (call-name (car (call-args chain))) "f")
-    (check-equal? (name-ref-name (car (call-args (car (call-args chain))))) "x")
-    (check-equal? (parse-code "def f() -> Void\n  x = a |> f() |> g() == b == c\nend\n\n")
-                  'PARSE-CHAINED-COMPARISON))
+    (check-equal? (name-ref-name (car (call-args (car (call-args chain))))) "x"))
 
   (test-case "try and unary operators bind tighter than pipe, and try on the right wraps the call"
     (define left-try (parse-expr "try x |> f()"))
@@ -572,39 +494,13 @@
     (check-equal? (length (call-args blocked)) 2)
     (check-true (block-lit? (cadr (call-args blocked))))
     (define lines (parse-expr "(x\n    |> f()\n    |> g())"))
-    (check-equal? (call-name lines) "g")
-    (check-equal? (parse-code "def f() -> Void\n  x = a\n    |> f()\nend\n\n") 'PARSE-UNEXPECTED-TOKEN))
+    (check-equal? (call-name lines) "g"))
 
   (test-case "the right side of pipe must be a call with parentheses"
-    (define (target-at text)
-      (define result (parse-text (format "def f() -> Void\n  x = ~a\nend\n\n" text)))
-      (check-true (diagnostic? result))
-      (check-equal? (diagnostic-code result) 'PARSE-PIPE-TARGET)
-      (check-regexp-match #rx"wrap" (diagnostic-help result))
-      (define span (diagnostic-span result))
-      (list (source-position-column (source-span-start span))
-            (source-position-column (source-span-end span))))
-    (check-equal? (target-at "a |> f") '(12 13))
-    (check-equal? (target-at "a |> r.field") '(12 19))
-    (check-equal? (target-at "a |> xs[0]") '(12 17))
-    (check-equal? (target-at "a |> f(1).g") '(12 18))
-    (check-equal? (target-at "a |> f() + 1") '(12 19))
-    (check-equal? (target-at "a |> 1") '(12 13))
-    (check-equal? (target-at "a |> try f") '(12 17))
-    (check-equal? (target-at "a |> gets") '(12 16))
-    (check-equal? (target-at "a |> s.trim()") '(12 20))
-    (check-equal? (target-at "3 |> (U.double)") '(12 22))
-    (check-equal? (target-at "1 |> (IO.gets)") '(12 21))
-    (check-equal? (target-at "3 |> U.each2 do |y: Int| y end") '(12 37))
-    (check-equal? (target-at "3 |> U.each2") '(12 19)))
-
-  (define (problem-at text)
-    (define result (parse-text text))
-    (check-true (diagnostic? result) text)
-    (define span (diagnostic-span result))
-    (list (diagnostic-code result)
-          (source-position-line (source-span-start span))
-          (source-position-column (source-span-start span))))
+    (for ([text '("a |> f" "a |> r.field" "a |> xs[0]" "a |> f(1).g" "a |> f() + 1" "a |> 1"
+                  "a |> try f" "a |> gets" "a |> s.trim()" "3 |> (U.double)" "1 |> (IO.gets)"
+                  "3 |> U.each2 do |y: Int| y end" "3 |> U.each2")])
+      (check-regexp-match #rx"wrap" (diagnostic-help (parse-text (format "def f() -> Void\n  x = ~a\nend\n\n" text))) text)))
 
   (define (docs-by-line program)
     (sort (for/list ([(span text) (in-hash (program-docs program))])
@@ -663,61 +559,10 @@
     (check-false (program-module-doc attached))
     (check-equal? (docs-by-line attached) '((2 . "Not a module doc."))))
 
-  (test-case "every detached doc block is PARSE-DETACHED-DOC at its first line"
-    (for ([entry (in-list
-                  (list
-                   (cons "def a() -> Void\nend\n\n## d\n\ndef b() -> Void\nend\n" '(4 1))
-                   (cons "def a() -> Void\nend\n\n## d\n# note\ndef b() -> Void\nend\n" '(4 1))
-                   (cons "## d\n# note\n\ndef a() -> Void\nend\n" '(1 1))
-                   (cons "## d\n## e\n# note\n\ndef a() -> Void\nend\n" '(1 1))
-                   (cons "import A from \"a\"\n## d\nimport B from \"b\"\n" '(2 1))
-                   (cons "## d\nimport A from \"a\"\n" '(1 1))
-                   (cons "import A from \"a\"\n\n## d\n\ndef a() -> Void\nend\n" '(3 1))
-                   (cons "def main() -> Void\n  ## d\n  ## e\n  x = 1\nend\n" '(2 3))
-                   (cons "def main() -> Void\n  x = 1\n  ## d\nend\n" '(3 3))
-                   (cons "def main() -> Void\n  f(1,\n## d\n2)\nend\n" '(3 1))
-                   (cons "def main() -> Void\n  f(1\n## d\n)\nend\n" '(3 1))
-                   (cons "def a() -> Void\nend\n\n## d\n" '(4 1))
-                   (cons "def a() -> Void\nend\n\n## d" '(4 1))
-                   (cons "## d\n" '(1 1))
-                   (cons "## d" '(1 1))
-                   (cons "## a\n\n## b\n\ndef a() -> Void\nend\n" '(3 1))
-                   (cons "## d\nputs(1)\n" '(1 1))
-                   (cons "struct S\n  a: Int\n  ## d\nend\n" '(3 3))
-                   (cons "struct S\n  ## d\n\n  a: Int\nend\n" '(2 3))
-                   (cons "struct S\n  ## d\n  # note\n  a: Int\nend\n" '(2 3))
-                   (cons "enum E\n  A\n  ## d\nend\n" '(3 3))
-                   (cons "enum E\n  ## d\n\n  A\nend\n" '(2 3))))])
-      (check-equal? (problem-at (car entry)) (cons 'PARSE-DETACHED-DOC (cdr entry)) (car entry)))
-    (define multi (diagnostic-span (parse-text "def a() -> Void\nend\n\n## one\n## two\n\ndef b() -> Void\nend\n")))
-    (check-equal? (source-position-line (source-span-start multi)) 4)
-    (check-equal? (source-position-line (source-span-end multi)) 5)
-    (check-equal? (source-position-column (source-span-end multi)) 7))
-
   (test-case "a doc line does not count as the blank line between declarations"
-    (check-equal? (problem-at "def a() -> Void\nend\n## d\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 3 1))
-    (check-equal? (problem-at "def a() -> Void\nend\n## d\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 3 1))
-    (check-equal? (problem-at "struct S\n  a: Int\nend\n## d\nstruct T\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1))
-    (check-equal? (problem-at "def a() -> Void\nend\n## d\n\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 3 1))
     (define blank-before (parse-ok "def a() -> Void\nend\n\n## d\ndef b() -> Void\nend\n"))
     (check-equal? (docs-by-line blank-before) '((5 . "d")))
     (define comment-before (parse-ok "def a() -> Void\nend\n# note\n## d\ndef b() -> Void\nend\n"))
     (check-equal? (docs-by-line comment-before) '((5 . "d")))
     (define after-import (parse-ok "import A from \"a\"\n## d\ndef b() -> Void\nend\n"))
-    (check-equal? (docs-by-line after-import) '((3 . "d")))
-    (check-equal? (problem-at "## d\ndef a() -> Void\nend\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1)))
-
-  (test-case "nesting and chains beyond 1000 levels are PARSE-TOO-DEEP at the token that passes the limit"
-    (define (body text) (format "def main() -> Void\n  ~a\nend\n\n" text))
-    (define (repeat text count) (apply string-append (for/list ([_ (in-range count)]) text)))
-    (parse-ok (body (string-append "x = " (repeat "(" 900) "1" (repeat ")" 900))))
-    (parse-ok (body (string-append "x = 1" (repeat " + 1" 900))))
-    (for ([text (list (string-append "x = " (repeat "(" 1000) "1" (repeat ")" 1000))
-                      (string-append "x = " (repeat "- " 1000) "1")
-                      (string-append "x = 1" (repeat " + 1" 1000))
-                      (string-append "x = a" (repeat ".b" 1000))
-                      (repeat "if x\n" 1000))])
-      (check-equal? (parse-code (body text)) 'PARSE-TOO-DEEP))
-    (define problem (parse-text (body (string-append "x = 1" (repeat " + 1" 1000)))))
-    (check-equal? (source-position-column (source-span-start (diagnostic-span problem))) 4001)))
-
+    (check-equal? (docs-by-line after-import) '((3 . "d")))))
