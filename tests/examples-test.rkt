@@ -185,38 +185,12 @@
                               (abs (- (remainder from width) (remainder to width))))
                             1))))))
 
-  (test-case "algorithm examples reject malformed input before producing a solution"
-    (define maze-program (file->string (build-path examples-dir "maze-bfs.agc")))
-    (for ([grid (list (list (make-string 33 #\.)) (make-list 33 "."))])
+  (test-case "algorithm examples reject input that is not JSON"
+    (for ([name '("maze-bfs.agc" "knight-tour.agc" "traveling-salesman.agc")])
       (define-values (out result)
-        (run-text-io maze-program (jsexpr->string (hasheq 'grid grid 'start 0 'goal 0))
-                     #:max-steps 5000000))
+        (run-text-io (file->string (build-path examples-dir name)) "not JSON" #:max-steps 5000000))
       (check-equal? result (void))
-      (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))
-    (for ([entry '(("maze-bfs.agc" "not JSON" "{\"grid\":[],\"start\":0,\"goal\":0}"
-                   "{\"grid\":[\"\"],\"start\":0,\"goal\":0}"
-                   "{\"grid\":[\"..\",\".\"],\"start\":0,\"goal\":1}"
-                   "{\"grid\":[\"..\",\".x\"],\"start\":0,\"goal\":1}"
-                   "{\"grid\":[\"..\",false],\"start\":0,\"goal\":1}"
-                   "{\"grid\":[\"..\"],\"start\":true,\"goal\":1}"
-                   "{\"grid\":[\"..\"],\"start\":0,\"goal\":1.0}"
-                   "{\"grid\":[\"..\"],\"start\":-1,\"goal\":1}"
-                   "{\"grid\":[\"..\"],\"start\":0,\"goal\":2}"
-                   "{\"grid\":[\"#.\"],\"start\":0,\"goal\":1}"
-                   "{\"grid\":[\".#\"],\"start\":0,\"goal\":1}"
-                   "{\"grid\":[\"..\"],\"start\":0}")
-                  ("knight-tour.agc" "not JSON" "{\"size\":0,\"start\":0}"
-                   "{\"size\":9,\"start\":0}" "{\"size\":8,\"start\":64}"
-                   "{\"size\":8,\"start\":-1}" "{\"size\":true,\"start\":0}" "{\"size\":8}")
-                  ("traveling-salesman.agc" "not JSON" "{\"distances\":[]}"
-                   "{\"distances\":[[0,1],[1]]}" "{\"distances\":[[1]]}"
-                   "{\"distances\":[[0,-1],[1,0]]}" "{\"distances\":[[0,1],[false,0]]}"
-                   "{\"distances\":[[0,1],[1,0.0]]}" "{\"distances\":[[0,1000000001],[1,0]]}"))])
-      (define program (file->string (build-path examples-dir (car entry))))
-      (for ([input (in-list (cdr entry))])
-        (define-values (out result) (run-text-io program input #:max-steps 5000000))
-        (check-equal? result (void))
-        (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))))
+      (check-equal? (string->jsexpr out) (hasheq 'error "invalid input"))))
 
   (test-case "stdio peers receive flushed replies while stdin stays open"
     (define file (make-temporary-file "agentica-stdio~a.agc"))
@@ -397,3 +371,38 @@
      args-file #:exists 'truncate)
     (check-equal? (cli (path->string args-file) "x" "y" "--json") '(0 "x\ny\n--json\n" ""))
     (delete-file args-file)))
+
+;; The full list of malformed inputs: one VM run each. The test tier keeps one input per program.
+(module+ slow
+  (test-case "algorithm examples reject malformed input before producing a solution"
+    (define maze-program (file->string (build-path examples-dir "maze-bfs.agc")))
+    (for ([grid (list (list (make-string 33 #\.)) (make-list 33 "."))])
+      (define-values (out result)
+        (run-text-io maze-program (jsexpr->string (hasheq 'grid grid 'start 0 'goal 0))
+                     #:max-steps 5000000))
+      (check-equal? result (void))
+      (check-equal? (string->jsexpr out) (hasheq 'error "invalid input")))
+    (for ([entry '(("maze-bfs.agc" "not JSON" "{\"grid\":[],\"start\":0,\"goal\":0}"
+                   "{\"grid\":[\"\"],\"start\":0,\"goal\":0}"
+                   "{\"grid\":[\"..\",\".\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\",\".x\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\",false],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":true,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":0,\"goal\":1.0}"
+                   "{\"grid\":[\"..\"],\"start\":-1,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":0,\"goal\":2}"
+                   "{\"grid\":[\"#.\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\".#\"],\"start\":0,\"goal\":1}"
+                   "{\"grid\":[\"..\"],\"start\":0}")
+                  ("knight-tour.agc" "not JSON" "{\"size\":0,\"start\":0}"
+                   "{\"size\":9,\"start\":0}" "{\"size\":8,\"start\":64}"
+                   "{\"size\":8,\"start\":-1}" "{\"size\":true,\"start\":0}" "{\"size\":8}")
+                  ("traveling-salesman.agc" "not JSON" "{\"distances\":[]}"
+                   "{\"distances\":[[0,1],[1]]}" "{\"distances\":[[1]]}"
+                   "{\"distances\":[[0,-1],[1,0]]}" "{\"distances\":[[0,1],[false,0]]}"
+                   "{\"distances\":[[0,1],[1,0.0]]}" "{\"distances\":[[0,1000000001],[1,0]]}"))])
+      (define program (file->string (build-path examples-dir (car entry))))
+      (for ([input (in-list (cdr entry))])
+        (define-values (out result) (run-text-io program input #:max-steps 5000000))
+        (check-equal? result (void))
+        (check-equal? (string->jsexpr out) (hasheq 'error "invalid input"))))))

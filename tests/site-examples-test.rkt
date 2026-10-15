@@ -139,16 +139,39 @@
            [else (loop (cdr rest) #f)]))))
    (lambda () (delete-directory/files directory))))
 
-(module+ test
-  (define pages
-    (sort (for/list ([path (in-directory (simplify-path content-dir))]
-                     #:when (regexp-match? #px"\\.md$" (path->string path)))
-            path)
-          string<? #:key path->string))
+(define (site-pages)
+  (sort (for/list ([path (in-directory (simplify-path content-dir))]
+                   #:when (regexp-match? #px"\\.md$" (path->string path)))
+          path)
+        string<? #:key path->string))
+
+(define (check-pages pages)
   (define counts (make-hasheq))
   (for ([page (in-list pages)])
     (test-case (path->string page)
       (check-page page counts)))
+  counts)
+
+;; Fast tier: the start page, two tour pages (module files, run and rejected
+;; programs) and the BDD page (an input block). The whole site runs in the slow
+;; tier, which the site-examples workflow also runs (make test-slow).
+(define smoke-pages
+  '("getting-started.md" "tour/modules.md" "tour/results-and-try.md" "library/testing/bdd.md"))
+
+(module+ test
+  (define pages
+    (for/list ([page (in-list (site-pages))]
+               #:when (member (path->string (find-relative-path (simplify-path content-dir) page))
+                              smoke-pages))
+      page))
+  (define counts (check-pages pages))
+  (test-case "the smoke pages exist and have examples"
+    (check-equal? (length pages) (length smoke-pages))
+    (check-true (> (hash-ref counts 'run 0) 0) "the smoke pages should have run examples")
+    (check-true (> (hash-ref counts 'module 0) 0) "the smoke pages should have module files")))
+
+(module+ slow
+  (define counts (check-pages (site-pages)))
   (check-true (> (hash-ref counts 'run 0) 100) "the site should have many run examples")
   (printf "site examples: ~a run, ~a checked only, ~a rejected by the checker, ~a module files\n"
           (hash-ref counts 'run 0) (hash-ref counts 'check 0) (hash-ref counts 'rejected 0)
