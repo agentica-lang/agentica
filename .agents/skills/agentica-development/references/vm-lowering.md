@@ -40,7 +40,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 ## Linked programs
 
 Imports never reach the VM. `src/main.rkt` (`compile` and the default run) and
-`compile-file` in `tests/vm-diff-common.rkt` run `link-program`
+the helper `compile-file` of the live front-end comparisons (`tests/vm-diff-common.rkt`) run `link-program`
 (`src/modules.rkt`) before `check`, so `lower` sees one program whose
 imported declarations carry `@N::` prefixes (display names drop them,
 `write-bytecode` uses `display-name`). The span table names its source
@@ -122,7 +122,7 @@ functions up by name.
   (windows overlap). It does not touch the depth, so a deep tail recursion
   runs (the depth rule is in `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow need a
   non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
-  deep tail-recursion case lives in `tests/vm-diff-common.rkt`. The loader
+  deep tail-recursion case lives in `tests/test_vm_diff_8.py`. The loader
   treats `TAIL_CALL` as a call for the termination rules.
 - Closures: a `block-lit` becomes an extra IR function after the declared
   ones (`block@file:line:col`), lowered by a fresh `lower-function` context;

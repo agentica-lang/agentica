@@ -173,12 +173,13 @@ fixed point from the committed stage0.
 Then one PR deletes `src/*.rkt` and the `raco distribute` release steps, and
 tags the parent commit `bootstrap-racket`, the last commit that can make a
 stage0 from Racket. It changes no test: the test rewrite is done before it, in
-[§35.10](#3510-tests-move-to-python-unittest) phases 1 to 3. Today 23 of the 51
-`tests/*.rkt` files require `src/` modules directly (16 of the 43 `*-test.rkt`).
-The per-file rewrites that this section used to list (`cli-in-process.rkt`,
+[§35.10](#3510-tests-move-to-python-unittest) phases 1 to 3. Today 22 of the 31
+`tests/*.rkt` files require `src/` modules directly (9 of the 13 `*-test.rkt`):
+the Racket stage tests, the live comparisons `frontend-*` and their helpers. The
+per-file rewrites that this section used to list (`cli-in-process.rkt`,
 `compile-file` in `vm-diff-common.rkt`, the site examples, the latency and trace
-tests, `bdd-integration.rkt`, now `tests/test_bdd_integration.py`) are phase 1
-and 2 work there.
+tests, `bdd-integration.rkt`, now `tests/test_bdd_integration.py`) are done
+(phases 1 to 3, status below).
 
 Replacing rackunit is decided: Python `unittest`, standard library only, in
 phases that run beside steps 4 to 8
@@ -1083,10 +1084,10 @@ in rackunit until phase 3.
   `std/binary` tests (PR #276: 17 cases; the latency test runs alone, by
   `make vm-latency`), and the examples and CLI tests (PR #279: 17 fast cases
   and 1 slow one).
-  `tests/vm-stack-test.rkt` stays, because `make goldens` writes its sidecars.
-  `tests/unit-test-test.rkt` waits for phase 2: it calls
-  `run-agentica-test` of `src/bdd-driver.rkt` to set a test timeout that the CLI
-  has no flag for.
+  `tests/vm-stack-test.rkt` stayed because `make goldens` wrote its sidecars,
+  and `tests/unit-test-test.rkt` because it called `run-agentica-test` of
+  `src/bdd-driver.rkt` to set a test timeout that the CLI has no flag for; both
+  moved in 8d-1 (below).
 - **Phase 2:** the golden parts of the front-end tests move to `unittest`: the
   Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
   live comparisons with the Racket stages stay in rackunit until phase 3. A file
@@ -1130,3 +1131,29 @@ in rackunit until phase 3.
   Agentica stages and prints what changed. What 8d still removes: the
   rackunit files, whose remaining cases are the Racket printer against its
   goldens and the comparisons "while Racket exists".
+  **Status: 8d-1 is done** (tests only, before the switch). The rackunit files
+  that needed the Racket front end for a reason other than a live comparison now
+  run the product CLI as a child (`tests.agentica_test.cli()`, so
+  `AGENTICA_TEST_EXECUTABLE` picks `racket src/main.rkt`, `tests/agentica-agcb`
+  or the single binary) and none of them imports Racket code:
+  `tests/vm-diff-{1..8}-test.rkt` and the golden harness of
+  `vm-diff-common.rkt` are `tests/test_vm_diff_{1..8}.py` over
+  `tests/vm_diff_support.py` (`make goldens` and `make vm-golden-check` run it
+  too; the goldens it writes are byte-identical to the checked-in ones);
+  `vm-stack-test.rkt` is `tests/test_vm_stack.py`; `site-examples-test.rkt` is
+  `tests/test_site_examples.py`; `stdlib-docs-test.rkt` is
+  `tests/test_stdlib_docs.py`, which reads the doc lines from the source text;
+  `unit-test-test.rkt` is `tests/test_unit_test.py`, where the hung-test case
+  waits for the real 30 s deadline and is `@slow`;
+  `stdlib-distribution-test.rkt` is `tests/test_stdlib_distribution.py`, which
+  copies a built executable away from the checkout (`make test-distribution`);
+  the cases of `modules-test.rkt` that run programs, and the `compile` exit-code
+  case of `bytecode-test.rkt`, are `tests/test_modules.py` and
+  `tests/test_vm_diff_8.py`; `cli-in-process.rkt` is gone. What is left in
+  rackunit needs Racket on purpose: the stage tests (`lexer-test`, `parser-test`,
+  `modules-test`, `checker-test`, `bytecode-test`, `diagnostic-test`), the live
+  comparisons (`frontend-*`, frozen by 8c) and `vm-diff-common.rkt`, which is
+  cut down to the three helpers the live comparisons use (the VM path,
+  `compile-file` and `run-process`). The in-process comparison of `compile-file`
+  with the CLI `compile` is gone with `compile-file`; the front-end bytecode
+  goldens compare the writers. 8d deletes these files with the rest.
