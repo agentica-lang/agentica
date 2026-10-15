@@ -1,4 +1,7 @@
-## The type checker (src/checker.rkt, `check`): takes a linked program and gives the type of every expression and the resolution of every method call, or the first problem. The declarations are registered first (enums, structs, variants, functions, main), then the module constants are ordered and checked, then each function is checked in program order, file by file.
+## The type checker (src/checker.rkt, `check`): takes a linked program and gives the type of every expression and the
+## resolution of every method call, or the first problem. The declarations are registered first (enums, structs,
+## variants, functions, main), then the module constants are ordered and checked, then each function is checked in
+## program order, file by file.
 
 import Ast from "ast"
 import Builtins from "builtins"
@@ -12,7 +15,10 @@ import Statements from "check_stmt"
 import Linker from "linker"
 import T from "types"
 
-## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field access resolved to, by node id (lower.rkt reads them), and the linked names of the module constants in initialization order (the lowering reads that too, and does not order them again).
+## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
+## has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field
+## access resolved to, by node id (lower.rkt reads them), and the linked names of the module constants in
+## initialization order (the lowering reads that too, and does not order them again).
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
@@ -34,7 +40,8 @@ export def check(linked: Linker.Linked, catalog: Builtins.Catalog) -> Checking
   return Checking.Failed(Failure.unpack(result.message))
 end
 
-## A list of count slots with no type, built from repeats of at most chunk, so no runtime error escapes for a huge program.
+## A list of count slots with no type, built from repeats of at most chunk, so no runtime error escapes for a huge
+## program.
 export def no_types(count: Int, chunk: Int) -> List[T.Type]
   types: List[T.Type] = []
   left = count
@@ -55,7 +62,18 @@ def start(linked: Linker.Linked, catalog: Builtins.Catalog) -> State.Cx
   for module in linked.modules
     texts = texts.put(module.file, module.text)
   end
-  return State.Cx(catalog: catalog, help: Help.tables(), structs: catalog.records, enums: catalog.enums, functions: {}, constants: {}, type_params: [], file: linked.modules[0].file, texts: texts, expression: &Expr.check_expression)
+  return State.Cx(
+    catalog: catalog,
+    help: Help.tables(),
+    structs: catalog.records,
+    enums: catalog.enums,
+    functions: {},
+    constants: {},
+    type_params: [],
+    file: linked.modules[0].file,
+    texts: texts,
+    expression: &Expr.check_expression,
+  )
 end
 
 def run(linked: Linker.Linked, catalog: Builtins.Catalog) -> Result[Checked]
@@ -82,7 +100,8 @@ def ids_of(linked: Linker.Linked) -> Int
   return linked.ids
 end
 
-# List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node ids.
+# List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node
+# ids.
 def max_repeat() -> Int
   return 1048576
 end

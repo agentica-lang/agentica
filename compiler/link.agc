@@ -1,7 +1,10 @@
 import Env from "link_env"
 import LinkText from "link_text"
 
-# `agentica compiler/link.agc [flags] ROOT...` prints the text form of linking each root file (link_text.agc). The flags apply to the roots after them. `--stdlib=DIR` is the stdlib/ folder (the default is stdlib). `--agentica-path=V`, `--xdg-data-home=V` and `--home=V` replace the environment variable of the pkg/ search (the process environment otherwise). `--ids` prints the id ranges of the files instead (ids_text).
+# `agentica compiler/link.agc [flags] ROOT...` prints the text form of linking each root file (link_text.agc). The
+# flags apply to the roots after them. `--stdlib=DIR` is the stdlib/ folder (the default is stdlib).
+# `--agentica-path=V`, `--xdg-data-home=V` and `--home=V` replace the environment variable of the pkg/ search (the
+# process environment otherwise). `--ids` prints the id ranges of the files instead (ids_text).
 def main() -> Void
   stdlib = "stdlib"
   env = Env.process_env()

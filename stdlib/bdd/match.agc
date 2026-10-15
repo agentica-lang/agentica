@@ -28,8 +28,8 @@ export struct Resolved
   captures: List[String]
 end
 
-## Compiles the step patterns `texts`. Checks them in order and returns a failure at `where` for the first duplicate (`RUNTIME-BDD-DUPLICATE`)
-## or bad pattern (`RUNTIME-BDD-PATTERN`).
+## Compiles the step patterns `texts`. Checks them in order and returns a failure at `where` for the first duplicate
+## (`RUNTIME-BDD-DUPLICATE`) or bad pattern (`RUNTIME-BDD-PATTERN`).
 export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
   compiled = texts.map do |text| compile_one(text) end
   seen: Map[String, Bool] = {}
@@ -46,7 +46,8 @@ export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[L
   return Gherkin.Outcome.Done(compiled.map do |pattern| pattern.unwrap! end)
 end
 
-## Finds the one pattern that matches the text of `step`. Fails with `CHECK-BDD-UNDEFINED` when none does and `CHECK-BDD-AMBIGUOUS` when several do.
+## Finds the one pattern that matches the text of `step`. Fails with `CHECK-BDD-UNDEFINED` when none does and
+## `CHECK-BDD-AMBIGUOUS` when several do.
 export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outcome[Resolved]
   found = patterns.map do |pattern| captures(pattern, step.text) end
   hits = 0
@@ -60,10 +61,14 @@ export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outco
     end
   end
   if hits == 0
-    return Gherkin.Outcome.Failed(Gherkin.Diagnostic(code: "CHECK-BDD-UNDEFINED", message: "no step definition matches", span: step.span))
+    return Gherkin.Outcome.Failed(
+      Gherkin.Diagnostic(code: "CHECK-BDD-UNDEFINED", message: "no step definition matches", span: step.span),
+    )
   end
   if hits > 1
-    return Gherkin.Outcome.Failed(Gherkin.Diagnostic(code: "CHECK-BDD-AMBIGUOUS", message: "multiple step definitions match", span: step.span))
+    return Gherkin.Outcome.Failed(
+      Gherkin.Diagnostic(code: "CHECK-BDD-AMBIGUOUS", message: "multiple step definitions match", span: step.span),
+    )
   end
   return Gherkin.Outcome.Done(Resolved(index: first, captures: found[first].unwrap!))
 end

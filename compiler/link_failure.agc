@@ -1,4 +1,6 @@
-## How the linker reports a failure. A Result error is a String, as in the parser, and `try` stops at the first one. The String holds the file the failure is in (a diagnostic has no file of its own in compiler/) and the packed diagnostic.
+## How the linker reports a failure. A Result error is a String, as in the parser, and `try` stops at the first one.
+## The String holds the file the failure is in (a diagnostic has no file of its own in compiler/) and the packed
+## diagnostic.
 
 import Diag from "diagnostic"
 import Base from "parse_base"

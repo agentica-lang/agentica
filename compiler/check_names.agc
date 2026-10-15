@@ -1,4 +1,7 @@
-## Which builtin a method name stands for (src/checker.rkt: receiver-kind, resolve-method, catalog-method, method-names, pipe-method-name, foreign-method-help). A receiver kind is the word of its type ("String", "List", ...); "" is no kind. A method is resolved to the full name of a builtin, such as String.length, or to "self" when it returns the receiver (to_s on a String).
+## Which builtin a method name stands for (src/checker.rkt: receiver-kind, resolve-method, catalog-method,
+## method-names, pipe-method-name, foreign-method-help). A receiver kind is the word of its type ("String", "List",
+## ...); "" is no kind. A method is resolved to the full name of a builtin, such as String.length, or to "self" when it
+## returns the receiver (to_s on a String).
 
 import State from "check_state"
 import T from "types"
@@ -6,13 +9,25 @@ import T from "types"
 ## The kind of a receiver, or "" when its type has no methods in the catalog.
 export def receiver_kind(type: T.Type) -> String
   word = T.tag(type)
-  if word == "String" or word == "List" or word == "Map" or word == "Set" or word == "Float" or word == "Result" or word == "Json" or word == "Int" or word == "Range" or word == "Channel"
+  if (
+    word == "String" or
+    word == "List" or
+    word == "Map" or
+    word == "Set" or
+    word == "Float" or
+    word == "Result" or
+    word == "Json" or
+    word == "Int" or
+    word == "Range" or
+    word == "Channel"
+  )
     return word
   end
   return ""
 end
 
-## The builtin that method name of that kind stands for, "self", or "" when there is none: an alias first (size, to_i, push), then the builtin of the kind's module whose first parameter has that kind.
+## The builtin that method name of that kind stands for, "self", or "" when there is none: an alias first (size, to_i,
+## push), then the builtin of the kind's module whose first parameter has that kind.
 export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   alias = cx.help.aliases.get(kind + "." + name)
   if alias.ok?
@@ -45,7 +60,8 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
   return unique
 end
 
-## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase, String.to_int is the alias to_i. "" when there is none.
+## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
+## String.to_int is the alias to_i. "" when there is none.
 export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
   dot = name.index_of(".")
   if dot.ok?

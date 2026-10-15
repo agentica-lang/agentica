@@ -1,6 +1,11 @@
-## The types the checker works with: the lists headed by a name of src/checker.rkt ('Int, '(List T), '(Struct "Point")) as an enum.
+## The types the checker works with: the lists headed by a name of src/checker.rkt ('Int, '(List T), '(Struct "Point"))
+## as an enum.
 
-## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process, TestCase). Struct and Enum hold the linked name; Enum carries its type arguments (none for a plain enum). Var is a type variable of a builtin signature or a generic enum. Fn lists the parameters, then the result. Unknown is no type: the expected type when none is known (src/checker.rkt uses #f), and the type of a literal the lexer could not classify.
+## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
+## TestCase). Struct and Enum hold the linked name; Enum carries its type arguments (none for a plain enum). Var is a
+## type variable of a builtin signature or a generic enum. Fn lists the parameters, then the result. Unknown is no
+## type: the expected type when none is known (src/checker.rkt uses #f), and the type of a literal the lexer could not
+## classify.
 export enum Type
   Int
   Float
@@ -24,7 +29,8 @@ export enum Type
   Var(String)
 end
 
-## The variant of a type as a word: "Int", "List", "Struct", ... Every test of a type's shape is a comparison with this word.
+## The variant of a type as a word: "Int", "List", "Struct", ... Every test of a type's shape is a comparison with this
+## word.
 export def tag(type: Type) -> String
   case type
     Type.Int -> return "Int"
@@ -215,7 +221,8 @@ export def only_result_item(type: Type) -> Type
   return Type.Unknown
 end
 
-## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and messages leave it out.
+## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and
+## messages leave it out.
 export def display_name(name: String) -> String
   if not name.starts_with?("@")
     return name
@@ -256,7 +263,8 @@ export def to_text(type: Type) -> String
   end
 end
 
-## The type with its variant written out, for tests: Struct(Header), Enum(Await, [Var(T)]), Fn([Int], Void). Unlike to_text, two variants never print the same.
+## The type with its variant written out, for tests: Struct(Header), Enum(Await, [Var(T)]), Fn([Int], Void). Unlike
+## to_text, two variants never print the same.
 export def debug_text(type: Type) -> String
   case type
     Type.Opaque(name) -> return "Opaque(" + name + ")"

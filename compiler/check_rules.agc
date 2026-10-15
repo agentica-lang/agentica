@@ -1,4 +1,6 @@
-## A call of a builtin (src/checker.rkt, check-builtin-call): the form that takes this many arguments, a block only where the last parameter is a function, then the rule of the builtin. The List, Map, Set, Task and Channel rules are in check_list.agc and check_collections.agc; the rest are here.
+## A call of a builtin (src/checker.rkt, check-builtin-call): the form that takes this many arguments, a block only
+## where the last parameter is a function, then the rule of the builtin. The List, Map, Set, Task and Channel rules are
+## in check_list.agc and check_collections.agc; the rest are here.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -12,8 +14,15 @@ import CheckTypes from "check_types"
 import Source from "source"
 import T from "types"
 
-## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown when none.
-export def check_builtin_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type, entry: Model.Builtin) -> Result[State.Out]
+## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
+## when none.
+export def check_builtin_call(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.Call,
+  expected: T.Type,
+  entry: Model.Builtin,
+) -> Result[State.Out]
   selected = Builtins.form_for(entry, node.args.size)
   if !selected.ok?
     return error(arity_failure(cx, st, node, entry))
@@ -27,7 +36,19 @@ end
 ## CHECK-TYPE-MISMATCH unless the type can be printed or interpolated (it has to_s).
 export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
   if !CheckTypes.data?(cx, type, [])
-    return error(State.fail_help(cx, st, "CHECK-TYPE-MISMATCH", T.to_text(type) + " has no to_s, so it cannot be printed or interpolated", span, "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, structs and enums of those"))
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-TYPE-MISMATCH",
+        T.to_text(type) + " has no to_s, so it cannot be printed or interpolated",
+        span,
+        (
+          "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, " +
+          "structs and enums of those"
+        ),
+      ),
+    )
   end
   return ok(true)
 end
@@ -49,7 +70,16 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
   case last
     Ast.Expr.BlockLit(block) ->
       if !T.is(form.parameters[form.parameters.size - 1].type, "Fn")
-        return error(State.fail_help(cx, st, "CHECK-BLOCK-TARGET", "\"" + form.name + "\" does not take a block: its last parameter is not a function", block.span, "a block is only allowed when the last parameter is a function (Fn[...])"))
+        return error(
+          State.fail_help(
+            cx,
+            st,
+            "CHECK-BLOCK-TARGET",
+            "\"" + form.name + "\" does not take a block: its last parameter is not a function",
+            block.span,
+            "a block is only allowed when the last parameter is a function (Fn[...])",
+          ),
+        )
       end
     _ -> return ok(true)
   end
@@ -107,7 +137,16 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
     return error(State.mismatch(cx, message.st, expected, T.Type.Result(T.Type.Var("T")), span))
   end
   if T.unknown?(expected)
-    return error(State.fail_help(cx, message.st, "CHECK-RESULT-TYPE", "an error needs an expected Result type", span, "add a Result[T] annotation, for example r: Result[Int] = error(message)"))
+    return error(
+      State.fail_help(
+        cx,
+        message.st,
+        "CHECK-RESULT-TYPE",
+        "an error needs an expected Result type",
+        span,
+        "add a Result[T] annotation, for example r: Result[Int] = error(message)",
+      ),
+    )
   end
   return ok(State.Out(st: message.st, type: expected))
 end
@@ -123,7 +162,15 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   end
   case target
     Ast.Expr.TypeName(node) -> return json_target(cx, current, node, decode)
-    _ -> return error(State.fail(cx, current, "CHECK-TYPE-MISMATCH", "JSON type argument requires a struct name", Ast.expr_span(target)))
+    _ -> return error(
+      State.fail(
+        cx,
+        current,
+        "CHECK-TYPE-MISMATCH",
+        "JSON type argument requires a struct name",
+        Ast.expr_span(target),
+      ),
+    )
   end
 end
 
@@ -143,7 +190,15 @@ end
 def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   if !CheckTypes.encodable?(cx, out.type, [])
-    return error(State.fail(cx, out.st, "CHECK-NOT-ENCODABLE", "cannot JSON.encode " + T.to_text(out.type) + " or its nested types", Ast.expr_span(site.args[0])))
+    return error(
+      State.fail(
+        cx,
+        out.st,
+        "CHECK-NOT-ENCODABLE",
+        "cannot JSON.encode " + T.to_text(out.type) + " or its nested types",
+        Ast.expr_span(site.args[0]),
+      ),
+    )
   end
   if from
     return ok(State.Out(st: out.st, type: T.Type.Json))
@@ -159,7 +214,19 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
     return error(State.mismatch(cx, wanted.st, actual.type, wanted.type, Ast.expr_span(site.args[1])))
   end
   if !CheckTypes.data?(cx, actual.type, [])
-    return error(State.fail_help(cx, wanted.st, "CHECK-TYPE-MISMATCH", "Test.eq needs a type with equality, found " + T.to_text(actual.type), Ast.expr_span(site.args[0]), "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, structs and enums of those"))
+    return error(
+      State.fail_help(
+        cx,
+        wanted.st,
+        "CHECK-TYPE-MISMATCH",
+        "Test.eq needs a type with equality, found " + T.to_text(actual.type),
+        Ast.expr_span(site.args[0]),
+        (
+          "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, structs and " +
+          "enums of those"
+        ),
+      ),
+    )
   end
   return ok(State.Out(st: wanted.st, type: T.Type.Result(T.Type.Void)))
 end

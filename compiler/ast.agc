@@ -1,6 +1,10 @@
 ## The syntax tree of the Agentica parser: the nodes of src/ast.rkt as structs and enums.
 ##
-## Every node has an Int id and a span. The parser numbers the nodes in post-order: a node's children have smaller ids than the node, siblings are numbered in source order, the first id is the one given to the parser (0 for a single file), there are no gaps, and the Program has the last one. To number the modules of one program without renumbering, parse the next file from next_free_id of the previous Program. The checker keys its types by id, because Agentica has no object identity.
+## Every node has an Int id and a span. The parser numbers the nodes in post-order: a node's children have smaller ids
+## than the node, siblings are numbered in source order, the first id is the one given to the parser (0 for a single
+## file), there are no gaps, and the Program has the last one. To number the modules of one program without
+## renumbering, parse the next file from next_free_id of the previous Program. The checker keys its types by id,
+## because Agentica has no object identity.
 ##
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 
@@ -13,7 +17,8 @@ export enum Optional[T]
   Absent
 end
 
-## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its digits, with a leading - when a pattern negates it.
+## The value of a literal or of a literal pattern. Huge keeps an integer that does not fit an Int as its digits, with a
+## leading - when a pattern negates it.
 export enum LitValue
   Whole(Int)
   Huge(String)
@@ -49,7 +54,8 @@ export enum Decl
   Constant(ConstDecl)
 end
 
-## An import: import Alias from "path" (alias is Present, names is empty), or import {A, B as C} from "path" (alias is Absent, names has at least one entry).
+## An import: import Alias from "path" (alias is Present, names is empty), or import {A, B as C} from "path" (alias is
+## Absent, names has at least one entry).
 export struct ImportDecl
   id: Int
   path: String
@@ -58,7 +64,8 @@ export struct ImportDecl
   span: Source.Span
 end
 
-## One entry of an import list: the exported name, the name this file binds (the same without `as`), and the span of each (equal without `as`). It has no id: it is part of its ImportDecl.
+## One entry of an import list: the exported name, the name this file binds (the same without `as`), and the span of
+## each (equal without `as`). It has no id: it is part of its ImportDecl.
 export struct ImportName
   name: String
   local: String
@@ -74,7 +81,9 @@ export struct ExportDecl
   span: Source.Span
 end
 
-## A module constant: [export] NAME[: Type] = value (docs/future/44-module-constants.md). Unlike the other declarations it is not wrapped by an ExportDecl: exported says whether `export` was written, and the span starts at it. The linker clears exported.
+## A module constant: [export] NAME[: Type] = value (docs/future/44-module-constants.md). Unlike the other declarations
+## it is not wrapped by an ExportDecl: exported says whether `export` was written, and the span starts at it. The
+## linker clears exported.
 export struct ConstDecl
   id: Int
   name: String
@@ -300,7 +309,8 @@ export struct NameRef
   span: Source.Span
 end
 
-## A call by name, with the piped value as first argument after |>. parenthesized records whether the source had parentheses; only such a call may be the target of |>.
+## A call by name, with the piped value as first argument after |>. parenthesized records whether the source had
+## parentheses; only such a call may be the target of |>.
 export struct Call
   id: Int
   name: String
@@ -310,7 +320,9 @@ export struct Call
   span: Source.Span
 end
 
-## Enum.Variant(args), also through a module alias. named is empty from the parser. The linker fills it, and leaves args empty, for a call written with names such as Enum.Variant(x: 1), which the parser reads as a Construct; the checker refuses it (variants take positional arguments).
+## Enum.Variant(args), also through a module alias. named is empty from the parser. The linker fills it, and leaves
+## args empty, for a call written with names such as Enum.Variant(x: 1), which the parser reads as a Construct; the
+## checker refuses it (variants take positional arguments).
 export struct EnumConstructor
   id: Int
   enum_name: String
@@ -351,7 +363,11 @@ export struct Construct
   span: Source.Span
 end
 
-## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument. visible is Absent from the parser. The linker sets it to the sorted linked names of the user structs that the file of the update may build: its own and the exported ones of the files it imports (a builtin record is always allowed, so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). src/ keeps this as a predicate in the node.
+## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument.
+## visible is Absent from the parser. The linker sets it to the sorted linked names of the user structs that the file
+## of the update may build: its own and the exported ones of the files it imports (a builtin record is always allowed,
+## so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). src/ keeps this as
+## a predicate in the node.
 export struct StructUpdate
   id: Int
   target: Expr
@@ -452,7 +468,8 @@ export struct Unary
   span: Source.Span
 end
 
-## A binary operator; op is the token kind (plus, and, equal, dot-dot, ...), and a compound assignment is desugared to plus, minus, multiply, divide or modulo.
+## A binary operator; op is the token kind (plus, and, equal, dot-dot, ...), and a compound assignment is desugared to
+## plus, minus, multiply, divide or modulo.
 export struct Binary
   id: Int
   op: String
@@ -469,14 +486,18 @@ export struct TypeName
   span: Source.Span
 end
 
-## The read of a module constant, made by the linker from NAME (name is the linked name), and the receiver of a rewritten NAME.method(...) or NAME.field. A receiver made from a call has the id total + the id of the call, where total is the number of ids of the program, so it does not clash with a node of the parser (see Linker.Linked.ids).
+## The read of a module constant, made by the linker from NAME (name is the linked name), and the receiver of a
+## rewritten NAME.method(...) or NAME.field. A receiver made from a call has the id total + the id of the call, where
+## total is the number of ids of the program, so it does not clash with a node of the parser (see Linker.Linked.ids).
 export struct ConstRef
   id: Int
   name: String
   span: Source.Span
 end
 
-## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method checks it as the first argument without checking it twice (src/ast.rkt: typed-target). The parser never makes it. id and span are those of the receiver.
+## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method
+## checks it as the first argument without checking it twice (src/ast.rkt: typed-target). The parser never makes it. id
+## and span are those of the receiver.
 export struct TypedTarget
   id: Int
   target: Expr

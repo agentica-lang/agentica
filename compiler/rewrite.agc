@@ -1,13 +1,19 @@
-## The second half of the linker: rewrites the declarations of one file so that every name is the name of the linked program (resolve.agc), and so every file can share one program. This is the rewrite function of src/modules.rkt.
+## The second half of the linker: rewrites the declarations of one file so that every name is the name of the linked
+## program (resolve.agc), and so every file can share one program. This is the rewrite function of src/modules.rkt.
 ##
-## Names are resolved in the order Racket resolves them (a node's own name first, then its parts in field order), so the first failure is the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about one VM call per level (rewrite_expr passes to rewrite_compound with a tail call), so trees up to about 9,900 levels fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree; see ast.agc).
+## Names are resolved in the order Racket resolves them (a node's own name first, then its parts in field order), so
+## the first failure is the same. Nodes keep their ids and spans. The recursion follows the depth of the tree: about
+## one VM call per level (rewrite_expr passes to rewrite_compound with a tail call), so trees up to about 9,900 levels
+## fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree;
+## see ast.agc).
 
 import Ast from "ast"
 import Declarations from "declarations"
 import Resolve from "resolve"
 import Source from "source"
 
-## The declarations of a file in the linked program: its functions, structs and enums without the export, imports left out.
+## The declarations of a file in the linked program: its functions, structs and enums without the export, imports left
+## out.
 export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
   out: List[Ast.Decl] = []
   for wrapped in cx.me.program.declarations
@@ -35,14 +41,18 @@ def rewrite_function(cx: Resolve.Context, node: Ast.FunctionDecl) -> Result[Ast.
   end
   result = try rewrite_type(cx, node.result)
   body = try rewrite_stmts(cx, node.body)
-  return ok(Ast.Decl.Function(node.with(name: Resolve.identity(cx, node.name), params: params, result: result, body: body)))
+  return ok(
+    Ast.Decl.Function(node.with(name: Resolve.identity(cx, node.name), params: params, result: result, body: body)),
+  )
 end
 
 # A constant keeps its place, takes its linked name and loses its export (the linked program has no exports).
 def rewrite_constant(cx: Resolve.Context, node: Ast.ConstDecl) -> Result[Ast.Decl]
   type = try rewrite_optional_type(cx, node.type)
   value = try rewrite_expr(cx, node.value)
-  return ok(Ast.Decl.Constant(node.with(name: Resolve.identity(cx, node.name), type: type, value: value, exported: false)))
+  return ok(
+    Ast.Decl.Constant(node.with(name: Resolve.identity(cx, node.name), type: type, value: value, exported: false)),
+  )
 end
 
 def rewrite_struct(cx: Resolve.Context, node: Ast.StructDecl) -> Result[Ast.Decl]
@@ -212,16 +222,28 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   return ok(Ast.Expr.Call(node.with(name: name, args: args)))
 end
 
-# NAME.x on a constant: a field access when written with no parentheses and no arguments (a block is an argument), a method call otherwise (docs/future/44-module-constants.md 44.3). The receiver is the name alone, with an id past the ids of the program, since the call has only one.
-def rewrite_constant_member(cx: Resolve.Context, node: Ast.Call, linked: String, length: Int, member: String) -> Result[Ast.Expr]
+# NAME.x on a constant: a field access when written with no parentheses and no arguments (a block is an argument), a
+# method call otherwise (docs/future/44-module-constants.md 44.3). The receiver is the name alone, with an id past the
+# ids of the program, since the call has only one.
+def rewrite_constant_member(
+  cx: Resolve.Context,
+  node: Ast.Call,
+  linked: String,
+  length: Int,
+  member: String,
+) -> Result[Ast.Expr]
   start = node.span.start
   stop = Source.Position(offset: start.offset + length, line: start.line, column: start.column + length)
-  receiver = Ast.Expr.ConstRef(Ast.ConstRef(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)))
+  receiver = Ast.Expr.ConstRef(
+    Ast.ConstRef(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
+  )
   if node.args.size == 0 and !node.parenthesized
     return ok(Ast.Expr.FieldAccess(Ast.FieldAccess(id: node.id, target: receiver, name: member, span: node.span)))
   end
   args = try rewrite_exprs(cx, node.args)
-  return ok(Ast.Expr.MethodCall(Ast.MethodCall(id: node.id, target: receiver, name: member, args: args, span: node.span)))
+  return ok(
+    Ast.Expr.MethodCall(Ast.MethodCall(id: node.id, target: receiver, name: member, args: args, span: node.span)),
+  )
 end
 
 # The expressions that only rewrite their parts, in the order of their fields.
@@ -288,7 +310,8 @@ def rewrite_block(cx: Resolve.Context, node: Ast.BlockLit) -> Result[Ast.Expr]
   return ok(Ast.Expr.BlockLit(node.with(params: params, body: body)))
 end
 
-# Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin one; a name that is a constant of this file is a read of it; any other name is a type.
+# Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin
+# one; a name that is a constant of this file is a read of it; any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
   parts = node.name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
@@ -310,15 +333,34 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   return ok(Ast.Expr.TypeName(node.with(name: name)))
 end
 
-def variant(id: Int, enum_name: String, variant_name: String, args: List[Ast.Expr], named: List[Ast.NamedArg], span: Source.Span) -> Ast.Expr
-  return Ast.Expr.EnumConstructor(Ast.EnumConstructor(id: id, enum_name: enum_name, variant_name: variant_name, args: args, named: named, span: span))
+def variant(
+  id: Int,
+  enum_name: String,
+  variant_name: String,
+  args: List[Ast.Expr],
+  named: List[Ast.NamedArg],
+  span: Source.Span,
+) -> Ast.Expr
+  return Ast.Expr.EnumConstructor(
+    Ast.EnumConstructor(
+      id: id,
+      enum_name: enum_name,
+      variant_name: variant_name,
+      args: args,
+      named: named,
+      span: span,
+    ),
+  )
 end
 
-# Name(field: value) builds a struct, unless the name is a variant (Enum.Variant, or Alias.Enum.Variant): that is an enum constructor with named arguments, which the checker refuses.
+# Name(field: value) builds a struct, unless the name is a variant (Enum.Variant, or Alias.Enum.Variant): that is an
+# enum constructor with named arguments, which the checker refuses.
 def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Expr]
   parts = node.type_name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
-    return ok(variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], try rewrite_named(cx, node.args), node.span))
+    return ok(
+      variant(node.id, Resolve.identity(cx, parts[0]), parts[1], [], try rewrite_named(cx, node.args), node.span),
+    )
   elsif parts.size == 2 and Resolve.named_enum?(cx, parts[0])
     enum_name = try Resolve.resolve(cx, parts[0], Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, enum_name, parts[1], [], try rewrite_named(cx, node.args), node.span))

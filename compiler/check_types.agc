@@ -1,4 +1,6 @@
-## Types in the checker: reading a type written in the source (resolve_type), the questions the rules ask of a type (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic enums (substitute, unify). These are the helpers of src/checker.rkt that do not depend on the walk of the tree.
+## Types in the checker: reading a type written in the source (resolve_type), the questions the rules ask of a type
+## (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic enums (substitute,
+## unify). These are the helpers of src/checker.rkt that do not depend on the walk of the tree.
 
 import Ast from "ast"
 import Help from "check_help"
@@ -6,7 +8,9 @@ import State from "check_state"
 import Source from "source"
 import Types from "types"
 
-## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or CHECK-UNKNOWN-TYPE.
+## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
+## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
+## CHECK-UNKNOWN-TYPE.
 export def resolve_type(cx: State.Cx, st: State.St, ref: Ast.TypeRef, completion: Bool) -> Result[Types.Type]
   name = ref.name
   args = ref.args
@@ -55,7 +59,8 @@ export def primitive?(type: Types.Type) -> Bool
   return numeric?(type) or Types.is(type, "Bool") or Types.is(type, "String") or Types.is(type, "Nil")
 end
 
-## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, and structs of those.
+## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, and structs of
+## those.
 export def encodable?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
   if primitive?(type) or Types.is(type, "Json")
     return true
@@ -69,7 +74,8 @@ export def encodable?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Boo
   return false
 end
 
-## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, and structs of those.
+## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, and
+## structs of those.
 export def decodable?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
   if Types.is(type, "Int") or Types.is(type, "Float") or Types.is(type, "Bool") or Types.is(type, "String")
     return true
@@ -83,7 +89,9 @@ export def decodable?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Boo
   return false
 end
 
-## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, type variables, and lists, maps, sets, Results, structs and enums of those. seen holds the structs and enums already being looked at ("Struct:name"), so a recursive type ends.
+## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, type variables, and lists,
+## maps, sets, Results, structs and enums of those. seen holds the structs and enums already being looked at
+## ("Struct:name"), so a recursive type ends.
 export def data?(cx: State.Cx, type: Types.Type, seen: List[String]) -> Bool
   if primitive?(type) or Types.is(type, "Json") or Types.is(type, "Range") or Types.is(type, "Var")
     return true
@@ -111,7 +119,8 @@ export def has_variables?(type: Types.Type) -> Bool
     Types.Type.List(item) -> return has_variables?(item)
     Types.Type.Set(item) -> return has_variables?(item)
     Types.Type.Map(key, value) -> return has_variables?(key) or has_variables?(value)
-    Types.Type.Fn(params, result) -> return params.any? do |param: Types.Type| has_variables?(param) end or has_variables?(result)
+    Types.Type.Fn(params, result) ->
+      return params.any? do |param: Types.Type| has_variables?(param) end or has_variables?(result)
     Types.Type.Enum(name, args) -> return args.any? do |arg: Types.Type| has_variables?(arg) end
     _ -> return false
   end
@@ -126,8 +135,14 @@ export def substitute(type: Types.Type, substitutions: Map[String, Types.Type]) 
     Types.Type.Channel(item) -> return Types.Type.Channel(substitute(item, substitutions))
     Types.Type.List(item) -> return Types.Type.List(substitute(item, substitutions))
     Types.Type.Set(item) -> return Types.Type.Set(substitute(item, substitutions))
-    Types.Type.Map(key, value) -> return Types.Type.Map(substitute(key, substitutions), substitute(value, substitutions))
-    Types.Type.Fn(params, result) -> return Types.Type.Fn(substitute_all(params, substitutions), substitute(result, substitutions))
+    Types.Type.Map(key, value) -> return Types.Type.Map(
+      substitute(key, substitutions),
+      substitute(value, substitutions),
+    )
+    Types.Type.Fn(params, result) -> return Types.Type.Fn(
+      substitute_all(params, substitutions),
+      substitute(result, substitutions),
+    )
     Types.Type.Enum(name, args) -> return Types.Type.Enum(name, substitute_all(args, substitutions))
     _ -> return type
   end
@@ -138,8 +153,17 @@ export def substitute_all(types: List[Types.Type], substitutions: Map[String, Ty
   return types.map do |type: Types.Type| substitute(type, substitutions) end
 end
 
-## Matches the actual type against a template that may have type variables, and returns the substitutions with what the match learned. A variable already set must match again; a template with no variable must equal the actual type, else CHECK-TYPE-MISMATCH.
-export def unify(cx: State.Cx, st: State.St, template: Types.Type, actual: Types.Type, substitutions: Map[String, Types.Type], span: Source.Span) -> Result[Map[String, Types.Type]]
+## Matches the actual type against a template that may have type variables, and returns the substitutions with what the
+## match learned. A variable already set must match again; a template with no variable must equal the actual type, else
+## CHECK-TYPE-MISMATCH.
+export def unify(
+  cx: State.Cx,
+  st: State.St,
+  template: Types.Type,
+  actual: Types.Type,
+  substitutions: Map[String, Types.Type],
+  span: Source.Span,
+) -> Result[Map[String, Types.Type]]
   if Types.is(template, "Var")
     previous = substitutions.get(Types.name(template))
     if previous.ok?
@@ -199,7 +223,15 @@ end
 def resolve_map(cx: State.Cx, st: State.St, args: List[Ast.TypeRef]) -> Result[Types.Type]
   key = try resolve_type(cx, st, args[0], false)
   if !key_type?(key)
-    return error(State.fail(cx, st, "CHECK-MAP-KEY-TYPE", "a Map key must be Int or String, found " + Types.to_text(key), args[0].span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-MAP-KEY-TYPE",
+        "a Map key must be Int or String, found " + Types.to_text(key),
+        args[0].span,
+      ),
+    )
   end
   return ok(Types.Type.Map(key, try resolve_type(cx, st, args[1], false)))
 end
@@ -207,7 +239,15 @@ end
 def resolve_set(cx: State.Cx, st: State.St, arg: Ast.TypeRef) -> Result[Types.Type]
   element = try resolve_type(cx, st, arg, false)
   if !key_type?(element)
-    return error(State.fail(cx, st, "CHECK-SET-ELEMENT-TYPE", "a Set element must be Int or String, found " + Types.to_text(element), arg.span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-SET-ELEMENT-TYPE",
+        "a Set element must be Int or String, found " + Types.to_text(element),
+        arg.span,
+      ),
+    )
   end
   return ok(Types.Type.Set(element))
 end
@@ -219,7 +259,22 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Type
   if definition.ok?
     parameters = definition.unwrap!.parameters
     if parameters.size != ref.args.size
-      return error(State.fail(cx, st, "CHECK-UNKNOWN-TYPE", "enum " + Types.display_name(name) + " expects " + parameters.size.to_s + " type argument(s), found " + ref.args.size.to_s, ref.span))
+      return error(
+        State.fail(
+          cx,
+          st,
+          "CHECK-UNKNOWN-TYPE",
+          (
+            "enum " +
+            Types.display_name(name) +
+            " expects " +
+            parameters.size.to_s +
+            " type argument(s), found " +
+            ref.args.size.to_s
+          ),
+          ref.span,
+        ),
+      )
     end
     return ok(Types.Type.Enum(name, try resolve_all(cx, st, ref.args)))
   elsif cx.structs.has_key?(name) and ref.args.size == 0
@@ -230,15 +285,41 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: Ast.TypeRef) -> Result[Type
   if help == ""
     help = Help.near(name, candidates, shared_type_names(cx))
   end
-  return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-TYPE", "unknown type \"" + Types.display_name(name) + "\"", ref.span, help))
+  return error(
+    State.fail_maybe(
+      cx,
+      st,
+      "CHECK-UNKNOWN-TYPE",
+      "unknown type \"" + Types.display_name(name) + "\"",
+      ref.span,
+      help,
+    ),
+  )
 end
 
 # The type names offered as a guess for an unknown type besides the structs and enums.
 def shared_type_names(cx: State.Cx) -> List[String]
-  return ["Int", "Float", "Bool", "String", "Nil", "Void", "List", "Map", "Set", "Result", "Json", "Fn", "Task", "Channel", "Range"].concat(cx.catalog.opaque.to_a)
+  return [
+    "Int",
+    "Float",
+    "Bool",
+    "String",
+    "Nil",
+    "Void",
+    "List",
+    "Map",
+    "Set",
+    "Result",
+    "Json",
+    "Fn",
+    "Task",
+    "Channel",
+    "Range",
+  ].concat(cx.catalog.opaque.to_a)
 end
 
-# True when every field of the struct passes the test: 0 for encodable, 1 for decodable. A struct already in seen is true (the type is recursive).
+# True when every field of the struct passes the test: 0 for encodable, 1 for decodable. A struct already in seen is
+# true (the type is recursive).
 def struct_all?(cx: State.Cx, name: String, seen: List[String], test: Int) -> Bool
   if seen.any? do |item: String| item == name end
     return true
@@ -299,7 +380,14 @@ def composite?(type: Types.Type) -> Bool
 end
 
 # unify for two types with the same head: the arguments pair by pair. An enum must have the same name.
-def unify_inside(cx: State.Cx, st: State.St, template: Types.Type, actual: Types.Type, substitutions: Map[String, Types.Type], span: Source.Span) -> Result[Map[String, Types.Type]]
+def unify_inside(
+  cx: State.Cx,
+  st: State.St,
+  template: Types.Type,
+  actual: Types.Type,
+  substitutions: Map[String, Types.Type],
+  span: Source.Span,
+) -> Result[Map[String, Types.Type]]
   pairs = parts(template)
   others = parts(actual)
   if Types.is(template, "Enum") and Types.name(template) != Types.name(actual)

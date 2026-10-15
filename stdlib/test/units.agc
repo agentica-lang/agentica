@@ -5,7 +5,8 @@
 import Report from "report"
 import Child from "child"
 
-## The options of a run: the VM path, the seed, the `--only` text, the timeout of each test in milliseconds, and the `--source-root` of the file's bytecode ("" for none), so a trace names the file as the report does.
+## The options of a run: the VM path, the seed, the `--only` text, the timeout of each test in milliseconds, and the
+## `--source-root` of the file's bytecode ("" for none), so a trace names the file as the report does.
 export struct Settings
   vm: String
   seed: Int
@@ -43,8 +44,8 @@ struct Ending
   output: String
 end
 
-## Runs the tests of the file `path` from its compiled `bytecode` and returns the result. A non-empty `front_end` is a front-end error
-## of the file, which is reported instead.
+## Runs the tests of the file `path` from its compiled `bytecode` and returns the result. A non-empty `front_end` is a
+## front-end error of the file, which is reported instead.
 export def run(settings: Settings, path: String, bytecode: String, front_end: String) -> Report.FileResult
   if front_end != ""
     parsed = Report.from_json(front_end)
@@ -55,7 +56,14 @@ export def run(settings: Settings, path: String, bytecode: String, front_end: St
     Listed.Ready(found) ->
       chosen = found.filter do |item| settings.only == "" or item.name.include?(settings.only) end
       if chosen.size == 0
-        return Report.FileResult(path: path, feature: "", kind: "tests", scenarios: [], verdict: Report.Verdict.Pass, output: "")
+        return Report.FileResult(
+          path: path,
+          feature: "",
+          kind: "tests",
+          scenarios: [],
+          verdict: Report.Verdict.Pass,
+          output: "",
+        )
       end
       return run_child(settings, path, bytecode, chosen)
   end
@@ -73,20 +81,37 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
   read = Child.read_records(p, deadline)
   if read.problem == "process: output exceeds 1048576 bytes"
     Process.close(p)
-    return broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's output exceeds 1 MiB while listing its tests", where), "")
+    return broken(
+      Report.error_at(
+        "RUNTIME-BDD-OUTPUT-LIMIT",
+        "the test file's output exceeds 1 MiB while listing its tests",
+        where,
+      ),
+      "",
+    )
   end
   output = Process.output(p, Child.left(deadline))
   code = Process.wait(p, 5000)
   Process.close(p)
   if read.problem == "network: operation timed out" or not output.ok?
-    return broken(Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not list its tests within 30 seconds", where), "")
+    return broken(
+      Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not list its tests within 30 seconds", where),
+      "",
+    )
   end
   found = output.unwrap!
   records = read.items
   printed = found.stdout.split("\n").filter do |line| line != "" end.join("\n")
   shown = Child.tail(joined(printed, Child.stderr_text(found.stderr)), 65536)
   if found.truncated
-    return broken(Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's output exceeds 1 MiB while listing its tests", where), shown)
+    return broken(
+      Report.error_at(
+        "RUNTIME-BDD-OUTPUT-LIMIT",
+        "the test file's output exceeds 1 MiB while listing its tests",
+        where,
+      ),
+      shown,
+    )
   end
   failures = records.filter do |record| Child.event_of(record) == "fail" end
   if failures.size > 0
@@ -100,12 +125,17 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
       return broken(crash.unwrap!, shown)
     end
     if ready or exit != 0
-      return broken(Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "the test file exited with code #{exit}", where), shown)
+      return broken(
+        Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "the test file exited with code #{exit}", where),
+        shown,
+      )
     end
     return broken(Report.error_at("RUNTIME-TEST-RUN", "the test file did not call Test.run", where), shown)
   end
   empty: Map[Int, UnitTest] = {}
-  listed = records.filter do |record| Child.event_of(record) == "test" end.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
+  listed = records.filter do |record|
+    Child.event_of(record) == "test"
+  end.reduce(empty) do |acc: Map[Int, UnitTest], record: Json|
     line = Child.int_of(record, "line")
     column = Child.int_of(record, "column")
     acc.put(acc.size, UnitTest(index: acc.size, name: Child.text_of(record, "name"),
@@ -120,7 +150,12 @@ end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000 * (chosen.size + 1), "run"), ".", 30000)
+  spawned = Process.spawn_channel(
+    settings.vm,
+    args(settings, bytecode, 1000000 * (chosen.size + 1), "run"),
+    ".",
+    30000,
+  )
   if not spawned.ok?
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
@@ -142,7 +177,12 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
       done = await_test(settings, p, deadline, item.span)
     else
       found = failure(settings, p, line_sent.message, deadline, item.span)
-      done = TestEnd(verdict: Report.Verdict.Fail(found.problem), output: found.output, stopped: true, blame: found.blame)
+      done = TestEnd(
+        verdict: Report.Verdict.Fail(found.problem),
+        output: found.output,
+        stopped: true,
+        blame: found.blame,
+      )
     end
     if done.blame
       results = results.put(item.index, scenario(item, Time.monotonic_ms() - started, done.verdict, done.output))
@@ -166,7 +206,12 @@ def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span)
   printed = Process.read_available(p, Child.left(deadline))
   if not printed.ok?
     found = failure(settings, p, printed.message, deadline, span)
-    return TestEnd(verdict: Report.Verdict.Fail(found.problem), output: found.output, stopped: true, blame: found.blame)
+    return TestEnd(
+      verdict: Report.Verdict.Fail(found.problem),
+      output: found.output,
+      stopped: true,
+      blame: found.blame,
+    )
   end
   shown = Child.printed(printed.unwrap!)
   if not line.ok?
@@ -182,7 +227,12 @@ def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span)
   if event == "pass"
     return TestEnd(verdict: Report.Verdict.Pass, output: "", stopped: false, blame: true)
   elsif event == "fail"
-    return TestEnd(verdict: Report.Verdict.Fail(record_error(record)), output: Child.tail(shown, 65536), stopped: false, blame: true)
+    return TestEnd(
+      verdict: Report.Verdict.Fail(record_error(record)),
+      output: Child.tail(shown, 65536),
+      stopped: false,
+      blame: true,
+    )
   end
   problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file broke the test record protocol", span)
   return TestEnd(verdict: Report.Verdict.Fail(problem), output: Child.tail(shown, 65536), stopped: true, blame: true)
@@ -192,8 +242,12 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
   Process.channel_close(p, 5000)
   output = Process.output(p, settings.timeout_ms)
   if not output.ok?
-    return Ending(verdict: Report.Verdict.Fail(Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not exit after its last test", where)),
-                  output: "")
+    return Ending(
+      verdict: Report.Verdict.Fail(
+        Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not exit after its last test", where),
+      ),
+      output: "",
+    )
   end
   found = output.unwrap!
   shown = Child.stderr_text(found.stderr)
@@ -208,7 +262,11 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
   if crash.ok?
     return Ending(verdict: Report.Verdict.Fail(crash.unwrap!), output: shown)
   end
-  problem = Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "the test file exited with code #{code.unwrap_or(-1)}", where)
+  problem = Report.error_at(
+    "RUNTIME-BDD-PREMATURE-EXIT",
+    "the test file exited with code #{code.unwrap_or(-1)}",
+    where,
+  )
   return Ending(verdict: Report.Verdict.Fail(problem), output: shown)
 end
 
@@ -217,8 +275,11 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
     return timed_out(settings, span)
   end
   if message == "process: line exceeds 1048576 bytes"
-    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "a line of test output exceeds 1 MiB", span), output: "",
-                   blame: true)
+    return Failure(
+      problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "a line of test output exceeds 1 MiB", span),
+      output: "",
+      blame: true,
+    )
   end
   if message == "process: output exceeds 1048576 bytes"
     return overflow(settings, p, deadline, span)
@@ -236,7 +297,11 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
     return Failure(problem: crash.unwrap!, output: Child.stderr_text(stderr), blame: true)
   end
   code = Process.wait(p, Child.left(deadline))
-  problem = Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "the test file exited during the test (exit code #{code.unwrap_or(-1)})", span)
+  problem = Report.error_at(
+    "RUNTIME-BDD-PREMATURE-EXIT",
+    "the test file exited during the test (exit code #{code.unwrap_or(-1)})",
+    span,
+  )
   return Failure(problem: problem, output: Child.stderr_text(stderr), blame: true)
 end
 
@@ -244,12 +309,20 @@ def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -
   Process.channel_close(p, Child.left(deadline))
   output = Process.output(p, Child.brief(deadline))
   if not output.ok?
-    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span), output: "", blame: true)
+    return Failure(
+      problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span),
+      output: "",
+      blame: true,
+    )
   end
   stderr = output.unwrap!.stderr
   if stderr.length < 262144
     shown = Child.tail(Child.printed(output.unwrap!.stdout), 65536)
-    return Failure(problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span), output: shown, blame: true)
+    return Failure(
+      problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "test output exceeds 1 MiB", span),
+      output: shown,
+      blame: true,
+    )
   end
   where = Report.Span(file: span.file, line: 1, column: 1, end_column: 1)
   return Failure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
@@ -268,8 +341,12 @@ def record_error(record: Json) -> Report.Error
   range = JSON.get(record, "range").unwrap_or(JSON.null())
   start = JSON.get(range, "start").unwrap_or(JSON.null())
   stop = JSON.get(range, "end").unwrap_or(JSON.null())
-  span = Report.Span(file: Child.text_of(record, "file"), line: Child.int_of(start, "line"), column: Child.int_of(start, "column"),
-                     end_column: Child.int_of(stop, "column"))
+  span = Report.Span(
+    file: Child.text_of(record, "file"),
+    line: Child.int_of(start, "line"),
+    column: Child.int_of(start, "column"),
+    end_column: Child.int_of(stop, "column"),
+  )
   original = JSON.null()
   if JSON.get(record, "stack").ok?
     original = Child.diagnostic_of(record)
@@ -289,6 +366,18 @@ def joined(output: String, stderr: String) -> String
 end
 
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
-  return ["--allow-run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--source-root", settings.source_root,
-          "--", bytecode, "--agentica-test", mode]
+  return [
+    "--allow-run",
+    "--json",
+    "--max-steps",
+    steps.to_s,
+    "--seed",
+    settings.seed.to_s,
+    "--source-root",
+    settings.source_root,
+    "--",
+    bytecode,
+    "--agentica-test",
+    mode,
+  ]
 end

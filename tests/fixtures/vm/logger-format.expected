@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 15697,
+  "steps": 15785,
   "stdout": [
     "2025-10-15T10:15:02.345Z ERROR to stdout k=v",
     "{\"time\":\"2025-10-15T10:15:02.345Z\",\"level\":\"error\",\"msg\":\"to stdout\",\"fields\":{\"k\":\"v\"},\"task\":7}",

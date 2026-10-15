@@ -1,4 +1,5 @@
-## The import path rules of src/modules.rkt that need no file system: the module file name, the std/ and pkg/ path check, and the path helpers.
+## The import path rules of src/modules.rkt that need no file system: the module file name, the std/ and pkg/ path
+## check, and the path helpers.
 
 import Ast from "ast"
 import Declarations from "declarations"
@@ -12,7 +13,8 @@ export def last_part(text: String) -> String
   return parts[parts.size - 1]
 end
 
-## The folder of a file path: everything before the last "/" (empty for a name alone, "/" for a file in the root folder).
+## The folder of a file path: everything before the last "/" (empty for a name alone, "/" for a file in the root
+## folder).
 export def directory_of(path: String) -> String
   tail = last_part(path).length
   if tail == path.length
@@ -32,7 +34,10 @@ export def join(base: String, rest: String) -> String
   return base + "/" + rest
 end
 
-## The path a file is stored under in the program and in the .agcb, and printed by the text forms: src/source.rkt, stored-source-names. root_dir is the folder of the root file. A file inside it is its path from there, with no "./"; a file above it keeps the ".." parts ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a std/ folder is "./std/NAME.agc". The bytes of an .agcb then do not depend on where the project lives.
+## The path a file is stored under in the program and in the .agcb, and printed by the text forms: src/source.rkt,
+## stored-source-names. root_dir is the folder of the root file. A file inside it is its path from there, with no "./";
+## a file above it keeps the ".." parts ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a
+## std/ folder is "./std/NAME.agc". The bytes of an .agcb then do not depend on where the project lives.
 export def stored_name(root_dir: String, file: String) -> String
   if root_dir == "" or !file.starts_with?("/")
     return file
@@ -51,14 +56,17 @@ export def stored_name(root_dir: String, file: String) -> String
     out = out.push(to[index])
   end
   stored = out.join("/")
-  # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name but those).
+  # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name
+  # but those).
   if stored.starts_with?("std/")
     return "./" + stored
   end
   return stored
 end
 
-## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name list).
+## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is
+## CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name
+## list).
 export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[String]
   path = decl.path
   stem = ""
@@ -70,16 +78,41 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
   if module_name?(path)
     return ok(path + ".agc")
   elsif has_stem and module_name?(stem)
-    return error(refuse(site, "import paths name a module without the .agc extension", "write " + Declarations.import_line(Unicode.written_text(stem), decl)))
+    return error(
+      refuse(
+        site,
+        "import paths name a module without the .agc extension",
+        "write " + Declarations.import_line(Unicode.written_text(stem), decl),
+      ),
+    )
   elsif last_part(path) == "" or last_part(path) == "." or last_part(path) == ".."
-    return error(refuse(site, "import paths name a module file", "write " + Declarations.import_line("\"models\"", decl) + " to load models.agc"))
+    return error(
+      refuse(
+        site,
+        "import paths name a module file",
+        "write " + Declarations.import_line("\"models\"", decl) + " to load models.agc",
+      ),
+    )
   elsif module_name?(guess)
-    return error(refuse(site, "import paths name a module without an extension", "write " + Declarations.import_line(Unicode.written_text(guess), decl) + " to load " + guess + ".agc"))
+    return error(
+      refuse(
+        site,
+        "import paths name a module without an extension",
+        "write " + Declarations.import_line(Unicode.written_text(guess), decl) + " to load " + guess + ".agc",
+      ),
+    )
   end
-  return error(refuse(site, "a module file name has no dot apart from .agc", "rename the file so its name has no dot apart from .agc"))
+  return error(
+    refuse(
+      site,
+      "a module file name has no dot apart from .agc",
+      "rename the file so its name has no dot apart from .agc",
+    ),
+  )
 end
 
-## CHECK-IMPORT-PATH unless a std/ or pkg/ path is made of plain parts: no backslash, no empty, "." or ".." part, and no ":" in a part.
+## CHECK-IMPORT-PATH unless a std/ or pkg/ path is made of plain parts: no backslash, no empty, "." or ".." part, and
+## no ":" in a part.
 export def validate_library_path(path: String, site: Failure.Site) -> Result[Void]
   if path.contains?("\\")
     return error(invalid_library_path(site))

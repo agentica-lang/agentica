@@ -195,6 +195,9 @@ version = "0.3.0"
 [dependencies]
 "owner/sqlite-ac" = "1.2.0"
 "gitlab.com/team/json-tools" = "0.4.1"
+
+[style]
+max_line_width = 119
 ```
 
 - `name` is the project's own name. For a package it must equal the key it was
@@ -205,6 +208,22 @@ version = "0.3.0"
   version. The version is semver, written without the `v`. The lock says which
   version the build uses (45.6 and 45.7).
 - The keys are quoted, because `/` and `.` are not bare-key characters in TOML.
+- `[style]` holds style rules for the `.agc` files under the folder of the
+  manifest. All keys are optional, and a manifest with no `[style]` sets no
+  rule. Decided by the owner on 2026-10-15. Later style keys go in the same
+  table; today there is one:
+  - `max_line_width` is the longest line allowed, in characters (Unicode code
+    points, not bytes). It counts every line, comments and doc comments
+    included. With no `max_line_width` there is no limit. A line over it is an
+    error, never a warning (section 26). The proposed code is
+    `CHECK-LINE-TOO-LONG`, at the first character past the limit (a proposal,
+    not decided). The rule covers every `.agc` file under the folder that holds
+    that `agentica.toml`.
+  - Today `compiler/agentica.toml` and `stdlib/agentica.toml` set it to 119, and
+    `tests/test_style_line_width.py` enforces it. `agentica check` will read
+    `[style]` after step 8 of 35.4, with `std/toml`, and the test can go then.
+    The manager accepts `[style]` and its known keys, and an unknown style key
+    is `PKG-MANIFEST-INVALID` like any other unknown key.
 - An unknown key, a bad key or a bad version is `PKG-MANIFEST-INVALID`. The
   manager lists the keys of the parsed table itself and rejects any it does not
   know. It does not leave this to a typed decode, which ignores extra keys. A

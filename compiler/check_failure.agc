@@ -1,4 +1,6 @@
-## How the checker reports a failure: a diagnostic with the extra notes of src/diagnostic.rkt (expected, actual, callee, signature, labels) and the file it is in. A Result error is a String, so the failure travels packed (pack) and `try` stops at the first one, as in the parser; unpack reads it back.
+## How the checker reports a failure: a diagnostic with the extra notes of src/diagnostic.rkt (expected, actual,
+## callee, signature, labels) and the file it is in. A Result error is a String, so the failure travels packed (pack)
+## and `try` stops at the first one, as in the parser; unpack reads it back.
 
 import Diag from "diagnostic"
 import Source from "source"
@@ -9,7 +11,8 @@ export struct Label
   text: String
 end
 
-## The first problem the checker found. The notes are "" when the diagnostic has none (src/ uses #f). signature is the signature of the function being checked; callee the signature of the function or builtin called.
+## The first problem the checker found. The notes are "" when the diagnostic has none (src/ uses #f). signature is the
+## signature of the function being checked; callee the signature of the function or builtin called.
 export struct Problem
   file: String
   code: String
@@ -24,13 +27,43 @@ export struct Problem
 end
 
 ## A problem with no notes.
-export def problem(file: String, signature: String, code: String, message: String, span: Source.Span, help: Diag.Help) -> Problem
-  return Problem(file: file, code: code, message: message, span: span, help: help, expected: "", actual: "", callee: "", signature: signature, labels: [])
+export def problem(
+  file: String,
+  signature: String,
+  code: String,
+  message: String,
+  span: Source.Span,
+  help: Diag.Help,
+) -> Problem
+  return Problem(
+    file: file,
+    code: code,
+    message: message,
+    span: span,
+    help: help,
+    expected: "",
+    actual: "",
+    callee: "",
+    signature: signature,
+    labels: [],
+  )
 end
 
 ## The problem written as one String.
 export def pack(found: Problem) -> String
-  fields = [found.file, found.code, found.message, span_text(found.span), help_flag(found.help), help_text(found.help), found.expected, found.actual, found.callee, found.signature, found.labels.size.to_s]
+  fields = [
+    found.file,
+    found.code,
+    found.message,
+    span_text(found.span),
+    help_flag(found.help),
+    help_text(found.help),
+    found.expected,
+    found.actual,
+    found.callee,
+    found.signature,
+    found.labels.size.to_s,
+  ]
   for label in found.labels
     fields = fields.concat([span_text(label.span), label.text])
   end
@@ -58,7 +91,18 @@ export def unpack(text: String) -> Problem
   if fields[4] == "1"
     help = Diag.Help.Hint(fields[5])
   end
-  return Problem(file: fields[0], code: fields[1], message: fields[2], span: read_span(fields[3]), help: help, expected: fields[6], actual: fields[7], callee: fields[8], signature: fields[9], labels: labels)
+  return Problem(
+    file: fields[0],
+    code: fields[1],
+    message: fields[2],
+    span: read_span(fields[3]),
+    help: help,
+    expected: fields[6],
+    actual: fields[7],
+    callee: fields[8],
+    signature: fields[9],
+    labels: labels,
+  )
 end
 
 def span_text(span: Source.Span) -> String

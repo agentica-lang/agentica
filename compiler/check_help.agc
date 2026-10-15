@@ -1,4 +1,5 @@
-## The help texts of the checker (src/checker.rkt): the tables of check_tables.agc loaded into Maps once, and the helps that depend only on types or names. A help is a String, and "" means there is none.
+## The help texts of the checker (src/checker.rkt): the tables of check_tables.agc loaded into Maps once, and the helps
+## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -17,13 +18,25 @@ end
 
 ## The tables of this run.
 export def tables() -> Tables
-  return Tables(modules: Data.method_modules(), aliases: Data.method_aliases(), foreign_names: Data.foreign_names(), foreign_methods: Data.foreign_methods(), kind_methods: Data.foreign_kind_methods())
+  return Tables(
+    modules: Data.method_modules(),
+    aliases: Data.method_aliases(),
+    foreign_names: Data.foreign_names(),
+    foreign_methods: Data.foreign_methods(),
+    kind_methods: Data.foreign_kind_methods(),
+  )
 end
 
 ## The help of a type mismatch: how to convert the actual type into the expected one (conversion-help).
 export def conversion(expected: Types.Type, actual: Types.Type) -> String
   if Types.is(actual, "Result") and Types.same(Types.item(actual), expected)
-    return "this is " + Types.to_text(actual) + "; unwrap it with a ! form (" + unwrap_form(expected) + "), with Result.unwrap!(...), or with try inside a function that returns Result"
+    return (
+      "this is " +
+      Types.to_text(actual) +
+      "; unwrap it with a ! form (" +
+      unwrap_form(expected) +
+      "), with Result.unwrap!(...), or with try inside a function that returns Result"
+    )
   end
   return convert_help(expected, actual)
 end

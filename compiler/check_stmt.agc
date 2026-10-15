@@ -1,4 +1,5 @@
-## Statements, blocks, case and functions (src/checker.rkt: check-statement, check-block-body, check-case, check-function). Expressions are checked through State.expr, because they are in a module that imports this one.
+## Statements, blocks, case and functions (src/checker.rkt: check-statement, check-block-body, check-case,
+## check-function). Expressions are checked through State.expr, because they are in a module that imports this one.
 
 import Ast from "ast"
 import Model from "builtin_model"
@@ -22,7 +23,8 @@ struct ArmDone
   arms: Arms
 end
 
-## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is not Void.
+## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is
+## not Void.
 export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
   signature = cx.functions[node.name]
   here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
@@ -35,7 +37,16 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
   end
   inner = try check_block(cx, inner, node.body)
   if !T.is(signature.result, "Void") and !Flow.block_returns?(node.body)
-    return error(State.fail_maybe(cx, inner, "CHECK-MISSING-RETURN", "function \"" + T.display_name(node.name) + "\" must return " + T.to_text(signature.result) + " on every path", node.span, Flow.missing_return_help(node.body, T.to_text(signature.result))))
+    return error(
+      State.fail_maybe(
+        cx,
+        inner,
+        "CHECK-MISSING-RETURN",
+        "function \"" + T.display_name(node.name) + "\" must return " + T.to_text(signature.result) + " on every path",
+        node.span,
+        Flow.missing_return_help(node.body, T.to_text(signature.result)),
+      ),
+    )
   end
   return ok(State.leave(inner, here))
 end
@@ -49,14 +60,29 @@ export def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -
   return ok(current)
 end
 
-## Checks the body of a block literal (do |x| ... end) against the parameter types and result type its context knows (Absent and Unknown when it knows none). The block's type is Fn(parameters, result), and it is recorded for the block's id. each_receiver is the list of a List.each call, for the help of CHECK-CAPTURED-ASSIGNMENT.
-export def check_block_body(cx: State.Cx, st: State.St, block: Ast.BlockLit, known_params: Ast.Optional[List[T.Type]], known_result: T.Type, each_receiver: Ast.Optional[Ast.Expr]) -> Result[State.Out]
+## Checks the body of a block literal (do |x| ... end) against the parameter types and result type its context knows
+## (Absent and Unknown when it knows none). The block's type is Fn(parameters, result), and it is recorded for the
+## block's id. each_receiver is the list of a List.each call, for the help of CHECK-CAPTURED-ASSIGNMENT.
+export def check_block_body(
+  cx: State.Cx,
+  st: State.St,
+  block: Ast.BlockLit,
+  known_params: Ast.Optional[List[T.Type]],
+  known_result: T.Type,
+  each_receiver: Ast.Optional[Ast.Expr],
+) -> Result[State.Out]
   types = try block_parameter_types(cx, st, block, known_params)
   slot = State.Slot.Infer
   if !T.unknown?(known_result)
     slot = State.Slot.Known(known_result)
   end
-  inside = st.with(loops: 0, result: slot, capture: Ast.Optional.Present(State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver)))
+  inside = st.with(
+    loops: 0,
+    result: slot,
+    capture: Ast.Optional.Present(
+      State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver),
+    ),
+  )
   inside = State.enter(inside)
   index = 0
   while index < types.size
@@ -67,7 +93,16 @@ export def check_block_body(cx: State.Cx, st: State.St, block: Ast.BlockLit, kno
   done = try block_statements(cx, inside, block.body)
   result = block_result(done.st.result, done.type)
   if !T.is(result, "Void") and T.unknown?(done.type) and !Flow.block_returns?(block.body)
-    return error(State.fail_help(cx, done.st, "CHECK-MISSING-RETURN", "this block must give " + T.to_text(result) + " on every path", block.span, "end the block with an expression, or return a value on every path"))
+    return error(
+      State.fail_help(
+        cx,
+        done.st,
+        "CHECK-MISSING-RETURN",
+        "this block must give " + T.to_text(result) + " on every path",
+        block.span,
+        "end the block with an expression, or return a value on every path",
+      ),
+    )
   end
   block_type = T.Type.Fn(types, result)
   after = State.leave(done.st, st).with(result: st.result, capture: st.capture, loops: st.loops)
@@ -77,7 +112,16 @@ end
 # The statement checked; a nesting past the limit is CHECK-TOO-DEEP.
 def check_statement(cx: State.Cx, st: State.St, statement: Ast.Stmt) -> Result[State.St]
   if st.nest >= State.nesting_limit()
-    return error(State.fail_help(cx, st, "CHECK-TOO-DEEP", "nesting is deeper than " + State.nesting_limit().to_s + " levels", statement_span(statement), "split the code into smaller functions or simpler expressions"))
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-TOO-DEEP",
+        "nesting is deeper than " + State.nesting_limit().to_s + " levels",
+        statement_span(statement),
+        "split the code into smaller functions or simpler expressions",
+      ),
+    )
   end
   done = try statement_inside(cx, st.with(nest: st.nest + 1), statement)
   return ok(done.with(nest: st.nest))
@@ -108,10 +152,13 @@ def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Res
   end
   help = "use it inside while or for; a function cannot break its caller's loop, so return a value and test it there"
   case st.capture
-    Ast.Optional.Present(capture) -> help = "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
+    Ast.Optional.Present(capture) ->
+      help = "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
     Ast.Optional.Absent -> help = help
   end
-  return error(State.fail_help(cx, st, "CHECK-LOOP-CONTROL", node.kind + " is only valid inside while or for", node.span, help))
+  return error(
+    State.fail_help(cx, st, "CHECK-LOOP-CONTROL", node.kind + " is only valid inside while or for", node.span, help),
+  )
 end
 
 def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State.St]
@@ -133,21 +180,48 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
   return State.introduce(cx, out.st, node.name, type, node.span, false)
 end
 
-# A binding of a name that is already in scope is an assignment: not from inside a block, not with an annotation, not to a for variable.
+# A binding of a name that is already in scope is an assignment: not from inside a block, not with an annotation, not
+# to a for variable.
 def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: State.Binding) -> Result[State.St]
   case st.capture
     Ast.Optional.Present(capture) ->
       if existing.level <= capture.boundary
-        return error(State.fail_help(cx, st, "CHECK-CAPTURED-ASSIGNMENT", "a block cannot assign to \"" + node.name + "\", which belongs to the enclosing code", node.span, Flow.captured_help(node.name, capture)))
+        return error(
+          State.fail_help(
+            cx,
+            st,
+            "CHECK-CAPTURED-ASSIGNMENT",
+            "a block cannot assign to \"" + node.name + "\", which belongs to the enclosing code",
+            node.span,
+            Flow.captured_help(node.name, capture),
+          ),
+        )
       end
     Ast.Optional.Absent -> existing = existing
   end
   case node.type
-    Ast.Optional.Present(annotation) -> return error(State.fail(cx, st, "CHECK-ANNOTATION-ON-EXISTING", "an annotation is only allowed when \"" + node.name + "\" is introduced", node.span))
+    Ast.Optional.Present(annotation) -> return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-ANNOTATION-ON-EXISTING",
+        "an annotation is only allowed when \"" + node.name + "\" is introduced",
+        node.span,
+      ),
+    )
     Ast.Optional.Absent -> existing = existing
   end
   if existing.immutable
-    return error(State.fail_help(cx, st, "CHECK-IMMUTABLE-ASSIGNMENT", "\"" + node.name + "\" cannot be assigned", node.span, "\"for\" variables cannot be assigned; copy the value to a new name"))
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-IMMUTABLE-ASSIGNMENT",
+        "\"" + node.name + "\" cannot be assigned",
+        node.span,
+        "\"for\" variables cannot be assigned; copy the value to a new name",
+      ),
+    )
   end
   out = try State.expr(cx, st, node.value, existing.type)
   return ok(out.st)
@@ -207,7 +281,15 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
   iterable = try State.expr(cx, st, node.iterable, T.Type.Unknown)
   type = iterable.type
   if !T.is(type, "List") and !T.is(type, "Set") and !T.is(type, "Range")
-    return error(State.fail(cx, iterable.st, "CHECK-NOT-A-LIST", "\"for\" iterates over a list, a set or a range, found " + T.to_text(type), node.span))
+    return error(
+      State.fail(
+        cx,
+        iterable.st,
+        "CHECK-NOT-A-LIST",
+        "\"for\" iterates over a list, a set or a range, found " + T.to_text(type),
+        node.span,
+      ),
+    )
   end
   element = T.Type.Int
   if !T.is(type, "Range")
@@ -253,10 +335,25 @@ def check_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, value_type: T.Type, 
   end
 end
 
-def check_literal_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, pattern: Ast.LiteralPattern, value_type: T.Type, arms: Arms) -> Result[ArmDone]
+def check_literal_arm(
+  cx: State.Cx,
+  st: State.St,
+  arm: Ast.CaseArm,
+  pattern: Ast.LiteralPattern,
+  value_type: T.Type,
+  arms: Arms,
+) -> Result[ArmDone]
   pattern_type = literal_type(pattern.value)
   if !Types.primitive?(value_type) or !T.same(value_type, pattern_type)
-    return error(State.fail(cx, st, "CHECK-PATTERN-TYPE", "literal pattern has type " + T.to_text(pattern_type) + ", but case value has type " + T.to_text(value_type), pattern.span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-PATTERN-TYPE",
+        "literal pattern has type " + T.to_text(pattern_type) + ", but case value has type " + T.to_text(value_type),
+        pattern.span,
+      ),
+    )
   end
   if arms.literals.any? do |seen: Ast.LitValue| same_literal(seen, pattern.value) end
     return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
@@ -265,7 +362,14 @@ def check_literal_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, pattern: Ast
   return ok(ArmDone(st: body, arms: arms.with(literals: arms.literals.push(pattern.value))))
 end
 
-def check_variant_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, pattern: Ast.VariantPattern, value_type: T.Type, arms: Arms) -> Result[ArmDone]
+def check_variant_arm(
+  cx: State.Cx,
+  st: State.St,
+  arm: Ast.CaseArm,
+  pattern: Ast.VariantPattern,
+  value_type: T.Type,
+  arms: Arms,
+) -> Result[ArmDone]
   payload = payload_types(cx, pattern, value_type)
   if !payload.ok?
     return error(variant_mismatch(cx, st, pattern, value_type))
@@ -275,7 +379,15 @@ def check_variant_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, pattern: Ast
   end
   types = payload.unwrap!
   if pattern.bindings.size != types.size
-    return error(State.fail(cx, st, "CHECK-ARITY", "variant pattern expects " + types.size.to_s + " binding(s), found " + pattern.bindings.size.to_s, pattern.span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-ARITY",
+        "variant pattern expects " + types.size.to_s + " binding(s), found " + pattern.bindings.size.to_s,
+        pattern.span,
+      ),
+    )
   end
   bound = try bind_pattern(cx, State.enter(st), pattern, types)
   body = try check_block(cx, bound, arm.body)
@@ -290,7 +402,9 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
     case pattern.bindings[index]
       Ast.Optional.Present(name) ->
         if T.is(types[index], "Void")
-          return error(State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span))
+          return error(
+            State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span),
+          )
         end
         current = try State.introduce(cx, current, name, types[index], pattern.span, false)
       Ast.Optional.Absent -> current = current
@@ -305,7 +419,8 @@ def arm_body(cx: State.Cx, st: State.St, body: List[Ast.Stmt]) -> Result[State.S
   return ok(State.leave(inner, st))
 end
 
-# The payload types of a variant pattern: Ok and Err of a Result, or the variant of the enum the value has, with its type arguments filled in. An error when the pattern names another enum or no such variant.
+# The payload types of a variant pattern: Ok and Err of a Result, or the variant of the enum the value has, with its
+# type arguments filled in. An error when the pattern names another enum or no such variant.
 def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type) -> Result[List[T.Type]]
   if T.is(value_type, "Result") and pattern.enum_name == "Result" and pattern.variant_name == "Ok"
     return ok([T.item(value_type)])
@@ -337,12 +452,32 @@ end
 
 def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, value_type: T.Type) -> String
   if T.is(value_type, "Enum") and pattern.enum_name == T.name(value_type)
-    return State.fail(cx, st, "CHECK-UNKNOWN-VARIANT", "enum \"" + T.display_name(pattern.enum_name) + "\" has no variant \"" + pattern.variant_name + "\"", pattern.span)
+    return State.fail(
+      cx,
+      st,
+      "CHECK-UNKNOWN-VARIANT",
+      "enum \"" + T.display_name(pattern.enum_name) + "\" has no variant \"" + pattern.variant_name + "\"",
+      pattern.span,
+    )
   end
-  return State.fail(cx, st, "CHECK-PATTERN-TYPE", "variant pattern \"" + T.display_name(pattern.enum_name) + "." + pattern.variant_name + "\" does not match " + T.to_text(value_type), pattern.span)
+  return State.fail(
+    cx,
+    st,
+    "CHECK-PATTERN-TYPE",
+    (
+      "variant pattern \"" +
+      T.display_name(pattern.enum_name) +
+      "." +
+      pattern.variant_name +
+      "\" does not match " +
+      T.to_text(value_type)
+    ),
+    pattern.span,
+  )
 end
 
-# The variant names a case on this type must cover: Ok and Err for a Result, the variants of an enum; an error for any other type.
+# The variant names a case on this type must cover: Ok and Err for a Result, the variants of an enum; an error for any
+# other type.
 def variant_names(cx: State.Cx, value_type: T.Type) -> Result[List[String]]
   if T.is(value_type, "Result")
     return ok(["Ok", "Err"])
@@ -359,12 +494,29 @@ def all_covered?(names: List[String], covered: List[String]) -> Bool
   return names.all? do |name: String| covered.any? do |seen: String| seen == name end end
 end
 
-def check_exhaustive(cx: State.Cx, st: State.St, node: Ast.CaseStmt, value_type: T.Type, names: Result[List[String]], arms: Arms) -> Result[Bool]
+def check_exhaustive(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.CaseStmt,
+  value_type: T.Type,
+  names: Result[List[String]],
+  arms: Arms,
+) -> Result[Bool]
   if !names.ok?
-    return error(State.fail(cx, st, "CHECK-NON-EXHAUSTIVE-CASE", "case on a non-enum value requires a final _ arm", node.span))
+    return error(
+      State.fail(cx, st, "CHECK-NON-EXHAUSTIVE-CASE", "case on a non-enum value requires a final _ arm", node.span),
+    )
   end
   if !all_covered?(names.unwrap!, arms.covered)
-    return error(State.fail(cx, st, "CHECK-NON-EXHAUSTIVE-CASE", "case must cover every variant of " + T.to_text(value_type) + " or include _", node.span))
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-NON-EXHAUSTIVE-CASE",
+        "case must cover every variant of " + T.to_text(value_type) + " or include _",
+        node.span,
+      ),
+    )
   end
   return ok(true)
 end
@@ -435,11 +587,24 @@ def nothing?(b: Ast.LitValue) -> Bool
   end
 end
 
-def block_parameter_types(cx: State.Cx, st: State.St, block: Ast.BlockLit, known: Ast.Optional[List[T.Type]]) -> Result[List[T.Type]]
+def block_parameter_types(
+  cx: State.Cx,
+  st: State.St,
+  block: Ast.BlockLit,
+  known: Ast.Optional[List[T.Type]],
+) -> Result[List[T.Type]]
   case known
     Ast.Optional.Present(types) ->
       if types.size != block.params.size
-        return error(State.fail(cx, st, "CHECK-ARITY", "this block takes " + types.size.to_s + " parameter(s), found " + block.params.size.to_s, block.span))
+        return error(
+          State.fail(
+            cx,
+            st,
+            "CHECK-ARITY",
+            "this block takes " + types.size.to_s + " parameter(s), found " + block.params.size.to_s,
+            block.span,
+          ),
+        )
       end
     Ast.Optional.Absent -> known = known
   end
@@ -453,7 +618,13 @@ def block_parameter_types(cx: State.Cx, st: State.St, block: Ast.BlockLit, known
 end
 
 # The type of one block parameter: the annotation and the context agree, or one of them gives it.
-def block_parameter_type(cx: State.Cx, st: State.St, param: Ast.BlockParam, known: Ast.Optional[List[T.Type]], index: Int) -> Result[T.Type]
+def block_parameter_type(
+  cx: State.Cx,
+  st: State.St,
+  param: Ast.BlockParam,
+  known: Ast.Optional[List[T.Type]],
+  index: Int,
+) -> Result[T.Type]
   annotated = T.Type.Unknown
   case param.type
     Ast.Optional.Present(annotation) -> annotated = try Types.resolve_type(cx, st, annotation, false)
@@ -474,10 +645,20 @@ def block_parameter_type(cx: State.Cx, st: State.St, param: Ast.BlockParam, know
   elsif !T.unknown?(context)
     return ok(context)
   end
-  return error(State.fail_help(cx, st, "CHECK-BLOCK-TYPE", "the type of block parameter \"" + param.name + "\" is not known here", param.span, "annotate it, as in do |" + param.name + ": Int| ... end"))
+  return error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-BLOCK-TYPE",
+      "the type of block parameter \"" + param.name + "\" is not known here",
+      param.span,
+      "annotate it, as in do |" + param.name + ": Int| ... end",
+    ),
+  )
 end
 
-# The statements of a block: all but the last are statements; the last one, an expression, is the value of the block. The type in the result is Unknown when the last statement gives no value.
+# The statements of a block: all but the last are statements; the last one, an expression, is the value of the block.
+# The type in the result is Unknown when the last statement gives no value.
 def block_statements(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> Result[State.Out]
   if statements.size == 0
     return ok(State.Out(st: st, type: T.Type.Unknown))
