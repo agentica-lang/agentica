@@ -61,6 +61,14 @@ the roadmap order: the JIT first (section 22), then an `extern def` FFI into
 native libraries behind an explicit flag when a library needs it, and AOT last;
 the JIT changes no language, and the FFI syntax is only a sketch.
 
+Section 41 (dates and times) designs the calendar types `Date`, `NaiveDateTime`
+and `DateTime`, their conversions and their text, as native `Time` functions.
+The types are checker changes, so they come after the bootstrap (§35).
+`Time.monotonic_ns` is independent and may land earlier. Section 42 (sized
+numeric types) designs `Int8` to `UInt64` and `Float32`, with explicit
+conversions and rules for literals. It is implemented after the bootstrap, in
+the Agentica front end. `Int` and `Float` stay 64 bits on every target.
+
 
 ## Files
 
@@ -100,7 +108,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 28 | VM metrics | [`28-vm-metrics.md`](28-vm-metrics.md) | Planned (roadmap phase 18) |
 | 29 | TLS contexts | [`29-tls-context.md`](29-tls-context.md) | Planned (roadmap phase 19, order step 7.4) |
 | 30 | HTTP on the VM: simple, synchronous, hybrid | [`30-hybrid-http.md`](30-hybrid-http.md) | Streaming (roadmap 20e to 20g, order step 7.4) and binary bodies planned; the rest of phase 20 is built: [`docs/vm/10-io-http.md`](../vm/10-io-http.md) |
-| 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | 22a built, 22b planned (roadmap phase 22, order step 7.2a) |
+| 32 | Doc comments | [`32-doc-comments.md`](32-doc-comments.md) | 22a built (roadmap phase 22, order step 7.2a); 22b (`agentica doc`) waits until after the bootstrap (row 22b) |
 | 33 | Digit separators | [`33-digit-separators.md`](33-digit-separators.md) | Done (roadmap phase 23, 23a) |
 | 34 | Shared small values in the VM | [`34-shared-small-values.md`](34-shared-small-values.md) | Candidate (roadmap 7g); needs a measurement |
 | 35 | Self-hosted front end and a single binary | [`35-self-hosting.md`](35-self-hosting.md) | Planned, in the roadmap order from row 7.2.7 on |
@@ -109,7 +117,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 38 | Value representation | [`38-value-representation.md`](38-value-representation.md) | Note, no change planned; revisit with 8d and the benchmarks (roadmap order rows 9 and 14) |
 | 39 | Semantic CLI for agents | [`39-semantic-cli.md`](39-semantic-cli.md) | Planned (roadmap phase 26, order step 7.2b) |
 | 40 | Native code and FFI | [`40-native-code.md`](40-native-code.md) | Idea, not in the roadmap order: the JIT (roadmap 9.1) first; FFI and AOT wait for a need or a measurement |
-| 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; not scheduled |
+| 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; the types wait until after the bootstrap (§35, 41.13); `Time.monotonic_ns` may land earlier |
 | 42 | Sized numeric types | [`42-sized-numeric-types.md`](42-sized-numeric-types.md) | Designed by the owner's scope of 2026-10-14; implement after the bootstrap (§35) |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
