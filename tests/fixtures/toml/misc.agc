@@ -137,6 +137,9 @@ def get_case() -> Void
   puts("missing: " + brief(Toml.get(doc, "package.nope")))
   puts("bad index: " + brief(Toml.get(doc, "bin.7")))
   puts("into scalar: " + brief(Toml.get(doc, "package.name.x")))
+  for segment in ["bin.01.path", "bin.+1.path", "bin.-0.path", "bin.0.path", "bin.00.path", "bin.1x.path"]
+    puts(segment + ": " + brief(Toml.get(doc, segment)))
+  end
 end
 
 def round_trip_case() -> Void
@@ -150,6 +153,69 @@ def round_trip_case() -> Void
     puts(show(first))
     puts(show(second))
   end
+end
+
+# `n` nested tables below the root, so the deepest header has n parts.
+def table_chain(n: Int) -> Toml.Value
+  inner: Map[String, Toml.Value] = {"x": Toml.Value.Int(1)}
+  v = table(inner)
+  for i in 0...n
+    wrap: Map[String, Toml.Value] = {"a": v}
+    v = table(wrap)
+  end
+  return v
+end
+
+# `n` arrays inside each other as the value of the key `k`.
+def array_chain(n: Int) -> Toml.Value
+  v = Toml.Value.Int(1)
+  for i in 0...n
+    v = Toml.Value.Array([v])
+  end
+  root: Map[String, Toml.Value] = {"k": v}
+  return table(root)
+end
+
+# What the writer says, and whether the reader takes the text back.
+def write_and_read(label: String, value: Toml.Value) -> Void
+  written = Toml.encode(value)
+  if !written.ok?
+    puts(label + ": " + written.message)
+    return
+  end
+  back = Toml.parse(written.unwrap!)
+  if back.ok?
+    puts(label + ": ok")
+  else
+    puts(label + ": unreadable: " + back.message)
+  end
+end
+
+def limits_case() -> Void
+  write_and_read("tables 256", table_chain(256))
+  write_and_read("tables 257", table_chain(257))
+  write_and_read("tables 300", table_chain(300))
+  write_and_read("tables 1", table_chain(1))
+  write_and_read("tables 50000", table_chain(50000))
+  write_and_read("arrays 256", array_chain(256))
+  write_and_read("arrays 257", array_chain(257))
+  write_and_read("arrays 50000", array_chain(50000))
+  puts("json arrays 2000: " + Toml.to_json(array_chain(2000)).message + "|")
+  puts("json arrays 2100: " + Toml.to_json(array_chain(2100)).message)
+  puts("json arrays 50000: " + Toml.to_json(array_chain(50000)).message)
+  puts("json tables 50000: " + Toml.to_json(table_chain(50000)).message)
+end
+
+def dates_case() -> Void
+  items: List[Toml.Value] = []
+  for i in 0...10000
+    items = items.push(Toml.Value.DateTime("1979-05-27T07:32:00Z"))
+  end
+  root: Map[String, Toml.Value] = {"when": Toml.Value.Array(items)}
+  start = Time.monotonic_ms()
+  written = Toml.encode(table(root))
+  puts("size: " + Result.unwrap!(written).length.to_s)
+  puts("fast: " + (Time.monotonic_ms() - start < 2000).to_s)
 end
 
 def main() -> Void
@@ -169,5 +235,9 @@ def main() -> Void
     get_case()
   elsif name == "round_trip"
     round_trip_case()
+  elsif name == "limits"
+    limits_case()
+  elsif name == "dates"
+    dates_case()
   end
 end

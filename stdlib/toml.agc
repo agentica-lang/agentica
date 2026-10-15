@@ -133,11 +133,12 @@ end
 ## Writes a `Value.Table` as a TOML document ending in a newline. Any other root is an error.
 ## The output is deterministic: keys appear in the order of the `Map` (its insertion order). In each table, first the plain `key = value` lines of a table, then its sub-tables as `[a.b]` sections, and an array that holds only tables, when it is a direct entry of a table, as `[[a.b]]` sections, whatever the order of the `Map`; each group keeps the insertion order. Any other array or table (inside an array) is written inline.
 ## A key that is not a bare key (`A-Za-z0-9_-`) is quoted. Strings are basic strings with escapes. A float is written so that it reads back as the same float (`inf`, `-inf` and `nan` too). A `DateTime` whose text is not a valid TOML date-time is an error.
-## `parse(encode(v))` gives back `v` for every table `v` this function accepts.
+## `parse(encode(v))` gives back the same values and the same Map entries for every table `v` this function accepts, but the keys of a Map may be regrouped (plain entries first, then sub-tables, then arrays of tables).
+## A table path of more than 256 parts or an inline value nested more than 256 levels is an error (the reader refuses such text), so the text that `encode` writes can always be read back. No value halts the function.
 export def encode(value: Value) -> Result[String]
   case value
     Value.Table(entries) ->
-      lines = try emit_table(entries, [], [])
+      lines = try emit_table(entries, [], [], class_table())
       if lines.size == 0
         return ok("")
       end
@@ -148,35 +149,12 @@ end
 
 ## Converts a `Value` to `Json`, for typed decoding: `JSON.decode(JSON.encode(json), Config)`.
 ## A `DateTime` becomes its string. An `inf` or `nan` float is an error, since `Json` cannot hold it. An integer stays an integer and a float stays a float (`1.0` is not `1`).
+## A value nested more than 2,048 levels (no document `parse` reads is that deep) is an error, not a halt.
 export def to_json(value: Value) -> Result[Json]
-  case value
-    Value.Str(s) -> return ok(JSON.from(s))
-    Value.Int(n) -> return ok(JSON.from(n))
-    Value.Bool(b) -> return ok(JSON.from(b))
-    Value.DateTime(s) -> return ok(JSON.from(s))
-    Value.Float(x) ->
-      if !finite?(x)
-        return error("cannot convert " + float_text(x) + " to JSON")
-      end
-      return ok(JSON.from(x))
-    Value.Array(items) ->
-      out: List[Json] = []
-      for item in items
-        j = try to_json(item)
-        out = out.push(j)
-      end
-      return ok(JSON.array(out))
-    Value.Table(entries) ->
-      out: Map[String, Json] = {}
-      for k in entries.keys
-        j = try to_json(entries[k])
-        out = out.put(k, j)
-      end
-      return ok(JSON.object(out))
-  end
+  return json_of(value, 0)
 end
 
-## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment that is a number also indexes an array (`"bin.0.path"`).
+## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment of plain ASCII digits without a leading zero also indexes an array (`"bin.0.path"`).
 ## Returns an error that names the missing key. A key that holds a dot cannot be reached this way: use `case` on the `Table`.
 export def get(value: Value, path: String) -> Result[Value]
   current = value
@@ -189,7 +167,7 @@ export def get(value: Value, path: String) -> Result[Value]
         current = entries[part]
       Value.Array(items) ->
         index = part.to_i
-        if !index.ok? or index.unwrap! < 0 or index.unwrap! >= items.size
+        if !index_segment?(part) or !index.ok? or index.unwrap! >= items.size
           return error("no index \"" + part + "\" in \"" + path + "\"")
         end
         current = items[index.unwrap!]
@@ -197,6 +175,57 @@ export def get(value: Value, path: String) -> Result[Value]
     end
   end
   return ok(current)
+end
+
+# A plain run of ASCII digits without a leading zero (`0`, `7`, `12`): not `01`, `+1` or `-0`.
+def index_segment?(part: String) -> Bool
+  if part.length == 0 or (part.length > 1 and String.code(part.at(0)) == 48)
+    return false
+  end
+  for ch in part.split("")
+    c = String.code(ch)
+    if c < 48 or c > 57
+      return false
+    end
+  end
+  return true
+end
+
+# `depth` counts the arrays and tables above `value`. The deepest tree `parse` can build has under
+# 1,100 levels (256 header tables, as many arrays of tables, 256 dotted-key tables, 256 inline
+# levels), so the limit of 2,048 never refuses a parsed document.
+def json_of(value: Value, depth: Int) -> Result[Json]
+  case value
+    Value.Str(s) -> return ok(JSON.from(s))
+    Value.Int(n) -> return ok(JSON.from(n))
+    Value.Bool(b) -> return ok(JSON.from(b))
+    Value.DateTime(s) -> return ok(JSON.from(s))
+    Value.Float(x) ->
+      if !finite?(x)
+        return error("cannot convert " + float_text(x) + " to JSON")
+      end
+      return ok(JSON.from(x))
+    Value.Array(items) ->
+      if depth >= 2048
+        return error("a value nests more than 2048 levels")
+      end
+      out: List[Json] = []
+      for item in items
+        j = try json_of(item, depth + 1)
+        out = out.push(j)
+      end
+      return ok(JSON.array(out))
+    Value.Table(entries) ->
+      if depth >= 2048
+        return error("a value nests more than 2048 levels")
+      end
+      out: Map[String, Json] = {}
+      for k in entries.keys
+        j = try json_of(entries[k], depth + 1)
+        out = out.put(k, j)
+      end
+      return ok(JSON.object(out))
+  end
 end
 
 # Nesting limit of arrays, inline tables and keys. The recursion of the reader, the encoder and
@@ -777,15 +806,16 @@ end
 # The JSON number grammar is the TOML float grammar without underscores and a leading plus, and
 # its reader rounds correctly (String.to_float has no exponent). A zero keeps its sign.
 def decimal_float(src: Src, pos: Int, digits: String, negative: Bool, stop: Int) -> Result[Parsed]
+  x = Float.from_bits(9218868437227405312)
   json = JSON.parse(digits)
-  if !json.ok?
-    return error(place(src, pos, "float out of range"))
+  if json.ok?
+    magnitude = JSON.float(json.unwrap!)
+    if magnitude.ok?
+      x = magnitude.unwrap!
+    end
   end
-  magnitude = JSON.float(json.unwrap!)
-  if !magnitude.ok?
-    return error(place(src, pos, "float out of range"))
-  end
-  x = magnitude.unwrap!
+  # The text is a valid float, so a reader error means a magnitude above the largest float. IEEE
+  # rounding gives infinity then (1e400 is inf), and the peer parsers agree.
   if negative
     x = x * (0.0 - 1.0)
   end
@@ -911,9 +941,11 @@ def time_end(src: Src, pos: Int) -> Result[Int]
   return ok(stop)
 end
 
-# True when `text` is exactly one TOML date-time (used by the encoder).
-def valid_date_time?(text: String) -> Bool
-  src = make_src(text)
+# True when `text` is exactly one TOML date-time (used by the encoder, which builds the class table
+# once per document).
+def valid_date_time?(text: String, cls: List[Int]) -> Bool
+  codes = text.split("").map do |c| String.code(c) end
+  src = Src(text: text, codes: codes, n: codes.size, cls: cls)
   if !date_time_start?(src, 0)
     return false
   end
@@ -1070,30 +1102,46 @@ def hex_digit(n: Int) -> String
   return String.slice("0123456789ABCDEF", n, 1)
 end
 
-# A basic string with escapes. Characters above 127 are written as they are.
+# The escape of one character that a basic string cannot hold as it is.
+def escape_for(c: Int) -> String
+  if c == 34
+    return "\\\""
+  elsif c == 92
+    return "\\\\"
+  elsif c == 8
+    return "\\b"
+  elsif c == 9
+    return "\\t"
+  elsif c == 10
+    return "\\n"
+  elsif c == 12
+    return "\\f"
+  elsif c == 13
+    return "\\r"
+  end
+  return "\\u00" + hex_digit(c / 16) + hex_digit(c % 16)
+end
+
+# A basic string with escapes. Characters above 127 are written as they are. Runs of plain
+# characters are copied as one slice, so a string with nothing to escape costs one slice.
 def quote(s: String) -> String
+  chars = s.split("")
   parts: List[String] = ["\""]
-  for ch in s.split("")
-    c = String.code(ch)
-    if c == 34
-      parts = parts.push("\\\"")
-    elsif c == 92
-      parts = parts.push("\\\\")
-    elsif c == 8
-      parts = parts.push("\\b")
-    elsif c == 9
-      parts = parts.push("\\t")
-    elsif c == 10
-      parts = parts.push("\\n")
-    elsif c == 12
-      parts = parts.push("\\f")
-    elsif c == 13
-      parts = parts.push("\\r")
-    elsif c < 32 or c == 127
-      parts = parts.push("\\u00" + hex_digit(c / 16) + hex_digit(c % 16))
-    else
-      parts = parts.push(ch)
+  start = 0
+  i = 0
+  while i < chars.size
+    c = String.code(chars[i])
+    if c < 32 or c == 34 or c == 92 or c == 127
+      if i > start
+        parts = parts.push(String.slice(s, start, i - start))
+      end
+      parts = parts.push(escape_for(c))
+      start = i + 1
     end
+    i += 1
+  end
+  if chars.size > start
+    parts = parts.push(String.slice(s, start, chars.size - start))
   end
   parts = parts.push("\"")
   return parts.join("")
@@ -1123,28 +1171,36 @@ def path_text(path: List[String]) -> String
   return path.map do |k| key_text(k) end.join(".")
 end
 
-def inline(value: Value) -> Result[String]
+# `depth` counts the arrays and tables above `value`; the reader refuses more than 256, so the
+# writer does too, and what it writes can be read back.
+def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
   case value
     Value.Str(s) -> return ok(quote(s))
     Value.Int(n) -> return ok(n.to_s)
     Value.Float(x) -> return ok(float_text(x))
     Value.Bool(b) -> return ok(b.to_s)
     Value.DateTime(s) ->
-      if !valid_date_time?(s)
+      if !valid_date_time?(s, cls)
         return error("not a valid TOML date-time: " + quote(s))
       end
       return ok(s)
     Value.Array(items) ->
+      if depth >= max_depth()
+        return error("arrays and inline tables nest more than 256 levels")
+      end
       texts: List[String] = []
       for item in items
-        text = try inline(item)
+        text = try inline(item, cls, depth + 1)
         texts = texts.push(text)
       end
       return ok("[" + texts.join(", ") + "]")
     Value.Table(entries) ->
+      if depth >= max_depth()
+        return error("arrays and inline tables nest more than 256 levels")
+      end
       texts: List[String] = []
       for k in entries.keys
-        text = try inline(entries[k])
+        text = try inline(entries[k], cls, depth + 1)
         texts = texts.push(key_text(k) + " = " + text)
       end
       return ok("{" + texts.join(", ") + "}")
@@ -1170,7 +1226,10 @@ def table_array?(value: Value) -> Bool
 end
 
 # Writes a table's plain entries, then its sections. `path` is the table's own path.
-def emit_table(entries: Map[String, Value], path: List[String], out: List[String]) -> Result[List[String]]
+def emit_table(entries: Map[String, Value], path: List[String], out: List[String], cls: List[Int]) -> Result[List[String]]
+  if path.size > max_depth()
+    return error("tables nest more than 256 levels")
+  end
   lines = out
   for k in entries.keys
     v = entries[k]
@@ -1178,7 +1237,7 @@ def emit_table(entries: Map[String, Value], path: List[String], out: List[String
       Value.Table(_) -> next
       _ ->
         if !table_array?(v)
-          text = try inline(v)
+          text = try inline(v, cls, 0)
           lines = lines.push(key_text(k) + " = " + text)
         end
     end
@@ -1195,7 +1254,7 @@ def emit_table(entries: Map[String, Value], path: List[String], out: List[String
           end
           lines = lines.push("[" + path_text(sub_path) + "]")
         end
-        lines = try emit_table(sub, sub_path, lines)
+        lines = try emit_table(sub, sub_path, lines, cls)
       Value.Array(items) ->
         if table_array?(v)
           for item in items
@@ -1205,7 +1264,7 @@ def emit_table(entries: Map[String, Value], path: List[String], out: List[String
                   lines = lines.push("")
                 end
                 lines = lines.push("[[" + path_text(sub_path) + "]]")
-                lines = try emit_table(row, sub_path, lines)
+                lines = try emit_table(row, sub_path, lines, cls)
               _ -> next
             end
           end

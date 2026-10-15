@@ -366,6 +366,20 @@ class OwnInvalid(TomlTestCase):
             self.assertFalse(report["ok"], bad)
             self.assertIn("64-bit", report["error"], bad)
 
+    def test_a_header_and_a_key_may_each_reach_the_limit(self):
+        # The reader accepts 256 header parts plus 256 key parts; the writer refuses that depth with an error.
+        text = "[" + ".".join(["a"] * 256) + "]\n" + ".".join(["b"] * 256) + " = 1\n"
+        report = self.parse_text("both-limits", text)
+        self.assertTrue(report["ok"], report.get("error"))
+        self.assertIn("nest more than 256", report["encode_error"])
+
+    def test_float_overflow_is_infinity_like_the_peer(self):
+        report = self.parse_text("overflow-floats", "a = 1e400\nb = -1e400\nc = 1e-400\nd = -1e-400\ne = 2.5e-324\n")
+        self.assertTrue(report["ok"], report.get("error"))
+        values = {k: int(v["v"]) for k, v in report["tagged"]["v"].items()}
+        self.assertEqual(values, {"a": float_bits(math.inf), "b": float_bits(-math.inf), "c": 0,
+                                  "d": float_bits(-0.0), "e": float_bits(5e-324)})
+
     def test_nesting_limit(self):
         limit = 256
         cases = {
@@ -379,6 +393,7 @@ class OwnInvalid(TomlTestCase):
             "mixed-over-limit": ("a = " + "[{a=" * 129 + "1" + "}]" * 129 + "\n", False),
             "header-at-limit": ("[" + ".".join(["a"] * limit) + "]\n", True),
             "header-over-limit": ("[" + ".".join(["a"] * (limit + 1)) + "]\n", False),
+            "header-and-key-over-limit": ("[" + ".".join(["a"] * 200) + "]\n" + ".".join(["b"] * 300) + " = 1\n", False),
             "dotted-key-over-limit": (".".join(["a"] * (limit + 1)) + " = 1\n", False),
             "header-far-over": ("[" + ".".join(["a"] * 50000) + "]\n", False),
         }
@@ -477,7 +492,33 @@ class Misc(TestCase):
             "missing: no key \"nope\" in \"package.nope\"",
             "bad index: no index \"7\" in \"bin.7\"",
             "into scalar: \"x\" in \"package.name.x\" is not inside a table or an array",
+            "bin.01.path: no index \"01\" in \"bin.01.path\"",
+            "bin.+1.path: no index \"+1\" in \"bin.+1.path\"",
+            "bin.-0.path: no index \"-0\" in \"bin.-0.path\"",
+            "bin.0.path: str a",
+            "bin.00.path: no index \"00\" in \"bin.00.path\"",
+            "bin.1x.path: no index \"1x\" in \"bin.1x.path\"",
         ])
+
+    def test_encoder_and_to_json_refuse_what_the_reader_would_refuse(self):
+        # No halt for a value nested 50,000 deep, and whatever the encoder writes, the reader takes back.
+        self.assertEqual(self.lines("limits"), [
+            "tables 256: ok",
+            "tables 257: tables nest more than 256 levels",
+            "tables 300: tables nest more than 256 levels",
+            "tables 1: ok",
+            "tables 50000: tables nest more than 256 levels",
+            "arrays 256: ok",
+            "arrays 257: arrays and inline tables nest more than 256 levels",
+            "arrays 50000: arrays and inline tables nest more than 256 levels",
+            "json arrays 2000: |",
+            "json arrays 2100: a value nests more than 2048 levels",
+            "json arrays 50000: a value nests more than 2048 levels",
+            "json tables 50000: a value nests more than 2048 levels",
+        ])
+
+    def test_many_date_times_encode_fast(self):
+        self.assertEqual(self.lines("dates"), ["size: 220008", "fast: true"])
 
     def test_encode_then_parse_is_the_identity_for_built_values(self):
         self.assertEqual(self.lines("round_trip"), ["same"])

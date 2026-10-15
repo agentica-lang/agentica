@@ -141,6 +141,7 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   frontend-check-common.rkt  # the checker text form (types, resolutions, diagnostic notes) printed from src/checker.rkt, and its goldens (references/frontend.md)
   frontend-check-test.rkt  # fast: generated tables, goldens, every CHECK- code and rule; slow: both checkers on the corpus, mutants, deep trees, a large program
   test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
+  test_std_toml.py  # unittest: std/toml against toml-test and tomllib, encoder, limits (references/library-notes.md)
   test_filesystem.py  # unittest: File and Path programs on the VM (references/vm-io.md)
   cli-in-process.rkt  # helper: runs src/main.rkt in process for CLI tests
   info.rkt        # the Racket package info: lists the tests the runner omits
@@ -171,11 +172,11 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   test_bdd_integration.py  # unittest: programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
   unit-test-test.rkt  # agentica test on *_test.agc files; slow: stderr flood, endless print, flooding listing (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules
-  fixtures/       # golden fixtures and independent Node.js and Python peers
+  fixtures/       # golden fixtures and independent Node.js and Python peers; toml/ (std/toml inputs, driver.agc, misc.agc), toml-test/ (vendored, MIT)
   bdd/            # feature specs and step handlers run by make test-bdd (references/bdd.md)
   eval/           # agent evaluation runner, not part of make test (references/bench-eval.md)
 stdlib/                 # std/ modules written in Agentica, embedded by src/stdlib.rkt (an explicit registry keyed "std/<path>.agc")
-  queue.agc http.agc binary.agc logger.agc    # std/queue, std/http, std/binary, std/logger
+  queue.agc http.agc binary.agc logger.agc toml.agc    # std/queue, std/http, std/binary, std/logger, std/toml
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md
   test/report.agc test/runner.agc test/units.agc test/child.agc  # internal to agentica test: the report, the runner, the test-file runner and the child-channel record helpers, shared by unit tests and BDD

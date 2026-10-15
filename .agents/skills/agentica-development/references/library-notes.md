@@ -83,6 +83,35 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
   both files when the vectors change. `tests/std-binary-test.rkt` checks the
   fixed output.
 
+## std/toml (phase 45-0)
+
+- `std/toml` (`stdlib/toml.agc`) is pure Agentica, no C. The reader walks a list
+  of code points (`Src`, with a 128-entry class table of bits for digits, bare
+  keys, number characters, forbidden control characters and string stoppers)
+  with `while` loops; each function returns the next position in a small struct
+  (`Parsed`, `Scan`, `Key`). CRLF is turned into LF before reading, so a lone CR
+  is an error everywhere. Error text is built only on the error path (`place`
+  scans from the start for the line and column).
+- Floats go through `JSON.parse` and `JSON.float` (`String.to_float` has no
+  exponent and rounds less well). A reader error on a valid float text means a
+  magnitude over the largest float, which is inf, as in `tomllib`. A sign is
+  applied afterwards so that `-0.0` survives.
+- Tables are built as a `Node` tree (`Leaf` sealed, `Tab` with its `Origin` and
+  `Rows` for arrays of tables) because `Value` cannot tell which tables a
+  header or a dotted key may still extend. `Origin.Dotted` carries the number of
+  the section that made it: only that section adds keys. This is the rule set of
+  `tomllib`'s flags. The tree is turned into `Value` at the end.
+- Limits, all 256: arrays and inline tables per value, parts of one header, parts
+  of one dotted key. The encoder refuses the same depths (a table path over 256,
+  inline nesting over 256), and `to_json` refuses 2,048 levels, so no value built
+  by a caller halts with `RUNTIME-STACK-OVERFLOW`, and what `encode` writes
+  `parse` reads back.
+- The encoder builds the class table once per document, because the date-time
+  check reuses the reader (`valid_date_time?`). Tests: `tests/test_std_toml.py`
+  compares the tagged value with the vendored toml-test JSON (its `valid/` and
+  `invalid/` for TOML 1.0.0, MIT, `tests/fixtures/toml-test/`) and with
+  `tomllib`; `.gitattributes` marks both fixture folders `-text` to keep CRLF.
+
 ## Comments in stdlib/
 
 - Give the module a `##` doc block (its first block, followed by a blank

@@ -31,15 +31,15 @@ end
 
 The root of a document is always a `Table`. A `Table` is a `Map`, so it keeps the keys in the order they were first written. An `Int` is a signed 64-bit integer: a larger value is a parse error. `Float` holds `inf` and `nan` too. Arrays may mix types, as TOML 1.0 allows.
 
-A `DateTime` keeps the text as it was written, because a date-time and a string are different values in TOML and the date types of the language do not exist yet. All four forms are accepted: an offset date-time (`1979-05-27T07:32:00Z`), a local date-time (`1979-05-27 07:32:00`), a local date (`1979-05-27`) and a local time (`07:32:00`). The module checks the text (month, day of the month with leap years, hour, minute, second, offset) but does not convert it.
+A `DateTime` keeps the text as it was written, because a date-time and a string are different values in TOML and the date types of the language do not exist yet. All four forms are accepted: an offset date-time (`1979-05-27T07:32:00Z`), a local date-time (`1979-05-27 07:32:00`), a local date (`1979-05-27`) and a local time (`07:32:00`). The module checks the text (month, day of the month with leap years, hour, minute, second, offset) but does not convert it. A leap second (`:60`) is accepted, because RFC 3339 allows it although some parsers reject it, and fractional seconds keep every digit as written.
 
 ## Reading
 
-`Toml.parse` accepts TOML 1.0 and nothing else: bare, quoted and dotted keys; basic, literal and multi-line strings with all escapes, including `\uXXXX`, `\UXXXXXXXX` and the backslash at the end of a line; integers in decimal, hex, octal and binary with `_`; floats with an exponent, `inf` and `nan`; booleans; date-times; arrays; inline tables; standard tables and arrays of tables; comments; CRLF line ends. A CRLF counts as one LF, also inside a multi-line string.
+`Toml.parse` accepts TOML 1.0 and nothing else: bare, quoted and dotted keys; basic, literal and multi-line strings with all escapes, including `\uXXXX`, `\UXXXXXXXX` and the backslash at the end of a line; integers in decimal, hex, octal and binary with `_`; floats with an exponent, `inf` and `nan` (a magnitude above the largest float reads as `inf`, as in Python's `tomllib`, and one below the smallest as zero); booleans; date-times; arrays; inline tables; standard tables and arrays of tables; comments; CRLF line ends. A CRLF counts as one LF, also inside a multi-line string.
 
 The rules of redefinition are errors: a duplicate key, a table defined twice, adding keys to an inline table or to a static array, a dotted key that names a table a `[header]` defined (or the other way round), and `[[a]]` where `a` is a static array or a table. Control characters are rejected in strings and comments, and a lone carriage return is an error.
 
-`Toml.get(value, path)` reads a value by a dotted path (`"package.name"`). A segment that is a number also indexes an array, so `"bin.1.path"` reads the second `[[bin]]`. It returns an error that names the missing key. A key that itself holds a dot cannot be reached this way: use `case` on the `Table`.
+`Toml.get(value, path)` reads a value by a dotted path (`"package.name"`). A segment of plain digits (no sign, no leading zero) also indexes an array, so `"bin.1.path"` reads the second `[[bin]]`. It returns an error that names the missing key. A key that itself holds a dot cannot be reached this way: use `case` on the `Table`.
 
 ```agentica
 import Toml from "std/toml"
@@ -78,7 +78,9 @@ Arrays and inline tables nest at most 256 levels, and a key (a table header or a
 - A float is written so that it reads back as the same float, including `inf`, `-inf` and `nan`.
 - A `DateTime` whose text is not a valid TOML date-time is an error.
 
-`Toml.parse` of what `Toml.encode` wrote gives back the same value.
+`Toml.parse` of what `Toml.encode` wrote gives back the same values in the same Maps, but the order of the keys may be regrouped: plain entries first, then sub-tables, then arrays of tables.
+
+The writer keeps the limits of the reader: a table path of more than 256 parts, or an inline value (an array, or a table inside an array) nested more than 256 levels, is an error, so what `encode` writes can always be read back. A value nested very deeply is an error, never a halt, and so is `Toml.to_json` beyond 2,048 levels.
 
 ```agentica
 import Toml from "std/toml"
