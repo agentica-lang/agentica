@@ -56,6 +56,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | `'+'`, `'abc'`, `` `abc` `` (`LEX-UNEXPECTED-CHAR`) | strings use double quotes; a character is a one-character String: `"+"` |
 | `// note`, `/* note */` (`PARSE-UNEXPECTED-TOKEN`) | comments start with `#`; `4 // 2` has no `//` operator, `/` on two Ints truncates |
 | a `##` doc block that is not directly above a `def`, `struct`, `enum`, field or variant (`PARSE-DETACHED-DOC`) | put the doc block on the lines just above what it documents, with no blank line or `#` comment between; use `#` for a note that documents nothing |
+| a function before a `struct` or `enum`, a private `def` before an `export def`, an `import` after a declaration (`CHECK-DECL-ORDER`) | keep the file order: module doc and imports, then `struct` and `enum`, then `export def`, then `def` |
 | a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`) | statements go inside `def main() -> Void ... end`; an extra `end` closes nothing; a stray `else` or `elsif` has no matching `if` |
 | `s.chars`, `s.each_char` | `s.split("")`, and `s.at(i)` for one character |
 | `s.matches?(...)`, `s.match?(...)`, `s.scan(...)` | no regular expressions: `contains?`, `starts_with?`, `ends_with?`, `index_of` |

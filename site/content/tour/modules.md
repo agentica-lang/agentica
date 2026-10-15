@@ -25,6 +25,26 @@ def secret() -> Int
 end
 ```
 
+## File layout
+
+Every file lists its declarations in the same order: the module doc and the imports, then `struct` and `enum` declarations, then `export def` functions, then private `def` functions. Types may come in any order among themselves. The order is only style, because a function can still call one declared later, but the checker enforces it so every file reads the same way.
+
+A private function before an exported one is `CHECK-DECL-ORDER`:
+
+```agentica {expect="CHECK-DECL-ORDER"}
+def secret() -> Int
+  return 42
+end
+
+export def reveal() -> Int
+  return secret()
+end
+
+def main() -> Void
+  puts(reveal())
+end
+```
+
 ## Import a file
 
 `import` loads a file and gives it a name, the alias. Use the alias in front of

@@ -5,6 +5,7 @@ Read this for the exact rule behind a checker error or a core question that SKIL
 ## Program shape
 
 - A file has top-level `def`, `struct`, `enum`, and `import` declarations; no statements run at top level. `export` may prefix a function, struct, or enum.
+- Declarations keep one order in every file: the module doc and `import`s, then `struct` and `enum` (exported or not, in any order), then `export def` functions, then private `def` functions. The first declaration out of place is `CHECK-DECL-ORDER`, at its start. The order is style only: a function may call a function declared later.
 - The root file needs exactly one `def main() -> Void` with no parameters. Only that entrypoint runs.
 - Blocks end with `end`; indentation is for reading only. `#` starts a comment to the end of the line.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression may span lines, and a trailing comma is allowed. To split a long expression, wrap it in parentheses.
