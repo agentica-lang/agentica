@@ -87,7 +87,8 @@ The self-hosted front end and a single binary
 ([§35](../future/35-self-hosting.md)), decided by the owner on 2026-10-13, are
 in the order from row 7.2.7 on, after their prerequisites (rows 8 and 7.2.4 to
 7.2.6; [§35.9](../future/35-self-hosting.md#359-order)). Its steps (§35.4) are
-PRs, not rows of this table.
+PRs, not rows of this table. Before the step-8 PR merges: cut a release (the
+last one with the Racket front end; owner decision, 2026-10-15).
 
 Designed, not scheduled: dates and times (§41,
 [`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).

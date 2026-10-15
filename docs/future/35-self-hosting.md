@@ -116,6 +116,9 @@ checked-in file keeps the build hermetic and offline, like CI today, and works
 in the private alpha, which has no stable releases to rely on. Zig (`zig1.wasm`)
 and OCaml (`boot/ocamlc`) do the same.
 
+The release cut right before step 8 (35.4) is a fixed reference point and a
+fallback for users. It does not replace the checked-in stage0.
+
 **Versions.** The loader checks the format version of every program. It checks
 the Agentica version of every program except the front end that C loads itself:
 the embedded one, or the file given to `--front-end`. So a version bump does not
@@ -219,7 +222,9 @@ Notes:
   VM, as it runs the BDD runner today, and passes it the VM's path. So
   `agentica test` always works. Releases before step 8 ship today's archive (the
   Racket front end and `agentica-vm`). The first release after step 8 is the
-  single binary.
+  single binary. A release is cut right before the step-8 PR merges, as the
+  starting point before the bootstrap (owner decision, 2026-10-15). It is the
+  last release with the Racket front end.
 - **Step 8 in detail.** The diagnostic forms (`format-diagnostic`, the `--ai`
   text, `diagnostic->jsexpr`) move to Agentica; `vm/diag.c` already prints the
   same forms for runtime errors. The version moves from `src/version.rkt` to a
