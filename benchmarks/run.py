@@ -28,6 +28,7 @@ NAMES = [
     "list-build",
     "list-bulk",
     "maps",
+    "sets",
     "calls",
     "case",
     "string-library",
