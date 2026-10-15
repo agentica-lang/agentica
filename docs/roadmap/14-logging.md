@@ -67,7 +67,7 @@ builtins too (§24.2, "Types").
   and why (§24.2, "Decided"). Done: `vm/logger.c` (the ten `LogRegistry`
   builtins over `vm->rt->log`), `stdlib/logger.agc`, goldens
   `tests/fixtures/vm/logger-*.agc`, `tests/std/logger_test.agc` for the
-  registry, `tests/vm-logger-test.rkt` with the Python peer
+  registry, `tests/test_vm_logger.py` with the Python peer
   `tests/fixtures/logger-peer.py`, and the benchmark
   `benchmarks/programs/logger-disabled.agc`.
 
