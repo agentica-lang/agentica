@@ -722,9 +722,9 @@ Expected values come from fixtures whose numbers are known.
   trace variables, and every test file that removes `AGENTICA_VM_TRACE` removes
   all three too when it loads (today `tests/bytecode-test.rkt`,
   `tests/cli-in-process.rkt`, `tests/modules-test.rkt`,
-  `tests/process-test.rkt`, `tests/stdlib-distribution-test.rkt`,
-  `tests/vm-diff-common.rkt`, `tests/vm-latency-test.rkt` and
-  `tests/vm-trace-test.rkt`), so a developer's setting cannot change expected
+  `tests/stdlib-distribution-test.rkt`, `tests/vm-diff-common.rkt`,
+  `tests/vm-latency-test.rkt` and `tests/vm-trace-test.rkt`; the Python tests
+  use `vm_environment` of `tests/agentica_test.py`), so a developer's setting cannot change expected
   output. The `vm-sanitizers` CI job also builds `make vm vm-test METRICS=0`,
   and `agentica-vm --version` says `metrics off` there.
 - **Overhead check** (manual, like `make bench`; not in `make test` or CI, where

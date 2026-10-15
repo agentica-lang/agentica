@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.." || exit 1
 exe_tests() {
-  AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" raco test -j 2 tests/process-test.rkt tests/modules-test.rkt
+  AGENTICA_TEST_EXECUTABLE="$PWD/dist/agentica" "${MAKE:-make}" --no-print-directory test \
+    TESTS="tests/test_process.py tests/modules-test.rkt" JOBS=2
 }
 if [ "${1:-}" = exe ]; then
   exe_tests

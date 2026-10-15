@@ -667,7 +667,7 @@ and 26.4.
 | `site/content` blocks | 0 | 17 blocks on 7 pages (`library/io-and-system/network.md` 7, `process.md` 3, `files.md` 3, `io.md`, `library/data-structures/range.md`, `library/concurrency/task.md`, `tour/results-and-try.md`) | 0 | 0 |
 | Programming skill examples | 0 | 0 | 0 | 0 |
 | Bare `_` used as a variable (all of the sources above) | | 0 breaks: no `_ =`, no read of `_`, no `_` block parameter; 3 `for _ in` loops in `tests/fixtures/vm/random.agc`, which stay valid as discards | | |
-| Inline programs in Racket tests, before 7i | 1 (`tests/modules-test.rkt:207`) | 36: 24 in `checker-test.rkt` (23 of the 33 `check-ok` programs the scan could read, and one more), 6 in `bytecode-test.rkt`, 2 in `bdd-integration.rkt`, 1 each in `modules-test.rkt` (`:208`), `examples-test.rkt`, `task-test.rkt` and `vm-diff-common.rkt` | 0 | 1 (a `check-ok` program in `checker-test.rkt` that drops `HTTP.respond`) |
+| Inline programs in Racket tests, before 7i | 1 (`tests/modules-test.rkt:207`) | 36: 24 in `checker-test.rkt` (23 of the 33 `check-ok` programs the scan could read, and one more), 6 in `bytecode-test.rkt`, 2 in `bdd-integration.rkt` (now `test_bdd_integration.py`), 1 each in `modules-test.rkt` (`:208`), `examples-test.rkt`, `task-test.rkt` and `vm-diff-common.rkt` | 0 | 1 (a `check-ok` program in `checker-test.rkt` that drops `HTTP.respond`) |
 
 The inline counts are for the tests as they are before 7i. 7i deletes the
 evaluator and the tests that only exercise it, so the implementing PRs, which

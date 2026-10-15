@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from collections import namedtuple
 from pathlib import Path
@@ -339,3 +340,39 @@ def check_lines(case, text, expected, message):
             case.assertEqual(line, want, message)
         else:
             case.assertTrue(line.startswith(want[1]), "%s: %r should start with %r" % (message, line, want[1]))
+
+
+def process_alive(pid):
+    """True while the process exists and is not a zombie (Linux /proc)."""
+    try:
+        with open("/proc/%d/stat" % int(pid)) as stat:
+            text = stat.read()
+    except OSError:
+        return False
+    return text.rsplit(") ", 1)[-1][:1] != "Z"
+
+
+def wait_until(predicate, timeout=WAIT_SECONDS, interval=0.05):
+    """Poll `predicate` until it is true (returns True) or `timeout` seconds pass (returns False)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)
+
+
+def processes_mentioning(text):
+    """The pids whose command line contains `text` (Linux /proc)."""
+    needle = os.fsencode(str(text))
+    found = []
+    for entry in os.listdir("/proc"):
+        if entry.isdigit():
+            try:
+                with open("/proc/%s/cmdline" % entry, "rb") as cmdline:
+                    if needle in cmdline.read():
+                        found.append(int(entry))
+            except OSError:
+                pass
+    return found

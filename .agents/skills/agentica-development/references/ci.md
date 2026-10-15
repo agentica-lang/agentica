@@ -37,7 +37,8 @@ comment), then a step that calls it. Targets that are not obvious:
   and `Child` and `start_vm(flags=)` for a peer or VM read line by line
   (`next_line`, `next_stderr_line`, `wait`, `close_stdin`; `read_stdout=False`
   for a pipe that must stay full), killed with its process group when the test
-  ends, also on Ctrl-C or SIGTERM. Without `python3`, `CI` set fails the run
+  ends, also on Ctrl-C or SIGTERM; `process_alive`, `wait_until` and
+  `processes_mentioning` check that a test left no process. Without `python3`, `CI` set fails the run
   and a local run reports a skip; a missing VM binary does the same for a
   test.
 - `test-slow` runs the `slow` submodule of the rackunit files (`raco test
