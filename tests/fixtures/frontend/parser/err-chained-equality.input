@@ -1,0 +1,4 @@
+def f() -> Bool
+  return a == b == c
+end
+

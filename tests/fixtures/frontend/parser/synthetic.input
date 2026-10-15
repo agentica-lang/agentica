@@ -1,0 +1,113 @@
+## A small inventory module used to exercise the parser.
+
+import "util" as Util
+
+## One stocked item.
+struct Item
+  name: String
+  count: Int
+  price: Float
+end
+
+## What a lookup can return.
+export enum Found[T]
+  Hit(T)
+  Miss
+end
+
+def find(items: List[Item], name: String) -> Found[Item]
+  for item in items
+    if item.name == name
+      return Found.Hit(item)
+    end
+  end
+  return Found.Miss
+end
+
+def total(items: List[Item]) -> Float
+  sum = 0.0
+  for item in items
+    sum += item.count.to_f * item.price
+  end
+  return sum
+end
+
+def describe(found: Found[Item]) -> String
+  case found
+    Found.Hit(item) -> return "#{item.name}: #{item.count}"
+    Found.Miss -> return "missing"
+  end
+end
+
+def restock(items: List[Item], amount: Int) -> List[Item]
+  return items.map do |item|
+    if item.count < 5 and amount > 0
+      Item(name: item.name, count: item.count + amount, price: item.price)
+    else
+      item
+    end
+  end
+end
+
+def parse_count(text: String) -> Result[Int]
+  count = try text.to_i
+  if count < 0
+    return error("negative: #{count}")
+  end
+  return ok(count)
+end
+
+def report(items: List[Item], title: String) -> String
+  lines: List[String] = []
+  for item in items
+    line = "#{item.name} x#{item.count} @ #{item.price}"
+    lines = lines.push(line)
+  end
+  return "#{title}\n#{lines.join("\n")}"
+end
+
+def cheapest(items: List[Item]) -> Found[Item]
+  best = Found.Miss
+  for item in items
+    case best
+      Found.Miss -> best = Found.Hit(item)
+      Found.Hit(current) ->
+        if item.price < current.price
+          best = Found.Hit(item)
+        end
+    end
+  end
+  return best
+end
+
+def histogram(items: List[Item]) -> Map[String, Int]
+  counts: Map[String, Int] = {}
+  for item in items
+    counts = Map.put(counts, item.name, item.count)
+  end
+  return counts
+end
+
+def main() -> Void
+  items: List[Item] = [
+    Item(name: "pen", count: 3, price: 1.5),
+    Item(name: "book", count: 12, price: 9.99),
+  ]
+  stock = {"pen": 3, "book": 12}
+  puts(describe(find(items, "pen")))
+  puts("total #{total(items)}")
+  better = restock(items, 10) |> List.size()
+  n = 0
+  while n < 3
+    n += 1
+    next
+  end
+  case parse_count("x7")
+    ok(c) -> puts("count #{c}")
+    error(m) -> puts(m)
+  end
+  puts(stock["pen"] + better)
+  for i in 0...n
+    puts(i)
+  end
+end

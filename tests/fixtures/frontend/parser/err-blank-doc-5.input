@@ -1,0 +1,6 @@
+## d
+def a() -> Void
+end
+## e
+def b() -> Void
+end

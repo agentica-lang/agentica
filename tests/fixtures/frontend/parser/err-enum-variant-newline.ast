@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 11:2:5-12:2:6 "expected a newline after the enum variant, found \"B\"" -

@@ -165,14 +165,22 @@
                     (string-replace (string-upcase (symbol->string op)) "-" "_"))))
 
   (test-case "JSON field types are written only for programs that use them, up to 1024 nested levels"
-    (define (nested n) (string-append (string-append* (make-list n "List[")) "Int" (make-string n #\])))
-    (define (program n use?)
-      (format "struct Deep\n  xs: ~a\nend\n\ndef main() -> Void\n  ~a\nend\n"
-              (nested n) (if use? "puts(JSON.schema(Deep))" "puts(1)")))
-    (check-pred bc-program? (ir->bytecode (lower-text (program 1024 #t))))
-    (define deep (ir->bytecode (lower-text (program 1025 #t))))
+    (define (nested n) (for/fold ([type 'Int]) ([_ (in-range n)]) (list 'List type)))
+    (define (source-type n) (string-append (string-append* (make-list n "List[")) "Int" (make-string n #\])))
+    ; The parser stops at 1000 levels of nesting, so a deeper type cannot be written in source: the used
+    ; case sets the JSON field type of the struct in the IR. The unused case keeps a deep type in source.
+    (define (program source-n use? ir-n)
+      (define ir (lower-text (format "struct Deep\n  xs: ~a\nend\n\ndef main() -> Void\n  ~a\nend\n"
+                                     (source-type source-n) (if use? "puts(JSON.schema(Deep))" "puts(1)"))))
+      (struct-copy ir-program ir
+                   [structs (for/list ([entry (in-list (ir-program-structs ir))])
+                              (if (and use? (equal? (ir-struct-name entry) "Deep"))
+                                  (struct-copy ir-struct entry [types (list (nested ir-n))])
+                                  entry))]))
+    (check-pred bc-program? (ir->bytecode (program 1 #t 1024)))
+    (define deep (ir->bytecode (program 1 #t 1025)))
     (check-equal? (and (diagnostic? deep) (diagnostic-code deep)) 'BYTECODE-LIMIT)
-    (define plain (ir->bytecode (lower-text (program 1025 #f))))
+    (define plain (ir->bytecode (program 900 #f 0)))
     (check-equal? (vector-length (bc-program-types plain)) 0))
 
   (test-case "compile exits 1 on a diagnostic and 2 on an unwritable output"

@@ -1,0 +1,4 @@
+def f() -> Void
+  x = 1 |> (IO.gets)
+end
+

@@ -1,0 +1,5 @@
+def main() -> Void
+  case x
+    Option -> puts(1)
+  end
+end

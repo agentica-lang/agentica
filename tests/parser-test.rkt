@@ -661,4 +661,19 @@
     (check-equal? (docs-by-line comment-before) '((5 . "d")))
     (define after-import (parse-ok "import \"a\" as A\n## d\ndef b() -> Void\nend\n"))
     (check-equal? (docs-by-line after-import) '((3 . "d")))
-    (check-equal? (problem-at "## d\ndef a() -> Void\nend\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1))))
+    (check-equal? (problem-at "## d\ndef a() -> Void\nend\n## e\ndef b() -> Void\nend\n") '(PARSE-MISSING-BLANK-LINE 4 1)))
+
+  (test-case "nesting and chains beyond 1000 levels are PARSE-TOO-DEEP at the token that passes the limit"
+    (define (body text) (format "def main() -> Void\n  ~a\nend\n\n" text))
+    (define (repeat text count) (apply string-append (for/list ([_ (in-range count)]) text)))
+    (parse-ok (body (string-append "x = " (repeat "(" 900) "1" (repeat ")" 900))))
+    (parse-ok (body (string-append "x = 1" (repeat " + 1" 900))))
+    (for ([text (list (string-append "x = " (repeat "(" 1000) "1" (repeat ")" 1000))
+                      (string-append "x = " (repeat "- " 1000) "1")
+                      (string-append "x = 1" (repeat " + 1" 1000))
+                      (string-append "x = a" (repeat ".b" 1000))
+                      (repeat "if x\n" 1000))])
+      (check-equal? (parse-code (body text)) 'PARSE-TOO-DEEP))
+    (define problem (parse-text (body (string-append "x = 1" (repeat " + 1" 1000)))))
+    (check-equal? (source-position-column (source-span-start (diagnostic-span problem))) 4001)))
+

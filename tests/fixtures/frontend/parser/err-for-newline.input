@@ -1,0 +1,4 @@
+def main() -> Void
+  for x in xs puts(x)
+  end
+end

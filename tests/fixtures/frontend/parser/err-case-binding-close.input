@@ -1,0 +1,5 @@
+def main() -> Void
+  case x
+    Option.Some(a b) -> puts(1)
+  end
+end

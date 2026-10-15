@@ -1,0 +1,4 @@
+def f() -> Void
+  puts "hello"
+end
+

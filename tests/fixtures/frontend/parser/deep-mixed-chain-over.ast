@@ -1,0 +1,1 @@
+ERROR PARSE-TOO-DEEP 4023:2:4005-4024:2:4006 "nesting is deeper than 1000 levels" "split the code into smaller functions or simpler expressions"

@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 32:2:14-34:2:16 "a block needs a call before it, found the name \"lambda\"" "there are no standalone lambdas: pass a block to a call (xs.map do |x| ... end) or use &name"

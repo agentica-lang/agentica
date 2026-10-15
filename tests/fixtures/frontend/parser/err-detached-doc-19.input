@@ -1,0 +1,5 @@
+struct S
+  ## d
+  # note
+  a: Int
+end

@@ -1,0 +1,4 @@
+def main() -> Void
+  if x puts(1)
+  end
+end

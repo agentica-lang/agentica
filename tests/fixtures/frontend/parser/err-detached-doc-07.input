@@ -1,0 +1,6 @@
+import "a" as A
+
+## d
+
+def a() -> Void
+end

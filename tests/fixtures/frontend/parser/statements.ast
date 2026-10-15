@@ -1,0 +1,144 @@
+program #141 0:1:1-824:63:1
+  declaration: function-decl #124 0:1:1-711:53:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: binding #2 21:2:3-31:3:1 name="count"
+      value: literal #1 29:2:11-30:2:12 value=int:0
+    body: binding #5 33:3:3-48:4:1 name="total"
+      type: type-ref #3 40:3:10-43:3:13 name="Int"
+      value: literal #4 46:3:16-47:3:17 value=int:1
+    body: binding #9 50:4:3-75:5:1 name="names"
+      type: type-ref #7 57:4:10-69:4:22 name="List"
+        arg: type-ref #6 62:4:15-68:4:21 name="String"
+      value: list-lit #8 72:4:25-74:4:27
+    body: binding #13 77:5:3-88:6:1 name="count"
+      value: binary #12 77:5:3-88:6:1 op=plus op-span=83:5:9-85:5:11
+        left: name-ref #10 77:5:3-82:5:8 name="count"
+        right: literal #11 86:5:12-87:5:13 value=int:1
+    body: binding #17 90:6:3-101:7:1 name="count"
+      value: binary #16 90:6:3-101:7:1 op=minus op-span=96:6:9-98:6:11
+        left: name-ref #14 90:6:3-95:6:8 name="count"
+        right: literal #15 99:6:12-100:6:13 value=int:2
+    body: binding #21 103:7:3-114:8:1 name="count"
+      value: binary #20 103:7:3-114:8:1 op=multiply op-span=109:7:9-111:7:11
+        left: name-ref #18 103:7:3-108:7:8 name="count"
+        right: literal #19 112:7:12-113:7:13 value=int:3
+    body: binding #25 116:8:3-127:9:1 name="count"
+      value: binary #24 116:8:3-127:9:1 op=divide op-span=122:8:9-124:8:11
+        left: name-ref #22 116:8:3-121:8:8 name="count"
+        right: literal #23 125:8:12-126:8:13 value=int:4
+    body: binding #29 129:9:3-140:10:1 name="count"
+      value: binary #28 129:9:3-140:10:1 op=modulo op-span=135:9:9-137:9:11
+        left: name-ref #26 129:9:3-134:9:8 name="count"
+        right: literal #27 138:9:12-139:9:13 value=int:5
+    body: if-stmt #54 142:10:3-282:19:1
+      branch: if-branch #36 142:10:3-176:12:1
+        condition: binary #32 145:10:6-154:10:15 op=greater op-span=151:10:12-152:10:13
+          left: name-ref #30 145:10:6-150:10:11 name="count"
+          right: literal #31 153:10:14-154:10:15 value=int:0
+        body: expr-stmt #35 159:11:5-176:12:1
+          value: call #34 159:11:5-175:11:21 name="puts" piped=false
+            arg: literal #33 164:11:10-174:11:20 value=string:"positive"
+      branch: if-branch #43 178:12:3-215:14:1
+        condition: binary #39 184:12:9-193:12:18 op=less op-span=190:12:15-191:12:16
+          left: name-ref #37 184:12:9-189:12:14 name="count"
+          right: literal #38 192:12:17-193:12:18 value=int:0
+        body: expr-stmt #42 198:13:5-215:14:1
+          value: call #41 198:13:5-214:13:21 name="puts" piped=false
+            arg: literal #40 203:13:10-213:13:20 value=string:"negative"
+      branch: if-branch #50 217:14:3-251:16:1
+        condition: binary #46 223:14:9-233:14:19 op=equal op-span=229:14:15-231:14:17
+          left: name-ref #44 223:14:9-228:14:14 name="count"
+          right: literal #45 232:14:18-233:14:19 value=int:0
+        body: expr-stmt #49 238:15:5-251:16:1
+          value: call #48 238:15:5-250:15:17 name="puts" piped=false
+            arg: literal #47 243:15:10-249:15:16 value=string:"zero"
+      else:
+        body: expr-stmt #53 262:17:5-276:18:1
+          value: call #52 262:17:5-275:17:18 name="puts" piped=false
+            arg: literal #51 267:17:10-274:17:17 value=string:"other"
+    body: if-stmt #57 284:19:3-306:22:1
+      branch: if-branch #56 284:19:3-293:20:1
+        condition: name-ref #55 287:19:6-292:19:11 name="count"
+      else:
+    body: while-stmt #77 308:22:3-421:31:1
+      condition: binary #60 314:22:9-324:22:19 op=less op-span=320:22:15-321:22:16
+        left: name-ref #58 314:22:9-319:22:14 name="count"
+        right: literal #59 322:22:17-324:22:19 value=int:10
+      body: binding #64 329:23:5-340:24:1 name="count"
+        value: binary #63 329:23:5-340:24:1 op=plus op-span=335:23:11-337:23:13
+          left: name-ref #61 329:23:5-334:23:10 name="count"
+          right: literal #62 338:23:14-339:23:15 value=int:1
+      body: if-stmt #70 344:24:5-377:27:1
+        branch: if-branch #69 344:24:5-369:26:1
+          condition: binary #67 347:24:8-357:24:18 op=equal op-span=353:24:14-355:24:16
+            left: name-ref #65 347:24:8-352:24:13 name="count"
+            right: literal #66 356:24:17-357:24:18 value=int:3
+          body: loop-control #68 364:25:7-368:25:11 kind=next
+      body: if-stmt #76 381:27:5-415:30:1
+        branch: if-branch #75 381:27:5-407:29:1
+          condition: binary #73 384:27:8-394:27:18 op=equal op-span=390:27:14-392:27:16
+            left: name-ref #71 384:27:8-389:27:13 name="count"
+            right: literal #72 393:27:17-394:27:18 value=int:7
+          body: loop-control #74 401:28:7-406:28:12 kind=break
+    body: while-stmt #85 423:31:3-464:34:1
+      condition: binary #80 429:31:9-439:31:19 op=less op-span=435:31:15-436:31:16
+        left: name-ref #78 429:31:9-434:31:14 name="count"
+        right: literal #79 437:31:17-439:31:19 value=int:12
+      body: binding #84 447:32:5-458:33:1 name="count"
+        value: binary #83 447:32:5-458:33:1 op=plus op-span=453:32:11-455:32:13
+          left: name-ref #81 447:32:5-452:32:10 name="count"
+          right: literal #82 456:32:14-457:32:15 value=int:1
+    body: for-stmt #92 466:34:3-503:37:1 variable="i"
+      iterable: binary #88 475:34:12-484:34:21 op=dot-dot-dot op-span=476:34:13-479:34:16
+        left: literal #86 475:34:12-476:34:13 value=int:0
+        right: name-ref #87 479:34:16-484:34:21 name="count"
+      body: expr-stmt #91 489:35:5-497:36:1
+        value: call #90 489:35:5-496:35:12 name="puts" piped=false
+          arg: name-ref #89 494:35:10-495:35:11 name="i"
+    body: for-stmt #97 505:37:3-547:40:1 variable="name"
+      iterable: name-ref #93 517:37:15-522:37:20 name="names"
+      body: expr-stmt #96 530:38:5-541:39:1
+        value: call #95 530:38:5-540:38:15 name="puts" piped=false
+          arg: name-ref #94 535:38:10-539:38:14 name="name"
+    body: case-stmt #115 549:40:3-655:48:1
+      value: name-ref #98 554:40:8-559:40:13 name="count"
+      arm: case-arm #103 564:41:5-581:42:1
+        pattern: literal-pattern #99 564:41:5-565:41:6 value=int:1
+        body: expr-stmt #102 569:41:10-581:42:1
+          value: call #101 569:41:10-580:41:21 name="puts" piped=false
+            arg: literal #100 574:41:15-579:41:20 value=string:"one"
+      arm: case-arm #111 585:42:5-627:45:1
+        pattern: literal-pattern #104 585:42:5-586:42:6 value=int:2
+        body: expr-stmt #107 596:43:7-608:44:1
+          value: call #106 596:43:7-607:43:18 name="puts" piped=false
+            arg: literal #105 601:43:12-606:43:17 value=string:"two"
+        body: expr-stmt #110 614:44:7-627:45:1
+          value: call #109 614:44:7-626:44:19 name="puts" piped=false
+            arg: literal #108 619:44:12-625:44:18 value=string:"deux"
+      arm: case-arm #114 631:45:5-649:47:1
+        pattern: wildcard-pattern #112 631:45:5-632:45:6
+        body: return-stmt #113 642:46:7-649:47:1
+    body: case-stmt #122 657:48:3-698:51:1
+      value: name-ref #116 662:48:8-667:48:13 name="count"
+      arm: case-arm #121 675:49:5-692:50:1
+        pattern: wildcard-pattern #117 675:49:5-676:49:6
+        body: expr-stmt #120 680:49:10-692:50:1
+          value: call #119 680:49:10-691:49:21 name="puts" piped=false
+            arg: literal #118 685:49:15-690:49:20 value=string:"any"
+    body: return-stmt #123 700:51:3-707:52:1
+  declaration: function-decl #130 712:54:1-750:57:1 name="value"
+    result: type-ref #125 727:54:16-730:54:19 name="Int"
+    body: return-stmt #129 733:55:3-746:56:1
+      value: binary #128 740:55:10-745:55:15 op=plus op-span=742:55:12-743:55:13
+        left: literal #126 740:55:10-741:55:11 value=int:1
+        right: literal #127 744:55:14-745:55:15 value=int:2
+  declaration: function-decl #140 751:58:1-824:63:1 name="next_value"
+    result: type-ref #131 771:58:21-774:58:24 name="Int"
+    body: binding #133 777:59:3-786:60:1 name="next"
+      value: literal #132 784:59:10-785:59:11 value=int:5
+    body: binding #135 788:60:3-798:61:1 name="break"
+      value: literal #134 796:60:11-797:60:12 value=int:6
+    body: return-stmt #139 800:61:3-820:62:1
+      value: binary #138 807:61:10-819:61:22 op=plus op-span=812:61:15-813:61:16
+        left: name-ref #136 807:61:10-811:61:14 name="next"
+        right: name-ref #137 814:61:17-819:61:22 name="break"

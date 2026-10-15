@@ -1,0 +1,1 @@
+ERROR PARSE-TOO-DEEP 2021:2:2003-2022:2:2004 "nesting is deeper than 1000 levels" "split the code into smaller functions or simpler expressions"

@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 21:2:3-23:2:5 "expected an expression, found \"do\"" "a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas"

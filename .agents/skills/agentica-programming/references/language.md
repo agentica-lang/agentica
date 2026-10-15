@@ -66,6 +66,8 @@ end
 - Leave a blank line after the `end` of each `def`, `struct`, and `enum` before the next declaration (`PARSE-MISSING-BLANK-LINE`).
 - Every parameter and the return type need an annotation.
 - Structs, enums, and functions are top level only. An enum's type parameters apply only to its payloads; there are no generic functions or structs, no user methods, no nested functions, no default arguments, and no overloading. Closures are blocks.
+- Source nesting (parentheses, calls, blocks, `if`, types) may go 1000 levels deep at most, and each operator of a chain or `.` suffix counts a level too (`PARSE-TOO-DEEP`; a chain of 1,000 `+` already fails).
+- File layout (a style, not a rule): after the imports and the module doc, put the structs and enums first, then the exported functions, then the private ones. A function may use a struct, enum or function declared later.
 - Functions may be called before they are declared, and may be recursive. Nested calls go 10000 deep at most (`RUNTIME-STACK-OVERFLOW`); tail calls do not count toward that depth. Only `return f(...)` whose value is directly a call to a user function is a tail call: `return 1 + f(n - 1)` (the call inside a larger expression) and calls to builtins are not.
 - So recursion over a big list or a big count is written in tail form with an accumulator (and an index for a list), or uses `for`, `map`, `filter` or `each`. `return count(n - 1, acc + 1)` runs for 1,000,000 calls; `return 1 + count(n - 1)` fails with `RUNTIME-STACK-OVERFLOW` at that size.
 - Build a list with `xs = xs.push(x)` in a loop. `push` is cheap because lists are persistent vectors, so there is no need for the prepend-then-reverse habit of Elixir or Lisp.

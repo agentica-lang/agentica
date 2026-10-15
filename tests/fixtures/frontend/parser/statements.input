@@ -1,0 +1,62 @@
+def main() -> Void
+  count = 0
+  total: Int = 1
+  names: List[String] = []
+  count += 1
+  count -= 2
+  count *= 3
+  count /= 4
+  count %= 5
+  if count > 0
+    puts("positive")
+  elsif count < 0
+    puts("negative")
+  elsif count == 0
+    puts("zero")
+  else
+    puts("other")
+  end
+  if count
+  else
+  end
+  while count < 10
+    count += 1
+    if count == 3
+      next
+    end
+    if count == 7
+      break
+    end
+  end
+  while count < 12 do
+    count += 1
+  end
+  for i in 0...count
+    puts(i)
+  end
+  for name in names do
+    puts(name)
+  end
+  case count
+    1 -> puts("one")
+    2 ->
+      puts("two")
+      puts("deux")
+    _ ->
+      return
+  end
+  case count do
+    _ -> puts("any")
+  end
+  return
+end
+
+def value() -> Int
+  return 1 + 2
+end
+
+def next_value() -> Int
+  next = 5
+  break = 6
+  return next + break
+end

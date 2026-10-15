@@ -6,3 +6,4 @@ tests/fixtures/vm/map-library.agc diff
 tests/fixtures/vm/*.stdin binary
 tests/eval/tasks/t19-orders-report/hidden/05.in binary
 tests/fixtures/frontend/lexer/*.input -text
+tests/fixtures/frontend/parser/*.input -text

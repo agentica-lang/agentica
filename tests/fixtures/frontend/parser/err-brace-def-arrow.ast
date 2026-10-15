@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 19:1:20-20:1:21 "expected a newline after the function signature, found \"{\"" "blocks have no braces: write \"def name() -> Type\" ... \"end\""

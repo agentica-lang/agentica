@@ -1,0 +1,7 @@
+def a() -> Void
+end
+
+## d
+# note
+def b() -> Void
+end
