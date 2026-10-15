@@ -1,0 +1,106 @@
+program #60 0:1:1-518:22:1
+  module "root.agc"
+    declaration: function-decl #59 191:5:1-518:22:1 name="main"
+      result: type-ref #3 205:5:15-209:5:19 name="Void"
+      body: binding #6 212:6:3-226:7:1 name="a"
+        value: call #5 216:6:7-225:6:16 name="@2::lex" piped=false
+          arg: literal #4 221:6:12-224:6:15 value=string:"a"
+      body: binding #9 228:7:3-248:8:1 name="b"
+        value: call #8 232:7:7-247:7:22 name="@2::lex" piped=false
+          arg: literal #7 243:7:18-246:7:21 value=string:"b"
+      body: binding #12 250:8:3-263:9:1 name="c"
+        value: call #11 254:8:7-262:8:15 name="@2::make" piped=false
+          arg: literal #10 260:8:13-261:8:14 value=int:1
+      body: binding #18 265:9:3-292:10:1 name="d"
+        value: binary #17 269:9:7-291:9:29 op=plus op-span=280:9:18-281:9:19
+          left: call #14 269:9:7-279:9:17 name="@2::as" piped=false
+            arg: literal #13 277:9:15-278:9:16 value=int:2
+          right: call #16 282:9:20-291:9:29 name="@2::from" piped=false
+            arg: literal #15 289:9:27-290:9:28 value=int:3
+      body: binding #24 294:10:3-314:11:1 name="e"
+        value: binary #23 298:10:7-313:10:22 op=plus op-span=304:10:13-305:10:14
+          left: call #20 298:10:7-303:10:12 name="@2::as" piped=false
+            arg: literal #19 301:10:10-302:10:11 value=int:4
+          right: call #22 306:10:15-313:10:22 name="@2::from" piped=false
+            arg: literal #21 311:10:20-312:10:21 value=int:5
+      body: binding #26 316:11:3-326:12:1 name="f"
+        value: function-ref #25 320:11:7-325:11:12 name="@2::lex"
+      body: binding #29 328:12:3-347:13:1 name="g"
+        value: enum-constructor #28 332:12:7-346:12:21 enum="@2::Color" variant="Green"
+          arg: literal #27 344:12:19-345:12:20 value=int:1
+      body: binding #31 349:13:3-363:14:1 name="h"
+        value: enum-constructor #30 353:13:7-362:13:16 enum="@2::Color" variant="Red"
+      body: binding #37 365:14:3-386:15:1 name="i"
+        value: construct #36 369:14:7-385:14:23 type="@2::Point"
+          arg: named-arg #33 374:14:12-378:14:16 name="x"
+            value: literal #32 377:14:15-378:14:16 value=int:1
+          arg: named-arg #35 380:14:18-384:14:22 name="y"
+            value: literal #34 383:14:21-384:14:22 value=int:2
+      body: binding #42 388:15:3-415:16:1 name="j"
+        type: type-ref #39 391:15:6-400:15:15 name="@2::Maybe"
+          arg: type-ref #38 395:15:10-399:15:14 name="@2::Point"
+        value: enum-constructor #41 403:15:18-414:15:29 enum="@2::Maybe" variant="Some"
+          arg: name-ref #40 412:15:27-413:15:28 name="i"
+      body: case-stmt #55 417:16:3-491:20:1
+        value: name-ref #43 422:16:8-423:16:9 name="j"
+        arm: case-arm #49 428:17:5-456:18:1
+          pattern: variant-pattern #44 428:17:5-439:17:16 enum="@2::Maybe" variant="Some" bindings=["k"]
+          body: expr-stmt #48 443:17:20-456:18:1
+            value: call #47 443:17:20-455:17:32 name="puts" piped=false
+              arg: interpolation #46 448:17:25-454:17:31
+                part: name-ref #45 451:17:28-452:17:29 name="k"
+        arm: case-arm #54 460:18:5-485:19:1
+          pattern: variant-pattern #50 460:18:5-468:18:13 enum="@2::Maybe" variant="None" bindings=[]
+          body: expr-stmt #53 472:18:17-485:19:1
+            value: call #52 472:18:17-484:18:29 name="puts" piped=false
+              arg: literal #51 477:18:22-483:18:28 value=string:"none"
+      body: binding #58 493:20:3-514:21:1 name="l"
+        value: call #57 497:20:7-513:20:23 name="lex" piped=false
+          arg: literal #56 501:20:11-512:20:22 value=string:"not bound"
+  module "lib.agc"
+    declaration: enum-decl #3 7:1:8-41:5:1 name="@2::Color" type-parameters=[]
+      variant: enum-variant #0 20:2:3-24:3:1 name="Red"
+      variant: enum-variant #2 26:3:3-37:4:1 name="Green"
+        payload: type-ref #1 32:3:9-35:3:12 name="Int"
+    declaration: enum-decl #8 49:6:8-84:10:1 name="@2::Maybe" type-parameters=["T"]
+      variant: enum-variant #6 65:7:3-73:8:1 name="Some"
+        payload: type-ref #5 70:7:8-71:7:9 name="T"
+      variant: enum-variant #7 75:8:3-80:9:1 name="None"
+    declaration: struct-decl #14 92:11:8-127:15:1 name="@2::Point"
+      field: field-decl #11 107:12:3-114:13:1 name="x"
+        type: type-ref #10 110:12:6-113:12:9 name="Int"
+      field: field-decl #13 116:13:3-123:14:1 name="y"
+        type: type-ref #12 119:13:6-122:13:9 name="Int"
+    declaration: function-decl #22 135:16:8-187:19:1 name="@2::lex"
+      param: param #17 143:16:16-155:16:28 name="text"
+        type: type-ref #16 149:16:22-155:16:28 name="String"
+      result: type-ref #18 160:16:33-163:16:36 name="Int"
+      body: return-stmt #21 166:17:3-183:18:1
+        value: field-access #20 173:17:10-182:17:19 name="size"
+          target: name-ref #19 173:17:10-177:17:14 name="text"
+    declaration: function-decl #33 195:20:8-252:23:1 name="@2::make"
+      param: param #25 204:20:17-210:20:23 name="x"
+        type: type-ref #24 207:20:20-210:20:23 name="Int"
+      result: type-ref #26 215:20:28-220:20:33 name="@2::Point"
+      body: return-stmt #32 223:21:3-248:22:1
+        value: construct #31 230:21:10-247:21:27 type="@2::Point"
+          arg: named-arg #28 236:21:16-240:21:20 name="x"
+            value: name-ref #27 239:21:19-240:21:20 name="x"
+          arg: named-arg #30 242:21:22-246:21:26 name="y"
+            value: literal #29 245:21:25-246:21:26 value=int:0
+    declaration: function-decl #40 260:24:8-297:27:1 name="@2::as"
+      param: param #36 267:24:15-273:24:21 name="x"
+        type: type-ref #35 270:24:18-273:24:21 name="Int"
+      result: type-ref #37 278:24:26-281:24:29 name="Int"
+      body: return-stmt #39 284:25:3-293:26:1
+        value: name-ref #38 291:25:10-292:25:11 name="x"
+    declaration: function-decl #47 305:28:8-344:31:1 name="@2::from"
+      param: param #43 314:28:17-320:28:23 name="x"
+        type: type-ref #42 317:28:20-320:28:23 name="Int"
+      result: type-ref #44 325:28:28-328:28:31 name="Int"
+      body: return-stmt #46 331:29:3-340:30:1
+        value: name-ref #45 338:29:10-339:29:11 name="x"
+    declaration: function-decl #52 345:32:1-380:35:1 name="@2::hidden"
+      result: type-ref #49 361:32:17-364:32:20 name="Int"
+      body: return-stmt #51 367:33:3-376:34:1
+        value: literal #50 374:33:10-375:33:11 value=int:2

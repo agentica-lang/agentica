@@ -1,0 +1,5 @@
+import Util from "util"
+import Lexer from "compiler/lexer"
+
+def main() -> Void
+end

@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 75:5:5-84:5:14 "wrong kind of imported declaration" - file="root.agc"

@@ -4,6 +4,7 @@
 
 (provide (struct-out program)
          (struct-out import-decl)
+         (struct-out import-name)
          (struct-out export-decl)
          (struct-out function-decl)
          (struct-out param)
@@ -52,7 +53,10 @@
          node-span)
 
 (struct program (declarations span docs module-doc) #:transparent)
-(struct import-decl (path alias span) #:transparent)
+;; Exactly one of alias and names is set: alias is a string or #f, names a list of import-name.
+;; name is the exported name; local is the name bound in this file (equal to name without `as`).
+(struct import-decl (path alias names span) #:transparent)
+(struct import-name (name local span local-span) #:transparent)
 (struct export-decl (declaration span) #:transparent)
 (struct function-decl (name params result body span) #:transparent)
 (struct param (name type span) #:transparent)
