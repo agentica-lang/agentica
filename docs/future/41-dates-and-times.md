@@ -557,9 +557,9 @@ chosen.
     `vm/value.h`, read by `load_types` in `vm/loader.c`), so the `.agcb` format
     changes. The typed encoder and decoder (`vm/json_typed.c`,
     `vm/json_value.c`) get a text branch for each kind. If §42 lands first,
-    these kinds are added to its version 5 (42.11). If §41 lands first, it sets
-    version 5, and §42 sets version 6. (Version 4 is the struct update `with`
-    of 15c.)
+    these kinds are added to its version 6 (42.11). If §41 lands first, it sets
+    version 6, and §42 sets version 7. (Version 4 is the struct update `with`
+    of 15c, and version 5 is the module constants of §44.)
   - Top level: `JSON.decode(text, DateTime)` reads a JSON string with
     `Time.parse` and gives `Result[DateTime]`; text that is not a JSON string is
     an error. `JSON.encode` of a `DateTime` gives the JSON string.

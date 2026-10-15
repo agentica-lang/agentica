@@ -126,6 +126,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 41 | Dates and times | [`41-dates-and-times.md`](41-dates-and-times.md) | Designed by the owner's scope of 2026-10-14; the types wait until after the bootstrap (§35, 41.13); `Time.monotonic_ns` may land earlier |
 | 42 | Sized numeric types | [`42-sized-numeric-types.md`](42-sized-numeric-types.md) | Designed by the owner's scope of 2026-10-14; implement after the bootstrap (§35) |
 | 43 | Language server (LSP) | [`43-language-server.md`](43-language-server.md) | Idea, not scheduled (the owner asked on 2026-10-15 to note it); reuses §39 and §32 |
+| 44 | Module constants and imports | [`44-module-constants.md`](44-module-constants.md) | Planned (roadmap row 7.2.8): new import forms (`import Mod from "path"`, `import {A} from "path"`) first, then module constants; before the bootstrap, by the owner's decision of 2026-10-15; relaxes the freeze of row 7.2.7 |
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no Racket
 twin ([roadmap
