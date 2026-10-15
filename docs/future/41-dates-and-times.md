@@ -92,6 +92,13 @@ The implementation PR marks this **Breaking:** in `CHANGELOG.md`. No migration
 path or compatibility workaround is added: the language has no external users
 yet.
 
+Enum variants are not reserved. A variant is always written with its enum
+(`Toml.Value.DateTime`), so a variant named like a builtin type does not clash
+with it. The same holds today for `Toml.Value.Int` and `Toml.Value.Bool`, and
+it keeps `Toml.Value.DateTime` valid when §41 lands. The checker port in
+`compiler/` must not start reserving variant names: a variant named `Date` or
+`DateTime` checks ok (41.15).
+
 Construction. Builtin records can be constructed today: `Header(name: "a",
 value: "b")` checks. For dates that is wrong: `Date(year: 2026, month: 13, day:
 1)` would check and then break every function that reads it. The types part adds
@@ -140,7 +147,8 @@ Time.assume_offset(value: NaiveDateTime, offset_minutes: Int)
   valid `Date` can still be passed in (`Time.naive(d.year, d.month, d.day, 19,
   5, 42, 201337)`).
 - No conversion from a `DateTime` or a `NaiveDateTime` to `TimeOfDay` in v1.
-  `Time.time_of_day(dt.hour, dt.minute, dt.second, dt.microsecond)` does it.
+  `Time.time_of_day(dt.hour, dt.minute, dt.second, dt.microsecond).unwrap!`
+  does it; the fields of a valid value are always in range.
 - Two aware constructors, because they take different inputs: `datetime` builds
   from numbers, as Python's constructor does with `tzinfo`; `assume_offset`
   gives an offset to a reading that already exists (from `parse_naive` or a
@@ -158,14 +166,18 @@ Time.now() -> DateTime
 
 - The unit is in the name. The functions without a suffix count whole seconds,
   and `_us` counts microseconds, the precision of the fields. Milliseconds are
-  not a unit of this module: `Time.now_ms` and `Time.monotonic_ms` keep theirs.
+  not a unit of the new functions: `Time.now_ms` and `Time.monotonic_ms` keep
+  theirs.
 - Both `from_unix` functions return UTC, offset 0. A value outside years 1 to
   9999 is an error. `from_unix` checks its argument against the range in seconds
   before it multiplies by 10^6, so no value overflows.
 - `to_unix` is `to_unix_us` divided by 1000000, rounded toward minus infinity:
   `to_unix(from_unix_us(-1))` is `-1`, and `from_unix(-1)` is 23:59:59.000000 of
   1969-12-31 (the same second). `to_unix_us` cannot fail, since the range is
-  about 2.5e17 us of the 9.2e18 an Int holds (§42.4).
+  about 2.5e17 us of the 9.2e18 an Int holds (§42.4). The two directions are
+  not exact inverses at the edges: an aware value at offset -1439 can have an
+  instant up to a day past 9999-12-31, so `to_unix_us` can return a value that
+  `from_unix_us` rejects (41.15 tests it).
 - `Time.now()` is the wall clock in UTC. It reads the clock the way
   `Time.now_ms` does (`timespec_get` with `TIME_UTC`), and it keeps the
   nanoseconds truncated to microseconds. The resolution is the OS clock's, so a
@@ -517,6 +529,10 @@ it and has a golden `dates-vectors.expected`. The vectors:
   2400-02-29, and the invalid 1900-02-29 and 2100-02-29; every month end of
   years 1, 4, 100, 400, 1900, 2000, 2026 and 9999; every day of 1899 to 1901 and
   of 9998 to 9999.
+- Across the epoch: `add_us(from_unix_us(-1), 1)` is
+  1970-01-01T00:00:00.000000Z, and `add_us(from_unix_us(0), -1)` is
+  1969-12-31T23:59:59.999999Z. These check the floor division of 41.9 on
+  negative microseconds.
 - Offsets: -1439, -720, 0, 840 (+14:00) and 1439 minutes, each with a reading,
   both ways. The two edge readings of 41.8 with offsets: 0001-01-01T00:00:00 at
   +1439 and 9999-12-31T23:59:59.999999 at -1439. Their UTC readings are out of
@@ -529,6 +545,8 @@ it and has a golden `dates-vectors.expected`. The vectors:
 - Calendar queries (`weekday`, `day_of_year`, `days_in_month`, `leap_year?`) for
   the same dates, and `add_days`, `days_between` and `compare_date` for seeded
   random pairs.
+- `compare_time` for seeded random pairs of clock readings, and for the first
+  and last readings of the day, 00:00:00.000000 and 23:59:59.999999.
 
 The fixture checks every vector in both directions, prints one line for each
 mismatch, and then prints `N vectors ok`.
@@ -537,11 +555,18 @@ Round trips, in the same fixture: `parse(format(dt))` gives back `dt` for every
 vector without extra fraction digits; `from_unix_us(to_unix_us(dt))` equals
 `with_offset(dt, 0)` when that is ok, and is an error exactly when it is;
 `parse_naive(format_naive(n))` gives back `n`; `parse_time(format_time(t))`
-gives back `t`; `add_days(a, days_between(a, b))` gives `b`.
+gives back `t`; `add_days(a, days_between(a, b))` gives `b`. For seeded random
+pairs `a` and `b` of `DateTime`, `add_us(a, us_between(a, b))` has the instant
+of `b` (`compare` gives 0) when it is ok, and is an error exactly when its
+reading at the offset of `a` is outside years 1 to 9999. Records have no `==`
+(41.2), so the check uses `compare`. The naive form,
+`add_us_naive(a, us_between_naive(a, b))`, gives back `b` (`compare_naive`
+gives 0).
 
 Errors: `dates-errors.agc` (golden) prints the message of every error for fixed
 bad inputs: months 0 and 13, day 31 of April, 2100-02-29, years 0 and 10000,
-hour 24, minute 60, second 60, microsecond 1000000, offsets 1440 and -1440, an
+hour 24, minute 60, second 60, microsecond 1000000 (for `Time.time_of_day`, and
+the same fields of `naive` and `datetime`), offsets 1440 and -1440, an
 out-of-range `from_unix_us`, and a `from_unix` second outside the range. It also
 covers the parse errors of 41.6 (no offset in `parse`, an offset in
 `parse_naive`, a space for `T`, `+0200`, `:60`, trailing text, empty text, a `.`
@@ -555,7 +580,8 @@ Checker (the goldens of the Agentica front end, against `agentica check --json`,
 as 42.13 says, since the Racket checker is frozen; each asserts the code and the
 span): a user `struct Date` gives `CHECK-REDEFINED-NAME`; `Date(...)` and
 `TimeOfDay(...)` give `CHECK-NOT-CONSTRUCTIBLE`; `Time.compare` with a naive and
-an aware argument gives `CHECK-TYPE-MISMATCH`.
+an aware argument gives `CHECK-TYPE-MISMATCH`; and an `enum` with variants
+`Date` and `DateTime` checks ok (41.2).
 
 Monotonic clock: 41.10.
 
@@ -630,23 +656,38 @@ chosen.
 
 std/toml (phase 45-0, 45.4) keeps the text of a TOML date-time: its
 `DateTime(String)` variant holds the text as written, until these types land.
-When §41 lands, std/toml maps TOML's four kinds of date and time to the four
-types:
+When §41 lands, std/toml maps TOML's four kinds of date and time to four
+variants, named after the types:
 
-- offset date-time, `1979-05-27T07:32:00Z`: `DateTime`, read with `Time.parse`;
-- local date-time, `1979-05-27T07:32:00`: `NaiveDateTime`, read with
-  `Time.parse_naive`;
-- local date, `1979-05-27`: `Date`, read with `Time.parse_date`;
-- local time, `07:32:00.999999`: `TimeOfDay`, read with `Time.parse_time`.
+- offset date-time, `1979-05-27T07:32:00Z`: `DateTime(DateTime)`, read with
+  `Time.parse`;
+- local date-time, `1979-05-27T07:32:00`: `NaiveDateTime(NaiveDateTime)`, read
+  with `Time.parse_naive`;
+- local date, `1979-05-27`: `Date(Date)`, read with `Time.parse_date`;
+- local time, `07:32:00.999999`: `TimeOfDay(TimeOfDay)`, read with
+  `Time.parse_time`.
 
 That replaces one variant with four, so it changes `Toml.Value`. It is a
-breaking change of std/toml, and its design waits for §41 to land. Three TOML
-rules meet §41 there. TOML lets a space stand for the `T`
-(`1979-05-27 07:32:00Z`): std/toml changes it to `T` before it calls the
-parser, since §41.6 rejects a space. TOML allows second `60` (a leap second),
-which §41.8 rejects, so std/toml reports it as an error. And TOML asks for
-truncation of fraction digits past the precision an implementation keeps, which
-§41.6 does too.
+breaking change of std/toml, and its design waits for §41 to land. The variant
+names do not clash with the types, because enum variants are not reserved
+(41.2).
+
+The costs, to be accepted when it lands:
+
+- Conformance. Year `0000` and second `60` are valid TOML 1.0, and std/toml
+  accepts both today. §41 rejects both (41.8), so they become a std/toml parse
+  error at the value's position. Python's `tomllib`, the test peer of 45.11,
+  rejects both too. This is a small loss of conformance, and it is documented.
+- Round trip. It is semantic, not textual. `Time.format` writes six fraction
+  digits and `Z`, so `07:32:00` comes back as `07:32:00.000000`. `-00:00`,
+  lowercase `t` and `z`, and digits past the sixth are lost as well. The value
+  stays the same at microsecond precision; the text does not.
+- Space for `T`. TOML allows a space (`1979-05-27 07:32:00Z`). std/toml changes
+  it to `T` before it calls the parser, since §41.6 rejects a space.
+- Truncation. TOML asks for truncation of fraction digits past the precision an
+  implementation keeps, which §41.6 does too.
+- TOML 1.1 makes seconds optional. If std/toml moves to 1.1, `parse_time` would
+  need to accept `HH:MM`.
 
 ### 41.20 Questions for the owner
 

@@ -62,8 +62,9 @@ first (section 22), then an `extern def` FFI into native libraries behind an
 explicit flag when a library needs it, and AOT last; the JIT changes no
 language, and the FFI syntax is only a sketch.
 
-Section 41 (dates and times) designs the calendar types `Date`, `NaiveDateTime`
-and `DateTime`, their conversions and their text, as native `Time` functions.
+Section 41 (dates and times) designs the calendar types `Date`, `TimeOfDay`,
+`NaiveDateTime` and `DateTime`, their conversions and their text, as native
+`Time` functions.
 The types are checker changes, so they come after the bootstrap (§35).
 `Time.monotonic_ns` is independent and may land earlier. Section 42 (sized
 numeric types) designs `Int8` to `UInt64` and `Float32`, with explicit
