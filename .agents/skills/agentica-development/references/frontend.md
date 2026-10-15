@@ -89,7 +89,7 @@ By default, under the freeze, these recipes name `src/` files. New syntax and ne
 
 1. Add it to the `keywords` hash (reserved words) or the operator hash in `src/lexer.rkt`.
 2. If the parser must act on it, add the kind to the relevant `case`/`memq` in `src/parser.rkt`.
-3. Add a test in `tests/lexer-test.rkt` (kinds) and, when it affects syntax, `tests/parser-test.rkt`.
+3. Add a test: a rule the CLI can observe (a diagnostic code and span, or a program's output) goes in `tests/test_spec_lexer.py`; token kinds go in the goldens of `tests/fixtures/frontend/lexer/` (`NAME.input` and `NAME.tokens`). When it affects syntax, add to `tests/parser-test.rkt` too.
 4. Run `make test TESTS="tests/<stage>-test.rkt"`.
 
 ### Add an AST node

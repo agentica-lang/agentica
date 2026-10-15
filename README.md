@@ -29,7 +29,7 @@ dist/agentica examples/hello.agc
 
 ```sh
 make test                                # all Racket tests, after building the VM
-make test TESTS="tests/lexer-test.rkt"   # some files
+make test TESTS="tests/parser-test.rkt"   # some files
 make vm-test                             # the C tests
 ```
 

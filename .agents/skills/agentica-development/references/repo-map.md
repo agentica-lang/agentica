@@ -147,7 +147,7 @@ vm/               # the C11 bytecode VM (dist/agentica-vm); layers in references
     tls_test.c           # TLS adapter
     trace_test.c         # trace points
 tests/            # rackunit files and unittest modules (test_<area>.py); the lists of references/vm-tests.md say which covers what
-  lexer-test.rkt  # the lexer (references/stages.md)
+  test_spec_lexer.py  # lexer rules through the CLI (references/stages.md)
   parser-test.rkt  # the parser (references/stages.md)
   checker-test.rkt  # ranges, JSON contracts and other checker rules (references/stages.md)
   modules-test.rkt  # import linking, visibility, cross-file diagnostics, from the linker and the checker in process (references/language-notes.md)

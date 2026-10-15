@@ -176,8 +176,11 @@ def span_of(problem):
 
 
 class LexerSpec(TestCase):
-    def check_all(self, sources):
-        """Check each {case: source} as a file with `--json check`, side by side; gives {case: problem or None}."""
+    def run_all(self, sources, arguments=()):
+        """Run the CLI on each {case: source} as a file, side by side; gives {case: Result}.
+
+        Only the subprocess runs in the pool: every assertion is made by the caller, under the case's subTest.
+        """
         directory = self.make_temp_dir()
         cases = list(sources)
         paths = []
@@ -186,23 +189,16 @@ class LexerSpec(TestCase):
             path.write_bytes(sources[case].encode("utf-8"))
             paths.append(path)
         with ThreadPoolExecutor(WORKERS) as pool:
-            results = list(pool.map(self.check_file, paths))
+            results = list(pool.map(lambda path: run(cli() + list(arguments) + [str(path)]), paths))
         return dict(zip(cases, results))
 
-    def check_file(self, path):
-        result = run(cli() + ["--json", "check", str(path)])
-        if result.code == 0:
-            self.assertEqual(result.stdout, '{"ok":true}\n')
-            return None
-        self.assertEqual(result.code, 1, result.stderr)
-        return json.loads(result.stderr.strip().split("\n")[-1])
-
     def test_diagnostics_carry_the_code_and_span_of_the_rule(self):
-        problems = self.check_all({case: source for case, source, *_ in DIAGNOSTICS})
+        results = self.run_all({case: source for case, source, *_ in DIAGNOSTICS}, ["--json", "check"])
         for case, _source, code, where, help_ in DIAGNOSTICS:
             with self.subTest(case):
-                problem = problems[case]
-                self.assertIsNotNone(problem, "the source checks clean")
+                result = results[case]
+                self.assertEqual(result.code, 1, result.stdout + result.stderr)
+                problem = json.loads(result.stderr.strip().split("\n")[-1])
                 self.assertEqual(problem["code"], code)
                 if where is not None:
                     self.assertEqual(span_of(problem)[:len(where)], where)
@@ -210,20 +206,14 @@ class LexerSpec(TestCase):
                     self.assertEqual("help" in problem, help_)
 
     def test_sources_that_check_clean(self):
-        problems = self.check_all(dict(CLEAN))
+        results = self.run_all(dict(CLEAN), ["--json", "check"])
         for case, _source in CLEAN:
             with self.subTest(case):
-                self.assertIsNone(problems[case], problems[case])
+                result = results[case]
+                self.assertEqual((result.code, result.stdout), (0, '{"ok":true}\n'), result.stderr)
 
     def test_programs_print_what_the_rule_says(self):
-        directory = self.make_temp_dir()
-        paths = {}
-        for index, (case, source, _stdout) in enumerate(RUNS):
-            path = directory / ("run-%d.agc" % index)
-            path.write_bytes(source.encode("utf-8"))
-            paths[case] = path
-        with ThreadPoolExecutor(WORKERS) as pool:
-            results = dict(zip(paths, pool.map(lambda path: run(cli() + [str(path)]), paths.values())))
+        results = self.run_all({case: source for case, source, _stdout in RUNS})
         for case, _source, stdout in RUNS:
             with self.subTest(case):
                 result = results[case]

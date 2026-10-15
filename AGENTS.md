@@ -42,10 +42,10 @@ phase 13).
 
 - `make vm`: build `dist/agentica-vm` (`git submodule update --init` first).
   `make vm-test`: the C tests.
-- `make test TESTS="tests/lexer-test.rkt"`: a subset. `make test` alone runs
+- `make test TESTS="tests/parser-test.rkt"`: a subset. `make test` alone runs
   everything (`JOBS=8` sets the workers).
 - `racket src/main.rkt file.agc` runs a program; `... check file.agc` checks.
-- `make test TESTS="tests/lexer-test.rkt tests/test_vm_bits.py"`: a `.rkt` file
+- `make test TESTS="tests/parser-test.rkt tests/test_vm_bits.py"`: a `.rkt` file
   goes to rackunit, a `.py` file to unittest (one process per module).
 - `make test-slow`: the `(module+ slow ...)` and `@slow` cases; CI only.
 - `make smoke`, `make goldens` (rewrite the VM and front-end goldens; commit

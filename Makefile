@@ -28,7 +28,7 @@ build:
 # section 35.10, references/ci.md): a .rkt file in TESTS goes to raco test, a tests/test_<area>.py file to unittest, and a
 # directory (the default, tests/) to both. A test lives in one framework only.
 # All tests, in parallel:      make test
-# A subset:                    make test TESTS="tests/lexer-test.rkt tests/parser-test.rkt tests/test_vm_bits.py"
+# A subset:                    make test TESTS="tests/parser-test.rkt tests/test_spec_lexer.py tests/test_vm_bits.py"
 # More or fewer workers:       make test JOBS=8
 PYTHON ?= python3
 RKT_TESTS = $(filter-out %.py,$(TESTS))
