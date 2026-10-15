@@ -72,6 +72,7 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | a statement or an extra `end` at the top level (`PARSE-TOP-LEVEL-STATEMENT`) | statements go inside `def main() -> Void ... end`; an extra `end` closes nothing; a stray `else` or `elsif` has no matching `if`; a file holds only `def`, `struct`, `enum`, `import`, `export` and constants (`NAME = value`) |
 | `user.with()`, `user.with(31)`, `user.with(age)` (`PARSE-UNEXPECTED-TOKEN`) | a struct update names each field it changes, one or more: `user.with(age: 31)` |
 | `x.with(age: 31)` where `x` is not a struct (`CHECK-UNKNOWN-METHOD`) | `with` copies a struct with some fields changed; the value before `.with` must be a struct |
+| `CONFIG.with()` on a constant of a struct type (`CHECK-UNKNOWN-METHOD`; a lowercase `user.with()` is `PARSE-UNEXPECTED-TOKEN`) | `with` needs the fields to change, as in `.with(field: value)`; the help lists the fields |
 | a field named `with` of type `Fn[...]` (`CHECK-REDEFINED-NAME`) | rename the field: `value.with(...)` is always the struct update |
 | `s.chars`, `s.each_char` | `s.split("")`, and `s.at(i)` for one character |
 | `s.matches?(...)`, `s.match?(...)`, `s.scan(...)` | no regular expressions: `contains?`, `starts_with?`, `ends_with?`, `index_of` |

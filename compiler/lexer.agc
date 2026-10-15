@@ -395,6 +395,7 @@ def bad_escape(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Dia
   if input.codes[index + 1] == 10
     stop = Source.Position(offset: index + 2, line: line + 1, column: 1)
   end
+  # The message is a backslash followed by the escaped character, such as: unsupported escape \q
   return Diag.fail(
     "LEX-INVALID-ESCAPE",
     "unsupported escape \\#{input.text.slice(index + 1, 1)}",

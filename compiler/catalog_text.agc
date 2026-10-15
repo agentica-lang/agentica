@@ -154,11 +154,13 @@ def variant_text(variant: Model.Variant) -> String
   if variant.payload.size == 0
     return variant.name
   end
-  return variant.name + "(" + variant.payload.map do |type: Types.Type| Types.debug_text(type) end.join(", ") + ")"
+  payload = variant.payload.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
+  return "#{variant.name}(#{payload})"
 end
 
 def quoted_list(items: List[String]) -> String
-  return "[" + items.map do |item: String| Text.quote(item) end.join(", ") + "]"
+  quoted = items.map do |item: String| Text.quote(item) end.join(", ")
+  return "[#{quoted}]"
 end
 
 def rule_name(rule: Model.Rule) -> String
