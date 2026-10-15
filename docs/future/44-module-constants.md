@@ -137,9 +137,10 @@ import {lex as lex_text, Token as Tok} from "compiler/lexer"
     text is `as` starts the rename. The original always comes first, so a
     function called `as` can still be imported (`{as}`, `{as as as_text}`).
   - The local name follows the case rules of what it names, and the linker
-    checks them because only the linker knows the kind of `A`: a constant stays
-    `UPPER_SNAKE_CASE` (the rule of 44.3), a struct or an enum is a `TYPE_NAME`,
-    a function is a lowercase name. Anything else is the new
+    checks them because only the linker knows the kind of `A`: a struct or an
+    enum is renamed to a `TYPE_NAME`, a function to a lowercase name, and a
+    constant stays `UPPER_SNAKE_CASE` (the rule of 44.3; constants arrive in
+    44a2, so that case and its test are 44a2's). Anything else is the new
     `CHECK-IMPORT-RENAME`, located at the local name, with the help "a
     constant is renamed to another constant name" (or the matching text for the
     other kinds). A new code, because no existing one says this: it is not a
@@ -290,10 +291,14 @@ or a module (`Models.User`, `JSON.decode`):
   alias may also be all capitals (`import HTTP from "std/http"`). The linker
   decides: a name that is a constant of the file (declared or imported by
   name) and not an alias or builtin module becomes the receiver of the same
-  nodes that `xs.size` and `xs.get(k, d)` give. With parentheses
-  (`LEVELS.get(kind, 0)`, `KEYWORDS.include?(word)`) the call becomes a
-  `method-call`; without them (`KEYWORDS.size`, `CONFIG.port`) it becomes a
-  `field-access`, the node a builtin property or a struct field gets. A struct
+  nodes that `xs.size` and `xs.get(k, d)` give. With
+  parentheses or with a block argument (`LEVELS.get(kind, 0)`,
+  `KEYWORDS.include?(word)`, `KEYWORDS.each do |k| ... end`, which has no
+  parentheses but is a call, and the parser records it as not parenthesized)
+  the call becomes a `method-call`. The rule is: no parentheses and no
+  arguments, a block being an argument, gives a `field-access`
+  (`KEYWORDS.size`, `CONFIG.port`); anything else a `method-call`. The
+  `field-access` is the node a builtin property or a struct field gets. A struct
   constant with parentheses (`CONFIG.port()`) is then the usual
   `CHECK-UNKNOWN-METHOD`. This is how the linker already turns `Enum.Variant`
   into an enum value.
@@ -481,10 +486,10 @@ New codes, stable, with the span of the form named:
   allow. Span: that form.
 - `CHECK-CONSTANT-TYPE`: an expression of the initializer has a type that is
   not a data type. Span: that expression.
-
 - `CHECK-IMPORT-RENAME`: `import {A as B}` where `B` does not follow the case
   rule of what `A` is (44.2). Span: `B`. (An import diagnostic, not a
-  constant one; listed here with the other new codes.)
+  constant one; listed here with the other new codes. 44a0-1 adds it for
+  functions, structs and enums, 44a2 for constants.)
 
 Reused codes: `CHECK-REDEFINED-NAME` (duplicate or reserved name),
 `CHECK-DECL-ORDER` (44.7), `CHECK-IMPORT-NAME` (a private or unknown name in an
@@ -622,8 +627,11 @@ reachable from the same roots and the collector keeps its values. It rejects
 - a `GLOBAL` or `GLOBAL_SET` whose slot is not below the count;
 - a `GLOBAL_SET` in a function that is not the entry, and a function that has
   a `GLOBAL_SET` and a backward jump (a jump whose target is not after it);
-- a `CALL`, `TAIL_CALL` or `CLOSURE` whose target is the entry function, so no
-  task can run the entry again and write a slot after `main` started. Only the
+- when the Globals count is above zero, a `CALL`, `TAIL_CALL` or `CLOSURE`
+  whose target is the entry function, so no task can run the entry again and
+  write a slot after `main` started. With a count of zero the entry is `main`,
+  which a program may call (`main()` inside `main`); nothing is rejected, and
+  the rules about the entry apply only to a file that has slots. Only the
   entry writes, once, in straight-line code, before `main`. After it returns
   the table is read-only, which keeps a future multicore scheduler (step 11)
   free of races on it.
@@ -941,31 +949,34 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    and a private name with the did-you-mean help; two lines with one path); a VM
    fixture that uses named imports; and the differential golden of both front
    ends (the Racket printer and the Agentica linker print the same text; the
-   text form is not source, so there is no round trip). Docs:
-   `docs/grammar/05-syntax.md` (the `import_decl` rule) and `05b-modules.md`
-   (the forms, `Mod.name`, collisions, rename); `references/modules.md` of the
-   programming skill; `CHANGELOG.md` ("Added"). External `pkg/` libraries keep
+   text form is not source, so there is no round trip). Docs, all in this PR,
+   because 44a0-1 adds user-visible syntax and a code (`AGENTS.md`, and each
+   PR of a stack holds its own docs): `docs/grammar/05-syntax.md` (the
+   `import_decl` rule), `05b-modules.md` (the forms, `Mod.name`, collisions,
+   rename) and `07-diagnostics.md` (`CHECK-IMPORT-RENAME` and the help rows);
+   the Hugo site, the tour page `modules.md` and the diagnostics page if it
+   lists codes (`make site` before the merge); the `agentica-programming`
+   skill (`SKILL.md` core rules, which stay near 2,000 tokens, and
+   `references/modules.md`); the `agentica-development` skill
+   (`references/frontend.md`: the import forms and the linker's `named` table;
+   `stages.md`: the new code and the new shape of the `import-decl` node);
+   `CHANGELOG.md` with an "Added" entry. External `pkg/` libraries keep
    working.
 2. **44a0-2: the migration and the end of the old form** (**Breaking:**). The
-   migration script runs over the whole repository (563 occurrences in 307 files
-   at the time of writing), `make goldens` rewrites the goldens (the spans
-   move), the old form becomes `PARSE-UNEXPECTED-TOKEN` with the help, and the
-   help texts that show the import form change: `src/modules.rkt`, `compiler/`
-   and also `src/checker.rkt` (the `BDD.` and `HTTP.` help of the
-   unknown-function error, a message text). Docs, all in this PR: the grammar
-   pages show only the new forms (`05-syntax.md`, `05b-modules.md`,
-   `07-diagnostics.md`); the Hugo site, the tour page `modules.md` and every
-   page with an import (`make site` before the merge); the
-   `agentica-programming` skill (the import form in the core rules of
-   `SKILL.md`, which stays near 2,000 tokens, and `references/modules.md`); the
-   `agentica-development` skill (`references/frontend.md`: the import forms and
-   the linker's `named` table; `stages.md` if it lists the `import-decl` node);
-   `CHANGELOG.md` with the `**Breaking:**` entry. The two parts keep the final
-   state at one form, as the owner decided; the split exists because of the size
-   of the migration and so that `pkg/` authors can move first. Both parts state
-   which rule they relax (the freeze, row 7.2.7: a syntax change in both parsers
-   and both linkers) and why (the owner's decision of 2026-10-15). They do not
-   depend on 4b; the one checker line is a message text (44.13).
+   migration script runs over the whole repository (563 occurrences in 307
+   files at the time of writing), `make goldens` rewrites the goldens (the
+   spans move), the old form becomes `PARSE-UNEXPECTED-TOKEN` with the help,
+   and the help texts that show the import form change: `src/modules.rkt`,
+   `compiler/` and also `src/checker.rkt` (the `BDD.` and `HTTP.` help of the
+   unknown-function error, a message text). It carries only what the removal
+   needs: the grammar and skill pages lose the old form, and the
+   `**Breaking:**` entry of `CHANGELOG.md` is written. The two parts keep the
+   final state at one form, as the owner decided; the split exists because of
+   the size of the migration and so that `pkg/` authors can move first. Both
+   parts state which rule they relax (the freeze, row 7.2.7: a syntax change in
+   both parsers and both linkers) and why (the owner's decision of
+   2026-10-15). They do not depend on 4b; the one checker line is a message
+   text (44.13).
 3. **44a1: VM and writer, no language change.** Bytecode format 5: the Globals
    section (a count), `GLOBAL` and `GLOBAL_SET` (`agc_opcode` in `vm/value.h`
    and `opcodes` in `src/bytecode.rkt`, same order), loader checks and
@@ -973,7 +984,9 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    version 5 and a zero count; the front ends do not use the feature yet. Tests:
    the C tests build `.agcb` files by hand (valid use, slot out of range,
    `GLOBAL_SET` outside the entry, a jump back in the entry, a call of the
-   entry, an unset read, a count over the limit); all existing goldens still
+   entry when the count is above zero, a program with a zero count whose `main`
+   calls `main`, which must load and run, an unset read, a count over the
+   limit); all existing goldens still
    pass (their bytes change by the version and the zero count); `make vm-test`.
    A C change, so the `vm-c-critic` review applies. This is the "new format"
    step of 35.3 done before anything uses it.
@@ -991,31 +1004,32 @@ together; the user-visible change in `CHANGELOG.md` under `## [Unreleased]`).
    opcodes stay unused and the PR says so.
 4. **44a2: the language, both front ends.** `src/lexer.rkt`: no change.
    `src/parser.rkt`, `src/ast.rkt`; `src/modules.rkt` (collect, rank in
-   `declaration-order-error`, rewrite to `const-ref`); `src/checker.rkt`
-   (order, cycle, forms, types, `const-ref`); `src/lower.rkt` and
-   `src/bytecode.rkt` (literals, functions, `<start>`, slot reads). In
-   `compiler/`: `ast.agc`, `parse_base.agc`/`parser.agc`, `parse_text.agc`,
-   `declarations.agc`, `modules.agc`, `resolve.agc`, `rewrite.agc`,
-   `link_text.agc`, and the Agentica checker if 4b has merged (44.13); in
-   `src/parser.rkt` the table `parenthesized-calls` becomes module level
-   with an exported predicate (44.3). Tests: parser goldens (`const-*` valid
-   files, one `err-*` per site, `PARSE-CONSTANT-NAME`, the blank-line
-   exemption, a documented and an exported constant after a constant), linker
-   goldens (a fixture folder with an exported and a private constant, a named
-   import of a constant, `Mod.NAME` on a constant, `NAME.size` and
-   `CONFIG.port` and `LEVELS.get(k, 0)` on constants, a name clash, a bad
-   order), checker tests in
-   `tests/checker-test.rkt` (each rule of 44.5 and 44.6 with its code and
-   span, the effect-list audit), VM fixtures in `tests/fixtures/vm/` with
-   `.expected` (use, dependency order across two files, a constant of structs
-   and enums, a runtime error in an initializer, an unread constant that would
-   fail), and the differential golden of both front ends for the linked text of
-   a program with constants (the text form is not source, so no round trip).
-   Docs, all in this PR (owner request of 2026-10-15):
+   `declaration-order-error`, rewrite to `const-ref`); `src/checker.rkt` (order,
+   cycle, forms, types, `const-ref`); `src/lower.rkt` and `src/bytecode.rkt`
+   (literals, functions, `<start>`, slot reads). In `compiler/`: `ast.agc`,
+   `parse_base.agc`/`parser.agc`, `parse_text.agc`, `declarations.agc`,
+   `modules.agc`, `resolve.agc`, `rewrite.agc`, `link_text.agc`, and the
+   Agentica checker if 4b has merged (44.13); in `src/parser.rkt` the table
+   `parenthesized-calls` becomes module level with an exported predicate (44.3).
+   Tests: parser goldens (`const-*` valid files, one `err-*` per site,
+   `PARSE-CONSTANT-NAME`, the blank-line exemption, a documented and an exported
+   constant after a constant), linker goldens (a fixture folder with an exported
+   and a private constant, a named import of a constant, `Mod.NAME` on a
+   constant, `NAME.size` and `CONFIG.port`, `LEVELS.get(k, 0)` and
+   `KEYWORDS.each do |k| ... end` on constants, a name clash, a bad order), the
+   rename of a constant (`CHECK-IMPORT-RENAME` for a non-UPPER_SNAKE local name,
+   the case of 44.2 that 44a0-1 cannot test), checker tests in
+   `tests/checker-test.rkt` (each rule of 44.5 and 44.6 with its code and span,
+   the effect-list audit), VM fixtures in `tests/fixtures/vm/` with `.expected`
+   (use, dependency order across two files, a constant of structs and enums, a
+   runtime error in an initializer, an unread constant that would fail), and the
+   differential golden of both front ends for the linked text of a program with
+   constants (the text form is not source, so no round trip). Docs, all in this
+   PR (owner request of 2026-10-15):
    - `docs/grammar/`: `05-syntax.md` (the constant rule, the blank-line
      exemption and the new declaration order), `05b-modules.md` (`export NAME`,
-     importing a constant by name, `Mod.NAME` not valid, and "no mutable module
-     state"),
+     importing a constant by name, `Mod.NAME` not valid, the rename of a
+     constant, and "no mutable module state"),
      `06-semantics.md` (evaluation, types, the value rules),
      `07-diagnostics.md` (the four new codes and the new `CHECK-DECL-ORDER`
      help). One line per paragraph.
