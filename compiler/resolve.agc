@@ -11,11 +11,12 @@ import "resolve_import" as Resolve
 import "source" as Source
 import "suggest" as Suggest
 
-## What the linker knows while it rewrites one file: the settings, every module, and the file itself.
+## What the linker knows while it rewrites one file: the settings, every module, the file itself, and the linked names of the user structs the file may update (StructUpdate.visible).
 export struct Context
   settings: Env.Settings
   modules: Map[String, Modules.Module]
   me: Modules.Module
+  visible: List[String]
 end
 
 ## The name in the linked program for a name written in the file. want says what the name must be: "type" (a struct or enum), "enum" or "function". hint adds the enum hint to the help of an unknown alias. A failure is CHECK-IMPORT-NAME, CHECK-TYPE-MISMATCH or CHECK-UNKNOWN-NAME at span.

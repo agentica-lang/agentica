@@ -43,7 +43,7 @@ end
 
 ## The margin one level deeper.
 export def deeper(at: Margin) -> Margin
-  return Margin(indent: at.indent + "  ", base: at.base)
+  return at.with(indent: at.indent + "  ")
 end
 
 # The first line of a node. The root has no role.
@@ -108,6 +108,13 @@ def value_text(value: Ast.LitValue) -> String
     Ast.LitValue.Text(text) -> return "string:" + Text.quote(text)
     Ast.LitValue.Flag(flag) -> return "bool:" + flag.to_s
     Ast.LitValue.Nothing -> return "nil"
+  end
+end
+
+def visible_attr(visible: Ast.Optional[List[String]]) -> String
+  case visible
+    Ast.Optional.Present(names) -> return " visible=" + list_text(names.map do |name| Text.quote(name) end)
+    Ast.Optional.Absent -> return ""
   end
 end
 
@@ -210,7 +217,7 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
       lines = out.push(head(at, role, "construct", node.id, node.span, " type=" + Text.quote(node.type_name)))
       return print_named_args(lines, child, node.args)
     Ast.Expr.Update(node) ->
-      lines = out.push(head(indent, role, "struct-update", node.id, node.span, ""))
+      lines = out.push(head(at, role, "struct-update", node.id, node.span, visible_attr(node.visible)))
       lines = print_expr(lines, child, "target", node.target)
       return print_named_args(lines, child, node.args)
     Ast.Expr.ListLit(node) ->

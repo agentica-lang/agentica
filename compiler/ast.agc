@@ -327,11 +327,12 @@ export struct Construct
   span: Source.Span
 end
 
-## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument.
+## target.with(name: value, ...): a copy of a struct with the named fields changed. There is at least one argument. visible is Absent from the parser. The linker sets it to the sorted linked names of the user structs that the file of the update may build: its own and the exported ones of the files it imports (a builtin record is always allowed, so it is not listed). The checker refuses an update of any other user struct (CHECK-IMPORT-NAME). src/ keeps this as a predicate in the node.
 export struct StructUpdate
   id: Int
   target: Expr
   args: List[NamedArg]
+  visible: Optional[List[String]]
   span: Source.Span
 end
 

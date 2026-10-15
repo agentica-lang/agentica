@@ -133,8 +133,11 @@
                  (if (program-module-doc linked)
                      (string-append " module-doc=" (quote-text (program-module-doc linked)))
                      "")))
-  (for ([group (in-list (group-by-file (program-declarations linked)))])
-    (module-lines! emit! folder (car group) (cdr group) (original-of (car group))))
+  (parameterize ([current-update-universe
+                  (for/list ([declaration (in-list (program-declarations linked))] #:when (struct-decl? declaration))
+                    (struct-decl-name declaration))])
+    (for ([group (in-list (group-by-file (program-declarations linked)))])
+      (module-lines! emit! folder (car group) (cdr group) (original-of (car group)))))
   (reverse out))
 
 (define (failure-line folder problem)

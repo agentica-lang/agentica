@@ -16,6 +16,7 @@
          pseudo-children
          part-text-text
          shape
+         current-update-universe
          node-children
          number-tree
          emit-tree!
@@ -50,6 +51,17 @@
 
 (define (op-attrs op op-span)
   (format " op=~a op-span=~a" op (span-text op-span)))
+
+; The user structs of the linked program, when it is printed: the linker leaves the privacy rule of a struct
+; update as a predicate, which the text form shows as the sorted names it accepts.
+(define current-update-universe (make-parameter #f))
+
+(define (update-attrs node)
+  (define visible (struct-update-visible node))
+  (if (and visible (current-update-universe))
+      (format " visible=[~a]"
+              (string-join (map quote-text (sort (filter visible (current-update-universe)) string<?)) ","))
+      ""))
 
 ; The kind, attributes and children of a node. doc-of gives the doc text of a node or #f; the text form
 ; prints it where the node has one.
@@ -149,7 +161,7 @@
      (values "construct" (string-append " type=" (quote-text (construct-type-name node)))
              (kids "arg" (construct-args node)))]
     [(struct-update? node)
-     (values "struct-update" ""
+     (values "struct-update" (update-attrs node)
              (cons (cons "target" (struct-update-target node)) (kids "arg" (struct-update-args node))))]
     [(list-lit? node) (values "list-lit" "" (kids "element" (list-lit-elements node)))]
     [(map-entry? node)

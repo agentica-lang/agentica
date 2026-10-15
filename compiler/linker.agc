@@ -61,9 +61,22 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
   out: List[LinkedModule] = []
   for key in loaded.order
     module = loaded.modules[key]
-    cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module)
+    cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module, visible: visible_structs(module, loaded.modules))
     declarations = try Rewrite.rewrite_declarations(cx)
     out = out.push(LinkedModule(key: key, file: module.file, prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), declarations: declarations))
   end
   return ok(out)
+end
+
+# A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the `visible` predicate of src/modules.rkt as data).
+def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]) -> List[String]
+  names = structs_of(module.prefix, module.names)
+  for target in module.aliases.values
+    names = names.concat(structs_of(modules[target].prefix, modules[target].public))
+  end
+  return Set.new(names).to_a.sort
+end
+
+def structs_of(prefix: String, kinds: Map[String, String]) -> List[String]
+  return kinds.keys.filter do |name| kinds[name] == "struct" end.map do |name| prefix + name end
 end

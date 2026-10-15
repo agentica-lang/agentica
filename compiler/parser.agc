@@ -325,7 +325,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
         # `with` is only special before `(` after a dot; `x.with` still reads a field.
         args = try parse_update_arguments(inner, after_name + 1, next_id)
         close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
-        target = Ast.Expr.Update(Ast.StructUpdate(id: args.ids, target: target, args: args.nodes, span: Base.span_from(e, pos, close)))
+        target = Ast.Expr.Update(Ast.StructUpdate(id: args.ids, target: target, args: args.nodes, visible: Ast.Optional.Absent, span: Base.span_from(e, pos, close)))
         cursor = close
         next_id = args.ids + 1
       elsif e.tokens[after_name].kind == "left-paren"

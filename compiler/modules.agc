@@ -107,9 +107,8 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
 end
 
 def finish(walk: Walk, frame: Frame) -> Walk
-  m = frame.module
-  module = Module(key: m.key, file: m.file, prefix: m.prefix, first_id: m.first_id, program: m.program, names: m.names, public: m.public, aliases: frame.aliases)
-  return Walk(stack: walk.stack.take(walk.stack.size - 1), seen: walk.seen.put(m.key, 0), done: walk.done.put(m.key, module), order: walk.order, next_id: walk.next_id, root_dir: walk.root_dir)
+  module = frame.module.with(aliases: frame.aliases)
+  return walk.with(stack: walk.stack.take(walk.stack.size - 1), seen: walk.seen.put(module.key, 0), done: walk.done.put(module.key, module))
 end
 
 # One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen).
@@ -121,7 +120,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   end
   file = try Paths.module_file(decl.path, decl.alias, site)
   target = try Resolve.resolve_import(settings, walk.root_dir, module.key, file, site)
-  moved = Frame(module: module, aliases: frame.aliases.put(decl.alias, target), imports: frame.imports, next: frame.next + 1)
+  moved = frame.with(aliases: frame.aliases.put(decl.alias, target), next: frame.next + 1)
   with_frame = replace_top(walk, moved)
   state = walk.seen.get(target, -1)
   if state == 1
@@ -133,7 +132,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
 end
 
 def replace_top(walk: Walk, frame: Frame) -> Walk
-  return Walk(stack: walk.stack.set(walk.stack.size - 1, frame), seen: walk.seen, done: walk.done, order: walk.order, next_id: walk.next_id, root_dir: walk.root_dir)
+  return walk.with(stack: walk.stack.set(walk.stack.size - 1, frame))
 end
 
 def load_file(settings: Env.Settings, walk: Walk, key: String, site: Failure.Site) -> Result[Walk]
@@ -156,7 +155,7 @@ def enter(settings: Env.Settings, walk: Walk, key: String, file: String, program
   end
   module = Module(key: key, file: file, prefix: prefix, first_id: first_id, program: program, names: collected.names, public: collected.public, aliases: {})
   frame = Frame(module: module, aliases: {}, imports: Declarations.imports_of(program.declarations), next: 0)
-  return ok(Walk(stack: walk.stack.push(frame), seen: walk.seen.put(key, 1), done: walk.done, order: walk.order.push(key), next_id: Ast.next_free_id(program), root_dir: walk.root_dir))
+  return ok(walk.with(stack: walk.stack.push(frame), seen: walk.seen.put(key, 1), order: walk.order.push(key), next_id: Ast.next_free_id(program)))
 end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is CHECK-REDEFINED-NAME at the declaration.

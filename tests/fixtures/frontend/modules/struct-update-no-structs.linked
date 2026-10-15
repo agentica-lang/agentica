@@ -1,0 +1,16 @@
+program #14 0:1:1-93:5:1
+  module "root.agc"
+    declaration: function-decl #13 0:1:1-92:4:1 name="main"
+      result: type-ref #0 14:1:15-18:1:19 name="Void"
+      body: binding #12 21:2:3-88:3:1 name="x"
+        value: struct-update #11 25:2:7-87:2:69 visible=[]
+          target: struct-update #8 25:2:7-70:2:52 visible=[]
+            target: construct #5 25:2:7-54:2:36 type="Header"
+              arg: named-arg #2 32:2:14-41:2:23 name="name"
+                value: literal #1 38:2:20-41:2:23 value=string:"a"
+              arg: named-arg #4 43:2:25-53:2:35 name="value"
+                value: literal #3 50:2:32-53:2:35 value=string:"b"
+            arg: named-arg #7 60:2:42-69:2:51 name="name"
+              value: literal #6 66:2:48-69:2:51 value=string:"c"
+          arg: named-arg #10 76:2:58-86:2:68 name="value"
+            value: literal #9 83:2:65-86:2:68 value=string:"d"
