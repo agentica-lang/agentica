@@ -1,0 +1,1 @@
+ERROR CHECK-EMPTY-SET-TYPE 26:2:8-37:2:19 "an empty set needs an expected type, for example \"Set[Int]\"" "annotate the variable: seen: Set[Int] = Set.new([]); a parameter, a field or a function result also gives the type" signature="main() -> Void" file="empty-set-type.agc"

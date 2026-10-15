@@ -1,0 +1,1 @@
+ERROR CHECK-ENUM-POSITIONAL-ARGS 73:7:7-98:7:32 "enum variants use positional arguments" - signature="main() -> Void" file="enum-positional-args.agc"

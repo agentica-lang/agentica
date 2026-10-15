@@ -1,0 +1,1 @@
+ERROR CHECK-UNKNOWN-TYPE 24:2:6-27:2:9 "unknown type \"Foo\"" - signature="main() -> Void" file="unknown-type.agc"

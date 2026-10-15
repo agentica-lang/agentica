@@ -1,0 +1,1 @@
+ERROR CHECK-NOT-A-LIST 21:2:3-50:5:1 "\"for\" iterates over a list, a set or a range, found Int" - signature="main() -> Void" file="not-a-list.agc"

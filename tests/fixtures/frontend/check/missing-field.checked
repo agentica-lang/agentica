@@ -1,0 +1,1 @@
+ERROR CHECK-MISSING-FIELD 70:7:7-85:7:22 "constructor \"Item\" is missing field \"price\"" "add \"price: ...\" with a value of type Int" signature="main() -> Void" file="missing-field.agc"

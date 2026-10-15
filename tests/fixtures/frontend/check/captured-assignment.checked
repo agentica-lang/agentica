@@ -1,0 +1,1 @@
+ERROR CHECK-CAPTURED-ASSIGNMENT 53:4:5-64:5:1 "a block cannot assign to \"total\", which belongs to the enclosing code" "blocks capture values; use a for loop, which can assign \"total\": for x in xs ... end, or build it with xs.reduce(total) do |acc, x| ... end" signature="main() -> Void" file="captured-assignment.agc"

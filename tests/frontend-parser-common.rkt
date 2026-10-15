@@ -215,12 +215,13 @@
   ids)
 
 ; Calls (emit! line) for a node and the nodes below it, one line each, in the text form. id-of and doc-of
-; give the id and the doc of a node.
-(define (emit-tree! emit! node role indent id-of doc-of)
+; give the id and the doc of a node; notes-of the text added at the end of its line (the checker's text form
+; adds the type of an expression).
+(define (emit-tree! emit! node role indent id-of doc-of #:notes [notes-of (lambda (node) "")])
   (let walk ([node node] [role role] [indent indent])
     (define-values (kind attrs children) (shape node doc-of))
-    (emit! (format "~a~a~a #~a ~a~a" indent (if role (string-append role ": ") "") kind
-                   (id-of node) (span-text (node-span node)) attrs))
+    (emit! (format "~a~a~a #~a ~a~a~a" indent (if role (string-append role ": ") "") kind
+                   (id-of node) (span-text (node-span node)) attrs (notes-of node)))
     (let visit ([children children] [indent (string-append indent "  ")])
       (for ([child (in-list children)])
         (define item (cdr child))

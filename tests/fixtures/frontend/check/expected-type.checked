@@ -1,0 +1,1 @@
+ERROR CHECK-EXPECTED-TYPE 197:14:8-211:14:22 "a channel needs an expected type" "annotate the variable, for example ch: Channel[Int] = Channel.new(8)" signature="main() -> Void" file="expected-type.agc"

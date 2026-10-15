@@ -1,0 +1,1 @@
+ERROR CHECK-ANNOTATION-ON-EXISTING 29:3:3-40:4:1 "an annotation is only allowed when \"x\" is introduced" - signature="main() -> Void" file="annotation-on-existing.agc"

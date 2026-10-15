@@ -1,0 +1,79 @@
+program #77 0:1:1-539:37:1
+  module "valid-7.agc"
+    declaration: function-decl #6 0:1:1-59:4:1 name="text"
+      param: param #1 9:1:10-15:1:16 name="n"
+        type: type-ref #0 12:1:13-15:1:16 name="Int"
+      result: type-ref #2 20:1:21-26:1:27 name="String"
+      body: return-stmt #5 29:2:3-55:3:1
+        value: call #4 36:2:10-54:2:28 name="String.from_int" piped=false type=String
+          arg: name-ref #3 52:2:26-53:2:27 name="n" type=Int
+    declaration: function-decl #14 61:6:1-105:9:1 name="keep"
+      param: param #8 70:6:10-76:6:16 name="n"
+        type: type-ref #7 73:6:13-76:6:16 name="Int"
+      result: type-ref #9 81:6:21-85:6:25 name="Bool"
+      body: return-stmt #13 88:7:3-101:8:1
+        value: binary #12 95:7:10-100:7:15 op=greater op-span=97:7:12-98:7:13 type=Bool
+          left: name-ref #10 95:7:10-96:7:11 name="n" type=Int
+          right: literal #11 99:7:14-100:7:15 value=int:0 type=Int
+    declaration: function-decl #25 107:11:1-185:14:1 name="join"
+      param: param #16 116:11:10-127:11:21 name="acc"
+        type: type-ref #15 121:11:15-127:11:21 name="String"
+      param: param #18 129:11:23-135:11:29 name="n"
+        type: type-ref #17 132:11:26-135:11:29 name="Int"
+      result: type-ref #19 140:11:34-146:11:40 name="String"
+      body: return-stmt #24 149:12:3-181:13:1
+        value: binary #23 156:12:10-180:12:34 op=plus op-span=160:12:14-161:12:15 type=String
+          left: name-ref #20 156:12:10-159:12:13 name="acc" type=String
+          right: call #22 162:12:16-180:12:34 name="String.from_int" piped=false type=String
+            arg: name-ref #21 178:12:32-179:12:33 name="n" type=Int
+    declaration: function-decl #37 187:16:1-269:19:1 name="collect"
+      param: param #28 199:16:13-213:16:27 name="acc"
+        type: type-ref #27 204:16:18-213:16:27 name="List"
+          arg: type-ref #26 209:16:23-212:16:26 name="Int"
+      param: param #30 215:16:29-221:16:35 name="n"
+        type: type-ref #29 218:16:32-221:16:35 name="Int"
+      result: type-ref #32 226:16:40-235:16:49 name="List"
+        arg: type-ref #31 231:16:45-234:16:48 name="Int"
+      body: return-stmt #36 238:17:3-265:18:1
+        value: call #35 245:17:10-264:17:29 name="List.append" piped=false type=List(Int)
+          arg: name-ref #33 257:17:22-260:17:25 name="acc" type=List(Int)
+          arg: name-ref #34 262:17:27-263:17:28 name="n" type=Int
+    declaration: function-decl #41 271:21:1-302:23:1 name="ignore"
+      param: param #39 282:21:12-288:21:18 name="n"
+        type: type-ref #38 285:21:15-288:21:18 name="Int"
+      result: type-ref #40 293:21:23-297:21:27 name="Void"
+    declaration: function-decl #49 304:25:1-355:28:1 name="bad"
+      param: param #43 312:25:9-323:25:20 name="acc"
+        type: type-ref #42 317:25:14-323:25:20 name="String"
+      param: param #45 325:25:22-331:25:28 name="n"
+        type: type-ref #44 328:25:25-331:25:28 name="Int"
+      result: type-ref #46 336:25:33-339:25:36 name="Int"
+      body: return-stmt #48 342:26:3-351:27:1
+        value: name-ref #47 349:26:10-350:26:11 name="n" type=Int
+    declaration: function-decl #76 356:29:1-538:36:1 name="main"
+      result: type-ref #50 370:29:15-374:29:19 name="Void"
+      body: binding #54 377:30:3-401:31:1 name="a"
+        value: call #53 381:30:7-400:30:26 name="List.map" piped=false type=List(String)
+          arg: list-lit #51 390:30:16-392:30:18 type=List(Int)
+          arg: function-ref #52 394:30:20-399:30:25 name="text" type=Fn([Int], String)
+      body: binding #58 403:31:3-430:32:1 name="b"
+        value: call #57 407:31:7-429:31:29 name="List.filter" piped=false type=List(Int)
+          arg: list-lit #55 419:31:19-421:31:21 type=List(Int)
+          arg: function-ref #56 423:31:23-428:31:28 name="keep" type=Fn([Int], Bool)
+      body: binding #63 432:32:3-463:33:1 name="c"
+        value: call #62 436:32:7-462:32:33 name="List.reduce" piped=false type=String
+          arg: list-lit #59 448:32:19-450:32:21 type=List(Int)
+          arg: literal #60 452:32:23-454:32:25 value=string:"" type=String
+          arg: function-ref #61 456:32:27-461:32:32 name="join" type=Fn([String, Int], String)
+      body: binding #69 465:33:3-497:34:1 name="d"
+        value: call #68 469:33:7-496:33:34 name="List.reduce" piped=false type=String
+          arg: list-lit #65 481:33:19-484:33:22 type=List(Int)
+            element: literal #64 482:33:20-483:33:21 value=int:1 type=Int
+          arg: literal #66 486:33:24-488:33:26 value=string:"" type=String
+          arg: function-ref #67 490:33:28-495:33:33 name="join" type=Fn([String, Int], String)
+      body: binding #75 499:34:3-534:35:1 name="e"
+        value: call #74 503:34:7-533:34:37 name="List.reduce" piped=false type=List(Int)
+          arg: list-lit #71 515:34:19-518:34:22 type=List(Int)
+            element: literal #70 516:34:20-517:34:21 value=int:1 type=Int
+          arg: list-lit #72 520:34:24-522:34:26 type=List(Int)
+          arg: function-ref #73 524:34:28-532:34:36 name="collect" type=Fn([List(Int), Int], List(Int))
