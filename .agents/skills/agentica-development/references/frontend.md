@@ -93,5 +93,5 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 
 ## Comments
 
-- `compiler/*.agc`: a `#` comment where the code is complex or copies a Racket behavior on purpose (name the behavior, such as the span or NL rule). Each exported `def`, `struct` and `enum` gets a `##` doc block, as in `stdlib/queue.agc`; the file's first doc block, followed by a blank line, is its module doc (`docs/grammar/05-syntax.md`).
+- `compiler/*.agc`: a `#` comment where the code is complex or copies a Racket behavior on purpose (name the behavior, such as the span or NL rule). Each exported `def`, `struct` and `enum` you add or touch gets a `##` doc block, as in `stdlib/queue.agc` (`compiler/` has none yet; do not add docs to code you do not touch); the file's first doc block, followed by a blank line, is its module doc (`docs/grammar/05-syntax.md`). A `#` comment goes inside the body or above the `##` block, never between the block and its `def` (that is `PARSE-DETACHED-DOC`).
 - `src/*.rkt` and `tests/*.rkt`: a `;` comment for the non-obvious why, such as a Racket quirk, a freeze exception or a golden that must not change. Never narrate the code.
