@@ -1,0 +1,1 @@
+ERROR PARSE-UNEXPECTED-TOKEN 8:1:9-9:1:10 "expected an imported name, found \"}\"" "name at least one export, as in import {name} from \"path\""

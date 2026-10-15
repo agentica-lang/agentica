@@ -1,6 +1,7 @@
 ## The "did you mean" help of an unknown name: src/builtins.rkt (did-you-mean, edit-distance).
 
 import "ast" as Ast
+import "diagnostic" as Diag
 import "types" as Types
 
 ## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
@@ -23,6 +24,20 @@ export def did_you_mean_among(full_name: String, candidates: List[String], share
     end
   end
   return nearest(name, pool.concat(shared).sort, limit)
+end
+
+## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed texts for the removed std/http functions and std/logger error, or the did-you-mean over the exports (a private name is never suggested).
+export def unknown_import_help(key: String, exports: List[String], member: String) -> Diag.Help
+  removed = ["respond", "begin", "write", "write_bytes", "finish"].any? do |name| name == member end
+  if key == "std/http.agc" and removed
+    return Diag.Help.Hint("a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text))")
+  elsif key == "std/logger.agc" and member == "error"
+    return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")
+  end
+  case did_you_mean(member, exports)
+    Ast.Optional.Present(text) -> return Diag.Help.Hint(text)
+    Ast.Optional.Absent -> return Diag.Help.NoHelp
+  end
 end
 
 ## The "@N::" a linked name starts with, or "".

@@ -1,0 +1,15 @@
+program #14 0:1:1-277:13:1
+  declaration: import-decl #0 0:1:1-28:2:1 path="lexer" names=["Token"@8:1:9-13:1:14]
+  declaration: import-decl #1 28:2:1-52:3:1 path="x" names=["A"@36:2:9-37:2:10,"B"@39:2:12-40:2:13]
+  declaration: import-decl #2 52:3:1-129:8:1 path="compiler/lexer" names=["lex"@63:4:3-66:4:6,"Token"@70:5:3-75:5:8 as "Tok"@79:5:12-82:5:15,"scan"@86:6:3-90:6:7 as "scan_text"@94:6:11-103:6:20]
+  declaration: import-decl #3 129:8:1-216:9:1 path="words" names=["as"@137:8:9-139:8:11,"from"@141:8:13-145:8:17,"as"@147:8:19-149:8:21 as "as_text"@153:8:25-160:8:32,"from"@162:8:34-166:8:38 as "origin"@170:8:42-176:8:48,"empty?"@178:8:50-184:8:56,"ready?"@186:8:58-192:8:64 as "done?"@196:8:68-201:8:73]
+  declaration: function-decl #13 217:10:1-277:13:1 name="check"
+    param: param #5 227:10:11-236:10:20 name="from"
+      type: type-ref #4 233:10:17-236:10:20 name="Int"
+    param: param #7 238:10:22-245:10:29 name="as"
+      type: type-ref #6 242:10:26-245:10:29 name="Int"
+    result: type-ref #8 250:10:34-253:10:37 name="Int"
+    body: return-stmt #12 256:11:3-273:12:1
+      value: binary #11 263:11:10-272:11:19 op=plus op-span=268:11:15-269:11:16
+        left: name-ref #9 263:11:10-267:11:14 name="from"
+        right: name-ref #10 270:11:17-272:11:19 name="as"

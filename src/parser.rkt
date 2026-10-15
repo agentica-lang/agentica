@@ -192,6 +192,80 @@
         [(kind? 'struct) (parse-struct-decl)]
         [else (parse-enum-decl)]))
 
+    ;; The three import forms. `import "path" as Alias` is the old alias form, kept until 44a0-2.
+    ;; `from` and `as` are plain name tokens that this parser reads by their text, so a parameter
+    ;; or a function called `from` or `as` still works.
+    (define (parse-import)
+      (define begin (advance!))
+      (cond
+        [(kind? 'type-name)
+         (define alias (advance!))
+         (expect-word "from")
+         (define path (expect 'string "an import path"))
+         (expect 'NL "a newline after import")
+         (import-decl (token-value path) (token-lexeme alias) '() (span-from begin))]
+        [(kind? 'left-brace)
+         (advance!)
+         (define names (parse-import-names))
+         (expect-word "from")
+         (define path (expect 'string "an import path"))
+         (expect 'NL "a newline after import")
+         (import-decl (token-value path) #f names (span-from begin))]
+        [else
+         (define path (expect 'string "an import path"))
+         (define as-token (expect 'name "as"))
+         (unless (equal? (token-lexeme as-token) "as")
+           (bail 'PARSE-UNEXPECTED-TOKEN "expected as" as-token))
+         (define alias (expect 'type-name "a module alias"))
+         (expect 'NL "a newline after import")
+         (import-decl (token-value path) (token-lexeme alias) '() (span-from begin))]))
+
+    (define (expect-word word)
+      (if (and (kind? 'name) (equal? (token-lexeme (current)) word))
+          (advance!)
+          (bail 'PARSE-UNEXPECTED-TOKEN
+                (format "expected ~a, found ~a" word (describe (current)))
+                (current))))
+
+    ;; The list after "{": one or more entries, a trailing comma allowed, then "}".
+    (define (parse-import-names)
+      (when (kind? 'right-brace)
+        (bail 'PARSE-UNEXPECTED-TOKEN
+              (format "expected an imported name, found ~a" (describe (current)))
+              (current)
+              #:help "name at least one export, as in import {name} from \"path\""))
+      (let loop ([acc (list (parse-import-name))])
+        (cond
+          [(kind? 'comma)
+           (advance!)
+           (if (kind? 'right-brace)
+               (begin (advance!) (reverse acc))
+               (loop (cons (parse-import-name) acc)))]
+          [(kind? 'right-brace) (advance!) (reverse acc)]
+          [else (bail 'PARSE-UNEXPECTED-TOKEN
+                      (format "expected \",\" or \"}\", found ~a" (describe (current)))
+                      (current))])))
+
+    ;; An exported name, then optionally `as` and the local name. The original always comes first,
+    ;; so `{as}` imports a function called as.
+    (define (import-word description)
+      (if (memq (token-kind (current)) '(name type-name))
+          (advance!)
+          (bail 'PARSE-UNEXPECTED-TOKEN
+                (format "expected ~a, found ~a" description (describe (current)))
+                (current))))
+
+    (define (parse-import-name)
+      (define original (import-word "an imported name"))
+      (cond
+        [(and (kind? 'name) (equal? (token-lexeme (current)) "as"))
+         (advance!)
+         (define local (import-word "a local name"))
+         (import-name (token-lexeme original) (token-lexeme local)
+                      (token-span original) (token-span local))]
+        [else (import-name (token-lexeme original) (token-lexeme original)
+                           (token-span original) (token-span original))]))
+
     (define (parse-program)
       (define start (current))
       (define module-doc #f)
@@ -212,15 +286,7 @@
                   (eq? (doc-block-next (token-value (current))) 'blank))
              (set! module-doc (doc-block-text (token-value (advance!))))
              (loop acc)]
-            [(kind? 'import)
-             (define begin (advance!))
-             (define path (expect 'string "an import path"))
-             (define as-token (expect 'name "as"))
-             (unless (equal? (token-lexeme as-token) "as")
-               (bail 'PARSE-UNEXPECTED-TOKEN "expected as" as-token))
-             (define alias (expect 'type-name "a module alias"))
-             (expect 'NL "a newline after import")
-             (loop (cons (import-decl (token-value path) (token-lexeme alias) (span-from begin)) acc))]
+            [(kind? 'import) (loop (cons (parse-import) acc))]
             [(or (declaration-start?) (kind? 'DOC))
              (loop (cons (parse-documented parse-declaration declaration-start?) acc))]
             [else

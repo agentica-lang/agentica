@@ -19,6 +19,16 @@ struct DocAt
   pos: Int
 end
 
+struct ImportNameAt
+  node: Ast.ImportName
+  pos: Int
+end
+
+struct ImportNamesAt
+  nodes: List[Ast.ImportName]
+  pos: Int
+end
+
 struct BlockParamsAt
   params: List[Ast.BlockParam]
   pos: Int
@@ -1368,7 +1378,14 @@ def top_level_help(kind: String) -> String
   return "statements go inside a function: def main() -> Void ... end; a file holds only def, struct, enum, import and export"
 end
 
+# The three import forms. `import "path" as Alias` is the old alias form, kept until 44a0-2. `from` and `as` are plain name tokens read by their text, so a parameter or a function called `from` or `as` still works (src/parser.rkt, parse-import).
 def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
+  kind = Base.kind_at(e, pos + 1)
+  if kind == "type-name"
+    return parse_import_alias(e, pos, ids)
+  elsif kind == "left-brace"
+    return parse_import_names(e, pos, ids)
+  end
   after_path = try Base.expect(e, pos + 1, "string", "an import path", false)
   after_as = try Base.expect(e, after_path, "name", "as", false)
   if e.tokens[after_path].lexeme != "as"
@@ -1376,8 +1393,87 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   end
   after_alias = try Base.expect(e, after_as, "type-name", "a module alias", false)
   stop = try Base.expect(e, after_alias, "NL", "a newline after import", false)
-  node = Ast.Decl.Import(Ast.ImportDecl(id: ids, path: Base.token_text(e.tokens[pos + 1]), alias: e.tokens[after_as].lexeme, span: Base.span_from(e, pos, stop)))
+  alias = Ast.Optional.Present(e.tokens[after_as].lexeme)
+  node = Ast.Decl.Import(Ast.ImportDecl(id: ids, path: Base.token_text(e.tokens[pos + 1]), alias: alias, names: [], span: Base.span_from(e, pos, stop)))
   return decl_at(node, stop, ids)
+end
+
+# import Alias from "path"
+def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
+  after_from = try expect_word(e, pos + 2, "from")
+  after_path = try Base.expect(e, after_from, "string", "an import path", false)
+  stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
+  alias = Ast.Optional.Present(e.tokens[pos + 1].lexeme)
+  node = Ast.Decl.Import(Ast.ImportDecl(id: ids, path: Base.token_text(e.tokens[after_from]), alias: alias, names: [], span: Base.span_from(e, pos, stop)))
+  return decl_at(node, stop, ids)
+end
+
+# import {A, B as C} from "path"
+def parse_import_names(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
+  listed = try parse_import_list(e, pos + 2)
+  after_from = try expect_word(e, listed.pos, "from")
+  after_path = try Base.expect(e, after_from, "string", "an import path", false)
+  stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
+  node = Ast.Decl.Import(Ast.ImportDecl(id: ids, path: Base.token_text(e.tokens[after_from]), alias: Ast.Optional.Absent, names: listed.nodes, span: Base.span_from(e, pos, stop)))
+  return decl_at(node, stop, ids)
+end
+
+# The position after the name token with this text (from, as).
+def expect_word(e: Base.Env, at: Int, word: String) -> Result[Int]
+  if e.tokens[at].kind == "name" and e.tokens[at].lexeme == word
+    return ok(at + 1)
+  end
+  return error(Base.found(e, at, word))
+end
+
+# The entries after "{": one or more, a trailing comma allowed, then "}".
+def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
+  if Base.kind_at(e, at) == "right-brace"
+    return error(Base.unexpected_help(e, at, "expected an imported name, found " + Base.describe(e.tokens[at]), "name at least one export, as in import {name} from \"path\""))
+  end
+  nodes: List[Ast.ImportName] = []
+  cursor = at
+  looping = true
+  while looping
+    entry = try parse_import_name(e, cursor)
+    nodes = nodes.push(entry.node)
+    cursor = entry.pos
+    kind = Base.kind_at(e, cursor)
+    if kind == "comma"
+      cursor += 1
+      if Base.kind_at(e, cursor) == "right-brace"
+        cursor += 1
+        looping = false
+      end
+    elsif kind == "right-brace"
+      cursor += 1
+      looping = false
+    else
+      return error(Base.found(e, cursor, "\",\" or \"}\""))
+    end
+  end
+  return ok(ImportNamesAt(nodes: nodes, pos: cursor))
+end
+
+# An exported name, then optionally `as` and the local name. The original always comes first, so `{as}` imports a function called as.
+def parse_import_name(e: Base.Env, at: Int) -> Result[ImportNameAt]
+  after_name = try import_word(e, at, "an imported name")
+  original = e.tokens[at]
+  if e.tokens[after_name].kind == "name" and e.tokens[after_name].lexeme == "as"
+    after_local = try import_word(e, after_name + 1, "a local name")
+    local = e.tokens[after_name + 1]
+    return ok(ImportNameAt(node: Ast.ImportName(name: original.lexeme, local: local.lexeme, span: original.span, local_span: local.span), pos: after_local))
+  end
+  return ok(ImportNameAt(node: Ast.ImportName(name: original.lexeme, local: original.lexeme, span: original.span, local_span: original.span), pos: after_name))
+end
+
+# A name or a type name; a name may end in ? or !, as a function does.
+def import_word(e: Base.Env, at: Int, description: String) -> Result[Int]
+  kind = Base.kind_at(e, at)
+  if kind == "name" or kind == "type-name"
+    return ok(at + 1)
+  end
+  return error(Base.found(e, at, description))
 end
 
 # The blank line rule: right after a declaration other than an import, the next token must not start a declaration, an import or a doc block (PARSE-MISSING-BLANK-LINE), before the newlines are skipped. The first doc block of a file, followed by a blank line, is the module doc.

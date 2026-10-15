@@ -12,8 +12,15 @@ import "link_failure" as Failure
 import "parser" as Parser
 import "resolve_import" as Resolve
 import "source" as Source
+import "suggest" as Suggest
 
-## A file of the program once it is loaded.
+## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the exported name.
+export struct Named
+  target: String
+  name: String
+end
+
+## A file of the program once it is loaded. named maps each local name of an import list to what it names.
 export struct Module
   key: String
   file: String
@@ -23,6 +30,7 @@ export struct Module
   names: Map[String, Declarations.Kind]
   public: Map[String, Declarations.Kind]
   aliases: Map[String, String]
+  named: Map[String, Named]
 end
 
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a file imported twice appears once. root_dir is the folder of the root file.
@@ -32,12 +40,14 @@ export struct Loaded
   root_dir: String
 end
 
-# A file whose imports are being read: the module so far (its aliases are filled in as imports are read), and the index of the next import to read.
+# A file whose imports are being read: the module so far (its aliases and named imports are filled in as imports are read), and the index of the next import to read. pending is the key of the file that the import at next names while its names wait to be checked: they need the exports of that file, so they are checked once it is loaded, as src/modules.rkt checks them after visit. "" when no import waits.
 struct Frame
   module: Module
   aliases: Map[String, String]
+  named: Map[String, Named]
   imports: List[Ast.ImportDecl]
   next: Int
+  pending: String
 end
 
 # seen maps a key to 1 while its file is on the stack, and to 0 once it is done.
@@ -103,24 +113,35 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
   if frame.next >= frame.imports.size
     return ok(finish(walk, frame))
   end
+  if frame.pending != ""
+    return bind_names(settings, walk, frame, frame.imports[frame.next])
+  end
   return read_import(settings, walk, frame, frame.imports[frame.next])
 end
 
 def finish(walk: Walk, frame: Frame) -> Walk
-  module = frame.module.with(aliases: frame.aliases)
+  module = frame.module.with(aliases: frame.aliases, named: frame.named)
   return walk.with(stack: walk.stack.take(walk.stack.size - 1), seen: walk.seen.put(module.key, 0), done: walk.done.put(module.key, module))
 end
 
-# One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen).
+# One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen). The names of an import list wait for the file to be loaded (bind_names).
 def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.ImportDecl) -> Result[Walk]
   module = frame.module
   site = Failure.Site(file: module.file, span: decl.span)
-  if frame.aliases.has_key?(decl.alias) or module.names.has_key?(decl.alias) or settings.catalog.reserved.include?(decl.alias)
+  alias = Declarations.alias_of(decl)
+  aliases = frame.aliases
+  if alias != "" and (aliases.has_key?(alias) or module.names.has_key?(alias) or frame.named.has_key?(alias) or settings.catalog.reserved.include?(alias))
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
   end
-  file = try Paths.module_file(decl.path, decl.alias, site)
+  file = try Paths.module_file(decl, site)
   target = try Resolve.resolve_import(settings, walk.root_dir, module.key, file, site)
-  moved = frame.with(aliases: frame.aliases.put(decl.alias, target), next: frame.next + 1)
+  if alias != ""
+    aliases = aliases.put(alias, target)
+  end
+  moved = frame.with(aliases: aliases, next: frame.next + 1)
+  if decl.names.size > 0
+    moved = frame.with(aliases: aliases, pending: target)
+  end
   with_frame = replace_top(walk, moved)
   state = walk.seen.get(target, -1)
   if state == 1
@@ -129,6 +150,41 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
     return ok(with_frame)
   end
   return load_file(settings, with_frame, target, site)
+end
+
+# The names of the import at next, once its file is loaded: each must be an export, keep the case rule of its kind, and join the names of the file like a declaration. The first problem is reported, in the order of the list.
+def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.ImportDecl) -> Result[Walk]
+  target = walk.done[frame.pending]
+  named = frame.named
+  for entry in decl.names
+    named = try bind_name(settings, frame, target, entry, named)
+  end
+  return ok(replace_top(walk, frame.with(named: named, next: frame.next + 1, pending: "")))
+end
+
+def bind_name(settings: Env.Settings, frame: Frame, target: Module, entry: Ast.ImportName, named: Map[String, Named]) -> Result[Map[String, Named]]
+  file = frame.module.file
+  if !target.public.has_key?(entry.name)
+    return error(Failure.fail_at(Failure.Site(file: file, span: entry.span), "CHECK-IMPORT-NAME", "unknown or private imported name", Suggest.unknown_import_help(target.key, target.public.keys, entry.name)))
+  end
+  kind = target.public[entry.name]
+  at_local = Failure.Site(file: file, span: entry.local_span)
+  if Declarations.type_name?(entry.local) == Declarations.function?(kind)
+    return error(Failure.fail_at(at_local, "CHECK-IMPORT-RENAME", "the new name does not follow the case rule of the imported name", Failure.hint(rename_help(kind))))
+  end
+  taken = frame.module.names.has_key?(entry.local) or frame.aliases.has_key?(entry.local) or named.has_key?(entry.local)
+  if taken or settings.catalog.bare_names.include?(entry.local) or settings.catalog.reserved.include?(entry.local)
+    return error(Failure.fail_at(at_local, "CHECK-REDEFINED-NAME", "duplicate or reserved imported name", Diag.Help.NoHelp))
+  end
+  return ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
+end
+
+def rename_help(kind: Declarations.Kind) -> String
+  case kind
+    Declarations.Kind.Struct -> return "a struct is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.Enum -> return "an enum is renamed to another type name, which starts with a capital letter"
+    _ -> return "a function is renamed to another lowercase name"
+  end
 end
 
 def replace_top(walk: Walk, frame: Frame) -> Walk
@@ -153,8 +209,8 @@ def enter(settings: Env.Settings, walk: Walk, key: String, file: String, program
   if walk.order.size == 0
     prefix = ""
   end
-  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, program: program, names: collected.names, public: collected.public, aliases: {})
-  frame = Frame(module: module, aliases: {}, imports: Declarations.imports_of(program.declarations), next: 0)
+  module = Module(key: key, file: file, prefix: prefix, first_id: first_id, program: program, names: collected.names, public: collected.public, aliases: {}, named: {})
+  frame = Frame(module: module, aliases: {}, named: {}, imports: Declarations.imports_of(program.declarations), next: 0, pending: "")
   return ok(walk.with(stack: walk.stack.push(frame), seen: walk.seen.put(key, 1), order: walk.order.push(key), next_id: Ast.next_free_id(program)))
 end
 

@@ -155,6 +155,16 @@ import {lex as lex_text, Token as Tok} from "compiler/lexer"
     change: it depends on the module, not on the names. Messages that print a
     declaration's name show the original name (the display name of the linked
     name), not the local one.
+- **Order and places of the checks (as built in 44a0-1).** The names of a
+  list are checked once the module they come from is loaded (they need its
+  exports), so a failure inside that module, or in the modules it imports,
+  comes first. Then, entry by entry in source order: `CHECK-IMPORT-NAME` at the
+  original name, `CHECK-IMPORT-RENAME` at the local name, then
+  `CHECK-REDEFINED-NAME` at the local name (the name after `as`, or the only
+  name when there is no `as`). An alias is also checked against the names
+  imported before it. The `CHECK-IMPORT-PATH` helps of a name list show the
+  line as `import {A, B as C} from "path"`. The text form of the parser prints
+  `names=["A"@SPAN,"B"@SPAN as "C"@SPAN]`.
 - **Re-exports stay out of scope** (§25, 15b). An imported name is not
   exported; `export` still cannot precede `import`. Unused names are not
   reported: that is `CHECK-UNUSED-IMPORT` of §26.

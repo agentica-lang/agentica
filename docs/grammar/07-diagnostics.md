@@ -88,7 +88,10 @@ Names and forms from other languages get a `help` that names the Agentica form. 
 | a `Result[T]` where `T` is expected (`n: Int = s.to_i`) | a `!` form (`s.to_i!`), `Result.unwrap!`, or `try` |
 | `HttpWire.exchange(...)` or another `HttpWire` call outside `std/http` | `import "std/http" as HTTP`, then `HTTP.get`, `HTTP.post` or `HTTP.request` |
 | `LogRegistry.level()` or another `LogRegistry` call outside `std/logger` | `import "std/logger" as Logger`, then `Logger.info`, `Logger.attach` and the other `Logger` functions |
-| `M.nme` when module `M` exports `name` (`CHECK-IMPORT-NAME`) | the help suggests the closest export of `M` (`did you mean "name"?`); it never suggests a private name, and it stays empty when no export is close |
+| `import Mod, {name} from "path"`, `import {} from "path"`, `import {a b} from "path"` (`PARSE-UNEXPECTED-TOKEN`) | one line does one thing: write `import Mod from "path"` and `import {name} from "path"` on two lines; a name list has at least one name, with commas between names |
+| `import {Token as token} from "path"`, `import {lex as Lex} from "path"` (`CHECK-IMPORT-RENAME`) | a struct or an enum is renamed to a type name (a capital first letter) and a function to a lowercase name |
+| an imported name (or the new name after `as`) that is also a declaration of the file, an alias, another imported name, a builtin function such as `puts` or a reserved type name such as `Int` (`CHECK-REDEFINED-NAME`) | rename the import: `import {name as other} from "path"` |
+| `M.nme` or `import {nme} from "path"` when module `M` exports `name` (`CHECK-IMPORT-NAME`) | the help suggests the closest export of `M` (`did you mean "name"?`); it never suggests a private name, and it stays empty when no export is close |
 | `Logger.error(...)` (`CHECK-IMPORT-NAME`) | `Logger.err(...)`; `error` is a reserved name, so the function for the error level is `err` |
 | `HTTP.get(...)` or another `HTTP.` call without the import | `import "std/http" as HTTP` |
 | `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` with the import (`CHECK-IMPORT-NAME`) | a handler that returns its whole response: `return ok(HttpResponse(status: 200, headers: [], body: text))` |
