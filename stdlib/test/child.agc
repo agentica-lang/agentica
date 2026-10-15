@@ -10,8 +10,8 @@ export struct Records
   problem: String
 end
 
-## Reads the channel records of the child `p` until a read fails or the `deadline` passes (a `Time.monotonic_ms` value).
-## Lines that are not JSON are skipped.
+## Reads the channel records of the child `p` until a read fails or the `deadline` passes (a `Time.monotonic_ms`
+## value). Lines that are not JSON are skipped.
 export def read_records(p: Process, deadline: Int) -> Records
   items: List[Json] = []
   while true
@@ -78,7 +78,11 @@ end
 
 ## Returns true when the error `message` says the child's channel has ended or closed.
 export def gone?(message: String) -> Bool
-  return message == "process: end of input" or message == "process: channel is closed" or message.starts_with?("error writing to stream port")
+  return (
+    message == "process: end of input" or
+    message == "process: channel is closed" or
+    message.starts_with?("error writing to stream port")
+  )
 end
 
 ## Returns the milliseconds left until `deadline`, at most 2000.
@@ -120,8 +124,9 @@ export def tail(text: String, limit: Int) -> String
   return text.slice(text.length - limit, limit)
 end
 
-## Reads the diagnostic a child wrote as the last line of `stderr`. A child that halts writes its `--json` diagnostic there, and a child with an
-## unobserved task crash writes a summary, which becomes `RUNTIME-TASK-CRASHED`. Lines of task crashes are skipped. Returns an error when there is none.
+## Reads the diagnostic a child wrote as the last line of `stderr`. A child that halts writes its `--json` diagnostic
+## there, and a child with an unobserved task crash writes a summary, which becomes `RUNTIME-TASK-CRASHED`. Lines of
+## task crashes are skipped. Returns an error when there is none.
 export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Error]
   lines = stderr.split("\n").filter do |line| line != "" and not vm_shape?(line, true) end
   if lines.size == 0

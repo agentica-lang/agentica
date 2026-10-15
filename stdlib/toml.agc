@@ -1,8 +1,11 @@
 ## Reads and writes TOML 1.0 documents.
 ##
-## Import it with `import Toml from "std/toml"`. `Toml.parse` turns text into a `Toml.Value`, `Toml.encode` writes a `Toml.Value` back as text, and `Toml.to_json` bridges to typed decoding (`JSON.decode(JSON.encode(json), T)`).
-## Every function returns a `Result` and never halts. A parse error starts with the place, for example `line 3, column 7: expected '=' after key`; lines and columns count from 1, and a column counts characters.
-## Arrays and inline tables nest at most 256 levels, and a key (a header or a dotted key) has at most 256 parts; a deeper input is an error at the opening bracket or the key.
+## Import it with `import Toml from "std/toml"`. `Toml.parse` turns text into a `Toml.Value`, `Toml.encode` writes a
+## `Toml.Value` back as text, and `Toml.to_json` bridges to typed decoding (`JSON.decode(JSON.encode(json), T)`). Every
+## function returns a `Result` and never halts. A parse error starts with the place, for example
+## `line 3, column 7: expected '=' after key`; lines and columns count from 1, and a column counts characters. Arrays
+## and inline tables nest at most 256 levels, and a key (a header or a dotted key) has at most 256 parts; a deeper
+## input is an error at the opening bracket or the key.
 
 ## A TOML value. The root of a document is always a `Table`.
 ## A `Map` keeps the order its keys were first written in, so `encode` is deterministic.
@@ -15,7 +18,8 @@ export enum Value
   Float(Float)
   ## `true` or `false`.
   Bool(Bool)
-  ## A date-time kept as the text it was written with: an offset date-time, a local date-time, a local date or a local time.
+  ## A date-time kept as the text it was written with: an offset date-time, a local date-time, a local date or a local
+  ## time.
   DateTime(String)
   ## An array; TOML 1.0 allows mixed types.
   Array(List[Value])
@@ -72,8 +76,8 @@ struct Key
 end
 
 ## Reads a TOML document. Returns the root `Value.Table`, or an error that starts with `line L, column C: `.
-## It checks all of TOML 1.0: a duplicate key, a table defined twice, extending an inline table or a static array, and a bad escape, number or date are errors.
-## A CRLF line ending counts as one LF, also inside multi-line strings.
+## It checks all of TOML 1.0: a duplicate key, a table defined twice, extending an inline table or a static array, and
+## a bad escape, number or date are errors. A CRLF line ending counts as one LF, also inside multi-line strings.
 export def parse(text: String) -> Result[Value]
   src = make_src(text)
   root = Node.Tab(empty_tbl(Origin.Header, 0))
@@ -131,10 +135,16 @@ export def parse(text: String) -> Result[Value]
 end
 
 ## Writes a `Value.Table` as a TOML document ending in a newline. Any other root is an error.
-## The output is deterministic: keys appear in the order of the `Map` (its insertion order). In each table, first the plain `key = value` lines of a table, then its sub-tables as `[a.b]` sections, and an array that holds only tables, when it is a direct entry of a table, as `[[a.b]]` sections, whatever the order of the `Map`; each group keeps the insertion order. Any other array or table (inside an array) is written inline.
-## A key that is not a bare key (`A-Za-z0-9_-`) is quoted. Strings are basic strings with escapes. A float is written so that it reads back as the same float (`inf`, `-inf` and `nan` too). A `DateTime` whose text is not a valid TOML date-time is an error.
-## `parse(encode(v))` gives back the same values and the same Map entries for every table `v` this function accepts, but the keys of a Map may be regrouped (plain entries first, then sub-tables, then arrays of tables).
-## A table path of more than 256 parts or an inline value nested more than 256 levels is an error (the reader refuses such text), so the text that `encode` writes can always be read back. No value halts the function.
+## The output is deterministic: keys appear in the order of the `Map` (its insertion order). In each table, first the
+## plain `key = value` lines of a table, then its sub-tables as `[a.b]` sections, and an array that holds only tables,
+## when it is a direct entry of a table, as `[[a.b]]` sections, whatever the order of the `Map`; each group keeps the
+## insertion order. Any other array or table (inside an array) is written inline. A key that is not a bare key
+## (`A-Za-z0-9_-`) is quoted. Strings are basic strings with escapes. A float is written so that it reads back as the
+## same float (`inf`, `-inf` and `nan` too). A `DateTime` whose text is not a valid TOML date-time is an error.
+## `parse(encode(v))` gives back the same values and the same Map entries for every table `v` this function accepts,
+## but the keys of a Map may be regrouped (plain entries first, then sub-tables, then arrays of tables). A table path
+## of more than 256 parts or an inline value nested more than 256 levels is an error (the reader refuses such text), so
+## the text that `encode` writes can always be read back. No value halts the function.
 export def encode(value: Value) -> Result[String]
   case value
     Value.Table(entries) ->
@@ -148,14 +158,16 @@ export def encode(value: Value) -> Result[String]
 end
 
 ## Converts a `Value` to `Json`, for typed decoding: `JSON.decode(JSON.encode(json), Config)`.
-## A `DateTime` becomes its string. An `inf` or `nan` float is an error, since `Json` cannot hold it. An integer stays an integer and a float stays a float (`1.0` is not `1`).
-## A value nested more than 2,048 levels (no document `parse` reads is that deep) is an error, not a halt.
+## A `DateTime` becomes its string. An `inf` or `nan` float is an error, since `Json` cannot hold it. An integer stays
+## an integer and a float stays a float (`1.0` is not `1`). A value nested more than 2,048 levels (no document `parse`
+## reads is that deep) is an error, not a halt.
 export def to_json(value: Value) -> Result[Json]
   return json_of(value, 0)
 end
 
-## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment of plain ASCII digits without a leading zero also indexes an array (`"bin.0.path"`).
-## Returns an error that names the missing key. A key that holds a dot cannot be reached this way: use `case` on the `Table`.
+## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment of plain ASCII digits without
+## a leading zero also indexes an array (`"bin.0.path"`). Returns an error that names the missing key. A key that holds
+## a dot cannot be reached this way: use `case` on the `Table`.
 export def get(value: Value, path: String) -> Result[Value]
   current = value
   for part in path.split(".")
@@ -868,7 +880,10 @@ def number_at(src: Src, pos: Int, count: Int) -> Int
 end
 
 def date_time_start?(src: Src, pos: Int) -> Bool
-  return (number_at(src, pos, 4) >= 0 and at(src, pos + 4) == 45) or (number_at(src, pos, 2) >= 0 and at(src, pos + 2) == 58)
+  return (
+    (number_at(src, pos, 4) >= 0 and at(src, pos + 4) == 45) or
+    (number_at(src, pos, 2) >= 0 and at(src, pos + 2) == 58)
+  )
 end
 
 def days_in_month(year: Int, month: Int) -> Int
@@ -924,7 +939,16 @@ def time_end(src: Src, pos: Int) -> Result[Int]
   hour = number_at(src, pos, 2)
   minute = number_at(src, pos + 3, 2)
   second = number_at(src, pos + 6, 2)
-  if hour < 0 or hour > 23 or minute < 0 or minute > 59 or second < 0 or second > 60 or at(src, pos + 2) != 58 or at(src, pos + 5) != 58
+  if (
+    hour < 0 or
+    hour > 23 or
+    minute < 0 or
+    minute > 59 or
+    second < 0 or
+    second > 60 or
+    at(src, pos + 2) != 58 or
+    at(src, pos + 5) != 58
+  )
     return error(place(src, pos, "invalid time"))
   end
   stop = pos + 8
@@ -1226,7 +1250,12 @@ def table_array?(value: Value) -> Bool
 end
 
 # Writes a table's plain entries, then its sections. `path` is the table's own path.
-def emit_table(entries: Map[String, Value], path: List[String], out: List[String], cls: List[Int]) -> Result[List[String]]
+def emit_table(
+  entries: Map[String, Value],
+  path: List[String],
+  out: List[String],
+  cls: List[Int],
+) -> Result[List[String]]
   if path.size > max_depth()
     return error("tables nest more than 256 levels")
   end

@@ -21,7 +21,8 @@ export enum Detail
 end
 
 ## A failure: a code, a message and its place, and the expected and actual values when known.
-## `original` keeps the diagnostic object as `--json` wrote it (with its `stack` keys, which the text report shows), or JSON null for an error built from fields.
+## `original` keeps the diagnostic object as `--json` wrote it (with its `stack` keys, which the text report shows), or
+## JSON null for an error built from fields.
 export struct Error
   code: String
   message: String
@@ -99,7 +100,10 @@ export def from_json(text: String) -> Result[Error]
   span = Span(file: try text_at(root, "file"), line: try int_at(start, "line"), column: try int_at(start, "column"),
                       end_column: try int_at(stop, "column"))
   return ok(Error(code: try text_at(root, "code"), message: try text_at(root, "message"), span: span,
-                  end_line: try int_at(stop, "line"), expected: detail_at(root, "expected"), actual: detail_at(root, "actual"),
+                  end_line: try int_at(stop, "line"), expected: detail_at(root, "expected"), actual: detail_at(
+                    root,
+                    "actual",
+                  ),
                   original: root))
 end
 
@@ -123,8 +127,8 @@ export def file_failure(path: String, kind: String, problem: Error, output: Stri
   return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
-## Returns the exit code of a run: 0 when at least one scenario ran and nothing failed, 2 when any file or scenario error
-## is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
+## Returns the exit code of a run: 0 when at least one scenario ran and nothing failed, 2 when any file or scenario
+## error is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
 export def exit_code(files: List[FileResult]) -> Int
   return totals(files).exit_code
 end
@@ -149,7 +153,10 @@ end
 export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
   sums = totals(files)
   chunks = files.map do |file| file_text(file, ai) end
-  last = "#{sums.passed} passed, #{sums.failed} failed, #{sums.not_executed} not executed, #{sums.file_errors} file errors"
+  last = (
+    "#{sums.passed} passed, #{sums.failed} failed, #{sums.not_executed} not executed, #{sums.file_errors} file " +
+    "errors"
+  )
   if sums.exit_code != 0
     last = "#{last}, seed #{seed}"
   end
@@ -158,8 +165,12 @@ end
 
 def totals(files: List[FileResult]) -> Totals
   scenarios = files.reduce(0) do |n, file| n + file.scenarios.size end
-  passed = files.reduce(0) do |n, file| n + file.scenarios.filter do |item| status(item.verdict) == "passed" end.size end
-  skipped = files.reduce(0) do |n, file| n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size end
+  passed = files.reduce(0) do |n, file|
+    n + file.scenarios.filter do |item| status(item.verdict) == "passed" end.size
+  end
+  skipped = files.reduce(0) do |n, file|
+    n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size
+  end
   file_errors = files.filter do |file| failed?(file.verdict) end.size
   severe = files.any? do |file|
     severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end
@@ -251,7 +262,11 @@ def step_json(step: StepResult) -> Json
 end
 
 def location_json(span: Span) -> Json
-  fields: Map[String, Json] = {"file": JSON.from(span.file), "line": JSON.from(span.line), "column": JSON.from(span.column)}
+  fields: Map[String, Json] = {
+    "file": JSON.from(span.file),
+    "line": JSON.from(span.line),
+    "column": JSON.from(span.column),
+  }
   return JSON.object(fields)
 end
 
@@ -290,7 +305,9 @@ end
 def file_text(file: FileResult, ai: Bool) -> String
   head: List[String] = []
   case file.verdict
-    Verdict.Fail(problem) -> head = ["FAIL #{file.path}#{separator(ai)}#{summary(problem, ai)}#{output_text(file.output, ai)}"]
+    Verdict.Fail(problem) -> head = [
+      "FAIL #{file.path}#{separator(ai)}#{summary(problem, ai)}#{output_text(file.output, ai)}",
+    ]
     Verdict.Pass -> head = []
     Verdict.NotExecuted -> head = []
   end
@@ -306,7 +323,8 @@ def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   case item.verdict
     Verdict.Pass -> return "PASS #{label} / #{item.name}"
     Verdict.NotExecuted -> return "NOT RUN #{label} / #{item.name}"
-    Verdict.Fail(problem) -> return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem, ai)}#{output_text(item.output, ai)}"
+    Verdict.Fail(problem) ->
+      return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem, ai)}#{output_text(item.output, ai)}"
   end
 end
 
@@ -329,7 +347,12 @@ end
 def summary(problem: Error, ai: Bool) -> String
   span = problem.span
   head = "#{span.file}:#{span.line}:#{span.column} [#{problem.code}] #{problem.message}"
-  return head + detail_text("expected", problem.expected) + detail_text("actual", problem.actual) + stack_text(problem, ai)
+  return (
+    head +
+    detail_text("expected", problem.expected) +
+    detail_text("actual", problem.actual) +
+    stack_text(problem, ai)
+  )
 end
 
 def stack_text(problem: Error, ai: Bool) -> String
