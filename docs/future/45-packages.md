@@ -626,8 +626,9 @@ One line each, as possible later work:
     - Option A: an RFC 3339 string in `Text`. A datetime and a string look the
       same, so a round trip writes the datetime in quotes and changes the file.
     - Option B: `DateTime(String)`, which keeps the text as written.
-    - **Recommendation:** B. The text is exact, and §41 can add a conversion
-      later without a change to the value.
+    - **Recommendation:** B. The text is exact. When §41 lands, the date
+      variants change: TOML's four kinds get one variant each (41.19). That is
+      a breaking change of std/toml, and its design waits for §41.
 
 12. **The toml-test corpus.**
     - Option A: vendor it under `tests/fixtures/toml-test/` with its license

@@ -629,7 +629,7 @@ chosen.
 ### 41.19 TOML (std/toml)
 
 std/toml (phase 45-0, 45.4) keeps the text of a TOML date-time: its
-`Datetime(String)` variant holds the text as written, until these types land.
+`DateTime(String)` variant holds the text as written, until these types land.
 When §41 lands, std/toml maps TOML's four kinds of date and time to the four
 types:
 
