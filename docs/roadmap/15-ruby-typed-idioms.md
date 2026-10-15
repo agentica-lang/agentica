@@ -7,9 +7,10 @@ evaluator (order 7.2), changes the front end and `src/lower.rkt`, and runs on
 the C VM only, never on the Racket evaluator. Item 15l is the exception: it
 comes at order row 7.2.1g, before order step 7.5, and changes no lowering. Three
 order steps: 15a (front end only) as order row 7.5a, deferred until after the
-bootstrap (row 7.2.7), before `std/log` (14c), so `std/log` ships with a
-`fields` default and no `_with` functions; 15b to 15e, 15i and 15j at order step
-7.6, after phase 16 (strict diagnostics); the prelude part, 15f and 15k, at
+bootstrap (row 7.2.7). `std/logger` (14c) does not wait for it (§24.2): its
+`_meta` functions become one `fields` default when it lands. 15b to 15e, 15i and
+15j at order step 7.6, after phase 16 (strict diagnostics); the prelude part,
+15f and 15k, at
 order step 8.2, after faster lists (8d), because on today's flat-array lists an
 Agentica loop that builds a list is O(n²). One small PR per item, each with
 `grammar.md`, the programming skill, the site page, the development skill's
@@ -22,12 +23,12 @@ exception 1), and the internal `__fail_arg` and `__float_fixed` (prelude-only,
 guarded by the loader). Part B (§25.12) and Part C (§25.13) add no items. Ten
 items are planned; 15g and 15h are not planned.
 
-- [ ] 15a Order row 7.5a (deferred until after the bootstrap, row 7.2.7), before
-  14c. Default parameter values (§25.1): `CHECK-DEFAULT-ORDER`,
-  `CHECK-DEFAULT-VALUE`, `CHECK-ARITY` with a range; `lower.rkt` fills the
-  missing arguments at the call site; the linker resolves an enum default in the
-  declaring module. Docs: `grammar.md`, the programming skill (with
-  `references/diagnostics.md`), `site/content/tour/functions.md`.
+- [ ] 15a Order row 7.5a (deferred until after the bootstrap, row 7.2.7). Not a
+  dependency of 14c (§24.2). Default parameter values (§25.1):
+  `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`, `CHECK-ARITY` with a range;
+  `lower.rkt` fills the missing arguments at the call site; the linker resolves
+  an enum default in the declaring module. Docs: `grammar.md`, the programming
+  skill (with `references/diagnostics.md`), `site/content/tour/functions.md`.
 - [ ] 15b Re-exports `export Alias.name` (§25.2), in the linker
   (`src/modules.rkt`) only. A re-export counts as a use of its alias for
   `CHECK-UNUSED-IMPORT` (16a, §26.1). Docs: `grammar.md`,

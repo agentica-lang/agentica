@@ -12,8 +12,9 @@ again. Section 18 records the history of the front-end language question, which
 section 35 decides. Sections 19 (SIMD in the VM), 21 (VM layers) and 22 (JIT)
 are implementation proposals with no language change. Section 23 (binary data)
 adds `Int` and `Float` builtins and the `std/binary` module, with no grammar
-change. Section 24 (logging and debugging) adds the `std/log` module, stack
-traces on runtime errors and tracing inside the VM, with no grammar change.
+change. Section 24 (logging and debugging) adds the `std/logger` module with a
+std-only registry for its handlers, stack traces on runtime errors and tracing
+inside the VM, with no grammar change.
 Section 25 (Ruby typed idioms) plans more Ruby forms for after 7i, lists others
 to evaluate later, and records the ones decided against. Section 26 (strict
 diagnostics) records that Agentica has no warnings and plans four new errors:
@@ -92,7 +93,7 @@ built and specified in [`docs/bdd.md`](../bdd.md).
 | 21 | VM layers | [`21-vm-layers.md`](21-vm-layers.md) | Planned (roadmap 7l) |
 | 22 | JIT | [`22-jit.md`](22-jit.md) | Required (roadmap 7m) |
 | 23 | Binary data | [`23-binary-data.md`](23-binary-data.md) | Done (roadmap phase 13) |
-| 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14) |
+| 24 | Logging and debugging | [`24-logging.md`](24-logging.md) | Planned (roadmap phase 14; `std/logger`, §24.2, is 14c) |
 | 25 | Ruby typed idioms | [`25-ruby-typed-idioms.md`](25-ruby-typed-idioms.md) | Part A planned (roadmap phase 15); Part B to evaluate later; Part C decided against |
 | 26 | Strict diagnostics | [`26-strict-diagnostics.md`](26-strict-diagnostics.md) | Planned (roadmap phase 16) |
 | 27 | Iteration and concurrent collections | [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md) | Channels (17b) and `Task.await` with a timeout (17c) built; `Task.map` planned (roadmap phase 17); `File.each_line` built (17d), `Stream[T]` planned (17e); generators and shared state decided against |
