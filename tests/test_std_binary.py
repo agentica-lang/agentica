@@ -4,7 +4,7 @@ Two fixture programs print their own checks: std-binary.agc ends with a fixed
 summary, and std-binary-vectors.agc reads the Python-made vectors of its
 sidecar from stdin and counts them.
 """
-from tests.agentica_test import FIXTURES, TestCase, run_vm
+from tests.agentica_test import FIXTURES, TestCase, run_vm, vm_environment
 
 VM_FIXTURES = FIXTURES / "vm"
 
@@ -13,7 +13,7 @@ class StdBinary(TestCase):
     def run_fixture(self, name, stdin=None):
         """Compile a fixture, run it on the VM, and return its stdout split on \\n (a final "" stays)."""
         bytecode = self.compile_fixture(VM_FIXTURES / (name + ".agc"))
-        result = run_vm(bytecode, stdin=stdin)
+        result = run_vm(bytecode, stdin=stdin, env=vm_environment())
         self.assertEqual(result.code, 0, name + "\n" + result.stderr)
         self.assertEqual(result.stderr, "", name)
         return result.stdout.split("\n")

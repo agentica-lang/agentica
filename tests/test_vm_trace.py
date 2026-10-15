@@ -99,6 +99,7 @@ class VmTrace(TestCase):
         sidecar = VM_FIXTURES / (name + ".args")
         if not sidecar.exists():
             return []
+        # No escapes: a regex reads the strings, so a sidecar with a backslash escape (system-args.args) needs a real reader.
         # The sidecar is a Racket list of strings: "@tmp" is the case's temp dir, "@fixtures/x" is tests/fixtures/x.
         arguments = []
         for argument in re.findall(r'"([^"]*)"', sidecar.read_text()):

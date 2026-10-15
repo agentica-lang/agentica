@@ -33,26 +33,32 @@ class VmLatency(TestCase):
     def sleep_worst(self, bytecode, no_turn_cost):
         child = self.start(bytecode, "sleep", no_turn_cost)
         child.close_stdin()
-        line = child.next_line(WAIT_SECONDS)
-        match = re.match(r"^worst ([0-9]+)$", line)
-        self.assertIsNotNone(match, "unexpected output: %r" % line)
-        return int(match.group(1))
+        try:
+            line = child.next_line(WAIT_SECONDS)
+            match = re.match(r"^worst ([0-9]+)$", line)
+            self.assertIsNotNone(match, "unexpected output: %r" % line)
+            return int(match.group(1))
+        finally:
+            child.stop()  # no VM may run during the next measurement
 
     def echo_worst(self, bytecode, no_turn_cost):
         child = self.start(bytecode, "echo", no_turn_cost)
         worst = 0
-        for round_number in range(20):
-            if worst > LIMIT_MS:
-                break
-            self.assertEqual(child.next_line(WAIT_SECONDS), "ready", "the program did not say ready")
-            sent = time.monotonic()
-            child.process.stdin.write(("line %d\n" % round_number).encode())
-            child.process.stdin.flush()
-            reply = child.next_line(WAIT_SECONDS)
-            delay = (time.monotonic() - sent) * 1000
-            self.assertEqual(reply, "echo line %d" % round_number)
-            worst = max(worst, delay)
-        return worst
+        try:
+            for round_number in range(20):
+                if worst > LIMIT_MS:
+                    break
+                self.assertEqual(child.next_line(WAIT_SECONDS), "ready", "the program did not say ready")
+                sent = time.monotonic()
+                child.process.stdin.write(("line %d\n" % round_number).encode())
+                child.process.stdin.flush()
+                reply = child.next_line(WAIT_SECONDS)
+                delay = (time.monotonic() - sent) * 1000
+                self.assertEqual(reply, "echo line %d" % round_number)
+                worst = max(worst, delay)
+            return worst
+        finally:
+            child.stop()  # no VM may run during the next measurement
 
     def concurrently(self, *calls):
         """Run the calls in threads at once; return their results in order, or raise the first exception."""

@@ -2,7 +2,7 @@
 import json
 import re
 
-from tests.agentica_test import FIXTURES, PYTHON, TestCase, compile_agc, run, run_vm
+from tests.agentica_test import FIXTURES, PYTHON, TestCase, compile_agc, run, run_vm, vm_environment
 
 
 class Logger(TestCase):
@@ -13,14 +13,14 @@ class Logger(TestCase):
         return compile_agc(FIXTURES / (name + ".agc"), self.work / (name + ".agcb"))
 
     def test_default_run_prints_one_info_line_on_stderr(self):
-        result = run_vm(self.bytecode_of("logger-default"))
+        result = run_vm(self.bytecode_of("logger-default"), env=vm_environment())
         self.assertEqual(result.code, 0)
         self.assertEqual(result.stdout, "")
         self.assertRegex(result.stderr,
                          r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z INFO hello\n\Z")
 
     def test_async_handler_leaves_every_event_in_the_file_in_order(self):
-        result = run_vm(self.bytecode_of("logger-async"), cwd=self.work)
+        result = run_vm(self.bytecode_of("logger-async"), cwd=self.work, env=vm_environment())
         self.assertEqual(result.code, 0)
         self.assertEqual(result.stdout, "")
         lines = (self.work / "app.log").read_text().splitlines()
@@ -36,7 +36,8 @@ class Logger(TestCase):
         peer = FIXTURES / "logger-peer.py"
         made = run([PYTHON, peer, "vectors", self.work])
         self.assertEqual(made.code, 0, made.stderr)
-        result = run_vm(self.bytecode_of("logger-peer"), stdin=(self.work / "ms.txt").read_bytes())
+        result = run_vm(self.bytecode_of("logger-peer"), stdin=(self.work / "ms.txt").read_bytes(),
+                        env=vm_environment())
         self.assertEqual(result.code, 0, result.stderr)
         (self.work / "stdout.txt").write_text(result.stdout, encoding="utf-8")
         (self.work / "stderr.txt").write_text(result.stderr, encoding="utf-8")
