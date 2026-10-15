@@ -619,7 +619,7 @@ end
 def substitute_part(part: String, bindings: Map[String, String]) -> Result[String]
   close = part.index_of(">").unwrap_or(0)
   if close == 0
-    return ok("<" + part)
+    return ok("<#{part}")
   end
   name = part.slice(0, close)
   if not bindings.has_key?(name)

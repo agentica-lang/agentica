@@ -15,6 +15,7 @@
          "parser.rkt"
          "modules.rkt"
          "source.rkt"
+         "source-file.rkt"
          "version.rkt"
          "vm-launch.rkt")
 
@@ -248,7 +249,8 @@
                      (lambda (_)
                        (eprintf "agentica: cannot read ~a\n" source-file)
                        (exit 2))])
-      (file->string source-file)))
+      (read-source-file source-file source-file)))
+  (when (diagnostic? text) (fail! text))
   (define input (source source-file text))
 
   (define lexed (lex input))

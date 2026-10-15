@@ -31,11 +31,8 @@ end
 export def conversion(expected: Types.Type, actual: Types.Type) -> String
   if Types.is(actual, "Result") and Types.same(Types.item(actual), expected)
     return (
-      "this is " +
-      Types.to_text(actual) +
-      "; unwrap it with a ! form (" +
-      unwrap_form(expected) +
-      "), with Result.unwrap!(...), or with try inside a function that returns Result"
+      "this is #{Types.to_text(actual)}; unwrap it with a ! form (#{unwrap_form(expected)}), " +
+      "with Result.unwrap!(...), or with try inside a function that returns Result"
     )
   end
   return convert_help(expected, actual)
@@ -61,12 +58,12 @@ end
 ## The help of a missing or unknown field: a guess if one is close, then the field names.
 export def field_help(name: String, fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
-  all = "fields: " + names.join(", ")
+  all = "fields: #{names.join(", ")}"
   guess = near(name, names, [])
   if guess == ""
     return all
   end
-  return guess + " " + all
+  return "#{guess} #{all}"
 end
 
 # What a failed unwrap suggests, by the type that was expected.

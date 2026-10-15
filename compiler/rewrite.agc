@@ -367,7 +367,7 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
   elsif parts.size == 2 and cx.settings.catalog.enums.has_key?(parts[0])
     return ok(variant(node.id, parts[0], parts[1], [], try rewrite_named(cx, node.args), node.span))
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])
-    name = try Resolve.resolve(cx, parts[0] + "." + parts[1], Resolve.Want.Enum, node.span, false)
+    name = try Resolve.resolve(cx, "#{parts[0]}.#{parts[1]}", Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, name, parts[2], [], try rewrite_named(cx, node.args), node.span))
   end
   name = try Resolve.resolve(cx, node.type_name, Resolve.Want.Type, node.span, false)

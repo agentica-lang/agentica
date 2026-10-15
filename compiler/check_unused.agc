@@ -21,7 +21,7 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
         cx,
         st,
         "CHECK-UNUSED-VALUE",
-        "the result of " + unused_subject(name) + " is not used",
+        "the result of #{unused_subject(name)} is not used",
         Ast.expr_span(value),
         unused_help(value, resolved, entry),
       ),
@@ -119,7 +119,7 @@ def unused_help(value: Ast.Expr, resolved: Ast.Optional[State.Resolved], entry: 
   target = receiver_name(value)
   keeps = struct_update?(value) or resolved_self?(resolved) or (entry.ok? and keeps_first_type?(entry.unwrap!))
   if target != "" and keeps
-    return "values are immutable, so this call changes nothing; assign the result, for example " + target + " = ..."
+    return "values are immutable, so this call changes nothing; assign the result, for example #{target} = ..."
   end
   return "values are immutable, so this call changes nothing; assign or use the result"
 end

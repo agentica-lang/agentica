@@ -3,8 +3,9 @@
 (require rackunit
          racket/runtime-path
          "frontend-parser-common.rkt"
-         (only-in "frontend-lexer-common.rkt" call-with-bytecode)
-         "vm-diff-common.rkt")
+         (only-in "frontend-lexer-common.rkt" call-with-bytecode diagnostic-line)
+         "vm-diff-common.rkt"
+         "../src/source-file.rkt")
 
 (define-runtime-path root "..")
 (define-runtime-path entry "../compiler/parse.agc")
@@ -182,6 +183,12 @@
             (define racket (parser-text (third entry)))
             (check-equal? (regexp-match? #rx"^program " racket) legal? label)
             (check-equal? agentica (string-append racket "\n") label)))
+
+        (test-case "a file with invalid UTF-8 is LEX-INVALID-UTF8 at the first bad byte, as in Racket"
+          (define path (path->string (build-path work "invalid.agc")))
+          (call-with-output-file path (lambda (out) (write-bytes #"# caf\303\251\ndef \377\n" out)))
+          (check-equal? (hash-ref (run-parser bytecode (list path)) path)
+                        (string-append (diagnostic-line (read-source-file path path)) "\n")))
 
         (test-case "the first node id can be chosen, so modules can share one numbering"
           (define path "tests/fixtures/frontend/parser/synthetic.input")

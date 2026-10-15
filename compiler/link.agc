@@ -21,7 +21,7 @@ def main() -> Void
     elsif argument == "--ids"
       ids = true
     else
-      puts("== " + argument)
+      puts("== #{argument}")
       settings = Env.settings(stdlib, env)
       if ids
         puts(LinkText.ids_text(argument, settings))

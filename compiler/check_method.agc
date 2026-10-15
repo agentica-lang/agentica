@@ -47,7 +47,7 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
         cx,
         st,
         "CHECK-UNKNOWN-FIELD",
-        "\"" + T.display_name(T.name(target)) + "\" has no field \"" + node.name + "\"",
+        "\"#{T.display_name(T.name(target))}\" has no field \"#{node.name}\"",
         node.span,
         Help.field_help(node.name, fields),
       ),
@@ -93,7 +93,7 @@ def method_on(
         cx,
         target.st,
         "CHECK-UNKNOWN-METHOD",
-        T.to_text(type) + " has no method \"" + name + "\"",
+        "#{T.to_text(type)} has no method \"#{name}\"",
         span,
         unknown_method_help(cx, target.st, id, type, kind, name),
       ),
@@ -123,7 +123,7 @@ def check_own_method(
   expected: T.Type,
 ) -> Result[State.Out]
   if args.size > 0
-    return error(State.fail(cx, st, "CHECK-ARITY", "\"" + name + "\" takes no arguments", span))
+    return error(State.fail(cx, st, "CHECK-ARITY", "\"#{name}\" takes no arguments", span))
   end
   result = T.Type.String
   how = State.Resolved.Text(type)
@@ -140,7 +140,7 @@ end
 # The help of CHECK-UNKNOWN-METHOD: a range that needs parentheses, then what is special about the receiver.
 def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kind: String, name: String) -> String
   if st.range_chain.any? do |link: Int| link == id end and Names.resolve_method(cx, "Range", name) != ""
-    return "a method call on a range needs parentheses: (a..b)." + name
+    return "a method call on a range needs parentheses: (a..b).#{name}"
   elsif name == "to_s" or name == "inspect"
     return (
       "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, " +
@@ -161,11 +161,11 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
   fields = cx.structs[T.name(target)]
   field = Calls.find_field(fields, name)
   if cx.functions.has_key?(name)
-    return "structs have no methods; call " + name + "(...) with the struct as an argument"
+    return "structs have no methods; call #{name}(...) with the struct as an argument"
   elsif field.ok? and T.is(field.unwrap!.type, "Fn")
-    return name + " is a function field; call it with ." + name + ".call(...)"
+    return "#{name} is a function field; call it with .#{name}.call(...)"
   end
-  return "structs have no methods; " + Help.field_help(name, fields)
+  return "structs have no methods; #{Help.field_help(name, fields)}"
 end
 
 # The help for a method another language has, a close name, or the methods the kind has.
@@ -179,7 +179,7 @@ def kind_help(cx: State.Cx, target: T.Type, kind: String, name: String) -> Strin
   if guess != ""
     return guess
   end
-  return T.to_text(target) + " methods: " + names.sort.join(", ")
+  return "#{T.to_text(target)} methods: #{names.sort.join(", ")}"
 end
 
 # The methods of the kind, with to_s and inspect for a data value.

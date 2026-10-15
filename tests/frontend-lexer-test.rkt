@@ -4,6 +4,7 @@
          racket/runtime-path
          "frontend-lexer-common.rkt"
          "vm-diff-common.rkt"
+         "../src/source-file.rkt"
          "../tools/gen-lexer-unicode.rkt")
 
 (define-runtime-path root "..")
@@ -16,10 +17,10 @@
 (define (golden input)
   (file->string (golden-file input)))
 
-(define (run-lexer bytecode paths)
+(define (run-lexer bytecode paths #:flags [flags '()])
   (define result
     (parameterize ([current-directory root])
-      (apply run-process vm-file #:timeout run-timeout "--" (path->string bytecode) paths)))
+      (apply run-process vm-file #:timeout run-timeout (append flags (list "--" (path->string bytecode)) paths))))
   (check-equal? (first result) 0 (third result))
   (check-equal? (third result) "")
   (for/hash ([piece (in-list (cdr (regexp-split #rx"(?m:^== )" (second result))))])
@@ -55,6 +56,19 @@
     (define text (file->string (path->complete-path path root)))
     (check-equal? (hash-ref outputs path #f) (string-append (lexer-text text) "\n") path)))
 
+;; Lexes `depth` nested `if x` lines under a step budget instead of a clock, so
+;; the check is deterministic on a loaded runner. The linear lexer costs about
+;; 1,050 steps per line and the budget allows 3,000. A scan of the whole frame
+;; stack per line costs about 37,000 per line at depth 4,000 and fails it.
+(define steps-per-line 3000)
+
+(define (check-nested-linear bytecode work depth)
+  (define path (path->string (build-path work (format "nested-~a.agc" depth))))
+  (display-to-file (string-append* (make-list depth "if x\n")) path #:exists 'truncate)
+  (define nested
+    (run-lexer bytecode (list path) #:flags (list "--max-steps" (number->string (* depth steps-per-line)))))
+  (check-against-racket nested (list path)))
+
 (define (with-bytecode proc) (call-with-bytecode compile-file entry proc))
 
 (module+ test
@@ -85,7 +99,18 @@
         (define outputs (run-lexer bytecode (map lexer-input-path inputs)))
         (test-case "the Agentica lexer matches the goldens on the VM"
           (for ([input (in-list inputs)])
-            (check-equal? (hash-ref outputs (lexer-input-path input) #f) (golden input) (lexer-input-name input))))))))
+            (check-equal? (hash-ref outputs (lexer-input-path input) #f) (golden input) (lexer-input-name input))))
+
+        ; The file is read by compiler/source_file.agc before the lexer sees it (the linker test covers the details).
+        (test-case "a file with invalid UTF-8 is LEX-INVALID-UTF8 at the first bad byte, as in Racket"
+          (define path (path->string (build-path work "invalid.agc")))
+          (call-with-output-file path (lambda (out) (write-bytes #"# caf\303\251\ndef \377\n" out)))
+          (define racket (read-source-file path path))
+          (check-equal? (hash-ref (run-lexer bytecode (list path)) path)
+                        (string-append (diagnostic-line racket) "\n"))
+          (check-regexp-match #rx"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 " (diagnostic-line racket)))
+        (test-case "a deeply nested file lexes in a linear number of steps"
+          (check-nested-linear bytecode work 4000))))))
 
 (module+ slow
   (when (vm-built? "frontend lexer tests")
@@ -105,10 +130,5 @@
         (test-case "while Racket exists: the Agentica lexer matches the Racket lexer on 300 generated inputs"
           (check-against-racket outputs generated-paths))
 
-        (test-case "a deeply nested file lexes in linear time"
-          (define path (path->string (build-path work "nested.agc")))
-          (display-to-file (string-append* (make-list 10000 "if x\n")) path)
-          (define started (current-inexact-milliseconds))
-          (define nested (run-lexer bytecode (list path)))
-          (check-true (< (- (current-inexact-milliseconds) started) 5000))
-          (check-against-racket nested (list path)))))))
+        (test-case "a deeply nested file lexes in a linear number of steps"
+          (check-nested-linear bytecode work 10000))))))

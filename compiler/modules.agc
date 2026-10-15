@@ -16,6 +16,7 @@ import Failure from "link_failure"
 import Parser from "parser"
 import Resolve from "resolve_import"
 import Source from "source"
+import SourceFile from "source_file"
 import Suggest from "suggest"
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
@@ -81,13 +82,8 @@ end
 ## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
 export def load(root: String, settings: Env.Settings) -> Result[Loaded]
   file = Path.resolve(root).unwrap_or(root)
-  text = File.read_text(root, Env.io_timeout())
-  if !text.ok?
-    return error(
-      Failure.fail_at(Failure.Site(file: file, span: start_span()), "CHECK-IMPORT-IO", text.message, Diag.Help.NoHelp),
-    )
-  end
-  program = try parse_source(file, text.unwrap!, 0)
+  text = try root_text(root, file)
+  program = try parse_source(file, text, 0)
   key = Path.real(root)
   if !key.ok?
     return error(
@@ -95,7 +91,7 @@ export def load(root: String, settings: Env.Settings) -> Result[Loaded]
     )
   end
   empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: Paths.directory_of(key.unwrap!))
-  walk = try enter(settings, empty, key.unwrap!, file, text.unwrap!, program, 0)
+  walk = try enter(settings, empty, key.unwrap!, file, text, program, 0)
   finished = try run(settings, walk)
   return ok(Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir))
 end
@@ -267,12 +263,30 @@ def replace_top(walk: Walk, frame: Frame) -> Walk
 end
 
 def load_file(settings: Env.Settings, walk: Walk, key: String, site: Failure.Site) -> Result[Walk]
-  text = File.read_text(Resolve.source_path(settings, key), Env.io_timeout())
-  if !text.ok?
-    return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read import", Diag.Help.NoHelp))
+  text = try imported_text(settings, key, site)
+  program = try parse_source(key, text, walk.next_id)
+  return enter(settings, walk, key, key, text, program, walk.next_id)
+end
+
+# The text of the root file: CHECK-IMPORT-IO at its start with the system's message, or LEX-INVALID-UTF8.
+def root_text(root: String, file: String) -> Result[String]
+  case SourceFile.read(root, Env.io_timeout())
+    SourceFile.Read.Text(text) -> return ok(text)
+    SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(file, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Unreadable(message) ->
+      site = Failure.Site(file: file, span: start_span())
+      return error(Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp))
   end
-  program = try parse_source(key, text.unwrap!, walk.next_id)
-  return enter(settings, walk, key, key, text.unwrap!, program, walk.next_id)
+end
+
+# The text of an imported file: CHECK-IMPORT-IO at the import, or LEX-INVALID-UTF8 in the imported file.
+def imported_text(settings: Env.Settings, key: String, site: Failure.Site) -> Result[String]
+  case SourceFile.read(Resolve.source_path(settings, key), Env.io_timeout())
+    SourceFile.Read.Text(text) -> return ok(text)
+    SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(key, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Unreadable(_) ->
+      return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read import", Diag.Help.NoHelp))
+  end
 end
 
 # Registers a parsed file: the declaration order, then the declared names, then it goes on the stack with the imports
@@ -289,7 +303,7 @@ def enter(
   try Declarations.check_order(file, program.declarations)
   collected = try collect(settings, file, program.declarations)
   count = walk.seen.size + 1
-  prefix = "@" + count.to_s + "::"
+  prefix = "@#{count}::"
   if walk.order.size == 0
     prefix = ""
   end

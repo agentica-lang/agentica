@@ -31,6 +31,7 @@ A runtime trace names each file as you can open it from the working directory (`
 | Code | Meaning |
 |---|---|
 | `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER` | bad character, string, or bracket. A `;` says Agentica has no semicolons (end the statement with a newline). A `'` or a backtick says strings use double quotes (a character is a one-character String). A `}` with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`. |
+| `LEX-INVALID-UTF8` | a source file (the one you run or one it imports) holds bytes that are not valid UTF-8. The span is the first bad byte; save the file as UTF-8 |
 | `LEX-INVALID-NUMBER` | a `_` in a number literal that is not between two digits: `1_`, `1__0`, `1_.5`, `1._5`. Write `1_000` or `0.000_5`; the `_` is only visual |
 | `PARSE-UNEXPECTED-TOKEN` | the parser expected something else here. A `{` after `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks have no braces and names the form: `while cond` ... `end`. A `//` or `/*` says comments start with `#`. `value.with()` and `value.with(31)` say to name each field to change, as in `value.with(age: 31)` |
 | `PARSE-UNCLOSED-BLOCK` | missing `end` |

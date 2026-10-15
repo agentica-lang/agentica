@@ -282,14 +282,32 @@ Notes:
   with `Process.spawn_captured`, whose close already sends `SIGTERM`, then
   `SIGKILL`.
 - No language change lands in a stage while its port is open (35.7).
-- **Open for step 8: reading source files.** `compiler/lex.agc` reads with
-  `File.read_text`, which is strict UTF-8 with a 1 MiB limit. Racket's
-  `file->string` replaces invalid bytes with U+FFFD and has no limit. So a
-  source file with invalid UTF-8 gives different results on the two sides (the
-  Agentica front end fails to read it). Step 8 has to decide: reject invalid
-  UTF-8 in both front ends with a diagnostic, or decode with replacement in
-  Agentica too (bytes from `File.read_bytes`, then a decoder). It is not
-  decided here.
+- **Reading source files. Done** (decided by the owner on 2026-10-15). The two
+  front ends used to read differently: Racket's `file->string` replaced invalid
+  bytes with U+FFFD and had no size limit, while `File.read_text` is strict
+  UTF-8 with a 1 MiB limit. Now both read the same way:
+  - Invalid UTF-8 in a source file is an error in both, the new stable
+    diagnostic `LEX-INVALID-UTF8`, located in the file that has the bad bytes
+    (the root file, or an imported file like any other lexer error). Its span
+    starts at the first byte of the first sequence that does not decode, with
+    the line and column of the characters decoded before it, and has length 1.
+    "Does not decode" is the strict rule of `String.from_bytes`: no overlong
+    form, no surrogate, nothing above U+10FFFF, no truncated sequence at the end
+    of the file. The message and the help are equal on both sides. It is a bug
+    fix in the frozen Racket front end, so both front ends changed in the same
+    PR.
+  - A source file has no size limit. `compiler/source_file.agc` reads a file
+    with `File.open` and `File.read_bytes` in chunks of 256 KiB, decodes each
+    chunk with `String.from_bytes` (the bytes of a character that a chunk
+    cuts in two wait for the next chunk) and joins the pieces once, so nothing
+    is quadratic. Only on the error path does it find the first invalid byte,
+    with a small validator over the byte list, and it counts the lines and
+    columns in a loop over that validated prefix, without copying it. `lex.agc`,
+    `parse.agc` and both read sites of `modules.agc` use it. Racket reads the
+    bytes in `src/source-file.rkt` (`file->string` is gone from the front end;
+    the embedded `std/` sources are trusted and still read at compile time).
+  - I/O errors keep their codes and spans: `CHECK-IMPORT-IO` at the start of
+    the root file, or "cannot read import" at the import.
 
 ### 35.5 Language and VM prerequisites
 
@@ -299,7 +317,7 @@ Notes:
 | No quadratic `+=` on `String` | Known, no plan | `s += x` copies the string. A compiler builds big strings (dumps, `--json`, messages). Collect parts in a list and `join` them. To check on the corpus whether that is enough; if not, a string builder becomes a new prerequisite. Shared one-character strings (§34, 7g) cut the lexer's allocations if it reads characters with `at` or `split("")`. |
 | Efficient map for symbol tables | Known, ready | `Map` is a persistent HAMT (`vm/map.c`): `put` is O(log n) and copies nothing. Keys are `Int` or `String` only, hence the node ids of 35.4. |
 | JSON key listing | Known, not needed | No API lists an object's keys (phase 10, §15). The front end writes JSON (`--json`, `help --json`) with the builders, and reads none of unknown shape. |
-| Read files, directories and module paths | Known, ready | `File.read_text`, `File.stat`, `Dir.list` exist. `File.read_text` stops at 1 MiB and Racket has no limit, so a bigger source file is read with `File.open`, `File.read_bytes` in a loop, and `String.from_bytes`. Both builtins that step 3 needs are done (row 7.2.6 of the order, OS builtins in C, exception 1 of the std-first rule, no new flag): `System.env(name)` reads environment variables (`AGENTICA_PATH`, `XDG_DATA_HOME` and, as `System.env("HOME")`, the home directory; `src/modules.rkt:29-50`), and `Path.real(path)` resolves symbolic links, for module identity and the `pkg/` escape check (`normalize-path`, `src/modules.rkt:26,91-99`). `Path.real` is POSIX `realpath`, so it fails on a path that does not exist where `normalize-path` does not: the linker checks that a file exists first, as `file-exists?` does there. `Path.resolve` is lexical and does not resolve links. |
+| Read files, directories and module paths | Known, ready | `File.read_text`, `File.stat`, `Dir.list` exist. `File.read_text` stops at 1 MiB and Racket has no limit, so a source file is read with `File.open`, `File.read_bytes` in a loop, and `String.from_bytes` (`compiler/source_file.agc`, 35.4). Both builtins that step 3 needs are done (row 7.2.6 of the order, OS builtins in C, exception 1 of the std-first rule, no new flag): `System.env(name)` reads environment variables (`AGENTICA_PATH`, `XDG_DATA_HOME` and, as `System.env("HOME")`, the home directory; `src/modules.rkt:29-50`), and `Path.real(path)` resolves symbolic links, for module identity and the `pkg/` escape check (`normalize-path`, `src/modules.rkt:26,91-99`). `Path.real` is POSIX `realpath`, so it fails on a path that does not exist where `normalize-path` does not: the linker checks that a file exists first, as `file-exists?` does there. `Path.resolve` is lexical and does not resolve links. |
 | Write binary `.agcb` output | Known, ready | Agentica has no byte type: `Bytes` is deferred (§12.5, §23.1), and bytes are `List[Int]`, written with `File.write_bytes` (1 MiB per call). An `Int` as 8 two's-complement bytes and a `Float` as its IEEE bits are `std/binary` (§23: `Binary.write_i64_be`, `Binary.write_f64_le`, `Binary.concat`), built on the `Int` and `Float` bit builtins; phase 13 (row 7.2.4 of the order) is done. To check: a 2 MB `.agcb` as `List[Int]` is 32 MB of values; if that is too slow or too big for the start-up target, `Bytes` becomes a prerequisite. |
 | Process spawning for the BDD driver | Known, ready (step 7a) | `Process.spawn_captured` exists (21a), and the environment builtin above reads `AGENTICA_VM` and `TMPDIR`. The audit of `src/bdd-driver.rkt` is the table under this one, and the OS builtins it found missing are done (step 7a: `vm/files.c`, `vm/tree.c`, `vm/process.c`; each is an OS builtin, exception 1 of the std-first rule, with no new flag). The path of the binary itself comes from C as an argument. |
 | Handing the program to the VM | Known, missing | `agentica file.agc` must run the compiled program without a temporary file. A new builtin returns the bytes to C. C frees the front end's runtime and loads the program in a new one, so the user program never sees the compiler's heap or tasks, and `--max-steps`, `--seed` and `--allow-run` apply only to it. A second builtin reads an embedded `std/` source. Both are guarded in C at run time: they fail unless the running program is the embedded front end, which C knows because it loaded that program itself (from its own data, or from `--front-end`, 35.3). A linker rule like the std-only `HttpWire` check cannot work here, because `compiler/` is not in `stdlib/`. |
@@ -526,21 +544,19 @@ language or VM change. Notes for the next steps:
   right operand of each first link). The parser accepts such files (35.9, step
   2), and Racket links them. The checker of step 4 refuses a tree deeper than
   1,000 levels (`CHECK-TOO-DEEP`), so later passes never see one.
-- Differences from Racket. A source file over 1 MiB, or with invalid UTF-8,
-  cannot be read (`File.read_text`, see the open item of 35.4 for step 8) and
-  is `CHECK-IMPORT-IO` "cannot read import". The message of the root file's own
-  read error is the system's text, so it differs, and the golden comparison
-  skips it. An unset `HOME` leaves the user library folder out of the `pkg/`
-  search (Racket asks the system for the home folder). `Path.real` fails on a
-  missing file where `normalize-path` accepts a missing last part, so the
-  loader checks the folder first and a missing file is "cannot read import" at
-  once, with the same code and span. For the same reason a symbolic link to a
-  missing folder (a dangling link used as a folder part of an import) is
-  "cannot read import" in Agentica where Racket says "cannot resolve import",
-  again with the same code and span. The tests pin the Agentica side of the
-  invalid UTF-8 case (the fast tier) and of the 1 MiB limit (the slow tier);
-  the `HOME` user root is tested in the fast tier on the Agentica side only,
-  because Racket's `find-system-path` ignores a replaced environment.
+- Differences from Racket. The message of the root file's own read error is
+  the system's text, so it differs, and the golden comparison skips it. (A
+  source file over 1 MiB, or with invalid UTF-8, is no longer a difference: see
+  the item "Reading source files" of 35.4.) An unset `HOME` leaves the user
+  library folder out of the `pkg/` search (Racket asks the system for the home
+  folder). `Path.real` fails on a missing file where `normalize-path` accepts a
+  missing last part, so the loader checks the folder first and a missing file is
+  "cannot read import" at once, with the same code and span. For the same reason
+  a symbolic link to a missing folder (a dangling link used as a folder part of
+  an import) is "cannot read import" in Agentica where Racket says "cannot
+  resolve import", again with the same code and span. The `HOME` user root is
+  tested in the fast tier on the Agentica side only, because Racket's
+  `find-system-path` ignores a replaced environment.
 - Measured on `stdlib/bdd/gherkin.agc` (575 lines, 2 files with
   `std/test/report`): 0.12 s and 11.7 MB of RSS as a process, 0.04 s of that
   for loading the second file. On `stdlib/test/runner.agc` (7 files, 3,598
@@ -700,8 +716,7 @@ are in `tests/fixtures/frontend/check/` (58 fixtures, one for every reachable
   `constant-order` of `src/constants.rkt` on the linked program.
 - The list of types is built from repeats of at most 1,048,576 slots, because
   `List.repeat` halts with `RUNTIME-INVALID-COUNT` above that count and a
-  program of about 5.7 MB of source has more node ids. One file is limited to
-  1 MiB, so such a program is several files joined by imports.
+  program of about 5.7 MB of source has more node ids.
 
 Status on 2026-10-15 (PR #282): step 5 is done. `compiler/` also holds the
 IR as data (`ir.agc`), the tables of `src/lower.rkt` (`lower_tables.agc`), the
