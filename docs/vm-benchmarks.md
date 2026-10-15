@@ -225,6 +225,113 @@ the trie and 0.22 s here (CPython: 0.455 s); `lists`, `list-build` and `maps`
 are 0.079 / 0.076, 0.105 / 0.104 and 0.29 / 0.28 s (trie / this PR), inside the
 noise. Peak RSS of `list-bulk` is 66 to 83 MB on the trie and 65 to 73 MB here.
 
+## Unboxed numeric leaves (roadmap 8d step 3)
+
+A list whose items are all Int, or all Float, stores 8 bytes per item and no tag
+(`docs/vm/17-lists.md` §17.12). Master (88b9dbb) against this VM, and CPython
+3.13.5, 2026-10-15, on the same host as above (Ryzen 5 3550H, gcc 14.2, Debian
+13, load average 1 to 3 from other work). The program is `lb2.agc` and its twin
+`lb2.py` (scratch files, not in the repo, like `lb.agc`): one case per process
+on a list of 1,000,000 items, built outside the timing, the operation repeated
+`reps` times inside one run and the total divided by `reps`. Median of 5 runs,
+with the three binaries alternating and their order rotated each round.
+Milliseconds per operation, and peak RSS of the whole process in MB
+(`/usr/bin/time -f %M`, start-up 5.6 MB included, the base list included):
+
+| Int list | Master ms | This VM ms | Ratio | Python ms | Master MB | This VM MB | Python MB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `(0...n).to_a` | 5.8 | 4.8 | 0.82 | 56.6 | 37.6 | 30.2 | 47.9 |
+| 100,000 `push` calls | 38.8 | 30.0 | 0.77 | 6.8 | 10.8 | 7.2 | 13.5 |
+| `map` (`y + 1`) | 102.4 | 97.2 | 0.95 | 78.8 | 37.3 | 22.0 | 88.2 |
+| `filter` | 165.2 | 149.4 | 0.90 | 81.6 | 61.6 | 53.1 | 51.9 |
+| `sort`, in order | 10.7 | 8.3 | 0.77 | 15.0 | 69.2 | 45.5 | 55.5 |
+| `sort`, reversed | 15.9 | 10.9 | 0.69 | 17.4 | 116.5 | 92.4 | 55.6 |
+| `sort`, scattered | 100.6 | 70.6 | 0.70 | 189.0 | 115.5 | 98.7 | 61.2 |
+| `for x in xs` sum | 134.6 | 133.8 | 0.99 | 48.4 | 21.8 | 13.8 | 48.0 |
+| `xs[i]` for every 7th item | 23.7 | 23.6 | 1.00 | 16.8 | 21.9 | 14.0 | 47.9 |
+| `take`, `drop`, `concat` | 6.6 | 2.2 | 0.33 | 18.3 | 46.4 | 32.8 | 67.0 |
+| `List.repeat(7, n)` | under 0.01 | under 0.01 | | 1.7 | 5.8 | 5.9 | 17.5 |
+
+| Float list | Master ms | This VM ms | Ratio | Python ms | Master MB | This VM MB | Python MB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `map` of an Int list to Float | 111.8 | 102.4 | 0.92 | 108.6 | 37.5 | 22.0 | 88.2 |
+| 100,000 `push` calls | 47.0 | 38.0 | 0.81 | 12.4 | 10.7 | 7.2 | 13.7 |
+| `map` (`y * 1.5`) | 103.8 | 98.0 | 0.94 | 81.6 | 37.7 | 29.8 | 86.2 |
+| `filter` | 105.4 | 104.2 | 0.99 | 44.6 | 61.1 | 68.0 | 51.8 |
+| `sort`, in order | 11.5 | 9.4 | 0.81 | 16.6 | 100.0 | 67.9 | 55.6 |
+| `sort`, reversed | 17.2 | 11.5 | 0.67 | 17.8 | 69.3 | 76.6 | 55.6 |
+| `sort`, scattered | 104.8 | 73.4 | 0.70 | 175.6 | 100.7 | 98.8 | 61.3 |
+| `for x in xs` sum | 137.6 | 93.0 | 0.68 | 31.4 | 37.4 | 22.0 | 48.0 |
+| `xs[i]` for every 7th item | 18.0 | 17.5 | 0.97 | 14.1 | 37.2 | 22.0 | 48.0 |
+| `take`, `drop`, `concat` | 7.1 | 2.6 | 0.36 | 18.6 | 62.4 | 30.2 | 67.0 |
+| `List.repeat(2.5, n)` | under 0.01 | under 0.01 | | 4.6 | 5.9 | 5.9 | 17.4 |
+
+A `List[String]` is a boxed list and must not get slower. The same cases on
+strings (`List.repeat("abc", n)` as the base, `upcase`, and a scattered sort of
+`to_s` keys):
+
+| String list | Master ms | This VM ms | Ratio | Python ms | Master MB | This VM MB | Python MB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 100,000 `push` calls | 50.8 | 51.6 | 1.02 | 4.6 | 10.8 | 10.8 | 10.6 |
+| `map` (`upcase`) | 221.0 | 211.0 | 0.95 | 115.4 | 77.8 | 77.8 | 73.0 |
+| `sort`, scattered | 543.6 | 593.4 | 1.09 | 466.6 | 132.7 | 155.8 | 76.6 |
+| `for x in xs`, `length` | 165.8 | 171.8 | 1.04 | 55.8 | 5.7 | 5.8 | 17.4 |
+| `xs[i]` for every 7th item | 26.8 | 27.9 | 1.04 | 21.5 | 5.7 | 5.8 | 17.4 |
+| `take`, `drop`, `concat` | 5.9 | 6.5 | 1.09 | 5.7 | 22.8 | 39.1 | 36.4 |
+| `List.repeat("x", n)` | under 0.01 | under 0.01 | | 1.8 | 5.9 | 5.9 | 17.4 |
+
+How to read the tables:
+
+- The int and float rows that gain are the ones that move or compare raw words:
+  `sort` (the sorted entries carry the item, so there is no second read of the
+  list), `take`, `drop`, `concat` and `reverse` (half the bytes to copy), the
+  pushes, and the Float `for` sum. A million-item Int list is 8 MB instead of
+  16 MB, so the process that only holds one peaks 8 MB lower (`for` sum: 21.8
+  to 13.8 MB, Python 48.0). `map` and `filter` are dominated by the 70 to 100 ns
+  of the callback per item, and the Int `for` sum and `xs[i]` by the dispatch
+  loop; they do not change. The Float `for` sum is 32% faster in every run, in
+  the three probe rounds and in this one, while the Int sum is unchanged; the
+  loop runs the same instructions, and no cause was found, so treat it as a
+  bonus and not as a result.
+- Peak RSS also depends on when the collector runs. Master and this VM make the
+  same allocations in the string cases (`GC_PRINT_STATS=1` shows the same
+  collections and a heap of 34 MB at the end), yet the pages the allocator
+  touches differ: `take`, `drop`, `concat` shows 22.8 against 39.1 MB for
+  strings, and master alone gave 39.8 MB in one of 6 runs. Read a row of RSS to
+  within 15 MB or so. The 8 MB that an Int or Float list saves per million
+  items is exact; the rest of a row is the heap the collector chose.
+- The string rows are the boxed path, which is the old code with one more
+  branch on the kind. The ratios are 0.95 to 1.09. The link layout of an
+  unrelated change moves these loops by 4 to 6% (a loop of plain `while`
+  arithmetic with no list ran 5% faster on this VM than on master), so the +4%
+  of the `for` and `xs[i]` rows is inside what a rebuild does. `take`, `drop`,
+  `concat` takes 6 ms, and master alone ranged from 2.7 to 7.1 ms in 11 runs.
+  `sort` of strings is the one row that looks real: +5% in 11 alternating runs
+  (539 ms for master and 566 for this VM, medians). It is a small price, and
+  not chased.
+
+The C operations (`vm/list.c` alone, 1,000,000 Int items, a loop around each
+call, milliseconds per call, master against this VM): `concat` of two halves
+2.3 to 0.8, `reverse` 2.7 to 1.3, 100,000 appends 27 to 12, `agc_list_get` of
+every 7th item 1.0 to 0.91, a cursor scan 1.57 to 1.49, a builder run of a
+million pushes 4.6 to 4.4 or 5.2.
+
+The `benchmarks/run.py` programs (`--runs 3 --size 2 --runners vm`, the master
+VM from `AGENTICA_VM`, three invocations per VM alternating, median of the
+three medians), seconds:
+
+| Program | Master | This VM | Ratio | CPython | Master MB | This VM MB |
+|---|---:|---:|---:|---:|---:|---:|
+| lists | 0.076 | 0.069 | 0.91 | 0.056 | 5.9 | 5.7 |
+| list-build | 0.106 | 0.087 | 0.82 | 0.043 | 8.2 | 6.5 |
+| list-bulk | 0.227 | 0.147 | 0.65 | 0.446 | 65.0 | 38.6 |
+| maps | 0.286 | 0.302 | 1.06 | 0.045 | 6.0 | 6.1 |
+| arithmetic | 0.127 | 0.125 | 0.98 | 0.090 | 5.5 | 5.5 |
+
+`maps` and `arithmetic` do not use numeric lists in a hot loop; their +6% and
+-2% are the layout noise above. `list-bulk` is the one that sorts, reverses and
+slices lists of ints: 1.5 times faster and 40% less peak memory.
+
 ## Conclusions
 
 - Start-up is cheap on bytecode but not yet measured from source. A source file
