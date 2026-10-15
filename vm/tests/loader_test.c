@@ -1,6 +1,7 @@
 /*
  * One assert per loader rule: each case is a malformed input that must be
- * rejected, and the Types section cases come from type_tables.
+ * rejected, and the Types section cases come from type_tables. The Updates
+ * section and STRUCT_WITH come from make_updates.
  */
 #include "../core.h"
 
@@ -37,6 +38,7 @@ typedef struct {
   double extra_float, second_float;
   uint32_t captures, helper_captures;
   const char *second_source;
+  const buffer *updates;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -91,13 +93,13 @@ static void function(buffer *b, const char *name, uint32_t params, uint32_t capt
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL};
   return s;
 }
 
 static buffer build(spec s) {
   buffer b;
-  b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0));
+  b.data = malloc(4096 + (size_t)s.extra_voids + (s.tables ? s.tables->len : 0) + (s.updates ? s.updates->len : 0));
   assert(b.data);
   b.len = 0;
   memcpy(b.data, s.magic, 4);
@@ -138,6 +140,12 @@ static buffer build(spec s) {
     u32(&b, 0);
     u32(&b, 0);
     u32(&b, 0);
+    u32(&b, 0);
+  }
+  if (s.updates) {
+    memcpy(b.data + b.len, s.updates->data, s.updates->len);
+    b.len += s.updates->len;
+  } else {
     u32(&b, 0);
   }
   u32(&b, 1);
@@ -242,6 +250,68 @@ static agc_outcome run_with_tables(const agc_instr *code, const uint32_t *spans,
   s.registers = 4;
   agc_outcome outcome = run_spec(s, out);
   free(t.data);
+  return outcome;
+}
+
+/* An Updates section: the count, then the words of every entry (struct index,
+   field count, the field indexes), written as given so a case can be wrong. */
+static buffer make_updates(uint32_t count, const uint32_t *words, size_t n) {
+  buffer u;
+  u.data = malloc(4 + 4 * n);
+  assert(u.data);
+  u.len = 0;
+  u32(&u, count);
+  for (size_t i = 0; i < n; i++) u32(&u, words[i]);
+  return u;
+}
+
+/* The two updates the cases use, over the structs of make_tables: Q.b, then Q.a and Q.b. */
+static const uint32_t good_updates[] = {1, 1, 1, 1, 2, 0, 1};
+
+/* The base file with the tables of make_tables and the given Updates section; code replaces the base code. */
+static spec updates_spec(const buffer *tables, const buffer *updates, const agc_instr *code, const uint32_t *spans,
+                         uint32_t count, uint32_t registers) {
+  spec s = base();
+  s.tables = tables;
+  s.updates = updates;
+  if (code) {
+    s.code = code;
+    s.code_spans = spans;
+    s.count = count;
+    s.registers = registers;
+  }
+  return s;
+}
+
+static bool loads_updates(uint32_t count, const uint32_t *words, size_t n, const char *reason) {
+  buffer t = make_tables(1);
+  buffer u = make_updates(count, words, n);
+  bool ok = loads(updates_spec(&t, &u, NULL, NULL, 0, 0), reason);
+  free(t.data);
+  free(u.data);
+  return ok;
+}
+
+static bool loads_with_updates(const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t registers,
+                               const char *reason) {
+  buffer t = make_tables(1);
+  buffer u = make_updates(2, good_updates, sizeof good_updates / sizeof good_updates[0]);
+  bool ok = loads(updates_spec(&t, &u, code, spans, count, registers), reason);
+  free(t.data);
+  free(u.data);
+  return ok;
+}
+
+static agc_outcome run_with_updates(const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t registers,
+                                    int64_t seven, FILE *out) {
+  buffer t = make_tables(1);
+  buffer u = make_updates(2, good_updates, sizeof good_updates / sizeof good_updates[0]);
+  spec s = updates_spec(&t, &u, code, spans, count, registers);
+  s.extra_kind = 4;
+  s.extra_int = seven;
+  agc_outcome outcome = run_spec(s, out);
+  free(t.data);
+  free(u.data);
   return outcome;
 }
 
@@ -1102,6 +1172,89 @@ int main(void) {
   }
   free(typed_file.data);
   free(typed.data);
+
+  /* STRUCT_WITH: the copy gets the new values and the receiver is untouched. Constant 2 is the Int 7. */
+  static const agc_instr update_one[] = {
+    {AGC_OP_STEP, 1, 0, 0},         {AGC_OP_CONST, 0, 0, 0},   {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_STRUCT, 2, 0, 1},
+    {AGC_OP_MOVE, 3, 2, 0},         {AGC_OP_CONST, 4, 2, 0},   {AGC_OP_STRUCT_WITH, 5, 3, 0},
+    {AGC_OP_MOVE, 6, 5, 0},         {AGC_OP_CALL_BUILTIN, 6, 0, 0}, {AGC_OP_MOVE, 6, 2, 0},
+    {AGC_OP_CALL_BUILTIN, 6, 0, 0}, {AGC_OP_CONST, 0, 1, 0},   {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t update_one_spans[] = {1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0};
+  out = tmpfile();
+  assert(out);
+  assert(run_with_updates(update_one, update_one_spans, 13, 7, 7, out).kind == AGC_DONE);
+  expect_output(out, "Q(a: 1, b: 7)\nQ(a: 1, b: 1)\n");
+  static const agc_instr update_both[] = {
+    {AGC_OP_STEP, 1, 0, 0},         {AGC_OP_CONST, 0, 0, 0},   {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_STRUCT, 2, 0, 1},
+    {AGC_OP_MOVE, 3, 2, 0},         {AGC_OP_CONST, 4, 2, 0},   {AGC_OP_CONST, 5, 2, 0}, {AGC_OP_STRUCT_WITH, 6, 3, 1},
+    {AGC_OP_MOVE, 7, 6, 0},         {AGC_OP_CALL_BUILTIN, 7, 0, 0}, {AGC_OP_CONST, 0, 1, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t update_both_spans[] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0};
+  out = tmpfile();
+  assert(out);
+  assert(run_with_updates(update_both, update_both_spans, 12, 8, 7, out).kind == AGC_DONE);
+  expect_output(out, "Q(a: 7, b: 7)\n");
+
+  /* A hand-made file may put another struct, or no struct, where the update expects its receiver. */
+  static const agc_instr update_wrong_struct[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_STRUCT, 1, 0, 0}, {AGC_OP_MOVE, 2, 1, 0},
+    {AGC_OP_CONST, 3, 2, 0}, {AGC_OP_STRUCT_WITH, 4, 2, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t update_wrong_spans[] = {1, 0, 0, 0, 0, 0, 0};
+  agc_outcome wrong_struct = run_with_updates(update_wrong_struct, update_wrong_spans, 7, 6, 7, stdout);
+  assert(wrong_struct.kind == AGC_FAILED && strcmp(wrong_struct.code, "RUNTIME-INTERNAL") == 0);
+  assert(strstr(wrong_struct.message, "struct update of another struct"));
+  static const agc_instr update_of_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_STRUCT_WITH, 2, 0, 0},
+    {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t update_of_int_spans[] = {1, 0, 0, 0, 0};
+  agc_outcome int_receiver = run_with_updates(update_of_int, update_of_int_spans, 5, 4, 7, stdout);
+  assert(int_receiver.kind == AGC_FAILED && strcmp(int_receiver.code, "RUNTIME-INTERNAL") == 0);
+
+  /* Operands of the instruction: the entry, the window of the receiver and the values, the target. */
+  static const agc_instr bad_update_index[] = {{AGC_OP_STRUCT_WITH, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_updates(bad_update_index, two_spans, 2, 4, "struct update index out of range"));
+  static const agc_instr bad_update_window[] = {{AGC_OP_STRUCT_WITH, 0, 3, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_updates(bad_update_window, two_spans, 2, 4, "register range out of range"));
+  static const agc_instr bad_update_wide_window[] = {{AGC_OP_STRUCT_WITH, 0, 2, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_updates(bad_update_wide_window, two_spans, 2, 4, "register range out of range"));
+  static const agc_instr bad_update_target[] = {{AGC_OP_STRUCT_WITH, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_updates(bad_update_target, two_spans, 2, 4, "register out of range"));
+  static const agc_instr exact_update[] = {{AGC_OP_STRUCT_WITH, 3, 1, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(loads_with_updates(exact_update, two_spans, 2, 4, NULL));
+  static const agc_instr update_without_table[] = {{AGC_OP_STRUCT_WITH, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_code(update_without_table, two_spans, 2, "struct update index out of range"));
+
+  /* The section: each entry names a struct and strictly increasing fields below that struct's field count. */
+  assert(loads_updates(2, good_updates, 7, NULL));
+  assert(loads_updates(0, NULL, 0, NULL));
+  static const uint32_t update_bad_struct[] = {2, 1, 0};
+  assert(!loads_updates(1, update_bad_struct, 3, "struct index out of range"));
+  static const uint32_t update_no_fields[] = {1, 0};
+  assert(!loads_updates(1, update_no_fields, 2, "bad updated field count"));
+  static const uint32_t update_too_many[] = {0, 2, 0, 1};
+  assert(!loads_updates(1, update_too_many, 4, "bad updated field count"));
+  static const uint32_t update_field_past[] = {1, 1, 2};
+  assert(!loads_updates(1, update_field_past, 3, "updated field out of range"));
+  static const uint32_t update_repeated[] = {1, 2, 1, 1};
+  assert(!loads_updates(1, update_repeated, 4, "updated fields out of order"));
+  static const uint32_t update_descending[] = {1, 2, 1, 0};
+  assert(!loads_updates(1, update_descending, 4, "updated fields out of order"));
+  assert(!loads_updates(1000000, good_updates, 3, "struct update count exceeds the file"));
+  static const uint32_t update_field_count_huge[] = {1, 4000000000u, 0};
+  assert(!loads_updates(1, update_field_count_huge, 3, "updated field count exceeds the file"));
+  buffer table = make_tables(1);
+  buffer updates = make_updates(2, good_updates, 7);
+  s = base();
+  s.tables = &table;
+  s.updates = &updates;
+  buffer updated_file = build(s);
+  for (size_t n = 0; n < updated_file.len; n++) {
+    agc_program *q;
+    assert(!agc_load(updated_file.data, n, &q, error, sizeof error));
+  }
+  free(updated_file.data);
+  free(table.data);
+  free(updates.data);
 
   puts("loader tests passed");
   return 0;

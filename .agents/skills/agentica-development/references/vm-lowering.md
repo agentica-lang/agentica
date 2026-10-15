@@ -59,6 +59,14 @@ functions up by name.
   evaluator's `JSON.schema` prints them, and two imported structs can share
   a display name. A new decodable kind (enums, `JsonField`) needs a new
   type kind, loader rules and a format bump.
+- `value.with(...)` lowers to one `STRUCT_WITH` (format version 4): the receiver
+  goes in the first slot of a window, the values follow it in field order, and
+  the Updates section interns each (struct, field indexes) pair. It beats a
+  constructor call for structs of four or more fields (the numbers are in
+  `docs/vm-benchmarks.md`), so a new copy-with-changes form should reuse it. The
+  copy is charged by size, like `CONCAT`. The VM also checks the receiver's
+  struct type and field count at run time, as `agc_struct_def_of` does; the C
+  creators already go through `agc_builtin_struct`, so it is a defence.
 - Struct and enum table names are display names: `write-bytecode` passes
   the linked name through `display-name` (`builtins.rkt`), as the
   evaluator does when printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the

@@ -209,6 +209,10 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
     Ast.Expr.Construct(node) ->
       lines = out.push(head(at, role, "construct", node.id, node.span, " type=" + Text.quote(node.type_name)))
       return print_named_args(lines, child, node.args)
+    Ast.Expr.Update(node) ->
+      lines = out.push(head(indent, role, "struct-update", node.id, node.span, ""))
+      lines = print_expr(lines, child, "target", node.target)
+      return print_named_args(lines, child, node.args)
     Ast.Expr.ListLit(node) ->
       lines = out.push(head(at, role, "list-lit", node.id, node.span, ""))
       return print_exprs(lines, child, "element", node.elements)

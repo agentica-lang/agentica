@@ -34,6 +34,7 @@
          (struct-out invoke)
          (struct-out named-arg)
          (struct-out construct)
+         (struct-out struct-update)
          (struct-out list-lit)
          (struct-out map-entry)
          (struct-out map-lit)
@@ -85,6 +86,10 @@
 (struct invoke (target args span) #:transparent)
 (struct named-arg (name value span) #:transparent)
 (struct construct (type-name args span) #:transparent)
+;; `target.with(name: value, ...)`: args are `named-arg`s. The linker sets `visible` to a
+;; predicate on linked struct names (the structs the enclosing module may construct); #f
+;; outside a linked program, where every struct is visible.
+(struct struct-update (target args span [visible #:auto #:mutable]) #:auto-value #f #:transparent)
 (struct list-lit (elements span) #:transparent)
 (struct map-entry (key value span) #:transparent)
 (struct map-lit (entries span) #:transparent)
@@ -134,6 +139,7 @@
     [(invoke? node) (invoke-span node)]
     [(named-arg? node) (named-arg-span node)]
     [(construct? node) (construct-span node)]
+    [(struct-update? node) (struct-update-span node)]
     [(list-lit? node) (list-lit-span node)]
     [(map-entry? node) (map-entry-span node)]
     [(map-lit? node) (map-lit-span node)]

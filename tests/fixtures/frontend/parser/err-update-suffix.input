@@ -1,0 +1,4 @@
+def f() -> Void
+  x = ana.with(age?: 31)
+end
+

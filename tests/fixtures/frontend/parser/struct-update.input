@@ -1,0 +1,27 @@
+import "geometry" as Geo
+
+struct User
+  name: String
+  age: Int
+end
+
+def main() -> Void
+  ana = User(name: "Ana", age: 30)
+  older = ana.with(age: 31)
+  both = ana.with(name: "Bea", age: 32,)
+  nested = a.with(address: a.address.with(city: "Lima"))
+  chained = ana.with(age: 1).with(name: "Cy").name
+  from_call = make().with(age: 2)
+  from_module = Geo.origin().with(x: 1)
+  field_read = ana.with
+  module_call = Geo.with(1)
+  mapped = ana.with(tags: tags.map do |t| t.upcase() end)
+  text = "#{ana.with(age: 3).age}"
+  indexed = ana.with(xs: [1, 2])[0]
+  piped = ana |> keep(ana.with(age: 4))
+  wide = ana.with(
+    name: "Dee",
+    age: 5
+  )
+  puts(older)
+end

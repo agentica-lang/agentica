@@ -306,6 +306,45 @@
        (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
        (check-regexp-match #rx"ok\\(value\\)" (diagnostic-help problem)))))
 
+  (test-case "a struct update follows the rules of construction across files"
+    ;; An exported struct can be updated by an importer; a module may update its own private structs.
+    (with-files
+     '(("lib.agc" . "export struct Box\n  label: String\n  size: Int\nend\n\nstruct Hidden\n  n: Int\nend\n\nexport def make() -> Box\n  return Box(label: \"a\", size: 1)\nend\n\nexport def grow(b: Box) -> Box\n  return b.with(size: b.size + 1)\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1).with(n: 2)\nend\n\n")
+       ("root.agc" . "import \"lib\" as Lib\n\ndef main() -> Void\n  b = Lib.make().with(label: \"b\")\n  puts(Lib.grow(b))\n  puts(Lib.hidden().n)\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "Box(label: \"b\", size: 2)\n2\n")))
+    ;; A value of a struct the other module keeps private cannot be updated: the diagnostic of constructing it.
+    (with-files
+     '(("lib.agc" . "struct Hidden\n  n: Int\nend\n\nexport def hidden() -> Hidden\n  return Hidden(n: 1)\nend\n\n")
+       ("root.agc" . "import \"lib\" as Lib\n\ndef main() -> Void\n  h = Lib.hidden()\n  x = h.with(n: 2)\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)
+       (check-equal? (source-position-line (source-span-start (diagnostic-span problem))) 5)
+       (check-equal? (source-position-column (source-span-start (diagnostic-span problem))) 7)))
+    ;; Importing a module that only passes the struct along is not enough: the importer needs the struct's own module.
+    (with-files
+     '(("a.agc" . "export struct P\n  n: Int\nend\n\n")
+       ("b.agc" . "import \"a\" as A\n\nexport def get() -> A.P\n  return A.P(n: 1)\nend\n\n")
+       ("root.agc" . "import \"b\" as B\n\ndef main() -> Void\n  x = B.get().with(n: 2)\nend\n\n"))
+     (lambda (directory)
+       (define problem (checked (build-path directory "root.agc")))
+       (check-equal? (diagnostic-code problem) 'CHECK-IMPORT-NAME)))
+    ;; A builtin record of std/http is updated without importing a module that declares it (the form that phase 19 teaches).
+    (with-files
+     '(("root.agc" . "import \"std/http\" as Http\n\ndef main() -> Void\n  o = Http.client_options()\n  p = o.with(timeout_ms: 5000, ca_file: \"ca.pem\")\n  puts(p.timeout_ms)\n  puts(o.timeout_ms)\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "5000\n30000\n")))
+    ;; Alias.with(...) is a call of the module's function named with, not an update.
+    (with-files
+     '(("lib.agc" . "export def with(n: Int) -> Int\n  return n + 1\nend\n\n")
+       ("root.agc" . "import \"lib\" as Lib\n\ndef main() -> Void\n  puts(Lib.with(1))\nend\n\n"))
+     (lambda (directory)
+       (define-values (out result) (run (build-path directory "root.agc")))
+       (check-equal? out "2\n"))))
+
   (test-case "cycles and dependency runtime failures retain original file spans"
     (with-files
      '(("root.agc" . "import \"a\" as A\ndef main() -> Void\nend\n\n")

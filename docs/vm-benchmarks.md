@@ -390,6 +390,34 @@ with an empty set). When half the elements go, the second pass builds the
 result: about 1.8 s for 150,000 puts. `Test.eq` and `subset?` on two equal
 sets of 300,000 take about 145 ms.
 
+## Struct update (15c)
+
+`value.with(f: x)` lowers to one `STRUCT_WITH` instruction that copies the
+struct and writes the given fields. The first plan was the constructor
+(`FIELD` for each field that stays, then `STRUCT`, no VM change), so both were
+built and measured by throwaway programs (not committed) on a release build,
+8 cores, Linux, a quiet host. Each program updates a struct 1,000,000 times in
+a `while` loop; the table is the best of 7 wall times in ms, and the empty
+loop alone takes 108 to 111 ms.
+
+| Struct and update | Constructor | `STRUCT_WITH` |
+|---|---:|---:|
+| 2 fields, 1 changed | 197 | 212 |
+| 4 fields, 1 changed | 289 | 240 |
+| 8 fields (one `String`), 1 changed | 380 | 280 |
+| 8 fields, 2 changed | 443 | 368 |
+| 16 fields, 1 changed | 567 | 373 |
+| 8 fields, `step(s.with(...))` as a tail call, 1M iterations | 570 | 485 |
+
+The constructor needs one instruction for each field that stays, so its cost
+grows with the field count; `STRUCT_WITH` is one `memcpy` of the fields and one
+store for each changed field, and it charges the copy by size as `CONCAT` does
+(the first measurement, 206 and 273 ms for 2 and 8 fields, was before the
+charge; it costs 3% to 5%). For two fields the two have the same instruction
+count and the new handler costs about 8% more. The instruction stayed because
+the case it is for, a lexer or parser state of 4 to 16 fields in a
+tail-recursive `step`, is 15% to 34% faster.
+
 ## HTTP sanity check
 
 `benchmarks/http_bench.py` is not a CI gate. It needs Python 3.10 or newer,

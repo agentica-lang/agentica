@@ -1,0 +1,1 @@
+ERROR PARSE-TOO-DEEP 11002:2:10984-11003:2:10985 "nesting is deeper than 1000 levels" "split the code into smaller functions or simpler expressions"

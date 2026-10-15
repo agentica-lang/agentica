@@ -5,11 +5,11 @@ a new feature, so it comes after 7i deletes the evaluator (order 7.2) and runs
 on the C VM only. It is part of order step 7.4: after phase 17 (`Task.map` and
 channels, §27) and right after the HTTP streaming items 20e to 20g ([section
 30.11](30-hybrid-http.md#3011-streaming-on-channels)), and before default
-parameter values (15a, order row 7.5a, deferred until after the bootstrap) and
-`with` (15c, order step 7.6). So its API needs neither: every call has a fixed
-argument list, and options live in records (29.1). It changes `TLS` and `HTTP`
-together in one breaking step, with one CHANGELOG entry and one migration
-(29.5).
+parameter values (15a, order row 7.5a, deferred until after the bootstrap).
+`with` (15c) was built early, on 2026-10-15, so `TLS.client_options().with(...)`
+is available. The API needs neither: every call has a fixed argument list, and
+options live in records (29.1). It changes `TLS` and `HTTP` together in one
+breaking step, with one CHANGELOG entry and one migration (29.5).
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS
@@ -82,11 +82,9 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
   work (`src/builtins.rkt:68`). A new option is a new field, never a new
   argument or a new builder, so default parameter values (15a) never have to
   change these calls. A new field does break code that constructs the record
-  with every field named, so the later options of 29.7 come after `with` (§25.3,
-  15c, order step 7.6): from then on the skill teaches
-  `TLS.client_options().with(ca_file: "ca.pem")`, which keeps working when a
-  field is added. Until 15c, the first fields are the only ones, and a program
-  writes `TlsClientOptions(ca_file: "ca.pem")`.
+  with every field named, so the skill teaches `with` (§25.3, 15c, built):
+  `TLS.client_options().with(ca_file: "ca.pem")` keeps working when a field is
+  added, and the later options of 29.7 come after it.
 - **One type, two roles.** `TlsContext` is one opaque type, like `SSLContext`,
   with its role (client or server) fixed at creation. Two types
   (`TlsClientContext`, `TlsServerContext`) would catch a mix-up at check time,

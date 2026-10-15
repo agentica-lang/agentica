@@ -154,6 +154,24 @@
     (check-equal? ops '(sub-i add-i range range-bounds add-i))
     (check-false (diagnostic? (ir->bytecode ir))))
 
+  (test-case "a struct update is one struct-with; sites that change the same fields share a table entry"
+    (define program
+      (ir->bytecode
+       (lower-text (string-append
+                    "struct P\n  a: Int\n  b: Int\n  c: Int\nend\n\n"
+                    "def main() -> Void\n  p = P(a: 1, b: 2, c: 3)\n  q = p.with(c: 4, a: 5)\n"
+                    "  r = q.with(a: 6, c: 7)\n  s = r.with(b: 8)\n  puts(s)\nend\n"))))
+    ;; (struct index . field indexes), fields in increasing order whatever the order written.
+    (check-equal? (bc-program-updates program) '((0 0 2) (0 1)))
+    (define main (list-ref (bc-program-functions program) (bc-program-entry program)))
+    (define with-op (index-of opcodes 'struct-with))
+    (define updates
+      (for/list ([instr (in-vector (bc-function-code main))] #:when (= (first instr) with-op))
+        (fourth instr)))
+    (check-equal? updates '(0 0 1))
+    (check-false (member (index-of opcodes 'field)
+                         (for/list ([instr (in-vector (bc-function-code main))]) (first instr)))))
+
   (test-case "opcode numbers match vm/value.h"
     (define names
       (for/list ([match (in-list (regexp-match* #px"AGC_OP_([A-Z_]+)" (file->string vm-header)
