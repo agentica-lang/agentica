@@ -152,31 +152,25 @@ fixed point from the committed stage0.
   in one release;
 - the fixed point runs in CI from the committed stage0;
 - the per-stage goldens (35.4) pass without the Racket stages;
-- no Makefile target, CI job or release step runs `racket` or `raco` except the
-  test suite (`make version` reads the plain version file of step 8);
+- no Makefile target, CI job or release step runs `racket` or `raco`, the test
+  suite included (`make version` reads the plain version file of step 8, and
+  the tests reach the binary alone at
+  [§35.10](#3510-tests-move-to-python-unittest) phase 3);
 - `vm/tools/gen-unicode.rkt` is ported (its output, `vm/unicode_data.c`, stays
   checked in).
 
 Then one PR deletes `src/*.rkt` and the `raco distribute` release steps, and
 tags the parent commit `bootstrap-racket`, the last commit that can make a
-stage0 from Racket. 18 of the 31 `tests/*.rkt` files require `src/` modules. In
-the same PR, the per-stage goldens replace the stage tests that call `src/`
-directly (`lexer-test`, `parser-test`, `modules-test`, `checker-test`,
-`bytecode-test`, `diagnostic-test` and the like), and those files are deleted.
-The PR rewrites the others so that they use only the binary:
+stage0 from Racket. It changes no test: the test rewrite is done before it, in
+[§35.10](#3510-tests-move-to-python-unittest) phases 1 to 3. Today 23 of the 51
+`tests/*.rkt` files require `src/` modules directly (16 of the 43 `*-test.rkt`).
+The per-file rewrites that this section used to list (`cli-in-process.rkt`,
+`compile-file` in `vm-diff-common.rkt`, the site examples, the latency and trace
+tests, `bdd-integration.rkt`) are phase 1 and 2 work there.
 
-- `cli-in-process.rkt` loads `src/main.rkt` in the same process, and five test
-  files go through it. It runs the binary as a child instead.
-- `compile-file` in `vm-diff-common.rkt` builds every golden fixture with the
-  Racket stages. It calls `agentica compile` instead.
-- `site-examples-test.rkt` loads the lexer, parser, modules and checker. It uses
-  `agentica check --json` instead.
-- `vm-latency-test.rkt`, `vm-trace-test.rkt` and `bdd-integration.rkt` run
-  `racket src/main.rkt` as a child. They run the binary instead.
-
-Replacing rackunit itself is a separate decision: the test suite stays on Racket
-until the owner chooses its replacement, because the choice changes the test
-rule in `AGENTS.md`.
+Replacing rackunit is decided: Python `unittest`, standard library only, in
+phases that run beside steps 4 to 8
+([§35.10](#3510-tests-move-to-python-unittest)). Phase 3 is the step-8 PR.
 
 ### 35.4 Stages to port
 
@@ -195,7 +189,7 @@ goldens stay.
 | 1 | **Done** (PR #237): Lexer (`src/lexer.rkt`, with `source.rkt`, `token.rkt` and the diagnostic data of `diagnostic.rkt`) | Tokens as text lines (kind, value, span), or the one `LEX-` diagnostic |
 | 2 | **Done** (PR #245): Parser (`src/parser.rkt`, `ast.rkt`) | The AST in a stable text form, or the `PARSE-` diagnostic. Today `--dump` is Racket's `pretty-print` of the checked tree, so step 2 adds a printer with the same output on both sides (`tests/frontend-parser-common.rkt`) |
 | 3 | **Done** (PR #254): Modules and linker (`src/modules.rkt`, `stdlib.rkt`) | The linked program dump, with `std/` and `pkg/` resolution, or the first `CHECK-IMPORT-*`, `CHECK-DECL-ORDER` or `CHECK-REDEFINED-NAME` diagnostic with its file. Needs the environment and real-path builtins (35.5). It carries the privacy rule of `value.with(...)` (roadmap 15c) as data: each linked module lists the user structs it may update, and the text form prints the list on every update. The text form is `tests/frontend-modules-common.rkt` (Racket) and `compiler/link.agc` (Agentica) |
-| 4 | **Done** (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #PRNUM): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
+| 4 | **Done** except module constants (4a, the builtin catalog as Agentica data, PR #258; 4b, the checker, PR #PRNUM; the constants of §44 follow, below): Checker (`src/checker.rkt`, `builtins.rkt`, `builtin-types.rkt`) | The `CHECK-` diagnostic, and the type of each expression. The port must carry `CHECK-DECL-ORDER` (imports, then `struct` and `enum`, then `export def`, then `def`, in every file), which the Racket front end checks per file in `src/modules.rkt` before linking; the module port (step 3) and this one keep its span (the start of the first declaration out of place). It must also handle `Set[T]` (roadmap 8b, landed in `src/` before this step): the type `(Set T)` with an `Int` or `String` element (`CHECK-SET-ELEMENT-TYPE`), the rules of the `Set.*` rows of `builtins.rkt` (`CHECK-EMPTY-SET-TYPE` for `Set.new([])` with no expected type), `for` over a set, the printable and not-encodable cases, and the reserved name `Set`; `compiler/lexer.agc` already uses `Set` for its keyword table. It must also carry `value.with(...)` (roadmap 15c, landed in `src/` and in `compiler/parser.agc`, which already parses it as `Update(StructUpdate)`): the receiver must be a struct (`CHECK-UNKNOWN-METHOD` otherwise); each name must be a field of it (`CHECK-UNKNOWN-FIELD`), given once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take it); a field of `Fn` type named `with` is `CHECK-REDEFINED-NAME`; a bare update whose result is dropped is `CHECK-UNUSED-VALUE`; and a struct that its module keeps private cannot be updated from another module (`CHECK-IMPORT-NAME`; the linker decides what is visible, as data from the modules port of step 3, because the `visible` predicate of `src/` is a closure in the node). Lowering (step 5) emits one `struct-with` per update and the bytecode writer (step 6) writes its Updates section (format version 4). It must also carry module constants (§44, roadmap row 7.2.8): the order, `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE` and the `CHECK-DECL-ORDER` rank of constants; the new import forms of §44.2 (`import Mod from "path"`, `import {A, B} from "path"`) are parser and linker changes that land in `src/` and `compiler/` together (44a0), and the checker sees no import, but one help text of `src/checker.rkt` shows the old form and the checker port carries the new text. Decided for deep trees (35.9): the linker of step 3 handles trees up to about 9,900 levels with one VM call per level, and the parser accepts trees much deeper than that, so both checkers stop with `CHECK-TOO-DEEP` at 1,000 levels of expressions and statements (one level for each, so it bounds the depth of the tree they recurse on; a diagnostic change in both front ends, made in 4b). |
 | 5 | Lowering (`src/lower.rkt`) | The IR in the form `--dump-ir` prints, or the `LOWER-` diagnostic |
 | 6 | Bytecode writer (`src/bytecode.rkt`) | The `.agcb` bytes, equal |
 | 7 | BDD driver (`src/bdd-driver.rkt`) | The `agentica test` tests (`tests/bdd-test.rkt`, `tests/bdd-integration.rkt`) |
@@ -621,3 +615,115 @@ are in `tests/fixtures/frontend/check/` (57 fixtures, one for every reachable
   spans, messages, helps and notes, and the same types.
 - Not done: module constants (`NAME = expr` at top level, section 44) land in
   `src/checker.rkt` in a later PR, and the port carries them then.
+
+### 35.10 Tests move to Python unittest
+
+**Status:** started on 2026-10-15, decided by the owner the same day. Phase 0
+is PR #261 (branch `tests/unittest-phase0`). Roadmap row 7.2.9
+([`docs/roadmap/README.md`](../roadmap/README.md)) tracks the phases. They run
+beside steps 4 to 8 of [§35.4](#354-stages-to-port) and
+[§44](44-module-constants.md).
+
+The suite is rackunit: 51 `.rkt` files in `tests/` (43 named `*-test.rkt`, the
+rest helpers and integration tests), about 11,800 lines. Most of it runs the
+binary, reads its output and compares it with a golden or a peer. The Python
+standard library does that well (`subprocess`, `difflib`, `socket`,
+`tempfile`), and the translation is close to line by line. The repo already has
+19 Python peers in `tests/fixtures/` and two `unittest` modules in
+`tests/eval/`. `unittest` is part of the standard library, so the tests add no
+package, no lock file and no install step.
+
+`AGENTS.md` keeps its rule of standard library only, with no test frameworks.
+Only the list of frameworks changes: rackunit and Python `unittest` during the
+migration, and `unittest` alone at the end. Phase 0 changes that rule, the
+two-tier rule and the `tests/` line of the map in `AGENTS.md`, and the test
+references of the development skill.
+
+Considered and rejected:
+
+- Keeping Racket as a test-only reference: a second implementation that falls
+  behind every language change.
+- C: about twice the migration work.
+- Zig: pre-1.0, and it breaks between versions.
+- Rust and OCaml: new heavy toolchains.
+- Agentica-only tests as the base: they stay for the stdlib and for user
+  programs through `agentica test`, but not as the base.
+- pytest with pytest-xdist: it adds packages to pin and install for what
+  `make -j` and `unittest` already do; adopt it later only if a real need shows
+  up.
+
+**The harness.** The tests are black-box. A test runs the product CLI, runs
+`agentica-vm` directly when it checks the VM alone, and runs the stage programs
+of `compiler/` while they exist. The product CLI is `racket src/main.rkt` until
+step 8, and the single binary after it. A test compares the output with a golden
+or a peer: tokens, AST text, linked text, diagnostics (code and span, never
+message text), `.agcb` bytes, CLI exit codes, stdout and stderr.
+
+- `tests/agentica_test.py` is the shared helper. It holds the binary and CLI
+  paths, the environment variables that exist today (`AGENTICA_VM_BINARY`,
+  `AGENTICA_REQUIRE_VM`, `AGENTICA_FIXTURES`, `AGENTICA_SWEEP`), process runs
+  with timeouts, `compile_agc`, `run_vm`, and temporary directories that are
+  removed after the run. It stays small: a helper goes in only when a second
+  module needs it.
+- Programs are compiled by the product CLI, never by a Racket module loaded into
+  the test process. The rackunit helpers do load `src/` in process today
+  (`vm-diff-common.rkt`, `cli-in-process.rkt`), so each area that moves stops
+  using them.
+- Peers (Node, Python, curl) stay standard library only, as they are today. A
+  peer runs as its own child process.
+- The translation is mechanical. `check-equal?` becomes `assertEqual`, a
+  `test-case` becomes a test method, and `(module+ slow ...)` becomes the
+  `@slow` mark of the helper.
+- The two tiers are exclusive, as the rackunit submodules are. `make test` runs
+  the fast cases only. `make test-slow` sets `AGENTICA_TEST_SLOW=1`, which runs
+  only the `@slow` cases, as `raco test --submodule slow` does. A case of the
+  other tier is skipped visibly.
+- A missing VM follows the rule of `AGENTS.md` as it does today: a local run
+  skips it visibly, and CI fails when `AGENTICA_REQUIRE_VM=1`.
+- Parallel runs come from make. Each test module is one
+  `python3 -m unittest tests.test_<area>` process, run by make with
+  `make -k -O -j`, so one failure does not hide the others. No runner script is
+  needed. Tests that open sockets use port 0 and clean up their children. If a
+  case ever needs more, it is a tiny stdlib script for the summary and subset
+  selection.
+- `make test TESTS=...` selects files of either kind: a `.rkt` file goes to
+  rackunit, a `.py` file to unittest.
+
+A test lives in one framework only. Each area PR deletes the `.rkt` files it
+replaces, and the docs that name a moved file change in the same PR. Finding
+them: search `docs`, `.agents` and `AGENTS.md` for `rackunit`, `raco test` and
+`-test.rkt`. The CI targets keep working in every PR. During the migration, new
+tests are written in unittest unless they need the in-process Racket front end
+(the live comparisons of the steps of [§35.4](#354-stages-to-port)), which stay
+in rackunit until phase 3.
+
+**Phases.**
+
+- **Phase 0** (PR #261, started 2026-10-15): the helper, the make targets above,
+  the rule changes in `AGENTS.md` and the development skill, and one small area
+  as the proof: `tests/vm-bits-test.rkt` (42 lines) moves to
+  `tests/test_vm_bits.py`.
+- **Phase 1:** areas that do not need the Racket front end as an oracle: VM and
+  runtime fixtures, network and process tests, BDD, and CLI. One area per PR.
+  Tests that go through `cli-in-process.rkt` run the product CLI as a child
+  instead, with the same output. A test that calls a front-end module directly
+  waits for phase 2.
+- **Phase 2:** the golden parts of the front-end tests move to `unittest`: the
+  Agentica output compared with the goldens in `tests/fixtures/frontend/`. The
+  live comparisons with the Racket stages stay in rackunit until phase 3. A file
+  with both kinds is split, and each case keeps one framework.
+- **Phase 3,** with the step-8 PR. Before that PR, every live comparison (corpus
+  files, generated inputs, the large inputs of the slow tier) is frozen into a
+  golden, so no coverage is lost. Generated inputs are checked in as fixture
+  files or, when they are too big for that, a seeded stdlib script writes them
+  and the golden records their SHA-256. The PR then removes the rackunit files,
+  every make target that only runs rackunit, and the CI steps that use those
+  targets. Other `raco` calls stay until the deletion PR (`raco exe` for
+  `dist/agentica`, `raco make`, `raco distribute`), because the build still uses
+  Racket. The test suite no longer needs Racket. The fixed-point check of
+  [§35.3](#353-bootstrap), stage2 and stage3 equal byte for byte, runs in CI
+  from the committed `stage0`. The release cut before the step-8 PR, which
+  [§35.4](#354-stages-to-port) defines, is taken from the commit before this
+  phase, so that release still has the rackunit live comparisons. The deletion
+  of `src/*.rkt` and of the `raco distribute` steps follows the conditions of
+  [§35.3](#353-bootstrap).
