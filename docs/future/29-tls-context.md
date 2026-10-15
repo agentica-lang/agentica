@@ -6,11 +6,10 @@ on the C VM only. It is part of order step 7.4: after phase 17 (`Task.map` and
 channels, §27) and right after the HTTP streaming items 20e to 20g ([section
 30.11](30-hybrid-http.md#3011-streaming-on-channels)), and before default
 parameter values (15a, order row 7.5a, deferred until after the bootstrap).
-`with` (15c) was built early, on 2026-10-15, so
-`TLS.client_options().with(...)` is available. The API needs neither: every
-call has a fixed argument list, and options live in records (29.1). It changes `TLS` and `HTTP`
-together in one breaking step, with one CHANGELOG entry and one migration
-(29.5).
+`with` (15c) was built early, on 2026-10-15, so `TLS.client_options().with(...)`
+is available. The API needs neither: every call has a fixed argument list, and
+options live in records (29.1). It changes `TLS` and `HTTP` together in one
+breaking step, with one CHANGELOG entry and one migration (29.5).
 
 **What is asked for:** an opaque handle like Python's `ssl.SSLContext`, built
 once and reused by many connections, so the CA bundle is loaded once, and so TLS

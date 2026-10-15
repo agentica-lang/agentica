@@ -7,19 +7,19 @@ evaluator (order 7.2), changes the front end and `src/lower.rkt`, and runs on
 the C VM only, never on the Racket evaluator. Item 15l is the exception: it
 comes at order row 7.2.1g, before order step 7.5, and changes no lowering. Item
 15c is another exception: the owner moved it before the bootstrap on 2026-10-15
-(built; see its line). Three order steps: 15a (front end only) as order row 7.5a, deferred until after the
-bootstrap (row 7.2.7). `std/logger` (14c) does not wait for it (§24.2): its
-`_meta` functions become one `fields` default when it lands. 15b, 15d, 15e, 15i
-and 15j at order step 7.6, after phase 16 (strict diagnostics); the prelude part,
-15f and 15k, at order step 8.2, after faster lists (8d), because on today's
-flat-array lists an Agentica loop that builds a list is O(n²). One small PR per
-item, each with `grammar.md`, the programming skill, the site page, the
-development skill's notes and tests (parser, lexer and checker tests that assert
-codes and spans, golden VM fixtures, site examples). The items are independent,
-except where noted. Library items follow the library rule (after the order
-table): their code is Agentica in the compiler prelude, and the only new
-builtins are `String.compare` (public, under its exception 5), `File.eof?`
-(public, under its exception 1), and the internal `__fail_arg` and
+(built; see its line). Three order steps: 15a (front end only) as order row
+7.5a, deferred until after the bootstrap (row 7.2.7). `std/logger` (14c) does
+not wait for it (§24.2): its `_meta` functions become one `fields` default when
+it lands. 15b, 15d, 15e, 15i and 15j at order step 7.6, after phase 16 (strict
+diagnostics); the prelude part, 15f and 15k, at order step 8.2, after faster
+lists (8d), because on today's flat-array lists an Agentica loop that builds a
+list is O(n²). One small PR per item, each with `grammar.md`, the programming
+skill, the site page, the development skill's notes and tests (parser, lexer and
+checker tests that assert codes and spans, golden VM fixtures, site examples).
+The items are independent, except where noted. Library items follow the library
+rule (after the order table): their code is Agentica in the compiler prelude,
+and the only new builtins are `String.compare` (public, under its exception 5),
+`File.eof?` (public, under its exception 1), and the internal `__fail_arg` and
 `__float_fixed` (prelude-only, guarded by the loader). Part B (§25.12) and Part
 C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
 
@@ -42,7 +42,7 @@ C (§25.13) add no items. Ten items are planned; 15g and 15h are not planned.
   `CHECK-TYPE-MISMATCH`, and `CHECK-IMPORT-NAME` for a struct that its module
   keeps private, through a `visible` predicate of the linker), and one new
   opcode, `STRUCT_WITH` (bytecode format version 4, an Updates section checked
-  by the loader), which beat a constructor call by 20% to 35% on structs of 4 to
+  by the loader), which beat a constructor call by 15% to 34% on structs of 4 to
   16 fields (`docs/vm-benchmarks.md`). The ban on `Fn` fields named `with` comes
   here, in advance, so that 10a stays non-breaking; the ban on a type-parameter
   field named `with` is in 10c. Breaking change: an `Fn` field named `with`

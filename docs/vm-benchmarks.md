@@ -402,19 +402,21 @@ loop alone takes 108 to 111 ms.
 
 | Struct and update | Constructor | `STRUCT_WITH` |
 |---|---:|---:|
-| 2 fields, 1 changed | 197 | 206 |
-| 4 fields, 1 changed | 289 | 232 |
-| 8 fields (one `String`), 1 changed | 380 | 273 |
-| 8 fields, 2 changed | 443 | 350 |
-| 16 fields, 1 changed | 567 | 362 |
-| 8 fields, `step(s.with(...))` as a tail call, 1M iterations | 570 | 467 |
+| 2 fields, 1 changed | 197 | 212 |
+| 4 fields, 1 changed | 289 | 240 |
+| 8 fields (one `String`), 1 changed | 380 | 280 |
+| 8 fields, 2 changed | 443 | 368 |
+| 16 fields, 1 changed | 567 | 373 |
+| 8 fields, `step(s.with(...))` as a tail call, 1M iterations | 570 | 485 |
 
 The constructor needs one instruction for each field that stays, so its cost
 grows with the field count; `STRUCT_WITH` is one `memcpy` of the fields and one
-store for each changed field. For two fields the two have the same instruction
-count and the new handler costs about 4% more. The instruction stayed because
+store for each changed field, and it charges the copy by size as `CONCAT` does
+(the first measurement, 206 and 273 ms for 2 and 8 fields, was before the
+charge; it costs 3% to 5%). For two fields the two have the same instruction
+count and the new handler costs about 8% more. The instruction stayed because
 the case it is for, a lexer or parser state of 4 to 16 fields in a
-tail-recursive `step`, is 18% to 36% faster.
+tail-recursive `step`, is 15% to 34% faster.
 
 ## HTTP sanity check
 

@@ -50,15 +50,16 @@ one.
   `src/parser.rkt`, `src/modules.rkt`, `src/checker.rkt`) and `src/lower.rkt`,
   and runs on the C VM. No item touches `src/evaluator.rkt`.
 - Most items are sugar that `lower.rkt` turns into code the VM already runs, so
-  the bytecode format and the VM do not change. Four items change the VM, and
-  two of them bump the bytecode format version, since any change to the layout
-  or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.4
-  widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a prelude
-  flag on functions, argument spans on prelude calls, a name-only source entry
-  per prelude file, the error-span rule, the prelude-only builtin `__fail_arg`
-  and the public builtin `String.compare` (format version bump); 25.9 appends
-  the builtin `File.eof?` (no bump); and 25.11 appends the prelude-only builtin
-  `__float_fixed` (no bump).
+  the bytecode format and the VM do not change. Five items change the VM, and
+  three of them bump the bytecode format version, since any change to the layout
+  or to an opcode's meaning does (`docs/vm/03-ir-and-bytecode.md` §4): 25.3 adds
+  the `STRUCT_WITH` opcode and the Updates section (format version 4, built);
+  25.4 widens the `EQ` and `NE` opcodes (format version bump); 25.6 adds a
+  prelude flag on functions, argument spans on prelude calls, a name-only source
+  entry per prelude file, the error-span rule, the prelude-only builtin
+  `__fail_arg` and the public builtin `String.compare` (format version bump);
+  25.9 appends the builtin `File.eof?` (no bump); and 25.11 appends the
+  prelude-only builtin `__float_fixed` (no bump).
 - Library work follows the roadmap rule [New library features: `std/`
   first](../roadmap/README.md#new-library-features-std-first): pure computation
   is written in Agentica, and C is only for its exceptions. 25.6 and 25.11 need
@@ -324,6 +325,8 @@ intent, but the skill teaches `with`.
   a help for structs). Each name must be a field of it (`CHECK-UNKNOWN-FIELD`),
   given at most once (`CHECK-DUPLICATE-FIELD`), with a value of the field's type
   (`CHECK-TYPE-MISMATCH`; `[]` and `{}` take the field type).
+- A bare `ana.with(...)` whose result is dropped is `CHECK-UNUSED-VALUE`, like a
+  bare `xs.push(4)`: values are immutable, so the call would change nothing.
 - At least one field: `ana.with()` is `PARSE-UNEXPECTED-TOKEN`, since
   `named_arguments` needs at least one argument. A positional argument
   (`ana.with(31)`) is `PARSE-UNEXPECTED-TOKEN`, with a help that shows
@@ -332,10 +335,11 @@ intent, but the skill teaches `with`.
   construction: for a type that another module keeps private, it gives the same
   diagnostic as constructing it (`CHECK-IMPORT-NAME`; the linker gives the node
   a `visible` predicate: the structs of the file, and the exported structs of
-  the modules it imports directly). With generic structs (15.3) the type
-  arguments stay, so a field's new value has the same type as before: `.with(`
-  always parses as the update, and each field is checked after the struct's type
-  arguments are substituted.
+  the modules it imports directly; a closure in the node today, so the
+  self-hosted linker turns it into data, §35.4 step 3). With generic structs
+  (15.3) the type arguments stay, so a field's new value has the same type as
+  before: `.with(` always parses as the update, and each field is checked after
+  the struct's type arguments are substituted.
 - A field named `with` whose type is `Fn[...]` is `CHECK-REDEFINED-NAME`. (A
   field named `with` whose type is a type parameter is banned where generic
   structs land, [section
@@ -356,7 +360,7 @@ instruction, reading the fields that do not change from the receiver, with no VM
 change. It was measured against one new instruction, `STRUCT_WITH`, which copies
 the struct and writes the given fields (the field indexes are resolved at lower
 time and kept in the Updates section of the bytecode, format version 4). The
-instruction is the same speed for a 2-field struct and about 20 to 35 percent
+instruction is about 8 percent slower for a 2-field struct and 15 to 34 percent
 faster for a struct of 4 to 16 fields (the lexer-state case), so the instruction
 stayed (numbers in the PR of 15c, and in `docs/vm-benchmarks.md`).
 
