@@ -111,6 +111,7 @@ Read only the files the task needs:
 | [references/language.md](references/language.md) | hits a checker error about an operator, type, Void, pattern, block, method, or Result, or needs a core rule this file does not state |
 | [references/builtins.md](references/builtins.md) | calls a builtin not in the cheat sheet, or needs an exact signature for `String`, `List`, `Map`, `Set`, `Range`, `Int`, `Float`, `IO`, `System` (arguments, environment), `Time`, or `Random` |
 | [references/examples.md](references/examples.md) | needs a complete program to start from |
+| [references/performance.md](references/performance.md) | writes a hot loop, a lexer or parser, or code over big input, or chooses between `List`, `Map`, `Set` and struct update in a loop |
 | [references/modules.md](references/modules.md) | spans several files, or imports `std/` or `pkg/` modules |
 | [references/json.md](references/json.md) | reads or writes JSON |
 | [references/files.md](references/files.md) | reads or writes files, directories, or paths |
