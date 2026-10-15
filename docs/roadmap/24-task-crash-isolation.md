@@ -53,11 +53,12 @@ are a proposal for the owner to review.
       or `Void`, so `main` halts with `RUNTIME-TASK-CRASHED` at its
       `Task.await`, with the original code in the message and the crash line on
       stderr.
-    - `tests/bdd-test.rkt:113` and `:122`: the "a task crashes" step spawns a
-      crash and sleeps 60 s, which now meets the scenario deadline. Replace
-      `Task.sleep(60000)` with `Task.sleep(0)`, which yields so the crash task
-      runs; the step fails when its handler returns, and line 122 expects
-      `RUNTIME-TASK-CRASHED` with `RUNTIME-DIVISION-BY-ZERO` in the message.
+    - `tests/test_bdd.py` (first `tests/bdd-test.rkt:113` and `:122`): the
+      "a task crashes" step spawns a crash and sleeps 60 s, which now meets the
+      scenario deadline. Replace `Task.sleep(60000)` with `Task.sleep(0)`,
+      which yields so the crash task runs; the step fails when its handler
+      returns, and line 122 expects `RUNTIME-TASK-CRASHED` with
+      `RUNTIME-DIVISION-BY-ZERO` in the message.
     - `make goldens` for the expected files of the fixtures above. Crash lines
       on stderr carry the fixture's absolute path, so the golden harness
       replaces the fixture directory with a fixed token before it compares
@@ -101,7 +102,7 @@ are a proposal for the owner to review.
       work), the BDD step and a crash before `BDD.run` (a file error), a
       lowering test of the two await entries, and a `tests/filesystem-test.rkt`
       case that checks a crashed task's buffered write is on disk after the run;
-      `tests/process-test.rkt` ("every way a run ends") now awaits its crashing
+      `tests/test_process.py` ("every way a run ends") now awaits its crashing
       task and expects `RUNTIME-TASK-CRASHED`; `vm/tests/task_cancel_test.c` now
       expects a task that awaits a cancelled task to crash. These cases of
       §37.11 were left out by the owner's rule (only the tests that prove "Done

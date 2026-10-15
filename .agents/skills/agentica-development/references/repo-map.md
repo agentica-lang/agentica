@@ -140,7 +140,7 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   frontend-catalog-test.rkt  # the generated compiler/builtins_data.agc, the Rule enum, and Racket against Agentica on the catalog (references/frontend.md)
   frontend-check-common.rkt  # the checker text form (types, resolutions, diagnostic notes) printed from src/checker.rkt, and its goldens (references/frontend.md)
   frontend-check-test.rkt  # fast: generated tables, goldens, every CHECK- code and rule; slow: both checkers on the corpus, mutants, deep trees, a large program
-  process-test.rkt  # Process builtins on the VM, every way a run ends (references/vm-net.md)
+  test_process.py  # unittest: Process builtins on the VM, every way a run ends (references/vm-net.md)
   filesystem-test.rkt  # File and Path programs on the VM (references/vm-io.md)
   cli-in-process.rkt  # helper: runs src/main.rkt in process for CLI tests
   info.rkt        # the Racket package info: lists the tests the runner omits
@@ -167,8 +167,8 @@ tests/            # rackunit files and unittest modules (test_<area>.py); the li
   site-examples-test.rkt  # agentica blocks in site/content run or check; fast: three pages, slow: all (references/site.md)
   stdlib-distribution-test.rkt  # the relocated executable still finds std/ (references/ci.md)
   stdlib-docs-test.rkt  # every stdlib module has a module doc and export docs (references/stages.md)
-  bdd-test.rkt  # agentica test over the CLI: step programs, isolation (references/bdd.md)
-  bdd-integration.rkt  # programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
+  test_bdd.py  # unittest: agentica test over the CLI: step programs, isolation (references/bdd.md)
+  test_bdd_integration.py  # unittest: programs under test, limits, seed, cleanup; slow: 1 MiB outputs, big JSON line, killed driver (references/bdd.md)
   unit-test-test.rkt  # agentica test on *_test.agc files; slow: stderr flood, endless print, flooding listing (references/bdd.md)
   std/            # *_test.agc unit tests of the std/ modules
   fixtures/       # golden fixtures and independent Node.js and Python peers

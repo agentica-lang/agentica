@@ -11,7 +11,8 @@ import signal
 import threading
 import time
 
-from tests.agentica_test import FIXTURES, PYTHON, Child, TestCase, cli, start_vm, vm_binary, vm_environment
+from tests.agentica_test import (FIXTURES, PYTHON, Child, TestCase, cli, process_alive, start_vm, vm_binary,
+                                 vm_environment, wait_until)
 
 PEER = FIXTURES / "stop-peer.py"
 WAIT_SECONDS = 10
@@ -86,22 +87,10 @@ end
 """ % (("spawn", "", "") if trap == "" else ("spawn_captured", trap, ', "."'))
 
 
-def alive(pid):
-    try:
-        with open("/proc/%d/stat" % pid) as stat:
-            text = stat.read()
-    except OSError:
-        return False
-    return text.rsplit(") ", 1)[-1][:1] != "Z"
-
-
 def gone_soon(pid):
     """True when the process ends within WAIT_SECONDS; otherwise it is killed so it cannot outlive the test."""
-    deadline = time.monotonic() + WAIT_SECONDS
-    while time.monotonic() < deadline:
-        if not alive(pid):
-            return True
-        time.sleep(0.1)
+    if wait_until(lambda: not process_alive(pid), WAIT_SECONDS, 0.1):
+        return True
     os.kill(pid, signal.SIGKILL)
     return False
 
