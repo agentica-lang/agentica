@@ -64,6 +64,19 @@ export def stored_name(root_dir: String, file: String) -> String
   return stored
 end
 
+## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
+## links), so it is made canonical first, as the key of a loaded file is.
+export def stored_file(root_dir: String, file: String) -> String
+  if file.starts_with?("std/")
+    return file
+  end
+  real = Path.real(file)
+  if real.ok?
+    return stored_name(root_dir, real.unwrap!)
+  end
+  return stored_name(root_dir, file)
+end
+
 ## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is
 ## CHECK-IMPORT-PATH with a help that shows the fix, written as the import line of decl (the alias form or the name
 ## list).

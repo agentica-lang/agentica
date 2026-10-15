@@ -48,16 +48,6 @@
   (for ([path (in-list paths)])
     (check-equal? (hash-ref outputs path #f) (string-append (lower-text path) "\n") path)))
 
-(define (write-file path text)
-  (make-parent-directory* path)
-  (display-to-file text path #:exists 'truncate/replace)
-  (path->string path))
-
-(define (agc-files-in directory)
-  (for/list ([file (in-list (directory-list (build-path root directory) #:build? #t))]
-             #:when (path-has-extension? file #".agc"))
-    (path->string (simplify-path file))))
-
 ; The names of the VM_BUILTINS constant of compiler/lower_tables.agc: the strings between its brackets.
 (define (agentica-vm-builtins)
   (define text (file->string tables))
@@ -124,68 +114,6 @@
     (set! collected-programs (reverse found)))
   collected-programs)
 
-(define (repeat text count) (string-append* (make-list count text)))
-
-(define (function-body body)
-  (string-append "def f(a: Int) -> Int\n  return a\nend\n\ndef main() -> Void\n  x = 1\n" body "end\n\n"))
-
-; Trees at the nesting limit of the checker (1,000 levels): lowering recurses on the tree, so these are the
-; deepest inputs it can see. Each name is a shape; the number is how deep it is nested.
-(define (deep-cases)
-  (define (bind text) (function-body (string-append "  y = " text "\n  puts(y)\n")))
-  (list
-   (cons "chain-997" (bind (string-append "x" (repeat " + x" 997))))
-   (cons "calls-998" (bind (string-append (repeat "f(" 998) "x" (repeat ")" 998))))
-   (cons "lists-990" (bind (string-append (repeat "[" 990) "x" (repeat "]" 990))))
-   (cons "negations" (bind (string-append (repeat "-" 997) "x")))
-   (cons "parentheses" (bind (string-append (repeat "(x + " 490) "x" (repeat ")" 490))))
-   (cons "interpolations" (bind (string-append (repeat "\"#{" 990) "x" (repeat "}\"" 990))))
-   (cons "ifs-990" (function-body (string-append (repeat "  if x == 1\n" 990) "  puts(x)\n" (repeat "  end\n" 990))))
-   (cons "whiles-990" (function-body (string-append (repeat "  while x < 0\n" 990) "  puts(x)\n" (repeat "  end\n" 990))))
-   (cons "blocks-200"
-         (function-body
-          (string-append "  xs = [1]\n  y = "
-                         (string-append* (for/list ([i (in-range 200)]) (format "xs.map do |v~a| " i)))
-                         "v199" (repeat " end" 200) "\n")))))
-
-; count functions that use structs, enums, lists, maps, case, blocks, interpolation and a constant.
-(define (generated-program count)
-  (string-append
-   "LABELS = [\"a\", \"b\"]\nSCALE = 3\n\n"
-   "struct Item\n  id: Int\n  name: String\n  score: Float\nend\n\nenum Shape\n  Circle(Float)\n  Rect(Float, Float)\nend\n\n"
-   (string-append*
-    (for/list ([n (in-range count)])
-      (format #<<END
-def f~a(xs: List[Int], label: String) -> Int
-  total = 0
-  items: List[Item] = []
-  for x in xs
-    if x % 2 == 0 and x > ~a
-      total += x * SCALE
-    elsif x < 0
-      total -= x
-    else
-      items = items.push(Item(id: x, name: "~a-" + label, score: 1.5))
-    end
-  end
-  shape = Shape.Rect(1.0, 2.0)
-  area = 0.0
-  case shape
-    Shape.Circle(r) -> area = r * r
-    Shape.Rect(w, h) -> area = w * h
-  end
-  names = items.map do |it: Item| it.name.upcase end
-  m: Map[String, Int] = {"a": 1, "b": ~a}
-  total += names.size + m.size + LABELS.size
-  puts("f~a #{total} #{area} #{names.join(",")}")
-  return total
-end
-
-
-END
-              n (modulo n 7) n (add1 (modulo n 5)) n)))
-   "def main() -> Void\n  puts(f0([1, 2, 3], \"x\"))\nend\n"))
-
 (module+ slow
   (when (vm-built? "frontend lower tests")
     (with-bytecode
@@ -204,11 +132,7 @@ END
           (agentica-matches-racket (texts-by-path bytecode paths) paths))
 
         (test-case "while Racket exists: the Agentica lowering matches the Racket lowering on every std/ module and the compiler"
-          (define wrappers
-            (for/list ([file (in-directory stdlib-folder)] #:when (path-has-extension? file #".agc"))
-              (define name (path->string (path-replace-extension (find-relative-path (simplify-path stdlib-folder) (simplify-path file)) #"")))
-              (write-file (build-path work "std" (string-append (string-replace name "/" "_") ".agc"))
-                          (format "import Module from \"std/~a\"\n\ndef main() -> Void\nend\n" name))))
+          (define wrappers (std-wrapper-paths work))
           (define paths (append wrappers (agc-files-in "compiler")))
           (check-true (> (length paths) 50))
           (agentica-matches-racket (texts-by-path bytecode paths) paths))

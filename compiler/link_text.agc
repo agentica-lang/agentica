@@ -43,22 +43,9 @@ export def root_dir_of(path: String) -> String
   return ""
 end
 
-## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
-## links), so it is made canonical first, as the key of a loaded file is.
-export def stored(root_dir: String, file: String) -> String
-  if file.starts_with?("std/")
-    return file
-  end
-  real = Path.real(file)
-  if real.ok?
-    return Paths.stored_name(root_dir, real.unwrap!)
-  end
-  return Paths.stored_name(root_dir, file)
-end
-
 ## The ERROR line of a link failure, with the file it is in.
 export def failure_text(root_dir: String, failure: Failure.Failure) -> String
-  return Text.diagnostic_line(failure.diagnostic) + " file=" + Text.quote(stored(root_dir, failure.file))
+  return Text.diagnostic_line(failure.diagnostic) + " file=" + Text.quote(Paths.stored_file(root_dir, failure.file))
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).

@@ -1,0 +1,38 @@
+## The constants of src/bytecode.rkt: the format version, the limits of the format, the Agentica version the header
+## names, and the opcode numbers with the groups of opcodes that share an operand layout. A test compares OPCODES with
+## `opcodes` of src/bytecode.rkt and VERSION with src/version.rkt.
+
+## The largest value of a u16 operand, and of every count the VM reads as a u16.
+export MAX_U16 = 65535
+
+## The format version of the .agcb header (docs/vm/03-ir-and-bytecode.md 4.6).
+export FORMAT_VERSION = 5
+
+## The deepest nesting of List and Map in a JSON field type the loader accepts.
+export MAX_TYPE_DEPTH = 1024
+
+## The Agentica version the header names (src/version.rkt); the VM accepts only its own.
+export VERSION = "0.2.0"
+
+## The number of each opcode, in the order of `opcodes` in src/bytecode.rkt and `agc_opcode` in vm/value.h.
+export OPCODES = {
+  "move": 0, "const": 1, "step": 2, "add-i": 3, "sub-i": 4, "mul-i": 5, "div-i": 6, "mod-i": 7, "neg-i": 8, "not": 9,
+  "lt-i": 10, "le-i": 11, "eq": 12, "ne": 13, "jump": 14, "jump-if-false": 15, "jump-if-true": 16, "call": 17,
+  "call-builtin": 18, "return": 19, "add-f": 20, "sub-f": 21, "mul-f": 22, "div-f": 23, "neg-f": 24, "lt-f": 25,
+  "le-f": 26, "concat": 27, "to-text": 28, "inspect": 29, "list": 30, "list-len": 31, "list-get": 32, "struct": 33,
+  "field": 34, "enum": 35, "is-variant": 36, "payload": 37, "same": 38, "tail-call": 39, "try": 40, "is-ok": 41,
+  "result-value": 42, "map": 43, "map-get": 44, "call-value": 45, "closure": 46, "range": 47, "range-bounds": 48,
+  "struct-with": 49, "global": 50, "global-set": 51,
+}
+
+## The opcodes written as their first two operands and a zero.
+export PAIR_OPS = Set.new([
+  "move", "neg-i", "neg-f", "not", "to-text", "inspect", "list-len", "try", "is-ok", "result-value", "range-bounds",
+  "call-value",
+])
+
+## The opcodes written as their first operand and two zeros.
+export SINGLE_OPS = Set.new(["return"])
+
+## The opcodes written as their first operand and a 32-bit index split into two u16 (low half first).
+export WIDE_OPS = Set.new(["call", "tail-call", "closure", "global", "global-set"])
