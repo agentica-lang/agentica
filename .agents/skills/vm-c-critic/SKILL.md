@@ -156,11 +156,15 @@ handles. A second way for any of them is a finding.
 - C style: types at the top of the file, no prototypes of `static` functions, no
   mutable globals or file-scope statics, and no value-driven recursion. Follow
   the development skill's `references/vm-c.md`: every C file starts with a
-  header comment (3 to 8 lines for a source file, 1 to 4 for a C test), and
-  other comments say why. CI checks part of this style: `make vm-lint`
-  (clang-tidy) and `tests/vm-style-test.rkt`, which checks types at the top, no
-  prototypes of `static` functions and the file header size. Exported names
-  start with `agc_`.
+  header comment (3 to 8 lines for a source file, 1 to 4 for a C test).
+  Other comments are welcome in complex code when they say why: do not flag a
+  useful one as a defect. Flag a comment that narrates obvious code, or is
+  commented-out code, as a Nit. Ask for a short `/* */` comment as a Nit where
+  complex code gives no reason (an invariant, a GC or ownership rule, a
+  protocol quirk, a hostile-input check). CI checks part of this style:
+  `make vm-lint` (clang-tidy) and `tests/vm-style-test.rkt`, which checks types
+  at the top, no prototypes of `static` functions and the file header size.
+  Exported names start with `agc_`.
 - Duplication: flag the clones you see and suggest a shared helper; CI runs
   `make dup-check`. Never fix a clone by adding it to the baseline.
 - Builtin tables: a C test may index a table by position. For example,

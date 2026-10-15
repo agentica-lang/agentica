@@ -90,3 +90,8 @@ Top-level declarations need a blank line after their `end` (`PARSE-MISSING-BLANK
 - Smoke test exits 1: `main.rkt` printed `file:line:column error[CODE]`, the message, and a source excerpt with a caret on stderr. That is a stage diagnostic, not a crash.
 - A Racket traceback instead of a diagnostic means a stage raised or indexed out of range. Find the token or index and turn it into a `bail`/`fail`; the roadmap requires Agentica diagnostics, never host tracebacks.
 - A stage unexpectedly returns a diagnostic: check the first-error rule and that `main.rkt` guards with `diagnostic?` before passing data to the next stage.
+
+## Comments
+
+- `compiler/*.agc`: a `#` comment where the code is complex or copies a Racket behavior on purpose (name the behavior, such as the span or NL rule). Each exported `def`, `struct` and `enum` gets a `##` doc block, as in `stdlib/queue.agc`; the file's first doc block, followed by a blank line, is its module doc (`docs/grammar/05-syntax.md`).
+- `src/*.rkt` and `tests/*.rkt`: a `;` comment for the non-obvious why, such as a Racket quirk, a freeze exception or a golden that must not change. Never narrate the code.

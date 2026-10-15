@@ -74,3 +74,12 @@ What the checker enforces and the VM keeps for each library area: stdio, JSON, t
   exact f32 rounding). CI does not run the script: run it by hand and commit
   both files when the vectors change. `tests/std-binary-test.rkt` checks the
   fixed output.
+
+## Comments in stdlib/
+
+- Give the module a `##` doc block (its first block, followed by a blank
+  line), and give every exported `def`, `struct` and `enum` one, as
+  `stdlib/queue.agc` does. Say what the code does and returns, not how.
+- Add a `#` comment where the Agentica is complex: a bit trick, a bound that
+  keeps input safe, an order that matters, or a copy of a Racket or VM
+  behavior (name it). Never narrate obvious code.
