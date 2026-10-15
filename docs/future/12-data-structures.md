@@ -149,7 +149,9 @@ list with n pushes was O(n²). A persistent vector (a 32-way trie with a tail
 buffer, as in Clojure and Scala) makes `append`, `set` and indexing O(log32 n),
 near constant, and keeps old versions unchanged. The C VM is the only backend
 since 7i, so only `vm/list.c` changed; output, step counts and diagnostics stay
-the same. The design is [`docs/vm/17-lists.md`](../vm/17-lists.md), and
+the same. A list of Ints or of Floats keeps 8 bytes per item and no tag (step 3
+of 8d, decided by the VM from the values). The design is
+[`docs/vm/17-lists.md`](../vm/17-lists.md), and
 `benchmarks/programs/list-build.agc` measures it.
 
 ### 12.5 Later

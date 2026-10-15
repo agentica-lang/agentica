@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "trace.h"
 
@@ -38,6 +39,22 @@ typedef struct {
   union { bool b; int64_t i; double f; void *p; } as;
 } agc_value;
 
+static inline uint64_t agc_value_word(agc_value v) {
+  uint64_t word;
+  memcpy(&word, &v.as, sizeof word);
+  return word;
+}
+
+_Static_assert(sizeof(agc_value) == 16 && offsetof(agc_value, as) == 8 && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
+               "agc_word_value builds a value from its two 8-byte words");
+
+static inline agc_value agc_word_value(uint32_t tag, uint64_t word) {
+  const uint64_t image[2] = {tag, word};
+  agc_value v;
+  memcpy(&v, image, sizeof v);
+  return v;
+}
+
 typedef struct {
   size_t bytes, chars;
   char data[];
@@ -47,13 +64,16 @@ typedef struct agc_list agc_list;
 
 typedef struct {
   agc_list *out;
-  agc_value *next, *stop, *after;
+  char *next, *stop, *after;
+  size_t n;
+  uint32_t kind;
 } agc_list_builder;
 
 typedef struct {
   const agc_list *list;
   size_t index, start, end;
-  const agc_value *chunk;
+  const char *chunk;
+  uint32_t kind;
 } agc_list_cursor;
 
 typedef struct agc_hamt agc_hamt;
@@ -345,7 +365,7 @@ agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_va
 size_t agc_list_len(const agc_list *l);
 agc_value agc_list_get(const agc_list *l, size_t i);
 void agc_list_builder_sized(agc_list_builder *b, size_t n);
-void agc_list_builder_advance(agc_list_builder *b);
+void agc_list_builder_more(agc_list_builder *b, agc_value v);
 agc_list *agc_list_builder_finish(agc_list_builder *b);
 agc_list *agc_list_from_array(const agc_value *items, size_t n);
 void agc_list_to_array(const agc_list *l, agc_value *out);
@@ -357,15 +377,30 @@ agc_list *agc_list_slice(const agc_list *l, size_t from, size_t count);
 agc_list *agc_list_concat(const agc_list *a, const agc_list *b);
 agc_list *agc_list_reverse(const agc_list *l);
 agc_list *agc_list_repeat(agc_value v, size_t n);
+uint32_t agc_list_kind(const agc_list *l);
 
 static inline void agc_list_builder_push(agc_list_builder *b, agc_value v) {
-  if (b->next == b->stop) agc_list_builder_advance(b);
-  *b->next++ = v;
+  if (b->next == b->stop || (b->kind && v.tag != b->kind)) {
+    agc_list_builder_more(b, v);
+  } else if (b->kind) {
+    *(uint64_t *)b->next = agc_value_word(v);
+    b->next += sizeof(uint64_t);
+  } else {
+    *(agc_value *)b->next = v;
+    b->next += sizeof(agc_value);
+  }
 }
 
 static inline bool agc_list_cursor_next(agc_list_cursor *c, agc_value *out) {
   if (c->index >= c->end && !agc_list_cursor_fill(c)) return false;
-  *out = c->chunk[c->index++ - c->start];
+  size_t k = c->index++ - c->start;
+  if (c->kind) {
+    uint64_t word;
+    memcpy(&word, c->chunk + k * sizeof word, sizeof word);
+    *out = agc_word_value(c->kind, word);
+  } else {
+    *out = ((const agc_value *)c->chunk)[k];
+  }
   return true;
 }
 

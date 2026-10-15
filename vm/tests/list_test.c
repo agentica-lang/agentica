@@ -1,11 +1,14 @@
 /*
- * The list API at the lengths around the 32-way boundaries: trie shape, builder,
- * append, set, slice, concat, reverse and repeat, cursors, and persistence.
+ * The list API at the lengths around the 32-way boundaries, for Int, Float and
+ * boxed items: trie shape, builder, append, set, slice, concat, reverse and
+ * repeat, cursors, persistence, the kind of a list (unboxed leaves, 17.12) and
+ * the conversion to boxed leaves when kinds mix.
  */
 #include "../core.h"
 #include "../list_impl.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -22,14 +25,36 @@
 
 static agc_vm vm;
 
-static agc_value item(size_t i) { return agc_int((int64_t)i * 3 + 1); }
+typedef enum { FLAVOR_INT, FLAVOR_FLOAT, FLAVOR_BOXED, FLAVORS } flavor_t;
 
-static agc_value other(size_t i) { return agc_int(-(int64_t)i - 1); }
+static flavor_t flavor;
 
-static int64_t int_of(agc_value v) {
-  assert(agc_is(v, AGC_T_INT));
-  return agc_as_int(&vm, v);
+static uint32_t kind_of_flavor(flavor_t f) { return f == FLAVOR_INT ? AGC_T_INT : f == FLAVOR_FLOAT ? AGC_T_FLOAT : 0; }
+
+static agc_value make_as(flavor_t f, int64_t n) {
+  if (f == FLAVOR_INT) return agc_int(n);
+  if (f == FLAVOR_FLOAT) return agc_float((double)n);
+  return agc_range_value(n, 0, false);
 }
+
+static int64_t number_as(flavor_t f, agc_value v) {
+  if (f == FLAVOR_INT) {
+    assert(agc_is(v, AGC_T_INT));
+    return agc_as_int(&vm, v);
+  }
+  if (f == FLAVOR_FLOAT) {
+    assert(agc_is(v, AGC_T_FLOAT));
+    return (int64_t)agc_as_float(&vm, v);
+  }
+  assert(agc_is(v, AGC_T_RANGE));
+  return agc_as_range(&vm, v)->start;
+}
+
+static agc_value item(size_t i) { return make_as(flavor, (int64_t)i * 3 + 1); }
+
+static agc_value other(size_t i) { return make_as(flavor, -(int64_t)i - 1); }
+
+static int64_t int_of(agc_value v) { return number_as(flavor, v); }
 
 static bool is_item(agc_value v, size_t i) { return int_of(v) == (int64_t)i * 3 + 1; }
 
@@ -77,6 +102,8 @@ static size_t count_leaves(const list_branch *node, uint32_t level) { // NOLINT(
 
 static void expect_shape(const agc_list *l, size_t n) {
   assert(agc_list_len(l) == n);
+  assert(l->kind == (n ? kind_of_flavor(flavor) : 0));
+  assert(agc_list_kind(l) == l->kind);
   assert((l->root == NULL) == (n <= LIST_WIDTH));
   assert(l->shift == expected_shift(n));
   if (n > LIST_WIDTH) assert(count_leaves(l->root, l->shift) == (n - 1) / LIST_WIDTH);
@@ -358,15 +385,12 @@ static void expect_versions(void) {
   for (size_t k = 0; k <= KEPT; k++) expect_run(versions[k], 0, k);
 }
 
-int main(void) {
-  agc_init();
-  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-
+static void run_lengths(void) {
   const size_t lengths[] = {0,     1,     2,     31,    32,    33,    63,      64,      65,      1023,    1024,
                             1025,  1056,  1057,  32768, 32769, 32800, 32801,   1048576, 1048608, 1048609};
   for (size_t s = 0; s < sizeof lengths / sizeof lengths[0]; s++) {
     size_t n = lengths[s];
-    if (n > MAX_LENGTH) continue;
+    if (n > MAX_LENGTH || (flavor != FLAVOR_INT && n > LARGE)) continue;
     agc_list *l = built(n);
     expect_list(l, n);
     expect_reversed(l, n);
@@ -389,7 +413,7 @@ int main(void) {
   agc_list_builder empty;
   agc_list_builder_sized(&empty, 0);
   assert(agc_list_len(agc_list_builder_finish(&empty)) == 0);
-  expect_debug();
+  if (flavor == FLAVOR_INT) expect_debug();
   expect_versions();
   expect_sharing();
   expect_shared_leaves();
@@ -397,6 +421,239 @@ int main(void) {
   const size_t chains[] = {33, 65, 1057, 1100};
   for (size_t s = 0; s < sizeof chains / sizeof chains[0]; s++)
     if (chains[s] <= MAX_LENGTH) expect_set_chain(chains[s]);
+}
+
+static agc_value sample(flavor_t k, size_t i) { return make_as(k, (int64_t)i * 3 + 1); }
+
+static bool is_sample(agc_value v, flavor_t k, size_t i) { return number_as(k, v) == (int64_t)i * 3 + 1; }
+
+
+static agc_list *sampled(flavor_t k, size_t n) {
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
+  for (size_t i = 0; i < n; i++) agc_list_builder_push(&b, sample(k, i));
+  return agc_list_builder_finish(&b);
+}
+
+static void expect_samples(const agc_list *l, flavor_t k, size_t n) {
+  assert(agc_list_len(l) == n);
+  assert(l->kind == (n ? kind_of_flavor(k) : 0));
+  for (size_t i = 0; i < n; i++) assert(is_sample(agc_list_get(l, i), k, i));
+}
+
+static void expect_mixed(const agc_list *l, flavor_t base, flavor_t odd, size_t n, size_t at) {
+  assert(agc_list_len(l) == n);
+  assert(l->kind == 0);
+  for (size_t i = 0; i < n; i++) assert(is_sample(agc_list_get(l, i), i == at ? odd : base, i));
+  agc_list_cursor c;
+  agc_value v;
+  agc_list_cursor_begin(&c, l, 0);
+  for (size_t i = 0; i < n; i++) {
+    assert(agc_list_cursor_next(&c, &v));
+    assert(is_sample(v, i == at ? odd : base, i));
+  }
+}
+
+static void expect_builder_mixing(flavor_t base, flavor_t odd) {
+  const size_t sizes[] = {1, 2, 3, 31, 32, 33, 34, 64, 65, 66, 1056, 1057, 1058, 2113};
+  for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
+    size_t n = sizes[s];
+    if (n < 2) continue;
+    size_t trie = list_tail_off(n);
+    size_t spots[] = {0, 1, 31, 32, 33, trie ? trie - 1 : 0, trie, trie + 1, n / 2, n - 1};
+    for (size_t t = 0; t < sizeof spots / sizeof spots[0]; t++) {
+      size_t at = spots[t];
+      if (at >= n) continue;
+      agc_list_builder b;
+      agc_list_builder_sized(&b, n);
+      for (size_t i = 0; i < n; i++) agc_list_builder_push(&b, sample(i == at ? odd : base, i));
+      expect_mixed(agc_list_builder_finish(&b), base, odd, n, at);
+    }
+  }
+}
+
+static void expect_append_mixing(flavor_t base, flavor_t odd) {
+  const size_t sizes[] = {1, 31, 32, 33, 64, 65, 1056, 1057};
+  for (size_t s = 0; s < sizeof sizes / sizeof sizes[0]; s++) {
+    size_t n = sizes[s];
+    agc_list *l = sampled(base, n);
+    agc_list *grown = agc_list_append(l, sample(odd, n));
+    assert(agc_list_len(grown) == n + 1 && grown->kind == 0);
+    for (size_t i = 0; i < n; i++) assert(is_sample(agc_list_get(grown, i), base, i));
+    assert(is_sample(agc_list_get(grown, n), odd, n));
+    expect_samples(l, base, n);
+    size_t trie = list_tail_off(n);
+    size_t spots[] = {0, 31, 32, trie ? trie - 1 : 0, trie, n - 1};
+    for (size_t t = 0; t < sizeof spots / sizeof spots[0]; t++) {
+      size_t at = spots[t];
+      if (at >= n) continue;
+      agc_list *changed = agc_list_set(l, at, sample(odd, at));
+      expect_mixed(changed, base, odd, n, at);
+      expect_samples(l, base, n);
+    }
+  }
+}
+
+static void expect_concat_mixing(flavor_t left, flavor_t right) {
+  const size_t lefts[] = {1, 31, 32, 33, 100};
+  const size_t rights[] = {1, 2, 32, 33, 100};
+  for (size_t s = 0; s < sizeof lefts / sizeof lefts[0]; s++) {
+    for (size_t t = 0; t < sizeof rights / sizeof rights[0]; t++) {
+      size_t n = lefts[s], m = rights[t];
+      agc_list *a = sampled(left, n);
+      agc_list *b = sampled(right, m);
+      agc_list *joined = agc_list_concat(a, b);
+      assert(agc_list_len(joined) == n + m && joined->kind == 0);
+      for (size_t i = 0; i < n; i++) assert(is_sample(agc_list_get(joined, i), left, i));
+      for (size_t i = 0; i < m; i++) assert(is_sample(agc_list_get(joined, n + i), right, i));
+      expect_samples(a, left, n);
+      expect_samples(b, right, m);
+      agc_list *edited = agc_list_set(joined, 0, sample(right, 0));
+      assert(is_sample(agc_list_get(edited, 0), right, 0));
+      expect_samples(a, left, n);
+    }
+  }
+}
+
+static void expect_from_array_kinds(void) {
+  agc_value mixed[70];
+  memset(mixed, 0, sizeof mixed);
+  for (size_t n = 0; n <= 70; n += n < 3 ? 1 : 67) {
+    for (size_t k = 0; k < n; k++) mixed[k] = sample(FLAVOR_INT, k);
+    agc_list *ints = agc_list_from_array(mixed, n);
+    assert(ints->kind == (n ? AGC_T_INT : 0) && agc_list_len(ints) == n);
+    for (size_t at = 0; at < n; at += at < 3 ? 1 : 33) {
+      for (size_t k = 0; k < n; k++) mixed[k] = sample(k == at ? FLAVOR_BOXED : FLAVOR_INT, k);
+      agc_list *wide = agc_list_from_array(mixed, n);
+      expect_mixed(wide, FLAVOR_INT, FLAVOR_BOXED, n, at);
+    }
+  }
+  for (size_t k = 0; k < 40; k++) mixed[k] = sample(k == 39 ? FLAVOR_INT : FLAVOR_FLOAT, k);
+  agc_list *floats = agc_list_from_array(mixed, 39);
+  assert(floats->kind == AGC_T_FLOAT);
+  expect_samples(floats, FLAVOR_FLOAT, 39);
+  expect_mixed(agc_list_from_array(mixed, 40), FLAVOR_FLOAT, FLAVOR_INT, 40, 39);
+}
+
+static void expect_empty_kinds(void) {
+  agc_list *empty = agc_list_from_array(NULL, 0);
+  assert(empty->kind == 0 && agc_list_kind(empty) == 0);
+  agc_list_builder b;
+  agc_list_builder_sized(&b, 0);
+  assert(agc_list_builder_finish(&b)->kind == 0);
+  assert(agc_list_slice(sampled(FLAVOR_INT, 40), 40, 0)->kind == 0);
+  assert(agc_list_slice(sampled(FLAVOR_FLOAT, 40), 3, 0)->kind == 0);
+  assert(agc_list_repeat(sample(FLAVOR_INT, 0), 0)->kind == 0);
+  assert(agc_list_concat(empty, empty)->kind == 0);
+  agc_list *ints = sampled(FLAVOR_INT, 5);
+  assert(agc_list_concat(ints, empty) == ints && agc_list_concat(empty, ints) == ints);
+  agc_list *wide = sampled(FLAVOR_BOXED, 5);
+  assert(agc_list_concat(empty, wide) == wide);
+  assert(agc_list_append(empty, sample(FLAVOR_INT, 0))->kind == AGC_T_INT);
+  assert(agc_list_append(empty, sample(FLAVOR_FLOAT, 0))->kind == AGC_T_FLOAT);
+  assert(agc_list_append(empty, sample(FLAVOR_BOXED, 0))->kind == 0);
+  assert(agc_list_append(wide, sample(FLAVOR_INT, 0))->kind == 0);
+  agc_list_builder first;
+  agc_list_builder_sized(&first, 3);
+  agc_list_builder_push(&first, sample(FLAVOR_FLOAT, 0));
+  agc_list_builder_push(&first, sample(FLAVOR_FLOAT, 1));
+  agc_list_builder_push(&first, sample(FLAVOR_FLOAT, 2));
+  assert(agc_list_builder_finish(&first)->kind == AGC_T_FLOAT);
+}
+
+static bool same_word(agc_value a, agc_value b) { return a.tag == b.tag && agc_value_word(a) == agc_value_word(b); }
+
+static agc_value special_value(flavor_t k, size_t i) {
+  static const int64_t ints[] = {INT64_MIN, INT64_MAX, 0, -1, 1, INT64_MIN + 1};
+  static const uint64_t floats[] = {0x8000000000000000ull, 0, 0x7ff8dead00000001ull, 0xfff8000000000000ull,
+                                    0x7ff0000000000000ull, 0xfff0000000000000ull, 0x0010000000000000ull,
+                                    1, 0x7fefffffffffffffull};
+  if (k == FLAVOR_INT) return agc_int(ints[i % (sizeof ints / sizeof ints[0])]);
+  return agc_word_value(AGC_T_FLOAT, floats[i % (sizeof floats / sizeof floats[0])]);
+}
+
+static void expect_special_run(const agc_list *l, flavor_t k, size_t from, size_t n) {
+  assert(agc_list_len(l) == n);
+  for (size_t i = 0; i < n; i++) assert(same_word(agc_list_get(l, i), special_value(k, from + i)));
+}
+
+static void expect_specials(flavor_t k) {
+  const size_t n = 100;
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
+  for (size_t i = 0; i < n; i++) agc_list_builder_push(&b, special_value(k, i));
+  agc_list *l = agc_list_builder_finish(&b);
+  assert(l->kind == kind_of_flavor(k));
+  expect_special_run(l, k, 0, n);
+  agc_list *grown = agc_list_from_array(NULL, 0);
+  for (size_t i = 0; i < n; i++) grown = agc_list_append(grown, special_value(k, i));
+  expect_special_run(grown, k, 0, n);
+  agc_list *changed = agc_list_set(l, 40, special_value(k, 3));
+  assert(same_word(agc_list_get(changed, 40), special_value(k, 3)));
+  assert(same_word(agc_list_get(changed, 41), special_value(k, 41)));
+  expect_special_run(l, k, 0, n);
+  expect_special_run(agc_list_slice(l, 64, 36), k, 64, 36);
+  expect_special_run(agc_list_slice(l, 0, 70), k, 0, 70);
+  agc_list *back = agc_list_reverse(l);
+  for (size_t i = 0; i < n; i++) assert(same_word(agc_list_get(back, i), special_value(k, n - 1 - i)));
+  agc_list *joined = agc_list_concat(l, l);
+  expect_special_run(agc_list_slice(joined, n, n), k, 0, n);
+  for (size_t i = 0; i < 9; i++) {
+    agc_list *same = agc_list_repeat(special_value(k, i), 70);
+    for (size_t j = 0; j < 70; j++) assert(same_word(agc_list_get(same, j), special_value(k, i)));
+  }
+  assert(isnan(agc_as_float(&vm, special_value(FLAVOR_FLOAT, 2))));
+}
+
+static void expect_kind_persistence(void) {
+  agc_list *ints = sampled(FLAVOR_INT, 200);
+  agc_list *boxed = sampled(FLAVOR_BOXED, 40);
+  agc_list *wide = agc_list_concat(ints, boxed);
+  assert(wide->kind == 0 && wide->root != ints->root);
+  agc_list *wider = agc_list_set(wide, 10, sample(FLAVOR_BOXED, 10));
+  agc_list *head = agc_list_slice(ints, 0, 128);
+  agc_list *rest = agc_list_slice(ints, 64, 136);
+  assert(head->kind == AGC_T_INT && rest->kind == AGC_T_INT);
+  for (size_t k = 0; k < 3; k++) assert(head->root->child[k] == ints->root->child[k]);
+  for (size_t k = 0; k < 4; k++) assert(rest->root->child[k] == ints->root->child[k + 2]);
+  agc_list *edited = agc_list_set(head, 5, sample(FLAVOR_FLOAT, 5));
+  assert(edited->kind == 0 && edited->root != head->root);
+  expect_samples(ints, FLAVOR_INT, 200);
+  expect_samples(boxed, FLAVOR_BOXED, 40);
+  expect_samples(head, FLAVOR_INT, 128);
+  for (size_t i = 0; i < 136; i++) assert(is_sample(agc_list_get(rest, i), FLAVOR_INT, 64 + i));
+  for (size_t i = 0; i < 200; i++) assert(is_sample(agc_list_get(wide, i), FLAVOR_INT, i));
+  for (size_t i = 0; i < 40; i++) assert(is_sample(agc_list_get(wide, 200 + i), FLAVOR_BOXED, i));
+  assert(is_sample(agc_list_get(wider, 10), FLAVOR_BOXED, 10));
+  assert(is_sample(agc_list_get(edited, 5), FLAVOR_FLOAT, 5));
+  agc_list *floats = sampled(FLAVOR_FLOAT, 200);
+  agc_list *both = agc_list_concat(ints, floats);
+  assert(both->kind == 0 && agc_list_len(both) == 400);
+  agc_list *again = agc_list_slice(both, 100, 200);
+  assert(again->kind == 0);
+  for (size_t i = 0; i < 100; i++) assert(is_sample(agc_list_get(again, i), FLAVOR_INT, 100 + i));
+  for (size_t i = 0; i < 100; i++) assert(is_sample(agc_list_get(again, 100 + i), FLAVOR_FLOAT, i));
+}
+
+int main(void) {
+  agc_init();
+  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+
+  for (flavor = 0; flavor < FLAVORS; flavor++) run_lengths();
+
+  for (flavor_t a = 0; a < FLAVORS; a++) {
+    for (flavor_t b = 0; b < FLAVORS; b++) {
+      if (a == b) continue;
+      expect_builder_mixing(a, b);
+      expect_append_mixing(a, b);
+      expect_concat_mixing(a, b);
+    }
+  }
+  expect_from_array_kinds();
+  expect_empty_kinds();
+  expect_specials(FLAVOR_INT);
+  expect_specials(FLAVOR_FLOAT);
+  expect_kind_persistence();
 
   puts("list tests passed");
   return 0;

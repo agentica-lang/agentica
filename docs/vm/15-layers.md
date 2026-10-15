@@ -255,7 +255,7 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   http, test) and their counts.
 
 - **`list_impl.h`** (includes `value.h`; private to the core): `struct agc_list`
-  (`{ len, root, shift, tail[] }`), the two node types of the 32-way trie and
+  (`{ len, root, shift, kind, tail[] }`), the node type of the 32-way trie and
   the `static inline` fast versions of `agc_list_len` and `agc_list_get`
   (`list_len`, `list_get` and `list_at`, which skips the bounds check for a
   caller that has made it). They read an item of the tail in line, with one
