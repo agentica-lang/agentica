@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 128:14:19-141:14:32 "expected Box[T], found Other[Int]" - expected="Box[T]" actual="Other[Int]" signature="main() -> Void" file="enum-payload-mismatch.agc"

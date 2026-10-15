@@ -1,0 +1,1 @@
+ERROR CHECK-BLOCK-TARGET 39:2:21-56:2:38 "\"Task.spawn\" does not take a block: its last parameter is not a function" "a block is only allowed when the last parameter is a function (Fn[...])" signature="main() -> Void" file="block-target.agc"

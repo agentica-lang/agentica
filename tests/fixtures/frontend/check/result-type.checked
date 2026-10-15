@@ -1,0 +1,1 @@
+ERROR CHECK-RESULT-TYPE 25:2:7-37:2:19 "an error needs an expected Result type" "add a Result[T] annotation, for example r: Result[Int] = error(message)" signature="main() -> Void" file="result-type.agc"

@@ -5,6 +5,7 @@
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 
 import "source" as Source
+import "types" as Types
 
 ## A value that may be absent; where src/ast.rkt uses #f.
 export enum Optional[T]
@@ -269,6 +270,7 @@ export enum Expr
   Unary(Unary)
   Binary(Binary)
   TypeName(TypeName)
+  Typed(TypedTarget)
 end
 
 ## A number, string, true, false or nil.
@@ -452,6 +454,75 @@ export struct TypeName
   id: Int
   name: String
   span: Source.Span
+end
+
+## The receiver of a method call that the checker has already checked, with its type, so the builtin rule of the method checks it as the first argument without checking it twice (src/ast.rkt: typed-target). The parser never makes it. id and span are those of the receiver.
+export struct TypedTarget
+  id: Int
+  target: Expr
+  type: Types.Type
+  span: Source.Span
+end
+
+## The id of an expression node.
+export def expr_id(expr: Expr) -> Int
+  case expr
+    Expr.Literal(node) -> return node.id
+    Expr.Name(node) -> return node.id
+    Expr.Call(node) -> return node.id
+    Expr.EnumConstructor(node) -> return node.id
+    Expr.FunctionRef(node) -> return node.id
+    Expr.Invoke(node) -> return node.id
+    Expr.Construct(node) -> return node.id
+    Expr.Update(node) -> return node.id
+    Expr.ListLit(node) -> return node.id
+    Expr.MapLit(node) -> return node.id
+    Expr.FieldAccess(node) -> return node.id
+    Expr.MethodCall(node) -> return node.id
+    Expr.Interpolation(node) -> return node.id
+    Expr.BlockLit(node) -> return node.id
+    Expr.Index(node) -> return node.id
+    Expr.Try(node) -> return node.id
+    Expr.Unary(node) -> return node.id
+    Expr.Binary(node) -> return node.id
+    Expr.TypeName(node) -> return node.id
+    Expr.Typed(node) -> return node.id
+  end
+end
+
+## The span of an expression node.
+export def expr_span(expr: Expr) -> Source.Span
+  case expr
+    Expr.Literal(node) -> return node.span
+    Expr.Name(node) -> return node.span
+    Expr.Call(node) -> return node.span
+    Expr.EnumConstructor(node) -> return node.span
+    Expr.FunctionRef(node) -> return node.span
+    Expr.Invoke(node) -> return node.span
+    Expr.Construct(node) -> return node.span
+    Expr.Update(node) -> return node.span
+    Expr.ListLit(node) -> return node.span
+    Expr.MapLit(node) -> return node.span
+    Expr.FieldAccess(node) -> return node.span
+    Expr.MethodCall(node) -> return node.span
+    Expr.Interpolation(node) -> return node.span
+    Expr.BlockLit(node) -> return node.span
+    Expr.Index(node) -> return node.span
+    Expr.Try(node) -> return node.span
+    Expr.Unary(node) -> return node.span
+    Expr.Binary(node) -> return node.span
+    Expr.TypeName(node) -> return node.span
+    Expr.Typed(node) -> return node.span
+  end
+end
+
+## The span of a pattern node.
+export def pattern_span(pattern: Pattern) -> Source.Span
+  case pattern
+    Pattern.Wildcard(node) -> return node.span
+    Pattern.Literal(node) -> return node.span
+    Pattern.Variant(node) -> return node.span
+  end
 end
 
 ## The first id the next file can use: one more than the id of the Program.

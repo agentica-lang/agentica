@@ -1,0 +1,1 @@
+ERROR CHECK-NON-EXHAUSTIVE-CASE 21:2:3-68:6:1 "case on a non-enum value requires a final _ arm" - signature="main() -> Void" file="non-exhaustive-case.agc"

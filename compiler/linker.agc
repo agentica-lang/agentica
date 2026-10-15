@@ -8,13 +8,14 @@ import "modules" as Modules
 import "resolve" as Resolve
 import "rewrite" as Rewrite
 
-## One file of the linked program: its declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and exports count too, so the declarations leave gaps).
+## One file of the linked program: its source text (for the help of the checker), its declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node ids of the file (its imports and exports count too, so the declarations leave gaps).
 export struct LinkedModule
   key: String
   file: String
   prefix: String
   first_id: Int
   next_id: Int
+  text: String
   declarations: List[Ast.Decl]
 end
 
@@ -64,7 +65,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
     module = loaded.modules[key]
     cx = Resolve.Context(settings: settings, modules: loaded.modules, me: module, visible: visible_structs(module, loaded.modules))
     declarations = try Rewrite.rewrite_declarations(cx)
-    out = out.push(LinkedModule(key: key, file: module.file, prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), declarations: declarations))
+    out = out.push(LinkedModule(key: key, file: module.file, prefix: module.prefix, first_id: module.first_id, next_id: Ast.next_free_id(module.program), text: module.text, declarations: declarations))
   end
   return ok(out)
 end

@@ -1,0 +1,163 @@
+program #161 0:1:1-774:37:1
+  module "valid-3.agc"
+    declaration: function-decl #13 0:1:1-73:4:1 name="twice"
+      param: param #1 10:1:11-16:1:17 name="x"
+        type: type-ref #0 13:1:14-16:1:17 name="Int"
+      param: param #5 18:1:19-33:1:34 name="f"
+        type: type-ref #4 21:1:22-33:1:34 name="Fn"
+          arg: type-ref #2 24:1:25-27:1:28 name="Int"
+          arg: type-ref #3 29:1:30-32:1:33 name="Int"
+      result: type-ref #6 38:1:39-41:1:42 name="Int"
+      body: return-stmt #12 44:2:3-69:3:1
+        value: invoke #11 51:2:10-68:2:27 type=Int
+          target: name-ref #7 51:2:10-52:2:11 name="f" type=Fn([Int], Int)
+          arg: invoke #10 58:2:17-67:2:26 type=Int
+            target: name-ref #8 58:2:17-59:2:18 name="f" type=Fn([Int], Int)
+            arg: name-ref #9 65:2:24-66:2:25 name="x" type=Int
+    declaration: function-decl #25 75:6:1-153:9:1 name="parse"
+      param: param #18 85:6:11-111:6:37 name="f"
+        type: type-ref #17 88:6:14-111:6:37 name="Fn"
+          arg: type-ref #14 91:6:17-97:6:23 name="String"
+          arg: type-ref #16 99:6:25-110:6:36 name="Result"
+            arg: type-ref #15 106:6:32-109:6:35 name="Int"
+      result: type-ref #20 116:6:42-127:6:53 name="Result"
+        arg: type-ref #19 123:6:49-126:6:52 name="Int"
+      body: return-stmt #24 130:7:3-149:8:1
+        value: invoke #23 137:7:10-148:7:21 type=Result(Int)
+          target: name-ref #21 137:7:10-138:7:11 name="f" type=Fn([String], Result(Int))
+          arg: literal #22 144:7:17-147:7:20 value=string:"4" type=String
+    declaration: function-decl #160 154:10:1-773:36:1 name="main"
+      result: type-ref #26 168:10:15-172:10:19 name="Void"
+      body: binding #30 175:11:3-187:12:1 name="xs"
+        value: list-lit #29 180:11:8-186:11:14 type=List(Int)
+          element: literal #27 181:11:9-182:11:10 value=int:3 type=Int
+          element: literal #28 184:11:12-185:11:13 value=int:1 type=Int
+      body: binding #40 189:12:3-233:13:1 name="ys"
+        type: type-ref #32 193:12:7-205:12:19 name="List"
+          arg: type-ref #31 198:12:12-204:12:18 name="String"
+        value: method-call #39 208:12:22-232:12:46 name="map" type=List(String) resolved=call("List.map", List(Int))
+          target: name-ref #33 208:12:22-210:12:24 name="xs" type=List(Int)
+          arg: block-lit #38 215:12:29-232:12:46 type=Fn([Int], String)
+            param: block-param #34 219:12:33-220:12:34 name="x"
+            body: expr-stmt #37 222:12:36-228:12:42
+              value: field-access #36 222:12:36-228:12:42 name="to_s" type=String resolved=call("String.from_int", Int)
+                target: name-ref #35 222:12:36-223:12:37 name="x" type=Int
+      body: binding #51 235:13:3-278:14:1 name="zs"
+        type: type-ref #42 239:13:7-248:13:16 name="List"
+          arg: type-ref #41 244:13:12-247:13:15 name="Int"
+        value: method-call #50 251:13:19-277:13:45 name="filter" type=List(Int) resolved=call("List.filter", List(Int))
+          target: name-ref #43 251:13:19-253:13:21 name="xs" type=List(Int)
+          arg: block-lit #49 261:13:29-277:13:45 type=Fn([Int], Bool)
+            param: block-param #44 265:13:33-266:13:34 name="x"
+            body: expr-stmt #48 268:13:36-273:13:41
+              value: binary #47 268:13:36-273:13:41 op=greater op-span=270:13:38-271:13:39 type=Bool
+                left: name-ref #45 268:13:36-269:13:37 name="x" type=Int
+                right: literal #46 272:13:40-273:13:41 value=int:1 type=Int
+      body: binding #63 280:14:3-330:15:1 name="total"
+        type: type-ref #52 287:14:10-290:14:13 name="Int"
+        value: method-call #62 293:14:16-329:14:52 name="reduce" type=Int resolved=call("List.reduce", List(Int))
+          target: name-ref #53 293:14:16-295:14:18 name="xs" type=List(Int)
+          arg: literal #54 303:14:26-304:14:27 value=int:0 type=Int
+          arg: block-lit #61 306:14:29-329:14:52 type=Fn([Int, Int], Int)
+            param: block-param #55 310:14:33-313:14:36 name="sum"
+            param: block-param #56 315:14:38-316:14:39 name="x"
+            body: expr-stmt #60 318:14:41-325:14:48
+              value: binary #59 318:14:41-325:14:48 op=plus op-span=322:14:45-323:14:46 type=Int
+                left: name-ref #57 318:14:41-321:14:44 name="sum" type=Int
+                right: name-ref #58 324:14:47-325:14:48 name="x" type=Int
+      body: binding #74 332:15:3-386:16:1 name="sorted"
+        type: type-ref #65 340:15:11-349:15:20 name="List"
+          arg: type-ref #64 345:15:16-348:15:19 name="Int"
+        value: call #73 352:15:23-385:15:56 name="List.sort_by" piped=false type=List(Int)
+          arg: name-ref #66 365:15:36-367:15:38 name="xs" type=List(Int)
+          arg: block-lit #72 369:15:40-385:15:56 type=Fn([Int], Int)
+            param: block-param #67 373:15:44-374:15:45 name="x"
+            body: expr-stmt #71 376:15:47-381:15:52
+              value: binary #70 376:15:47-381:15:52 op=minus op-span=378:15:49-379:15:50 type=Int
+                left: literal #68 376:15:47-377:15:48 value=int:0 type=Int
+                right: name-ref #69 380:15:51-381:15:52 name="x" type=Int
+      body: expr-stmt #83 388:16:3-426:19:1
+        value: method-call #82 388:16:3-425:18:6 name="each" type=Void resolved=call("List.each", List(Int))
+          target: name-ref #75 388:16:3-390:16:5 name="xs" type=List(Int)
+          arg: block-lit #81 396:16:11-425:18:6 type=Fn([Int], Void)
+            param: block-param #76 400:16:15-401:16:16 name="x"
+            body: expr-stmt #80 407:17:5-420:18:1
+              value: call #79 407:17:5-419:17:17 name="puts" piped=false type=Void
+                arg: field-access #78 412:17:10-418:17:16 name="to_s" type=String resolved=call("String.from_int", Int)
+                  target: name-ref #77 412:17:10-413:17:11 name="x" type=Int
+      body: binding #93 428:19:3-464:20:1 name="a"
+        type: type-ref #84 431:19:6-435:19:10 name="Bool"
+        value: method-call #92 438:19:13-463:19:38 name="any?" type=Bool resolved=call("List.any?", List(Int))
+          target: name-ref #85 438:19:13-440:19:15 name="xs" type=List(Int)
+          arg: block-lit #91 446:19:21-463:19:38 type=Fn([Int], Bool)
+            param: block-param #86 450:19:25-451:19:26 name="x"
+            body: expr-stmt #90 453:19:28-459:19:34
+              value: binary #89 453:19:28-459:19:34 op=equal op-span=455:19:30-457:19:32 type=Bool
+                left: name-ref #87 453:19:28-454:19:29 name="x" type=Int
+                right: literal #88 458:19:33-459:19:34 value=int:1 type=Int
+      body: binding #103 466:20:3-501:21:1 name="b"
+        type: type-ref #94 469:20:6-473:20:10 name="Bool"
+        value: method-call #102 476:20:13-500:20:37 name="all?" type=Bool resolved=call("List.all?", List(Int))
+          target: name-ref #95 476:20:13-478:20:15 name="xs" type=List(Int)
+          arg: block-lit #101 484:20:21-500:20:37 type=Fn([Int], Bool)
+            param: block-param #96 488:20:25-489:20:26 name="x"
+            body: expr-stmt #100 491:20:28-496:20:33
+              value: binary #99 491:20:28-496:20:33 op=greater op-span=493:20:30-494:20:31 type=Bool
+                left: name-ref #97 491:20:28-492:20:29 name="x" type=Int
+                right: literal #98 495:20:32-496:20:33 value=int:0 type=Int
+      body: binding #113 503:21:3-542:22:1 name="n"
+        type: type-ref #104 506:21:6-509:21:9 name="Int"
+        value: call #112 512:21:12-541:21:41 name="twice" piped=false type=Int
+          arg: literal #105 518:21:18-519:21:19 value=int:1 type=Int
+          arg: block-lit #111 521:21:21-541:21:41 type=Fn([Int], Int)
+            param: block-param #106 525:21:25-526:21:26 name="v"
+            body: expr-stmt #110 528:21:28-537:21:37
+              value: binary #109 528:21:28-537:21:37 op=plus op-span=530:21:30-531:21:31 type=Int
+                left: name-ref #107 528:21:28-529:21:29 name="v" type=Int
+                right: name-ref #108 532:21:32-537:21:37 name="total" type=Int
+      body: binding #130 544:22:3-644:28:1 name="labels"
+        type: type-ref #115 552:22:11-564:22:23 name="List"
+          arg: type-ref #114 557:22:16-563:22:22 name="String"
+        value: method-call #129 567:22:26-643:27:6 name="map" type=List(String) resolved=call("List.map", List(Int))
+          target: name-ref #116 567:22:26-569:22:28 name="xs" type=List(Int)
+          arg: block-lit #128 574:22:33-643:27:6 type=Fn([Int], String)
+            param: block-param #118 578:22:37-584:22:43 name="x"
+              type: type-ref #117 581:22:40-584:22:43 name="Int"
+            body: if-stmt #125 590:23:5-626:26:1
+              branch: if-branch #124 590:23:5-618:25:1
+                condition: binary #121 593:23:8-598:23:13 op=greater op-span=595:23:10-596:23:11 type=Bool
+                  left: name-ref #119 593:23:8-594:23:9 name="x" type=Int
+                  right: literal #120 597:23:12-598:23:13 value=int:1 type=Int
+                body: return-stmt #123 605:24:7-618:25:1
+                  value: literal #122 612:24:14-617:24:19 value=string:"big" type=String
+            body: expr-stmt #127 630:26:5-638:27:1
+              value: literal #126 630:26:5-637:26:12 value=string:"small" type=String
+      body: binding #143 646:28:3-704:32:1 name="r"
+        value: call #142 650:28:7-703:31:6 name="parse" piped=false type=Result(Int)
+          arg: block-lit #141 658:28:15-703:31:6 type=Fn([String], Result(Int))
+            param: block-param #131 662:28:19-663:28:20 name="s"
+            body: binding #135 669:29:5-684:30:1 name="v"
+              value: try-expr #134 673:29:9-683:29:19 type=Int
+                operand: field-access #133 677:29:13-683:29:19 name="to_i" type=Result(Int) resolved=call("String.to_int", String)
+                  target: name-ref #132 677:29:13-678:29:14 name="s" type=String
+            body: expr-stmt #140 688:30:5-698:31:1
+              value: call #139 688:30:5-697:30:14 name="ok" piped=false type=Result(Int)
+                arg: binary #138 691:30:8-696:30:13 op=multiply op-span=693:30:10-694:30:11 type=Int
+                  left: name-ref #136 691:30:8-692:30:9 name="v" type=Int
+                  right: literal #137 695:30:12-696:30:13 value=int:2 type=Int
+      body: binding #159 706:32:3-769:35:1 name="nested"
+        value: method-call #158 715:32:12-768:34:6 name="map" type=List(List(Int)) resolved=call("List.map", List(List(Int)))
+          target: list-lit #146 715:32:12-720:32:17 type=List(List(Int))
+            element: list-lit #145 716:32:13-719:32:16 type=List(Int)
+              element: literal #144 717:32:14-718:32:15 value=int:1 type=Int
+          arg: block-lit #157 725:32:22-768:34:6 type=Fn([List(Int)], List(Int))
+            param: block-param #147 729:32:26-732:32:29 name="row"
+            body: expr-stmt #156 738:33:5-763:34:1
+              value: method-call #155 738:33:5-762:33:29 name="map" type=List(Int) resolved=call("List.map", List(Int))
+                target: name-ref #148 738:33:5-741:33:8 name="row" type=List(Int)
+                arg: block-lit #154 746:33:13-762:33:29 type=Fn([Int], Int)
+                  param: block-param #149 750:33:17-751:33:18 name="v"
+                  body: expr-stmt #153 753:33:20-758:33:25
+                    value: binary #152 753:33:20-758:33:25 op=plus op-span=755:33:22-756:33:23 type=Int
+                      left: name-ref #150 753:33:20-754:33:21 name="v" type=Int
+                      right: name-ref #151 757:33:24-758:33:25 name="n" type=Int

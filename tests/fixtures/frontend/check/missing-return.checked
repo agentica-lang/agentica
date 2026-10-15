@@ -1,0 +1,1 @@
+ERROR CHECK-MISSING-RETURN 0:1:1-22:3:1 "function \"data\" must return Nil on every path" "add \"return <value>\" of type Nil at the end" signature="data() -> Nil" file="missing-return.agc"

@@ -1,0 +1,1 @@
+ERROR CHECK-VOID-TYPE 21:2:10-25:2:14 "Void is only valid in a completion type position" - file="void-type.agc"

@@ -1,0 +1,1 @@
+ERROR CHECK-ARITY 21:2:3-32:2:14 "\"IO.flush\" expects 0 argument(s), found 1" - callee="IO.flush() -> Void" signature="main() -> Void" file="arity.agc"

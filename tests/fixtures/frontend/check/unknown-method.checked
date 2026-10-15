@@ -1,0 +1,1 @@
+ERROR CHECK-UNKNOWN-METHOD 25:2:7-31:2:13 "Int has no method \"chr\"" "use String.from_code(n) for the character of a code point" signature="main() -> Void" file="unknown-method.agc"

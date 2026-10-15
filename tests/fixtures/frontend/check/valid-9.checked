@@ -1,0 +1,84 @@
+program #79 0:1:1-493:23:1
+  module "valid-9.agc"
+    declaration: struct-decl #13 0:1:1-102:8:1 name="User"
+      field: field-decl #1 14:2:3-27:3:1 name="name"
+        type: type-ref #0 20:2:9-26:2:15 name="String"
+      field: field-decl #3 29:3:3-38:4:1 name="age"
+        type: type-ref #2 34:3:8-37:3:11 name="Int"
+      field: field-decl #6 40:4:3-59:5:1 name="tags"
+        type: type-ref #5 46:4:9-58:4:21 name="List"
+          arg: type-ref #4 51:4:14-57:4:20 name="String"
+      field: field-decl #10 61:5:3-86:6:1 name="scores"
+        type: type-ref #9 69:5:11-85:5:27 name="Map"
+          arg: type-ref #7 73:5:15-79:5:21 name="String"
+          arg: type-ref #8 81:5:23-84:5:26 name="Int"
+      field: field-decl #12 88:6:3-98:7:1 name="with"
+        type: type-ref #11 94:6:9-97:6:12 name="Int"
+    declaration: function-decl #27 103:9:1-193:12:1 name="make"
+      result: type-ref #14 117:9:15-121:9:19 name="User"
+      body: return-stmt #26 124:10:3-189:11:1
+        value: construct #25 131:10:10-188:10:67 type="User" type=Struct(User)
+          arg: named-arg #16 136:10:15-147:10:26 name="name"
+            value: literal #15 142:10:21-147:10:26 value=string:"Ana" type=String
+          arg: named-arg #18 149:10:28-156:10:35 name="age"
+            value: literal #17 154:10:33-156:10:35 value=int:30 type=Int
+          arg: named-arg #20 158:10:37-166:10:45 name="tags"
+            value: list-lit #19 164:10:43-166:10:45 type=List(String)
+          arg: named-arg #22 168:10:47-178:10:57 name="scores"
+            value: map-lit #21 176:10:55-178:10:57 type=Map(String, Int)
+          arg: named-arg #24 180:10:59-187:10:66 name="with"
+            value: literal #23 186:10:65-187:10:66 value=int:0 type=Int
+    declaration: function-decl #78 194:13:1-492:22:1 name="main"
+      result: type-ref #28 208:13:15-212:13:19 name="Void"
+      body: binding #30 215:14:3-228:15:1 name="ana"
+        value: call #29 221:14:9-227:14:15 name="make" piped=false type=Struct(User)
+      body: binding #39 230:15:3-271:16:1 name="older"
+        type: type-ref #31 237:15:10-241:15:14 name="User"
+        value: struct-update #38 244:15:17-270:15:43 visible=["User"] type=Struct(User)
+          target: name-ref #32 244:15:17-247:15:20 name="ana" type=Struct(User)
+          arg: named-arg #37 253:15:26-269:15:42 name="age"
+            value: binary #36 258:15:31-269:15:42 op=plus op-span=266:15:39-267:15:40 type=Int
+              left: field-access #34 258:15:31-265:15:38 name="age" type=Int
+                target: name-ref #33 258:15:31-261:15:34 name="ana" type=Struct(User)
+              right: literal #35 268:15:41-269:15:42 value=int:1 type=Int
+      body: binding #46 273:16:3-314:17:1 name="cleared"
+        value: struct-update #45 283:16:13-313:16:43 visible=["User"] type=Struct(User)
+          target: name-ref #40 283:16:13-286:16:16 name="ana" type=Struct(User)
+          arg: named-arg #42 292:16:22-300:16:30 name="tags"
+            value: list-lit #41 298:16:28-300:16:30 type=List(String)
+          arg: named-arg #44 302:16:32-312:16:42 name="scores"
+            value: map-lit #43 310:16:40-312:16:42 type=Map(String, Int)
+      body: binding #57 316:17:3-374:18:1 name="deep"
+        value: struct-update #56 323:17:10-373:17:60 visible=["User"] type=Struct(User)
+          target: struct-update #52 323:17:10-355:17:42 visible=["User"] type=Struct(User)
+            target: call #47 323:17:10-329:17:16 name="make" piped=false type=Struct(User)
+            arg: named-arg #49 335:17:22-346:17:33 name="name"
+              value: literal #48 341:17:28-346:17:33 value=string:"Bea" type=String
+            arg: named-arg #51 348:17:35-354:17:41 name="age"
+              value: literal #50 353:17:40-354:17:41 value=int:2 type=Int
+          arg: named-arg #55 361:17:48-372:17:59 name="tags"
+            value: list-lit #54 367:17:54-372:17:59 type=List(String)
+              element: literal #53 368:17:55-371:17:58 value=string:"a" type=String
+      body: binding #61 376:18:3-394:19:1 name="w"
+        type: type-ref #58 379:18:6-382:18:9 name="Int"
+        value: field-access #60 385:18:12-393:18:20 name="with" type=Int
+          target: name-ref #59 385:18:12-388:18:15 name="ana" type=Struct(User)
+      body: binding #66 396:19:3-426:20:1 name="same_name"
+        value: struct-update #65 408:19:15-425:19:32 visible=["User"] type=Struct(User)
+          target: name-ref #62 408:19:15-411:19:18 name="ana" type=Struct(User)
+          arg: named-arg #64 417:19:24-424:19:31 name="with"
+            value: literal #63 423:19:30-424:19:31 value=int:5 type=Int
+      body: expr-stmt #77 428:20:3-488:21:1
+        value: call #76 428:20:3-487:20:62 name="puts" piped=false type=Void
+          arg: interpolation #75 433:20:8-486:20:61 type=String
+            part: field-access #68 436:20:11-445:20:20 name="age" type=Int
+              target: name-ref #67 436:20:11-441:20:16 name="older" type=Struct(User)
+            part: text " "
+            part: field-access #71 449:20:24-466:20:41 name="size" type=Int resolved=call("List.size", List(String))
+              target: field-access #70 449:20:24-461:20:36 name="tags" type=List(String)
+                target: name-ref #69 449:20:24-456:20:31 name="cleared" type=Struct(User)
+            part: text " "
+            part: field-access #73 470:20:45-479:20:54 name="name" type=String
+              target: name-ref #72 470:20:45-474:20:49 name="deep" type=Struct(User)
+            part: text " "
+            part: name-ref #74 483:20:58-484:20:59 name="w" type=Int

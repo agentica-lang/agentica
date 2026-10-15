@@ -1,0 +1,95 @@
+program #93 0:1:1-631:31:1
+  module "valid-6.agc"
+    declaration: struct-decl #4 0:1:1-42:4:1 name="Box"
+      field: field-decl #3 13:2:3-38:3:1 name="value"
+        type: type-ref #2 20:2:10-37:2:27 name="Result"
+          arg: type-ref #1 27:2:17-36:2:26 name="List"
+            arg: type-ref #0 32:2:22-35:2:25 name="Int"
+    declaration: function-decl #11 44:6:1-101:8:1 name="consume"
+      param: param #9 56:6:13-87:6:44 name="value"
+        type: type-ref #8 63:6:20-87:6:44 name="Result"
+          arg: type-ref #7 70:6:27-86:6:43 name="Map"
+            arg: type-ref #5 74:6:31-80:6:37 name="String"
+            arg: type-ref #6 82:6:39-85:6:42 name="Int"
+      result: type-ref #10 92:6:49-96:6:53 name="Void"
+    declaration: function-decl #18 103:10:1-155:13:1 name="make"
+      result: type-ref #14 117:10:15-134:10:32 name="Result"
+        arg: type-ref #13 124:10:22-133:10:31 name="List"
+          arg: type-ref #12 129:10:27-132:10:30 name="Int"
+      body: return-stmt #17 137:11:3-151:12:1
+        value: call #16 144:11:10-150:11:16 name="ok" piped=false type=Result(List(Int))
+          arg: list-lit #15 147:11:13-149:11:15 type=List(Int)
+    declaration: function-decl #92 157:15:1-630:30:1 name="main"
+      result: type-ref #19 171:15:15-175:15:19 name="Void"
+      body: binding #22 178:16:3-195:17:1 name="inferred"
+        value: call #21 189:16:14-194:16:19 name="ok" piped=false type=Result(Int)
+          arg: literal #20 192:16:17-193:16:18 value=int:1 type=Int
+      body: binding #27 197:17:3-227:18:1 name="r"
+        type: type-ref #24 200:17:6-211:17:17 name="Result"
+          arg: type-ref #23 207:17:13-210:17:16 name="Int"
+        value: call #26 214:17:20-226:17:32 name="error" piped=false type=Result(Int)
+          arg: literal #25 220:17:26-225:17:31 value=string:"bad" type=String
+      body: binding #30 229:18:3-239:19:1 name="r"
+        value: call #29 233:18:7-238:18:12 name="ok" piped=false type=Result(Int)
+          arg: literal #28 236:18:10-237:18:11 value=int:2 type=Int
+      body: binding #33 241:19:3-260:20:1 name="r"
+        value: call #32 245:19:7-259:19:21 name="error" piped=false type=Result(Int)
+          arg: literal #31 251:19:13-258:19:20 value=string:"again" type=String
+      body: binding #40 262:20:3-307:21:1 name="nested"
+        type: type-ref #36 270:20:11-290:20:31 name="Result"
+          arg: type-ref #35 277:20:18-289:20:30 name="Result"
+            arg: type-ref #34 284:20:25-288:20:29 name="Bool"
+        value: call #39 293:20:34-306:20:47 name="ok" piped=false type=Result(Result(Bool))
+          arg: call #38 296:20:37-305:20:46 name="ok" piped=false type=Result(Bool)
+            arg: literal #37 299:20:40-304:20:45 value=bool:false type=Bool
+      body: binding #45 309:21:3-340:22:1 name="box"
+        value: construct #44 315:21:9-339:21:33 type="Box" type=Struct(Box)
+          arg: named-arg #43 319:21:13-338:21:32 name="value"
+            value: call #42 326:21:20-338:21:32 name="error" piped=false type=Result(List(Int))
+              arg: literal #41 332:21:26-337:21:31 value=string:"bad" type=String
+      body: expr-stmt #49 342:22:3-358:23:1
+        value: call #48 342:22:3-357:22:18 name="consume" piped=false type=Void
+          arg: call #47 350:22:11-356:22:17 name="ok" piped=false type=Result(Map(String, Int))
+            arg: map-lit #46 353:22:14-355:22:16 type=Map(String, Int)
+      body: binding #58 360:23:3-406:24:1 name="xs"
+        type: type-ref #52 364:23:7-381:23:24 name="List"
+          arg: type-ref #51 369:23:12-380:23:23 name="Result"
+            arg: type-ref #50 376:23:19-379:23:22 name="Int"
+        value: list-lit #57 384:23:27-405:23:48 type=List(Result(Int))
+          element: call #54 385:23:28-397:23:40 name="error" piped=false type=Result(Int)
+            arg: literal #53 391:23:34-396:23:39 value=string:"bad" type=String
+          element: call #56 399:23:42-404:23:47 name="ok" piped=false type=Result(Int)
+            arg: literal #55 402:23:45-403:23:46 value=int:1 type=Int
+      body: binding #68 408:24:3-460:25:1 name="map"
+        type: type-ref #62 413:24:8-437:24:32 name="Map"
+          arg: type-ref #59 417:24:12-423:24:18 name="String"
+          arg: type-ref #61 425:24:20-436:24:31 name="Result"
+            arg: type-ref #60 432:24:27-435:24:30 name="Int"
+        value: map-lit #67 440:24:35-459:24:54 type=Map(String, Result(Int))
+          entry: map-entry #66 441:24:36-458:24:53
+            key: literal #63 441:24:36-444:24:39 value=string:"k" type=String
+            value: call #65 446:24:41-458:24:53 name="error" piped=false type=Result(Int)
+              arg: literal #64 452:24:47-457:24:52 value=string:"bad" type=String
+      body: binding #74 462:25:3-500:26:1 name="inferred_list"
+        value: list-lit #73 478:25:19-499:25:40 type=List(Result(Int))
+          element: call #70 479:25:20-484:25:25 name="ok" piped=false type=Result(Int)
+            arg: literal #69 482:25:23-483:25:24 value=int:1 type=Int
+          element: call #72 486:25:27-498:25:39 name="error" piped=false type=Result(Int)
+            arg: literal #71 492:25:33-497:25:38 value=string:"bad" type=String
+      body: binding #79 502:26:3-540:27:1 name="a"
+        type: type-ref #75 505:26:6-508:26:9 name="Int"
+        value: call #78 511:26:12-539:26:40 name="Result.unwrap!" piped=false type=Int
+          arg: call #77 526:26:27-538:26:39 name="error" piped=false type=Result(Int)
+            arg: literal #76 532:26:33-537:26:38 value=string:"bad" type=String
+      body: binding #84 542:27:3-580:28:1 name="b"
+        value: call #83 546:27:7-579:27:40 name="Result.unwrap_or" piped=false type=Int
+          arg: call #81 563:27:24-575:27:36 name="error" piped=false type=Result(Int)
+            arg: literal #80 569:27:30-574:27:35 value=string:"bad" type=String
+          arg: literal #82 577:27:38-578:27:39 value=int:7 type=Int
+      body: binding #91 582:28:3-626:29:1 name="c"
+        type: type-ref #86 585:28:6-594:28:15 name="List"
+          arg: type-ref #85 590:28:11-593:28:14 name="Int"
+        value: call #90 597:28:18-625:28:46 name="Result.unwrap_or" piped=false type=List(Int)
+          arg: call #88 614:28:35-620:28:41 name="ok" piped=false type=Result(List(Int))
+            arg: list-lit #87 617:28:38-619:28:40 type=List(Int)
+          arg: list-lit #89 622:28:43-624:28:45 type=List(Int)

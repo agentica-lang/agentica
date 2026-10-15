@@ -9,6 +9,11 @@
 
 (define int-max (sub1 (expt 2 63)))
 
+;; The deepest nesting of expressions and statements the checker accepts (CHECK-TOO-DEEP beyond it). Each
+;; expression and each statement being checked is one level, so it bounds the depth of the tree the checker
+;; recurses on; compiler/check_state.agc has the same limit, because the VM call depth is finite (RUNTIME-STACK-OVERFLOW).
+(define nesting-limit 1000)
+
 (define reserved-type-names
   (append '("Int" "Float" "Bool" "String" "Nil" "Void" "List" "Map" "Result" "IO" "System" "Json" "JSON" "Fn" "Task" "Channel" "File" "Dir" "Path" "TCP" "TLS" "HttpWire" "LogRegistry" "Time" "Random" "Range" "Set" "Test")
           (map symbol->string opaque-types) (hash-keys builtin-records) (hash-keys builtin-enums)))
@@ -340,6 +345,7 @@
   (define capture-each-receiver #f)
   (define loop-depth 0)
   (define range-chain '())
+  (define nesting 0)
 
   (let/ec return
     (define (bail code message span
@@ -383,7 +389,9 @@
         [(and (pair? template) (pair? actual)
               (eq? (car template) (car actual))
               (= (length (cdr template)) (length (cdr actual)))
-              (not (memq (car template) '(Struct))))
+              (not (memq (car template) '(Struct)))
+              ;; Two enums of different names are a mismatch, not a pair of types to unify.
+              (not (and (eq? (car template) 'Enum) (not (equal? (cadr template) (cadr actual))))))
          (for ([left (in-list (cdr template))] [right (in-list (cdr actual))])
            (unify-type! left right substitutions span))]
         [else (ensure actual template span)]))
@@ -600,7 +608,19 @@
 
     ;; Expressions ----------------------------------------------------------
 
+    ;; Runs thunk one level deeper, or is CHECK-TOO-DEEP at the span when the limit is reached.
+    (define (nested span thunk)
+      (when (>= nesting nesting-limit)
+        (bail 'CHECK-TOO-DEEP (format "nesting is deeper than ~a levels" nesting-limit) span
+              #:help "split the code into smaller functions or simpler expressions"))
+      (set! nesting (add1 nesting))
+      (begin0 (thunk) (set! nesting (sub1 nesting))))
+
     (define (check-expression expression expected #:completion? [completion? #f])
+      (nested (node-span expression)
+              (lambda () (check-expression-here expression expected completion?))))
+
+    (define (check-expression-here expression expected completion?)
       (define actual
         (cond
           [(type-expression? expression)
@@ -1716,6 +1736,9 @@
         (check-statement statement)))
 
     (define (check-statement statement)
+      (nested (node-span statement) (lambda () (check-statement-here statement))))
+
+    (define (check-statement-here statement)
       (cond
         [(binding? statement) (check-binding statement)]
         [(return-stmt? statement) (check-return statement)]

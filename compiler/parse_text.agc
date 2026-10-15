@@ -13,10 +13,11 @@ export struct Printed
   next_id: Int
 end
 
-## Where a line is printed: its indent, and the number subtracted from every node id. A file of a linked program prints ids that start at 0 inside the file, so the text does not depend on which files came before it.
+## Where a line is printed: its indent, the number subtracted from every node id, and the text added at the end of the line of a node, by the node's id (the checker's text form adds the type of each expression this way). A file of a linked program prints ids that start at 0 inside the file, so the text does not depend on which files came before it.
 export struct Margin
   indent: String
   base: Int
+  notes: Map[Int, String]
 end
 
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node per line: `role: kind #id span attributes`, children indented by two spaces. tests/frontend-parser-common.rkt prints the same text from the Racket tree.
@@ -52,7 +53,12 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
   if role != ""
     label = role + ": "
   end
-  return at.indent + label + kind + " #" + (id - at.base).to_s + " " + Text.span_text(span) + attrs
+  note = at.notes.get(id)
+  extra = ""
+  if note.ok?
+    extra = note.unwrap!
+  end
+  return at.indent + label + kind + " #" + (id - at.base).to_s + " " + Text.span_text(span) + attrs + extra
 end
 
 ## The label followed by the quoted text of an optional string, or the empty string when it is absent.
@@ -367,9 +373,9 @@ def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> Li
 end
 
 def print_program(program: Ast.Program) -> List[String]
-  lines: List[String] = [head(Margin(indent: "", base: 0), "", "program", program.id, program.span, text_attr(" module-doc=", program.module_doc))]
+  lines: List[String] = [head(Margin(indent: "", base: 0, notes: {}), "", "program", program.id, program.span, text_attr(" module-doc=", program.module_doc))]
   for decl in program.declarations
-    lines = print_decl(lines, Margin(indent: "  ", base: 0), "declaration", decl)
+    lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
   end
   return lines
 end

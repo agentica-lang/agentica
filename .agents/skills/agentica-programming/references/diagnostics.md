@@ -72,6 +72,7 @@ Each line is a function and the place it runs: the error for the first, the call
 | `CHECK-LOOP-CONTROL` | `break` or `next` outside a `while`/`for` body, or inside a block |
 | `CHECK-CAPTURED-ASSIGNMENT` | a block assigns to an outer variable; use a `for` loop or `reduce`. For `xs.each do |w|` on a name or field the help shows the loop, `for w in xs ... end`, which can assign the variable |
 | `CHECK-NOT-A-HANDLE` | `Task.spawn_owning` with an argument that is not a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`, at the argument (see `tasks.md`) |
+| `CHECK-TOO-DEEP` | more than 1,000 levels of expressions and statements in the tree (each counts one; a chain of operators is as deep as it is long, and nested chains are deeper than the parser counts); split the code into functions or bindings |
 | `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW` | arithmetic failure |
 | `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND` | list index or map key not present |
 | `RUNTIME-INVALID-COUNT` | List.repeat count outside 0..1048576, or negative List.take/drop count; `Channel.new` capacity outside 1..1048576; a negative `Int.shift_left`/`shift_right`/`shift_right_unsigned` count |
