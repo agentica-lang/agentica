@@ -1,6 +1,8 @@
 ## 46. Signals
 
-**Status:** Design, not scheduled (asked by the owner on 2026-10-15).
+**Status:** Scheduled on 2026-10-15 in [phase 27](../roadmap/27-signals.md),
+after the bootstrap of §35 (step 8). 46a and 46b may come earlier when a
+code slot is idle. Nothing is implemented yet.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
 container entrypoint should stop its child, run cleanup and exit with the right
@@ -941,7 +943,8 @@ are the default-path cases.
   Agentica code, and it does not need the VM work of 46a or 46b in full.
 - **Separate changes, outside §46:** `Path.remove`, `File.copy` that keeps the
   mode, a kind check that does not follow links, and `System.hostname`. Reaping
-  orphans as PID 1 is also separate (46.8, question 10).
+  orphans as PID 1 is also separate (46.8, question 10). The BDD driver
+  work of §35 step 7 adds some of these; see its PR.
 
 The bootstrap question. The compiler catalog exists (§35 step 4, PR #258).
 `compiler/builtins_data.agc` is generated from `src/builtins.rkt` and
@@ -963,10 +966,16 @@ Each question has options and a recommendation.
    blocking call drops a signal that arrives before the call. It also needs a
    task for each wait point. The channel fits the timeouts that the programs
    already use.
+
+   **Decided (2026-10-15):** the recommendation.
+
 2. **Names: enum or strings.** Options: (a) the builtin enum `Signal`. The
    checker catches a typo. The set is fixed by the VM. (b) strings, such as
    `Signal.channel(["TERM"])`, where a typo shows up only at run time.
    **Recommendation:** (a), as `LogLevel` does.
+
+   **Decided (2026-10-15):** the recommendation.
+
 3. **Later signals.** Options: (A) as today: a second signal ends the run after
    the children are stopped, with the 3-second alarm. (B) the program decides:
    while a subscription exists, every Term, Int, Hup, Usr1 and Usr2 goes to the
@@ -981,21 +990,33 @@ Each question has options and a recommendation.
    with no driver, can only be stopped by Quit or SIGKILL. Ctrl-\ is less known
    than Ctrl-C twice, so the site page must say so. Option (C) is the fallback
    if the owner wants Ctrl-C twice to work.
+
+   **Decided (2026-10-15):** the recommendation.
+
 4. **The grace alarm.** Options: (a) keep the 3-second alarm for the default
    path only. A handled signal never arms it. (b) a grace per subscription, such
    as `Signal.channel(signals, grace_ms)`. **Recommendation:** (a). A handled
    stop has no VM deadline. The program sets its own deadlines, as the example
    does.
+
+   **Decided (2026-10-15):** the recommendation.
+
 5. **The permission flag.** Options: (a) no flag for subscribing. `--allow-run`
    for `spawn_group` and `System.signal`. (b) `--allow-run` for every signal
    call, including subscribing. (c) a new flag such as `--allow-signal`.
    **Recommendation:** (a). A program that subscribes only affects itself. A pid
    signal reaches other processes, so it belongs to the class that `--allow-run`
    already covers. A new flag adds one more thing to document for little gain.
+
+   **Decided (2026-10-15):** the recommendation.
+
 6. **SIGHUP reload.** Options: (a) out of scope. HUP stays a stop signal only.
    (b) in scope as delivery only. HUP can be subscribed to, the VM does no
    reload, and the program decides. **Recommendation:** (b). It costs nothing
    once 46a exists, and the VM reloads nothing.
+
+   **Decided (2026-10-15):** the recommendation.
+
 7. **The driver's 2-second wait.** Options: (a) keep it, and tell containers to
    run `agentica-vm` on the compiled file. (b) forward the break at once and
    drop the second copy that comes from the terminal. This is fragile. (c) start
@@ -1003,27 +1024,42 @@ Each question has options and a recommendation.
    terminal reaches only the driver, which forwards one copy. A signal from
    Docker reaches the driver, which also forwards it. **Recommendation:** (a)
    now, and (c) in 46c, after a test with terminal input.
+
+   **Decided (2026-10-15):** the recommendation.
+
 8. **The pid API shape.** Options: (a) `System.signal(pid, sig, comm)` with a
    pidfd and the name check. (b) `System.signal(pid, sig)` with no check, and a
    warning in the docs. (c) a handle from the scan, such as `Process.attach(pid,
    comm)`, returning a non-owning `Process`. **Recommendation:** (a). Option (b)
    is unsafe because of pid reuse. Option (c) makes `Process.close` dangerous,
    since it would kill a process the program does not own.
+
+   **Decided (2026-10-15):** the recommendation.
+
 9. **Stdin of group children.** `spawn_group` children inherit stdin (46.3.6),
    as Python does. Options: (a) inherit, and document that the program must not
    read stdin while such a child runs. (b) give the child `/dev/null` as stdin,
    and let the program choose a pipe later. **Recommendation:** (a), to match
    the script. The example does not read stdin.
+
+   **Decided (2026-10-15):** the recommendation.
+
 10. **Reaping orphans as PID 1.** Options: (a) document `docker run --init`. (b)
     make the VM reap orphans when it is PID 1, by calling `waitpid` on pids that
     libuv does not own. **Recommendation:** (a) now. The VM would need `waitpid`
     on pids it does not own, which is a separate decision.
+
+    **Decided (2026-10-15):** the recommendation.
+
 11. **Fallback when pidfd is unavailable.** Options: (a) refuse:
     `System.signal` returns `error("signal: pidfd is unavailable")`. (b) call
     `kill()` after the name check, which leaves a window in which a reused pid
     can be hit. The race is documented. **Recommendation:** (a). The window in
     (b) can signal a stranger. The gh-runner still ends after its deadline,
     because the group kill reaches a listener that stays in run.sh's group.
+
+    **Decided (2026-10-15):** the recommendation.
+
 12. **The name `Signal`.** Options: (A) keep `Signal.channel` and
     `Signal.number` beside the enum, and make `src/modules.rkt` resolve a
     function first. This is a front-end change in both front ends. (B) move the
@@ -1032,3 +1068,6 @@ Each question has options and a recommendation.
     `src/modules.rkt` clash. The enum parameter (no builtin takes one today) is
     checked with a spike in 46a. The fixture rename and the `**Breaking:**`
     entry happen under either option.
+
+    **Decided (2026-10-15):** the recommendation is the default. The 46a PR
+    makes the final choice between (A) and (B), as 46.3.1 and 46.7 say.

@@ -71,6 +71,7 @@ after them may run in parallel when needed and keep their relative order.
 | 7.4 | New features, VM-only (cont.): the streaming items of phase 20 (20e to 20g, [§30](../future/30-hybrid-http.md#3011-streaming-on-channels), the hybrid HTTP plan), built on the channels of 17b; then `TlsContext` ([phase 19](19-tls-context.md), [§29](../future/29-tls-context.md#29-tls-contexts)) | Programs stream HTTP bodies through channels and set up TLS with a `TlsContext` |
 | 7.5 | New features, VM-only (cont.): UDP, then logging and debugging (14c, **done**: `std/logger` of `docs/future/24-logging.md` §24.2, with no default parameter values and no flags; its Racket parts are data under the freeze of row 7.2.7 (§24.2, "The freeze")), then the `Crypto` module (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare, random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`). Binary data (row 7.2.4) and stack traces (row 7.2.5) moved to their own rows | Programs send UDP; programs log with levels, fields and JSON lines, and sign, hash and encrypt |
 | 7.7 | VM metrics (phase 18, `docs/future/28-vm-metrics.md` §28), VM-only, no language change: 18a metrics derived from the VM's own state and the `.prom` file, 18b the `GET /metrics` endpoint, 18c the enabled-only hooks with the overhead check, then 18d memory diagnosis ([§28.12](../future/28-vm-metrics.md#2812-memory-diagnosis-18d): per-task allocation counters, which need channels (17b) done and, for handle bytes, the one-owner rule of 24b; and an on-demand dump of the top tasks); it needs only 7i (not the HTTP stack), and goes before the server measurement (7j) | Prometheus scrapes a running VM and Grafana graphs its GC, tasks, run-queue delay and I/O; batch runs leave their exit code and totals for node_exporter; nothing costs anything while nobody asks |
+| 7.8 | **Scheduled after the bootstrap**, decided by the owner on 2026-10-15 (phase 27, [`docs/roadmap/27-signals.md`](27-signals.md); design: [§46](../future/46-signals.md#46-signals)): signals that a program can handle, in four parts. 46a, subscription: the `Signal` enum and its subscription builtin (the name is decided in 46a), so a program handles TERM, INT, HUP, USR1 and USR2, and QUIT forces the exit. 46b, sending: `Process.signal`, `Process.spawn_group`, `Process.signal_group` and `System.signal`. 46c, the driver forwards a stop at once. 46d, `std/http` drains its handlers on a stop. 46a and 46b are VM C code and builtin table rows, which row 7.2.7 allows, so they may be pulled earlier when a code slot is idle, without delaying the bootstrap. 46c and 46d come after 46b; 46d is Agentica code in `std/http` | A container entrypoint can stop its children and exit on its own terms, and an Agentica program can send signals to its children |
 | 8.1 | The rest of the VM layers (7l, `docs/future/21-vm-layers.md` §21: opcode helpers, builtin metadata flags, the callback-builtin protocol; the header split is row 7.2.1b); after the tasks PR, next to 7k | The prerequisites of the JIT |
 | 9 | Server measurement on the VM (7j), with the source → result runner (7g); it also reads the VM metrics of phase 18 (GC, run-queue delay, I/O) while the load runs | Requests/s, p50/p99 latency (also while a CPU-bound task runs), peak memory and real start-up, against Python as an outside reference |
 | 11 | Decided by the owner on 2026-10-14: it comes right after step 9 and before the JIT (9.1), and decides with the numbers of step 9 (and the 6c pilot of step 7.2.2): multicore schedulers (7h item, gated). After step 9 the work stops so the owner reviews the next steps (a review point, not a gate on the JIT: 9.1 stays required and not gated). The front end is decided: self-hosting, in this table from row 7.2.7 on ([§35](../future/35-self-hosting.md)) | Build multicore only if the numbers ask for it |
@@ -112,12 +113,6 @@ Designed, not scheduled: packages (§45,
 [`docs/future/45-packages.md`](../future/45-packages.md)). It has no row in this
 table. Its first step, the TOML parser `std/toml` (45-0), is a std module and
 landed before the bootstrap (done). The manager waits for step 8 of §35.4.
-
-Designed, not scheduled: signals ([§46](../future/46-signals.md)). It has no
-row in this table. It may land before the bootstrap if the owner schedules
-it: its VM parts (46a and 46b) are C code and builtin table rows, which row
-7.2.7 allows. They need no new syntax, and the compiler catalog gets the same
-rows.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
@@ -240,6 +235,7 @@ they were, so "phase 13" is in `13-binary-data.md` and "7h" is in `07-vm.md`.
 | [`24-task-crash-isolation.md`](24-task-crash-isolation.md) | Phase 24: task crash isolation (a crash ends only its task) |
 | [`25-unit-tests.md`](25-unit-tests.md) | Phase 25: unit tests (the `Test` module, `*_test.agc` in `agentica test`) |
 | [`26-semantic-cli.md`](26-semantic-cli.md) | Phase 26: semantic CLI for agents (`agentica outline`, `symbol`, `refs`, `type-at`) |
+| [`27-signals.md`](27-signals.md) | Phase 27: signals (stop signals a program handles, signals to children, the driver's stop, graceful HTTP stop; design in §46) |
 | [`pending-general-programming-and-mcp.md`](pending-general-programming-and-mcp.md) | Pending work: general programming and MCP (everyday library, typed JSON, modules, real applications, MCP) |
 | [`ruby-style-ergonomics.md`](ruby-style-ergonomics.md) | Ruby-style ergonomics (complete) |
 | [`later-extensions.md`](later-extensions.md) | Later extensions and open decisions |
